@@ -35,6 +35,20 @@ const eslintConfig = [
       "@next/next/no-css-tags": "off",
     },
   },
+  {
+    // Convencion: parametros y variables que empiezan con `_` son
+    // intencionalmente sin usar (stubs, callbacks de interfaz, etc.).
+    rules: {
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+        },
+      ],
+    },
+  },
 ];
 
 export default eslintConfig;
