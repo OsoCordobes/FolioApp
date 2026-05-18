@@ -1,36 +1,71 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Folio
 
-## Getting Started
+SaaS vertical para gestión de turnos, agenda clínica y finanzas para profesionales de la salud en Argentina (quiropraxia, kinesiología, fonoaudiología, etc.).
 
-First, run the development server:
+Multi-tenant + clinic-ready desde día 1. Cumple Ley 25.326 (Habeas Data) y Ley 26.529 (Historia Clínica AR).
+
+## Stack
+
+- **Next.js 15** (App Router, Turbopack) + **React 19** + **TypeScript**
+- **Supabase** (Postgres + Auth + RLS + Storage + pgsodium TCE)
+- **Prisma 7** (ORM)
+- **Playwright** (visual regression pixel-perfect)
+- es-AR · America/Argentina/Cordoba · ARS centavos
+
+## Setup
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm install
+cp .env.local.example .env.local   # completar con credenciales reales (F2+)
+pnpm dev                            # arranca en http://localhost:3010
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Scripts
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Comando | Qué hace |
+|---|---|
+| `pnpm dev` | Next.js dev server (puerto 3010, Turbopack) |
+| `pnpm build` | Build producción |
+| `pnpm typecheck` | TypeScript estricto |
+| `pnpm lint` | ESLint |
+| `pnpm test:visual` | Playwright visual regression vs prototipo |
+| `pnpm test:visual:update` | Regenera baselines (solo si el prototipo cambió legítimamente) |
+| `pnpm db:generate` | Prisma client |
+| `pnpm db:migrate` | Prisma migrate dev |
+| `pnpm db:studio` | Prisma Studio |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Pixel-perfect (regla inviolable)
 
-## Learn More
+El diseño viene del prototipo Claude Design en `C:\Users\amiun\Desktop\Folio\` y es **intocable**. `folio.css` (12,199 líneas) se sirve byte-perfect como static asset desde `/public/folio.css`.
 
-To learn more about Next.js, take a look at the following resources:
+Cada PR/commit corre `pnpm test:visual` y compara contra los baselines de los 10 HTML originales. Cualquier diff > 0.1% bloquea merge.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Baselines: `tests/visual/baseline.spec.ts-snapshots/` (20 PNGs = 10 pantallas × light/dark a 1440×900).
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Estado de fases (plan maestro)
 
-## Deploy on Vercel
+Ver `C:\Users\amiun\.claude\plans\estoy-trabajando-en-folio-velvet-torvalds.md`.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- [x] **F0** Bootstrap (Next.js + Prisma + Supabase + Playwright + baselines)
+- [ ] **F1** Migración pixel-perfect de las 10 pantallas con mock data
+- [ ] **F2** Migrations M01–M14 (schema + RLS + encriptación columnar)
+- [ ] **F3** Auth + multi-tenancy + onboarding
+- [ ] **F4** Data layer + Server Actions
+- [ ] **F5** Google Calendar bidireccional
+- [ ] **F6** WhatsApp Cloud API
+- [ ] **F7** Booking público
+- [ ] **F8** Analytics anonimizada (k-anonymity)
+- [ ] **F9** Cron jobs (recordatorios)
+- [ ] **F10** Compliance (consentimientos + audit + AFIP)
+- [ ] **F11** Polish + a11y + observability + deploy
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+F12 (post-MVP, ~1 mes después): UI específica de Clínicas (selector multi-profesional, dashboard del Director, splits de comisión).
+
+## Reglas inviolables
+
+1. NO tocar `folio.css` (intacto desde el prototipo).
+2. NO emojis en código, commits ni archivos productivos.
+3. Una tarea a la vez, premium standard antes de avanzar.
+4. RLS habilitada en la misma migration que crea cada tabla (nunca activar a posteriori).
+5. Sin `--no-verify`, sin `--force`, sin push remoto sin confirmación del owner.
+6. Sin inventar secrets: si falta una credencial, pedirla o documentarla.

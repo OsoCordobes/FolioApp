@@ -18,7 +18,22 @@ const eslintConfig = [
       "out/**",
       "build/**",
       "next-env.d.ts",
+      "app/generated/**",
+      "tests/visual/**-snapshots/**",
+      "playwright-report/**",
+      "test-results/**",
     ],
+  },
+  {
+    // Root layout deliberadamente carga folio.css como static asset y Geist
+    // via CDN para preservar fidelidad pixel-perfect con el prototipo Claude
+    // Design (ver app/layout.tsx). Esos two warnings son irrelevantes en App
+    // Router con root layout.
+    files: ["app/layout.tsx"],
+    rules: {
+      "@next/next/no-page-custom-font": "off",
+      "@next/next/no-css-tags": "off",
+    },
   },
 ];
 
