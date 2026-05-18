@@ -54,3 +54,8 @@ next-env.d.ts
 /supabase/.branches/
 
 .vercel
+
+# .flow/ = scratch local del agente para STATE.md, TODOS-INVENTORY.md,
+# MISSING-COMPONENTS.md, handoff entre sesiones. La fuente persistente
+# real es claude-mem; .flow/ es la cache local de cada workstation.
+/.flow/
