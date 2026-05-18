@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 
+import { TweaksProvider } from "@/lib/tweaks-context";
+
 export const metadata: Metadata = {
   title: "Folio",
   description: "Gestión de turnos, agenda clínica y finanzas para profesionales de la salud.",
@@ -13,6 +15,10 @@ export const metadata: Metadata = {
  *
  * Fonts: Geist + Geist Mono via Google Fonts CDN, idéntico al prototipo.
  * Self-hosting evaluado en F11 si Lighthouse lo demanda.
+ *
+ * `data-theme="light"` se setea en SSR para evitar FOUC; TweaksProvider
+ * (en el cliente) puede sobreescribirlo post-hydration leyendo localStorage.
+ * `suppressHydrationWarning` protege contra el diff esperado de ese cambio.
  */
 export default function RootLayout({
   children,
@@ -20,7 +26,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es" suppressHydrationWarning>
+    <html lang="es" data-theme="light" suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
@@ -30,7 +36,9 @@ export default function RootLayout({
         />
         <link rel="stylesheet" href="/folio.css" />
       </head>
-      <body>{children}</body>
+      <body>
+        <TweaksProvider>{children}</TweaksProvider>
+      </body>
     </html>
   );
 }
