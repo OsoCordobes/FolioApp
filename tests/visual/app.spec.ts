@@ -28,6 +28,8 @@ const SCREENS: Screen[] = [
   { name: "onboarding", route: "/onboarding" },
   { name: "hoy", route: "/hoy" },
   { name: "pacientes", route: "/pacientes" },
+  // El baseline del prototipo abre la ficha de María Sánchez (id=2).
+  { name: "paciente", route: "/pacientes/2" },
 ];
 
 async function loadAppScreen(page: Page, route: string, theme: Theme) {
