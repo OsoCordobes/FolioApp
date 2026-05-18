@@ -46,9 +46,12 @@ async function listSql(dir: string): Promise<string[]> {
   return files.filter((f) => f.endsWith(".sql")).sort();
 }
 
-async function runFiles(client: Client, dir: string, label: string): Promise<FileResult[]> {
+async function runFiles(client: Client, dir: string, label: string, fromPrefix?: string | null): Promise<FileResult[]> {
   const results: FileResult[] = [];
-  const files = await listSql(dir);
+  let files = await listSql(dir);
+  if (fromPrefix) {
+    files = files.filter((f) => f >= fromPrefix);
+  }
   for (const file of files) {
     const start = Date.now();
     const sql = await readFile(path.join(dir, file), "utf8");
@@ -80,6 +83,10 @@ export async function POST(req: Request) {
   const url = new URL(req.url);
   const mode = url.searchParams.get("mode") ?? "all";
   const reset = url.searchParams.get("reset") === "true";
+  // `from` = prefijo del filename a partir del cual correr migrations (incluyente).
+  // Útil para forward-fix sin tirar todas las migrations ya aplicadas.
+  // Ej: ?from=20260519 → aplica solo migrations >= esa fecha.
+  const fromPrefix = url.searchParams.get("from");
   if (!["all", "migrations", "seeds"].includes(mode)) {
     return NextResponse.json({ ok: false, error: "mode debe ser all|migrations|seeds" }, { status: 400 });
   }
@@ -140,9 +147,10 @@ export async function POST(req: Request) {
     await client.query("SET check_function_bodies = off");
 
     if (mode === "all" || mode === "migrations") {
-      all.push(...(await runFiles(client, MIGRATIONS_DIR, "migrations")));
+      all.push(...(await runFiles(client, MIGRATIONS_DIR, "migrations", fromPrefix)));
     }
     if (mode === "all" || mode === "seeds") {
+      // `from` no aplica a seeds (seeds son idempotentes).
       all.push(...(await runFiles(client, SEED_DIR, "seeds")));
     }
 
