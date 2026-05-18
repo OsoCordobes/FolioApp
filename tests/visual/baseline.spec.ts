@@ -5,10 +5,16 @@ import { test, expect, type Page } from "@playwright/test";
  * C:\Users\amiun\Desktop\Folio\) en light + dark a 1440x900.
  *
  * Estos snapshots son la verdad pixel-perfect contra la que se compara
- * la app Next.js durante F1 y subsiguientes (cualquier diff > 0.1% bloquea merge).
+ * la app Next.js (cualquier diff > 0.1% bloquea merge).
  *
  * El prototipo usa Babel-in-browser, por lo tanto esperamos al render real
  * (#root con hijos) y a fonts.ready antes de cualquier screenshot.
+ *
+ * Determinismo: mockeamos `Date` y `Date.now` para que el reloj que aparece
+ * en pantalla (Login, Hoy, ...) sea estable entre corridas. NO mockeamos
+ * setTimeout/setInterval/requestAnimationFrame: los hooks de animación del
+ * prototipo siguen corriendo en tiempo real y el `waitForTimeout(350)`
+ * captura un estado consistente (ej. SlideAgenda en step=4).
  */
 
 type Screen = { name: string; file: string };
@@ -28,6 +34,21 @@ const SCREENS: Screen[] = [
 
 const THEMES = ["light", "dark"] as const;
 type Theme = (typeof THEMES)[number];
+
+/**
+ * Hora fija para todos los snapshots: 2026-05-13 08:30:00 (Argentina).
+ * Coincide con `FOLIO_DATA.fechaLarga = "miércoles 13 de mayo"` y con
+ * la narrativa del prototipo (`08:30 · antes del primer turno`).
+ */
+const FIXED_TIME = new Date("2026-05-13T08:30:00-03:00");
+
+/**
+ * Avanzamos 2500ms del reloj simulado para dejar que las animaciones
+ * con narrativa breve (Login → SlideAgenda step 4 ≈ +1800ms) lleguen
+ * a su estado estable, sin entrar en el carrusel auto-rotation (que
+ * arranca recién a SLIDE_MS_LONG = 6500ms).
+ */
+const SETTLE_MS = 2500;
 
 async function loadScreen(page: Page, file: string, theme: Theme) {
   const url = `/${encodeURI(file)}`;
@@ -50,9 +71,18 @@ async function loadScreen(page: Page, file: string, theme: Theme) {
   // Esperar fonts (Geist / Geist Mono via Google Fonts)
   await page.evaluate(() => document.fonts.ready);
 
-  // Pequeño settle para CSS transitions de tema (240ms en folio.css)
-  await page.waitForTimeout(350);
+  // Avanzar el reloj mockeado para que las animaciones con timeline
+  // finita (count-ups, step machines de los slides) lleguen a estado
+  // estable. NO entramos en el carrusel auto-rotation (>= 6500ms).
+  await page.clock.runFor(SETTLE_MS);
 }
+
+test.beforeEach(async ({ page }) => {
+  // Mockear reloj antes de cualquier navegación. `install` congela el
+  // tiempo y reemplaza Date/Date.now/setTimeout/setInterval/rAF para
+  // que los snapshots sean determinísticos sin importar la hora real.
+  await page.clock.install({ time: FIXED_TIME });
+});
 
 for (const screen of SCREENS) {
   for (const theme of THEMES) {

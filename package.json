@@ -8,8 +8,10 @@
     "start": "next start -p 3010",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test:visual": "playwright test",
-    "test:visual:update": "playwright test --update-snapshots",
+    "test:visual": "playwright test --project=prototype",
+    "test:visual:update": "playwright test --project=prototype --update-snapshots",
+    "test:app": "playwright test --project=app",
+    "test:all": "playwright test",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio"
