@@ -25,6 +25,7 @@ type Screen = { name: string; route: string };
  */
 const SCREENS: Screen[] = [
   { name: "login", route: "/login" },
+  { name: "onboarding", route: "/onboarding" },
 ];
 
 async function loadAppScreen(page: Page, route: string, theme: Theme) {
