@@ -20,9 +20,10 @@
 -- owner del schema tampoco puede saltarse las policies (defensa contra
 -- bugs en server actions con service_role_key).
 --
--- Compliance: encriptación columnar sobre Profile.nombre/apellido con
--- pgsodium. SECURITY LABEL declara la intención; Supabase TCE encripta
--- al INSERT y desencripta al SELECT transparentemente.
+-- Compliance: encriptación columnar APP-SIDE (AES-256-GCM en Server Actions,
+-- key en Vercel env `FOLIO_ENC_KEY`). Las columnas `*_cifrado` son `bytea`
+-- que guardan ciphertext; la app encripta antes de INSERT y desencripta al
+-- leer. Ver memory/decision_supabase_free_pgcrypto.md.
 -- ════════════════════════════════════════════════════════════════════════════
 
 -- ─── Enums ─────────────────────────────────────────────────────────────────
@@ -66,7 +67,7 @@ CREATE TABLE organization (
   razon_social             text,
   condicion_iva            condicion_iva NOT NULL DEFAULT 'MONOTRIBUTO',
   punto_venta_afip         integer,
-  certificado_arca_cifrado bytea,                                -- pgsodium
+  certificado_arca_cifrado bytea,                                -- AES-256-GCM app-side
 
   -- Compliance toggles (Ley 25.326)
   opt_out_analytics        boolean NOT NULL DEFAULT false,
@@ -85,8 +86,8 @@ CREATE INDEX organization_cuit_idx ON organization (cuit) WHERE cuit IS NOT NULL
 CREATE INDEX organization_deleted_at_idx ON organization (deleted_at);
 CREATE INDEX organization_rubro_idx ON organization (rubro);
 
-SECURITY LABEL FOR pgsodium ON COLUMN organization.certificado_arca_cifrado
-  IS 'ENCRYPT WITH KEY ID null SECURITY INVOKER';
+COMMENT ON COLUMN organization.certificado_arca_cifrado IS
+  'Folio · certificado AFIP (formato PEM) cifrado AES-256-GCM app-side antes de INSERT';
 
 COMMENT ON TABLE organization IS
   'Folio · tenant raíz. Modo Consultorio = 1 org con 1 PROFESIONAL. Modo Clínica = 1 org con N PROFESIONAL + DIRECTOR + COORDINADOR + ASISTENTE.';
@@ -98,8 +99,8 @@ COMMENT ON COLUMN organization.opt_out_analytics IS
 CREATE TABLE profile (
   id                  uuid PRIMARY KEY,                          -- = auth.users.id
   email               text UNIQUE NOT NULL,
-  nombre_cifrado      bytea NOT NULL,                            -- pgsodium
-  apellido_cifrado    bytea NOT NULL,                            -- pgsodium
+  nombre_cifrado      bytea NOT NULL,                            -- AES-256-GCM app-side
+  apellido_cifrado    bytea NOT NULL,                            -- AES-256-GCM app-side
   matricula           text,
   avatar_url          text,
   two_factor_enabled  boolean NOT NULL DEFAULT false,
@@ -110,13 +111,8 @@ CREATE TABLE profile (
   -- En tests pgTAP usamos profiles standalone.
 );
 
-SECURITY LABEL FOR pgsodium ON COLUMN profile.nombre_cifrado
-  IS 'ENCRYPT WITH KEY ID null SECURITY INVOKER';
-SECURITY LABEL FOR pgsodium ON COLUMN profile.apellido_cifrado
-  IS 'ENCRYPT WITH KEY ID null SECURITY INVOKER';
-
 COMMENT ON TABLE profile IS
-  'Folio · perfil de usuario · 1:1 con auth.users (Supabase Auth). nombre/apellido cifrados con pgsodium TCE.';
+  'Folio · perfil de usuario · 1:1 con auth.users (Supabase Auth). nombre/apellido cifrados AES-256-GCM app-side antes de INSERT.';
 
 -- ─── Equipo (estructural, UI viene en F12) ─────────────────────────────────
 

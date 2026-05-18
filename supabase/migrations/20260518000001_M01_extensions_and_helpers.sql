@@ -1,15 +1,19 @@
 -- ════════════════════════════════════════════════════════════════════════════
 -- Folio · M01 · Extensiones + helpers SQL globales
 -- ════════════════════════════════════════════════════════════════════════════
--- Bootstrap minimal de la base. Habilita las 3 extensiones críticas y declara
+-- Bootstrap minimal de la base. Habilita las extensiones críticas y declara
 -- las funciones helper que el resto de migrations referencian para RLS:
 --
---   - pgcrypto:  hashing (HMAC para blind indexes en PII), gen_random_uuid()
---   - pgsodium:  Transparent Column Encryption (TCE) sobre PHI/PII.
---                Requiere plan Pro de Supabase en hosted. En local viene
---                incluido en la imagen Docker.
+--   - pgcrypto:  hashing (HMAC para blind indexes sobre PII cifrada),
+--                gen_random_uuid(), pgp_sym_encrypt como fallback.
 --   - pg_cron:   schedules de mantenimiento (refresh analytics, vacuum,
---                expiración de RecordatorioJob, etc.). Solo Supabase hosted.
+--                expiración de RecordatorioJob). Solo Supabase hosted Pro;
+--                en Free se usa Vercel Cron equivalente (F9).
+--   - pgsodium:  OPCIONAL. Si está disponible (Pro o local Docker) lo
+--                cargamos para futuras key-management features, pero NO lo
+--                usamos para TCE — la encriptación es app-side (AES-256-GCM
+--                en Server Actions, key en Vercel env). Ver
+--                memory/decision_supabase_free_pgcrypto.md.
 --
 -- Las funciones helper viven en el schema `public` para que Prisma las pueda
 -- referenciar y se invocan SIEMPRE qualificadas (`public.user_org_ids()`)
@@ -24,14 +28,16 @@
 -- ─── Extensiones ───────────────────────────────────────────────────────────
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
--- pgsodium en Supabase local viene precargado pero requiere CREATE EXTENSION
--- en cada nuevo schema. En hosted Pro idem.
-CREATE EXTENSION IF NOT EXISTS pgsodium;
 
--- pg_cron solo en hosted (en local podemos simularlo con triggers o saltar).
--- En tests, esta línea no falla porque IF NOT EXISTS es no-op si ya está.
+-- pgsodium y pg_cron son opt-in (disponibles condicionalmente):
+--   - pgsodium se carga si está; no se usa para TCE pero queda disponible
+--     para futuras features (key vault, signatures).
+--   - pg_cron solo en Supabase hosted (Pro). En Free usamos Vercel Cron.
 DO $$
 BEGIN
+  IF EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'pgsodium') THEN
+    EXECUTE 'CREATE EXTENSION IF NOT EXISTS pgsodium';
+  END IF;
   IF EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'pg_cron') THEN
     EXECUTE 'CREATE EXTENSION IF NOT EXISTS pg_cron';
   END IF;
@@ -162,43 +168,37 @@ $$;
 
 -- ─── Helpers de utilidad ──────────────────────────────────────────────────
 
--- HMAC determinístico para "blind indexes". Toma un texto + una key y
--- devuelve un hash hex. Se usa para crear índices sobre datos cifrados:
--- `nombre_hash` se calcula en la app, se guarda, y la búsqueda por nombre
--- usa `WHERE nombre_hash = hmac_blind(query, key)`. La key vive en
--- pgsodium key store; en local se hardcodea con un placeholder.
-CREATE OR REPLACE FUNCTION public.hmac_blind(plain text, key_id uuid DEFAULT NULL)
+-- HMAC determinístico para "blind indexes" sobre columnas cifradas app-side.
+-- Uso: `WHERE nombre_hash = $1` donde `$1` es el HMAC del query precomputado
+-- en Node.js con la misma key (`FOLIO_ENC_HMAC_KEY`).
+--
+-- ESTA función NO se invoca en queries normales — la app calcula el HMAC
+-- antes de hablar con la DB usando `lib/crypto.ts`. Sirve como referencia
+-- legible para auditoría y para scripts de migración / re-encrypt.
+--
+-- La key default es solo para desarrollo local SIN env var seteada. En prod
+-- el cálculo lo hace el servidor con la key real (no se invoca esta función).
+CREATE OR REPLACE FUNCTION public.hmac_blind(plain text)
 RETURNS text
-LANGUAGE plpgsql
-STABLE
+LANGUAGE sql
+IMMUTABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
-DECLARE
-  raw_key bytea;
-BEGIN
-  IF plain IS NULL THEN
-    RETURN NULL;
-  END IF;
-  -- En F4 reemplazamos por `pgsodium.crypto_auth_hmacsha512(plain, key_from_kms)`.
-  -- Hasta entonces, hmac determinístico con sha256 + key fija de desarrollo.
-  raw_key := COALESCE(
-    (SELECT raw_key FROM pgsodium.key WHERE id = key_id LIMIT 1),
-    '\xdeadbeef0000000000000000folio-dev-only-key-rotate-on-prod-launch'::bytea
-  );
-  RETURN encode(hmac(lower(trim(plain)), raw_key, 'sha256'), 'hex');
-EXCEPTION
-  WHEN OTHERS THEN
-    -- Si pgsodium aún no tiene la key (primer boot), usar key default.
-    RETURN encode(
+  SELECT CASE
+    WHEN plain IS NULL THEN NULL
+    ELSE encode(
       hmac(
         lower(trim(plain)),
-        '\xdeadbeef0000000000000000folio-dev-only-key-rotate-on-prod-launch'::bytea,
+        coalesce(
+          current_setting('folio.hmac_key', true),
+          'folio-dev-only-key-rotate-on-prod-launch'
+        )::bytea,
         'sha256'
       ),
       'hex'
-    );
-END
+    )
+  END
 $$;
 
 -- Comentario para auditoría y onboarding del próximo dev.
@@ -206,5 +206,5 @@ COMMENT ON FUNCTION public.user_org_ids() IS
   'Folio · helper RLS · devuelve organization_ids del auth.uid() del JWT actual';
 COMMENT ON FUNCTION public.can_read_clinical(uuid) IS
   'Folio · helper RLS · true si el usuario puede leer PHI en la org (OWNER + PROFESIONAL + DIRECTOR colegiado)';
-COMMENT ON FUNCTION public.hmac_blind(text, uuid) IS
-  'Folio · blind index · genera hmac determinístico para búsqueda sobre columnas cifradas con pgsodium';
+COMMENT ON FUNCTION public.hmac_blind(text) IS
+  'Folio · blind index · referencia de cómputo HMAC para búsqueda sobre columnas cifradas app-side. En prod la app computa el hash en Node.js con FOLIO_ENC_HMAC_KEY.';

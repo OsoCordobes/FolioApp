@@ -14,8 +14,8 @@
 --      clínico. Cumple Ley 26.529 art. 18 (retención 10 años) + Habeas Data.
 --   3. Analytics — F8 puede agregar sobre `paciente` sin tocar PII.
 --
--- Encriptación columnar (pgsodium TCE):
---   - Todo lo que identifica personalmente está bytea + SECURITY LABEL.
+-- Encriptación columnar (AES-256-GCM app-side, key en FOLIO_ENC_KEY):
+--   - Todo lo que identifica personalmente está bytea con ciphertext.
 --   - fecha_nacimiento NO cifrada (necesaria para agrupar por edad en analytics).
 --   - domicilio_ciudad / domicilio_provincia / domicilio_cp NO cifrados
 --     (geo cohort para k-anonymity).
@@ -37,7 +37,7 @@ CREATE TABLE paciente_identidad (
   id                          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id             uuid NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
 
-  -- Todos cifrados (pgsodium TCE)
+  -- Todos cifrados AES-256-GCM app-side antes de INSERT
   nombre_cifrado              bytea NOT NULL,
   apellido_cifrado            bytea NOT NULL,
   tipo_doc                    tipo_doc NOT NULL DEFAULT 'DNI',
@@ -74,16 +74,17 @@ CREATE INDEX paciente_identidad_org_dni_idx
 CREATE INDEX paciente_identidad_ciudad_idx
   ON paciente_identidad (domicilio_ciudad, domicilio_provincia) WHERE deleted_at IS NULL;
 
-SECURITY LABEL FOR pgsodium ON COLUMN paciente_identidad.nombre_cifrado            IS 'ENCRYPT WITH KEY ID null SECURITY INVOKER';
-SECURITY LABEL FOR pgsodium ON COLUMN paciente_identidad.apellido_cifrado          IS 'ENCRYPT WITH KEY ID null SECURITY INVOKER';
-SECURITY LABEL FOR pgsodium ON COLUMN paciente_identidad.numero_doc_cifrado        IS 'ENCRYPT WITH KEY ID null SECURITY INVOKER';
-SECURITY LABEL FOR pgsodium ON COLUMN paciente_identidad.email_cifrado             IS 'ENCRYPT WITH KEY ID null SECURITY INVOKER';
-SECURITY LABEL FOR pgsodium ON COLUMN paciente_identidad.telefono_cifrado          IS 'ENCRYPT WITH KEY ID null SECURITY INVOKER';
-SECURITY LABEL FOR pgsodium ON COLUMN paciente_identidad.domicilio_calle_cifrado   IS 'ENCRYPT WITH KEY ID null SECURITY INVOKER';
-SECURITY LABEL FOR pgsodium ON COLUMN paciente_identidad.domicilio_numero_cifrado  IS 'ENCRYPT WITH KEY ID null SECURITY INVOKER';
-
 COMMENT ON TABLE paciente_identidad IS
-  'Folio · PII del paciente (nombre, doc, contacto, domicilio). Cifrada con pgsodium TCE. Se borra físicamente en la pseudonimización (Ley 25.326 art. 16).';
+  'Folio · PII del paciente (nombre, doc, contacto, domicilio). Columnas *_cifrado guardan ciphertext AES-256-GCM (encrypt en Server Action con FOLIO_ENC_KEY). Se borra físicamente en la pseudonimización (Ley 25.326 art. 16).';
+COMMENT ON COLUMN paciente_identidad.nombre_cifrado IS 'AES-256-GCM app-side';
+COMMENT ON COLUMN paciente_identidad.apellido_cifrado IS 'AES-256-GCM app-side';
+COMMENT ON COLUMN paciente_identidad.numero_doc_cifrado IS 'AES-256-GCM app-side';
+COMMENT ON COLUMN paciente_identidad.email_cifrado IS 'AES-256-GCM app-side';
+COMMENT ON COLUMN paciente_identidad.telefono_cifrado IS 'AES-256-GCM app-side';
+COMMENT ON COLUMN paciente_identidad.domicilio_calle_cifrado IS 'AES-256-GCM app-side';
+COMMENT ON COLUMN paciente_identidad.domicilio_numero_cifrado IS 'AES-256-GCM app-side';
+COMMENT ON COLUMN paciente_identidad.nombre_hash IS 'HMAC-SHA256 de lower(trim(nombre + " " + apellido)) con FOLIO_ENC_HMAC_KEY · blind index para búsqueda';
+COMMENT ON COLUMN paciente_identidad.dni_hash IS 'HMAC-SHA256 de lower(trim(numero_doc)) con FOLIO_ENC_HMAC_KEY · blind index para lookup exacto';
 
 -- ─── Paciente (PHI) ───────────────────────────────────────────────────────
 
@@ -125,11 +126,10 @@ CREATE INDEX paciente_caja_fuerte_idx
   ON paciente (caja_fuerte_profesional) WHERE caja_fuerte_profesional IS NOT NULL;
 CREATE INDEX paciente_org_tipo_idx ON paciente (organization_id, tipo) WHERE deleted_at IS NULL;
 
-SECURITY LABEL FOR pgsodium ON COLUMN paciente.motivo_consulta_cifrado    IS 'ENCRYPT WITH KEY ID null SECURITY INVOKER';
-SECURITY LABEL FOR pgsodium ON COLUMN paciente.notas_importantes_cifrado  IS 'ENCRYPT WITH KEY ID null SECURITY INVOKER';
-
 COMMENT ON TABLE paciente IS
-  'Folio · PHI del paciente (motivo, notas, profesional asignado, caja fuerte). identidad_id NULL = pseudonimizado.';
+  'Folio · PHI del paciente (motivo, notas, profesional asignado, caja fuerte). Columnas *_cifrado son AES-256-GCM app-side. identidad_id NULL = pseudonimizado.';
+COMMENT ON COLUMN paciente.motivo_consulta_cifrado IS 'AES-256-GCM app-side';
+COMMENT ON COLUMN paciente.notas_importantes_cifrado IS 'AES-256-GCM app-side';
 COMMENT ON COLUMN paciente.caja_fuerte_profesional IS
   'Si seteado, SOLO ese member puede leer la PHI (override de paciente.profesional_principal_id). Para casos VIP / restricción explícita del paciente.';
 
@@ -286,22 +286,10 @@ CREATE POLICY paciente_no_delete
   ON paciente FOR DELETE
   USING (false);
 
--- ─── Trigger: mantener nombre_hash + dni_hash automáticamente ─────────────
--- Si el caller no setea los blind indexes, los calculamos del texto plano
--- antes de cifrar. PERO si los datos llegan ya cifrados (vía pgsodium), el
--- caller DEBE haber computado los hashes en el cliente. En F4 esto se hace
--- en la Server Action que pre-cifra los datos antes de INSERT.
--- Para hacer este trigger útil en pgTAP tests (donde insertamos plain), lo
--- dejamos no-op si los hashes ya vienen seteados.
-CREATE OR REPLACE FUNCTION paciente_identidad_set_blind_indexes()
-RETURNS trigger
-LANGUAGE plpgsql
-SET search_path = public
-AS $$
-BEGIN
-  -- nombre_hash debería venir pre-computado en el client. Si no, no podemos
-  -- recalcular acá (ya está cifrado). Dejamos NULL y warning.
-  -- Este trigger queda como hook para validación; en F4 lo activamos.
-  RETURN NEW;
-END
-$$;
+-- ─── Blind indexes ────────────────────────────────────────────────────────
+-- nombre_hash y dni_hash se computan SIEMPRE en el cliente (Server Action en F4
+-- con `lib/crypto.ts`). La DB no los puede recalcular porque los datos en
+-- columnas `*_cifrado` ya están cifrados con AES-256-GCM y la key vive en el
+-- servidor. Las queries de búsqueda por nombre o DNI envían el HMAC pre-
+-- computado: `SELECT ... WHERE nombre_hash = $1` con `$1` igual a
+-- `hmac_sha256(lower(trim(name)), FOLIO_ENC_HMAC_KEY)`.
