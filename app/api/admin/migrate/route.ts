@@ -83,13 +83,21 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "mode debe ser all|migrations|seeds" }, { status: 400 });
   }
 
-  const dsn = process.env.POSTGRES_URL_NON_POOLING ?? process.env.POSTGRES_URL;
-  if (!dsn) {
+  const rawDsn = process.env.POSTGRES_URL_NON_POOLING ?? process.env.POSTGRES_URL;
+  if (!rawDsn) {
     return NextResponse.json(
       { ok: false, error: "falta POSTGRES_URL_NON_POOLING / POSTGRES_URL" },
       { status: 500 },
     );
   }
+
+  // El cert de Supabase es self-signed para el chain de Vercel.
+  // Forzamos sslmode=no-verify para evitar "self-signed certificate in certificate chain".
+  const dsn = (() => {
+    const u = new URL(rawDsn);
+    u.searchParams.set("sslmode", "no-verify");
+    return u.toString();
+  })();
 
   const client = new Client({
     connectionString: dsn,
