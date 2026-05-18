@@ -32,6 +32,7 @@ const SCREENS: Screen[] = [
   { name: "focus", route: "/focus/3" },
   { name: "finanzas", route: "/finanzas" },
   { name: "configuracion", route: "/configuracion" },
+  { name: "calendario", route: "/calendario" },
 ];
 
 async function loadAppScreen(page: Page, route: string, theme: Theme) {
