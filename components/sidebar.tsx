@@ -6,7 +6,8 @@
  * Port de folio/sidebar.jsx con cambios mínimos para Next.js:
  *  - Routes nativas (`/hoy`, `/calendario`, ...) en vez de hrefs a HTML estáticos.
  *  - Estado `active` derivado de `usePathname()` (sustituye la prop `active` global).
- *  - Imports de mock-data directos (en F4 vienen de un loader Server Component).
+ *  - Datos del consultorio y Google Sync vienen como props desde el Server Component
+ *    layout (`app/(app)/layout.tsx`), NO desde mock-data.
  *
  * Las clases CSS (`fi-sidebar`, `fi-brand`, `fi-nav-item`, etc.) se respetan
  * intactas para garantizar paridad pixel-perfect con el prototipo.
@@ -18,7 +19,7 @@ import type { ReactNode } from "react";
 
 import { FolioMark } from "@/components/folio-mark";
 import * as I from "@/components/icons";
-import { CONSULTORIO, GOOGLE_SYNC } from "@/lib/mock-data";
+import { formatRubro, formatProfesionalDisplay } from "@/lib/format/identity";
 
 interface NavItem {
   id: string;
@@ -42,8 +43,26 @@ function isActive(pathname: string, item: NavItem): boolean {
   return (item.matchPrefixes ?? []).some((p) => pathname.startsWith(p));
 }
 
-export function Sidebar() {
+export type GoogleSyncStatus =
+  | { connected: false }
+  | { connected: true; lastSyncLabel: string; healthy: boolean };
+
+export interface SidebarProps {
+  /** Datos del consultorio (org). */
+  organization: { nombre: string; rubro: string | null };
+  /** Datos del profesional logueado (PII ya desencriptada en server). */
+  profile: { nombre: string | null; apellido: string | null };
+  /** Rol del member en esta org. */
+  role: "OWNER" | "DIRECTOR" | "PROFESIONAL" | "COORDINADOR" | "ASISTENTE";
+  /** Estado de Google Calendar sync. */
+  googleSync?: GoogleSyncStatus;
+}
+
+export function Sidebar({ organization, profile, role, googleSync }: SidebarProps) {
+  void role; // gating por rol entra en S2; por ahora todos los items visibles para todos los roles
   const pathname = usePathname() ?? "/";
+  const profesionalLine = formatProfesionalDisplay(profile, organization);
+  const rubroLabel = formatRubro(organization.rubro);
 
   return (
     <aside className="fi-sidebar">
@@ -52,7 +71,7 @@ export function Sidebar() {
         <div className="fi-brand-text">
           <b>folio</b>
           <span>
-            {CONSULTORIO.profesional} · {CONSULTORIO.rubro}
+            {profesionalLine}{rubroLabel ? ` · ${rubroLabel}` : ""}
           </span>
         </div>
       </div>
@@ -84,16 +103,7 @@ export function Sidebar() {
       </nav>
 
       <div className="fi-side-bottom">
-        <div className="fi-gcal">
-          <span className="fi-gcal-ico">
-            <I.Google size={14} />
-          </span>
-          <div className="fi-gcal-text">
-            <b>Sincronizado</b>
-            <span>con Google · {GOOGLE_SYNC.lastSync}</span>
-          </div>
-          <span className="fi-gcal-dot" />
-        </div>
+        <GoogleSyncBadge status={googleSync} />
         <div className="fi-side-links">
           <button className="fi-link" type="button">
             <I.ExternalLink size={13} /> Ver sitio público
@@ -106,5 +116,49 @@ export function Sidebar() {
         </div>
       </div>
     </aside>
+  );
+}
+
+function GoogleSyncBadge({ status }: { status?: GoogleSyncStatus }) {
+  // Estado no determinado todavía (loading inicial) → preserva el layout.
+  if (!status) {
+    return (
+      <div className="fi-gcal">
+        <span className="fi-gcal-ico">
+          <I.Google size={14} />
+        </span>
+        <div className="fi-gcal-text">
+          <b>Google Calendar</b>
+          <span>Verificando…</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!status.connected) {
+    return (
+      <div className="fi-gcal">
+        <span className="fi-gcal-ico">
+          <I.Google size={14} />
+        </span>
+        <div className="fi-gcal-text">
+          <b>Google Calendar</b>
+          <span>No conectado · ir a Configuración</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fi-gcal">
+      <span className="fi-gcal-ico">
+        <I.Google size={14} />
+      </span>
+      <div className="fi-gcal-text">
+        <b>{status.healthy ? "Sincronizado" : "Reconectar"}</b>
+        <span>con Google · {status.lastSyncLabel}</span>
+      </div>
+      <span className="fi-gcal-dot" />
+    </div>
   );
 }
