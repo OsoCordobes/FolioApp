@@ -164,12 +164,37 @@ export async function GET(req: Request) {
   const sampleCipher = encryptColumn(samplePlain);
   probes.encryptSample = {
     plaintext: samplePlain,
-    cipher_isBuffer: Buffer.isBuffer(sampleCipher),
-    cipher_len: sampleCipher?.length ?? 0,
-    cipher_hex_first30: sampleCipher?.subarray(0, 30).toString("hex") ?? null,
-    cipher_base64: sampleCipher?.toString("base64") ?? null,
-    cipher_toJSON: sampleCipher ? JSON.parse(JSON.stringify(sampleCipher)) : null,
+    wire: sampleCipher,
+    wireTypeof: typeof sampleCipher,
+    wireLen: sampleCipher?.length ?? 0,
+    startsWithBackslashX: sampleCipher?.startsWith("\\x") ?? false,
   };
+
+  // Probe 3: round-trip real — upsert sobre profile.matricula (text) con un
+  // ciphertext de prueba serializado a string `\x<hex>`. Verificar que al
+  // leerlo de vuelta, decryptColumn lo procesa correctamente.
+  if (prof?.id && sampleCipher) {
+    const { error: upErr } = await supabase
+      .from("profile")
+      .update({ matricula: sampleCipher })
+      .eq("id", prof.id);
+    if (upErr) {
+      probes.roundTripText = { error: upErr.message };
+    } else {
+      const { data: re } = await supabase
+        .from("profile")
+        .select("matricula")
+        .eq("id", prof.id)
+        .maybeSingle();
+      probes.roundTripText = {
+        sentWire: sampleCipher.slice(0, 80),
+        readBack: re?.matricula?.slice(0, 80) ?? null,
+        match: sampleCipher === re?.matricula,
+      };
+      // Cleanup: limpiar matricula para no dejar basura.
+      await supabase.from("profile").update({ matricula: null }).eq("id", prof.id);
+    }
+  }
 
   return NextResponse.json({ ok: true, probes }, { status: 200 });
 }

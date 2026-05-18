@@ -29,7 +29,7 @@
 import { decryptColumn } from "@/lib/crypto";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-import { err, mapSupabaseError, ok, type Result } from "./errors";
+import { err, ok, type Result } from "./errors";
 import { getActiveSession, type ActiveSession } from "./session";
 
 export interface ActiveOrganization {
@@ -124,26 +124,19 @@ export async function getActiveContext(): Promise<Result<ActiveContext>> {
   const profRow = profRes.data as {
     id: string;
     email: string;
-    nombre_cifrado: Buffer | null;
-    apellido_cifrado: Buffer | null;
+    nombre_cifrado: string | null;
+    apellido_cifrado: string | null;
     matricula: string | null;
     avatar_url: string | null;
   };
 
-  // Desencriptar PII server-side. NUNCA se enviarán los buffers cifrados al cliente.
-  let nombre: string | null = null;
-  let apellido: string | null = null;
-  try {
-    nombre = decryptColumn(toBuffer(profRow.nombre_cifrado));
-    apellido = decryptColumn(toBuffer(profRow.apellido_cifrado));
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    return err(
-      "db_error",
-      "No se pudo desencriptar el perfil. Verificá FOLIO_ENC_KEY.",
-      msg,
-    );
-  }
+  // Desencriptar PII server-side. NUNCA se envía el ciphertext al cliente.
+  // Si la decodificación falla (corruption, key rotation, data legacy del bug
+  // pre-2026-05-18 donde supabase-js serializaba Buffer como JSON), logueamos
+  // y devolvemos null en vez de tirar la app abajo — el sidebar muestra
+  // fallback con organization.nombre.
+  const nombre = tryDecrypt(profRow.nombre_cifrado, "profile.nombre_cifrado");
+  const apellido = tryDecrypt(profRow.apellido_cifrado, "profile.apellido_cifrado");
 
   const organization: ActiveOrganization = {
     id: orgRow.id,
@@ -172,23 +165,24 @@ export async function getActiveContext(): Promise<Result<ActiveContext>> {
     avatarUrl: profRow.avatar_url,
   };
 
-  void mapSupabaseError; // (helper disponible por consistencia con el resto del data layer)
   return ok({ session, organization, profile });
 }
 
 /**
- * Supabase serializa bytea como hex string (`\x...`) cuando viene de PostgREST,
- * no como Buffer. Convertimos a Buffer antes de pasar a `decryptColumn`.
- * Acepta también Buffer (caso futuro de bindings nativos) y null/undefined.
+ * Wrapper sobre `decryptColumn` que NO lanza: si la decodificación falla,
+ * loguea en server y devuelve null. Reservado para PII nice-to-have donde
+ * el render tolera ausencia (ej. nombre del profesional en sidebar). NO
+ * usar para PHI ni para datos donde el null genere ambigüedad.
  */
-function toBuffer(value: Buffer | string | null | undefined): Buffer | null {
-  if (value == null) return null;
-  if (Buffer.isBuffer(value)) return value;
-  if (typeof value === "string") {
-    // Format PostgREST: `\x` + hex pairs.
-    if (value.startsWith("\\x")) return Buffer.from(value.slice(2), "hex");
-    // Fallback: tratar como base64 (Supabase JS suele entregar base64 en algunas configs).
-    return Buffer.from(value, "base64");
+function tryDecrypt(value: string | null, label: string): string | null {
+  if (!value) return null;
+  try {
+    return decryptColumn(value);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn(
+      `[active-context] ${label}: decrypt falló (${msg}). len=${value.length}, sample="${value.slice(0, 40)}"`,
+    );
+    return null;
   }
-  return null;
 }

@@ -77,17 +77,29 @@ function getHmacKey(): Buffer {
 // ─── API pública ────────────────────────────────────────────────────────────
 
 /**
- * Encripta un string a un `Buffer` listo para insertar en una columna `bytea`.
+ * Encripta un string y devuelve el literal Postgres `\x<hex>` listo para
+ * INSERT en una columna `bytea` vía supabase-js / PostgREST.
  *
- * Formato del ciphertext: `iv(12) || authTag(16) || ciphertext(N)` concatenados.
+ * Formato binario interno: `iv(12) || authTag(16) || ciphertext(N)`.
+ * Formato wire (esta función): `'\\x' + hex(iv||tag||ct)`.
  *
- * NOTA: AES-GCM con IV random + AAD vacío es semánticamente seguro mientras
- * la key no se reuse para encriptar > 2^32 mensajes con el mismo IV
- * (extremadamente improbable con IV random de 96 bits). Para 20 médicos
- * × 50 turnos/mes durante 4 años = 4800 encryptions/mes = ~230k total,
- * estamos a 14 órdenes de magnitud del límite teórico.
+ * Por qué retornamos string y NO Buffer:
+ *   supabase-js serializa el body de cada request con `JSON.stringify`.
+ *   `JSON.stringify(Buffer)` invoca `Buffer.prototype.toJSON()` y produce
+ *   `{"type":"Buffer","data":[...]}`. PostgREST recibe ese objeto y lo
+ *   almacena como los BYTES ASCII de la cadena JSON, NO como los bytes
+ *   binarios originales. Resultado: el bytea queda corrupto.
+ *
+ *   Diagnosticado en prod 2026-05-18 vía /api/admin/probe-encryption:
+ *   `nombre_cifrado` contenía `{"type":"Buffer","data":[82,1,...]}` como
+ *   ASCII en vez del ciphertext. El fix es enviar el literal bytea
+ *   `\x<hex>` que PostgREST decodifica correctamente a binario.
+ *
+ * NOTA AES-GCM: con IV random + AAD vacío es semánticamente seguro mientras
+ * la key no se reuse para > 2^32 mensajes con el mismo IV (extremadamente
+ * improbable con IV random de 96 bits).
  */
-export function encryptColumn(plaintext: string | null | undefined): Buffer | null {
+export function encryptColumn(plaintext: string | null | undefined): string | null {
   if (plaintext === null || plaintext === undefined) return null;
   const iv = randomBytes(IV_LEN);
   const cipher = createCipheriv(ALG, getEncKey(), iv) as CipherGCM;
@@ -96,11 +108,21 @@ export function encryptColumn(plaintext: string | null | undefined): Buffer | nu
     cipher.final(),
   ]);
   const authTag = cipher.getAuthTag();
-  return Buffer.concat([iv, authTag, ciphertext]);
+  const wire = Buffer.concat([iv, authTag, ciphertext]);
+  return "\\x" + wire.toString("hex");
 }
 
-/** Inversa de `encryptColumn`. */
-export function decryptColumn(buf: Buffer | null | undefined): string | null {
+/**
+ * Inversa de `encryptColumn`. Acepta varios formatos de wire para tolerar
+ * cómo PostgREST y supabase-js serializan bytea en distintos paths:
+ *   - `'\\x<hex>'` — formato canónico PostgREST GET response.
+ *   - `Buffer` — bindings nativos pg.
+ *   - `Uint8Array` — algunos clients.
+ *   - base64 plano — fallback.
+ */
+export function decryptColumn(value: string | Buffer | Uint8Array | null | undefined): string | null {
+  if (value === null || value === undefined) return null;
+  const buf = toBufferForDecrypt(value);
   if (!buf || buf.length === 0) return null;
   if (buf.length < IV_LEN + TAG_LEN) {
     throw new Error(
@@ -114,6 +136,20 @@ export function decryptColumn(buf: Buffer | null | undefined): string | null {
   decipher.setAuthTag(authTag);
   const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
   return plaintext.toString("utf8");
+}
+
+function toBufferForDecrypt(value: string | Buffer | Uint8Array): Buffer | null {
+  if (Buffer.isBuffer(value)) return value;
+  if (value instanceof Uint8Array) return Buffer.from(value);
+  if (typeof value === "string") {
+    if (value.length === 0) return null;
+    if (value.startsWith("\\x")) return Buffer.from(value.slice(2), "hex");
+    if (/^[0-9a-fA-F]+$/.test(value) && value.length % 2 === 0) {
+      return Buffer.from(value, "hex");
+    }
+    return Buffer.from(value, "base64");
+  }
+  return null;
 }
 
 /**
@@ -153,8 +189,8 @@ export function generateKeyBase64(): string {
  */
 export function encryptFields<T extends Record<string, string | null | undefined>>(
   fields: T,
-): { [K in keyof T]: Buffer | null } {
-  const out = {} as { [K in keyof T]: Buffer | null };
+): { [K in keyof T]: string | null } {
+  const out = {} as { [K in keyof T]: string | null };
   for (const key in fields) {
     out[key] = encryptColumn(fields[key]);
   }
@@ -162,12 +198,12 @@ export function encryptFields<T extends Record<string, string | null | undefined
 }
 
 /** Inversa de encryptFields. */
-export function decryptFields<T extends Record<string, Buffer | null | undefined>>(
+export function decryptFields<T extends Record<string, string | Buffer | Uint8Array | null | undefined>>(
   fields: T,
 ): { [K in keyof T]: string | null } {
   const out = {} as { [K in keyof T]: string | null };
   for (const key in fields) {
-    out[key] = decryptColumn(fields[key]);
+    out[key] = decryptColumn(fields[key] as string | Buffer | Uint8Array | null | undefined);
   }
   return out;
 }
