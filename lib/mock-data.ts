@@ -46,27 +46,27 @@ export const RESERVAS_PENDIENTES = 4;
 // ─── Pacientes ──────────────────────────────────────────────────────────────
 
 export const PACIENTES: PacientesById = {
-  1: { nombre: "Carlos Vega",    tipo: "nuevo",      sesiones: 0, edad: 42, genero: "M",
+  "1": { nombre: "Carlos Vega",    tipo: "nuevo",      sesiones: 0, edad: 42, genero: "M",
        motivo: "Dolor lumbar hace 3 meses · jornadas largas en escritorio.", tags: ["Dolor lumbar crónico"],
        notasImportantes: "", telefono: "+54 9 351 555 1842" },
-  2: { nombre: "María Sánchez",  tipo: "recurrente", sesiones: 4, edad: 38, genero: "F",
+  "2": { nombre: "María Sánchez",  tipo: "recurrente", sesiones: 4, edad: 38, genero: "F",
        motivo: "Cervicalgia crónica + contractura trapecio bilateral.",     tags: ["Migrañas crónicas"],
        notasImportantes: "Alergia a ibuprofeno — no recetar AINEs derivados.",
        telefono: "+54 9 351 555 2901" },
-  3: { nombre: "Diego Peralta",  tipo: "recurrente", sesiones: 2, edad: 51, genero: "M",
+  "3": { nombre: "Diego Peralta",  tipo: "recurrente", sesiones: 2, edad: 51, genero: "M",
        motivo: "Hernia L4-L5 confirmada. Ciática bilateral.",               tags: ["Postoperatorio"],
        notasImportantes: "Evitar manipulación L4-L5 forzada y tracción agresiva. Coordinar con Dr. Mendieta (cirujano).",
        telefono: "+54 9 351 555 3315" },
-  4: { nombre: "Ana Romero",     tipo: "nuevo",      sesiones: 0, edad: 29, genero: "F",
+  "4": { nombre: "Ana Romero",     tipo: "nuevo",      sesiones: 0, edad: 29, genero: "F",
        motivo: "Migrañas 2-3 / semana. Sospecha origen cervical.",          tags: ["Migrañas crónicas"],
        notasImportantes: "", telefono: "+54 9 351 555 4408" },
-  5: { nombre: "Roberto Flores", tipo: "recurrente", sesiones: 8, edad: 47, genero: "M",
+  "5": { nombre: "Roberto Flores", tipo: "recurrente", sesiones: 8, edad: 47, genero: "M",
        motivo: "Postura · escritorio. Hiperlordosis + escoliosis leve.",    tags: ["Postura · escritorio"],
        notasImportantes: "", telefono: "+54 9 351 555 5512" },
-  6: { nombre: "Valentina Cruz", tipo: "recurrente", sesiones: 3, edad: 33, genero: "F",
+  "6": { nombre: "Valentina Cruz", tipo: "recurrente", sesiones: 3, edad: 33, genero: "F",
        motivo: "Lumbalgia deportiva. Trail runner competitiva.",            tags: ["Deportista"],
        notasImportantes: "", telefono: "+54 9 351 555 6620" },
-  7: { nombre: "Martín López",   tipo: "nuevo",      sesiones: 0, edad: 35, genero: "M",
+  "7": { nombre: "Martín López",   tipo: "nuevo",      sesiones: 0, edad: 35, genero: "M",
        motivo: "Contractura cervical tras accidente leve hace 2 semanas.",  tags: ["Postoperatorio"],
        notasImportantes: "Maniobras cervicales rápidas: contraindicadas hasta evaluación radiológica completa.",
        telefono: "+54 9 351 555 7733" },
@@ -77,35 +77,35 @@ export const PACIENTES: PacientesById = {
 // El monto suma a KPIs cuando el turno pasa a 'cerrado'.
 
 const TURNOS_HOY_RAW: Turno[] = [
-  { id: 1, hora: "09:00", pacienteId: 1, servicio: "Consulta inicial", precio: 35000,
+  { id: "1", hora: "09:00", pacienteId: "1", servicio: "Consulta inicial", precio: 35000,
     estado: "cerrado", duracionMin: 58,
     postVisita: { guardada: true, enviadaWhatsApp: true, ts: "2026-05-13T10:05:00",
                   memo: "Carlos, gracias por venir. Reposo relativo esta tarde, mañana actividad normal. Te dejé en WhatsApp el video del ejercicio que hablamos." },
     gcal: true },
 
-  { id: 2, hora: "10:00", pacienteId: 2, servicio: "Seguimiento", precio: 22000,
+  { id: "2", hora: "10:00", pacienteId: "2", servicio: "Seguimiento", precio: 22000,
     estado: "cerrado", duracionMin: 42,
     postVisita: { guardada: true, enviadaWhatsApp: true, ts: "2026-05-13T10:50:00",
                   memo: "María, sesión muy productiva. Seguí con el estiramiento de trapecios 2 veces al día. Nos vemos en 2 semanas." },
     gcal: true },
 
-  { id: 3, hora: "11:00", pacienteId: 3, servicio: "Seguimiento", precio: 22000,
+  { id: "3", hora: "11:00", pacienteId: "3", servicio: "Seguimiento", precio: 22000,
     estado: "atendiendo", duracionMin: null, atendiendoDesde: null,
     postVisita: { guardada: false }, gcal: true },
 
-  { id: 4, hora: "12:00", pacienteId: 4, servicio: "Consulta inicial", precio: 35000,
+  { id: "4", hora: "12:00", pacienteId: "4", servicio: "Consulta inicial", precio: 35000,
     estado: "confirmado", duracionMin: null,
     postVisita: { guardada: false }, gcal: true },
 
-  { id: 5, hora: "15:00", pacienteId: 5, servicio: "Seguimiento", precio: 22000,
+  { id: "5", hora: "15:00", pacienteId: "5", servicio: "Seguimiento", precio: 22000,
     estado: "confirmado", duracionMin: null,
     postVisita: { guardada: false }, gcal: true },
 
-  { id: 6, hora: "16:00", pacienteId: 6, servicio: "Seguimiento", precio: 22000,
+  { id: "6", hora: "16:00", pacienteId: "6", servicio: "Seguimiento", precio: 22000,
     estado: "agendado", duracionMin: null,
     postVisita: { guardada: false }, gcal: false },
 
-  { id: 7, hora: "17:00", pacienteId: 7, servicio: "Consulta inicial", precio: 35000,
+  { id: "7", hora: "17:00", pacienteId: "7", servicio: "Consulta inicial", precio: 35000,
     estado: "agendado", duracionMin: null,
     postVisita: { guardada: false }, gcal: true },
 ];
@@ -146,44 +146,44 @@ export const CARGA_SEMANAL: CargaDiaSemana[] = [
 
 export const TURNOS_SEMANA: TurnoSemana[] = [
   // Lun 11 — cerrado / completados
-  { id: 101, fecha: "2026-05-11", hora: "09:00", dur: 45, pacienteId: 1, servicio: "Consulta inicial", estado: "cerrado", origen: "google" },
-  { id: 102, fecha: "2026-05-11", hora: "10:00", dur: 45, pacienteId: 2, servicio: "Seguimiento",      estado: "cerrado" },
-  { id: 103, fecha: "2026-05-11", hora: "11:00", dur: 45, pacienteId: 5, servicio: "Seguimiento",      estado: "cerrado" },
-  { id: 104, fecha: "2026-05-11", hora: "15:00", dur: 45, pacienteId: 6, servicio: "Deportiva",        estado: "cerrado" },
-  { id: 105, fecha: "2026-05-11", hora: "16:00", dur: 45, pacienteId: 3, servicio: "Seguimiento",      estado: "cerrado" },
-  { id: 106, fecha: "2026-05-11", hora: "17:00", dur: 45, pacienteId: 4, servicio: "Consulta inicial", estado: "cerrado", origen: "google" },
-  { id: 107, fecha: "2026-05-11", hora: "18:00", dur: 45, pacienteId: 7, servicio: "Seguimiento",      estado: "cerrado", origen: "google" },
+  { id: "101", fecha: "2026-05-11", hora: "09:00", dur: 45, pacienteId: "1", servicio: "Consulta inicial", estado: "cerrado", origen: "google" },
+  { id: "102", fecha: "2026-05-11", hora: "10:00", dur: 45, pacienteId: "2", servicio: "Seguimiento",      estado: "cerrado" },
+  { id: "103", fecha: "2026-05-11", hora: "11:00", dur: 45, pacienteId: "5", servicio: "Seguimiento",      estado: "cerrado" },
+  { id: "104", fecha: "2026-05-11", hora: "15:00", dur: 45, pacienteId: "6", servicio: "Deportiva",        estado: "cerrado" },
+  { id: "105", fecha: "2026-05-11", hora: "16:00", dur: 45, pacienteId: "3", servicio: "Seguimiento",      estado: "cerrado" },
+  { id: "106", fecha: "2026-05-11", hora: "17:00", dur: 45, pacienteId: "4", servicio: "Consulta inicial", estado: "cerrado", origen: "google" },
+  { id: "107", fecha: "2026-05-11", hora: "18:00", dur: 45, pacienteId: "7", servicio: "Seguimiento",      estado: "cerrado", origen: "google" },
 
   // Mar 12
-  { id: 111, fecha: "2026-05-12", hora: "09:00", dur: 45, pacienteId: 5, servicio: "Seguimiento",      estado: "cerrado" },
-  { id: 112, fecha: "2026-05-12", hora: "10:00", dur: 45, pacienteId: 1, servicio: "Seguimiento",      estado: "cerrado", origen: "google" },
-  { id: 113, fecha: "2026-05-12", hora: "11:00", dur: 45, pacienteId: 6, servicio: "Deportiva",        estado: "cerrado" },
-  { id: 114, fecha: "2026-05-12", hora: "15:00", dur: 45, pacienteId: 3, servicio: "Seguimiento",      estado: "cerrado" },
-  { id: 115, fecha: "2026-05-12", hora: "16:00", dur: 45, pacienteId: 2, servicio: "Seguimiento",      estado: "cerrado" },
-  { id: 116, fecha: "2026-05-12", hora: "17:00", dur: 45, pacienteId: 4, servicio: "Consulta inicial", estado: "no_asistio", origen: "google" },
+  { id: "111", fecha: "2026-05-12", hora: "09:00", dur: 45, pacienteId: "5", servicio: "Seguimiento",      estado: "cerrado" },
+  { id: "112", fecha: "2026-05-12", hora: "10:00", dur: 45, pacienteId: "1", servicio: "Seguimiento",      estado: "cerrado", origen: "google" },
+  { id: "113", fecha: "2026-05-12", hora: "11:00", dur: 45, pacienteId: "6", servicio: "Deportiva",        estado: "cerrado" },
+  { id: "114", fecha: "2026-05-12", hora: "15:00", dur: 45, pacienteId: "3", servicio: "Seguimiento",      estado: "cerrado" },
+  { id: "115", fecha: "2026-05-12", hora: "16:00", dur: 45, pacienteId: "2", servicio: "Seguimiento",      estado: "cerrado" },
+  { id: "116", fecha: "2026-05-12", hora: "17:00", dur: 45, pacienteId: "4", servicio: "Consulta inicial", estado: "no_asistio", origen: "google" },
 
   // Mié 13 — HOY (mirror de turnos actuales)
-  { id: 201, fecha: "2026-05-13", hora: "09:00", dur: 45, pacienteId: 1, servicio: "Consulta inicial", estado: "cerrado",    origen: "google" },
-  { id: 202, fecha: "2026-05-13", hora: "10:00", dur: 45, pacienteId: 2, servicio: "Seguimiento",      estado: "cerrado" },
-  { id: 203, fecha: "2026-05-13", hora: "11:00", dur: 45, pacienteId: 3, servicio: "Seguimiento",      estado: "atendiendo" },
-  { id: 204, fecha: "2026-05-13", hora: "12:00", dur: 45, pacienteId: 4, servicio: "Consulta inicial", estado: "confirmado", origen: "google" },
-  { id: 205, fecha: "2026-05-13", hora: "15:00", dur: 45, pacienteId: 5, servicio: "Seguimiento",      estado: "confirmado" },
-  { id: 206, fecha: "2026-05-13", hora: "16:00", dur: 45, pacienteId: 6, servicio: "Seguimiento",      estado: "agendado" },
-  { id: 207, fecha: "2026-05-13", hora: "17:00", dur: 45, pacienteId: 7, servicio: "Consulta inicial", estado: "agendado",   origen: "google" },
+  { id: "201", fecha: "2026-05-13", hora: "09:00", dur: 45, pacienteId: "1", servicio: "Consulta inicial", estado: "cerrado",    origen: "google" },
+  { id: "202", fecha: "2026-05-13", hora: "10:00", dur: 45, pacienteId: "2", servicio: "Seguimiento",      estado: "cerrado" },
+  { id: "203", fecha: "2026-05-13", hora: "11:00", dur: 45, pacienteId: "3", servicio: "Seguimiento",      estado: "atendiendo" },
+  { id: "204", fecha: "2026-05-13", hora: "12:00", dur: 45, pacienteId: "4", servicio: "Consulta inicial", estado: "confirmado", origen: "google" },
+  { id: "205", fecha: "2026-05-13", hora: "15:00", dur: 45, pacienteId: "5", servicio: "Seguimiento",      estado: "confirmado" },
+  { id: "206", fecha: "2026-05-13", hora: "16:00", dur: 45, pacienteId: "6", servicio: "Seguimiento",      estado: "agendado" },
+  { id: "207", fecha: "2026-05-13", hora: "17:00", dur: 45, pacienteId: "7", servicio: "Consulta inicial", estado: "agendado",   origen: "google" },
 
   // Jue 14
-  { id: 301, fecha: "2026-05-14", hora: "09:30", dur: 45, pacienteId: 2, servicio: "Seguimiento",      estado: "confirmado" },
-  { id: 302, fecha: "2026-05-14", hora: "10:30", dur: 45, pacienteId: 5, servicio: "Seguimiento",      estado: "confirmado" },
-  { id: 303, fecha: "2026-05-14", hora: "11:30", dur: 45, pacienteId: 3, servicio: "Seguimiento",      estado: "confirmado" },
-  { id: 304, fecha: "2026-05-14", hora: "15:00", dur: 45, pacienteId: 4, servicio: "Consulta inicial", estado: "agendado",   origen: "google" },
-  { id: 305, fecha: "2026-05-14", hora: "17:00", dur: 45, pacienteId: 6, servicio: "Deportiva",        estado: "agendado" },
+  { id: "301", fecha: "2026-05-14", hora: "09:30", dur: 45, pacienteId: "2", servicio: "Seguimiento",      estado: "confirmado" },
+  { id: "302", fecha: "2026-05-14", hora: "10:30", dur: 45, pacienteId: "5", servicio: "Seguimiento",      estado: "confirmado" },
+  { id: "303", fecha: "2026-05-14", hora: "11:30", dur: 45, pacienteId: "3", servicio: "Seguimiento",      estado: "confirmado" },
+  { id: "304", fecha: "2026-05-14", hora: "15:00", dur: 45, pacienteId: "4", servicio: "Consulta inicial", estado: "agendado",   origen: "google" },
+  { id: "305", fecha: "2026-05-14", hora: "17:00", dur: 45, pacienteId: "6", servicio: "Deportiva",        estado: "agendado" },
 
   // Vie 15
-  { id: 401, fecha: "2026-05-15", hora: "09:00", dur: 45, pacienteId: 1, servicio: "Seguimiento",      estado: "confirmado", origen: "google" },
-  { id: 402, fecha: "2026-05-15", hora: "10:00", dur: 45, pacienteId: 7, servicio: "Consulta inicial", estado: "confirmado", origen: "google" },
-  { id: 403, fecha: "2026-05-15", hora: "11:30", dur: 45, pacienteId: 6, servicio: "Deportiva",        estado: "agendado" },
-  { id: 404, fecha: "2026-05-15", hora: "15:30", dur: 45, pacienteId: 3, servicio: "Seguimiento",      estado: "agendado" },
-  { id: 405, fecha: "2026-05-15", hora: "16:30", dur: 45, pacienteId: 2, servicio: "Seguimiento",      estado: "confirmado" },
+  { id: "401", fecha: "2026-05-15", hora: "09:00", dur: 45, pacienteId: "1", servicio: "Seguimiento",      estado: "confirmado", origen: "google" },
+  { id: "402", fecha: "2026-05-15", hora: "10:00", dur: 45, pacienteId: "7", servicio: "Consulta inicial", estado: "confirmado", origen: "google" },
+  { id: "403", fecha: "2026-05-15", hora: "11:30", dur: 45, pacienteId: "6", servicio: "Deportiva",        estado: "agendado" },
+  { id: "404", fecha: "2026-05-15", hora: "15:30", dur: 45, pacienteId: "3", servicio: "Seguimiento",      estado: "agendado" },
+  { id: "405", fecha: "2026-05-15", hora: "16:30", dur: 45, pacienteId: "2", servicio: "Seguimiento",      estado: "confirmado" },
   // Sáb 16, Dom 17 — cerrado (sin turnos)
 ];
 
@@ -218,7 +218,7 @@ export const PEDIDOS: Pedido[] = [
   {
     id: "p3", canal: "whatsapp", estado: "pendiente",
     nombre: "María Sánchez", tel: "+54 9 351 488-7711",
-    nuevo: false, pacienteId: 2,
+    nuevo: false, pacienteId: "2",
     fecha: "2026-05-13", hora: "14:00", dur: 45,
     servicio: "Seguimiento", precio: 22000,
     motivo: "María quiere mover el seguimiento del 20 al 22. Vía WA.",
@@ -246,7 +246,7 @@ export const PEDIDOS: Pedido[] = [
   {
     id: "p6", canal: "whatsapp", estado: "reagendado",
     nombre: "Sebastián Carrizo", tel: "+54 9 351 411-9988",
-    nuevo: false, pacienteId: 3,
+    nuevo: false, pacienteId: "3",
     fecha: "2026-05-15", hora: "09:00", dur: 45,
     propuesta: { fecha: "2026-05-16", hora: "11:00" },
     servicio: "Seguimiento", precio: 22000,
@@ -307,9 +307,9 @@ export const CARGA_MES: CargaDiaMes[] = buildCargaMes();
 // Por pacienteId, ordenado de más reciente a más antigua.
 
 export const HISTORIAL_SESIONES: HistorialSesiones = {
-  1: [],
+  "1": [],
 
-  2: [
+  "2": [
     { id: "h2-4", fecha: "2026-04-30", hora: "10:00", dur: 42, servicio: "Seguimiento",
       vertebras: [{ id: "C4", estado: "ajustada" }, { id: "C5", estado: "ajustada" }, { id: "T1", estado: "leve" }],
       evaAntes: 4, evaDespues: 3,
@@ -359,7 +359,7 @@ export const HISTORIAL_SESIONES: HistorialSesiones = {
       postVisita: { guardada: false, memo: "", enviadaWhatsApp: false, ts: null } },
   ],
 
-  3: [
+  "3": [
     { id: "h3-2", fecha: "2026-04-29", hora: "11:00", dur: 48, servicio: "Seguimiento",
       vertebras: [{ id: "L4", estado: "severo" }, { id: "L5", estado: "moderado" }, { id: "L3", estado: "leve" }],
       evaAntes: 7, evaDespues: 6,
@@ -385,9 +385,9 @@ export const HISTORIAL_SESIONES: HistorialSesiones = {
       postVisita: { guardada: false, memo: "", enviadaWhatsApp: false, ts: null } },
   ],
 
-  4: [],
+  "4": [],
 
-  5: [
+  "5": [
     { id: "h5-8", fecha: "2026-04-23", hora: "15:00", dur: 38, servicio: "Seguimiento",
       vertebras: [{ id: "L2", estado: "ajustada" }, { id: "L3", estado: "ajustada" }, { id: "T8", estado: "leve" }],
       evaAntes: 3, evaDespues: 2,
@@ -449,7 +449,7 @@ export const HISTORIAL_SESIONES: HistorialSesiones = {
       postVisita: { guardada: true, memo: "Roberto, dejé el resumen con los ejercicios en tu WhatsApp. La silla nueva es clave.", enviadaWhatsApp: true, ts: "2025-11-13T16:01:00" } },
   ],
 
-  6: [
+  "6": [
     { id: "h6-3", fecha: "2026-04-22", hora: "16:00", dur: 45, servicio: "Seguimiento",
       vertebras: [{ id: "L4", estado: "ajustada" }, { id: "L5", estado: "ajustada" }, { id: "T12", estado: "leve" }],
       evaAntes: 3, evaDespues: 2,
@@ -476,5 +476,5 @@ export const HISTORIAL_SESIONES: HistorialSesiones = {
       postVisita: { guardada: false, memo: "", enviadaWhatsApp: false, ts: null } },
   ],
 
-  7: [],
+  "7": [],
 };

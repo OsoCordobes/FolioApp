@@ -12,6 +12,7 @@ import type { PacientesById, Turno } from "@/lib/types";
 interface KpiStripProps {
   turnos: Turno[];
   pacientes: PacientesById;
+  now: Date;
 }
 
 interface KpiItem {
@@ -22,7 +23,7 @@ interface KpiItem {
   tone?: "green";
 }
 
-export function KpiStrip({ turnos, pacientes }: KpiStripProps) {
+export function KpiStrip({ turnos, pacientes, now }: KpiStripProps) {
   const total = turnos.length;
   const cerrados = turnos.filter((t) => t.estado === "cerrado").length;
   const recaudado = turnos
@@ -35,10 +36,11 @@ export function KpiStrip({ turnos, pacientes }: KpiStripProps) {
   const proximo = turnos.find(
     (t) =>
       ["agendado", "confirmado", "en_sala"].includes(t.estado) &&
-      minutesTo(t.hora) >= 0,
+      minutesTo(t.hora, now) >= 0,
   );
-  const proximoTxt = proximo
-    ? `${pacientes[proximo.pacienteId].nombre.split(" ")[0]} · ${relativeTo(proximo.hora)}`
+  const proximoPaciente = proximo ? pacientes[proximo.pacienteId] : null;
+  const proximoTxt = proximo && proximoPaciente
+    ? `${proximoPaciente.nombre.split(" ")[0]} · ${relativeTo(proximo.hora, now)}`
     : "—";
 
   const kpis: KpiItem[] = [

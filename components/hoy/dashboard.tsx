@@ -10,58 +10,103 @@
  * persistencia real esté conectada.
  */
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 
 import * as I from "@/components/icons";
 import { KpiStrip } from "@/components/hoy/kpi-strip";
 import { PageHeader } from "@/components/hoy/page-header";
 import { TurnoList } from "@/components/hoy/turno-list";
-import { NOW_SIM } from "@/lib/dashboard-helpers";
-import { PACIENTES, TURNOS_HOY, bootAtendiendoDesde } from "@/lib/mock-data";
 import { applyTransition } from "@/lib/turno-states";
+import { useNow } from "@/lib/use-now";
 import type { EstadoTurno, PacientesById, Turno } from "@/lib/types";
 
-export function Dashboard() {
-  // Inicialización lazy: aplica bootAtendiendoDesde con el clock del cliente
-  // (mockeado por Playwright en tests, real en producción). Garantiza que
-  // `atendiendoDesde` quede a -38min 14s del clock activo, manteniendo el
-  // cronómetro determinístico contra el baseline.
-  const [turnos, setTurnos] = useState<Turno[]>(() => bootAtendiendoDesde(TURNOS_HOY));
-  const [pacientes] = useState<PacientesById>(PACIENTES);
-  const [fichaTurnoId, setFichaTurnoId] = useState<number | null>(null);
-  const [walkInOpen, setWalkInOpen] = useState(false);
+import { transitionTurnoAction } from "@/app/(app)/hoy/actions";
 
-  const handleTransition = (id: number, to: EstadoTurno, extra: Partial<Turno> = {}) => {
-    setTurnos((prev) =>
-      prev.map((t) => (t.id === id ? applyTransition(t, to, { extra }) : t)),
-    );
+interface DashboardProps {
+  initialTurnos: Turno[];
+  pacientes: PacientesById;
+  fechaIso: string; // YYYY-MM-DD
+  fechaLarga: string; // "miércoles 13 de mayo"
+  fechaAnio: number;
+  nowIso: string; // ISO del SSR, hydration-safe
+}
+
+export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fechaAnio, nowIso }: DashboardProps) {
+  const [turnos, setTurnos] = useState<Turno[]>(initialTurnos);
+  const [fichaTurnoId, setFichaTurnoId] = useState<string | null>(null);
+  const [walkInOpen, setWalkInOpen] = useState(false);
+  const [, startTransition] = useTransition();
+  const now = useNow(nowIso, 60_000);
+
+  /**
+   * Optimistic transition + persistencia via Server Action.
+   * - Aplica la transición local inmediatamente (UI responsiva).
+   * - Dispara `transitionTurnoAction` en server.
+   * - Si falla, revierte al estado anterior.
+   */
+  const handleTransition = (id: string, to: EstadoTurno, extra: Partial<Turno> = {}) => {
+    setTurnos((prev) => {
+      const idx = prev.findIndex((t) => t.id === id);
+      if (idx === -1) return prev;
+      const before = prev[idx];
+      const next = applyTransition(before, to, { extra });
+      // Si el estado no cambió (transición inválida), no hacer server call.
+      if (next === before) return prev;
+
+      const optimistic = [...prev];
+      optimistic[idx] = next;
+
+      startTransition(async () => {
+        const result = await transitionTurnoAction({
+          turnoId: id,
+          to,
+          duracionRealMin: typeof extra.duracionMin === "number" ? extra.duracionMin : undefined,
+        });
+        if (!result.ok) {
+          console.warn("[hoy] transición rechazada:", result.error.message);
+          setTurnos((curr) => curr.map((t) => (t.id === id ? before : t)));
+        }
+      });
+
+      return optimistic;
+    });
   };
 
-  const nextId = useMemo<number | undefined>(() => {
+  const nextId = useMemo<string | undefined>(() => {
+    const [yy, mm, dd] = fechaIso.split("-").map(Number);
     const future = turnos.filter((x) => {
       const [h, m] = x.hora.split(":").map(Number);
-      const tt = new Date(NOW_SIM);
-      tt.setHours(h, m, 0, 0);
+      const tt = new Date(yy, mm - 1, dd, h, m, 0, 0);
       return (
-        tt.getTime() >= NOW_SIM.getTime() &&
+        tt.getTime() >= now.getTime() &&
         ["agendado", "confirmado", "en_sala"].includes(x.estado)
       );
     });
     return future[0]?.id;
-  }, [turnos]);
+  }, [turnos, fechaIso, now]);
 
   return (
     <>
       <div className="fi-content">
-        <PageHeader turnos={turnos} pacientes={pacientes} />
-        <KpiStrip turnos={turnos} pacientes={pacientes} />
-        <TurnoList
+        <PageHeader
           turnos={turnos}
           pacientes={pacientes}
-          nextId={nextId}
-          onTransition={handleTransition}
-          onOpenFicha={(id) => setFichaTurnoId(id)}
+          fechaLarga={fechaLarga}
+          fechaAnio={fechaAnio}
+          now={now}
         />
+        <KpiStrip turnos={turnos} pacientes={pacientes} now={now} />
+        {turnos.length === 0 ? (
+          <EmptyState fechaLarga={fechaLarga} />
+        ) : (
+          <TurnoList
+            turnos={turnos}
+            pacientes={pacientes}
+            nextId={nextId}
+            onTransition={handleTransition}
+            onOpenFicha={(id) => setFichaTurnoId(id)}
+          />
+        )}
       </div>
 
       {/* FAB walk-in */}
@@ -73,5 +118,19 @@ export function Dashboard() {
 
       {/* Walk-in modal y ficha-panel se materializan en F4. */}
     </>
+  );
+}
+
+function EmptyState({ fechaLarga }: { fechaLarga: string }) {
+  return (
+    <section className="fi-empty">
+      <div className="fi-empty-inner">
+        <h2 className="fi-empty-title">Sin turnos para hoy</h2>
+        <p className="fi-empty-sub">
+          No tenés turnos agendados para el {fechaLarga.toLowerCase()}. Podés crear uno desde
+          Calendario o cargar un walk-in.
+        </p>
+      </div>
+    </section>
   );
 }

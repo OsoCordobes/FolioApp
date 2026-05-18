@@ -118,9 +118,9 @@ interface LegacyTurnoLike extends Omit<Partial<Turno>, "estado"> {
 export function migrateTurnoLegacy(turno: LegacyTurnoLike): Turno {
   const mapped = (LEGACY_MAP[turno.estado] ?? turno.estado) as EstadoTurno;
   const out: Turno = {
-    id: turno.id ?? 0,
+    id: turno.id ?? "",
     hora: turno.hora ?? "",
-    pacienteId: turno.pacienteId ?? 0,
+    pacienteId: turno.pacienteId ?? "",
     servicio: turno.servicio ?? "",
     precio: turno.precio ?? 0,
     duracionMin: turno.duracionMin ?? null,

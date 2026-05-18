@@ -13,7 +13,7 @@ import type { Paciente, Turno } from "@/lib/types";
 interface CerradoRowProps {
   turno: Turno;
   paciente: Paciente;
-  onOpenFicha: (id: number) => void;
+  onOpenFicha: (id: string) => void;
 }
 
 export function CerradoRow({ turno, paciente, onOpenFicha }: CerradoRowProps) {

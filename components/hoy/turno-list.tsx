@@ -19,9 +19,9 @@ import type { EstadoTurno, PacientesById, Turno } from "@/lib/types";
 interface TurnoListProps {
   turnos: Turno[];
   pacientes: PacientesById;
-  nextId: number | undefined;
-  onTransition: (id: number, to: EstadoTurno, extra?: Partial<Turno>) => void;
-  onOpenFicha: (id: number) => void;
+  nextId: string | undefined;
+  onTransition: (id: string, to: EstadoTurno, extra?: Partial<Turno>) => void;
+  onOpenFicha: (id: string) => void;
   dense?: boolean;
 }
 

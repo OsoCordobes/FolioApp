@@ -1,30 +1,26 @@
 /**
  * Folio · Dashboard "Hoy" · helpers compartidos.
  *
- * Port de los utilitarios de folio/dashboard.jsx (líneas 9-43).
- * `NOW_SIM` es la "hora simulada" del prototipo (mitad de la sesión de
- * Diego Peralta — 11:38). Se usa para calcular cuántos minutos faltan
- * para el próximo turno y para etiquetas relativas como "en 22 min".
- *
- * En F4 (data layer real) `NOW_SIM` se reemplaza por `new Date()` real.
+ * `minutesTo` y `relativeTo` operan contra un "now" inyectable para evitar
+ * hydration mismatches (SSR captura el reloj en el fetch, el cliente lo
+ * refresca via `useNow` hook). Los componentes pasan el `now` explícitamente
+ * o aceptan el default `new Date()` (sólo válido en client-side render).
  */
 
 import type { EstadoTurno, EstadoTurnoConfig } from "./types";
 
-export const NOW_SIM = new Date("2026-05-13T11:38:00");
-
 export const fmtMoney = (n: number | null | undefined): string =>
   "$" + (n ?? 0).toLocaleString("es-AR");
 
-export function minutesTo(horaStr: string): number {
+export function minutesTo(horaStr: string, now: Date = new Date()): number {
   const [h, m] = horaStr.split(":").map(Number);
-  const t = new Date(NOW_SIM);
+  const t = new Date(now);
   t.setHours(h, m, 0, 0);
-  return Math.round((t.getTime() - NOW_SIM.getTime()) / 60000);
+  return Math.round((t.getTime() - now.getTime()) / 60000);
 }
 
-export function relativeTo(horaStr: string): string {
-  const d = minutesTo(horaStr);
+export function relativeTo(horaStr: string, now: Date = new Date()): string {
+  const d = minutesTo(horaStr, now);
   if (d === 0) return "ahora";
   if (d > 0) {
     if (d < 60) return `en ${d} min`;

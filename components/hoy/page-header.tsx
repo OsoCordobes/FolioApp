@@ -7,37 +7,40 @@
  */
 
 import * as I from "@/components/icons";
-import { FECHA_LARGA } from "@/lib/mock-data";
 import { minutesTo, relativeTo } from "@/lib/dashboard-helpers";
 import type { PacientesById, Turno } from "@/lib/types";
 
 interface PageHeaderProps {
   turnos: Turno[];
   pacientes: PacientesById;
+  fechaLarga: string;
+  fechaAnio: number;
+  now: Date;
 }
 
-export function PageHeader({ turnos, pacientes }: PageHeaderProps) {
+export function PageHeader({ turnos, pacientes, fechaLarga, fechaAnio, now }: PageHeaderProps) {
   const proximo = turnos.find(
     (t) =>
       ["agendado", "confirmado", "en_sala"].includes(t.estado) &&
-      minutesTo(t.hora) >= 0,
+      minutesTo(t.hora, now) >= 0,
   );
-  const eta = proximo ? relativeTo(proximo.hora) : null;
+  const eta = proximo ? relativeTo(proximo.hora, now) : null;
   const activos = turnos.filter(
     (t) => !["cerrado", "cancelado", "no_asistio"].includes(t.estado),
   ).length;
+  const proximoPaciente = proximo ? pacientes[proximo.pacienteId] : null;
 
   return (
     <header className="fi-page-head">
       <div>
-        <span className="fi-eyebrow">{FECHA_LARGA} · 2026</span>
+        <span className="fi-eyebrow">{fechaLarga} · {fechaAnio}</span>
         <h1>Tu agenda hoy</h1>
         <p className="fi-page-sub">
           {activos} turnos por delante
-          {eta && proximo ? (
+          {eta && proximoPaciente ? (
             <>
               <span className="fi-sep">·</span>
-              próximo <b>{pacientes[proximo.pacienteId].nombre.split(" ")[0]}</b> {eta}
+              próximo <b>{proximoPaciente.nombre.split(" ")[0]}</b> {eta}
             </>
           ) : null}
         </p>

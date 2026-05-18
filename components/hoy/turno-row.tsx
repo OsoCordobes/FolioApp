@@ -32,8 +32,8 @@ interface TurnoRowProps {
   turno: Turno;
   paciente: Paciente;
   isNext: boolean;
-  onTransition: (id: number, to: EstadoTurno, extra?: Partial<Turno>) => void;
-  onOpenFicha: (id: number) => void;
+  onTransition: (id: string, to: EstadoTurno, extra?: Partial<Turno>) => void;
+  onOpenFicha: (id: string) => void;
 }
 
 export function TurnoRow({ turno, paciente, isNext, onTransition, onOpenFicha }: TurnoRowProps) {

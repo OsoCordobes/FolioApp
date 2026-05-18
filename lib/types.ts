@@ -43,11 +43,15 @@ export interface Cobro {
   ts: string | null;
 }
 
-/** Turno del día (mock — el shape real con organizationId etc. llega en F2) */
+/**
+ * Turno (vista de cliente). Los IDs son strings (UUIDs cuando viene de DB,
+ * literales "1"..."N" en mock data legacy). El fetcher server-side traduce
+ * `turno_extendido` (M14) a este shape antes de mandarlo al cliente.
+ */
 export interface Turno {
-  id: number;
+  id: string;
   hora: string;
-  pacienteId: number;
+  pacienteId: string;
   servicio: string;
   precio: number;
   estado: EstadoTurno;
@@ -63,11 +67,11 @@ export interface Turno {
 
 /** Turno de la semana / mes (compacto, para grilla de calendario) */
 export interface TurnoSemana {
-  id: number;
+  id: string;
   fecha: string; // YYYY-MM-DD
   hora: string;
   dur: number;
-  pacienteId: number;
+  pacienteId: string;
   servicio: string;
   estado: EstadoTurno;
   origen?: OrigenTurno;
@@ -89,7 +93,7 @@ export interface Paciente {
   telefono: string;
 }
 
-export type PacientesById = Record<number, Paciente>;
+export type PacientesById = Record<string, Paciente>;
 
 // ─── Pedidos (Inbox unificado) ──────────────────────────────────────────────
 
@@ -104,7 +108,7 @@ export interface Pedido {
   tel: string;
   email?: string;
   nuevo: boolean;
-  pacienteId?: number;
+  pacienteId?: string;
   fecha: string | null;
   hora: string | null;
   dur: number;
@@ -176,7 +180,7 @@ export interface SesionHistorial {
   postVisita: PostVisita;
 }
 
-export type HistorialSesiones = Record<number, SesionHistorial[]>;
+export type HistorialSesiones = Record<string, SesionHistorial[]>;
 
 // ─── Misc ───────────────────────────────────────────────────────────────────
 
