@@ -131,7 +131,6 @@ export async function createPedidoPublico(
   // Fallback en caso de que el RPC no exista todavía: chequear manualmente.
   let ocupado = false;
   if (overlap.error || overlap.data === null) {
-    const inicioIso = inicioDate.toISOString();
     const finIso = finDate.toISOString();
 
     const [{ data: turnoConflict }, { data: pedidoConflict }, { data: bloqueoConflict }] =
