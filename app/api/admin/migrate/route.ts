@@ -1,0 +1,144 @@
+/**
+ * Folio · /api/admin/migrate
+ *
+ * Endpoint admin one-shot que aplica las migrations + seeds bundled en
+ * `supabase/{migrations,seed}/*.sql` al Postgres de Supabase. Se usa cuando
+ * no podemos correr `supabase db push` desde local (ej. password del proyecto
+ * vive solo en Vercel-integration, sin export al CLI).
+ *
+ * Auth: Bearer ${CRON_SECRET}.
+ *
+ * Modos (?mode=):
+ *   - all (default): migrations en orden, luego seeds en orden.
+ *   - migrations: solo migrations.
+ *   - seeds: solo seeds.
+ *
+ * Las migrations NO son idempotentes (CREATE TABLE / CREATE TYPE fallan en re-run).
+ * Los seeds sí son idempotentes (usan ON CONFLICT DO UPDATE).
+ *
+ * Connection: prefiere POSTGRES_URL_NON_POOLING (direct, 5432) porque las
+ * migrations corren múltiples statements pesados y el transaction pooler corta.
+ */
+
+import { readFile, readdir } from "node:fs/promises";
+import path from "node:path";
+
+import { NextResponse } from "next/server";
+import { Client } from "pg";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const maxDuration = 300;
+
+const MIGRATIONS_DIR = path.join(process.cwd(), "supabase", "migrations");
+const SEED_DIR = path.join(process.cwd(), "supabase", "seed");
+
+interface FileResult {
+  file: string;
+  ok: boolean;
+  ms: number;
+  bytes: number;
+  error?: string;
+}
+
+async function listSql(dir: string): Promise<string[]> {
+  const files = await readdir(dir);
+  return files.filter((f) => f.endsWith(".sql")).sort();
+}
+
+async function runFiles(client: Client, dir: string, label: string): Promise<FileResult[]> {
+  const results: FileResult[] = [];
+  const files = await listSql(dir);
+  for (const file of files) {
+    const start = Date.now();
+    const sql = await readFile(path.join(dir, file), "utf8");
+    try {
+      await client.query(sql);
+      results.push({ file: `${label}/${file}`, ok: true, ms: Date.now() - start, bytes: sql.length });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      results.push({ file: `${label}/${file}`, ok: false, ms: Date.now() - start, bytes: sql.length, error: msg });
+      throw new MigrationError(results);
+    }
+  }
+  return results;
+}
+
+class MigrationError extends Error {
+  constructor(public results: FileResult[]) {
+    super(results[results.length - 1]?.error ?? "migration failed");
+  }
+}
+
+export async function POST(req: Request) {
+  const auth = req.headers.get("authorization") ?? "";
+  const secret = process.env.CRON_SECRET;
+  if (!secret || auth !== `Bearer ${secret}`) {
+    return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+  }
+
+  const url = new URL(req.url);
+  const mode = url.searchParams.get("mode") ?? "all";
+  if (!["all", "migrations", "seeds"].includes(mode)) {
+    return NextResponse.json({ ok: false, error: "mode debe ser all|migrations|seeds" }, { status: 400 });
+  }
+
+  const dsn = process.env.POSTGRES_URL_NON_POOLING ?? process.env.POSTGRES_URL;
+  if (!dsn) {
+    return NextResponse.json(
+      { ok: false, error: "falta POSTGRES_URL_NON_POOLING / POSTGRES_URL" },
+      { status: 500 },
+    );
+  }
+
+  const client = new Client({
+    connectionString: dsn,
+    ssl: { rejectUnauthorized: false },
+    keepAlive: true,
+  });
+
+  const all: FileResult[] = [];
+  try {
+    await client.connect();
+    await client.query("SET check_function_bodies = off");
+
+    if (mode === "all" || mode === "migrations") {
+      all.push(...(await runFiles(client, MIGRATIONS_DIR, "migrations")));
+    }
+    if (mode === "all" || mode === "seeds") {
+      all.push(...(await runFiles(client, SEED_DIR, "seeds")));
+    }
+
+    await client.query("SET check_function_bodies = on");
+
+    return NextResponse.json({
+      ok: true,
+      mode,
+      totalMs: all.reduce((s, r) => s + r.ms, 0),
+      files: all,
+    });
+  } catch (e) {
+    const partial = e instanceof MigrationError ? e.results : all;
+    const lastErr = partial[partial.length - 1];
+    return NextResponse.json(
+      {
+        ok: false,
+        mode,
+        failedAt: lastErr?.file,
+        error: lastErr?.error ?? (e instanceof Error ? e.message : String(e)),
+        files: partial,
+      },
+      { status: 500 },
+    );
+  } finally {
+    try {
+      await client.end();
+    } catch {
+      // ignore close errors
+    }
+  }
+}
+
+export async function GET(req: Request) {
+  return POST(req);
+}

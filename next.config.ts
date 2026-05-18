@@ -8,6 +8,9 @@ const nextConfig: NextConfig = {
    * en pantallas full-screen sin chrome (Focus). En producción no aparece.
    */
   devIndicators: false,
+  outputFileTracingIncludes: {
+    "/api/admin/migrate": ["./supabase/migrations/*.sql", "./supabase/seed/*.sql"],
+  },
 };
 
 export default nextConfig;
