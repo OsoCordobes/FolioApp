@@ -23,6 +23,10 @@ import { redirect } from "next/navigation";
 
 import { encryptColumn } from "@/lib/crypto";
 import {
+  completeOnboardingSchema,
+  signUpSchema,
+} from "@/lib/onboarding/schemas";
+import {
   createSupabaseServerClient,
   createSupabaseServiceClient,
 } from "@/lib/supabase/server";
@@ -37,12 +41,11 @@ export async function signUpEmail(
   email: string,
   password: string,
 ): Promise<SignUpResult> {
-  if (!email || !email.match(/^[^@\s]+@[^@\s]+\.[^@\s]+$/)) {
-    return { ok: false, error: "Email inválido." };
+  const parsed = signUpSchema.safeParse({ email, password });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos." };
   }
-  if (!password || password.length < 8) {
-    return { ok: false, error: "Contraseña debe tener mínimo 8 caracteres." };
-  }
+  ({ email, password } = parsed.data);
 
   // Usamos admin.createUser (NO signUp) por dos razones:
   //   1. signUp dispara el email de confirmación de Supabase y el SMTP por
@@ -129,13 +132,17 @@ function slugify(s: string): string {
 export async function completeOnboarding(
   data: OnboardingData,
 ): Promise<OnboardingResult> {
-  // Validaciones server-side
-  if (!data.nombre || !data.apellido) {
-    return { ok: false, error: "Nombre y apellido son obligatorios." };
+  // Validación server-side estricta con Zod.
+  const parsed = completeOnboardingSchema.safeParse(data);
+  if (!parsed.success) {
+    const firstIssue = parsed.error.issues[0];
+    const path = firstIssue?.path?.join(".") ?? "datos";
+    return {
+      ok: false,
+      error: `${path}: ${firstIssue?.message ?? "inválido"}`,
+    };
   }
-  if (!data.consultorioNombre || !data.ciudad || !data.provincia) {
-    return { ok: false, error: "Datos del consultorio incompletos." };
-  }
+  data = parsed.data as OnboardingData;
 
   // Obtener user desde sesión actual
   const supabase = await createSupabaseServerClient();

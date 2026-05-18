@@ -5,8 +5,19 @@ const APP_PORT = 3010;
 
 const PROTOTYPE_ROOT = "C:\\Users\\amiun\\Desktop\\Folio";
 
+/**
+ * Configuración base. Tres projects:
+ *   - `prototype` — sirve el HTML estático del prototipo en localhost:4001.
+ *   - `app` — corre Next dev en localhost:3010 y compara visualmente.
+ *   - `e2e` — corre auth + onboarding + nav contra `E2E_BASE_URL`
+ *     (default: localhost:3010 si dev server activo; override a https://prod
+ *     para validar contra producción). Requiere envs reales (Supabase keys,
+ *     FOLIO_ENC_KEY) para que el dev server arranque.
+ */
+const E2E_BASE_URL = process.env.E2E_BASE_URL ?? `http://localhost:${APP_PORT}`;
+
 export default defineConfig({
-  testDir: "./tests/visual",
+  testDir: "./tests",
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: 0,
@@ -47,13 +58,21 @@ export default defineConfig({
     },
     {
       name: "app",
-      testMatch: /app\.spec\.ts/,
+      testMatch: /visual\/app\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         baseURL: `http://localhost:${APP_PORT}`,
         viewport: { width: 1440, height: 900 },
       },
       dependencies: [],
+    },
+    {
+      name: "e2e",
+      testMatch: /e2e\/.*\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: E2E_BASE_URL,
+      },
     },
   ],
   webServer: [
