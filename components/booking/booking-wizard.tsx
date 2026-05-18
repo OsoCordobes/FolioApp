@@ -40,6 +40,44 @@ interface Slot {
 
 type Vista = "servicio" | "slot" | "datos" | "ok";
 
+const TZ_AR = "America/Argentina/Cordoba";
+
+function fmtHora(iso: string): string {
+  return new Date(iso).toLocaleTimeString("es-AR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: TZ_AR,
+  });
+}
+
+function fmtDia(iso: string): string {
+  const d = new Date(iso).toLocaleDateString("es-AR", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    timeZone: TZ_AR,
+  });
+  return d.charAt(0).toUpperCase() + d.slice(1);
+}
+
+function diaKey(iso: string): string {
+  // YYYY-MM-DD en AR para agrupar
+  return new Date(iso).toLocaleDateString("en-CA", { timeZone: TZ_AR });
+}
+
+function agruparPorDia(slots: Slot[]): Array<{ dia: string; items: Slot[] }> {
+  const map = new Map<string, Slot[]>();
+  for (const s of slots) {
+    const k = diaKey(s.inicio);
+    const arr = map.get(k);
+    if (arr) arr.push(s);
+    else map.set(k, [s]);
+  }
+  return Array.from(map.entries())
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .map(([, items]) => ({ dia: fmtDia(items[0].inicio), items }));
+}
+
 export function BookingWizard({
   org,
   servicios,
@@ -156,40 +194,52 @@ export function BookingWizard({
             {slots.length === 0 && !pending ? (
               <p>No hay slots disponibles en los próximos 14 días.</p>
             ) : null}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 8 }}>
-              {slots.slice(0, 24).map((s) => {
-                const d = new Date(s.inicio);
-                const fmtFecha = d.toLocaleDateString("es-AR", {
-                  weekday: "short",
-                  day: "numeric",
-                  month: "short",
-                });
-                const fmtHora = d.toLocaleTimeString("es-AR", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                });
-                return (
-                  <button
-                    key={s.inicio}
-                    type="button"
-                    onClick={() => {
-                      setSlotPicked(s);
-                      setVista("datos");
-                    }}
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              {agruparPorDia(slots).map(({ dia, items }) => (
+                <div key={dia}>
+                  <h3
                     style={{
-                      padding: "10px 12px",
-                      background: "var(--surface)",
-                      border: "1px solid var(--line-soft)",
-                      borderRadius: "var(--r-sm)",
-                      cursor: "pointer",
-                      textAlign: "left",
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: "var(--ink-2)",
+                      textTransform: "uppercase",
+                      letterSpacing: 0.4,
+                      marginBottom: 8,
                     }}
                   >
-                    <div style={{ fontSize: 12, color: "var(--ink-3)" }}>{fmtFecha}</div>
-                    <div style={{ fontWeight: 500 }}>{fmtHora}</div>
-                  </button>
-                );
-              })}
+                    {dia}
+                  </h3>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))",
+                      gap: 8,
+                    }}
+                  >
+                    {items.map((s) => (
+                      <button
+                        key={s.inicio}
+                        type="button"
+                        onClick={() => {
+                          setSlotPicked(s);
+                          setVista("datos");
+                        }}
+                        style={{
+                          padding: "10px 12px",
+                          background: "var(--surface)",
+                          border: "1px solid var(--line-soft)",
+                          borderRadius: "var(--r-sm)",
+                          cursor: "pointer",
+                          color: "var(--ink)",
+                          fontWeight: 500,
+                        }}
+                      >
+                        {fmtHora(s.inicio)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           </section>
         ) : null}

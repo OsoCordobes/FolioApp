@@ -116,6 +116,77 @@ export async function createPedidoPublico(
     .maybeSingle();
   if (!servicio) return err("not_found", "Servicio no disponible.");
 
+  // Re-chequear que el slot siga libre. Race window mínimo: alguien podría haber
+  // tomado el mismo horario entre que el wizard cargó la lista y este submit.
+  // F11 podría usar un advisory_lock o constraint exclusivo en SQL para garantía dura.
+  const inicioDate = new Date(parsed.data.inicio);
+  const finDate = new Date(inicioDate.getTime() + servicio.duracion_min * 60_000);
+
+  const overlap = await service.rpc("slot_ocupado", {
+    p_org: org.id,
+    p_inicio: inicioDate.toISOString(),
+    p_fin: finDate.toISOString(),
+  });
+
+  // Fallback en caso de que el RPC no exista todavía: chequear manualmente.
+  let ocupado = false;
+  if (overlap.error || overlap.data === null) {
+    const inicioIso = inicioDate.toISOString();
+    const finIso = finDate.toISOString();
+
+    const [{ data: turnoConflict }, { data: pedidoConflict }, { data: bloqueoConflict }] =
+      await Promise.all([
+        service
+          .from("turno")
+          .select("id")
+          .eq("organization_id", org.id)
+          .in("estado", ["AGENDADO", "CONFIRMADO", "EN_SALA", "ATENDIENDO"])
+          .lt("inicio", finIso)
+          .gte("inicio", new Date(inicioDate.getTime() - 4 * 60 * 60_000).toISOString())
+          .limit(20),
+        service
+          .from("pedido")
+          .select("id, fecha_propuesta, duracion_min")
+          .eq("organization_id", org.id)
+          .eq("estado", "PENDIENTE")
+          .not("fecha_propuesta", "is", null)
+          .gte("fecha_propuesta", new Date(inicioDate.getTime() - 4 * 60 * 60_000).toISOString())
+          .lt("fecha_propuesta", finIso)
+          .limit(20),
+        service
+          .from("bloqueo")
+          .select("id, inicio, duracion_min")
+          .eq("organization_id", org.id)
+          .gte("inicio", new Date(inicioDate.getTime() - 4 * 60 * 60_000).toISOString())
+          .lt("inicio", finIso)
+          .limit(20),
+      ]);
+
+    const overlapsWith = (
+      rows: Array<{ inicio?: string; fecha_propuesta?: string; duracion_min: number }> | null,
+      field: "inicio" | "fecha_propuesta",
+    ) =>
+      (rows ?? []).some((r) => {
+        const startMs = new Date(r[field]!).getTime();
+        const endMs = startMs + r.duracion_min * 60_000;
+        return startMs < finDate.getTime() && endMs > inicioDate.getTime();
+      });
+
+    ocupado =
+      overlapsWith(turnoConflict as Array<{ inicio: string; duracion_min: number }> | null, "inicio") ||
+      overlapsWith(
+        pedidoConflict as Array<{ fecha_propuesta: string; duracion_min: number }> | null,
+        "fecha_propuesta",
+      ) ||
+      overlapsWith(bloqueoConflict as Array<{ inicio: string; duracion_min: number }> | null, "inicio");
+  } else {
+    ocupado = overlap.data === true;
+  }
+
+  if (ocupado) {
+    return err("conflict", "Ese horario ya no está disponible. Por favor elegí otro.");
+  }
+
   const { data: pedido, error } = await service
     .from("pedido")
     .insert({
