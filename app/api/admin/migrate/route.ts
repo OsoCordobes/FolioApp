@@ -111,7 +111,10 @@ export async function POST(req: Request) {
     await client.connect();
 
     if (reset) {
-      // Drop+recreate public schema. Solo seguro en bootstrap inicial — destructivo.
+      // Drop+recreate schemas que crean las migrations. Solo seguro en bootstrap
+      // inicial — destructivo. Reset ahora también limpia el schema `analytics`
+      // (creado por M15).
+      await client.query("DROP SCHEMA IF EXISTS analytics CASCADE");
       await client.query("DROP SCHEMA IF EXISTS public CASCADE");
       await client.query("CREATE SCHEMA public");
       await client.query("GRANT ALL ON SCHEMA public TO postgres");
