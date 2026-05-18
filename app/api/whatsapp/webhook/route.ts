@@ -8,15 +8,23 @@
  *     informal: "hola, quería un turno para el lunes"). Lo convertimos a
  *     un `pedido` con canal=WHATSAPP y nombre=desde el contacto.
  *   - statuses: delivery report de un template que enviamos (delivered,
- *     read, failed). Actualizamos `recordatorio_job.enviado_ts` o flagging.
+ *     read, failed). Actualizamos `recordatorio_job` (M18).
  *
  * Seguridad:
- *   - Verify token en GET (Meta lo manda en cada handshake).
- *   - X-Hub-Signature-256: validar HMAC SHA256 del body con APP_SECRET.
- *     En F11 polish.
+ *   - GET verify token (Meta lo manda en cada handshake).
+ *   - POST: X-Hub-Signature-256 HMAC SHA256 del body con META_APP_SECRET.
+ *     En modo dev (sin secret) → warn + accept. En prod sin secret → 503.
  */
 
 import { NextResponse, type NextRequest } from "next/server";
+
+import { encryptColumn } from "@/lib/crypto";
+import { createSupabaseServiceClient } from "@/lib/supabase/server";
+import { resolveOrgByPhoneNumberId } from "@/lib/whatsapp/resolve-org";
+import { verifyMetaSignature } from "@/lib/whatsapp/webhook-security";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -31,62 +39,124 @@ export async function GET(request: NextRequest) {
   return new NextResponse("forbidden", { status: 403 });
 }
 
-interface WhatsAppWebhookEntry {
+interface WhatsAppMessage {
+  from: string;
+  id: string;
+  timestamp: string;
+  type: "text" | "image" | "audio" | "video" | "document" | "interactive";
+  text?: { body: string };
+}
+
+interface WhatsAppStatus {
+  id: string;
+  status: "sent" | "delivered" | "read" | "failed";
+  timestamp: string;
+  recipient_id: string;
+  errors?: Array<{ code: number; title: string; message?: string }>;
+}
+
+interface WhatsAppEntry {
   changes: Array<{
     value: {
       messaging_product: "whatsapp";
       metadata: { phone_number_id: string };
       contacts?: Array<{ profile: { name: string }; wa_id: string }>;
-      messages?: Array<{
-        from: string;
-        id: string;
-        timestamp: string;
-        type: "text" | "image" | "audio" | "video" | "document" | "interactive";
-        text?: { body: string };
-      }>;
-      statuses?: Array<{
-        id: string;
-        status: "sent" | "delivered" | "read" | "failed";
-        timestamp: string;
-        recipient_id: string;
-      }>;
+      messages?: WhatsAppMessage[];
+      statuses?: WhatsAppStatus[];
     };
     field: "messages";
   }>;
 }
 
+const STATUS_MAP: Record<WhatsAppStatus["status"], "SENT" | "DELIVERED" | "READ" | "FAILED"> = {
+  sent: "SENT",
+  delivered: "DELIVERED",
+  read: "READ",
+  failed: "FAILED",
+};
+
 export async function POST(request: NextRequest) {
-  const body = (await request.json()) as { entry: WhatsAppWebhookEntry[] };
+  // 1. Validar firma. Leemos el body como texto para HMAC, luego parseamos.
+  const rawBody = await request.text();
+  const sigCheck = verifyMetaSignature(request.headers.get("x-hub-signature-256"), rawBody);
+  if (!sigCheck.ok) {
+    return new NextResponse(`signature ${sigCheck.reason}`, {
+      status: sigCheck.reason === "server-misconfigured" ? 503 : 403,
+    });
+  }
 
-  // TODO[F11]: validar X-Hub-Signature-256 con APP_SECRET.
-  // const signature = request.headers.get("x-hub-signature-256");
-  // if (!verifyHmac(signature, await request.text(), process.env.WHATSAPP_APP_SECRET)) {
-  //   return new NextResponse("invalid signature", { status: 403 });
-  // }
+  let payload: { entry?: WhatsAppEntry[] };
+  try {
+    payload = JSON.parse(rawBody);
+  } catch (e) {
+    console.warn("[whatsapp] body no es JSON válido:", e);
+    return NextResponse.json({ ok: true }, { status: 200 });
+  }
 
-  for (const entry of body.entry ?? []) {
+  const supabase = createSupabaseServiceClient();
+
+  for (const entry of payload.entry ?? []) {
     for (const change of entry.changes ?? []) {
       if (change.field !== "messages") continue;
       const value = change.value;
+      const phoneNumberId = value.metadata?.phone_number_id;
+      const org = phoneNumberId ? await resolveOrgByPhoneNumberId(phoneNumberId) : null;
 
-      // Messages inbound → crear pedido (en F7 conectar con flow real)
+      // ─── Messages inbound ──────────────────────────────────────────────
       for (const msg of value.messages ?? []) {
         if (msg.type !== "text" || !msg.text?.body) continue;
+
+        if (!org) {
+          console.warn(`[whatsapp] mensaje recibido para phone_number_id=${phoneNumberId} pero no resolve a ninguna org. Ignorado.`);
+          continue;
+        }
+
         const contact = value.contacts?.find((c) => c.wa_id === msg.from);
-        const nombre = contact?.profile?.name ?? msg.from;
-        // TODO: resolver organization a partir del phone_number_id (lookup
-        // en integration.meta_json.phone_number_id → organization_id) y
-        // crear `pedido` con canal=WHATSAPP. Esto se implementa cuando
-        // las primeras orgs tengan WhatsApp conectado.
-        void nombre;
-        void msg.text.body;
+        const nombre = contact?.profile?.name?.trim() || msg.from;
+        const telefono = msg.from.startsWith("+") ? msg.from : `+${msg.from}`;
+        const motivo = msg.text.body.slice(0, 2000);
+
+        // Inserción de pedido vía service client (RLS bypass — el remitente
+        // no tiene sesión user).
+        const { error: pedErr } = await supabase.from("pedido").insert({
+          organization_id: org.id,
+          canal: "WHATSAPP",
+          estado: "PENDIENTE",
+          nombre_cifrado: encryptColumn(nombre)!,
+          telefono_cifrado: encryptColumn(telefono)!,
+          email_cifrado: null,
+          fecha_propuesta: null,
+          duracion_min: 45,
+          servicio_id: null,
+          motivo_cifrado: encryptColumn(motivo),
+          precio_cents: null,
+        });
+        if (pedErr) {
+          console.warn(`[whatsapp] error creando pedido inbound: ${pedErr.message}`);
+        }
       }
 
-      // Statuses outbound → marcar recordatorio_job como enviado o failed
+      // ─── Statuses outbound (delivered/read/failed) ─────────────────────
       for (const status of value.statuses ?? []) {
-        // TODO: lookup recordatorio_job por messages.id → setear enviado_ts
-        // o incrementar intentos si failed.
-        void status;
+        const dbStatus = STATUS_MAP[status.status];
+        if (!dbStatus) continue;
+
+        const patch: Record<string, unknown> = {
+          estado_delivery: dbStatus,
+          delivery_updated_ts: new Date(Number(status.timestamp) * 1000).toISOString(),
+        };
+        if (status.status === "failed" && status.errors?.[0]) {
+          const e = status.errors[0];
+          patch.error_msg = `${e.code}: ${e.title}${e.message ? ` — ${e.message}` : ""}`;
+        }
+
+        const { error: upErr } = await supabase
+          .from("recordatorio_job")
+          .update(patch)
+          .eq("meta_message_id", status.id);
+        if (upErr) {
+          console.warn(`[whatsapp] error actualizando status ${status.id}: ${upErr.message}`);
+        }
       }
     }
   }
