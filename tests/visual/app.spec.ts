@@ -27,6 +27,7 @@ const SCREENS: Screen[] = [
   { name: "login", route: "/login" },
   { name: "onboarding", route: "/onboarding" },
   { name: "hoy", route: "/hoy" },
+  { name: "pacientes", route: "/pacientes" },
 ];
 
 async function loadAppScreen(page: Page, route: string, theme: Theme) {
