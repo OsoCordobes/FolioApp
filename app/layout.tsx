@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { QueryProvider } from "@/lib/query-client";
 import { TweaksProvider } from "@/lib/tweaks-context";
 
 export const metadata: Metadata = {
@@ -37,7 +38,9 @@ export default function RootLayout({
         <link rel="stylesheet" href="/folio.css" />
       </head>
       <body>
-        <TweaksProvider>{children}</TweaksProvider>
+        <QueryProvider>
+          <TweaksProvider>{children}</TweaksProvider>
+        </QueryProvider>
       </body>
     </html>
   );
