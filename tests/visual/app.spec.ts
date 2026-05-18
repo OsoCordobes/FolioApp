@@ -28,8 +28,9 @@ const SCREENS: Screen[] = [
   { name: "onboarding", route: "/onboarding" },
   { name: "hoy", route: "/hoy" },
   { name: "pacientes", route: "/pacientes" },
-  // El baseline del prototipo abre la ficha de María Sánchez (id=2).
   { name: "paciente", route: "/pacientes/2" },
+  // Focus arranca con turno demo de Diego Peralta (id=3).
+  { name: "focus", route: "/focus/3" },
 ];
 
 async function loadAppScreen(page: Page, route: string, theme: Theme) {
@@ -44,13 +45,24 @@ async function loadAppScreen(page: Page, route: string, theme: Theme) {
     }
   }, theme);
 
-  await page.goto(route, { waitUntil: "domcontentloaded" });
+  // Esconder el dev-tools indicator de Next.js (DOM webcomponent
+  // `nextjs-portal`) para que no rompa el diff pixel-perfect. En
+  // producción el indicator no existe.
+  await page.addInitScript(() => {
+    const css =
+      "nextjs-portal,[data-nextjs-toast],[data-next-mark],[data-nextjs-dev-tools-button]{display:none !important}";
+    const inject = () => {
+      if (document.getElementById("__folio-hide-devtools")) return;
+      const style = document.createElement("style");
+      style.id = "__folio-hide-devtools";
+      style.textContent = css;
+      document.documentElement.appendChild(style);
+    };
+    inject();
+    document.addEventListener("DOMContentLoaded", inject);
+  });
 
-  // Forzamos el atributo por si el read de localStorage en useEffect llega
-  // tarde respecto al primer paint (defensa adicional para SSR).
-  await page.evaluate((t) => {
-    document.documentElement.setAttribute("data-theme", t);
-  }, theme);
+  await page.goto(route, { waitUntil: "domcontentloaded" });
 
   await page.waitForFunction(
     () => {
@@ -63,6 +75,23 @@ async function loadAppScreen(page: Page, route: string, theme: Theme) {
   await page.evaluate(() => document.fonts.ready);
 
   await page.clock.runFor(SETTLE_MS);
+
+  // Forzamos `data-theme` AL FINAL, después de que TweaksProvider haya
+  // corrido sus useEffect (mounting + localStorage read). Es la defensa
+  // para que rutas dinámicas (ssr:false como /focus) y rutas SSR'd
+  // converjan al mismo theme antes del screenshot.
+  await page.evaluate((t) => {
+    document.documentElement.setAttribute("data-theme", t);
+  }, theme);
+
+  // Remover el portal del Next.js DevTools indicator (vive como web component
+  // <nextjs-portal> con shadow DOM — CSS inyectado al document no aplica).
+  await page.evaluate(() => {
+    document.querySelectorAll("nextjs-portal").forEach((n) => n.remove());
+  });
+
+  // Un settle final para que el CSS del tema aplique completamente
+  await page.waitForTimeout(120);
 }
 
 test.beforeEach(async ({ page }) => {
