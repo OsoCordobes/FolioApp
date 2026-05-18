@@ -3,7 +3,7 @@
   "crons": [
     {
       "path": "/api/cron/dispatch-recordatorios",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 5 * * *"
     },
     {
       "path": "/api/cron/google-watch-renew",
