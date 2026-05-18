@@ -14,10 +14,14 @@
  * Pausa cuando el mouse está encima o cuando la tab está hidden.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ComponentType } from "react";
 
 import { FolioMark } from "@/components/folio-mark";
 import { SlideAgenda } from "@/components/auth/slide-agenda";
+import { SlideCalendario } from "@/components/auth/slide-calendario";
+import { SlideFinanzas } from "@/components/auth/slide-finanzas";
+import { SlideReagenda } from "@/components/auth/slide-reagenda";
+import { SlideIA } from "@/components/auth/slide-ia";
 
 const SLIDE_MS = 5000;
 const SLIDE_MS_LONG = 6500;
@@ -28,6 +32,7 @@ interface SlideDef {
   eyebrow: string;
   title: string;
   subtitle: string;
+  comp: ComponentType<{ active: boolean }>;
   dur: number;
   plus?: boolean;
 }
@@ -38,6 +43,7 @@ const CAROUSEL: SlideDef[] = [
     eyebrow: "08:30 · antes del primer turno",
     title: "Tu día ya está ordenado antes de que llegues.",
     subtitle: "Folio prepara la agenda y las fichas mientras dormís. Vos abrís la app y empezás.",
+    comp: SlideAgenda,
     dur: SLIDE_MS_LONG,
   },
   {
@@ -45,6 +51,7 @@ const CAROUSEL: SlideDef[] = [
     eyebrow: "10:12 · mientras atendés",
     title: "Mientras atendés, la app trabaja por vos.",
     subtitle: "Reservas online, cobros y recordatorios — todo en background.",
+    comp: SlideCalendario,
     dur: SLIDE_MS_LONG,
   },
   {
@@ -52,6 +59,7 @@ const CAROUSEL: SlideDef[] = [
     eyebrow: "19:40 · al cierre del día",
     title: "Tu mes en una mirada.",
     subtitle: "Recaudado, turnos atendidos y tu mejor día — al cerrar el consultorio.",
+    comp: SlideFinanzas,
     dur: SLIDE_MS_XLONG,
   },
   {
@@ -59,6 +67,7 @@ const CAROUSEL: SlideDef[] = [
     eyebrow: "11:20 · antes de cerrar el turno",
     title: "Reagendá el próximo turno en 2 clics.",
     subtitle: "Sin levantarte de la consulta. El recordatorio queda programado solo, antes de que tu paciente salga.",
+    comp: SlideReagenda,
     dur: SLIDE_MS_LONG,
   },
   {
@@ -66,6 +75,7 @@ const CAROUSEL: SlideDef[] = [
     eyebrow: "durante toda tu jornada · próximamente",
     title: "Tu copiloto clínico",
     subtitle: "Conoce a cada paciente, te avisa lo importante y te ayuda a crecer.",
+    comp: SlideIA,
     dur: 15000,
     plus: true,
   },
@@ -141,6 +151,7 @@ export function SideArt() {
       <div className="au2-stage">
         {CAROUSEL.map((c, i) => {
           const isActive = i === idx;
+          const Comp = c.comp;
           return (
             <div
               key={c.id}
@@ -157,7 +168,7 @@ export function SideArt() {
                   <p className="au2-slide-sub">{c.subtitle}</p>
                 </header>
                 <div className="au2-slide-mockup">
-                  <SlideAgenda active={isActive} />
+                  <Comp active={isActive} />
                 </div>
               </div>
             </div>
