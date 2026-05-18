@@ -29,8 +29,8 @@ const SCREENS: Screen[] = [
   { name: "hoy", route: "/hoy" },
   { name: "pacientes", route: "/pacientes" },
   { name: "paciente", route: "/pacientes/2" },
-  // Focus arranca con turno demo de Diego Peralta (id=3).
   { name: "focus", route: "/focus/3" },
+  { name: "finanzas", route: "/finanzas" },
 ];
 
 async function loadAppScreen(page: Page, route: string, theme: Theme) {
