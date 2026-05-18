@@ -88,8 +88,9 @@ CREATE TABLE seguro_profesional (
 );
 
 CREATE INDEX seguro_org_profile_idx ON seguro_profesional (organization_id, profile_id);
-CREATE INDEX seguro_vigencia_idx ON seguro_profesional (vigencia_hasta)
-  WHERE vigencia_hasta >= CURRENT_DATE;
+-- Index sobre vigencia. No usamos predicado con CURRENT_DATE (no IMMUTABLE).
+-- Las queries filtran `vigencia_hasta >= CURRENT_DATE` y el planner usa el btree.
+CREATE INDEX seguro_vigencia_idx ON seguro_profesional (vigencia_hasta);
 
 CREATE TRIGGER seguro_set_updated_at
   BEFORE UPDATE ON seguro_profesional FOR EACH ROW EXECUTE FUNCTION set_updated_at();

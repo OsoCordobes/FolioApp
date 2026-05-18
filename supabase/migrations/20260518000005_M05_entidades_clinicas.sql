@@ -113,8 +113,12 @@ CREATE TABLE medicacion (
   CONSTRAINT medicacion_vigencia CHECK (hasta IS NULL OR hasta >= desde)
 );
 
+-- Partial index sobre medicación vigente. NO usamos CURRENT_DATE en el
+-- predicado porque no es IMMUTABLE (Postgres rechaza). Indexamos por
+-- (paciente_id, hasta) y la query filtra `hasta IS NULL OR hasta >= CURRENT_DATE`
+-- usando el composite — el planner usa el índice eficientemente igual.
 CREATE INDEX medicacion_paciente_vigente_idx
-  ON medicacion (paciente_id) WHERE hasta IS NULL OR hasta >= CURRENT_DATE;
+  ON medicacion (paciente_id, hasta);
 CREATE INDEX medicacion_org_idx ON medicacion (organization_id);
 
 CREATE TRIGGER medicacion_set_updated_at
