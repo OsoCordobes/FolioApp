@@ -1,0 +1,151 @@
+"use client";
+
+/**
+ * Folio · Dashboard · fila de un turno activo.
+ *
+ * Port de `TurnoRow` en folio/dashboard.jsx (líneas 127-222). Incluye:
+ *  - hora (con G de Google si está sincronizado)
+ *  - dot de estado (pulse si en curso)
+ *  - nombre + flag de alerta (notas importantes) + pill "Próximo"
+ *  - servicio + cronómetro vivo si "atendiendo"
+ *  - CTA contextual según estado (Confirmar / Marcar llegada / Abrir ficha / Cerrar turno)
+ *  - drag handle (drag-and-drop habilitado en F4)
+ */
+
+import type { ReactNode } from "react";
+
+import * as I from "@/components/icons";
+import { STATE_CONF } from "@/lib/dashboard-helpers";
+import { useLiveTimer } from "@/lib/use-live-timer";
+import type { EstadoTurno, Paciente, Turno } from "@/lib/types";
+
+type CtaKind = "primary" | "secondary" | "primary-brass";
+
+interface CtaSpec {
+  kind: CtaKind;
+  label: string;
+  icon: ReactNode;
+  onClick: () => void;
+}
+
+interface TurnoRowProps {
+  turno: Turno;
+  paciente: Paciente;
+  isNext: boolean;
+  onTransition: (id: number, to: EstadoTurno, extra?: Partial<Turno>) => void;
+  onOpenFicha: (id: number) => void;
+}
+
+export function TurnoRow({ turno, paciente, isNext, onTransition, onOpenFicha }: TurnoRowProps) {
+  const conf = STATE_CONF[turno.estado as keyof typeof STATE_CONF] ?? STATE_CONF.agendado;
+  const isAtendiendo = turno.estado === "atendiendo";
+  const isEnSala = turno.estado === "en_sala";
+  const isConfirmado = turno.estado === "confirmado";
+  const isAgendado = turno.estado === "agendado";
+
+  let cta: CtaSpec | null = null;
+  if (isAgendado) {
+    cta = {
+      kind: "secondary",
+      label: "Confirmar",
+      icon: <I.Check size={12} />,
+      onClick: () => onTransition(turno.id, "confirmado"),
+    };
+  } else if (isConfirmado) {
+    cta = {
+      kind: isNext ? "primary" : "secondary",
+      label: "Marcar llegada",
+      icon: <I.ArrowRight size={12} />,
+      onClick: () => onTransition(turno.id, "en_sala"),
+    };
+  } else if (isEnSala) {
+    cta = {
+      kind: "primary-brass",
+      label: "Abrir ficha",
+      icon: <I.ArrowRight size={12} />,
+      onClick: () => {
+        onTransition(turno.id, "atendiendo", { atendiendoDesde: new Date().toISOString() });
+        onOpenFicha(turno.id);
+      },
+    };
+  } else if (isAtendiendo) {
+    cta = {
+      kind: "primary",
+      label: "Cerrar turno",
+      icon: <I.Check size={12} />,
+      onClick: () => onTransition(turno.id, "cerrado", { duracionMin: 38 }),
+    };
+  }
+
+  const time = useLiveTimer(isAtendiendo ? turno.atendiendoDesde : null);
+  const hasImportante = (paciente.notasImportantes ?? "").trim().length > 0;
+
+  return (
+    <div
+      onClick={() => onOpenFicha(turno.id)}
+      className={[
+        "fi-turno",
+        "fi-turno--" + turno.estado,
+        isAtendiendo ? "is-atendiendo" : "",
+        isNext && !isAtendiendo ? "is-next" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      <span className="fi-drag" aria-hidden>
+        <I.Drag size={14} />
+      </span>
+
+      <div className="fi-t-time">
+        <b>{turno.hora}</b>
+        {turno.gcal ? (
+          <span className="fi-t-gcal" title="Sincronizado con Google Calendar">
+            <I.Google size={9} />
+          </span>
+        ) : null}
+      </div>
+
+      <span className="fi-t-dot-wrap">
+        <span className="fi-t-dot" style={{ background: conf.dot }} />
+        {isAtendiendo ? <span className="fi-t-dot-pulse" style={{ background: conf.dot }} /> : null}
+      </span>
+
+      <div className="fi-t-who">
+        <div className="fi-t-name-row">
+          <b className="fi-t-name">{paciente.nombre}</b>
+          {hasImportante ? (
+            <span className="fi-t-flag fi-t-flag--warn" title={paciente.notasImportantes}>
+              <I.Alert size={11} />
+            </span>
+          ) : null}
+          {isNext && !isAtendiendo ? <span className="fi-pill fi-pill--next">Próximo</span> : null}
+        </div>
+        <div className="fi-t-meta">
+          <span>{turno.servicio}</span>
+          {isAtendiendo ? (
+            <span className="fi-t-live">
+              <span className="fi-t-live-dot" />
+              En curso · <span className="fi-mono">{time}</span>
+            </span>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="fi-t-actions">
+        {cta ? (
+          <button
+            type="button"
+            className={"fi-btn fi-btn-" + cta.kind}
+            onClick={(e) => {
+              e.stopPropagation();
+              cta.onClick();
+            }}
+          >
+            {cta.label}
+            {cta.icon}
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
