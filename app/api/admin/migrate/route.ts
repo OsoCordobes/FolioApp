@@ -116,6 +116,22 @@ export async function POST(req: Request) {
       await client.query("CREATE SCHEMA public");
       await client.query("GRANT ALL ON SCHEMA public TO postgres");
       await client.query("GRANT ALL ON SCHEMA public TO public");
+      // Grants de Supabase: anon (público), authenticated (JWT user), service_role
+      // (bypass RLS). Esto es lo que Supabase hace por default al crear el proyecto;
+      // el DROP CASCADE los borró así que los restauramos.
+      await client.query("GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role");
+      await client.query(`
+        ALTER DEFAULT PRIVILEGES IN SCHEMA public
+          GRANT ALL ON TABLES TO postgres, anon, authenticated, service_role
+      `);
+      await client.query(`
+        ALTER DEFAULT PRIVILEGES IN SCHEMA public
+          GRANT ALL ON ROUTINES TO postgres, anon, authenticated, service_role
+      `);
+      await client.query(`
+        ALTER DEFAULT PRIVILEGES IN SCHEMA public
+          GRANT ALL ON SEQUENCES TO postgres, anon, authenticated, service_role
+      `);
     }
 
     await client.query("SET check_function_bodies = off");
@@ -126,6 +142,12 @@ export async function POST(req: Request) {
     if (mode === "all" || mode === "seeds") {
       all.push(...(await runFiles(client, SEED_DIR, "seeds")));
     }
+
+    // Re-grant sobre TODAS las tablas/funciones/secuencias creadas por las
+    // migrations (ALTER DEFAULT PRIVILEGES solo aplica a objetos NUEVOS post-set).
+    await client.query("GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role");
+    await client.query("GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role");
+    await client.query("GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role");
 
     await client.query("SET check_function_bodies = on");
 
