@@ -12,6 +12,11 @@ import { z } from "zod";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import { err, mapSupabaseError, ok, type Result } from "./errors";
+import {
+  cancelRecordatoriosForTurno,
+  schedulePostVisitaForTurno,
+  scheduleRecordatoriosForTurno,
+} from "./recordatorios";
 import { getActiveSession } from "./session";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -102,6 +107,16 @@ export async function createTurno(input: CreateTurnoInput): Promise<Result<{ id:
 
   if (error) return err(mapSupabaseError(error).code, mapSupabaseError(error).message, error.message);
   if (!data) return err("db_error", "No se creó el turno.");
+
+  // Programar recordatorios 24h y 2h (idempotente vía UNIQUE turno_id,tipo).
+  // Si el insert de recordatorios falla no rollbackeamos el turno — el dispatcher
+  // reintentará via /api/cron y/o el user puede re-programarlos desde la UI.
+  void scheduleRecordatoriosForTurno({
+    organizationId: session.data.organizationId,
+    turnoId: data.id,
+    inicio: new Date(parsed.data.inicio),
+  });
+
   return ok({ id: data.id });
 }
 
@@ -136,6 +151,19 @@ export async function transitionTurno(input: z.infer<typeof transitionSchema>): 
     const mapped = mapSupabaseError(error);
     return err(mapped.code, mapped.message, error.message);
   }
+
+  // Hooks de transición de estado para la cola de recordatorios
+  if (parsed.data.to === "CERRADO") {
+    void schedulePostVisitaForTurno({
+      organizationId: session.data.organizationId,
+      turnoId: parsed.data.turnoId,
+      closedAt: new Date(),
+    });
+  }
+  if (parsed.data.to === "CANCELADO" || parsed.data.to === "REAGENDADO") {
+    void cancelRecordatoriosForTurno(parsed.data.turnoId);
+  }
+
   return ok(undefined);
 }
 

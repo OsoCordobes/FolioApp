@@ -1,0 +1,17 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/cron/dispatch-recordatorios",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/google-watch-renew",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/analytics/refresh",
+      "schedule": "0 6 * * *"
+    }
+  ]
+}
