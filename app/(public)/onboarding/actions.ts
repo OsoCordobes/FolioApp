@@ -57,9 +57,32 @@ export async function signUpEmail(
   if (error) {
     return { ok: false, error: error.message };
   }
+
+  // Auto-confirmar email para MVP. Razón: Supabase Free no tiene SMTP custom,
+  // los emails default tienen rate limit de 2/hora y se trabajan en el spam de
+  // muchos clientes. Hasta que se configure SMTP propio (SendGrid/Resend en F12),
+  // confirmamos al usuario directamente via admin API y abrimos la sesión.
+  // El email ya fue validado a nivel formato; la verificación de ownership real
+  // se hará cuando integremos el SMTP propio.
+  if (data.user && data.user.email_confirmed_at == null) {
+    const service = createSupabaseServiceClient();
+    const { error: confirmErr } = await service.auth.admin.updateUserById(data.user.id, {
+      email_confirm: true,
+    });
+    if (confirmErr) {
+      return { ok: false, error: `No pude confirmar el email: ${confirmErr.message}` };
+    }
+    // Re-sign in para establecer la sesión activa (signUp con confirmation pending
+    // no setea cookies; admin.updateUserById tampoco).
+    const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
+    if (signInErr) {
+      return { ok: false, error: `Cuenta creada pero no pude entrar: ${signInErr.message}` };
+    }
+  }
+
   return {
     ok: true,
-    needsConfirmation: data.user?.email_confirmed_at == null,
+    needsConfirmation: false,
   };
 }
 
