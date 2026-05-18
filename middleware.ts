@@ -25,11 +25,17 @@ const PUBLIC_PATHS = [
   "/login",
   "/onboarding",
   "/forgot",
+  "/api/health",            // healthcheck (load balancer, uptime monitoring)
+  "/api/analytics/refresh", // cron diario (validado por CRON_SECRET bearer)
 ];
 
 const PUBLIC_PREFIXES = [
-  "/book/",          // booking público F7
-  "/api/auth/",      // OAuth callbacks
+  "/book/",              // booking público F7
+  "/api/auth/",          // OAuth callbacks Supabase
+  "/api/cron/",          // Vercel Cron (validado por CRON_SECRET bearer)
+  "/api/admin/",         // admin one-shot ops (migrate, etc; validado por CRON_SECRET bearer)
+  "/api/whatsapp/",      // webhook Meta WhatsApp (validado por X-Hub-Signature)
+  "/api/google/",        // OAuth callback Google + watch renew
 ];
 
 function isPublicPath(pathname: string): boolean {
