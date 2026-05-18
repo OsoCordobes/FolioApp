@@ -3,34 +3,29 @@
 /**
  * Folio · /calendario — vista semanal de turnos + bloqueos + pedidos.
  *
- * Port simplificado de folio/calendario.jsx (1321 líneas). En F1
- * implementamos lo necesario para matchear el baseline pixel-perfect:
- *  - CalHeader + tabs (Semana, Mes, Bandeja) + nav + filtros
- *  - VistaSemana con time axis, day headers (con capacity bar) y grid
- *  - TurnoCardSemana, BloqueoCardSemana, PedidoGhostCard
- *  - PedidosTray (pedidos sin fecha asignada)
+ * Datos reales (S1 T-1.5): recibe `turnos`, `bloqueos`, `pedidos`, `pacientes`
+ * y metadata de la semana como props desde el Server Component padre. La
+ * navegación entre semanas es via query param `?w=YYYY-MM-DD` (lunes anchor)
+ * que el SC parsea y le da al fetcher.
  *
- * Se difieren a F4 (data layer):
- *  - Drag & drop para mover/duplicar turnos
- *  - Selection (drag para crear bloqueo)
- *  - Popovers (Agendar, ver detalle)
- *  - Modals (cal-agendar-popover, cal-pedido-modal)
- *  - Tooltips ricos de turnos
- *  - VistaBandeja y VistaMes
- *
- * La grilla es estática (read-only) en F1.
+ * Diferidas a sprints futuros (UI funcional, no data layer):
+ *  - Drag & drop para mover/duplicar turnos.
+ *  - Selection (drag para crear bloqueo).
+ *  - Popovers (Agendar, ver detalle de turno).
+ *  - Modal cal-pedido-modal para confirmar/rechazar pedidos.
+ *  - VistaBandeja y VistaMes (placeholder por ahora).
  */
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import * as I from "@/components/icons";
-import {
-  BLOQUEOS,
-  PACIENTES,
-  PEDIDOS,
-  TURNOS_SEMANA,
-} from "@/lib/mock-data";
-import type { Bloqueo, Pedido, TurnoSemana } from "@/lib/types";
+import type {
+  Bloqueo,
+  PacientesById,
+  Pedido,
+  TurnoSemana,
+} from "@/lib/types";
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -41,16 +36,6 @@ const HORA_PX = 56;
 const HEIGHT_PX = HOURS * HORA_PX;
 
 const DIAS = ["LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB", "DOM"];
-const SEMANA_MOSTRADA = [
-  "2026-05-11",
-  "2026-05-12",
-  "2026-05-13",
-  "2026-05-14",
-  "2026-05-15",
-  "2026-05-16",
-  "2026-05-17",
-];
-const HOY = "2026-05-13";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -198,8 +183,8 @@ const PEDIDO_CANAL_INFO: Record<string, { lbl: string; short: string }> = {
 
 // ─── Cards ──────────────────────────────────────────────────────────────────
 
-function TurnoCardSemana({ turno, lane, totalLanes }: { turno: TurnoSemana; lane: number; totalLanes: number }) {
-  const paciente = PACIENTES[turno.pacienteId];
+function TurnoCardSemana({ turno, lane, totalLanes, pacientes }: { turno: TurnoSemana; lane: number; totalLanes: number; pacientes: PacientesById }) {
+  const paciente = pacientes[turno.pacienteId];
   if (!paciente) return null;
   const vis = STATE_VIS[turno.estado] ?? STATE_VIS.agendado;
   const top = timeToTop(turno.hora);
@@ -382,6 +367,10 @@ function CalHeader({
   pedidosPendientesCount,
   mostrarPedidos,
   setMostrarPedidos,
+  weekRangeLabel,
+  prevWeekIso,
+  nextWeekIso,
+  hoyWeekStartIso,
 }: {
   vista: Vista;
   setVista: (v: Vista) => void;
@@ -390,8 +379,11 @@ function CalHeader({
   pedidosPendientesCount: number;
   mostrarPedidos: boolean;
   setMostrarPedidos: (v: boolean) => void;
+  weekRangeLabel: string;
+  prevWeekIso: string;
+  nextWeekIso: string;
+  hoyWeekStartIso: string;
 }) {
-  const rango = vista === "semana" ? "11 – 17 may 2026" : "mayo 2026";
   return (
     <header className="cal-head">
       <div className="cal-head-top">
@@ -419,20 +411,20 @@ function CalHeader({
       </div>
       <div className="cal-nav">
         <div className="cal-nav-l">
-          <button type="button" className="cal-nav-btn" aria-label="Anterior">
+          <Link href={`/calendario?w=${prevWeekIso}`} className="cal-nav-btn" aria-label="Semana anterior">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M15 18l-6-6 6-6" />
             </svg>
-          </button>
-          <button type="button" className="cal-nav-today" title="Semana actual">
+          </Link>
+          <Link href={`/calendario?w=${hoyWeekStartIso}`} className="cal-nav-today" title="Semana actual">
             Hoy
-          </button>
-          <button type="button" className="cal-nav-btn" aria-label="Siguiente">
+          </Link>
+          <Link href={`/calendario?w=${nextWeekIso}`} className="cal-nav-btn" aria-label="Semana siguiente">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 18l6-6-6-6" />
             </svg>
-          </button>
-          <span className="cal-range">{rango}</span>
+          </Link>
+          <span className="cal-range">{weekRangeLabel}</span>
         </div>
         <div className="cal-nav-r">
           <CalFilters estados={estados} setEstados={setEstados} pedidosPendientesCount={pedidosPendientesCount} mostrarPedidos={mostrarPedidos} setMostrarPedidos={setMostrarPedidos} />
@@ -506,10 +498,18 @@ function VistaSemana({
   turnos,
   bloqueos,
   pedidos,
+  pacientes,
+  weekDates,
+  hoyIso,
+  nowHHMM,
 }: {
   turnos: TurnoSemana[];
   bloqueos: Bloqueo[];
   pedidos: Pedido[];
+  pacientes: PacientesById;
+  weekDates: string[];
+  hoyIso: string;
+  nowHHMM: string;
 }) {
   const pedidosSinFecha = pedidos.filter((p) => p.estado === "pendiente" && !p.fecha);
 
@@ -533,8 +533,8 @@ function VistaSemana({
 
       <div className="cal-day-headers">
         <div className="cal-time-spacer" />
-        {SEMANA_MOSTRADA.map((iso, i) => {
-          const isHoy = iso === HOY;
+        {weekDates.map((iso, i) => {
+          const isHoy = iso === hoyIso;
           const cerrado = i === 5 || i === 6;
           const numero = Number(iso.slice(-2));
           const dayTs = turnos.filter((t) => t.fecha === iso);
@@ -570,8 +570,8 @@ function VistaSemana({
           ))}
         </div>
 
-        {SEMANA_MOSTRADA.map((iso, i) => {
-          const isHoy = iso === HOY;
+        {weekDates.map((iso, i) => {
+          const isHoy = iso === hoyIso;
           const cerrado = i === 5 || i === 6;
           const dayTurnos = turnos.filter((t) => t.fecha === iso);
           const dayBloqueos = bloqueos.filter((b) => b.fecha === iso);
@@ -642,12 +642,13 @@ function VistaSemana({
                     turno={ev.turno}
                     lane={ev._lane}
                     totalLanes={ev._totalLanes}
+                    pacientes={pacientes}
                   />
                 );
               })}
 
               {isHoy ? (
-                <div className="cal-ahora" style={{ top: timeToTop("11:38") }}>
+                <div className="cal-ahora" style={{ top: timeToTop(nowHHMM) }}>
                   <span className="cal-ahora-dot" />
                   <span className="cal-ahora-line" />
                 </div>
@@ -662,19 +663,45 @@ function VistaSemana({
 
 // ─── Root ──────────────────────────────────────────────────────────────────
 
-export function Calendario() {
+interface CalendarioProps {
+  turnos: TurnoSemana[];
+  bloqueos: Bloqueo[];
+  pedidos: Pedido[];
+  pacientes: PacientesById;
+  weekDates: string[];
+  weekRangeLabel: string;
+  hoyIso: string;
+  nowHHMM: string;
+  weekStartIso: string;
+  prevWeekIso: string;
+  nextWeekIso: string;
+  hoyWeekStartIso: string;
+}
+
+export function Calendario({
+  turnos,
+  bloqueos,
+  pedidos,
+  pacientes,
+  weekDates,
+  weekRangeLabel,
+  hoyIso,
+  nowHHMM,
+  prevWeekIso,
+  nextWeekIso,
+  hoyWeekStartIso,
+}: CalendarioProps) {
   const [vista, setVista] = useState<Vista>("semana");
   const [estados, setEstados] = useState<Set<string>>(new Set());
   const [mostrarPedidos, setMostrarPedidos] = useState(true);
 
-  const pedidosPendientes = useMemo(() => PEDIDOS.filter((p) => p.estado === "pendiente"), []);
+  const pedidosPendientes = useMemo(() => pedidos.filter((p) => p.estado === "pendiente"), [pedidos]);
   const pedidosVisibles = mostrarPedidos ? pedidosPendientes : [];
 
-  // Aplicar filtro de estados a turnos (vacío = todos)
   const turnosFiltrados = useMemo(() => {
-    if (estados.size === 0) return TURNOS_SEMANA;
-    return TURNOS_SEMANA.filter((t) => estados.has(t.estado));
-  }, [estados]);
+    if (estados.size === 0) return turnos;
+    return turnos.filter((t) => estados.has(t.estado));
+  }, [estados, turnos]);
 
   return (
     <div className="fi-content cal-content">
@@ -686,16 +713,76 @@ export function Calendario() {
         pedidosPendientesCount={pedidosPendientes.length}
         mostrarPedidos={mostrarPedidos}
         setMostrarPedidos={setMostrarPedidos}
+        weekRangeLabel={weekRangeLabel}
+        prevWeekIso={prevWeekIso}
+        nextWeekIso={nextWeekIso}
+        hoyWeekStartIso={hoyWeekStartIso}
       />
 
       {vista === "semana" ? (
-        <VistaSemana turnos={turnosFiltrados} bloqueos={BLOQUEOS} pedidos={pedidosVisibles} />
+        <VistaSemana
+          turnos={turnosFiltrados}
+          bloqueos={bloqueos}
+          pedidos={pedidosVisibles}
+          pacientes={pacientes}
+          weekDates={weekDates}
+          hoyIso={hoyIso}
+          nowHHMM={nowHHMM}
+        />
+      ) : vista === "bandeja" ? (
+        <VistaBandejaSimple pedidos={pedidosPendientes} />
       ) : (
         <div className="fi-empty" style={{ marginTop: 32 }}>
-          <h2>Vista {vista} disponible en F4.</h2>
-          <p>El baseline solo captura Semana.</p>
+          <h2>Vista mensual próximamente</h2>
+          <p>Mientras tanto, navegá entre semanas con las flechas.</p>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Bandeja simple: lista cards de pedidos pendientes. La versión rica del
+ * prototipo (con confirmar/reagendar/rechazar) llega cuando se cablee la
+ * UI de modal cal-pedido-modal a `confirmarPedido` / `rechazarPedido`.
+ */
+function VistaBandejaSimple({ pedidos }: { pedidos: Pedido[] }) {
+  if (pedidos.length === 0) {
+    return (
+      <div className="fi-empty" style={{ marginTop: 32 }}>
+        <h2>Bandeja vacía</h2>
+        <p>No hay pedidos pendientes de respuesta.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="cal-tray" style={{ marginTop: 16, padding: 12 }}>
+      <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 12 }}>
+        {pedidos.map((p) => (
+          <li
+            key={p.id}
+            style={{
+              padding: 12,
+              border: "1px solid var(--line)",
+              borderRadius: 8,
+              background: "var(--surface)",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+              <b>{p.nombre}</b>
+              <span className="cal-pedido-canal">{p.canal}</span>
+            </div>
+            <div style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 4 }}>
+              {p.fecha ? `${p.fecha} · ${p.hora ?? "—"}` : "sin fecha propuesta"}
+              <span style={{ margin: "0 6px" }}>·</span>
+              {p.recibidoHace}
+            </div>
+            {p.motivo ? (
+              <p style={{ margin: "6px 0 0", fontSize: 13 }}>{p.motivo}</p>
+            ) : null}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
