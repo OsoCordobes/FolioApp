@@ -21,7 +21,7 @@ import { createDecipheriv } from "node:crypto";
 
 import { NextResponse } from "next/server";
 
-import { encryptColumn } from "@/lib/crypto";
+import { decryptColumn, encryptColumn } from "@/lib/crypto";
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -100,12 +100,50 @@ function tryAllDecodings(value: unknown, encKey: Buffer): Array<{ strategy: stri
   return out;
 }
 
+/**
+ * Recupera los bytes originales del ciphertext cuando el bytea fue corrompido
+ * por el bug pre-2026-05-18 (supabase-js serializando Buffer como JSON).
+ *
+ * El bytea corrupto contiene la cadena ASCII `{"type":"Buffer","data":[...]}`
+ * almacenada como bytes literales. Extraemos `data` y reconstruimos el Buffer
+ * original. Si después podemos AES-GCM decrypt, sabemos que la recuperación
+ * es lossless.
+ *
+ * Retorna `{ recovered: Buffer, plaintext: string } | null` si el formato no
+ * coincide o el decrypt falla.
+ */
+function recoverLegacyBuffer(value: unknown, encKey: Buffer): { ciphertext: Buffer; plaintext: string } | null {
+  if (typeof value !== "string" || !value.startsWith("\\x")) return null;
+  const buf = Buffer.from(value.slice(2), "hex");
+  const asAscii = buf.toString("utf8");
+  if (!asAscii.startsWith('{"type":"Buffer"')) return null;
+  try {
+    const parsed = JSON.parse(asAscii) as { type?: string; data?: unknown };
+    if (parsed.type !== "Buffer" || !Array.isArray(parsed.data)) return null;
+    const ciphertext = Buffer.from(parsed.data as number[]);
+    const IV_LEN_LOCAL = 12, TAG_LEN_LOCAL = 16;
+    if (ciphertext.length < IV_LEN_LOCAL + TAG_LEN_LOCAL) return null;
+    const iv = ciphertext.subarray(0, IV_LEN_LOCAL);
+    const tag = ciphertext.subarray(IV_LEN_LOCAL, IV_LEN_LOCAL + TAG_LEN_LOCAL);
+    const ct = ciphertext.subarray(IV_LEN_LOCAL + TAG_LEN_LOCAL);
+    const decipher = createDecipheriv(ALG, encKey, iv);
+    decipher.setAuthTag(tag);
+    const plaintext = Buffer.concat([decipher.update(ct), decipher.final()]).toString("utf8");
+    return { ciphertext, plaintext };
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(req: Request) {
   const authHeader = req.headers.get("authorization");
   const expected = `Bearer ${process.env.CRON_SECRET}`;
   if (!authHeader || authHeader !== expected) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
+
+  const url = new URL(req.url);
+  const recoverMode = url.searchParams.get("recover") === "1";
 
   const supabase = createSupabaseServiceClient();
   const encKeyRaw = process.env.FOLIO_ENC_KEY;
@@ -139,12 +177,66 @@ export async function GET(req: Request) {
       nombreCifrado: {
         wire: describeWire(prof.nombre_cifrado),
         decodings: tryAllDecodings(prof.nombre_cifrado, encKey),
+        legacyRecover: recoverLegacyBuffer(prof.nombre_cifrado, encKey),
       },
       apellidoCifrado: {
         wire: describeWire(prof.apellido_cifrado),
         decodings: tryAllDecodings(prof.apellido_cifrado, encKey),
+        legacyRecover: recoverLegacyBuffer(prof.apellido_cifrado, encKey),
       },
     };
+
+    // Modo recovery: si los rows son legacy-corrupt, los re-encriptamos en el
+    // formato nuevo y los actualizamos. Idempotente: si ya están en formato
+    // nuevo, el decryptColumn directo funciona y skip.
+    if (recoverMode) {
+      const recoveries: Record<string, unknown> = {};
+      for (const col of ["nombre_cifrado", "apellido_cifrado"] as const) {
+        const value = prof[col];
+        // Si decrypt directo ya funciona → no es legacy.
+        try {
+          const plain = decryptColumn(value);
+          recoveries[col] = { skipped: "already-decryptable", plaintext: plain };
+          continue;
+        } catch {
+          // legacy: intentar recovery
+        }
+        const recovered = recoverLegacyBuffer(value, encKey);
+        if (!recovered) {
+          recoveries[col] = { error: "recovery falló — formato desconocido" };
+          continue;
+        }
+        const newWire = encryptColumn(recovered.plaintext);
+        const { error: upErr } = await supabase
+          .from("profile")
+          .update({ [col]: newWire })
+          .eq("id", prof.id);
+        if (upErr) {
+          recoveries[col] = { recoveredPlain: recovered.plaintext, error: upErr.message };
+        } else {
+          // verify
+          const { data: re } = await supabase
+            .from("profile")
+            .select(col)
+            .eq("id", prof.id)
+            .maybeSingle();
+          let verified = false;
+          try {
+            const reReadValue = (re as Record<string, unknown> | null | undefined)?.[col];
+            const plain = decryptColumn(reReadValue as string | Buffer | null | undefined);
+            verified = plain === recovered.plaintext;
+          } catch {
+            verified = false;
+          }
+          recoveries[col] = {
+            recoveredPlain: recovered.plaintext,
+            updated: true,
+            verifiedRoundTrip: verified,
+          };
+        }
+      }
+      probes.recoveries = recoveries;
+    }
   }
 
   // Probe 2: round-trip — encriptar plaintext conocido, insertar en organization.razon_social
