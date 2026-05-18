@@ -44,46 +44,46 @@ export async function signUpEmail(
     return { ok: false, error: "Contraseña debe tener mínimo 8 caracteres." };
   }
 
-  const supabase = await createSupabaseServerClient();
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3010";
-  const { data, error } = await supabase.auth.signUp({
+  // Usamos admin.createUser (NO signUp) por dos razones:
+  //   1. signUp dispara el email de confirmación de Supabase y el SMTP por
+  //      default tiene rate limit (~4 emails/hora). Eso bloquea signups
+  //      legítimos en Supabase Free.
+  //   2. admin.createUser con email_confirm:true crea al usuario YA confirmado
+  //      sin mandar mail. Apropiado para MVP hasta que integremos SMTP propio
+  //      (Resend/SendGrid en F12) y el email de bienvenida con verificación.
+  //
+  // Después abrimos sesión con signInWithPassword en el client cookie-based
+  // para que las server actions siguientes (completeOnboarding) vean al user.
+  const service = createSupabaseServiceClient();
+  const { data: created, error: createErr } = await service.auth.admin.createUser({
     email,
     password,
-    options: {
-      emailRedirectTo: `${appUrl}/api/auth/callback`,
-    },
+    email_confirm: true,
   });
 
-  if (error) {
-    return { ok: false, error: error.message };
-  }
-
-  // Auto-confirmar email para MVP. Razón: Supabase Free no tiene SMTP custom,
-  // los emails default tienen rate limit de 2/hora y se trabajan en el spam de
-  // muchos clientes. Hasta que se configure SMTP propio (SendGrid/Resend en F12),
-  // confirmamos al usuario directamente via admin API y abrimos la sesión.
-  // El email ya fue validado a nivel formato; la verificación de ownership real
-  // se hará cuando integremos el SMTP propio.
-  if (data.user && data.user.email_confirmed_at == null) {
-    const service = createSupabaseServiceClient();
-    const { error: confirmErr } = await service.auth.admin.updateUserById(data.user.id, {
-      email_confirm: true,
-    });
-    if (confirmErr) {
-      return { ok: false, error: `No pude confirmar el email: ${confirmErr.message}` };
-    }
-    // Re-sign in para establecer la sesión activa (signUp con confirmation pending
-    // no setea cookies; admin.updateUserById tampoco).
-    const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
-    if (signInErr) {
-      return { ok: false, error: `Cuenta creada pero no pude entrar: ${signInErr.message}` };
+  if (createErr) {
+    // 'User already registered' → intentamos auto-confirmar (puede haber quedado
+    // un user previo sin confirmar) y luego abrir sesión.
+    if (createErr.message.toLowerCase().includes("already") || createErr.message.toLowerCase().includes("registered")) {
+      const { data: list } = await service.auth.admin.listUsers({ page: 1, perPage: 200 });
+      const existing = list?.users?.find((u) => u.email?.toLowerCase() === email.toLowerCase());
+      if (existing && !existing.email_confirmed_at) {
+        await service.auth.admin.updateUserById(existing.id, { email_confirm: true });
+      }
+      // Caer a signInWithPassword más abajo
+    } else {
+      return { ok: false, error: createErr.message };
     }
   }
 
-  return {
-    ok: true,
-    needsConfirmation: false,
-  };
+  const supabase = await createSupabaseServerClient();
+  const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
+  if (signInErr) {
+    return { ok: false, error: `Cuenta creada pero no pude entrar: ${signInErr.message}` };
+  }
+
+  void created;
+  return { ok: true, needsConfirmation: false };
 }
 
 export interface OnboardingData {
