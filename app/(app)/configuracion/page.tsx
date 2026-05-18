@@ -1,16 +1,40 @@
 /**
- * Folio · /configuracion
+ * Folio · /configuracion (Server Component).
  *
- * Ajustes del consultorio organizados en 6 secciones: Cuenta, Consultorio
- * (default), Horarios, Servicios, Integraciones, Plan. Save bar al header
- * muestra estado dirty/saved.
+ * Lee organization + profile + servicios y los pasa al Client Component.
+ * MVP scope:
+ *   - Save real para sección Consultorio (organization + profile).
+ *   - Servicios, Horarios, Integraciones, Plan: read-only o stub.
  *
- * En F4 cada sección persiste vía Server Action con audit log. En F5/F6
- * las integraciones (Google Calendar, WhatsApp) ejecutan flow OAuth real.
+ * Role gating del save: el server action `saveConsultorioAction` ya rechaza
+ * si el rol no es OWNER/DIRECTOR. El UI usa `canEdit` para deshabilitar el
+ * botón Guardar y mostrar tooltip explicativo.
  */
 
 import { Configuracion } from "@/components/configuracion/configuracion";
+import { getActiveContext } from "@/lib/db/active-context";
+import { getConfiguracionData } from "@/lib/db/configuracion";
 
-export default function ConfiguracionPage() {
-  return <Configuracion />;
+export const dynamic = "force-dynamic";
+
+export default async function ConfiguracionPage() {
+  const ctx = await getActiveContext();
+  if (!ctx.ok) {
+    throw new Error(`No se pudo cargar /configuracion: ${ctx.error.message}`);
+  }
+
+  const data = await getConfiguracionData();
+  if (!data.ok) {
+    throw new Error(`Error cargando configuración: ${data.error.message}`);
+  }
+
+  const canEdit = ctx.data.session.role === "OWNER" || ctx.data.session.role === "DIRECTOR";
+
+  return (
+    <Configuracion
+      initialConsultorio={data.data.consultorio}
+      initialServicios={data.data.servicios}
+      canEdit={canEdit}
+    />
+  );
 }

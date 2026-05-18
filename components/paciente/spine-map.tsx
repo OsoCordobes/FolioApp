@@ -12,11 +12,11 @@ import { useState } from "react";
 
 import {
   ESTADO_VERT,
-  PLAN,
   SPINE_VERTEBRAS,
   fmtFecha,
-  type EstadoVertebra,
-} from "@/lib/paciente-detalle-mock";
+} from "@/components/paciente/spine-config";
+import { usePacienteFicha } from "@/components/paciente/contexto";
+import type { EstadoVertebra } from "@/lib/db/paciente-ficha";
 
 interface SpineMapProps {
   states: Record<string, EstadoVertebra>;
@@ -26,6 +26,7 @@ interface SpineMapProps {
 }
 
 export function SpineMap({ states, setStates }: SpineMapProps) {
+  const { plan } = usePacienteFicha();
   const [selected, setSelected] = useState<string | null>(null);
   const [hover, setHover] = useState<string | null>(null);
 
@@ -194,7 +195,7 @@ export function SpineMap({ states, setStates }: SpineMapProps) {
           ? (() => {
               const est = currentEstado(hoverData.id);
               const cfg = ESTADO_VERT[est];
-              const ultimo = PLAN.ultimoAjuste[hoverData.id];
+              const ultimo = plan.ultimoAjuste[hoverData.id];
               return (
                 <div
                   className="pc-spine-tip"

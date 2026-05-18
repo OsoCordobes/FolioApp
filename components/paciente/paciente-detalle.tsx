@@ -16,17 +16,23 @@ import { useRef, useState } from "react";
 
 import * as I from "@/components/icons";
 import { SpineMap } from "@/components/paciente/spine-map";
-import {
-  ESTADO_VERT,
-  PACIENTE_DETALLE,
-  PLAN,
-  TURNO_HOY_HORA,
-  fmtFecha,
-  iniciales,
-  type EstadoVertebra,
-} from "@/lib/paciente-detalle-mock";
-// ESTADO_VERT solo se referencia desde SpineMap; mantenemos el import por consistencia con el prototipo
-void ESTADO_VERT;
+import { PacienteFichaProvider, usePacienteFicha } from "@/components/paciente/contexto";
+import type { EstadoVertebra, PacienteFichaInfo, PlanData } from "@/lib/db/paciente-ficha";
+
+const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+
+function fmtFecha(iso: string): string {
+  if (!iso || iso === "—") return "—";
+  const d = new Date(iso + (iso.length === 10 ? "T00:00:00" : ""));
+  if (isNaN(d.getTime())) return iso;
+  return `${d.getDate()} ${MESES[d.getMonth()]}`;
+}
+
+function iniciales(nombre: string): string {
+  return nombre.split(" ").map((p) => p[0]).filter(Boolean).join("").slice(0, 2).toUpperCase();
+}
+
+const TURNO_HOY_HORA = "hoy";
 
 type TabId = "informacion" | "plan" | "sesiones" | "documentos";
 
@@ -39,7 +45,7 @@ const SOAP_SECTIONS = [
   { id: "plan"      as const, label: "Plan",      hint: "Próximos pasos." },
 ];
 
-type SoapState = typeof PLAN.soap;
+type SoapState = PlanData["soap"];
 type SoapKey = keyof SoapState;
 
 function SoapStacked({ soap, setSoap }: { soap: SoapState; setSoap: (s: SoapState) => void }) {
@@ -103,7 +109,8 @@ function SoapStacked({ soap, setSoap }: { soap: SoapState; setSoap: (s: SoapStat
 // ─── Sub: Plan de tratamiento ──────────────────────────────────────────────
 
 function PlanTratamiento() {
-  const pct = Math.round((PLAN.completadas / PLAN.total) * 100);
+  const { plan } = usePacienteFicha();
+  const pct = plan.total > 0 ? Math.round((plan.completadas / plan.total) * 100) : 0;
   return (
     <section className="pc-card pc-plan">
       <header className="pc-card-head">
@@ -113,8 +120,8 @@ function PlanTratamiento() {
       <div className="pc-plan-progress">
         <div className="pc-plan-progress-row">
           <span className="pc-plan-num">
-            <b>{PLAN.completadas}</b>
-            <small>/ {PLAN.total}</small>
+            <b>{plan.completadas}</b>
+            <small>/ {plan.total}</small>
           </span>
           <span className="pc-plan-num-lbl">sesiones</span>
           <span className="pc-plan-pct fm-mono">{pct}%</span>
@@ -122,8 +129,8 @@ function PlanTratamiento() {
         <div className="pc-plan-bar">
           <div className="pc-plan-bar-fill" style={{ width: pct + "%" }} />
           <div className="pc-plan-bar-segs">
-            {Array.from({ length: PLAN.total }, (_, i) => (
-              <span key={i} className={"pc-plan-seg " + (i < PLAN.completadas ? "is-done" : "")} />
+            {Array.from({ length: plan.total }, (_, i) => (
+              <span key={i} className={"pc-plan-seg " + (i < plan.completadas ? "is-done" : "")} />
             ))}
           </div>
         </div>
@@ -131,15 +138,15 @@ function PlanTratamiento() {
       <div className="pc-plan-meta">
         <div>
           <span className="muted">Frecuencia</span>
-          <b>{PLAN.frecuencia}</b>
+          <b>{plan.frecuencia}</b>
         </div>
         <div>
           <span className="muted">Próximo control</span>
-          <b>{fmtFecha(PLAN.proximoControl)}</b>
+          <b>{fmtFecha(plan.proximoControl)}</b>
         </div>
         <div>
           <span className="muted">Diagnóstico</span>
-          <b>{PLAN.diagnostico}</b>
+          <b>{plan.diagnostico}</b>
         </div>
       </div>
     </section>
@@ -149,15 +156,16 @@ function PlanTratamiento() {
 // ─── Sub: Historial reciente ───────────────────────────────────────────────
 
 function HistorialReciente() {
+  const { plan } = usePacienteFicha();
   const [expanded, setExpanded] = useState(false);
-  const visibles = expanded ? PLAN.sesiones : PLAN.sesiones.slice(0, 4);
+  const visibles = expanded ? plan.sesiones : plan.sesiones.slice(0, 4);
 
   return (
     <section className="pc-card pc-historial">
       <header className="pc-card-head">
         <span className="fi-eyebrow">Historial reciente</span>
         <button type="button" className="pc-link" onClick={() => setExpanded((v) => !v)}>
-          {expanded ? "Mostrar menos" : `Ver todas (${PLAN.sesiones.length})`}
+          {expanded ? "Mostrar menos" : `Ver todas (${plan.sesiones.length})`}
         </button>
       </header>
       <div className="pc-historial-list">
@@ -193,10 +201,11 @@ function HistorialReciente() {
 // ─── Sub: Tab Plan ─────────────────────────────────────────────────────────
 
 function TabPlan() {
+  const { plan } = usePacienteFicha();
   const [vertStates, setVertStates] = useState<Record<string, EstadoVertebra>>(
-    PLAN.vertebrasEstado,
+    plan.vertebrasEstado,
   );
-  const [soap, setSoap] = useState<SoapState>(PLAN.soap);
+  const [soap, setSoap] = useState<SoapState>(plan.soap);
 
   return (
     <div className="pc-plan-tab">
@@ -222,6 +231,7 @@ function TabPlan() {
 // ─── Sub: Otras tabs ───────────────────────────────────────────────────────
 
 function TabInformacion() {
+  const { paciente, cumple } = usePacienteFicha();
   return (
     <div className="pc-info-grid">
       <section className="pc-card">
@@ -231,11 +241,11 @@ function TabInformacion() {
         </header>
         <dl className="pc-dl">
           <dt>Teléfono</dt>
-          <dd className="fm-mono">{PACIENTE_DETALLE.tel}</dd>
+          <dd className="fm-mono">{paciente.tel || "—"}</dd>
           <dt>Email</dt>
-          <dd>{PACIENTE_DETALLE.email}</dd>
+          <dd>{paciente.email || "—"}</dd>
           <dt>Cumpleaños</dt>
-          <dd>18 may</dd>
+          <dd>{cumple}</dd>
           <dt>Obra social</dt>
           <dd>Particular</dd>
         </dl>
@@ -244,9 +254,9 @@ function TabInformacion() {
         <header className="pc-card-head">
           <span className="fi-eyebrow">Motivo de consulta</span>
         </header>
-        <p className="pc-card-text">{PACIENTE_DETALLE.motivo}</p>
+        <p className="pc-card-text">{paciente.motivo || "—"}</p>
         <div className="pc-tags">
-          {PACIENTE_DETALLE.tags.map((t) => (
+          {paciente.tags.map((t) => (
             <span key={t} className="fi-pill fi-pill--mute">{t}</span>
           ))}
         </div>
@@ -256,8 +266,7 @@ function TabInformacion() {
           <span className="fi-eyebrow">Notas internas</span>
         </header>
         <p className="pc-card-text muted">
-          Prefiere turnos a la mañana. Trabaja remoto, jornadas largas en escritorio.
-          Compró silla ergonómica en abril; reportó mejoría inmediata en lumbar.
+          {paciente.notasImportantes || "Sin notas registradas todavía."}
         </p>
       </section>
     </div>
@@ -265,18 +274,19 @@ function TabInformacion() {
 }
 
 function TabSesiones() {
+  const { plan } = usePacienteFicha();
   return (
     <div className="pc-sesiones">
       <div className="pc-sesiones-toolbar">
         <span className="fi-eyebrow">
-          {PLAN.sesiones.length} sesiones · desde {fmtFecha(PLAN.inicio)}
+          {plan.sesiones.length} sesiones · desde {fmtFecha(plan.inicio)}
         </span>
         <button type="button" className="fi-btn fi-btn-secondary">
           <I.Plus size={12} /> Nueva sesión
         </button>
       </div>
       <div className="pc-sesiones-list">
-        {PLAN.sesiones.map((s, i) => (
+        {plan.sesiones.map((s, i) => (
           <div key={s.fecha} className="pc-sesion-row">
             <div className="pc-sesion-date">
               <b className="fm-mono">{fmtFecha(s.fecha)}</b>
@@ -284,7 +294,7 @@ function TabSesiones() {
             </div>
             <div className="pc-sesion-body">
               <div className="pc-sesion-title">
-                <b>Sesión {PLAN.sesiones.length - i}</b>
+                <b>Sesión {plan.sesiones.length - i}</b>
                 <span className="muted">· {s.servicio}</span>
                 <span className="fi-pill fi-pill--mute fm-mono">{s.dur} min</span>
               </div>
@@ -328,6 +338,8 @@ function TabDocumentos() {
 // ─── Header del paciente ──────────────────────────────────────────────────
 
 function PacienteHeader() {
+  const { paciente, plan, cumple } = usePacienteFicha();
+  const ultimaVisita = plan.sesiones[0]?.fecha ?? null;
   return (
     <header className="pc-head">
       <Link href="/pacientes" className="pc-back">
@@ -337,21 +349,25 @@ function PacienteHeader() {
         Pacientes
       </Link>
       <div className="pc-id-row">
-        <div className="fi-avatar pc-avatar">{iniciales(PACIENTE_DETALLE.nombre)}</div>
+        <div className="fi-avatar pc-avatar">{iniciales(paciente.nombre)}</div>
         <div className="pc-id-body">
-          <h1>{PACIENTE_DETALLE.nombre}</h1>
+          <h1>{paciente.nombre}</h1>
           <div className="pc-id-meta">
             <span className="fi-pill fi-pill--mute">
-              {PACIENTE_DETALLE.tipo === "nuevo"
+              {paciente.tipo === "nuevo"
                 ? "1ª visita"
-                : `${PACIENTE_DETALLE.sesiones}ª sesión`}
+                : `${paciente.sesiones}ª sesión`}
             </span>
-            {PACIENTE_DETALLE.tags.includes("VIP") ? (
+            {paciente.tags.includes("VIP") ? (
               <span className="fi-pill fi-pill--vip">VIP</span>
             ) : null}
-            <span className="muted">Cumple 18 may</span>
-            <span className="muted">·</span>
-            <span className="muted">Última visita {fmtFecha("2026-05-06")}</span>
+            <span className="muted">Cumple {cumple}</span>
+            {ultimaVisita ? (
+              <>
+                <span className="muted">·</span>
+                <span className="muted">Última visita {fmtFecha(ultimaVisita)}</span>
+              </>
+            ) : null}
           </div>
         </div>
         <div className="pc-actions">
@@ -369,13 +385,28 @@ function PacienteHeader() {
 
 // ─── Root ──────────────────────────────────────────────────────────────────
 
-export function PacienteDetalle() {
+interface PacienteDetalleProps {
+  paciente: PacienteFichaInfo;
+  plan: PlanData;
+  cumple: string;
+}
+
+export function PacienteDetalle({ paciente, plan, cumple }: PacienteDetalleProps) {
+  return (
+    <PacienteFichaProvider value={{ paciente, plan, cumple }}>
+      <PacienteDetalleInner />
+    </PacienteFichaProvider>
+  );
+}
+
+function PacienteDetalleInner() {
+  const { plan } = usePacienteFicha();
   const [tab, setTab] = useState<TabId>("plan");
 
   const tabs: [TabId, string, boolean?][] = [
     ["informacion", "Información"],
     ["plan", "Plan", true],
-    ["sesiones", `Sesiones (${PLAN.sesiones.length})`],
+    ["sesiones", `Sesiones (${plan.sesiones.length})`],
     ["documentos", "Documentos"],
   ];
 

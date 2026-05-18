@@ -1,24 +1,47 @@
 /**
- * Folio · /finanzas
+ * Folio · /finanzas (Server Component).
  *
- * Server Component: fetcha los insights del cohort y los pasa a la card.
- * El resto del dashboard (KPIs, gráficos, transacciones) sigue siendo Client
- * Component con datos mock por ahora — se conectará a la DB en F11 cuando
- * tengamos pagos reales.
+ * Lee pagos + turnos del mes en TZ de la org y los agrega para KPIs, chart
+ * diario, donut por servicio y transacciones recientes. PII desencriptada
+ * server-side.
+ *
+ * Insights card (F8 cohort k=5) ya estaba conectada — la mantenemos en su
+ * lugar arriba del dashboard.
  */
 
 import { Finanzas } from "@/components/finanzas/finanzas";
 import { InsightsCard } from "@/components/finanzas/insights-card";
+import { getActiveContext } from "@/lib/db/active-context";
+import { getFinanzasDelMes } from "@/lib/db/finanzas";
 import { getInsightsForActiveOrg } from "@/lib/db/insights";
 
+export const dynamic = "force-dynamic";
+
 export default async function FinanzasPage() {
-  const result = await getInsightsForActiveOrg();
-  const bundle = result.ok ? result.data : null;
+  const ctx = await getActiveContext();
+  if (!ctx.ok) {
+    throw new Error(`No se pudo cargar /finanzas: ${ctx.error.message}`);
+  }
+
+  const tz = ctx.data.organization.timezone || "America/Argentina/Cordoba";
+
+  const [insightsResult, finanzasResult] = await Promise.all([
+    getInsightsForActiveOrg(),
+    getFinanzasDelMes({
+      organizationId: ctx.data.organization.id,
+      timezone: tz,
+    }),
+  ]);
+
+  if (!finanzasResult.ok) {
+    throw new Error(`Error cargando finanzas: ${finanzasResult.error.message}`);
+  }
+  const insightsBundle = insightsResult.ok ? insightsResult.data : null;
 
   return (
     <>
-      <InsightsCard bundle={bundle} />
-      <Finanzas />
+      <InsightsCard bundle={insightsBundle} />
+      <Finanzas data={finanzasResult.data} />
     </>
   );
 }

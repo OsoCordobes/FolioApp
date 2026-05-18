@@ -6,11 +6,22 @@
  * Integraciones, datos del consultorio, servicios, horarios.
  */
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { saveConsultorio, type SaveConsultorioInput } from "@/lib/db/configuracion";
 import { getActiveSession } from "@/lib/db/session";
 import { err, type Result } from "@/lib/db/errors";
 import { getAuthUrl as getGoogleAuthUrl } from "@/lib/google/oauth";
+
+export async function saveConsultorioAction(input: SaveConsultorioInput): Promise<Result<void>> {
+  const result = await saveConsultorio(input);
+  if (result.ok) {
+    revalidatePath("/configuracion");
+    revalidatePath("/", "layout");
+  }
+  return result;
+}
 
 export async function connectGoogleCalendar(): Promise<Result<void>> {
   const session = await getActiveSession();

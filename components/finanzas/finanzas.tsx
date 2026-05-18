@@ -13,15 +13,38 @@
 import { useState, useMemo, type ReactNode } from "react";
 
 import * as I from "@/components/icons";
-import {
-  INGRESOS_DIA,
-  METODO_LBL,
-  SERVICIOS_BREAKDOWN,
-  TRANSACCIONES,
-  fmtMoney,
-  fmtMonth,
-  fmtFechaHora,
-} from "@/lib/finanzas-mock";
+import type {
+  FinanzasData,
+  FinanzasServicioBreakdown,
+  FinanzasTransaccion,
+  MetodoPagoUI,
+} from "@/lib/db/finanzas";
+
+const METODO_LBL: Record<MetodoPagoUI, { lbl: string; color: string }> = {
+  mercadopago:   { lbl: "MercadoPago",   color: "var(--slate)" },
+  transferencia: { lbl: "Transferencia", color: "var(--ink-2)" },
+  efectivo:      { lbl: "Efectivo",      color: "var(--ink-2)" },
+  tarjeta:       { lbl: "Tarjeta",       color: "var(--ink-2)" },
+  obra_social:   { lbl: "Obra Social",   color: "var(--ink-2)" },
+  otro:          { lbl: "Otro",          color: "var(--ink-3)" },
+  pendiente:     { lbl: "Pendiente",     color: "var(--amber)" },
+};
+
+const MESES_ABREV_FN = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+
+const fmtMoney = (n: number | null | undefined): string =>
+  "$ " + (n ?? 0).toLocaleString("es-AR");
+
+const fmtMonth = (n: number): string => {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(".0", "") + "M";
+  if (n >= 1_000) return Math.round(n / 1_000) + "k";
+  return n.toString();
+};
+
+const fmtFechaHora = (iso: string): string => {
+  const d = new Date(iso);
+  return `${d.getDate()} ${MESES_ABREV_FN[d.getMonth()]} · ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+};
 
 // ─── KPI strip ──────────────────────────────────────────────────────────────
 
@@ -64,12 +87,21 @@ function KpiStrip({
   totalSesiones,
   ticketProm,
   proyeccion,
+  diaActual,
+  diasDelMes,
+  deltaIngresosPct,
 }: {
   totalIngresos: number;
   totalSesiones: number;
   ticketProm: number;
   proyeccion: number;
+  diaActual: number;
+  diasDelMes: number;
+  deltaIngresosPct: number | null;
 }) {
+  const deltaLabel = deltaIngresosPct == null
+    ? undefined
+    : `${deltaIngresosPct >= 0 ? "+" : ""}${deltaIngresosPct}%`;
   return (
     <div className="fn-kpis">
       <KpiCard
@@ -80,15 +112,14 @@ function KpiStrip({
             {fmtMonth(totalIngresos)}
           </>
         }
-        sub="13 de 31 días"
-        delta="+18%"
+        sub={`${diaActual} de ${diasDelMes} días`}
+        delta={deltaLabel}
         tone="primary"
       />
       <KpiCard
         label="Sesiones"
         value={totalSesiones}
         sub={totalSesiones === 1 ? "1 atendido" : "atendidos"}
-        delta="+6"
       />
       <KpiCard
         label="Ticket promedio"
@@ -99,7 +130,6 @@ function KpiStrip({
           </>
         }
         sub="por sesión"
-        delta="-3%"
       />
       <KpiCard
         label="Proyección fin de mes"
@@ -117,28 +147,33 @@ function KpiStrip({
 
 // ─── Line chart ─────────────────────────────────────────────────────────────
 
-function LineChart() {
+function LineChart({ ingresosPorDia, diasDelMes, diaActual }: { ingresosPorDia: Array<[number, number]>; diasDelMes: number; diaActual: number }) {
   const PAD_L = 36;
   const PAD_R = 12;
   const PAD_T = 12;
   const PAD_B = 26;
   const W = 600 - PAD_L - PAD_R;
   const H = 180 - PAD_T - PAD_B;
-  const days = 13;
-  const maxY = 150000;
+  const days = diasDelMes;
+  // Solo mostramos hasta el día actual (no proyección visual).
+  const dataHastaHoy = ingresosPorDia.filter(([d]) => d <= diaActual);
+  const maxObserved = Math.max(0, ...dataHastaHoy.map(([, m]) => m));
+  const maxY = Math.max(150000, Math.ceil(maxObserved / 50000) * 50000);
 
-  const points = INGRESOS_DIA.map(([d, m]) => ({
-    x: PAD_L + ((d - 1) / (days - 1)) * W,
+  const points = dataHastaHoy.map(([d, m]) => ({
+    x: PAD_L + ((d - 1) / Math.max(1, days - 1)) * W,
     y: PAD_T + H - (m / maxY) * H,
     d,
     m,
   }));
   const labPoints = points.filter((p) => p.m > 0);
   const path = labPoints.map((p, i) => (i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`)).join(" ");
-  const lastPoint = labPoints[labPoints.length - 1];
-  const firstPoint = labPoints[0];
-  const area = path + ` L ${lastPoint.x} ${PAD_T + H} L ${firstPoint.x} ${PAD_T + H} Z`;
-  const ticks = [0, 50000, 100000, 150000];
+  const lastPoint = labPoints[labPoints.length - 1] ?? { x: PAD_L, y: PAD_T + H, d: 1, m: 0 };
+  const firstPoint = labPoints[0] ?? lastPoint;
+  const area = labPoints.length > 0
+    ? path + ` L ${lastPoint.x} ${PAD_T + H} L ${firstPoint.x} ${PAD_T + H} Z`
+    : "";
+  const ticks = [0, Math.round(maxY / 3), Math.round((2 * maxY) / 3), maxY];
 
   return (
     <svg className="fn-chart" viewBox="0 0 600 180" preserveAspectRatio="none">
@@ -169,11 +204,11 @@ function LineChart() {
         );
       })}
 
-      {[1, 5, 9, 13].map((d) => {
-        const x = PAD_L + ((d - 1) / (days - 1)) * W;
+      {labelDaysFor(days).map((d) => {
+        const x = PAD_L + ((d - 1) / Math.max(1, days - 1)) * W;
         return (
           <text key={d} x={x} y={PAD_T + H + 16} textAnchor="middle" fill="var(--ink-3)" fontSize="10" fontFamily="Geist Mono">
-            {d} may
+            {d}
           </text>
         );
       })}
@@ -182,7 +217,7 @@ function LineChart() {
       <path d={path} stroke="var(--accent)" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
 
       {labPoints.map((p) => {
-        const isToday = p.d === 13;
+        const isToday = p.d === diaActual;
         return (
           <g key={p.d}>
             <circle cx={p.x} cy={p.y} r={isToday ? 4.5 : 3} fill="var(--surface)" stroke="var(--accent)" strokeWidth="1.8" />
@@ -191,25 +226,44 @@ function LineChart() {
         );
       })}
 
-      <line x1={lastPoint.x} y1={PAD_T} x2={lastPoint.x} y2={PAD_T + H} stroke="var(--accent)" strokeWidth="1" strokeDasharray="2 3" opacity="0.5" />
-      <text x={lastPoint.x} y={PAD_T - 2} textAnchor="middle" fill="var(--accent-2)" fontSize="10" fontFamily="Geist Mono" letterSpacing=".08em">
-        HOY
-      </text>
+      {labPoints.length > 0 ? (
+        <>
+          <line x1={lastPoint.x} y1={PAD_T} x2={lastPoint.x} y2={PAD_T + H} stroke="var(--accent)" strokeWidth="1" strokeDasharray="2 3" opacity="0.5" />
+          <text x={lastPoint.x} y={PAD_T - 2} textAnchor="middle" fill="var(--accent-2)" fontSize="10" fontFamily="Geist Mono" letterSpacing=".08em">
+            HOY
+          </text>
+        </>
+      ) : null}
     </svg>
   );
 }
 
+function labelDaysFor(diasDelMes: number): number[] {
+  if (diasDelMes <= 7) return [1, Math.ceil(diasDelMes / 2), diasDelMes];
+  return [1, Math.round(diasDelMes / 4), Math.round(diasDelMes / 2), Math.round((3 * diasDelMes) / 4), diasDelMes];
+}
+
 // ─── Donut ──────────────────────────────────────────────────────────────────
 
-function Donut() {
-  const total = SERVICIOS_BREAKDOWN.reduce((s, x) => s + x.monto, 0);
+function Donut({ servicios }: { servicios: FinanzasServicioBreakdown[] }) {
+  const total = servicios.reduce((s, x) => s + x.monto, 0);
   const cx = 90;
   const cy = 90;
   const r = 64;
   const stroke = 22;
   let angle = -Math.PI / 2;
 
-  const arcs = SERVICIOS_BREAKDOWN.map((s) => {
+  if (total === 0) {
+    return (
+      <div className="fn-donut-wrap">
+        <p className="muted" style={{ padding: "32px 16px", textAlign: "center" }}>
+          Sin ingresos este mes todavía.
+        </p>
+      </div>
+    );
+  }
+
+  const arcs = servicios.map((s) => {
     const portion = s.monto / total;
     const angleEnd = angle + portion * Math.PI * 2;
     const x1 = cx + r * Math.cos(angle);
@@ -252,7 +306,7 @@ function Donut() {
 
 // ─── Tabla ──────────────────────────────────────────────────────────────────
 
-function TablaTransacciones() {
+function TablaTransacciones({ transacciones, totalSesiones, mesLabel }: { transacciones: FinanzasTransaccion[]; totalSesiones: number; mesLabel: string }) {
   return (
     <div className="fn-table-wrap">
       <header className="fn-table-head">
@@ -270,48 +324,51 @@ function TablaTransacciones() {
           </button>
         </div>
       </header>
-      <table className="fn-table">
-        <thead>
-          <tr>
-            <th>Fecha</th>
-            <th>Paciente</th>
-            <th>Servicio</th>
-            <th>Método</th>
-            <th className="ta-r">Monto</th>
-          </tr>
-        </thead>
-        <tbody>
-          {TRANSACCIONES.map((t) => {
-            const m = METODO_LBL[t.metodo];
-            const isPendiente = t.estado === "pendiente";
-            return (
-              <tr key={t.id} className={isPendiente ? "is-pendiente" : ""}>
-                <td className="fm-mono">{fmtFechaHora(t.fecha)}</td>
-                <td>
-                  <b>{t.paciente}</b>
-                </td>
-                <td className="muted">{t.servicio}</td>
-                <td>
-                  <span className="fn-metodo" style={{ color: m.color }}>
-                    <span className="fn-metodo-dot" style={{ background: m.color }} />
-                    {m.lbl}
-                  </span>
-                </td>
-                <td className="ta-r">
-                  <span className={"fn-monto fm-mono " + (isPendiente ? "is-pendiente" : "")}>
-                    {fmtMoney(t.monto)}
-                  </span>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+      {transacciones.length === 0 ? (
+        <p className="muted" style={{ padding: 24, textAlign: "center" }}>
+          Sin transacciones registradas todavía.
+        </p>
+      ) : (
+        <table className="fn-table">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Paciente</th>
+              <th>Servicio</th>
+              <th>Método</th>
+              <th className="ta-r">Monto</th>
+            </tr>
+          </thead>
+          <tbody>
+            {transacciones.map((t) => {
+              const m = METODO_LBL[t.metodo];
+              const isPendiente = t.estado === "pendiente";
+              return (
+                <tr key={t.id} className={isPendiente ? "is-pendiente" : ""}>
+                  <td className="fm-mono">{fmtFechaHora(t.fecha)}</td>
+                  <td>
+                    <b>{t.paciente}</b>
+                  </td>
+                  <td className="muted">{t.servicio}</td>
+                  <td>
+                    <span className="fn-metodo" style={{ color: m.color }}>
+                      <span className="fn-metodo-dot" style={{ background: m.color }} />
+                      {m.lbl}
+                    </span>
+                  </td>
+                  <td className="ta-r">
+                    <span className={"fn-monto fm-mono " + (isPendiente ? "is-pendiente" : "")}>
+                      {fmtMoney(t.monto)}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
       <footer className="fn-table-foot">
-        <span className="muted">Mostrando 11 de 38 · mayo 2026</span>
-        <button type="button" className="pc-link">
-          Ver todas →
-        </button>
+        <span className="muted">Mostrando {transacciones.length} de {totalSesiones} · {mesLabel}</span>
       </footer>
     </div>
   );
@@ -319,7 +376,7 @@ function TablaTransacciones() {
 
 // ─── Page header ────────────────────────────────────────────────────────────
 
-function PageHeader({ periodo, setPeriodo }: { periodo: string; setPeriodo: (v: string) => void }) {
+function PageHeader({ periodo, setPeriodo, mesLabel, nowLabel }: { periodo: string; setPeriodo: (v: string) => void; mesLabel: string; nowLabel: string }) {
   const periods: [string, string][] = [
     ["hoy", "Hoy"],
     ["semana", "Semana"],
@@ -330,9 +387,9 @@ function PageHeader({ periodo, setPeriodo }: { periodo: string; setPeriodo: (v: 
   return (
     <header className="fn-head">
       <div>
-        <span className="fi-eyebrow">finanzas · mayo 2026</span>
+        <span className="fi-eyebrow">finanzas · {mesLabel}</span>
         <h1>Ingresos del mes</h1>
-        <p className="fn-head-sub">Jornada en curso · datos hasta las 11:38 de hoy</p>
+        <p className="fn-head-sub">Jornada en curso · datos {nowLabel}</p>
       </div>
       <div className="fn-head-controls">
         <div className="fn-period">
@@ -354,42 +411,62 @@ function PageHeader({ periodo, setPeriodo }: { periodo: string; setPeriodo: (v: 
 
 // ─── Root ──────────────────────────────────────────────────────────────────
 
-export function Finanzas() {
-  const [periodo, setPeriodo] = useState("mes");
+interface FinanzasProps {
+  data: FinanzasData;
+}
 
-  const totalIngresos = useMemo(() => INGRESOS_DIA.reduce((s, [, m]) => s + m, 0), []);
-  const totalSesiones = useMemo(() => SERVICIOS_BREAKDOWN.reduce((s, x) => s + x.count, 0), []);
-  const ticketProm = Math.round(totalIngresos / totalSesiones);
-  const proyeccion = Math.round(totalIngresos * (31 / 13));
+export function Finanzas({ data }: FinanzasProps) {
+  const [periodo, setPeriodo] = useState("mes");
+  void useMemo; // keep import compat con sub-componentes
+
+  const deltaLabel = data.deltaIngresosVsMesPasadoPct == null
+    ? "vs mes pasado: sin datos"
+    : `${data.deltaIngresosVsMesPasadoPct >= 0 ? "+" : ""}${data.deltaIngresosVsMesPasadoPct}% vs mes pasado`;
 
   return (
     <div className="fi-content fn-content">
-      <PageHeader periodo={periodo} setPeriodo={setPeriodo} />
+      <PageHeader
+        periodo={periodo}
+        setPeriodo={setPeriodo}
+        mesLabel={data.mesLabel}
+        nowLabel={`al día ${data.diaActual}`}
+      />
       <KpiStrip
-        totalIngresos={totalIngresos}
-        totalSesiones={totalSesiones}
-        ticketProm={ticketProm}
-        proyeccion={proyeccion}
+        totalIngresos={data.totalIngresos}
+        totalSesiones={data.totalSesiones}
+        ticketProm={data.ticketPromedio}
+        proyeccion={data.proyeccionFinDeMes}
+        diaActual={data.diaActual}
+        diasDelMes={data.diasDelMes}
+        deltaIngresosPct={data.deltaIngresosVsMesPasadoPct}
       />
 
       <div className="fn-charts-grid">
         <section className="fn-chart-card">
           <header>
             <span className="fi-eyebrow">Ingresos diarios · este mes</span>
-            <span className="fn-chart-sub fm-mono">+18% vs abril</span>
+            <span className="fn-chart-sub fm-mono">{deltaLabel}</span>
           </header>
-          <LineChart />
+          <LineChart
+            ingresosPorDia={data.ingresosPorDia}
+            diasDelMes={data.diasDelMes}
+            diaActual={data.diaActual}
+          />
         </section>
         <section className="fn-chart-card">
           <header>
             <span className="fi-eyebrow">Por servicio</span>
-            <span className="fn-chart-sub muted">26 sesiones</span>
+            <span className="fn-chart-sub muted">{data.totalSesiones} sesiones</span>
           </header>
-          <Donut />
+          <Donut servicios={data.serviciosBreakdown} />
         </section>
       </div>
 
-      <TablaTransacciones />
+      <TablaTransacciones
+        transacciones={data.transacciones}
+        totalSesiones={data.totalSesiones}
+        mesLabel={data.mesLabel}
+      />
     </div>
   );
 }

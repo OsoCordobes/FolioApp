@@ -1,16 +1,24 @@
 /**
- * Folio · /pacientes
+ * Folio · /pacientes (Server Component).
  *
- * Directorio de pacientes: tabla densa con filtros, búsqueda, bulk actions
- * y widget de pacientes para reactivar (>60 días sin contacto).
+ * Lista todos los pacientes de la org logueada usando la vista
+ * `paciente_directorio_lite` (M14). Desencripta PII server-side y construye
+ * el shape view-friendly para la tabla del directorio.
  *
- * En F4 la data viene de Supabase (Paciente + PacienteIdentidad + join con
- * Turno) y las acciones (mensaje, archivar, etiquetar) se conectan a Server
- * Actions reales con audit logging.
+ * El filtrado y la búsqueda libre son client-side sobre la lista cargada.
+ * Para org con muchos pacientes (>500) habrá que paginar y filtrar en server;
+ * por ahora el MVP no lo necesita.
  */
 
 import { PacientesDir } from "@/components/pacientes/pacientes-dir";
+import { getPacientesDirectorio } from "@/lib/db/pacientes-dir";
 
-export default function PacientesPage() {
-  return <PacientesDir />;
+export const dynamic = "force-dynamic";
+
+export default async function PacientesPage() {
+  const result = await getPacientesDirectorio();
+  if (!result.ok) {
+    throw new Error(`No se pudo cargar el directorio: ${result.error.message}`);
+  }
+  return <PacientesDir pacientes={result.data} />;
 }

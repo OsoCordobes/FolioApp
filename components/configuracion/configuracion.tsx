@@ -10,35 +10,14 @@
  * En F5/F6 los toggles de Google/WhatsApp ejecutan el flow OAuth real.
  */
 
-import { useState, type ReactNode } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 
 import * as I from "@/components/icons";
+import { saveConsultorioAction } from "@/app/(app)/configuracion/actions";
+import type { ConsultorioData, ServicioRow } from "@/lib/db/configuracion";
 
-// ─── Data inicial ──────────────────────────────────────────────────────────
-
-interface ConsultorioData {
-  nombre: string;
-  profesional: string;
-  matricula: string;
-  email: string;
-  tel: string;
-  direccion: string;
-  ciudad: string;
-  provincia: string;
-  instagram: string;
-}
-
-const CONSULTORIO_INIT: ConsultorioData = {
-  nombre: "Consultorio Lorenzo Martínez",
-  profesional: "Lorenzo Martínez",
-  matricula: "M.N. ACA 8942",
-  email: "lorenzo.martinez.quiropraxia@gmail.com",
-  tel: "+54 9 351 411-2233",
-  direccion: "Belgrano 234",
-  ciudad: "Alta Gracia",
-  provincia: "Córdoba",
-  instagram: "lorenzo.quiropraxia",
-};
+// Re-export tipos para mantener compat con sub-componentes locales.
+export type { ConsultorioData };
 
 type DiaId = "lun" | "mar" | "mie" | "jue" | "vie" | "sab" | "dom";
 type Dia = { on: boolean; franjas: [string, string][] };
@@ -58,22 +37,7 @@ const DIAS_LBLS: Record<DiaId, string> = {
   vie: "Viernes", sab: "Sábado", dom: "Domingo",
 };
 
-interface ServicioCfg {
-  id: number;
-  nombre: string;
-  dur: number;
-  precio: number;
-  paraNuevos: boolean;
-  activo: boolean;
-  paquete?: number;
-}
-
-const SERVICIOS_INIT: ServicioCfg[] = [
-  { id: 1, nombre: "Consulta inicial", dur: 60, precio: 35000, paraNuevos: true,  activo: true },
-  { id: 2, nombre: "Seguimiento",      dur: 45, precio: 22000, paraNuevos: false, activo: true },
-  { id: 3, nombre: "Pack 5 sesiones",  dur: 45, precio: 95000, paraNuevos: false, activo: true, paquete: 5 },
-  { id: 4, nombre: "Deportiva",        dur: 45, precio: 26000, paraNuevos: false, activo: true },
-];
+type ServicioCfg = ServicioRow;
 
 // ─── Side nav ──────────────────────────────────────────────────────────────
 
@@ -396,7 +360,7 @@ function SecServicios({ servicios, setServicios }: { servicios: ServicioCfg[]; s
   const addServ = () =>
     setServicios([
       ...servicios,
-      { id: Date.now(), nombre: "", dur: 45, precio: 0, paraNuevos: false, activo: true },
+      { id: `tmp-${Date.now()}`, nombre: "", dur: 45, precio: 0, paraNuevos: false, activo: true },
     ]);
   const removeServ = (i: number) => setServicios(servicios.filter((_, k) => k !== i));
 
@@ -607,22 +571,38 @@ function SecPlan() {
 
 // ─── Page header con save bar ──────────────────────────────────────────────
 
-function PageHeader({ dirty, onSave, onDiscard }: { dirty: boolean; onSave: () => void; onDiscard: () => void }) {
+function PageHeader({ dirty, onSave, onDiscard, isSaving, saveError, canEdit }: { dirty: boolean; onSave: () => void; onDiscard: () => void; isSaving: boolean; saveError: string | null; canEdit: boolean }) {
   return (
     <header className="cfg-head">
       <div>
         <span className="fi-eyebrow">ajustes</span>
         <h1>Configuración</h1>
+        {saveError ? (
+          <p style={{ color: "var(--red)", marginTop: 4, fontSize: 13 }}>{saveError}</p>
+        ) : null}
       </div>
       <div className={"cfg-save-bar " + (dirty ? "is-dirty" : "")}>
-        {dirty ? (
+        {isSaving ? (
+          <span className="cfg-save-msg">
+            <span className="cfg-save-dot" />
+            Guardando…
+          </span>
+        ) : dirty ? (
           <>
             <span className="cfg-save-msg">
               <span className="cfg-save-dot" />
               Hay cambios sin guardar
             </span>
             <button type="button" className="fi-btn fi-btn-ghost" onClick={onDiscard}>Descartar</button>
-            <button type="button" className="fi-btn fi-btn-primary" onClick={onSave}>Guardar cambios</button>
+            <button
+              type="button"
+              className="fi-btn fi-btn-primary"
+              onClick={onSave}
+              disabled={!canEdit}
+              title={canEdit ? undefined : "Solo OWNER/DIRECTOR puede editar"}
+            >
+              Guardar cambios
+            </button>
           </>
         ) : (
           <span className="cfg-save-msg cfg-save-msg--saved">
@@ -636,22 +616,63 @@ function PageHeader({ dirty, onSave, onDiscard }: { dirty: boolean; onSave: () =
 
 // ─── Root ──────────────────────────────────────────────────────────────────
 
-export function Configuracion() {
+interface ConfiguracionProps {
+  initialConsultorio: ConsultorioData;
+  initialServicios: ServicioCfg[];
+  canEdit: boolean;
+}
+
+export function Configuracion({ initialConsultorio, initialServicios, canEdit }: ConfiguracionProps) {
   const [seccion, setSeccion] = useState<SeccionId>("consultorio");
-  const [consultorio, setConsultorio] = useState<ConsultorioData>(CONSULTORIO_INIT);
+  const [consultorio, setConsultorio] = useState<ConsultorioData>(initialConsultorio);
+  const [snapshot, setSnapshot] = useState<ConsultorioData>(initialConsultorio);
   const [dias, setDias] = useState<Record<DiaId, Dia>>(DIAS_INIT);
   const [slotMin, setSlotMin] = useState(45);
-  const [servicios, setServicios] = useState<ServicioCfg[]>(SERVICIOS_INIT);
+  const [servicios, setServicios] = useState<ServicioCfg[]>(initialServicios);
   const [dirty, setDirty] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [isSaving, startSavingTransition] = useTransition();
 
   const setC = (patch: Partial<ConsultorioData>) => {
     setConsultorio((prev) => ({ ...prev, ...patch }));
     setDirty(true);
   };
 
+  const handleSave = () => {
+    setSaveError(null);
+    startSavingTransition(async () => {
+      const result = await saveConsultorioAction({
+        nombre: consultorio.nombre,
+        profesional: consultorio.profesional,
+        matricula: consultorio.matricula,
+        ciudad: consultorio.ciudad,
+        provincia: consultorio.provincia,
+      });
+      if (!result.ok) {
+        setSaveError(result.error.message);
+        return;
+      }
+      setSnapshot(consultorio);
+      setDirty(false);
+    });
+  };
+
+  const handleDiscard = () => {
+    setConsultorio(snapshot);
+    setDirty(false);
+    setSaveError(null);
+  };
+
   return (
     <div className="fi-content cfg-content">
-      <PageHeader dirty={dirty} onSave={() => setDirty(false)} onDiscard={() => setDirty(false)} />
+      <PageHeader
+        dirty={dirty}
+        onSave={handleSave}
+        onDiscard={handleDiscard}
+        isSaving={isSaving}
+        saveError={saveError}
+        canEdit={canEdit}
+      />
 
       <div className="cfg-grid">
         <SideNav active={seccion} setActive={setSeccion} />
@@ -669,7 +690,7 @@ export function Configuracion() {
           {seccion === "servicios"     ? (
             <SecServicios
               servicios={servicios}
-              setServicios={(s) => { setServicios(s); setDirty(true); }}
+              setServicios={(s) => { setServicios(s); }}
             />
           ) : null}
           {seccion === "integraciones" ? <SecIntegraciones /> : null}

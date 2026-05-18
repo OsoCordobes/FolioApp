@@ -14,14 +14,33 @@
 import { useMemo, useState } from "react";
 
 import * as I from "@/components/icons";
-import {
-  ESTADO_VIS,
-  PACIENTES_DIR,
-  diasDesde,
-  fmtFechaCorta,
-  iniciales,
-  type PacienteDir,
-} from "@/lib/pacientes-dir-mock";
+import type { PacienteDirRow } from "@/lib/db/pacientes-dir";
+
+// Re-export con el alias del prototipo para no tocar el resto del archivo.
+type PacienteDir = PacienteDirRow;
+
+const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+
+const fmtFechaCorta = (iso: string | null): string => {
+  if (!iso) return "—";
+  const d = new Date(iso + "T00:00:00");
+  return `${d.getDate()} ${MESES[d.getMonth()]}`;
+};
+
+const iniciales = (n: string): string =>
+  n.split(" ").map((p) => p[0]).filter(Boolean).join("").slice(0, 2).toUpperCase();
+
+const diasDesde = (iso: string | null, now: number = Date.now()): number | null => {
+  if (!iso) return null;
+  return Math.floor((now - new Date(iso + "T00:00:00").getTime()) / 86_400_000);
+};
+
+const ESTADO_VIS: Record<PacienteDir["estado"], { lbl: string; color: string }> = {
+  activo:   { lbl: "Activo",   color: "var(--green)" },
+  inactivo: { lbl: "Inactivo", color: "var(--ink-3)" },
+  pausa:    { lbl: "En pausa", color: "var(--amber)" },
+  alta:     { lbl: "Alta",     color: "var(--slate)" },
+};
 
 // ─── Toolbar ────────────────────────────────────────────────────────────────
 
@@ -78,8 +97,8 @@ function Toolbar({ q, setQ, filtro, setFiltro, counts, onAddPaciente }: ToolbarP
 
 interface TablaPacientesProps {
   pacientes: PacienteDir[];
-  selected: Set<number>;
-  setSelected: (s: Set<number>) => void;
+  selected: Set<string>;
+  setSelected: (s: Set<string>) => void;
   onOpen: (p: PacienteDir) => void;
 }
 
@@ -90,7 +109,7 @@ function TablaPacientes({ pacientes, selected, setSelected, onOpen }: TablaPacie
     if (allOn) setSelected(new Set());
     else setSelected(new Set(pacientes.map((p) => p.id)));
   };
-  const toggleOne = (id: number) => {
+  const toggleOne = (id: string) => {
     const next = new Set(selected);
     if (next.has(id)) next.delete(id);
     else next.add(id);
@@ -325,33 +344,37 @@ function PageHeader({ total }: { total: number }) {
 
 // ─── Root ──────────────────────────────────────────────────────────────────
 
-export function PacientesDir() {
+interface PacientesDirProps {
+  pacientes: PacienteDir[];
+}
+
+export function PacientesDir({ pacientes }: PacientesDirProps) {
   const [q, setQ] = useState("");
   const [filtro, setFiltro] = useState("todos");
-  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const paraReactivar = useMemo(
     () =>
-      PACIENTES_DIR.filter(
+      pacientes.filter(
         (p) => p.estado === "inactivo" && (diasDesde(p.ultima) ?? 0) > 60,
       ),
-    [],
+    [pacientes],
   );
 
   const counts = useMemo(
     () => ({
-      todos:     PACIENTES_DIR.length,
-      activos:   PACIENTES_DIR.filter((p) => p.estado === "activo").length,
-      nuevos:    PACIENTES_DIR.filter((p) => p.tipo === "nuevo").length,
+      todos:     pacientes.length,
+      activos:   pacientes.filter((p) => p.estado === "activo").length,
+      nuevos:    pacientes.filter((p) => p.tipo === "nuevo").length,
       reactivar: paraReactivar.length,
-      inactivos: PACIENTES_DIR.filter((p) => p.estado === "inactivo").length,
-      alta:      PACIENTES_DIR.filter((p) => p.estado === "alta").length,
+      inactivos: pacientes.filter((p) => p.estado === "inactivo").length,
+      alta:      pacientes.filter((p) => p.estado === "alta").length,
     }),
-    [paraReactivar],
+    [pacientes, paraReactivar],
   );
 
   const filtered = useMemo(() => {
-    let list: PacienteDir[] = PACIENTES_DIR;
+    let list: PacienteDir[] = pacientes;
     if (filtro === "activos") list = list.filter((p) => p.estado === "activo");
     if (filtro === "nuevos") list = list.filter((p) => p.tipo === "nuevo");
     if (filtro === "reactivar") list = paraReactivar;
@@ -368,12 +391,12 @@ export function PacientesDir() {
       );
     }
     return list;
-  }, [filtro, q, paraReactivar]);
+  }, [filtro, q, paraReactivar, pacientes]);
 
   return (
     <>
       <div className="fi-content pd-content">
-        <PageHeader total={PACIENTES_DIR.length} />
+        <PageHeader total={pacientes.length} />
 
         {filtro !== "reactivar" && paraReactivar.length > 0 ? (
           <ReactivarWidget pacientes={paraReactivar} />
