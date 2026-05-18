@@ -8,12 +8,34 @@
  * con service_role.
  */
 
-import { useEffect, useState, useTransition } from "react";
+import Script from "next/script";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 import {
   createPedidoPublico,
   fetchSlotsPublico,
 } from "@/app/(public)/book/[slug]/actions";
+
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
+
+declare global {
+  interface Window {
+    turnstile?: {
+      render: (
+        el: HTMLElement | string,
+        opts: {
+          sitekey: string;
+          callback?: (token: string) => void;
+          "error-callback"?: () => void;
+          "expired-callback"?: () => void;
+          theme?: "light" | "dark" | "auto";
+        },
+      ) => string;
+      reset: (widgetId?: string) => void;
+      remove: (widgetId?: string) => void;
+    };
+  }
+}
 
 interface OrgPublic {
   slug: string;
@@ -94,7 +116,31 @@ export function BookingWizard({
   const [email, setEmail] = useState("");
   const [motivo, setMotivo] = useState("");
   const [err, setErr] = useState<string | null>(null);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const captchaContainerRef = useRef<HTMLDivElement | null>(null);
+  const captchaWidgetIdRef = useRef<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  // Renderizar Turnstile cuando entramos al paso "datos" (no antes para no
+  // levantar challenge si el visitante solo revisa horarios).
+  useEffect(() => {
+    if (vista !== "datos" || !TURNSTILE_SITE_KEY) return;
+    if (!captchaContainerRef.current) return;
+    if (!window.turnstile) return;                 // Script todavía cargando
+    captchaWidgetIdRef.current = window.turnstile.render(captchaContainerRef.current, {
+      sitekey: TURNSTILE_SITE_KEY,
+      theme: "auto",
+      callback: (token) => setCaptchaToken(token),
+      "expired-callback": () => setCaptchaToken(null),
+      "error-callback": () => setCaptchaToken(null),
+    });
+    return () => {
+      if (captchaWidgetIdRef.current && window.turnstile) {
+        window.turnstile.remove(captchaWidgetIdRef.current);
+        captchaWidgetIdRef.current = null;
+      }
+    };
+  }, [vista]);
 
   // Cargar slots cuando se elija servicio
   useEffect(() => {
@@ -268,6 +314,10 @@ export function BookingWizard({
                   return;
                 }
                 setErr(null);
+                if (TURNSTILE_SITE_KEY && !captchaToken) {
+                  setErr("Esperá unos segundos a que el captcha verifique.");
+                  return;
+                }
                 startTransition(async () => {
                   const result = await createPedidoPublico({
                     orgSlug: org.slug,
@@ -277,6 +327,7 @@ export function BookingWizard({
                     telefono,
                     email: email || undefined,
                     motivo: motivo || undefined,
+                    captchaToken: captchaToken ?? undefined,
                   });
                   if (!result.ok) {
                     setErr(result.error.message);
@@ -303,6 +354,16 @@ export function BookingWizard({
                 <span>Motivo <small>opcional</small></span>
                 <textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={3} />
               </label>
+              {TURNSTILE_SITE_KEY ? (
+                <>
+                  <Script
+                    src="https://challenges.cloudflare.com/turnstile/v0/api.js"
+                    async
+                    defer
+                  />
+                  <div ref={captchaContainerRef} style={{ marginTop: 4 }} />
+                </>
+              ) : null}
               {err ? <p className="au-err">{err}</p> : null}
               <button type="submit" className="fi-btn fi-btn-primary" disabled={pending}>
                 {pending ? "Enviando..." : "Solicitar turno"}

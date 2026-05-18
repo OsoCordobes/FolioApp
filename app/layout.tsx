@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { FolioPostHogProvider } from "@/lib/observability/posthog-client";
 import { QueryProvider } from "@/lib/query-client";
 import { TweaksProvider } from "@/lib/tweaks-context";
 
@@ -38,9 +39,11 @@ export default function RootLayout({
         <link rel="stylesheet" href="/folio.css" />
       </head>
       <body>
-        <QueryProvider>
-          <TweaksProvider>{children}</TweaksProvider>
-        </QueryProvider>
+        <FolioPostHogProvider>
+          <QueryProvider>
+            <TweaksProvider>{children}</TweaksProvider>
+          </QueryProvider>
+        </FolioPostHogProvider>
       </body>
     </html>
   );

@@ -26,6 +26,8 @@
  * detrás de `signLoginTicketRequest` (TODO[F11]).
  */
 
+import forge from "node-forge";
+
 import { decryptColumn } from "@/lib/crypto";
 
 export type AfipEnv = "homologacion" | "produccion";
@@ -136,12 +138,66 @@ export async function getAuthTicket(config: AfipConfig): Promise<AuthTicket> {
  * Firma un LoginTicketRequest XML con el certificado en formato CMS/PKCS7
  * y devuelve el blob base64 listo para enviar al WSAA.
  *
- * Implementación: node-forge soporta pkcs7.createSignedData. Es 30-40 LOC.
- * En F11 cuando tengamos cert de prod, implementamos.
+ * El `pem` contiene certificado X.509 + private key concatenados (formato
+ * estándar que da `openssl` con --cert.crt + --key.key concatenados).
+ * `service` es el WSN al que queremos acceder (en nuestro caso "wsfe").
+ *
+ * Spec AFIP WSAA v1.1: el TRA (Ticket Request Authorization) es XML con
+ * `<uniqueId>`, `<generationTime>`, `<expirationTime>`, `<service>`.
+ * Se firma con CMS detached → base64.
  */
-async function signLoginTicketRequest(_pem: string, _service: string): Promise<string> {
-  // TODO[F11]: implementar con node-forge
-  throw new Error("signLoginTicketRequest no implementado (F11). Configurar cert + node-forge.");
+async function signLoginTicketRequest(pem: string, service: string): Promise<string> {
+  // 1. Construir el TRA XML
+  const now = Date.now();
+  const uniqueId = Math.floor(now / 1000);
+  const generationTime = new Date(now - 60_000).toISOString();             // -60s margen NTP
+  const expirationTime = new Date(now + 10 * 60_000).toISOString();        // +10 min
+
+  const tra = `<?xml version="1.0" encoding="UTF-8"?>
+<loginTicketRequest version="1.0">
+  <header>
+    <uniqueId>${uniqueId}</uniqueId>
+    <generationTime>${generationTime}</generationTime>
+    <expirationTime>${expirationTime}</expirationTime>
+  </header>
+  <service>${service}</service>
+</loginTicketRequest>`;
+
+  // 2. Extraer cert + key del PEM concatenado
+  let cert: forge.pki.Certificate | null = null;
+  let key: forge.pki.rsa.PrivateKey | null = null;
+  const blocks = pem.match(/-----BEGIN [^-]+-----[\s\S]*?-----END [^-]+-----/g) ?? [];
+  for (const block of blocks) {
+    if (block.includes("CERTIFICATE")) {
+      cert = forge.pki.certificateFromPem(block);
+    } else if (block.includes("PRIVATE KEY")) {
+      const pk = forge.pki.privateKeyFromPem(block);
+      key = pk as forge.pki.rsa.PrivateKey;
+    }
+  }
+  if (!cert || !key) {
+    throw new Error("PEM inválido: falta cert o private key");
+  }
+
+  // 3. Firmar con PKCS#7 SignedData (CMS)
+  const p7 = forge.pkcs7.createSignedData();
+  p7.content = forge.util.createBuffer(tra, "utf8");
+  p7.addCertificate(cert);
+  p7.addSigner({
+    key,
+    certificate: cert,
+    digestAlgorithm: forge.pki.oids.sha256,
+    authenticatedAttributes: [
+      { type: forge.pki.oids.contentType, value: forge.pki.oids.data },
+      { type: forge.pki.oids.messageDigest },                    // valor lo calcula la lib
+      { type: forge.pki.oids.signingTime, value: new Date().toISOString() },
+    ],
+  });
+  p7.sign({ detached: false });
+
+  // 4. Encode DER → base64
+  const der = forge.asn1.toDer(p7.toAsn1()).getBytes();
+  return forge.util.encode64(der);
 }
 
 /**

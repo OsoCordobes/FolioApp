@@ -4,16 +4,28 @@
  * Folio · Server Actions del booking público.
  *
  * Estas actions corren SIN sesión (cualquier visitante del link público).
- * Por eso usamos service client en todo + Zod estricto + rate limiting
- * (en F9/F11 con Upstash o middleware Vercel Edge).
+ * Defense-in-depth:
+ *   - Zod estricto (validación de inputs)
+ *   - Rate limit por IP (Upstash) en fetchSlots + createPedido
+ *   - Captcha Cloudflare Turnstile obligatorio en createPedido
+ *   - Re-chequeo del slot antes de insertar (race condition)
+ *   - service client + Zod (RLS no aplica porque no hay session)
  */
 
+import { headers } from "next/headers";
 import { z } from "zod";
 
 import { encryptColumn } from "@/lib/crypto";
 import { err, ok, type Result } from "@/lib/db/errors";
 import { getSlotsDisponibles, type Slot } from "@/lib/booking/availability";
+import { limitByIp } from "@/lib/security/rate-limit";
+import { verifyTurnstile } from "@/lib/security/turnstile";
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
+
+async function clientIp(): Promise<string | null> {
+  const h = await headers();
+  return h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+}
 
 const slotsInput = z.object({
   orgSlug: z.string().regex(/^[a-z0-9-]+$/),
@@ -26,6 +38,13 @@ export async function fetchSlotsPublico(
 ): Promise<Result<Slot[]>> {
   const parsed = slotsInput.safeParse(input);
   if (!parsed.success) return err("validation", "Parámetros inválidos.");
+
+  // Rate limit: hasta 60 consultas de slots por IP por hora.
+  const ip = await clientIp();
+  const rl = await limitByIp("book.slots", ip, 60);
+  if (!rl.ok) {
+    return err("validation", `Demasiadas consultas, probá en ${rl.resetIn}s.`);
+  }
 
   const service = createSupabaseServiceClient();
   const { data: org } = await service
@@ -98,7 +117,21 @@ export async function createPedidoPublico(
   if (!parsed.success) {
     return err("validation", "Datos del pedido inválidos.", parsed.error.message);
   }
-  // TODO[F11]: validar captchaToken contra Cloudflare Turnstile.
+
+  const ip = await clientIp();
+
+  // Rate limit más estricto en el submit final.
+  const rl = await limitByIp("book.create", ip, 5);
+  if (!rl.ok) {
+    return err("validation", `Demasiados intentos, probá en ${rl.resetIn}s.`);
+  }
+
+  // Captcha obligatorio. En dev (sin secret), verifyTurnstile retorna true
+  // para no bloquear el flow local. En producción es fail-closed.
+  const captchaOk = await verifyTurnstile(parsed.data.captchaToken, ip);
+  if (!captchaOk) {
+    return err("validation", "Captcha inválido o expirado. Recargá la página.");
+  }
 
   const service = createSupabaseServiceClient();
   const { data: org } = await service
