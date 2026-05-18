@@ -79,6 +79,7 @@ export async function POST(req: Request) {
 
   const url = new URL(req.url);
   const mode = url.searchParams.get("mode") ?? "all";
+  const reset = url.searchParams.get("reset") === "true";
   if (!["all", "migrations", "seeds"].includes(mode)) {
     return NextResponse.json({ ok: false, error: "mode debe ser all|migrations|seeds" }, { status: 400 });
   }
@@ -108,6 +109,15 @@ export async function POST(req: Request) {
   const all: FileResult[] = [];
   try {
     await client.connect();
+
+    if (reset) {
+      // Drop+recreate public schema. Solo seguro en bootstrap inicial — destructivo.
+      await client.query("DROP SCHEMA IF EXISTS public CASCADE");
+      await client.query("CREATE SCHEMA public");
+      await client.query("GRANT ALL ON SCHEMA public TO postgres");
+      await client.query("GRANT ALL ON SCHEMA public TO public");
+    }
+
     await client.query("SET check_function_bodies = off");
 
     if (mode === "all" || mode === "migrations") {

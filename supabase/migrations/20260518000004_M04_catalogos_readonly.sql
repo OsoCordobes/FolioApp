@@ -49,12 +49,9 @@ CREATE TABLE codigo_cie10 (
   CONSTRAINT codigo_cie10_capitulo_num CHECK (capitulo_num BETWEEN 1 AND 22)
 );
 
-CREATE INDEX codigo_cie10_capitulo_idx ON codigo_cie10 (capitulo_num, codigo);
-CREATE INDEX codigo_cie10_descripcion_trgm_idx
-  ON codigo_cie10 USING gin (descripcion gin_trgm_ops);
-
--- pg_trgm para búsqueda fuzzy ("lumbalgia" → encuentra "lumbago"). Si no
--- está disponible (debería estar en Supabase Free), el índice falla silently.
+-- pg_trgm para búsqueda fuzzy ("lumbalgia" → encuentra "lumbago"). Está
+-- disponible en Supabase Free. Debe crearse ANTES del índice que usa
+-- gin_trgm_ops (M01 ya la habilita, repetimos por seguridad si M04 corre suelto).
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'pg_trgm') THEN
@@ -62,6 +59,10 @@ BEGIN
   END IF;
 END
 $$;
+
+CREATE INDEX codigo_cie10_capitulo_idx ON codigo_cie10 (capitulo_num, codigo);
+CREATE INDEX codigo_cie10_descripcion_trgm_idx
+  ON codigo_cie10 USING gin (descripcion gin_trgm_ops);
 
 COMMENT ON TABLE codigo_cie10 IS
   'Folio · catálogo CIE-10 (OMS Spanish edition) · ~14.000 códigos diagnósticos. Seed en supabase/seed/cie10.sql.';

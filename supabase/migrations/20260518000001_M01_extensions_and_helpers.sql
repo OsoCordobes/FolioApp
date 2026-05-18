@@ -28,6 +28,9 @@
 -- ─── Extensiones ───────────────────────────────────────────────────────────
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
+-- pg_trgm: índices fuzzy gin_trgm_ops sobre catálogos (M04 lo usa para CIE-10).
+-- Está disponible en Supabase Free.
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 -- pgsodium y pg_cron son opt-in (disponibles condicionalmente):
 --   - pgsodium se carga si está; no se usa para TCE pero queda disponible
