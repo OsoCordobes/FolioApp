@@ -98,9 +98,11 @@ export function Sidebar() {
           <button className="fi-link" type="button">
             <I.ExternalLink size={13} /> Ver sitio público
           </button>
-          <button className="fi-link" type="button">
-            <I.Logout size={13} /> Cerrar sesión
-          </button>
+          <form method="POST" action="/api/auth/signout" style={{ display: "contents" }}>
+            <button className="fi-link" type="submit">
+              <I.Logout size={13} /> Cerrar sesión
+            </button>
+          </form>
         </div>
       </div>
     </aside>

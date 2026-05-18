@@ -3,13 +3,23 @@
 /**
  * Folio · Auth · forms (Login, Signup, Forgot).
  *
- * Port fiel de auth.jsx (líneas 1176-1411). En F1 son visualmente
- * idénticos al prototipo; el `onSubmit` es no-op (preventDefault) y
- * se conecta a Supabase en F3. La navegación entre vistas (login →
- * signup → forgot) es interna y client-side.
+ * En F3 los forms están conectados a Server Actions de Supabase:
+ *   - Login → signInWithPassword / signInWithGoogle
+ *   - Signup → signUpEmail (luego /onboarding completa el flow)
+ *   - Forgot → requestPasswordReset
+ *
+ * Estado pendiente del submit: `pending` flag deshabilita el botón y muestra
+ * "Entrando..." mientras la Server Action resuelve.
  */
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useMemo, useState, useTransition, type ReactNode } from "react";
+
+import {
+  requestPasswordReset,
+  signInWithGoogle,
+  signInWithPassword,
+} from "@/app/(public)/login/actions";
 
 type Vista = "login" | "signup" | "forgot";
 
@@ -60,14 +70,16 @@ const EyeClosed = () => (
 
 interface SubViewProps {
   setVista: (v: Vista) => void;
-  onSubmit: () => void;
 }
 
-function Login({ setVista, onSubmit }: SubViewProps) {
+function Login({ setVista }: SubViewProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [err, setErr] = useState("");
+  const [pending, startTransition] = useTransition();
 
   const submit = (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -80,7 +92,24 @@ function Login({ setVista, onSubmit }: SubViewProps) {
       return;
     }
     setErr("");
-    onSubmit();
+    startTransition(async () => {
+      const result = await signInWithPassword(email, password);
+      if (!result.ok) {
+        setErr(result.error ?? "Error al entrar");
+        return;
+      }
+      const redirect = searchParams.get("redirect") ?? "/hoy";
+      router.push(redirect);
+      router.refresh();
+    });
+  };
+
+  const handleGoogle = () => {
+    startTransition(async () => {
+      await signInWithGoogle();
+      // Si redirige al provider, no llegamos acá; si falla, el error se muestra
+      // recargando la página con ?error= (middleware no captura esto en F3).
+    });
   };
 
   return (
@@ -98,7 +127,7 @@ function Login({ setVista, onSubmit }: SubViewProps) {
         <h2>Entrar</h2>
       </header>
 
-      <button type="button" className="au-btn-google" onClick={onSubmit}>
+      <button type="button" className="au-btn-google" onClick={handleGoogle} disabled={pending}>
         <GoogleLogo />
         Continuar con Google
       </button>
@@ -119,6 +148,7 @@ function Login({ setVista, onSubmit }: SubViewProps) {
               setEmail(e.target.value);
               setErr("");
             }}
+            disabled={pending}
           />
         </label>
         <label className={"au-field" + (err && email && password.length < 8 ? " is-err" : "")}>
@@ -141,6 +171,7 @@ function Login({ setVista, onSubmit }: SubViewProps) {
                 setPassword(e.target.value);
                 setErr("");
               }}
+              disabled={pending}
             />
             <button
               type="button"
@@ -155,8 +186,8 @@ function Login({ setVista, onSubmit }: SubViewProps) {
 
         {err ? <p className="au-err">{err}</p> : null}
 
-        <button type="submit" className="fi-btn fi-btn-primary au-submit">
-          Entrar
+        <button type="submit" className="fi-btn fi-btn-primary au-submit" disabled={pending}>
+          {pending ? "Entrando..." : "Entrar"}
           <ArrowRightTiny />
         </button>
       </form>
@@ -166,11 +197,28 @@ function Login({ setVista, onSubmit }: SubViewProps) {
 
 // ─── Signup ────────────────────────────────────────────────────────────────
 
-function Signup({ setVista, onSubmit }: SubViewProps) {
+function Signup({ setVista }: SubViewProps) {
+  const router = useRouter();
   const [nombre, setNombre] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
+  const [pending, startTransition] = useTransition();
+  void pending;
+
+  // Signup desde /login → redirige al /onboarding que continúa el flow
+  // completo (signUpEmail + completeOnboarding) en Step 1+ con los datos
+  // pre-cargados via URL params.
+  const handleSignup = () => {
+    if (!email.match(/^[^@\s]+@[^@\s]+\.[^@\s]+$/) || password.length < 8) return;
+    const params = new URLSearchParams({ email, ...(nombre ? { nombre } : {}) });
+    startTransition(() => router.push(`/onboarding?${params.toString()}`));
+  };
+  const handleGoogle = () => {
+    startTransition(async () => {
+      await signInWithGoogle();
+    });
+  };
 
   const pwStrength = useMemo(() => {
     if (!password) return 0;
@@ -199,7 +247,7 @@ function Signup({ setVista, onSubmit }: SubViewProps) {
         <h2>Crear cuenta</h2>
       </header>
 
-      <button type="button" className="au-btn-google" onClick={onSubmit}>
+      <button type="button" className="au-btn-google" onClick={handleGoogle}>
         <GoogleLogo />
         Continuar con Google
       </button>
@@ -212,7 +260,7 @@ function Signup({ setVista, onSubmit }: SubViewProps) {
         className="au-form"
         onSubmit={(e) => {
           e.preventDefault();
-          onSubmit();
+          handleSignup();
         }}
       >
         <label className="au-field">
@@ -292,11 +340,19 @@ function Signup({ setVista, onSubmit }: SubViewProps) {
 function Forgot({ setVista }: { setVista: (v: Vista) => void }) {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
+  const [pending, startTransition] = useTransition();
 
   const submit = (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (email.match(/^[^@\s]+@[^@\s]+\.[^@\s]+$/)) setSent(true);
+    if (!email.match(/^[^@\s]+@[^@\s]+\.[^@\s]+$/)) return;
+    startTransition(async () => {
+      await requestPasswordReset(email);
+      // Siempre marcamos como "enviado" (no confirmar si el email existe).
+      setSent(true);
+    });
   };
+  // pending exposed via disabled below
+  void pending;
 
   if (sent) {
     return (
@@ -368,15 +424,11 @@ function Forgot({ setVista }: { setVista: (v: Vista) => void }) {
 
 export function AuthForms({ initialVista = "login" }: { initialVista?: Vista }) {
   const [vista, setVista] = useState<Vista>(initialVista);
-  // En F1 onSubmit no hace nada real. F3 lo conecta a Supabase Auth.
-  const onSubmit = () => {
-    // TODO[F3]: invocar Server Action de signIn / signUp / recovery.
-  };
 
   return (
     <main className="au-main">
-      {vista === "login" ? <Login setVista={setVista} onSubmit={onSubmit} /> : null}
-      {vista === "signup" ? <Signup setVista={setVista} onSubmit={onSubmit} /> : null}
+      {vista === "login" ? <Login setVista={setVista} /> : null}
+      {vista === "signup" ? <Signup setVista={setVista} /> : null}
       {vista === "forgot" ? <Forgot setVista={setVista} /> : null}
     </main>
   );

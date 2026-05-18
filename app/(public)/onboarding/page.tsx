@@ -1,17 +1,34 @@
 /**
  * Folio · /onboarding
  *
- * Wizard de 9 pasos que arranca después del signup. Port del prototipo
- * (`Folio · Onboarding.html` + `folio/onboarding.jsx` + steps).
+ * Wizard de 9 pasos. Step 1 → signUpEmail. Step 9 → completeOnboarding.
+ * Persistencia entre pasos vía localStorage.
  *
- * En F1 solo Step1 (Registro) está implementado para validar el baseline
- * pixel-perfect. Los pasos 2-9 se agregan en F3 cuando auth + tenancy
- * entran y necesitan el flow completo (matrícula, consultorio, horarios,
- * servicios, Google Calendar, Mercado Pago, listo).
+ * `useSearchParams()` (en OnboardingApp) requiere Suspense en App Router.
  */
+
+import { Suspense } from "react";
 
 import { OnboardingApp } from "@/components/onboarding/onboarding-app";
 
 export default function OnboardingPage() {
-  return <OnboardingApp />;
+  return (
+    <Suspense fallback={<OnboardingFallback />}>
+      <OnboardingApp />
+    </Suspense>
+  );
+}
+
+function OnboardingFallback() {
+  return (
+    <div className="onb-app">
+      <header className="onb-app-head">
+        <div className="onb-app-brand">
+          <span className="onb-brand-name">folio</span>
+        </div>
+        <span />
+      </header>
+      <main className="onb-app-main" />
+    </div>
+  );
 }
