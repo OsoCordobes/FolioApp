@@ -46,12 +46,21 @@ export function PageHeader({ turnos, pacientes, fechaLarga, fechaAnio, now }: Pa
         </p>
       </div>
       <div className="fi-page-actions">
-        <button type="button" className="fi-btn fi-btn-ghost">
+        <button
+          type="button"
+          className="fi-btn fi-btn-ghost"
+          onClick={() => window.print()}
+          title="Imprimir o exportar a PDF la agenda del día"
+        >
           <I.Printer size={13} /> Imprimir
         </button>
-        <button type="button" className="fi-btn fi-btn-secondary">
+        <a
+          href="/calendario#walkin"
+          className="fi-btn fi-btn-secondary"
+          title="Agendar un walk-in en el calendario"
+        >
           <I.Plus size={13} /> Turno walk-in
-        </button>
+        </a>
       </div>
     </header>
   );

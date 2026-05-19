@@ -307,6 +307,16 @@ function Donut({ servicios }: { servicios: FinanzasServicioBreakdown[] }) {
 // ─── Tabla ──────────────────────────────────────────────────────────────────
 
 function TablaTransacciones({ transacciones, totalSesiones, mesLabel }: { transacciones: FinanzasTransaccion[]; totalSesiones: number; mesLabel: string }) {
+  const [search, setSearch] = useState("");
+  const filtered = useMemo(() => {
+    if (!search.trim()) return transacciones;
+    const q = search.toLowerCase();
+    return transacciones.filter((t) =>
+      t.paciente.toLowerCase().includes(q) ||
+      t.servicio.toLowerCase().includes(q) ||
+      String(t.monto).includes(q),
+    );
+  }, [transacciones, search]);
   return (
     <div className="fn-table-wrap">
       <header className="fn-table-head">
@@ -314,9 +324,18 @@ function TablaTransacciones({ transacciones, totalSesiones, mesLabel }: { transa
         <div className="fn-table-tools">
           <div className="fn-table-search">
             <I.Search size={12} />
-            <input placeholder="Buscar paciente, monto…" />
+            <input
+              placeholder="Buscar paciente, monto…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
           </div>
-          <button type="button" className="fi-btn fi-btn-secondary">
+          <button
+            type="button"
+            className="fi-btn fi-btn-secondary"
+            onClick={() => exportTransaccionesToCsv(filtered, mesLabel)}
+            title="Descargar CSV con las transacciones visibles"
+          >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
             </svg>
@@ -324,9 +343,9 @@ function TablaTransacciones({ transacciones, totalSesiones, mesLabel }: { transa
           </button>
         </div>
       </header>
-      {transacciones.length === 0 ? (
+      {filtered.length === 0 ? (
         <p className="muted" style={{ padding: 24, textAlign: "center" }}>
-          Sin transacciones registradas todavía.
+          {transacciones.length === 0 ? "Sin transacciones registradas todavía." : "Sin resultados para esa búsqueda."}
         </p>
       ) : (
         <table className="fn-table">
@@ -340,7 +359,7 @@ function TablaTransacciones({ transacciones, totalSesiones, mesLabel }: { transa
             </tr>
           </thead>
           <tbody>
-            {transacciones.map((t) => {
+            {filtered.map((t) => {
               const m = METODO_LBL[t.metodo];
               const isPendiente = t.estado === "pendiente";
               return (
@@ -368,10 +387,39 @@ function TablaTransacciones({ transacciones, totalSesiones, mesLabel }: { transa
         </table>
       )}
       <footer className="fn-table-foot">
-        <span className="muted">Mostrando {transacciones.length} de {totalSesiones} · {mesLabel}</span>
+        <span className="muted">Mostrando {filtered.length} de {totalSesiones} · {mesLabel}</span>
       </footer>
     </div>
   );
+}
+
+function exportTransaccionesToCsv(transacciones: FinanzasTransaccion[], mesLabel: string): void {
+  const headers = ["Fecha", "Paciente", "Servicio", "Monto", "Metodo", "Estado"];
+  const rows = transacciones.map((t) => [
+    new Date(t.fecha).toISOString(),
+    csvEscapeFn(t.paciente),
+    csvEscapeFn(t.servicio),
+    String(t.monto),
+    t.metodo,
+    t.estado,
+  ].join(","));
+  const csv = [headers.join(","), ...rows].join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `transacciones-folio-${mesLabel.replace(/\s+/g, "-")}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function csvEscapeFn(v: string): string {
+  if (v == null) return "";
+  const needsQuote = /[",\r\n]/.test(v);
+  const escaped = v.replace(/"/g, '""');
+  return needsQuote ? `"${escaped}"` : escaped;
 }
 
 // ─── Page header ────────────────────────────────────────────────────────────

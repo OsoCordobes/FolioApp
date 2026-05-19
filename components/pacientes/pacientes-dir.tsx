@@ -322,16 +322,18 @@ function ReactivarWidget({ pacientes }: { pacientes: PacienteDir[] }) {
 
 // ─── Page header ────────────────────────────────────────────────────────────
 
-function PageHeader({ total }: { total: number }) {
+function PageHeader({ total, activos, paraReactivarCount, onExport }: { total: number; activos: number; paraReactivarCount: number; onExport: () => void }) {
   return (
     <header className="pd-head">
       <div>
         <span className="fi-eyebrow">Directorio</span>
         <h1>Pacientes</h1>
-        <p className="pd-head-sub">{total} en total · 6 activos · 2 para reactivar</p>
+        <p className="pd-head-sub">
+          {total} en total · {activos} activos · {paraReactivarCount} para reactivar
+        </p>
       </div>
       <div className="pd-head-actions">
-        <button type="button" className="fi-btn fi-btn-ghost">
+        <button type="button" className="fi-btn fi-btn-ghost" onClick={onExport} title="Descargar CSV con la lista visible">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
           </svg>
@@ -342,14 +344,47 @@ function PageHeader({ total }: { total: number }) {
   );
 }
 
+function exportPacientesToCsv(pacientes: PacienteDir[]): void {
+  const headers = ["Nombre", "Telefono", "Email", "Tipo", "Sesiones", "Ultima", "Proximo", "Estado", "Tags"];
+  const rows = pacientes.map((p) => [
+    csvEscape(p.nombre),
+    csvEscape(p.tel),
+    csvEscape(p.email),
+    csvEscape(p.tipo),
+    String(p.sesiones),
+    csvEscape(p.ultima ?? ""),
+    csvEscape(p.proximo ?? ""),
+    csvEscape(p.estado),
+    csvEscape(p.tags.join("; ")),
+  ].join(","));
+  const csv = [headers.join(","), ...rows].join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `pacientes-folio-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function csvEscape(value: string): string {
+  if (value == null) return "";
+  const needsQuote = /[",\r\n]/.test(value);
+  const escaped = value.replace(/"/g, '""');
+  return needsQuote ? `"${escaped}"` : escaped;
+}
+
 // ─── Root ──────────────────────────────────────────────────────────────────
 
 interface PacientesDirProps {
   pacientes: PacienteDir[];
+  initialQuery?: string;
 }
 
-export function PacientesDir({ pacientes }: PacientesDirProps) {
-  const [q, setQ] = useState("");
+export function PacientesDir({ pacientes, initialQuery = "" }: PacientesDirProps) {
+  const [q, setQ] = useState(initialQuery);
   const [filtro, setFiltro] = useState("todos");
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
@@ -396,7 +431,12 @@ export function PacientesDir({ pacientes }: PacientesDirProps) {
   return (
     <>
       <div className="fi-content pd-content">
-        <PageHeader total={pacientes.length} />
+        <PageHeader
+          total={pacientes.length}
+          activos={counts.activos}
+          paraReactivarCount={paraReactivar.length}
+          onExport={() => exportPacientesToCsv(filtered)}
+        />
 
         {filtro !== "reactivar" && paraReactivar.length > 0 ? (
           <ReactivarWidget pacientes={paraReactivar} />
@@ -408,7 +448,9 @@ export function PacientesDir({ pacientes }: PacientesDirProps) {
           filtro={filtro}
           setFiltro={setFiltro}
           counts={counts}
-          onAddPaciente={() => {}}
+          onAddPaciente={() => alert(
+            "Crear paciente desde el directorio: próximamente.\n\nPor ahora los pacientes se crean automáticamente al confirmar un pedido entrante (booking público o WhatsApp).",
+          )}
         />
 
         <div className="pd-table-wrap">
@@ -427,11 +469,30 @@ export function PacientesDir({ pacientes }: PacientesDirProps) {
         <BulkBar
           count={selected.size}
           onClear={() => setSelected(new Set())}
-          onWa={() => {}}
-          onTag={() => {}}
-          onArchivar={() => {}}
+          onWa={() => handleBulkWhatsApp(selected, pacientes)}
+          onTag={() => alert("Etiquetar masivamente: próximamente. Por ahora editá cada paciente individualmente.")}
+          onArchivar={() => alert("Archivar masivamente: próximamente. La pseudonimización individual está disponible desde la ficha del paciente.")}
         />
       ) : null}
     </>
   );
+}
+
+function handleBulkWhatsApp(selected: Set<string>, pacientes: PacienteDir[]): void {
+  const elegidos = pacientes.filter((p) => selected.has(p.id) && p.tel);
+  if (elegidos.length === 0) {
+    alert("Ninguno de los pacientes seleccionados tiene teléfono cargado.");
+    return;
+  }
+  if (elegidos.length > 1) {
+    const ok = confirm(
+      `WhatsApp masivo abre una pestaña por paciente (${elegidos.length}). ¿Continuar?`,
+    );
+    if (!ok) return;
+  }
+  for (const p of elegidos) {
+    const num = p.tel.replace(/[^0-9]/g, "");
+    if (!num) continue;
+    window.open(`https://wa.me/${num}`, "_blank", "noopener");
+  }
 }

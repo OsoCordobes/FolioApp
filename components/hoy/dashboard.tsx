@@ -34,7 +34,7 @@ interface DashboardProps {
 export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fechaAnio, nowIso }: DashboardProps) {
   const [turnos, setTurnos] = useState<Turno[]>(initialTurnos);
   const [fichaTurnoId, setFichaTurnoId] = useState<string | null>(null);
-  const [walkInOpen, setWalkInOpen] = useState(false);
+  const [walkInOpen] = useState(false);
   const [, startTransition] = useTransition();
   const now = useNow(nowIso, 60_000);
 
@@ -109,14 +109,19 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
         )}
       </div>
 
-      {/* FAB walk-in */}
+      {/* FAB walk-in → /calendario para agendar (modal walk-in nativo entra en sprint posterior). */}
       {!fichaTurnoId && !walkInOpen ? (
-        <button type="button" className="fi-fab" onClick={() => setWalkInOpen(true)}>
+        <a
+          href="/calendario#walkin"
+          className="fi-fab"
+          title="Agendar un walk-in en el calendario"
+        >
           <I.Plus size={14} /> Walk-in
-        </button>
+        </a>
       ) : null}
 
-      {/* Walk-in modal y ficha-panel se materializan en F4. */}
+      {/* Ficha-panel y modal walk-in nativo: se materializan al cablear
+          la mutación de creación rápida de turnos. */}
     </>
   );
 }

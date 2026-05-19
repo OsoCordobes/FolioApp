@@ -157,42 +157,98 @@ function SecCuenta({ c, set }: { c: ConsultorioData; set: (patch: Partial<Consul
       </Section>
 
       <Section title="Seguridad">
-        <Row label="Contraseña" sub="Última actualización · hace 2 meses">
-          <button type="button" className="fi-btn fi-btn-secondary">
-            Cambiar contraseña
-          </button>
+        <Row label="Contraseña" sub="Te enviaremos un email con un link de reset">
+          <CambiarPasswordButton email={c.email} />
         </Row>
         <Row label="Autenticación de dos factores" sub="Recomendado para datos clínicos">
-          <button type="button" className="fi-btn fi-btn-secondary">Activar MFA</button>
+          <button
+            type="button"
+            className="fi-btn fi-btn-secondary"
+            disabled
+            title="Próximamente — F11 polish"
+            style={{ opacity: 0.5, cursor: "not-allowed" }}
+          >
+            Activar MFA
+          </button>
         </Row>
         <Row label="Sesiones activas" sub="Dispositivos donde tu cuenta está abierta">
           <div className="cfg-sesiones">
             <div className="cfg-sesion">
               <div>
-                <b>MacBook Pro · Chrome</b>
-                <span className="muted">Alta Gracia · activa ahora</span>
+                <b>Este navegador</b>
+                <span className="muted">Sesión activa ahora</span>
               </div>
               <span className="cfg-tag-now">Este dispositivo</span>
             </div>
-            <div className="cfg-sesion">
-              <div>
-                <b>iPhone · Safari</b>
-                <span className="muted">Alta Gracia · hace 3 días</span>
-              </div>
-              <button type="button" className="cfg-link">Cerrar</button>
-            </div>
           </div>
+          <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+            Listado de otros dispositivos en F11 polish. Mientras tanto, usá &quot;Cerrar sesión&quot; del sidebar para cerrar esta sesión.
+          </p>
         </Row>
       </Section>
 
       <Section title="Zona peligrosa">
         <Row label="Eliminar cuenta" sub="Borra tu cuenta y todos tus datos. No se puede deshacer.">
-          <button type="button" className="fi-btn fi-btn-ghost cfg-btn-danger">
-            Eliminar cuenta
-          </button>
+          <EliminarCuentaButton email={c.email} />
         </Row>
       </Section>
     </>
+  );
+}
+
+function CambiarPasswordButton({ email }: { email: string }) {
+  const [state, setState] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const handler = async () => {
+    if (!email) {
+      alert("Email del perfil no disponible.");
+      return;
+    }
+    if (!confirm(`Te vamos a enviar un email a ${email} con un link para resetear la contraseña. ¿Continuar?`)) {
+      return;
+    }
+    setState("sending");
+    try {
+      const { createSupabaseBrowserClient } = await import("@/lib/supabase/client");
+      const supabase = createSupabaseBrowserClient();
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/login?reset=1`,
+      });
+      if (error) throw error;
+      setState("sent");
+    } catch (e) {
+      console.warn("[configuracion] reset password falló:", e);
+      setState("error");
+    }
+  };
+  if (state === "sent") return <span style={{ color: "var(--green)", fontSize: 13 }}>Email enviado. Revisá tu casilla.</span>;
+  return (
+    <button type="button" className="fi-btn fi-btn-secondary" onClick={handler} disabled={state === "sending"}>
+      {state === "sending" ? "Enviando…" : state === "error" ? "Reintentar" : "Cambiar contraseña"}
+    </button>
+  );
+}
+
+function EliminarCuentaButton({ email }: { email: string }) {
+  const handler = () => {
+    const challenge = prompt(
+      `ATENCIÓN: la eliminación de cuenta es IRREVERSIBLE.\n\n` +
+      `Tus pacientes, sesiones clínicas y registros quedan retenidos 10 años por Ley 26.529 ` +
+      `pero tu identidad se pseudonimiza permanentemente.\n\n` +
+      `Para confirmar, escribí tu email exacto: ${email}`,
+    );
+    if (challenge !== email) {
+      if (challenge != null) alert("El email no coincide. Operación cancelada.");
+      return;
+    }
+    alert(
+      "Eliminación de cuenta: el endpoint de procesamiento entra en sprint posterior (audit log + " +
+      "pseudonimización requieren proceso revisado). Por ahora contactá a hola@folio.app.",
+    );
+  };
+  return (
+    <button type="button" className="fi-btn fi-btn-ghost cfg-btn-danger" onClick={handler}>
+      Eliminar cuenta
+    </button>
   );
 }
 
@@ -240,22 +296,46 @@ function SecConsultorio({ c, set }: { c: ConsultorioData; set: (patch: Partial<C
 
       <Section title="Presencia online" sub="Para mostrar en tu link público y compartir reservas.">
         <Row label="Link público de reservas">
-          <div className="cfg-public-link">
-            <code className="fm-mono">folio.app/lorenzo-martinez</code>
-            <button type="button" className="fi-btn fi-btn-ghost">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="9" y="9" width="13" height="13" rx="2" />
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-              </svg>
-              Copiar
-            </button>
-          </div>
+          <PublicLinkRow nombreConsultorio={c.nombre} />
         </Row>
         <Row label="Instagram">
           <TextInput prefix="@" value={c.instagram} onChange={(v) => set({ instagram: v })} />
         </Row>
       </Section>
     </>
+  );
+}
+
+function PublicLinkRow({ nombreConsultorio }: { nombreConsultorio: string }) {
+  const [copied, setCopied] = useState(false);
+  // Slug derivado provisionalmente del nombre (el slug real persiste en DB,
+  // este es solo para preview). Cuando el SC pase el slug real reemplazamos.
+  const slug = nombreConsultorio.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 50) || "tu-consultorio";
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://folio-app-ten.vercel.app";
+  const url = `${origin}/book/${slug}`;
+  const display = url.replace(/^https?:\/\//, "");
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      alert(`No pude copiar automáticamente. Copialo a mano:\n\n${url}`);
+    }
+  };
+
+  return (
+    <div className="cfg-public-link">
+      <code className="fm-mono">{display}</code>
+      <button type="button" className="fi-btn fi-btn-ghost" onClick={copy}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="9" y="9" width="13" height="13" rx="2" />
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+        </svg>
+        {copied ? "¡Copiado!" : "Copiar"}
+      </button>
+    </div>
   );
 }
 
@@ -483,7 +563,14 @@ function SecIntegraciones() {
         action={
           <>
             <span className="cfg-int-account fm-mono">lorenzo.martinez.quiropraxia@gmail.com</span>
-            <button type="button" className="fi-btn fi-btn-ghost">Desconectar</button>
+            <button
+              type="button"
+              className="fi-btn fi-btn-ghost"
+              onClick={() => alert("Desconectar Google Calendar: próximamente desde el flow OAuth.\n\nPor ahora podés revocar el acceso desde myaccount.google.com/permissions.")}
+              title="Próximamente"
+            >
+              Desconectar
+            </button>
           </>
         }
       />
@@ -524,44 +611,35 @@ function SecPlan() {
         <div className="cfg-plan-card">
           <div className="cfg-plan-card-l">
             <span className="fi-eyebrow">Plan actual</span>
-            <h3>Folio Profesional</h3>
+            <h3>Folio MVP · Beta gratuita</h3>
             <p>
-              Renueva el <b>1 de junio 2026</b> · <span className="fm-mono">ARS 35.000 / mes</span>
+              Durante el período beta el Servicio es <b>gratis</b>. Cuando lancemos el plan pago te
+              avisamos por email con 30 días de antelación.
             </p>
           </div>
           <div className="cfg-plan-card-r">
-            <button type="button" className="fi-btn fi-btn-secondary">Cambiar método de pago</button>
-            <button type="button" className="fi-btn fi-btn-ghost">Cancelar suscripción</button>
+            <a
+              href="mailto:hola@folio.app?subject=Folio%20beta%20-%20feedback"
+              className="fi-btn fi-btn-secondary"
+              title="Mandanos feedback de qué te resulta más valioso"
+            >
+              Mandar feedback
+            </a>
           </div>
         </div>
       </Section>
 
-      <Section title="Facturación">
+      <Section title="Facturación" sub="Se activa cuando lancemos el plan pago.">
         <Row label="Método de pago">
-          <div className="cfg-pay-method">
-            <div className="cfg-pay-card">
-              <span className="fm-mono">VISA •••• 4421</span>
-              <span className="muted">Vence 09/28</span>
-            </div>
-            <button type="button" className="cfg-link">Cambiar</button>
-          </div>
+          <span className="muted">Sin método configurado · te avisamos cuando el plan pago arranque.</span>
         </Row>
-        <Row label="Datos de facturación" sub="Aparecen en cada factura emitida">
-          <div className="cfg-billing">
-            <div>
-              <b>Lorenzo Martínez</b>
-              <span className="muted">Monotributo categoría C</span>
-              <span className="muted fm-mono">CUIT 20-12345678-3</span>
-            </div>
-            <button type="button" className="cfg-link">Editar</button>
-          </div>
-        </Row>
-        <Row label="Historial">
-          <button type="button" className="fi-btn fi-btn-secondary">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
-            </svg>
-            Descargar facturas
+        <Row label="Datos de facturación" sub="Para emitir comprobantes cuando aplique">
+          <button
+            type="button"
+            className="cfg-link"
+            onClick={() => alert("Cargar CUIT + razón social: próximamente desde la sección Consultorio.")}
+          >
+            Cargar CUIT y datos
           </button>
         </Row>
       </Section>

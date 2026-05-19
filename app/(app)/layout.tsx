@@ -42,6 +42,7 @@ export default async function AppShellLayout({
         organization={{
           nombre: organization.nombre,
           rubro: organization.rubro,
+          slug: organization.slug,
         }}
         profile={{
           nombre: profile.nombre,

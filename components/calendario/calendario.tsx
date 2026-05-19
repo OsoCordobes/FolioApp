@@ -334,12 +334,12 @@ function PedidoGhostCard({ pedido, lane, totalLanes }: { pedido: Pedido; lane: n
 
 // ─── PedidosTray ───────────────────────────────────────────────────────────
 
-function PedidosTray({ pedidos }: { pedidos: Pedido[] }) {
+function PedidosTray({ pedidos, onOpenBandeja }: { pedidos: Pedido[]; onOpenBandeja: () => void }) {
   const count = pedidos.length;
   const label = count === 1 ? "1 pedido sin asignar" : `${count} pedidos sin asignar`;
   return (
     <div className="cal-tray">
-      <button type="button" className="cal-tray-trigger">
+      <button type="button" className="cal-tray-trigger" onClick={onOpenBandeja}>
         <span className="cal-tray-trigger-l">
           <span className="cal-tray-ico">
             <I.Inbox size={12} />
@@ -502,6 +502,7 @@ function VistaSemana({
   weekDates,
   hoyIso,
   nowHHMM,
+  onOpenBandeja,
 }: {
   turnos: TurnoSemana[];
   bloqueos: Bloqueo[];
@@ -510,6 +511,7 @@ function VistaSemana({
   weekDates: string[];
   hoyIso: string;
   nowHHMM: string;
+  onOpenBandeja: () => void;
 }) {
   const pedidosSinFecha = pedidos.filter((p) => p.estado === "pendiente" && !p.fecha);
 
@@ -529,7 +531,9 @@ function VistaSemana({
 
   return (
     <div className="cal-semana">
-      {pedidosSinFecha.length > 0 ? <PedidosTray pedidos={pedidosSinFecha} /> : null}
+      {pedidosSinFecha.length > 0 ? (
+        <PedidosTray pedidos={pedidosSinFecha} onOpenBandeja={onOpenBandeja} />
+      ) : null}
 
       <div className="cal-day-headers">
         <div className="cal-time-spacer" />
@@ -728,6 +732,7 @@ export function Calendario({
           weekDates={weekDates}
           hoyIso={hoyIso}
           nowHHMM={nowHHMM}
+          onOpenBandeja={() => setVista("bandeja")}
         />
       ) : vista === "bandeja" ? (
         <VistaBandejaSimple pedidos={pedidosPendientes} />

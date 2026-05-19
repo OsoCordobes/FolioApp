@@ -115,7 +115,14 @@ function PlanTratamiento() {
     <section className="pc-card pc-plan">
       <header className="pc-card-head">
         <span className="fi-eyebrow">Plan de tratamiento</span>
-        <button type="button" className="pc-link">Editar</button>
+        <button
+          type="button"
+          className="pc-link"
+          onClick={() => alert("Edición inline de este campo: próximamente. Por ahora editá desde Configuración → Consultorio o crea una nota nueva en Sesiones.")}
+          title="Próximamente"
+        >
+          Editar
+        </button>
       </header>
       <div className="pc-plan-progress">
         <div className="pc-plan-progress-row">
@@ -237,7 +244,14 @@ function TabInformacion() {
       <section className="pc-card">
         <header className="pc-card-head">
           <span className="fi-eyebrow">Contacto</span>
-          <button type="button" className="pc-link">Editar</button>
+          <button
+          type="button"
+          className="pc-link"
+          onClick={() => alert("Edición inline de este campo: próximamente. Por ahora editá desde Configuración → Consultorio o crea una nota nueva en Sesiones.")}
+          title="Próximamente"
+        >
+          Editar
+        </button>
         </header>
         <dl className="pc-dl">
           <dt>Teléfono</dt>
@@ -281,7 +295,12 @@ function TabSesiones() {
         <span className="fi-eyebrow">
           {plan.sesiones.length} sesiones · desde {fmtFecha(plan.inicio)}
         </span>
-        <button type="button" className="fi-btn fi-btn-secondary">
+        <button
+          type="button"
+          className="fi-btn fi-btn-secondary"
+          onClick={() => alert("Crear sesión manual: próximamente. Por ahora las sesiones se generan al cerrar un turno desde /hoy.")}
+          title="Próximamente"
+        >
           <I.Plus size={12} /> Nueva sesión
         </button>
       </div>
@@ -307,7 +326,17 @@ function TabSesiones() {
                 </div>
               ) : null}
             </div>
-            <button type="button" className="pc-link">Ver detalle</button>
+            <button
+              type="button"
+              className="pc-link"
+              onClick={(e) => {
+                e.stopPropagation();
+                alert("Detalle expandido de la sesión: próximamente.");
+              }}
+              title="Próximamente"
+            >
+              Ver detalle
+            </button>
           </div>
         ))}
       </div>
@@ -327,7 +356,12 @@ function TabDocumentos() {
       <h2>Sin documentos adjuntos.</h2>
       <p>Subí RMN, estudios o consentimientos para tener todo del paciente en un lugar.</p>
       <div className="fi-empty-actions">
-        <button type="button" className="fi-btn fi-btn-secondary">
+        <button
+          type="button"
+          className="fi-btn fi-btn-secondary"
+          onClick={() => alert("Subir documento clínico: próximamente. Sube a Supabase Storage cifrado con audit log automático.")}
+          title="Próximamente"
+        >
           <I.Plus size={13} /> Subir documento
         </button>
       </div>
@@ -336,6 +370,34 @@ function TabDocumentos() {
 }
 
 // ─── Header del paciente ──────────────────────────────────────────────────
+
+function PacienteWhatsAppButton({ telefono, nombre }: { telefono: string; nombre: string }) {
+  const num = telefono.replace(/[^0-9]/g, "");
+  if (!num) {
+    return (
+      <button
+        type="button"
+        className="fi-btn fi-btn-ghost"
+        disabled
+        title="Este paciente no tiene teléfono cargado"
+        style={{ opacity: 0.5 }}
+      >
+        <I.Phone size={13} /> WhatsApp
+      </button>
+    );
+  }
+  return (
+    <a
+      href={`https://wa.me/${num}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="fi-btn fi-btn-ghost"
+      title={`Abrir WhatsApp con ${nombre}`}
+    >
+      <I.Phone size={13} /> WhatsApp
+    </a>
+  );
+}
 
 function PacienteHeader() {
   const { paciente, plan, cumple } = usePacienteFicha();
@@ -371,12 +433,14 @@ function PacienteHeader() {
           </div>
         </div>
         <div className="pc-actions">
-          <button type="button" className="fi-btn fi-btn-ghost">
-            <I.Phone size={13} /> WhatsApp
-          </button>
-          <button type="button" className="fi-btn fi-btn-secondary">
+          <PacienteWhatsAppButton telefono={paciente.tel} nombre={paciente.nombre} />
+          <a
+            href={`/calendario?paciente=${encodeURIComponent(paciente.id)}`}
+            className="fi-btn fi-btn-secondary"
+            title="Agendar un nuevo turno para este paciente"
+          >
             <I.Calendar size={13} /> Sacar turno
-          </button>
+          </a>
         </div>
       </div>
     </header>

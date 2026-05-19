@@ -8,6 +8,9 @@
  * El filtrado y la búsqueda libre son client-side sobre la lista cargada.
  * Para org con muchos pacientes (>500) habrá que paginar y filtrar en server;
  * por ahora el MVP no lo necesita.
+ *
+ * Query params:
+ *   ?q=<texto> — preescribe la búsqueda inicial (viene del search del sidebar).
  */
 
 import { PacientesDir } from "@/components/pacientes/pacientes-dir";
@@ -15,10 +18,16 @@ import { getPacientesDirectorio } from "@/lib/db/pacientes-dir";
 
 export const dynamic = "force-dynamic";
 
-export default async function PacientesPage() {
+interface PageProps {
+  searchParams: Promise<{ q?: string }>;
+}
+
+export default async function PacientesPage({ searchParams }: PageProps) {
   const result = await getPacientesDirectorio();
   if (!result.ok) {
     throw new Error(`No se pudo cargar el directorio: ${result.error.message}`);
   }
-  return <PacientesDir pacientes={result.data} />;
+  const params = await searchParams;
+  const initialQuery = (params.q ?? "").trim();
+  return <PacientesDir pacientes={result.data} initialQuery={initialQuery} />;
 }

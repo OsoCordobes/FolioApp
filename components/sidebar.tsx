@@ -49,7 +49,7 @@ export type GoogleSyncStatus =
 
 export interface SidebarProps {
   /** Datos del consultorio (org). */
-  organization: { nombre: string; rubro: string | null };
+  organization: { nombre: string; rubro: string | null; slug?: string };
   /** Datos del profesional logueado (PII ya desencriptada en server). */
   profile: { nombre: string | null; apellido: string | null };
   /** Rol del member en esta org. */
@@ -63,6 +63,7 @@ export function Sidebar({ organization, profile, role, googleSync }: SidebarProp
   const pathname = usePathname() ?? "/";
   const profesionalLine = formatProfesionalDisplay(profile, organization);
   const rubroLabel = formatRubro(organization.rubro);
+  const publicHref = organization.slug ? `/book/${organization.slug}` : "/";
 
   return (
     <aside className="fi-sidebar">
@@ -76,13 +77,7 @@ export function Sidebar({ organization, profile, role, googleSync }: SidebarProp
         </div>
       </div>
 
-      <div className="fi-search">
-        <span className="fi-search-ico">
-          <I.Search size={14} />
-        </span>
-        <input placeholder="Buscar paciente, turno…" />
-        <span className="fi-kbd">⌘K</span>
-      </div>
+      <SidebarSearch />
 
       <nav className="fi-nav">
         {NAV_ITEMS.map((item) => {
@@ -105,9 +100,20 @@ export function Sidebar({ organization, profile, role, googleSync }: SidebarProp
       <div className="fi-side-bottom">
         <GoogleSyncBadge status={googleSync} />
         <div className="fi-side-links">
-          <button className="fi-link" type="button">
-            <I.ExternalLink size={13} /> Ver sitio público
-          </button>
+          {organization.slug ? (
+            <a
+              className="fi-link"
+              href={publicHref}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <I.ExternalLink size={13} /> Ver sitio público
+            </a>
+          ) : (
+            <span className="fi-link" style={{ opacity: 0.5, cursor: "not-allowed" }} title="Sin slug configurado">
+              <I.ExternalLink size={13} /> Ver sitio público
+            </span>
+          )}
           <form method="POST" action="/api/auth/signout" style={{ display: "contents" }}>
             <button className="fi-link" type="submit">
               <I.Logout size={13} /> Cerrar sesión
@@ -116,6 +122,23 @@ export function Sidebar({ organization, profile, role, googleSync }: SidebarProp
         </div>
       </div>
     </aside>
+  );
+}
+
+/**
+ * Buscador del sidebar (⌘K). Para MVP redirige a /pacientes con query
+ * preescrita en `?q=`. F11 polish: dialog modal con búsqueda fuzzy en
+ * pacientes + turnos + pedidos sin navegar.
+ */
+function SidebarSearch() {
+  return (
+    <form className="fi-search" action="/pacientes" method="GET">
+      <span className="fi-search-ico">
+        <I.Search size={14} />
+      </span>
+      <input name="q" placeholder="Buscar paciente, turno…" />
+      <span className="fi-kbd">⌘K</span>
+    </form>
   );
 }
 
@@ -137,7 +160,7 @@ function GoogleSyncBadge({ status }: { status?: GoogleSyncStatus }) {
 
   if (!status.connected) {
     return (
-      <div className="fi-gcal">
+      <Link href="/configuracion#integraciones" className="fi-gcal" style={{ textDecoration: "none", color: "inherit" }}>
         <span className="fi-gcal-ico">
           <I.Google size={14} />
         </span>
@@ -145,12 +168,12 @@ function GoogleSyncBadge({ status }: { status?: GoogleSyncStatus }) {
           <b>Google Calendar</b>
           <span>No conectado · ir a Configuración</span>
         </div>
-      </div>
+      </Link>
     );
   }
 
   return (
-    <div className="fi-gcal">
+    <Link href="/configuracion#integraciones" className="fi-gcal" style={{ textDecoration: "none", color: "inherit" }}>
       <span className="fi-gcal-ico">
         <I.Google size={14} />
       </span>
@@ -159,6 +182,6 @@ function GoogleSyncBadge({ status }: { status?: GoogleSyncStatus }) {
         <span>con Google · {status.lastSyncLabel}</span>
       </div>
       <span className="fi-gcal-dot" />
-    </div>
+    </Link>
   );
 }
