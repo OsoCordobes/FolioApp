@@ -20,7 +20,7 @@
  *    13.0+ HOLD
  */
 
-import { useEffect, useState } from "react";
+import { usePhaseSequence } from "@/components/auth/use-phase-sequence";
 
 interface Props {
   active: boolean;
@@ -50,28 +50,24 @@ function Sparkle({ size = 11 }: { size?: number }) {
   );
 }
 
-export function SlideIA({ active }: Props) {
-  const [phase, setPhase] = useState(0);
+// Timings IDÉNTICOS al pre-refactor en C10 — la compresión 15s→7s va en C11.
+// Eso permite re-baseline visual independiente del cambio de hook.
+//
+// 10 beats actuales (eternidad de 12.4s + hold hasta 15s):
+//   1000  → tip pop-up sobre Lucía (ACT 1)
+//   4000  → cross-fade a ACT 2 (Finanzas)
+//   6000  → FAB ✦ aparece + pulse
+//   7000  → FAB click → chat bar sube
+//   8200  → user bubble "dame un review"
+//   8900  → typing indicator
+//   10000 → AI bullet 1
+//   10800 → AI bullet 2
+//   11600 → AI bullet 3
+//   12400 → HOLD final
+const PHASES_IA = [1000, 4000, 6000, 7000, 8200, 8900, 10000, 10800, 11600, 12400] as const;
 
-  useEffect(() => {
-    if (!active) {
-      setPhase(0);
-      return;
-    }
-    const timers = [
-      setTimeout(() => setPhase(1), 1000),
-      setTimeout(() => setPhase(2), 4000),
-      setTimeout(() => setPhase(3), 6000),
-      setTimeout(() => setPhase(4), 7000),
-      setTimeout(() => setPhase(5), 8200),
-      setTimeout(() => setPhase(6), 8900),
-      setTimeout(() => setPhase(7), 10000),
-      setTimeout(() => setPhase(8), 10800),
-      setTimeout(() => setPhase(9), 11600),
-      setTimeout(() => setPhase(10), 12400),
-    ];
-    return () => timers.forEach(clearTimeout);
-  }, [active]);
+export function SlideIA({ active }: Props) {
+  const phase = usePhaseSequence(PHASES_IA, active);
 
   return (
     <>

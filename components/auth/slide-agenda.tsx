@@ -18,6 +18,8 @@
 
 import { useEffect, useState } from "react";
 
+import { usePhaseSequence } from "@/components/auth/use-phase-sequence";
+
 interface SlideAgendaProps {
   active: boolean;
 }
@@ -29,26 +31,22 @@ const TURNOS = [
   { time: "16:30", initials: "VC", name: "Valentina Cruz",  motivo: "consulta · 1ª" },
 ];
 
+// Phases identicos al pre-refactor (no compresión en C10):
+//   900   → row 1 ✓
+//   1200  → row 2 ✓
+//   1500  → row 3 ✓
+//   1800  → row 4 ✓ + status pill "todo listo"
+//   2700  → footer chip
+//   4000  → countdown empieza a tickear
+const PHASES_AGENDA = [900, 1200, 1500, 1800, 2700, 4000] as const;
+
 export function SlideAgenda({ active }: SlideAgendaProps) {
-  // step encadena los checks (1→2→3→4) + reveal del status pill + footer + tick
-  const [step, setStep] = useState(0);
+  const step = usePhaseSequence(PHASES_AGENDA, active);
   const [seconds, setSeconds] = useState(30 * 60); // 30:00 hasta primer turno
 
+  // Reset countdown cuando active cambia (el step phase lo maneja el hook)
   useEffect(() => {
-    if (!active) {
-      setStep(0);
-      setSeconds(30 * 60);
-      return;
-    }
-    const timers = [
-      setTimeout(() => setStep(1),  900),  // row 1 ✓
-      setTimeout(() => setStep(2), 1200),  // row 2 ✓
-      setTimeout(() => setStep(3), 1500),  // row 3 ✓
-      setTimeout(() => setStep(4), 1800),  // row 4 ✓ + status pill "todo listo"
-      setTimeout(() => setStep(5), 2700),  // footer chip
-      setTimeout(() => setStep(6), 4000),  // countdown empieza a tickear
-    ];
-    return () => timers.forEach((t) => clearTimeout(t));
+    if (!active) setSeconds(30 * 60);
   }, [active]);
 
   // Countdown tickea 1s después de step 6 (sutil sensación de vida)

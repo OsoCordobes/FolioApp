@@ -16,6 +16,8 @@
 
 import { useEffect, useState } from "react";
 
+import { usePhaseSequence } from "@/components/auth/use-phase-sequence";
+
 interface Props {
   active: boolean;
 }
@@ -38,26 +40,24 @@ const DAYS: { d: string; n: number; today?: boolean; target?: boolean }[] = [
   { d: "D", n: 25 },
 ];
 
+// Timings idénticos al pre-refactor:
+//   700   → banner "Mateo A. reservó" + totals tween 7→8
+//   2400  → toast "Pago recibido" + paid 4→5 + amount 186→221
+//   4100  → WhatsApp card bottom-right
+const PHASES_CALENDARIO = [700, 2400, 4100] as const;
+
 export function SlideCalendario({ active }: Props) {
-  const [phase, setPhase] = useState(0);
+  const phase = usePhaseSequence(PHASES_CALENDARIO, active);
   const [totalDisp, setTotalDisp] = useState(7);
   const [paidDisp, setPaidDisp] = useState(4);
   const [amountDisp, setAmountDisp] = useState(186);
 
   useEffect(() => {
     if (!active) {
-      setPhase(0);
       setTotalDisp(7);
       setPaidDisp(4);
       setAmountDisp(186);
-      return;
     }
-    const timers = [
-      setTimeout(() => setPhase(1), 700),
-      setTimeout(() => setPhase(2), 2400),
-      setTimeout(() => setPhase(3), 4100),
-    ];
-    return () => timers.forEach(clearTimeout);
   }, [active]);
 
   // Tween imperativo via rAF (ease-out cubic)

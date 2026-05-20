@@ -18,7 +18,7 @@
  *   T3900       Bottom banner sube · "próxima cita queda lista"
  */
 
-import { useEffect, useState } from "react";
+import { usePhaseSequence } from "@/components/auth/use-phase-sequence";
 
 interface Props {
   active: boolean;
@@ -32,25 +32,18 @@ function Check() {
   );
 }
 
-export function SlideReagenda({ active }: Props) {
-  const [phase, setPhase] = useState(0);
+// Timings idénticos al pre-refactor — 7 beats:
+//   400  → step 1 activa "IA sugiere"
+//   1100 → step 1 ✓
+//   1500 → cursor entra desde abajo-derecha
+//   2500 → step 2 ✓ (click ripple + button press)
+//   2900 → step 3 activa "Folio programa" + WhatsApp glyph
+//   3600 → step 3 ✓
+//   4000 → bottom banner "próxima cita queda lista" sube
+const PHASES_REAGENDA = [400, 1100, 1500, 2500, 2900, 3600, 4000] as const;
 
-  useEffect(() => {
-    if (!active) {
-      setPhase(0);
-      return;
-    }
-    const timers = [
-      setTimeout(() => setPhase(1), 400),
-      setTimeout(() => setPhase(2), 1100),
-      setTimeout(() => setPhase(3), 1500),
-      setTimeout(() => setPhase(4), 2500),
-      setTimeout(() => setPhase(5), 2900),
-      setTimeout(() => setPhase(6), 3600),
-      setTimeout(() => setPhase(7), 4000),
-    ];
-    return () => timers.forEach(clearTimeout);
-  }, [active]);
+export function SlideReagenda({ active }: Props) {
+  const phase = usePhaseSequence(PHASES_REAGENDA, active);
 
   const step1Done = phase >= 2;
   const step2Done = phase >= 4;

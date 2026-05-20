@@ -16,9 +16,10 @@
  *   T5500–8500    HOLD
  */
 
-import { useEffect, useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 
 import { useCountUp } from "@/components/auth/use-count-up";
+import { usePhaseSequence } from "@/components/auth/use-phase-sequence";
 
 interface Props {
   active: boolean;
@@ -54,29 +55,21 @@ const fmtMoney = (n: number): string => {
   return String(n);
 };
 
-export function SlideFinanzas({ active }: Props) {
-  const [phase, setPhase] = useState(0);
-  const [kpi, setKpi] = useState<[boolean, boolean, boolean]>([false, false, false]);
+// Timings idénticos al pre-refactor — 9 beats encadenados:
+//   400/550/700 → KPI 1/2/3 stagger (count-up triggers)
+//   1500 → chart+dots+hoy-line entran (phase 1)
+//   1800 → línea brass dibuja (phase 2)
+//   2700 → halo + vertical HOY line (phase 3)
+//   3100 → tooltip "14 may · $160k" (phase 4)
+//   3900 → deltas verde aparecen (phase 5)
+//   4800 → badge "Mejor mes del año" bounce (phase 6)
+const PHASES_FINANZAS = [400, 550, 700, 1500, 1800, 2700, 3100, 3900, 4800] as const;
 
-  useEffect(() => {
-    if (!active) {
-      setPhase(0);
-      setKpi([false, false, false]);
-      return;
-    }
-    const timers = [
-      setTimeout(() => setKpi((k) => [true, k[1], k[2]]), 400),
-      setTimeout(() => setKpi((k) => [k[0], true, k[2]]), 550),
-      setTimeout(() => setKpi((k) => [k[0], k[1], true]), 700),
-      setTimeout(() => setPhase(1), 1500),
-      setTimeout(() => setPhase(2), 1800),
-      setTimeout(() => setPhase(3), 2700),
-      setTimeout(() => setPhase(4), 3100),
-      setTimeout(() => setPhase(5), 3900),
-      setTimeout(() => setPhase(6), 4800),
-    ];
-    return () => timers.forEach(clearTimeout);
-  }, [active]);
+export function SlideFinanzas({ active }: Props) {
+  const step = usePhaseSequence(PHASES_FINANZAS, active);
+  // Los primeros 3 steps son kpis stagger; los restantes son phases tradicionales.
+  const kpi: [boolean, boolean, boolean] = [step >= 1, step >= 2, step >= 3];
+  const phase = Math.max(0, step - 3); // step 4 → phase 1, …, step 9 → phase 6
 
   const recaudado = useCountUp(1200, 700, kpi[0]);
   const sesiones = useCountUp(26, 600, kpi[1]);
