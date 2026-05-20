@@ -6579,22 +6579,38 @@ input:focus { outline: none; }
 .au2-art-grid {
   position: absolute; inset: 0;
   background-image:
-    linear-gradient(to right, color-mix(in oklab, var(--accent) 7%, transparent) 1px, transparent 1px),
-    linear-gradient(to bottom, color-mix(in oklab, var(--accent) 7%, transparent) 1px, transparent 1px);
+    linear-gradient(to right, color-mix(in oklab, var(--slide-tint, var(--accent)) 7%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklab, var(--slide-tint, var(--accent)) 7%, transparent) 1px, transparent 1px);
   background-size: 32px 32px;
   mask-image: radial-gradient(ellipse 70% 60% at 50% 45%, #000 30%, transparent 85%);
   -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 45%, #000 30%, transparent 85%);
   opacity: 0.7;
+  transition: background-image 720ms var(--ease-standard-out);
 }
 .au2-art-glow {
   position: absolute;
   left: 50%; top: 40%;
   transform: translate(-50%, -50%);
   width: 520px; height: 360px;
-  background: radial-gradient(ellipse, color-mix(in oklab, var(--accent) 14%, transparent) 0%, transparent 70%);
+  /* C12: el background reacciona al --slide-tint, animado en 720ms */
+  background: radial-gradient(ellipse, color-mix(in oklab, var(--slide-tint, var(--accent)) 14%, transparent) 0%, transparent 70%);
   opacity: 0.6;
   filter: blur(8px);
+  transition: background 720ms var(--ease-standard-out);
 }
+
+/* ──────────────────────────────────────────────────────────────────────
+   C12 · Background tints reactivos al slide activo. El SideArt aplica
+   un className `au2-art--tint-{id}` que define la --slide-tint del
+   slide actual. La interpolación entre tints es fluida (transition en
+   background del glow y grid). NO se anima la variable misma — se anima
+   el color RESOLVED gracias a la transition CSS.
+   ────────────────────────────────────────────────────────────────────── */
+.au2-art--tint-agenda     { --slide-tint: var(--accent); }
+.au2-art--tint-calendario { --slide-tint: color-mix(in oklab, var(--accent) 70%, var(--green) 30%); }
+.au2-art--tint-finanzas   { --slide-tint: color-mix(in oklab, var(--accent) 75%, var(--amber) 25%); }
+.au2-art--tint-reagenda   { --slide-tint: color-mix(in oklab, var(--accent) 68%, var(--slate) 32%); }
+.au2-art--tint-ia         { --slide-tint: color-mix(in oklab, var(--accent) 62%, #B888E4 38%); }
 
 .au2-art > *:not(.au2-art-bg) { position: relative; z-index: 1; }
 
