@@ -1,24 +1,35 @@
 "use client";
 
 /**
- * Folio · Onboarding · 9-step wizard.
+ * Folio · Onboarding · 9-step wizard (premium architecture).
  *
- * Step 1 → signUpEmail (Server Action que crea auth.users + envía verify).
- * Step 9 → completeOnboarding (Server Action que crea org + profile + member).
+ * Flow:
+ *   - Step 1 (signup) crea auth.user + organization + member en el mismo paso
+ *     via signUpAndInitOrganization. Devuelve organizationId + slug provisional.
+ *   - Steps 2-8 hacen auto-save por step (debounce 800ms) via updateOnboardingStep.
+ *     Cada cambio actualiza optimistic state local; el persist a DB ocurre async.
+ *   - Step 9 llama finalizeOnboarding (marca onboarding_completed=true) y muestra
+ *     el "moment" — card real con link real + CTAs.
  *
- * Persistencia entre pasos: localStorage `folio:onboarding` (resilient a
- * refresh accidental). Se borra al completar.
+ * Resume: si el user vuelve después de abandonar, /onboarding/page.tsx lee
+ * organizationId + initialSlug + initialData + initialStep desde DB y los pasa
+ * acá. Hidratamos el state desde DB (no desde localStorage).
+ *
+ * Keyboard: Enter avanza el step (si Next está activo), Esc vuelve uno.
+ * localStorage: backup secundario de drafts no guardados (red intermitente).
  */
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 
 import {
-  completeOnboarding,
-  signUpEmail,
+  finalizeOnboarding,
+  signUpAndInitOrganization,
+  updateOnboardingStep,
 } from "@/app/(public)/onboarding/actions";
 import { FolioMark } from "@/components/folio-mark";
 import { Step1Registro } from "@/components/onboarding/step1-registro";
+import { Step9Moment } from "@/components/onboarding/step9-moment";
 import {
   ONBOARDING_INITIAL,
   Step2Profesional,
@@ -28,12 +39,12 @@ import {
   Step6Servicios,
   Step7Google,
   Step8MercadoPago,
-  Step9Listo,
   type OnboardingDataState,
 } from "@/components/onboarding/steps";
 
 const ONB_TOTAL = 9;
 const STORAGE_KEY = "folio:onboarding";
+const AUTOSAVE_DEBOUNCE_MS = 800;
 
 const TIPO_CANONICO_MAP: Record<string, string> = {
   "consulta inicial":  "CONSULTA_INICIAL",
@@ -48,33 +59,35 @@ function inferTipoCanonico(nombre: string): string {
 }
 
 interface OnboardingAppProps {
-  /** Step donde resumir (premium resume). Si undefined → arranca en 1. */
   initialStep?: number;
-  /** Datos pre-cargados desde DB (premium resume). Sobrescriben localStorage. */
   initialData?: Record<string, unknown>;
-  /** ID de la org ya creada (premium architecture). Si undefined → step 1 la crea. */
   organizationId?: string;
-  /** Slug real de la org si ya existe. */
   initialSlug?: string;
+}
+
+interface SaveState {
+  status: "idle" | "saving" | "saved" | "error";
+  lastSavedAt?: number;
+  message?: string;
 }
 
 export function OnboardingApp({
   initialStep,
   initialData,
-  organizationId: _organizationId,
-  initialSlug: _initialSlug,
+  organizationId,
+  initialSlug,
 }: OnboardingAppProps = {}) {
-  // Las props organizationId/initialSlug se consumen en el refactor profundo
-  // de Phase 3. Por ahora las dejamos prefijadas con _ para indicar reserved.
-  void _organizationId;
-  void _initialSlug;
-
   const router = useRouter();
   const searchParams = useSearchParams();
   const [stepIdx, setStepIdx] = useState(initialStep ?? 1);
   const [data, setData] = useState<OnboardingDataState>(ONBOARDING_INITIAL);
+  const [orgId, setOrgId] = useState<string | undefined>(organizationId);
+  const [orgSlug, setOrgSlug] = useState<string | undefined>(initialSlug);
   const [finishing, startTransition] = useTransition();
+  const [signingUp, startSignupTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [saveState, setSaveState] = useState<SaveState>({ status: "idle" });
+  const [direction, setDirection] = useState<"forward" | "back">("forward");
 
   // Hidratación: prioriza initialData (DB) > localStorage > URL params.
   useEffect(() => {
@@ -90,14 +103,13 @@ export function OnboardingApp({
     setData((prev) => ({
       ...prev,
       ...restored,
-      // DB data overrides localStorage (DB es source of truth)
       ...(initialData ?? {}),
       ...(prefillEmail ? { email: prefillEmail } : {}),
       ...(prefillNombre ? { nombre: prefillNombre } : {}),
     }));
   }, [searchParams, initialData]);
 
-  // Persistir cada cambio en localStorage
+  // Persistir cada cambio en localStorage (backup)
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -106,66 +118,211 @@ export function OnboardingApp({
     }
   }, [data]);
 
+  // ─── Auto-save por step (debounce 800ms) ─────────────────────────────────
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSavedSnapshotRef = useRef<string>("");
+  const pendingStepRef = useRef<number | null>(null);
+
+  const persistStep = useCallback(
+    async (step: number, snapshot: OnboardingDataState) => {
+      if (!orgId) return;
+      try {
+        setSaveState({ status: "saving" });
+        let result;
+        switch (step) {
+          case 2:
+            result = await updateOnboardingStep(2, {
+              nombre: snapshot.nombre,
+              apellido: snapshot.apellido,
+              matricula: snapshot.matricula,
+              tel: snapshot.tel,
+            });
+            break;
+          case 3:
+            result = await updateOnboardingStep(3, {
+              consultorioNombre: snapshot.consultorioNombre,
+              rubro: snapshot.rubro,
+              ciudad: snapshot.ciudad,
+              provincia: snapshot.provincia,
+              direccion: snapshot.direccion,
+              telefonoPublico: snapshot.telefonoPublico,
+              instagram: snapshot.instagram,
+              bio: snapshot.bio,
+            });
+            break;
+          case 4:
+            result = await updateOnboardingStep(4, { acento: snapshot.acento });
+            break;
+          case 5:
+            result = await updateOnboardingStep(5, {
+              diasActivos: snapshot.diasActivos,
+              franjas: snapshot.franjas,
+              slotMin: snapshot.slotMin,
+            });
+            break;
+          case 6:
+            result = await updateOnboardingStep(6, {
+              servicios: snapshot.servicios.map((s) => ({
+                nombre: s.nombre,
+                dur: s.dur,
+                precioCents: Math.round(s.precio * 100),
+                tipoCanonico: inferTipoCanonico(s.nombre),
+              })),
+            });
+            break;
+          default:
+            setSaveState({ status: "idle" });
+            return;
+        }
+        if (result.ok) {
+          if (step === 3 && result.slug && result.slug !== orgSlug) {
+            setOrgSlug(result.slug);
+          }
+          setSaveState({ status: "saved", lastSavedAt: Date.now() });
+        } else {
+          setSaveState({ status: "error", message: result.error });
+        }
+      } catch (e) {
+        setSaveState({
+          status: "error",
+          message: e instanceof Error ? e.message : "Error guardando.",
+        });
+      }
+    },
+    [orgId, orgSlug],
+  );
+
+  // Trigger auto-save cuando cambian datos relevantes
+  useEffect(() => {
+    if (!orgId) return;
+    if (stepIdx === 1 || stepIdx === 9) return;
+    // Steps 7-8 no persisten datos (sus integraciones tienen su propio flow)
+    if (stepIdx === 7 || stepIdx === 8) return;
+
+    const snapshot = JSON.stringify({ step: stepIdx, data });
+    if (snapshot === lastSavedSnapshotRef.current) return;
+    lastSavedSnapshotRef.current = snapshot;
+    pendingStepRef.current = stepIdx;
+
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      void persistStep(stepIdx, data);
+    }, AUTOSAVE_DEBOUNCE_MS);
+
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [data, stepIdx, orgId, persistStep]);
+
   const set = (patch: Partial<OnboardingDataState>) =>
     setData((prev) => ({ ...prev, ...patch }));
 
-  const next = () => setStepIdx((n) => Math.min(ONB_TOTAL, n + 1));
-  const back = () => setStepIdx((n) => Math.max(1, n - 1));
-  const skip = () => next();
+  const flushSaveIfPending = useCallback(async () => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+      if (pendingStepRef.current !== null && orgId) {
+        await persistStep(pendingStepRef.current, data);
+        pendingStepRef.current = null;
+      }
+    }
+  }, [data, orgId, persistStep]);
 
-  // ─── Step 1 hook: pasar de Registro a Profesional via Server Action ──────
+  const next = useCallback(() => {
+    setDirection("forward");
+    void flushSaveIfPending();
+    setStepIdx((n) => Math.min(ONB_TOTAL, n + 1));
+  }, [flushSaveIfPending]);
+
+  const back = useCallback(() => {
+    setDirection("back");
+    void flushSaveIfPending();
+    setStepIdx((n) => Math.max(1, n - 1));
+  }, [flushSaveIfPending]);
+
+  const skip = next;
+
+  // ─── Keyboard shortcuts ──────────────────────────────────────────────────
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      // Ignorar si está modificador (Cmd/Ctrl+Enter = nueva línea, etc.)
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName?.toLowerCase();
+      const isTextArea = tag === "textarea";
+      const isContentEditable = target?.isContentEditable;
+
+      if (e.key === "Escape" && stepIdx > 1 && stepIdx < 9) {
+        e.preventDefault();
+        back();
+        return;
+      }
+      if (e.key === "Enter" && !isTextArea && !isContentEditable && stepIdx < 9) {
+        // En Step 1 dejamos que el botón maneje su validación
+        if (tag === "button") return;
+        e.preventDefault();
+        if (stepIdx === 1) {
+          handleStep1Next();
+        } else {
+          next();
+        }
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stepIdx, next, back]);
+
+  // ─── Step 1: signUpAndInitOrganization ───────────────────────────────────
   const handleStep1Next = () => {
-    // Validación client-side ya está en Step1Registro; acá disparamos signUp.
-    startTransition(async () => {
-      const result = await signUpEmail(data.email, data.password);
+    startSignupTransition(async () => {
+      const result = await signUpAndInitOrganization(data.email, data.password);
       if (!result.ok) {
         setError(result.error ?? "Error en signup");
         return;
       }
       setError(null);
-      // Si la confirmación de email está enabled, el user igual pasa al Step 2
-      // (verifica más tarde desde su email). El completeOnboarding final
-      // requiere que el user verifique antes para tener sesión activa.
-      next();
+      if (result.organizationId) setOrgId(result.organizationId);
+      if (result.slug) setOrgSlug(result.slug);
+      setDirection("forward");
+      setStepIdx(2);
     });
   };
 
-  // ─── Step 9: ejecutar completeOnboarding ──────────────────────────────────
+  // ─── Step 9: finalizar ───────────────────────────────────────────────────
   const handleFinish = async () => {
     setError(null);
-    const result = await completeOnboarding({
-      nombre: data.nombre,
-      apellido: data.apellido,
-      matricula: data.matricula,
-      tel: data.tel,
-      consultorioNombre: data.consultorioNombre,
-      rubro: data.rubro,
-      direccion: data.direccion,
-      ciudad: data.ciudad,
-      provincia: data.provincia,
-      instagram: data.instagram,
-      acento: data.acento,
-      diasActivos: data.diasActivos,
-      franjas: data.franjas,
-      slotMin: data.slotMin,
-      servicios: data.servicios.map((s) => ({
-        nombre: s.nombre,
-        dur: s.dur,
-        precioCents: s.precio * 100,
-        tipoCanonico: inferTipoCanonico(s.nombre),
-      })),
-    });
+    await flushSaveIfPending();
+    const result = await finalizeOnboarding();
     if (!result.ok) {
       setError(result.error ?? "Error al finalizar onboarding");
       return;
     }
+    if (result.slug && result.slug !== orgSlug) setOrgSlug(result.slug);
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch {
       // ignore
     }
-    router.push("/hoy");
-    router.refresh();
+  };
+
+  const goToPanel = () => {
+    startTransition(() => {
+      router.push("/hoy");
+      router.refresh();
+    });
+  };
+
+  const stepKey = `step-${stepIdx}-${direction}`;
+  const commonStepProps = {
+    data,
+    set,
+    next,
+    back,
+    skip,
+    orgId,
+    orgSlug,
+    direction,
   };
 
   return (
@@ -176,41 +333,113 @@ export function OnboardingApp({
           <span className="onb-brand-name">folio</span>
         </div>
         {stepIdx > 1 && stepIdx < 9 ? (
-          <button type="button" className="onb-skip-to-panel" onClick={() => setStepIdx(9)}>
-            Ir al panel ahora →
-          </button>
+          <SaveIndicator state={saveState} />
         ) : (
           <span />
         )}
       </header>
 
       <main className="onb-app-main">
-        {error ? <p className="au-err" style={{ textAlign: "center" }}>{error}</p> : null}
+        {error && stepIdx !== 9 ? (
+          <p className="au-err onb-banner-err" role="alert">{error}</p>
+        ) : null}
 
-        {stepIdx === 1 ? (
-          <Step1Registro
-            data={{ email: data.email, password: data.password }}
-            set={(patch) => set(patch)}
-            next={handleStep1Next}
-          />
-        ) : null}
-        {stepIdx === 2 ? <Step2Profesional data={data} set={set} next={next} back={back} skip={skip} /> : null}
-        {stepIdx === 3 ? <Step3Consultorio data={data} set={set} next={next} back={back} skip={skip} /> : null}
-        {stepIdx === 4 ? <Step4Personalizacion data={data} set={set} next={next} back={back} skip={skip} /> : null}
-        {stepIdx === 5 ? <Step5Horarios data={data} set={set} next={next} back={back} skip={skip} /> : null}
-        {stepIdx === 6 ? <Step6Servicios data={data} set={set} next={next} back={back} skip={skip} /> : null}
-        {stepIdx === 7 ? <Step7Google data={data} set={set} next={next} back={back} skip={skip} /> : null}
-        {stepIdx === 8 ? <Step8MercadoPago data={data} set={set} next={next} back={back} skip={skip} /> : null}
-        {stepIdx === 9 ? (
-          <Step9Listo
-            data={data}
-            accent={data.acento}
-            onFinish={handleFinish}
-            finishing={finishing}
-            error={error}
-          />
-        ) : null}
+        <div key={stepKey} className={`onb-anim onb-anim-${direction}`}>
+          {stepIdx === 1 ? (
+            <Step1Registro
+              data={{ email: data.email, password: data.password }}
+              set={(patch) => set(patch)}
+              next={handleStep1Next}
+              loading={signingUp}
+              error={error}
+            />
+          ) : null}
+          {stepIdx === 2 ? <Step2Profesional {...commonStepProps} /> : null}
+          {stepIdx === 3 ? <Step3Consultorio {...commonStepProps} /> : null}
+          {stepIdx === 4 ? <Step4Personalizacion {...commonStepProps} /> : null}
+          {stepIdx === 5 ? <Step5Horarios {...commonStepProps} /> : null}
+          {stepIdx === 6 ? <Step6Servicios {...commonStepProps} /> : null}
+          {stepIdx === 7 ? <Step7Google {...commonStepProps} /> : null}
+          {stepIdx === 8 ? <Step8MercadoPago {...commonStepProps} /> : null}
+          {stepIdx === 9 ? (
+            <Step9Moment
+              data={data}
+              accent={data.acento}
+              slug={orgSlug}
+              onFinish={handleFinish}
+              onGoToPanel={goToPanel}
+              finishing={finishing}
+              error={error}
+            />
+          ) : null}
+        </div>
       </main>
     </div>
+  );
+}
+
+// ─── Save indicator (header derecho durante steps 2-8) ──────────────────────
+
+function SaveIndicator({ state }: { state: SaveState }) {
+  if (state.status === "idle") return <span />;
+  const base: React.CSSProperties = {
+    fontSize: 12,
+    color: "var(--ink-3)",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "6px 10px",
+  };
+  if (state.status === "saving") {
+    return (
+      <span style={base} aria-live="polite">
+        <SaveSpinner /> Guardando…
+      </span>
+    );
+  }
+  if (state.status === "error") {
+    return (
+      <span style={{ ...base, color: "var(--red, #9B3A2A)" }} role="alert">
+        Reintentar guardar
+      </span>
+    );
+  }
+  // saved
+  const ago = state.lastSavedAt ? secondsAgo(state.lastSavedAt) : null;
+  return (
+    <span style={base} aria-live="polite">
+      <SavedCheck /> Guardado {ago ? `hace ${ago}` : "recién"}
+    </span>
+  );
+}
+
+function secondsAgo(ts: number): string {
+  const diff = Math.round((Date.now() - ts) / 1000);
+  if (diff < 5) return "ahora";
+  if (diff < 60) return `${diff}s`;
+  return `${Math.round(diff / 60)} min`;
+}
+
+function SaveSpinner() {
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        width: 10,
+        height: 10,
+        border: "1.5px solid var(--line)",
+        borderTopColor: "var(--accent, #8A6722)",
+        borderRadius: "50%",
+        animation: "onb-spin 720ms linear infinite",
+      }}
+    />
+  );
+}
+
+function SavedCheck() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
   );
 }

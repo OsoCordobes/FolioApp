@@ -20,9 +20,11 @@ interface Step1RegistroProps {
   data: OnboardingData;
   set: (patch: Partial<OnboardingData>) => void;
   next: () => void;
+  loading?: boolean;
+  error?: string | null;
 }
 
-export function Step1Registro({ data, set, next }: Step1RegistroProps) {
+export function Step1Registro({ data, set, next, loading, error }: Step1RegistroProps) {
   const [emailErr, setEmailErr] = useState("");
   const [pwErr, setPwErr] = useState("");
 
@@ -50,6 +52,8 @@ export function Step1Registro({ data, set, next }: Step1RegistroProps) {
       sub="7 días de prueba sin tarjeta. Después, ARS 35.000 / mes."
       next={validateAndNext}
       canSkip={false}
+      nextLabel={loading ? "Creando cuenta…" : "Continuar"}
+      nextDisabled={loading}
     >
       <button
         type="button"
@@ -99,6 +103,7 @@ export function Step1Registro({ data, set, next }: Step1RegistroProps) {
           />
           {pwErr ? <span className="onb-err">{pwErr}</span> : null}
         </label>
+        {error ? <p className="au-err onb-banner-err" role="alert">{error}</p> : null}
       </div>
     </StepShell>
   );

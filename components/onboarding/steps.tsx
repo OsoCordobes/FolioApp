@@ -1,17 +1,24 @@
 "use client";
 
 /**
- * Folio · Onboarding · Steps 2-9 (los 8 pasos siguientes a Registro).
+ * Folio · Onboarding · Steps 2-8 (premium refactor).
  *
- * Port fiel de folio/onboarding-steps.jsx (líneas 100-516). Step 1
- * (Registro) vive en `step1-registro.tsx` y conecta con `signUpEmail`.
- * El Step 9 conecta con `completeOnboarding`.
+ * Cada step:
+ *   - Validación inline (blur + onChange para limpiar errores).
+ *   - Recibe `orgId` / `orgSlug` (premium architecture) y los usa donde corresponde.
+ *   - Step 3 incluye <SlugEditor /> + bio textarea con contador + smart defaults por rubro.
+ *   - StepShell renderiza <CardPreviewLive /> a la derecha (desktop) o vía drawer (mobile).
+ *
+ * Step 9 vive en step9-moment.tsx (separado por su tamaño + animaciones propias).
  */
 
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { updateOnboardingStep } from "@/app/(public)/onboarding/actions";
 import { StepShell } from "@/components/onboarding/step-shell";
-import { FolioMark } from "@/components/folio-mark";
+import { SlugEditor } from "@/components/onboarding/slug-editor";
+import { type CardPreviewData } from "@/components/onboarding/card-preview";
+import { getRubroTemplate, listRubros } from "@/lib/onboarding/templates";
 
 // ─── Data shape compartido ──────────────────────────────────────────────────
 
@@ -28,6 +35,10 @@ export interface OnboardingDataState {
   ciudad: string;
   provincia: string;
   instagram: string;
+  /** Teléfono mostrado en /book público. Distinto del tel personal. */
+  telefonoPublico: string;
+  /** Bio corta del consultorio (max 280 chars). */
+  bio: string;
   acento: string;
   diasActivos: string[];
   franjas: [string, string][];
@@ -57,6 +68,8 @@ export const ONBOARDING_INITIAL: OnboardingDataState = {
   ciudad: "",
   provincia: "Córdoba",
   instagram: "",
+  telefonoPublico: "",
+  bio: "",
   acento: "#8A6722",
   diasActivos: ["lun", "mar", "mie", "jue", "vie"],
   franjas: [["09:00", "12:00"], ["15:00", "18:00"]],
@@ -76,88 +89,292 @@ interface StepProps {
   next: () => void;
   back?: () => void;
   skip?: () => void;
+  orgId?: string;
+  orgSlug?: string;
+  direction?: "forward" | "back";
 }
 
-// ─── Step 2 · Profesional ───────────────────────────────────────────────────
+// ─── Helpers de validación ──────────────────────────────────────────────────
 
-export function Step2Profesional({ data, set, next, back, skip }: StepProps) {
+const TEL_RE = /^[\d\s\-+()]{6,}$/;
+
+function previewDataFor(data: OnboardingDataState): CardPreviewData {
+  const fullName = [data.nombre, data.apellido].filter(Boolean).join(" ").trim();
+  return {
+    nombre: fullName || data.consultorioNombre || undefined,
+    consultorioNombre: data.consultorioNombre || undefined,
+    rubro: rubroLabel(data.rubro),
+    ciudad: data.ciudad || undefined,
+    provincia: data.provincia || undefined,
+    bio: data.bio || undefined,
+    telefonoPublico: data.telefonoPublico || data.tel || undefined,
+    instagramHandle: data.instagram || undefined,
+    direccionCompleta: data.direccion || undefined,
+    acentoHex: data.acento,
+    servicios: data.servicios
+      .filter((s) => s.nombre.trim())
+      .map((s) => ({
+        nombre: s.nombre,
+        dur: s.dur,
+        precioCents: Math.round(s.precio * 100),
+      })),
+  };
+}
+
+function rubroLabel(id: string | undefined): string | undefined {
+  if (!id) return undefined;
+  const found = listRubros().find((r) => r.id === id);
+  return found?.label;
+}
+
+// ─── Step 2 · Profesional (con validación inline) ───────────────────────────
+
+export function Step2Profesional({ data, set, next, back, skip, orgSlug }: StepProps) {
+  const [errors, setErrors] = useState<Partial<Record<keyof OnboardingDataState, string>>>({});
+
+  const validate = (field: keyof OnboardingDataState, value: string): string => {
+    if (field === "nombre" && !value.trim()) return "Necesitamos tu nombre.";
+    if (field === "apellido" && !value.trim()) return "Necesitamos tu apellido.";
+    if (field === "tel" && value && !TEL_RE.test(value)) return "Formato no parece teléfono.";
+    return "";
+  };
+
+  const onBlur = (field: keyof OnboardingDataState) => {
+    const value = data[field] as string;
+    const msg = validate(field, value ?? "");
+    setErrors((prev) => ({ ...prev, [field]: msg || undefined }));
+  };
+
+  const canContinue =
+    !!data.nombre.trim() &&
+    !!data.apellido.trim() &&
+    !errors.nombre && !errors.apellido && !errors.tel;
+
   return (
     <StepShell stepIdx={2} back={back} next={next} skip={skip}
       headline="¿Cómo te llamás?"
-      sub="Este es el nombre que va a aparecer en el sidebar y en tu link público.">
+      sub="Aparece en el sidebar y en tu link público. Lo cambiás cuando quieras."
+      nextDisabled={!canContinue}
+      previewData={previewDataFor(data)}
+      slug={orgSlug}
+    >
       <div className="onb-form">
         <div className="onb-form-row-2">
-          <label className="onb-field">
-            <span>Nombre</span>
+          <Field label="Nombre" error={errors.nombre}>
             <input type="text" placeholder="Lorenzo"
-              value={data.nombre} onChange={(e) => set({ nombre: e.target.value })}/>
-          </label>
-          <label className="onb-field">
-            <span>Apellido</span>
+              value={data.nombre}
+              onChange={(e) => { set({ nombre: e.target.value }); if (errors.nombre) setErrors((p) => ({ ...p, nombre: undefined })); }}
+              onBlur={() => onBlur("nombre")} />
+          </Field>
+          <Field label="Apellido" error={errors.apellido}>
             <input type="text" placeholder="Martínez"
-              value={data.apellido} onChange={(e) => set({ apellido: e.target.value })}/>
-          </label>
+              value={data.apellido}
+              onChange={(e) => { set({ apellido: e.target.value }); if (errors.apellido) setErrors((p) => ({ ...p, apellido: undefined })); }}
+              onBlur={() => onBlur("apellido")} />
+          </Field>
         </div>
-        <label className="onb-field">
-          <span>Matrícula</span>
+        <Field label="Matrícula" hint="Formato libre. Si tu consejo usa otro, escribilo igual.">
           <input type="text" placeholder="M.N. ACA 8942"
             value={data.matricula} onChange={(e) => set({ matricula: e.target.value })}/>
-          <span className="onb-hint">Formato libre. Algunos consejos usan otros formatos viejos.</span>
-        </label>
-        <label className="onb-field">
-          <span>Teléfono</span>
+        </Field>
+        <Field label="Teléfono personal" error={errors.tel}
+          hint="Para alertas internas. No se muestra a pacientes.">
           <div className="onb-input-prefix">
             <span className="fm-mono">+54</span>
             <input type="tel" placeholder="9 351 411-2233"
-              value={data.tel} onChange={(e) => set({ tel: e.target.value })}/>
+              value={data.tel}
+              onChange={(e) => { set({ tel: e.target.value }); if (errors.tel) setErrors((p) => ({ ...p, tel: undefined })); }}
+              onBlur={() => onBlur("tel")} />
           </div>
-        </label>
+        </Field>
       </div>
     </StepShell>
   );
 }
 
-// ─── Step 3 · Consultorio ───────────────────────────────────────────────────
+// ─── Step 3 · Consultorio (SlugEditor + bio + smart defaults) ───────────────
 
-export function Step3Consultorio({ data, set, next, back, skip }: StepProps) {
+export function Step3Consultorio({ data, set, next, back, skip, orgId, orgSlug }: StepProps) {
+  const [errors, setErrors] = useState<Partial<Record<keyof OnboardingDataState, string>>>({});
+  const [draftSlug, setDraftSlug] = useState<string>(orgSlug ?? "");
+  const rubros = useMemo(() => listRubros(), []);
+
+  useEffect(() => {
+    if (orgSlug) setDraftSlug(orgSlug);
+  }, [orgSlug]);
+
+  const onBlur = (field: keyof OnboardingDataState) => {
+    const value = (data[field] as string) ?? "";
+    let msg = "";
+    if (field === "consultorioNombre" && !value.trim()) msg = "Dale un nombre al consultorio.";
+    if (field === "ciudad" && !value.trim()) msg = "¿En qué ciudad atendés?";
+    if (field === "bio" && value.length > 280) msg = "Máximo 280 caracteres.";
+    setErrors((prev) => ({ ...prev, [field]: msg || undefined }));
+  };
+
+  /**
+   * Cuando el user cambia el rubro, aplicamos smart defaults SOLO en campos
+   * vacíos (no pisamos lo que ya escribió). La bio se sugiere solo si está
+   * vacía Y hay ciudad disponible.
+   */
+  const onRubroChange = (newRubro: string) => {
+    set({ rubro: newRubro });
+    const tpl = getRubroTemplate(newRubro);
+    const patch: Partial<OnboardingDataState> = {};
+
+    if (!data.bio.trim() && data.ciudad.trim()) {
+      patch.bio = tpl.bioTemplate(data.ciudad);
+    }
+    // Solo aplicamos defaults de servicios/horarios si user no los modificó (compare con initial)
+    const isDefaultServicios = data.servicios.length === 3 &&
+      data.servicios[0]?.nombre === "Consulta inicial";
+    if (isDefaultServicios && tpl.servicios.length > 0) {
+      patch.servicios = tpl.servicios.map((s, i) => ({
+        id: Date.now() + i,
+        nombre: s.nombre,
+        dur: s.dur,
+        precio: s.precioCents / 100,
+      }));
+    }
+    const isDefaultHorarios =
+      data.diasActivos.length === 5 &&
+      data.franjas.length === 2 &&
+      data.franjas[0]?.[0] === "09:00" &&
+      data.slotMin === 45;
+    if (isDefaultHorarios) {
+      patch.diasActivos = tpl.horarios.diasActivos;
+      patch.franjas = tpl.horarios.franjas;
+      patch.slotMin = tpl.horarios.slotMin;
+    }
+
+    if (Object.keys(patch).length > 0) set(patch);
+  };
+
+  const onSlugChange = useCallback((slug: string) => {
+    setDraftSlug(slug);
+  }, []);
+
+  // Cuando el user avanza, persiste slug si cambió
+  const handleNext = async () => {
+    if (draftSlug && draftSlug !== orgSlug) {
+      try {
+        const res = await updateOnboardingStep(3, {
+          consultorioNombre: data.consultorioNombre,
+          rubro: data.rubro,
+          ciudad: data.ciudad,
+          provincia: data.provincia,
+          direccion: data.direccion,
+          telefonoPublico: data.telefonoPublico,
+          instagram: data.instagram,
+          bio: data.bio,
+          slugManual: draftSlug,
+        });
+        if (!res.ok) {
+          setErrors((p) => ({ ...p, consultorioNombre: res.error ?? "No pude guardar el link." }));
+          return;
+        }
+      } catch {
+        // ignore — auto-save lo va a reintentar
+      }
+    }
+    next();
+  };
+
+  const canContinue =
+    !!data.consultorioNombre.trim() &&
+    !!data.ciudad.trim() &&
+    !errors.consultorioNombre &&
+    !errors.ciudad &&
+    !errors.bio;
+
+  const bioCount = data.bio.length;
+  const bioOverLimit = bioCount > 280;
+
   return (
-    <StepShell stepIdx={3} back={back} next={next} skip={skip}
+    <StepShell stepIdx={3} back={back} next={handleNext} skip={skip}
       headline="¿Dónde está tu consultorio?"
-      sub="Lo usamos para mostrar la dirección en tu link público y los recordatorios.">
+      sub="Esta info aparece en tu link público de reservas."
+      nextDisabled={!canContinue}
+      previewData={previewDataFor(data)}
+      slug={draftSlug || orgSlug}
+    >
       <div className="onb-form">
-        <label className="onb-field">
-          <span>Nombre del consultorio</span>
+        <Field label="Nombre del consultorio" error={errors.consultorioNombre}
+          hint="Puede ser tu nombre o uno comercial.">
           <input type="text" placeholder="Consultorio Lorenzo Martínez"
-            value={data.consultorioNombre} onChange={(e) => set({ consultorioNombre: e.target.value })}/>
-          <span className="onb-hint">Puede ser tu nombre o uno comercial.</span>
-        </label>
-        <label className="onb-field">
-          <span>Dirección</span>
+            value={data.consultorioNombre}
+            onChange={(e) => { set({ consultorioNombre: e.target.value }); if (errors.consultorioNombre) setErrors((p) => ({ ...p, consultorioNombre: undefined })); }}
+            onBlur={() => onBlur("consultorioNombre")} />
+        </Field>
+
+        <Field label="Rubro">
+          <select value={data.rubro} onChange={(e) => onRubroChange(e.target.value)}>
+            {rubros.map((r) => (
+              <option key={r.id} value={r.id}>{r.label}</option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="Tu link público">
+          <SlugEditor
+            value={draftSlug || orgSlug || ""}
+            onChange={onSlugChange}
+            baseSuggestion={`${slugifyClient(data.nombre)}-${slugifyClient(data.apellido)}`.replace(/^-|-$/g, "")}
+            currentOrgId={orgId}
+          />
+        </Field>
+
+        <Field label="Dirección">
           <input type="text" placeholder="Belgrano 234"
             value={data.direccion} onChange={(e) => set({ direccion: e.target.value })}/>
-        </label>
+        </Field>
         <div className="onb-form-row-2">
-          <label className="onb-field">
-            <span>Ciudad</span>
+          <Field label="Ciudad" error={errors.ciudad}>
             <input type="text" placeholder="Alta Gracia"
-              value={data.ciudad} onChange={(e) => set({ ciudad: e.target.value })}/>
-          </label>
-          <label className="onb-field">
-            <span>Provincia</span>
+              value={data.ciudad}
+              onChange={(e) => { set({ ciudad: e.target.value }); if (errors.ciudad) setErrors((p) => ({ ...p, ciudad: undefined })); }}
+              onBlur={() => onBlur("ciudad")} />
+          </Field>
+          <Field label="Provincia">
             <select value={data.provincia} onChange={(e) => set({ provincia: e.target.value })}>
-              {["Córdoba","Buenos Aires","Santa Fe","Mendoza","Neuquén","Salta","Tucumán","Otra"].map(p =>
+              {["Córdoba","Buenos Aires","Santa Fe","Mendoza","Neuquén","Salta","Tucumán","Río Negro","Entre Ríos","Misiones","Otra"].map(p =>
                 <option key={p} value={p}>{p}</option>)}
             </select>
-          </label>
+          </Field>
         </div>
-        <label className="onb-field">
-          <span>Instagram <small>opcional</small></span>
+
+        <Field label="Teléfono del consultorio" hint="El que aparece en tu link público (puede ser distinto al personal).">
+          <div className="onb-input-prefix">
+            <span className="fm-mono">+54</span>
+            <input type="tel" placeholder="9 351 411-2233"
+              value={data.telefonoPublico}
+              onChange={(e) => set({ telefonoPublico: e.target.value })} />
+          </div>
+        </Field>
+
+        <Field label="Instagram" hint="Opcional. Aparece como link en tu card pública.">
           <div className="onb-input-prefix">
             <span className="fm-mono">@</span>
             <input type="text" placeholder="lorenzo.quiropraxia"
-              value={data.instagram} onChange={(e) => set({ instagram: e.target.value })}/>
+              value={data.instagram} onChange={(e) => set({ instagram: e.target.value.replace(/^@/, "") })}/>
           </div>
-        </label>
+        </Field>
+
+        <Field label="Descripción corta" error={errors.bio}
+          hint={`Una o dos oraciones. Aparece en tu card pública.`}>
+          <textarea
+            placeholder={data.ciudad ? `Quiropráctica y bienestar postural en ${data.ciudad}.` : "Quiropráctica y bienestar postural."}
+            value={data.bio}
+            rows={3}
+            maxLength={320}
+            onChange={(e) => { set({ bio: e.target.value }); if (errors.bio) setErrors((p) => ({ ...p, bio: undefined })); }}
+            onBlur={() => onBlur("bio")}
+            style={{ resize: "vertical", minHeight: 72 }}
+          />
+          <span className={`onb-counter ${bioOverLimit ? "is-over" : ""}`} aria-live="polite">
+            {bioCount} / 280
+          </span>
+        </Field>
       </div>
     </StepShell>
   );
@@ -166,17 +383,20 @@ export function Step3Consultorio({ data, set, next, back, skip }: StepProps) {
 // ─── Step 4 · Personalización (acento) ──────────────────────────────────────
 
 const ACENTOS_CURADOS = [
-  { id: "#8A6722", nombre: "Brass",        desc: "Cálido, sobrio" },
+  { id: "#8A6722", nombre: "Brass",         desc: "Cálido, sobrio" },
   { id: "#3F6B49", nombre: "Verde antiguo", desc: "Sereno, clínico" },
   { id: "#3F5E75", nombre: "Azul piedra",   desc: "Sólido, neutral" },
   { id: "#A8513A", nombre: "Terracota",     desc: "Cálido, presente" },
 ];
 
-export function Step4Personalizacion({ data, set, next, back, skip }: StepProps) {
+export function Step4Personalizacion({ data, set, next, back, skip, orgSlug }: StepProps) {
   return (
     <StepShell stepIdx={4} back={back} next={next} skip={skip}
-      headline="¿Con qué color te identificás?"
-      sub="Aparece en CTAs, gráficos y el mark de tu consultorio. Lo cambiás cuando quieras en Configuración.">
+      headline="Elegí tu color"
+      sub="Tu acento aparece en CTAs, tu mark y tu card pública. Lo cambiás cuando quieras."
+      previewData={previewDataFor(data)}
+      slug={orgSlug}
+    >
       <div className="onb-acentos">
         {ACENTOS_CURADOS.map(a => {
           const isActive = data.acento === a.id;
@@ -225,7 +445,7 @@ const DIAS_SEM = [
   { id: "dom", lbl: "Dom" },
 ];
 
-export function Step5Horarios({ data, set, next, back, skip }: StepProps) {
+export function Step5Horarios({ data, set, next, back, skip, orgSlug }: StepProps) {
   const toggleDia = (id: string) => {
     const s = new Set(data.diasActivos);
     if (s.has(id)) s.delete(id);
@@ -241,10 +461,16 @@ export function Step5Horarios({ data, set, next, back, skip }: StepProps) {
   const addFranja = () => set({ franjas: [...data.franjas, ["", ""]] });
   const removeFranja = (i: number) => set({ franjas: data.franjas.filter((_, k) => k !== i) });
 
+  const canContinue = data.diasActivos.length > 0 && data.franjas.every(([a, b]) => a && b);
+
   return (
     <StepShell stepIdx={5} back={back} next={next} skip={skip}
       headline="¿Cuándo atendés?"
-      sub="Lo usamos para mostrar los slots disponibles en tu link público.">
+      sub="Los pacientes solo van a ver slots disponibles dentro de estos horarios."
+      nextDisabled={!canContinue}
+      previewData={previewDataFor(data)}
+      slug={orgSlug}
+    >
       <div className="onb-form">
         <div className="onb-field">
           <span>Días</span>
@@ -296,7 +522,7 @@ export function Step5Horarios({ data, set, next, back, skip }: StepProps) {
 
 // ─── Step 6 · Servicios ─────────────────────────────────────────────────────
 
-export function Step6Servicios({ data, set, next, back, skip }: StepProps) {
+export function Step6Servicios({ data, set, next, back, skip, orgSlug }: StepProps) {
   const setServ = (i: number, patch: Partial<OnboardingDataState["servicios"][number]>) =>
     set({ servicios: data.servicios.map((s, k) => (k === i ? { ...s, ...patch } : s)) });
   const addServ = () =>
@@ -304,10 +530,18 @@ export function Step6Servicios({ data, set, next, back, skip }: StepProps) {
   const removeServ = (i: number) =>
     set({ servicios: data.servicios.filter((_, k) => k !== i) });
 
+  const canContinue =
+    data.servicios.length > 0 &&
+    data.servicios.every((s) => s.nombre.trim() && s.dur > 0 && s.precio >= 0);
+
   return (
     <StepShell stepIdx={6} back={back} next={next} skip={skip}
       headline="¿Qué servicios ofrecés?"
-      sub="Los pacientes ven esta lista al reservar. Editable después en Configuración.">
+      sub="Los pacientes ven esta lista al reservar. Editable después en Configuración."
+      nextDisabled={!canContinue}
+      previewData={previewDataFor(data)}
+      slug={orgSlug}
+    >
       <div className="onb-servicios">
         {data.servicios.map((s, i) => (
           <div key={s.id} className="onb-servicio-row">
@@ -341,12 +575,14 @@ export function Step6Servicios({ data, set, next, back, skip }: StepProps) {
 
 // ─── Step 7 · Google Calendar ──────────────────────────────────────────────
 
-export function Step7Google({ data, set, next, back, skip }: StepProps) {
-  void data;
+export function Step7Google({ data, set, next, back, skip, orgSlug }: StepProps) {
   return (
     <StepShell stepIdx={7} back={back} next={next} skip={skip}
       headline="¿Conectamos tu Google Calendar?"
-      sub="Los eventos personales que crees en Google bloquean slots automáticamente. Las reservas confirmadas aparecen en tu Google.">
+      sub="Los eventos personales que crees en Google bloquean slots automáticamente. Las reservas confirmadas se sincronizan a tu calendar."
+      previewData={previewDataFor(data)}
+      slug={orgSlug}
+    >
       <div className="onb-integration">
         <button type="button" className="onb-oauth-card"
           onClick={() => { set({ googleConectado: true }); next(); }}>
@@ -360,14 +596,14 @@ export function Step7Google({ data, set, next, back, skip }: StepProps) {
           </div>
           <div className="onb-oauth-body">
             <b>Conectar Google Calendar</b>
-            <p>Vamos a pedir permiso para leer y crear eventos en tu calendar primario.</p>
+            <p>Pedimos permiso para leer y crear eventos en tu calendar primario.</p>
           </div>
           <div className="onb-oauth-arrow">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
           </div>
         </button>
         <p className="onb-fine">
-          Tus datos del calendar quedan privados. Solo leemos los eventos para bloquear slots; no se comparten con pacientes.
+          Tus datos del calendar quedan privados. Solo leemos eventos para bloquear slots; no se comparten con pacientes.
         </p>
       </div>
     </StepShell>
@@ -376,93 +612,76 @@ export function Step7Google({ data, set, next, back, skip }: StepProps) {
 
 // ─── Step 8 · Mercado Pago ──────────────────────────────────────────────────
 
-export function Step8MercadoPago({ data, set, next, back, skip }: StepProps) {
-  void data;
+export function Step8MercadoPago({ data, next, back, skip, orgSlug }: StepProps) {
   return (
     <StepShell stepIdx={8} back={back} next={next} skip={skip}
-      headline="¿Conectamos Mercado Pago?"
-      sub="Los pacientes pagan online al reservar y los turnos aparecen ya cobrados. Si saltás, cobrás en consultorio.">
+      headline="Activá tu prueba"
+      sub="Tenés 7 días gratis sin tarjeta. Después, activás tu suscripción desde Configuración cuando estés listo para cobrar."
+      previewData={previewDataFor(data)}
+      slug={orgSlug}
+    >
       <div className="onb-integration">
-        <button type="button" className="onb-oauth-card"
-          onClick={() => { set({ mpConectado: true }); next(); }}>
-          <div className="onb-oauth-ico" style={{ background: "#009EE3" }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff">
-              <path d="M3 9.5C3 7.6 4.6 6 6.5 6h11C19.4 6 21 7.6 21 9.5v5c0 1.9-1.6 3.5-3.5 3.5h-11C4.6 18 3 16.4 3 14.5v-5z" fill="#fff"/>
-              <circle cx="12" cy="12" r="2.2" fill="#009EE3"/>
-            </svg>
+        <div className="onb-trial-card">
+          <div className="onb-trial-row">
+            <div className="onb-trial-ico">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 16 14"/>
+              </svg>
+            </div>
+            <div>
+              <b>Tu prueba arranca ya</b>
+              <p>7 días para probar todas las funciones. Sin compromiso, sin tarjeta.</p>
+            </div>
           </div>
-          <div className="onb-oauth-body">
-            <b>Conectar Mercado Pago</b>
-            <p>Suscripciones recurrentes + cobros únicos de sesiones. Comisión MP estándar.</p>
+          <div className="onb-trial-row">
+            <div className="onb-trial-ico">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="6" width="20" height="12" rx="2"/>
+                <line x1="2" y1="10" x2="22" y2="10"/>
+              </svg>
+            </div>
+            <div>
+              <b>Cuando quieras, ARS 35.000 / mes</b>
+              <p>Suscripción mensual via Mercado Pago. Cancelás cuando quieras desde Configuración.</p>
+            </div>
           </div>
-          <div className="onb-oauth-arrow">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-          </div>
-        </button>
+        </div>
         <p className="onb-fine">
-          Si saltás, podés conectarlo después desde Configuración. Igual podés cargar pagos manualmente.
+          Mientras tanto, los pacientes pueden reservar libremente. Cuando actives tu cuenta MP, también podrás cobrar online.
         </p>
       </div>
     </StepShell>
   );
 }
 
-// ─── Step 9 · Listo ─────────────────────────────────────────────────────────
+// ─── Field helper ──────────────────────────────────────────────────────────
 
-interface Step9Props {
-  data: OnboardingDataState;
-  accent: string;
-  onFinish: () => Promise<void> | void;
-  finishing?: boolean;
-  error?: string | null;
+function Field({
+  label,
+  hint,
+  error,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  error?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className={"onb-field" + (error ? " is-err" : "")}>
+      <span>{label}</span>
+      {children}
+      {error ? <span className="onb-err">{error}</span> : hint ? <span className="onb-hint">{hint}</span> : null}
+    </label>
+  );
 }
 
-export function Step9Listo({ data, accent, onFinish, finishing, error }: Step9Props) {
-  const slugBase = (data.nombre || "lorenzo").toLowerCase().replace(/\s+/g, "-") +
-                   "-" + (data.apellido || "martinez").toLowerCase().replace(/\s+/g, "-");
-  const url = `folio.app/${slugBase}`;
-  const [copied, setCopied] = useState(false);
-
-  const onCopy = async () => {
-    try {
-      await navigator.clipboard.writeText("https://" + url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
-    } catch {
-      // ignore
-    }
-  };
-
-  return (
-    <div className="onb-step onb-listo">
-      <div className="onb-listo-mark">
-        <FolioMark size={56} color={accent} fg="#FBF9F4" />
-      </div>
-      <h1>Todo listo.</h1>
-      <p className="onb-listo-sub">
-        Tu consultorio está configurado. Compartí tu link público para empezar
-        a recibir reservas, o agendá manualmente desde el panel.
-      </p>
-
-      <div className="onb-listo-link">
-        <span className="fi-eyebrow">Tu link de reservas</span>
-        <div className="onb-listo-link-row">
-          <span className="onb-listo-url fm-mono">{url}</span>
-          <button type="button" className="fi-btn fi-btn-secondary" onClick={onCopy}>
-            {copied ? "Copiado" : "Copiar"}
-          </button>
-        </div>
-      </div>
-
-      {error ? <p className="au-err">{error}</p> : null}
-
-      <button type="button"
-        className="fi-btn fi-btn-primary onb-listo-cta"
-        onClick={() => void onFinish()}
-        disabled={finishing}>
-        {finishing ? "Creando consultorio..." : "Ir al panel"}
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-      </button>
-    </div>
-  );
+function slugifyClient(s: string): string {
+  return (s || "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }

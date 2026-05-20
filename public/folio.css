@@ -4604,6 +4604,297 @@ input:focus { outline: none; }
 .onb-oauth-arrow { color: var(--ink-3); }
 .onb-fine { font-size: 11.5px; color: var(--ink-3); line-height: 1.55; margin: 0; }
 
+/* ════════════════════════════════════════════════════════════════════════
+   ONBOARDING PREMIUM · split layout, preview drawer, step transitions,
+   step-9 reveal, save indicator, validation chrome.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* Step transitions: slide-X (16px) + fade, respeta prefers-reduced-motion */
+.onb-anim { animation: onb-step-in var(--motion-base) var(--motion-ease-out) both; }
+.onb-anim-forward { animation-name: onb-step-in-forward; }
+.onb-anim-back    { animation-name: onb-step-in-back; }
+@keyframes onb-step-in-forward {
+  from { opacity: 0; transform: translateX(16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes onb-step-in-back {
+  from { opacity: 0; transform: translateX(-16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes onb-step-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .onb-anim, .onb-anim-forward, .onb-anim-back {
+    animation: onb-step-fade 80ms var(--motion-ease-out) both;
+  }
+  @keyframes onb-step-fade { from { opacity: 0; } to { opacity: 1; } }
+}
+@keyframes onb-spin { to { transform: rotate(360deg); } }
+
+/* SPLIT LAYOUT: form izq + sticky preview der (desktop ≥1024px) */
+.onb-shell { width: 100%; max-width: 560px; }
+.onb-shell-form { width: 100%; }
+.onb-shell-preview { display: none; }
+@media (min-width: 1024px) {
+  .onb-shell-split {
+    display: grid; grid-template-columns: minmax(0, 1fr) 360px;
+    gap: 48px; align-items: flex-start;
+    width: 100%; max-width: 980px;
+  }
+  .onb-shell-split .onb-shell-form { max-width: 560px; }
+  .onb-shell-split .onb-shell-preview {
+    display: block; position: sticky; top: 32px;
+    align-self: start;
+  }
+}
+.onb-preview-sticky {
+  display: flex; flex-direction: column; gap: 10px;
+}
+.onb-preview-label {
+  font-family: 'Geist Mono', monospace; font-size: 10.5px;
+  letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3);
+}
+.onb-preview-fine {
+  font-size: 11.5px; color: var(--ink-3); margin: 4px 2px 0;
+  line-height: 1.55;
+}
+
+/* MOBILE: floating preview button + drawer */
+.onb-preview-fab {
+  position: fixed; right: 16px; bottom: 88px; z-index: 40;
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 14px;
+  background: var(--ink); color: var(--surface);
+  border: 0; border-radius: 999px;
+  font-size: 12.5px; font-weight: 500;
+  box-shadow: 0 6px 18px rgba(0,0,0,.18), 0 2px 4px rgba(0,0,0,.08);
+  transition: transform 160ms var(--motion-ease-out), background 160ms var(--motion-ease-out);
+}
+.onb-preview-fab:hover { transform: translateY(-1px); }
+.onb-preview-fab.is-open { background: var(--accent); }
+@media (min-width: 1024px) {
+  .onb-preview-fab { display: none; }
+}
+.onb-preview-drawer {
+  position: fixed; inset: 0; z-index: 50;
+  display: flex; flex-direction: column;
+  pointer-events: auto;
+}
+.onb-preview-drawer-backdrop {
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,.45);
+  animation: onb-fade-in 200ms var(--motion-ease-out) both;
+}
+.onb-preview-drawer-inner {
+  position: relative; z-index: 1;
+  margin-top: auto;
+  background: var(--surface);
+  padding: 20px 18px 28px;
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 -8px 28px rgba(0,0,0,.18);
+  animation: onb-slide-up 280ms var(--motion-ease-out) both;
+  max-height: 86vh; overflow-y: auto;
+}
+.onb-preview-drawer-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px;
+}
+.onb-preview-close {
+  width: 32px; height: 32px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--surface-2); color: var(--ink-2); border: 0;
+}
+.onb-preview-close:hover { background: var(--line); color: var(--ink); }
+@keyframes onb-slide-up {
+  from { transform: translateY(40px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+@keyframes onb-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Footer hint: ↵ continuar (solo desktop) */
+.onb-foot-kbd {
+  display: none;
+  margin-left: 6px; padding: 1px 6px;
+  font-family: 'Geist Mono', monospace; font-size: 10.5px;
+  color: rgba(255,255,255,.7);
+  background: rgba(0,0,0,.18); border-radius: 4px;
+}
+.fi-btn-primary .onb-foot-kbd { color: rgba(255,255,255,.75); }
+@media (min-width: 768px) {
+  .onb-foot-kbd { display: inline-flex; align-items: center; }
+}
+
+/* Bio counter */
+.onb-counter {
+  align-self: flex-end;
+  margin-top: 4px;
+  font-family: 'Geist Mono', monospace; font-size: 10.5px;
+  color: var(--ink-4); letter-spacing: .04em;
+}
+.onb-counter.is-over { color: var(--red); }
+
+/* Banner error inline (Step 1) */
+.onb-banner-err {
+  padding: 10px 14px; margin: 6px 0 0;
+  background: var(--red-soft);
+  border: 1px solid color-mix(in oklab, var(--red) 30%, transparent);
+  border-radius: var(--r-sm);
+  font-size: 12.5px; color: var(--red); line-height: 1.5;
+}
+
+/* Trial card (Step 8) */
+.onb-trial-card {
+  display: flex; flex-direction: column; gap: 18px;
+  padding: 22px 22px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+.onb-trial-row { display: flex; gap: 14px; align-items: flex-start; }
+.onb-trial-ico {
+  width: 36px; height: 36px; border-radius: var(--r-sm);
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--accent-soft); color: var(--accent);
+  flex-shrink: 0;
+}
+.onb-trial-row b {
+  display: block;
+  font-size: 14px; color: var(--ink); font-weight: 600;
+  letter-spacing: -.005em;
+}
+.onb-trial-row p {
+  margin: 4px 0 0; font-size: 12.5px; color: var(--ink-3); line-height: 1.5;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   STEP 9 · THE MOMENT — reveal coreografiado
+   ════════════════════════════════════════════════════════════════════════ */
+.onb-moment {
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  gap: 24px; padding: 16px 8px 40px;
+  width: 100%; max-width: 600px;
+}
+.onb-moment-mark {
+  margin-bottom: 6px;
+  opacity: 0;
+  animation: onb-moment-mark var(--motion-deliberate) var(--motion-ease-out) both;
+}
+.onb-moment-head {
+  margin: 0; font-size: 38px; font-weight: 600;
+  letter-spacing: -.025em; line-height: 1.04; color: var(--ink);
+  text-wrap: balance;
+  opacity: 0;
+  animation: onb-moment-up 520ms var(--motion-ease-out) 400ms both;
+}
+.onb-moment-sub {
+  margin: 0; font-size: 15px; color: var(--ink-2);
+  line-height: 1.55; max-width: 480px;
+  opacity: 0;
+  animation: onb-moment-up 520ms var(--motion-ease-out) 520ms both;
+}
+.onb-moment-card {
+  width: 100%; max-width: 520px; margin-top: 8px;
+  opacity: 0;
+  animation: onb-moment-card 720ms var(--motion-ease-out) 800ms both;
+}
+.onb-moment-link {
+  display: flex; flex-direction: column; gap: 8px;
+  width: 100%; max-width: 520px;
+  padding: 14px 16px;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  opacity: 0;
+  animation: onb-moment-up 360ms var(--motion-ease-out) 1280ms both;
+}
+.onb-moment-link-label { font-size: 10.5px; }
+.onb-moment-link-row {
+  display: flex; align-items: center; gap: 10px;
+}
+.onb-moment-url {
+  flex: 1; min-width: 0;
+  font-size: 13.5px; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  text-align: left;
+}
+.onb-moment-copy {
+  flex-shrink: 0;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.onb-moment-copy.is-copied {
+  background: var(--accent); color: #FBF9F4; border-color: var(--accent);
+}
+.onb-moment-ctas {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 10px;
+  width: 100%; max-width: 520px; margin-top: 4px;
+}
+.onb-moment-cta {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 12px 18px; font-size: 14px;
+  opacity: 0;
+}
+.onb-anim-cta-1 { animation: onb-moment-up 360ms var(--motion-ease-out) 1400ms both; }
+.onb-anim-cta-2 { animation: onb-moment-up 360ms var(--motion-ease-out) 1480ms both; }
+.onb-anim-cta-3 { animation: onb-moment-up 360ms var(--motion-ease-out) 1560ms both; }
+
+/* Avatar idle pulse en la card del moment (sutil, cada 4s) */
+.onb-moment-card .card-preview .avatar-pulse,
+.onb-moment-card .card-preview img,
+.onb-moment-card .card-preview [role="img"] {
+  animation: onb-avatar-pulse 4s var(--motion-ease-in-out) 2400ms infinite;
+}
+@keyframes onb-avatar-pulse {
+  0%, 70%, 100% { transform: scale(1); box-shadow: inset 0 1px 0 rgba(255,255,255,.18), 0 1px 2px rgba(0,0,0,.06); }
+  80%           { transform: scale(1.04); box-shadow: inset 0 1px 0 rgba(255,255,255,.22), 0 4px 14px color-mix(in oklab, var(--accent, #8A6722) 28%, transparent); }
+}
+
+@keyframes onb-moment-mark {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes onb-moment-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes onb-moment-card {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onb-moment-mark, .onb-moment-head, .onb-moment-sub,
+  .onb-moment-card, .onb-moment-link,
+  .onb-moment-cta {
+    animation: onb-step-fade 120ms var(--motion-ease-out) both !important;
+    transform: none !important;
+  }
+  .onb-moment-card .card-preview img,
+  .onb-moment-card .card-preview [role="img"] {
+    animation: none !important;
+  }
+}
+
+/* Mobile: footer sticky + ctas stacked */
+@media (max-width: 767px) {
+  .onb-step-foot {
+    position: sticky; bottom: 0; z-index: 10;
+    margin: 0 -16px -8px;
+    padding: 12px 16px;
+    background: color-mix(in oklab, var(--bg) 92%, transparent);
+    backdrop-filter: saturate(140%) blur(8px);
+    -webkit-backdrop-filter: saturate(140%) blur(8px);
+    border-top: 1px solid var(--line-soft);
+  }
+  .onb-moment-ctas { flex-direction: column; }
+  .onb-moment-cta { width: 100%; justify-content: center; }
+  .onb-moment-head { font-size: 30px; }
+  .onb-app-main { padding: 32px 16px 32px; }
+}
+
 /* STEP 9 · LISTO */
 .onb-listo {
   align-items: center; text-align: center; gap: 22px;
