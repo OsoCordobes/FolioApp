@@ -1,31 +1,43 @@
 "use client";
 
 /**
- * Folio · Auth · panel izquierdo "vivo".
+ * Folio · Auth · panel izquierdo "vivo" v2.
  *
- * Port simplificado de SideArt en folio/auth.jsx (líneas 1042-1173).
+ * Orchestrator del SideArt: state (idx, paused, hidden, direction, clock),
+ * data del CAROUSEL, lazy mount window [prev, current, next], delegación a
+ * <SideArtShell /> + <SideArtStage /> para JSX.
  *
- * Carousel con auto-rotation entre los 5 slides del prototipo (textos
- * idénticos). El mockup interno reutiliza SlideAgenda para los 5 hasta
- * portar los componentes específicos (SlideCalendario/Finanzas/Reagenda/IA).
- * La rotación, los dots y las flechas SÍ funcionan — el polish del mockup
- * por slide queda como mejora visual incremental.
+ * Diferencias clave vs v1:
+ *   1. Transición direction-aware con crossfade + scale + blur + spring x
+ *      (vía SideArtStage + framer-motion). Forward y backward son
+ *      visualmente distintos. Wraparound 4→0 es forward.
+ *   2. Entry animation propia del SideArt al montar (translate desde la
+ *      izquierda + fade del glow).
+ *   3. Pause indicator visible con debounce 240ms en hover (NO flickerea
+ *      en passes rápidos).
+ *   4. Dots con progress fill animado CSS-only (var --slide-dur).
+ *   5. Lazy mount [prev, current, next] reduce 5 → 3 slides montados.
  *
- * Pausa cuando el mouse está encima o cuando la tab está hidden.
+ * Pausa por hover sostenido + tab visibility. Auto-rotation con dur por slide.
  */
 
-import { useEffect, useState, type ComponentType } from "react";
+import { LazyMotion, domMax } from "framer-motion";
+import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 
-import { FolioMark } from "@/components/folio-mark";
+import { MAside, MDiv } from "@/components/motion/m";
+import { SideArtShell } from "@/components/auth/side-art-shell";
+import { SideArtStage } from "@/components/auth/side-art-stage";
+import { tintClassFor } from "@/components/auth/side-art-tints";
 import { SlideAgenda } from "@/components/auth/slide-agenda";
 import { SlideCalendario } from "@/components/auth/slide-calendario";
 import { SlideFinanzas } from "@/components/auth/slide-finanzas";
-import { SlideReagenda } from "@/components/auth/slide-reagenda";
 import { SlideIA } from "@/components/auth/slide-ia";
+import { SlideReagenda } from "@/components/auth/slide-reagenda";
 
 const SLIDE_MS = 5000;
 const SLIDE_MS_LONG = 6500;
 const SLIDE_MS_XLONG = 7500;
+const PAUSE_INDICATOR_DELAY_MS = 240;
 
 interface SlideDef {
   id: string;
@@ -76,7 +88,7 @@ const CAROUSEL: SlideDef[] = [
     title: "Tu copiloto clínico",
     subtitle: "Conoce a cada paciente, te avisa lo importante y te ayuda a crecer.",
     comp: SlideIA,
-    dur: 15000,
+    dur: 15000, // será comprimido a 7000 en C11
     plus: true,
   },
 ];
@@ -84,10 +96,13 @@ const CAROUSEL: SlideDef[] = [
 export function SideArt() {
   const [now, setNow] = useState<Date | null>(null);
   const [idx, setIdx] = useState(0);
+  const [direction, setDirection] = useState<1 | -1>(1);
   const [paused, setPaused] = useState(false);
   const [hidden, setHidden] = useState(false);
+  const [pauseIndicatorVisible, setPauseIndicatorVisible] = useState(false);
+  const pauseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Diferimos el primer Date hasta post-mount para evitar hydration mismatch.
+  // Clock (postmount + tick cada 30s para evitar hydration mismatch)
   useEffect(() => {
     setNow(new Date());
     const id = setInterval(() => setNow(new Date()), 30 * 1000);
@@ -103,109 +118,148 @@ export function SideArt() {
     return () => document.removeEventListener("visibilitychange", onVis);
   }, []);
 
-  // Auto-rotation con duración por slide (idéntica al prototipo)
+  // Auto-rotation con duración por slide
   useEffect(() => {
     if (paused || hidden) return;
     const dur = CAROUSEL[idx]?.dur ?? SLIDE_MS;
     const id = setTimeout(() => {
+      // auto-rotate: siempre forward (incluso wraparound 4→0)
+      setDirection(1);
       setIdx((i) => (i + 1) % CAROUSEL.length);
     }, dur);
     return () => clearTimeout(id);
   }, [idx, paused, hidden]);
 
+  // Pause indicator: debounce 240ms para evitar flicker en hover passes rápidos
+  useEffect(() => {
+    if (pauseTimerRef.current) {
+      clearTimeout(pauseTimerRef.current);
+      pauseTimerRef.current = null;
+    }
+    if (paused) {
+      pauseTimerRef.current = setTimeout(() => {
+        setPauseIndicatorVisible(true);
+      }, PAUSE_INDICATOR_DELAY_MS);
+    } else {
+      setPauseIndicatorVisible(false);
+    }
+    return () => {
+      if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
+    };
+  }, [paused]);
+
+  // Navigation helpers — calculan direction antes de setIdx
+  const goTo = (target: number) => {
+    const n = CAROUSEL.length;
+    const next = ((target % n) + n) % n;
+    if (next === idx) return;
+    // Direction = camino más corto en el carousel circular
+    const forwardDist = (next - idx + n) % n;
+    const backwardDist = (idx - next + n) % n;
+    setDirection(forwardDist <= backwardDist ? 1 : -1);
+    setIdx(next);
+  };
+  const goPrev = () => {
+    setDirection(-1);
+    setIdx((i) => (i - 1 + CAROUSEL.length) % CAROUSEL.length);
+  };
+  const goNext = () => {
+    setDirection(1);
+    setIdx((i) => (i + 1) % CAROUSEL.length);
+  };
+
+  // Lazy mount: solo renderizamos [prev, current, next] (3 de 5)
+  const visibleSet = useMemo(() => {
+    const n = CAROUSEL.length;
+    return new Set([(idx - 1 + n) % n, idx, (idx + 1) % n]);
+  }, [idx]);
+
   const hh = now ? String(now.getHours()).padStart(2, "0") : "--";
   const mm = now ? String(now.getMinutes()).padStart(2, "0") : "--";
+  const clock = `${hh}:${mm}`;
 
-  const goTo = (i: number) => setIdx(((i % CAROUSEL.length) + CAROUSEL.length) % CAROUSEL.length);
-  const goPrev = () => goTo(idx - 1);
-  const goNext = () => goTo(idx + 1);
+  const current = CAROUSEL[idx];
+  const Active = current.comp;
+  const tintClass = tintClassFor(idx);
 
   return (
-    <aside
-      className={"au2-art" + (paused ? " is-paused" : "") + (hidden ? " is-hidden" : "")}
+    <MAside
+      className={
+        "au2-art " +
+        tintClass +
+        (paused ? " is-paused" : "") +
+        (hidden ? " is-hidden" : "")
+      }
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
+      initial={{ opacity: 0, x: -20 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: 0.72, ease: [0, 0, 0.2, 1], delay: 0.06 }}
     >
       <div className="au2-art-bg" aria-hidden="true">
         <div className="au2-art-grid" />
-        <div className="au2-art-glow" />
+        <MDiv
+          className="au2-art-glow"
+          initial={{ opacity: 0, scale: 1.4 }}
+          animate={{ opacity: 0.6, scale: 1 }}
+          transition={{ duration: 1.2, ease: [0, 0, 0.2, 1], delay: 0.18 }}
+        />
       </div>
 
-      <header className="au2-head">
-        <div className="au2-head-brand">
-          <FolioMark size={26} />
-          <span className="au2-logo">folio</span>
-          <span className="au2-head-meta">
-            {hh}:{mm} · alta gracia
-          </span>
-        </div>
-        <div className="au2-head-status">
-          <span className="au2-head-ver">v0.9</span>
-          <span className="au2-head-live">
-            <span className="au2-status-dot" />
-            en vivo
-          </span>
-        </div>
-      </header>
+      <SideArtShell
+        current={current}
+        idx={idx}
+        total={CAROUSEL.length}
+        slides={CAROUSEL}
+        clock={clock}
+        paused={paused}
+        pauseIndicatorVisible={pauseIndicatorVisible}
+        onPrev={goPrev}
+        onNext={goNext}
+        onGoTo={goTo}
+      >
+        <SideArtStage slideKey={current.id} direction={direction}>
+          <div className="au2-slide-inner">
+            <header className="au2-slide-head">
+              <span className="au2-slide-eyebrow">{current.eyebrow}</span>
+              <h3 className="au2-slide-title">
+                {current.title}
+                {current.plus ? <span className="au2-plus-badge au2-plus-badge--title">Plus</span> : null}
+              </h3>
+              <p className="au2-slide-sub">{current.subtitle}</p>
+            </header>
+            <div className="au2-slide-mockup">
+              {/* Lazy mount window: solo monto slides en visibleSet, pero el activo
+                  se renderiza siempre acá (es current.comp). Los otros 2 (prev y
+                  next) se montan invisibles abajo para que sus useEffects estén
+                  vivos antes de que se transicione a ellos (preempt timers).
+                  Optimización futura: pasar Active prop al wrapper en vez de
+                  current.comp para reusar instancia. */}
+              <Active active={true} />
+            </div>
+          </div>
+        </SideArtStage>
 
-      <div className="au2-stage">
+        {/* Preempt slides: prev + next montados sin transition wrapper, hidden
+            visualmente pero su lógica corre (countdowns 30s, etc están listos
+            cuando el user llegue a ese slide). Su `active=false` no dispara
+            las animaciones internas. */}
         {CAROUSEL.map((c, i) => {
-          const isActive = i === idx;
+          if (i === idx) return null;
+          if (!visibleSet.has(i)) return null;
           const Comp = c.comp;
           return (
-            <div
-              key={c.id}
-              className={"au2-slide" + (isActive ? " is-active" : "")}
-              aria-hidden={!isActive}
-            >
-              <div className="au2-slide-inner">
-                <header className="au2-slide-head">
-                  <span className="au2-slide-eyebrow">{c.eyebrow}</span>
-                  <h3 className="au2-slide-title">
-                    {c.title}
-                    {c.plus ? <span className="au2-plus-badge au2-plus-badge--title">Plus</span> : null}
-                  </h3>
-                  <p className="au2-slide-sub">{c.subtitle}</p>
-                </header>
-                <div className="au2-slide-mockup">
-                  <Comp active={isActive} />
-                </div>
-              </div>
+            <div key={`preempt-${c.id}`} style={{ display: "none" }} aria-hidden>
+              <Comp active={false} />
             </div>
           );
         })}
-
-        <button className="au2-nav au2-nav--prev" type="button" onClick={goPrev} aria-label="Anterior">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <path d="m15 18-6-6 6-6" />
-          </svg>
-        </button>
-        <button className="au2-nav au2-nav--next" type="button" onClick={goNext} aria-label="Siguiente">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <path d="m9 18 6-6-6-6" />
-          </svg>
-        </button>
-      </div>
-
-      <footer className="au2-foot">
-        <div className="au2-foot-counter">
-          <span className="fm-mono au2-counter-val">{String(idx + 1).padStart(2, "0")}</span>
-          <span className="au2-counter-sep">/</span>
-          <span className="fm-mono au2-counter-total">{String(CAROUSEL.length).padStart(2, "0")}</span>
-        </div>
-        <div className="au2-foot-dots" role="tablist" aria-label="Vista del producto">
-          {CAROUSEL.map((c, i) => (
-            <button
-              key={c.id}
-              role="tab"
-              aria-selected={i === idx}
-              aria-label={c.title}
-              className={"au2-dot" + (i === idx ? " is-active" : "")}
-              onClick={() => goTo(i)}
-            />
-          ))}
-        </div>
-      </footer>
-    </aside>
+      </SideArtShell>
+    </MAside>
   );
 }
+
+// Re-export LazyMotion + domMax para tree-shake check (NO debería ser
+// importado fuera de motion-provider.tsx, pero en caso de necesidad ad-hoc
+// de un sub-tree con su propio LazyMotion).
+export { LazyMotion, domMax };
