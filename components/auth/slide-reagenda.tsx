@@ -18,6 +18,7 @@
  *   T3900       Bottom banner sube · "próxima cita queda lista"
  */
 
+import { GhostCalendar } from "@/components/auth/ghost-art";
 import { usePhaseSequence } from "@/components/auth/use-phase-sequence";
 
 interface Props {
@@ -54,6 +55,9 @@ export function SlideReagenda({ active }: Props) {
 
   return (
     <article className={"au2-fg au2-rea2 phase-" + phase}>
+      {/* C14: ghost calendar layer detrás del wizard de reagenda. Comunica
+          "esto pasa sobre la vista calendario del app real". */}
+      <GhostCalendar />
       <header className="au2-rea2-head">
         <span className="au2-rea2-pulse">
           <span className="au2-rea2-pulse-dot" />

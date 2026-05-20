@@ -20,6 +20,7 @@
  *    13.0+ HOLD
  */
 
+import { GhostSidebar } from "@/components/auth/ghost-art";
 import { MLi, MUl } from "@/components/motion/m";
 import { usePhaseSequence } from "@/components/auth/use-phase-sequence";
 
@@ -89,6 +90,10 @@ export function SlideIA({ active }: Props) {
       </span>
 
       <article className={"au2-fg au2-ia3 phase-" + phase}>
+        {/* C14: ghost UI layer detrás del card del slide IA — silueta del
+            sidebar del app real. Comunica "esto es parte de Folio" sin
+            competir con el FG. */}
+        <GhostSidebar />
         <div className="au2-ia3-stage">
           <section className="au2-ia3-scene au2-ia3-scene-agenda" aria-hidden={phase >= 2}>
             <header className="au2-ia3-mock-head">
