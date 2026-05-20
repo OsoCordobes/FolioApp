@@ -611,36 +611,28 @@ function SecPlan() {
         <div className="cfg-plan-card">
           <div className="cfg-plan-card-l">
             <span className="fi-eyebrow">Plan actual</span>
-            <h3>Folio MVP · Beta gratuita</h3>
+            <h3>Folio Profesional · $30.000 / mes</h3>
             <p>
-              Durante el período beta el Servicio es <b>gratis</b>. Cuando lancemos el plan pago te
-              avisamos por email con 30 días de antelación.
+              Cobro automático mensual vía Mercado Pago. Podés cancelar cuando quieras.
+              Durante los primeros 7 días tenés acceso completo sin tarjeta.
             </p>
           </div>
           <div className="cfg-plan-card-r">
-            <a
-              href="mailto:hola@folio.app?subject=Folio%20beta%20-%20feedback"
-              className="fi-btn fi-btn-secondary"
-              title="Mandanos feedback de qué te resulta más valioso"
-            >
-              Mandar feedback
+            <a href="/configuracion/billing" className="fi-btn fi-btn-primary">
+              Gestionar suscripción
             </a>
           </div>
         </div>
       </Section>
 
-      <Section title="Facturación" sub="Se activa cuando lancemos el plan pago.">
-        <Row label="Método de pago">
-          <span className="muted">Sin método configurado · te avisamos cuando el plan pago arranque.</span>
+      <Section title="Facturación" sub="Comprobantes y datos para emisión de facturas.">
+        <Row label="Datos de facturación" sub="CUIT, razón social y condición frente al IVA">
+          <span className="muted">Editables desde la sección Consultorio.</span>
         </Row>
-        <Row label="Datos de facturación" sub="Para emitir comprobantes cuando aplique">
-          <button
-            type="button"
-            className="cfg-link"
-            onClick={() => alert("Cargar CUIT + razón social: próximamente desde la sección Consultorio.")}
-          >
-            Cargar CUIT y datos
-          </button>
+        <Row label="Historial de cobros" sub="Tus últimos movimientos">
+          <a href="/configuracion/billing" className="cfg-link">
+            Ver historial completo
+          </a>
         </Row>
       </Section>
     </>

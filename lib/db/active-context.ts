@@ -31,6 +31,11 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import { err, ok, type Result } from "./errors";
 import { getActiveSession, type ActiveSession } from "./session";
+import {
+  computeAccessGate,
+  loadSubscriptionForOrg,
+  type AccessGate,
+} from "./suscripcion";
 
 export interface ActiveOrganization {
   id: string;
@@ -61,10 +66,27 @@ export interface ActiveProfile {
   avatarUrl: string | null;
 }
 
+export interface ActiveSubscription {
+  /** Estado de la suscripción en MP, o null si nunca se creó. */
+  estado:
+    | "PENDIENTE_ACTIVACION"
+    | "ACTIVA"
+    | "PAUSADA"
+    | "CANCELADA"
+    | "MOROSA"
+    | null;
+  /** Próximo cobro (ISO). Útil para mostrar "se renueva el X" en UI. */
+  proximaCobro: string | null;
+}
+
 export interface ActiveContext {
   session: ActiveSession;
   organization: ActiveOrganization;
   profile: ActiveProfile;
+  /** Estado actual de la suscripción (lazy: usa lookup local, no MP). */
+  subscription: ActiveSubscription;
+  /** Decisión de gating: si denegado, el layout debe redirigir a /configuracion/billing. */
+  accessGate: AccessGate;
 }
 
 /**
@@ -79,12 +101,14 @@ export async function getActiveContext(): Promise<Result<ActiveContext>> {
 
   const supabase = await createSupabaseServerClient();
 
-  // Single round-trip: trae organization + profile en paralelo.
-  const [orgRes, profRes] = await Promise.all([
+  // Single round-trip: trae organization + profile + suscripción en paralelo.
+  // La suscripción usa service client (en suscripcion.ts) para bypassar RLS;
+  // el gating se hace acá, no en la policy.
+  const [orgRes, profRes, subRes] = await Promise.all([
     supabase
       .from("organization")
       .select(
-        "id, slug, nombre, rubro, ciudad, provincia, acento_hex, tema, timezone, moneda, cuit, razon_social, condicion_iva, opt_out_analytics, opt_out_public_listing",
+        "id, slug, nombre, rubro, ciudad, provincia, acento_hex, tema, timezone, moneda, cuit, razon_social, condicion_iva, opt_out_analytics, opt_out_public_listing, created_at",
       )
       .eq("id", session.organizationId)
       .is("deleted_at", null)
@@ -94,6 +118,7 @@ export async function getActiveContext(): Promise<Result<ActiveContext>> {
       .select("id, email, nombre_cifrado, apellido_cifrado, matricula, avatar_url")
       .eq("id", session.userId)
       .maybeSingle(),
+    loadSubscriptionForOrg(session.organizationId),
   ]);
 
   if (orgRes.error) return err("db_error", "Error leyendo organización.", orgRes.error.message);
@@ -119,6 +144,7 @@ export async function getActiveContext(): Promise<Result<ActiveContext>> {
     condicion_iva: "MONOTRIBUTO" | "RESPONSABLE_INSCRIPTO" | "EXENTO";
     opt_out_analytics: boolean;
     opt_out_public_listing: boolean;
+    created_at: string;
   };
 
   const profRow = profRes.data as {
@@ -165,7 +191,21 @@ export async function getActiveContext(): Promise<Result<ActiveContext>> {
     avatarUrl: profRow.avatar_url,
   };
 
-  return ok({ session, organization, profile });
+  // Suscripción + gate. Si el lookup falla (db_error), no bloqueamos al usuario:
+  // tratamos como sin suscripción y dejamos que el grace period decida. Loguear
+  // pero no fail-fast — un hiccup en la tabla suscripcion no debería tirar
+  // toda la app abajo.
+  const subscriptionRow = subRes.ok ? subRes.data : null;
+  if (!subRes.ok) {
+    console.warn(`[active-context] loadSubscriptionForOrg falló: ${subRes.error.message}`);
+  }
+  const accessGate = computeAccessGate(orgRow.created_at, subscriptionRow);
+  const subscription: ActiveSubscription = {
+    estado: subscriptionRow?.estado ?? null,
+    proximaCobro: subscriptionRow?.proximaCobro ?? null,
+  };
+
+  return ok({ session, organization, profile, subscription, accessGate });
 }
 
 /**

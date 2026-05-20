@@ -12,11 +12,14 @@
  * contenido del main (header de página, KPIs, listas, etc.).
  */
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { Sidebar, type GoogleSyncStatus } from "@/components/sidebar";
 import { getActiveContext } from "@/lib/db/active-context";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+
+const BILLING_PATH = "/configuracion/billing";
 
 export default async function AppShellLayout({
   children,
@@ -32,7 +35,17 @@ export default async function AppShellLayout({
     // db_error / forbidden / network: fail-fast con error boundary del segment.
     throw new Error(`Error cargando contexto de la app: ${ctx.error.message}`);
   }
-  const { organization, profile, session } = ctx.data;
+  const { organization, profile, session, accessGate } = ctx.data;
+
+  // Gating de suscripción (M19/S0 billing). Si vencido el grace period y la
+  // suscripción no está activa, forzamos al usuario a /configuracion/billing.
+  // Excepción: si ya estamos en billing, dejamos pasar — sería loop infinito.
+  if (!accessGate.allowed) {
+    const pathname = (await headers()).get("x-pathname") ?? "";
+    if (!pathname.startsWith(BILLING_PATH)) {
+      redirect(`${BILLING_PATH}?gate=${accessGate.reason ?? "denied"}`);
+    }
+  }
 
   const googleSync = await loadGoogleSyncStatus(session.organizationId, session.memberId);
 
