@@ -86,6 +86,33 @@ export const consultorioBaseSchema = z.object({
     .string()
     .regex(/^#[0-9a-fA-F]{6}$/, "Color acento debe ser hex válido (ej. #c89b3c).")
     .default("#c89b3c"),
+  // ─── M20: campos públicos premium ───────────────────────────────────────
+  telefonoPublico: z
+    .string()
+    .trim()
+    .max(30, "Teléfono demasiado largo.")
+    .optional()
+    .or(z.literal("")),
+  direccionCompleta: z
+    .string()
+    .trim()
+    .max(200, "Dirección demasiado larga.")
+    .optional()
+    .or(z.literal("")),
+  bio: z
+    .string()
+    .trim()
+    .max(280, "Bio máximo 280 caracteres.")
+    .optional()
+    .or(z.literal("")),
+  slugManual: z
+    .string()
+    .trim()
+    .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, "Link inválido: solo minúsculas, números y guiones simples.")
+    .min(3, "Link mínimo 3 caracteres.")
+    .max(50, "Link máximo 50 caracteres.")
+    .optional()
+    .or(z.literal("")),
 });
 
 // ─── Step 6: Horarios ──────────────────────────────────────────────────────

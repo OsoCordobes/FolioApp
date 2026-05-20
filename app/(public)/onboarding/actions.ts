@@ -276,3 +276,432 @@ export async function completeOnboarding(
 export async function finishOnboardingAndGoToApp(): Promise<void> {
   redirect("/hoy");
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// PREMIUM ONBOARDING ARCHITECTURE (M20+)
+// ════════════════════════════════════════════════════════════════════════════
+// Nuevo flow: la org se crea en step 1 (post-signup) con onboarding_completed=false.
+// Cada step persiste su delta con updateOnboardingStep. Step 9 llama finalizeOnboarding
+// que solo marca completed=true.
+//
+// Las funciones viejas (signUpEmail, completeOnboarding) quedan para compat
+// del UI legacy mientras se refactoriza. Eventualmente se eliminan.
+
+export interface OnboardingBootstrapResult {
+  ok: boolean;
+  error?: string;
+  organizationId?: string;
+  slug?: string;
+  needsConfirmation?: boolean;
+}
+
+/**
+ * Premium signup: crea auth.user + organization placeholder + profile vacío + member OWNER.
+ *
+ * La org queda con datos mínimos (slug auto del email) y `onboarding_completed=false`.
+ * Steps siguientes la van completando vía `updateOnboardingStep`.
+ *
+ * Idempotente: si el user ya existe (registró antes), abre sesión y busca su org.
+ * Si tiene org → la devuelve. Si no → la crea.
+ */
+export async function signUpAndInitOrganization(
+  email: string,
+  password: string,
+): Promise<OnboardingBootstrapResult> {
+  const parsed = signUpSchema.safeParse({ email, password });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos." };
+  }
+  ({ email, password } = parsed.data);
+
+  const service = createSupabaseServiceClient();
+
+  // 1. Crear o resolver auth.user
+  let userId: string;
+  const { data: created, error: createErr } = await service.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+  });
+
+  if (createErr) {
+    if (createErr.message.toLowerCase().includes("already") || createErr.message.toLowerCase().includes("registered")) {
+      const { data: list } = await service.auth.admin.listUsers({ page: 1, perPage: 200 });
+      const existing = list?.users?.find((u) => u.email?.toLowerCase() === email.toLowerCase());
+      if (!existing) return { ok: false, error: "No pude resolver tu cuenta. Probá ingresar." };
+      if (!existing.email_confirmed_at) {
+        await service.auth.admin.updateUserById(existing.id, { email_confirm: true });
+      }
+      userId = existing.id;
+    } else {
+      return { ok: false, error: createErr.message };
+    }
+  } else {
+    userId = created.user.id;
+  }
+
+  // 2. Abrir sesión cookie-based (necesaria para los siguientes Server Actions)
+  const supabase = await createSupabaseServerClient();
+  const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
+  if (signInErr) {
+    return { ok: false, error: `Cuenta creada pero no pude entrar: ${signInErr.message}` };
+  }
+
+  // 3. ¿Ya tiene member/org? Si sí, devolverla (resume scenario).
+  const { data: existingMember } = await service
+    .from("member")
+    .select("organization_id")
+    .eq("profile_id", userId)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (existingMember?.organization_id) {
+    const { data: existingOrg } = await service
+      .from("organization")
+      .select("id, slug")
+      .eq("id", existingMember.organization_id)
+      .maybeSingle();
+    if (existingOrg) {
+      return { ok: true, organizationId: existingOrg.id as string, slug: existingOrg.slug as string };
+    }
+  }
+
+  // 4. Crear org placeholder con slug provisional del email
+  //    (ej. "lautaro-gmail-com" → slugificado). Se cambia en step 3.
+  const emailBase = email.split("@")[0] || "consultorio";
+  const provisionalSlug = await pickFreshSlug(service, slugifyInline(emailBase));
+
+  const { data: org, error: orgErr } = await service
+    .from("organization")
+    .insert({
+      slug: provisionalSlug,
+      nombre: "Mi consultorio",                  // placeholder, user lo cambia en step 3
+      rubro: null,
+      ciudad: null,
+      provincia: null,
+      acento_hex: "#c89b3c",                     // default Folio
+      onboarding_completed: false,
+      onboarding_step_max: 1,
+    })
+    .select("id, slug")
+    .single();
+
+  if (orgErr || !org) {
+    return { ok: false, error: `Error creando consultorio: ${orgErr?.message ?? "desconocido"}` };
+  }
+
+  // 5. Crear profile (vacío, sin nombre — se completa en step 2)
+  const { error: profErr } = await service
+    .from("profile")
+    .upsert({
+      id: userId,
+      email,
+      nombre_cifrado: null,
+      apellido_cifrado: null,
+      matricula: null,
+    });
+  if (profErr) {
+    return { ok: false, error: `Error creando perfil: ${profErr.message}` };
+  }
+
+  // 6. Crear member OWNER
+  const { error: memErr } = await service
+    .from("member")
+    .insert({
+      organization_id: org.id,
+      profile_id: userId,
+      role: "OWNER",
+      es_colegiado: true,
+      accepted_at: new Date().toISOString(),
+    });
+
+  if (memErr) {
+    return { ok: false, error: `Error creando membresía: ${memErr.message}` };
+  }
+
+  void created;
+  return { ok: true, organizationId: org.id as string, slug: org.slug as string };
+}
+
+// Helper interno: pickea un slug libre buscando un sufijo numérico si está tomado.
+async function pickFreshSlug(
+  service: ReturnType<typeof createSupabaseServiceClient>,
+  baseSlug: string,
+): Promise<string> {
+  let candidate = baseSlug || "consultorio";
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const { data: exists } = await service
+      .from("organization")
+      .select("id")
+      .eq("slug", candidate)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (!exists) return candidate;
+    candidate = `${baseSlug}-${attempt + 2}`;
+  }
+  // Último recurso: sufijo random
+  return `${baseSlug}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+// Helper interno: slugify mínimo (sin diacritics, lowercase, alphanumeric-dashes).
+// Duplicado del lib/onboarding/slug.ts a propósito para evitar import circular.
+function slugifyInline(input: string): string {
+  if (!input) return "";
+  return input
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-+/g, "-")
+    .slice(0, 50);
+}
+
+// ─── updateOnboardingStep: persiste delta de un step ────────────────────────
+
+export interface StepUpdateResult {
+  ok: boolean;
+  error?: string;
+  slug?: string;            // útil en step 3 si el user cambió el slug
+}
+
+export interface Step2Data {
+  nombre: string;
+  apellido: string;
+  matricula?: string;
+  tel?: string;
+}
+
+export interface Step3Data {
+  consultorioNombre: string;
+  rubro: string;
+  ciudad: string;
+  provincia: string;
+  direccion?: string;
+  direccionCompleta?: string;
+  telefonoPublico?: string;
+  instagram?: string;
+  bio?: string;
+  slugManual?: string;
+}
+
+export interface Step4Data {
+  acento: string;
+}
+
+export interface Step5Data {
+  diasActivos: string[];
+  franjas: [string, string][];
+  slotMin: number;
+}
+
+export interface Step6Data {
+  servicios: Array<{
+    nombre: string;
+    dur: number;
+    precioCents: number;
+    tipoCanonico: string;
+  }>;
+}
+
+/**
+ * Persiste el delta de un step específico. El cliente llama con debounce
+ * (800ms) cada vez que el user cambia un campo, para auto-save.
+ *
+ * También actualiza `organization.onboarding_step_max = max(actual, stepId)`
+ * para que el resume state sepa hasta dónde llegó.
+ */
+export async function updateOnboardingStep(
+  stepId: number,
+  data: Step2Data | Step3Data | Step4Data | Step5Data | Step6Data,
+): Promise<StepUpdateResult> {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Sesión expirada. Volvé a entrar." };
+
+  const service = createSupabaseServiceClient();
+
+  // Buscar la org del user (creada en signUpAndInitOrganization).
+  const { data: member } = await service
+    .from("member")
+    .select("organization_id")
+    .eq("profile_id", user.id)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (!member?.organization_id) {
+    return { ok: false, error: "No pude resolver tu organización. Cerrá sesión y volvé a registrarte." };
+  }
+  const orgId = member.organization_id as string;
+
+  try {
+    switch (stepId) {
+      case 2: {
+        const d = data as Step2Data;
+        const nombreCifrado = d.nombre ? encryptColumn(d.nombre) : null;
+        const apellidoCifrado = d.apellido ? encryptColumn(d.apellido) : null;
+        const profilePatch: Record<string, unknown> = {};
+        if (nombreCifrado !== null) profilePatch.nombre_cifrado = nombreCifrado;
+        if (apellidoCifrado !== null) profilePatch.apellido_cifrado = apellidoCifrado;
+        if (d.matricula !== undefined) profilePatch.matricula = d.matricula || null;
+        if (Object.keys(profilePatch).length > 0) {
+          const { error } = await service.from("profile").update(profilePatch).eq("id", user.id);
+          if (error) return { ok: false, error: error.message };
+        }
+        break;
+      }
+      case 3: {
+        const d = data as Step3Data;
+        const orgPatch: Record<string, unknown> = {};
+        if (d.consultorioNombre !== undefined) orgPatch.nombre = d.consultorioNombre;
+        if (d.rubro !== undefined) orgPatch.rubro = d.rubro;
+        if (d.ciudad !== undefined) orgPatch.ciudad = d.ciudad;
+        if (d.provincia !== undefined) orgPatch.provincia = d.provincia;
+        if (d.telefonoPublico !== undefined) orgPatch.telefono_publico = d.telefonoPublico || null;
+        if (d.direccionCompleta !== undefined || d.direccion !== undefined) {
+          orgPatch.direccion_completa = d.direccionCompleta || d.direccion || null;
+        }
+        if (d.instagram !== undefined) orgPatch.instagram_handle = d.instagram || null;
+        if (d.bio !== undefined) orgPatch.bio = d.bio || null;
+
+        // Slug change: validar disponibilidad antes
+        if (d.slugManual) {
+          const { data: existing } = await service
+            .from("organization")
+            .select("id")
+            .eq("slug", d.slugManual)
+            .neq("id", orgId)
+            .is("deleted_at", null)
+            .maybeSingle();
+          if (existing) {
+            return { ok: false, error: "Ese link ya está tomado, elegí otro." };
+          }
+          orgPatch.slug = d.slugManual;
+        }
+
+        if (Object.keys(orgPatch).length > 0) {
+          const { data: updated, error } = await service
+            .from("organization")
+            .update(orgPatch)
+            .eq("id", orgId)
+            .select("slug")
+            .single();
+          if (error) return { ok: false, error: error.message };
+          return { ok: true, slug: updated.slug as string };
+        }
+        break;
+      }
+      case 4: {
+        const d = data as Step4Data;
+        if (d.acento) {
+          const { error } = await service
+            .from("organization")
+            .update({ acento_hex: d.acento })
+            .eq("id", orgId);
+          if (error) return { ok: false, error: error.message };
+        }
+        break;
+      }
+      case 5: {
+        const d = data as Step5Data;
+        // Reemplazo total de disponibilidad: delete + insert
+        const { data: memberSelf } = await service
+          .from("member")
+          .select("id")
+          .eq("profile_id", user.id)
+          .eq("organization_id", orgId)
+          .single();
+        if (!memberSelf) return { ok: false, error: "Member no encontrado." };
+
+        await service
+          .from("disponibilidad_profesional")
+          .delete()
+          .eq("member_id", memberSelf.id);
+
+        const dowMap: Record<string, number> = {
+          dom: 0, lun: 1, mar: 2, mie: 3, jue: 4, vie: 5, sab: 6,
+        };
+        const rows = d.diasActivos.flatMap((dia) =>
+          d.franjas.map(([from, to]) => ({
+            organization_id: orgId,
+            member_id: memberSelf.id,
+            dia_semana: dowMap[dia] ?? 1,
+            hora_inicio: from,
+            hora_fin: to,
+          })),
+        );
+        if (rows.length > 0) {
+          const { error } = await service.from("disponibilidad_profesional").insert(rows);
+          if (error) return { ok: false, error: error.message };
+        }
+        break;
+      }
+      case 6: {
+        const d = data as Step6Data;
+        // Reemplazo total de servicios
+        await service.from("servicio").delete().eq("organization_id", orgId);
+        if (d.servicios.length > 0) {
+          const { error } = await service.from("servicio").insert(
+            d.servicios.map((s) => ({
+              organization_id: orgId,
+              nombre: s.nombre,
+              tipo_canonico: s.tipoCanonico,
+              duracion_min: s.dur,
+              precio_cents: s.precioCents,
+            })),
+          );
+          if (error) return { ok: false, error: error.message };
+        }
+        break;
+      }
+      // Steps 7-8 (integraciones): no persistimos nada acá — sus flows OAuth
+      // ya escriben en `integration` cuando el user conecta.
+    }
+
+    // Actualizar onboarding_step_max si avanzó
+    await service
+      .from("organization")
+      .update({ onboarding_step_max: stepId })
+      .eq("id", orgId)
+      .lt("onboarding_step_max", stepId);
+
+    return { ok: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Marca el onboarding como completado. Llamada desde Step 9.
+ */
+export async function finalizeOnboarding(): Promise<{ ok: boolean; error?: string; slug?: string }> {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Sesión expirada." };
+
+  const service = createSupabaseServiceClient();
+  const { data: member } = await service
+    .from("member")
+    .select("organization_id")
+    .eq("profile_id", user.id)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (!member?.organization_id) return { ok: false, error: "No pude resolver tu organización." };
+
+  const { data: org, error } = await service
+    .from("organization")
+    .update({
+      onboarding_completed: true,
+      onboarding_step_max: 9,
+    })
+    .eq("id", member.organization_id)
+    .select("slug")
+    .single();
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, slug: org.slug as string };
+}

@@ -47,15 +47,36 @@ function inferTipoCanonico(nombre: string): string {
   return TIPO_CANONICO_MAP[key] ?? "SERVICIO_ESPECIALIZADO";
 }
 
-export function OnboardingApp() {
+interface OnboardingAppProps {
+  /** Step donde resumir (premium resume). Si undefined → arranca en 1. */
+  initialStep?: number;
+  /** Datos pre-cargados desde DB (premium resume). Sobrescriben localStorage. */
+  initialData?: Record<string, unknown>;
+  /** ID de la org ya creada (premium architecture). Si undefined → step 1 la crea. */
+  organizationId?: string;
+  /** Slug real de la org si ya existe. */
+  initialSlug?: string;
+}
+
+export function OnboardingApp({
+  initialStep,
+  initialData,
+  organizationId: _organizationId,
+  initialSlug: _initialSlug,
+}: OnboardingAppProps = {}) {
+  // Las props organizationId/initialSlug se consumen en el refactor profundo
+  // de Phase 3. Por ahora las dejamos prefijadas con _ para indicar reserved.
+  void _organizationId;
+  void _initialSlug;
+
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [stepIdx, setStepIdx] = useState(1);
+  const [stepIdx, setStepIdx] = useState(initialStep ?? 1);
   const [data, setData] = useState<OnboardingDataState>(ONBOARDING_INITIAL);
   const [finishing, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  // Hidratación: cargar datos previos + prefill desde URL (link de signup)
+  // Hidratación: prioriza initialData (DB) > localStorage > URL params.
   useEffect(() => {
     let restored: Partial<OnboardingDataState> = {};
     try {
@@ -69,10 +90,12 @@ export function OnboardingApp() {
     setData((prev) => ({
       ...prev,
       ...restored,
+      // DB data overrides localStorage (DB es source of truth)
+      ...(initialData ?? {}),
       ...(prefillEmail ? { email: prefillEmail } : {}),
       ...(prefillNombre ? { nombre: prefillNombre } : {}),
     }));
-  }, [searchParams]);
+  }, [searchParams, initialData]);
 
   // Persistir cada cambio en localStorage
   useEffect(() => {

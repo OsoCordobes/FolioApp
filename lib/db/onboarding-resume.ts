@@ -1,0 +1,226 @@
+/**
+ * Folio · Onboarding · resume state.
+ *
+ * Si un user abandona el onboarding y vuelve después, lee el estado actual
+ * de su org + profile + member desde la DB y le devuelve:
+ *   - el step donde quedó (`initialStep`)
+ *   - los datos para pre-llenar los campos (`initialData`)
+ *
+ * Source of truth: DB. localStorage del cliente solo es backup de drafts no guardados.
+ *
+ * El layout `/onboarding/page.tsx` lo llama para hidratar el `<OnboardingApp />`.
+ */
+
+import { createSupabaseServiceClient } from "@/lib/supabase/server";
+import { decryptColumn } from "@/lib/crypto";
+
+import { type Result, err, ok } from "./errors";
+
+export interface OnboardingResumeState {
+  /** false si el user todavía NO terminó. Si true, redirigir a /hoy. */
+  shouldShowOnboarding: boolean;
+  /** Step en el que arrancar (2-9). 9 si ya está completo. */
+  initialStep: number;
+  /** Slug actual de la org (provisional o ya editado por el user). */
+  slug: string | null;
+  /** OrganizationId — necesario para auto-save por step. */
+  organizationId: string | null;
+  /** Datos pre-llenados de los steps anteriores. Cliente los carga al state. */
+  initialData: {
+    email: string;
+    nombre?: string;
+    apellido?: string;
+    matricula?: string;
+    tel?: string;
+    consultorioNombre?: string;
+    rubro?: string;
+    ciudad?: string;
+    provincia?: string;
+    direccion?: string;
+    direccionCompleta?: string;
+    telefonoPublico?: string;
+    instagram?: string;
+    bio?: string;
+    acento?: string;
+    diasActivos?: string[];
+    franjas?: [string, string][];
+    slotMin?: number;
+    servicios?: Array<{
+      nombre: string;
+      dur: number;
+      precio: number;
+      tipoCanonico?: string;
+    }>;
+  };
+}
+
+/**
+ * Lee el estado del onboarding del user actual. Si el user no tiene auth.user,
+ * el caller debe redirigir a /login antes de llamar a esta función.
+ */
+export async function getOnboardingResumeState(
+  userId: string,
+  email: string,
+): Promise<Result<OnboardingResumeState>> {
+  const service = createSupabaseServiceClient();
+
+  // 1. Buscar member del user (la membership a una org).
+  const { data: member, error: memErr } = await service
+    .from("member")
+    .select("id, organization_id")
+    .eq("profile_id", userId)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (memErr) return err("db_error", "Error leyendo membresía.", memErr.message);
+
+  // Caso A: no tiene member → todavía no pasó por signUpAndInitOrganization.
+  // Devolver estado "step 1, nada pre-llenado".
+  if (!member) {
+    return ok({
+      shouldShowOnboarding: true,
+      initialStep: 1,
+      slug: null,
+      organizationId: null,
+      initialData: { email },
+    });
+  }
+
+  // 2. Leer organization + profile.
+  const [orgRes, profRes] = await Promise.all([
+    service
+      .from("organization")
+      .select(
+        "id, slug, nombre, rubro, ciudad, provincia, acento_hex, telefono_publico, direccion_completa, instagram_handle, bio, onboarding_completed, onboarding_step_max",
+      )
+      .eq("id", member.organization_id)
+      .is("deleted_at", null)
+      .maybeSingle(),
+    service
+      .from("profile")
+      .select("nombre_cifrado, apellido_cifrado, matricula")
+      .eq("id", userId)
+      .maybeSingle(),
+  ]);
+
+  if (orgRes.error) return err("db_error", "Error leyendo organización.", orgRes.error.message);
+  if (!orgRes.data) return err("not_found", "Organización no existe.");
+
+  const org = orgRes.data as {
+    id: string;
+    slug: string;
+    nombre: string | null;
+    rubro: string | null;
+    ciudad: string | null;
+    provincia: string | null;
+    acento_hex: string | null;
+    telefono_publico: string | null;
+    direccion_completa: string | null;
+    instagram_handle: string | null;
+    bio: string | null;
+    onboarding_completed: boolean;
+    onboarding_step_max: number;
+  };
+  const prof = (profRes.data ?? {}) as {
+    nombre_cifrado?: string | null;
+    apellido_cifrado?: string | null;
+    matricula?: string | null;
+  };
+
+  // Caso B: onboarding ya completado → no mostrar.
+  if (org.onboarding_completed) {
+    return ok({
+      shouldShowOnboarding: false,
+      initialStep: 9,
+      slug: org.slug,
+      organizationId: org.id,
+      initialData: { email },
+    });
+  }
+
+  // Caso C: onboarding incompleto → resumir donde quedó.
+  // Resume al MAYOR de: step_max guardado, o step 2 si recién pasó signup.
+  const resumeStep = Math.max(org.onboarding_step_max, 2);
+
+  // Desencriptar PII del profile (con fallback null si falla).
+  const tryDecrypt = (v: string | null | undefined): string | undefined => {
+    if (!v) return undefined;
+    try {
+      const dec = decryptColumn(v);
+      return dec ?? undefined;
+    } catch {
+      return undefined;
+    }
+  };
+
+  // 3. Leer disponibilidad + servicios para steps 5/6 si avanzamos hasta ahí.
+  let diasActivos: string[] | undefined;
+  let franjas: [string, string][] | undefined;
+  let slotMin: number | undefined;
+  let servicios: OnboardingResumeState["initialData"]["servicios"];
+
+  if (resumeStep >= 5) {
+    const { data: disp } = await service
+      .from("disponibilidad_profesional")
+      .select("dia_semana, hora_inicio, hora_fin")
+      .eq("organization_id", org.id)
+      .eq("member_id", member.id);
+    if (disp && disp.length > 0) {
+      const dowReverse: Record<number, string> = {
+        0: "dom", 1: "lun", 2: "mar", 3: "mie", 4: "jue", 5: "vie", 6: "sab",
+      };
+      const dias = new Set<string>();
+      const franjasSet = new Set<string>();
+      for (const row of disp) {
+        const dia = dowReverse[row.dia_semana as number];
+        if (dia) dias.add(dia);
+        franjasSet.add(`${row.hora_inicio}|${row.hora_fin}`);
+      }
+      diasActivos = Array.from(dias);
+      franjas = Array.from(franjasSet).map((s) => s.split("|") as [string, string]);
+    }
+  }
+
+  if (resumeStep >= 6) {
+    const { data: servs } = await service
+      .from("servicio")
+      .select("nombre, duracion_min, precio_cents, tipo_canonico")
+      .eq("organization_id", org.id)
+      .is("deleted_at", null);
+    if (servs && servs.length > 0) {
+      servicios = servs.map((s) => ({
+        nombre: s.nombre as string,
+        dur: s.duracion_min as number,
+        precio: (s.precio_cents as number) / 100,
+        tipoCanonico: (s.tipo_canonico as string) ?? undefined,
+      }));
+    }
+  }
+
+  return ok({
+    shouldShowOnboarding: true,
+    initialStep: resumeStep,
+    slug: org.slug,
+    organizationId: org.id,
+    initialData: {
+      email,
+      nombre: tryDecrypt(prof.nombre_cifrado),
+      apellido: tryDecrypt(prof.apellido_cifrado),
+      matricula: prof.matricula ?? undefined,
+      consultorioNombre: org.nombre ?? undefined,
+      rubro: org.rubro ?? undefined,
+      ciudad: org.ciudad ?? undefined,
+      provincia: org.provincia ?? undefined,
+      direccion: org.direccion_completa ?? undefined,
+      direccionCompleta: org.direccion_completa ?? undefined,
+      telefonoPublico: org.telefono_publico ?? undefined,
+      instagram: org.instagram_handle ?? undefined,
+      bio: org.bio ?? undefined,
+      acento: org.acento_hex ?? undefined,
+      diasActivos,
+      franjas,
+      slotMin,
+      servicios,
+    },
+  });
+}
