@@ -88,7 +88,7 @@ const CAROUSEL: SlideDef[] = [
     title: "Tu copiloto clínico",
     subtitle: "Conoce a cada paciente, te avisa lo importante y te ayuda a crecer.",
     comp: SlideIA,
-    dur: 15000, // será comprimido a 7000 en C11
+    dur: 7000, // C11: comprimido de 15000 a 7000 — 7 beats con FM stagger en bullets
     plus: true,
   },
 ];

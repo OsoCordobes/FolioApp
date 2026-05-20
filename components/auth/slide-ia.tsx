@@ -20,6 +20,7 @@
  *    13.0+ HOLD
  */
 
+import { MLi, MUl } from "@/components/motion/m";
 import { usePhaseSequence } from "@/components/auth/use-phase-sequence";
 
 interface Props {
@@ -50,21 +51,32 @@ function Sparkle({ size = 11 }: { size?: number }) {
   );
 }
 
-// Timings IDÉNTICOS al pre-refactor en C10 — la compresión 15s→7s va en C11.
-// Eso permite re-baseline visual independiente del cambio de hook.
-//
-// 10 beats actuales (eternidad de 12.4s + hold hasta 15s):
-//   1000  → tip pop-up sobre Lucía (ACT 1)
-//   4000  → cross-fade a ACT 2 (Finanzas)
-//   6000  → FAB ✦ aparece + pulse
-//   7000  → FAB click → chat bar sube
-//   8200  → user bubble "dame un review"
-//   8900  → typing indicator
-//   10000 → AI bullet 1
-//   10800 → AI bullet 2
-//   11600 → AI bullet 3
-//   12400 → HOLD final
-const PHASES_IA = [1000, 4000, 6000, 7000, 8200, 8900, 10000, 10800, 11600, 12400] as const;
+// C11 compresión 15s → 7s. 7 beats que respiran (vs 10 del pre-refactor):
+//   600   → tip pop-up sobre Lucía (ACT 1)
+//   2200  → cross-fade a ACT 2 (Finanzas)
+//   2900  → FAB ✦ aparece con pulse
+//   3700  → chat sube + user bubble (mergea phases 4+5 antiguas)
+//   4400  → typing indicator
+//   5200  → bullets cascade (los 3 al mismo phase, FM stagger interno 220ms)
+//   6500  → HOLD final (500ms hasta siguiente slide)
+const PHASES_IA = [600, 2200, 2900, 3700, 4400, 5200, 6500] as const;
+
+// FM variants para bullets stagger — mata el "instant pop" raíz: el problema
+// pre-refactor era que React renderizaba bullets ya con `is-on` aplicado en
+// el mismo render donde el elemento se monta. Con variants + initial="hidden",
+// FM garantiza que el primer frame del bullet es opacity 0 y translateY 8px,
+// y la transición spring se ejecuta visible.
+const bulletListVariants = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.22, delayChildren: 0.05 } },
+};
+const bulletItemVariants = {
+  hidden: { opacity: 0, y: 8, scale: 0.96 },
+  show: {
+    opacity: 1, y: 0, scale: 1,
+    transition: { type: "spring" as const, stiffness: 360, damping: 30, mass: 0.7 },
+  },
+};
 
 export function SlideIA({ active }: Props) {
   const phase = usePhaseSequence(PHASES_IA, active);
@@ -248,34 +260,42 @@ export function SlideIA({ active }: Props) {
               </header>
 
               <div className="au2-ia3-chat-msgs" role="log" aria-live="polite">
-                {phase >= 5 ? (
+                {/* Phase 4: user bubble (mergea con chat sube — antes era phase 5) */}
+                {phase >= 4 ? (
                   <div className="au2-ia3-msg au2-ia3-msg-user">
                     <span>dame un review de mis finanzas</span>
                   </div>
                 ) : null}
 
-                {phase >= 6 && phase < 7 ? (
+                {/* Phase 5: typing indicator (antes phase 6) */}
+                {phase >= 5 && phase < 6 ? (
                   <div className="au2-ia3-msg au2-ia3-msg-ai au2-ia3-typing">
                     <span /><span /><span />
                   </div>
                 ) : null}
 
-                {phase >= 7 ? (
+                {/* Phase 6: AI bullets con FM stagger (antes phases 7/8/9 → instant pop) */}
+                {phase >= 6 ? (
                   <div className="au2-ia3-msg au2-ia3-msg-ai">
-                    <ul className="au2-ia3-bullets">
-                      <li className={phase >= 7 ? "is-on" : ""}>
+                    <MUl
+                      className="au2-ia3-bullets"
+                      variants={bulletListVariants}
+                      initial="hidden"
+                      animate="show"
+                    >
+                      <MLi variants={bulletItemVariants}>
                         <span className="au2-ia3-bullet-dot" />
                         <span>Hoy recaudaste <b>$160k</b>.</span>
-                      </li>
-                      <li className={phase >= 8 ? "is-on" : ""}>
+                      </MLi>
+                      <MLi variants={bulletItemVariants}>
                         <span className="au2-ia3-bullet-dot" />
                         <span>Tu ticket está un <b>20% debajo</b> del promedio regional.</span>
-                      </li>
-                      <li className={phase >= 9 ? "is-on" : ""}>
+                      </MLi>
+                      <MLi variants={bulletItemVariants}>
                         <span className="au2-ia3-bullet-dot" />
                         <span>Si aumentás un <b>15%</b> mejorás tu margen financiero.</span>
-                      </li>
-                    </ul>
+                      </MLi>
+                    </MUl>
                   </div>
                 ) : null}
               </div>

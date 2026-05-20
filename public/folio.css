@@ -11216,9 +11216,10 @@ input:focus { outline: none; }
 .au2-ia3-scene {
   position: absolute; inset: 0;
   display: flex; flex-direction: column;
+  /* C11: cross-fade reducido de 580ms → 500ms para slide IA comprimido */
   transition:
-    opacity 580ms cubic-bezier(.22, 1, .36, 1),
-    transform 580ms cubic-bezier(.22, 1, .36, 1);
+    opacity 500ms var(--ease-standard-out),
+    transform 500ms var(--ease-standard-out);
   will-change: opacity, transform;
 }
 /* Act 1 visible mientras phase < 2 */
@@ -11524,7 +11525,8 @@ input:focus { outline: none; }
   transform: translateY(0) scale(1);
 }
 .au2-ia3-fab.is-pulse {
-  animation: au2-ia3-fab-pulse 1400ms cubic-bezier(.4, 0, .2, 1);
+  /* C11: pulse comprimido de 1400ms → 900ms para slide IA 7s */
+  animation: au2-ia3-fab-pulse 900ms var(--ease-emphasized);
 }
 @keyframes au2-ia3-fab-pulse {
   0%, 100% { box-shadow: 0 8px 20px color-mix(in oklab, var(--accent) 32%, transparent),
@@ -11650,12 +11652,10 @@ input:focus { outline: none; }
   gap: 5px;
 }
 .au2-ia3-bullets li {
+  /* C11: FM controla entrada de cada li (spring stagger 220ms en variants).
+     Sin transition CSS de fallback — FM monta con initial=hidden y anima a show.
+     El estilo base es identidad (sin opacity/transform en CSS). */
   display: flex; align-items: flex-start; gap: 7px;
-  opacity: 0;
-  transform: translateY(3px);
-  transition:
-    opacity 360ms cubic-bezier(.22, 1, .36, 1),
-    transform 360ms cubic-bezier(.22, 1, .36, 1);
 }
 .au2-ia3-bullets li.is-on {
   opacity: 1;
