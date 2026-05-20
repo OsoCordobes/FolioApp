@@ -6665,6 +6665,8 @@ input:focus { outline: none; }
   position: relative;
   flex: 1;
   min-height: 0;
+  overflow: hidden;            /* C8: previene bleed durante crossfade x:±24 */
+  container-type: inline-size; /* hook para container queries futuras */
 }
 
 .au2-slide {
@@ -7565,21 +7567,53 @@ input:focus { outline: none; }
   width: 44px;
   background: color-mix(in oklab, var(--accent) 22%, var(--line));
 }
-.au2-dot-fill {
-  position: absolute; inset: 0;
+
+/* C8: progress fill via ::after, duration controlada por --slide-dur inline.
+   El componente fuerza remount via `key={c.id-idx-active}` cuando cambia el
+   slide → la animation re-arranca de 0%. */
+.au2-dot.is-active::after {
+  content: '';
+  position: absolute;
+  inset: 0;
   background: var(--accent);
   border-radius: 4px;
-  height: 100%;
-  transform: translateX(-100%);
-  animation: au2-dot-progress 5000ms linear forwards;
+  transform-origin: left center;
+  transform: scaleX(0);
+  animation: au2-dot-fill var(--slide-dur, 6500ms) linear forwards;
 }
-.au2-art.is-paused .au2-dot-fill {
+.au2-art.is-paused .au2-dot.is-active::after,
+.au2-art.is-hidden .au2-dot.is-active::after {
   animation-play-state: paused;
 }
-@keyframes au2-dot-progress {
-  from { transform: translateX(-100%); }
-  to   { transform: translateX(0); }
+@keyframes au2-dot-fill {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
 }
+
+/* C8: pause indicator overlay top-right del SideArt. Glass effect sutil,
+   no compite con el contenido del slide. */
+.au2-pause-indicator {
+  position: absolute;
+  top: 28px;
+  right: 32px;
+  z-index: var(--z-art-pause-ui);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: color-mix(in oklab, var(--surface) 88%, transparent);
+  -webkit-backdrop-filter: blur(8px) saturate(120%);
+  backdrop-filter: blur(8px) saturate(120%);
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  font-family: 'Geist Mono', monospace;
+  font-size: 10px;
+  color: var(--ink-3);
+  letter-spacing: 0.06em;
+  text-transform: lowercase;
+  pointer-events: none;
+}
+.au2-pause-indicator svg { color: var(--ink-2); flex-shrink: 0; }
 
 /* ── Pause on hover ──────────────────────────────── */
 /* Solo pausamos animaciones decorativas/infinitas.
