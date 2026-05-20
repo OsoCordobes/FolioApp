@@ -63,32 +63,28 @@ test.describe("SideArt v2", () => {
     await page.goto("/login");
     await page.locator(".au2-art").hover(); // pausar
 
-    // Click al 5to dot (índice 4 = slide tercera con badge Plus)
-    await page.locator(".au2-dot").nth(4).click();
+    // Click al 4to dot (índice 3 = Reagenda)
+    await page.locator(".au2-dot").nth(3).click();
     await page.waitForTimeout(500);
 
     const active = await page.locator(".au2-dot.is-active").getAttribute("aria-label");
-    // El slide tercera tiene title "Tu propia memoria, en el momento justo."
-    expect(active?.toLowerCase()).toContain("memoria");
+    // El slide Reagenda tiene title que contiene "Reagendá"
+    expect(active?.toLowerCase()).toContain("reagend");
   });
 
-  test("reduced-motion → cronómetro slide 4 en estado final inmediato", async ({ browser }) => {
+  test("reduced-motion → todo skip-to-end inmediato", async ({ browser }) => {
     const context = await browser.newContext({ reducedMotion: "reduce" });
     const page = await context.newPage();
 
     await page.goto("/login");
     await page.locator(".au2-art").hover(); // pausar para forzar el slide actual
-    await page.locator(".au2-dot").nth(3).click(); // ir a slide siete (cronómetro)
+    await page.locator(".au2-dot").nth(2).click(); // ir a Finanzas
 
-    // Si reduced-motion respetado, el cronómetro NO corre 7000ms — aparece full.
-    await page.waitForTimeout(300);
-    const fillTransform = await page.evaluate(() => {
-      const el = document.querySelector(".au2-siete-meter-fill") as HTMLElement;
-      if (!el) return null;
-      return window.getComputedStyle(el).transform;
-    });
-    // scaleX(1) → matrix(1, 0, 0, 1, 0, 0)
-    expect(fillTransform).toMatch(/matrix\(1,\s*0,\s*0,\s*1/);
+    // Si reduced-motion respetado, count-ups saltan al valor final inmediato
+    // sin esperar los 700ms del tween.
+    await page.waitForTimeout(200);
+    const kpiPrimary = page.locator(".au2-fin3-kpi-1 .au2-fin3-kpi-val");
+    await expect(kpiPrimary).toContainText(/1\.20/, { timeout: 500 });
 
     await context.close();
   });
