@@ -10,14 +10,17 @@ import { Suspense } from "react";
 
 import { SideArt } from "@/components/auth/side-art";
 import { AuthForms } from "@/components/auth/login-form";
+import { MotionProvider } from "@/components/motion/motion-provider";
 
 export default function LoginPage() {
   return (
-    <div className="au-app">
-      <SideArt />
-      <Suspense fallback={<main className="au-main" />}>
-        <AuthForms initialVista="login" />
-      </Suspense>
-    </div>
+    <MotionProvider>
+      <div className="au-app">
+        <SideArt />
+        <Suspense fallback={<main className="au-main" />}>
+          <AuthForms initialVista="login" />
+        </Suspense>
+      </div>
+    </MotionProvider>
   );
 }

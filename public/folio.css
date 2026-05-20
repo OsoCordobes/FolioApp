@@ -52,26 +52,143 @@
   --r-lg: 12px;
   --r-xl: 16px;
 
-  /* easing */
-  --ease-in:  cubic-bezier(.2, 0, 0, 1);
-  --ease-out: cubic-bezier(.4, 0, .6, 1);
+  /* ═════════════ MOTION TOKENS · folio motion language v2 ═════════════ */
+  /* ── Easings semánticos (Material 3 + Apple HIG hybrid) ── */
+  --ease-emphasized:        cubic-bezier(.32, .72, 0, 1);    /* dominante en SideArt — 138× pre-refactor */
+  --ease-emphasized-in:     cubic-bezier(.4, 0, 1, 1);       /* exits (acelera al desaparecer) */
+  --ease-emphasized-out:    cubic-bezier(0, 0, .2, 1);       /* entries (decelera al aparecer) */
+  --ease-standard:          cubic-bezier(.2, 0, 0, 1);
+  --ease-standard-out:      cubic-bezier(.22, 1, .36, 1);
+  --ease-decelerate:        cubic-bezier(0, 0, .2, 1);
+  --ease-accelerate:        cubic-bezier(.3, 0, 1, 1);
+  --ease-overshoot:         cubic-bezier(.34, 1.56, .64, 1); /* badge bounce, micro-pop */
+  --ease-anticipate:        cubic-bezier(.68, -.55, .27, 1.55);
 
-  /* motion · premium onboarding (M20+) */
-  --motion-ease-out:    cubic-bezier(0.22, 1, 0.36, 1);
+  /* ── Spring approximations vía CSS linear() ── */
+  /* Chrome 113+, Safari 17.4+, Firefox 112+ (~95% global may 2026).      */
+  /* Fallback en @supports al final del bloque por si el browser no soporta */
+  --spring-soft:    linear(0, 0.009, 0.035 2.4%, 0.082, 0.149 5.7%, 0.236, 0.341 9.6%, 0.462, 0.598 13.9%, 0.756 16.8%, 0.879 19.7%, 0.971 22.6%, 1.04 25.6%, 1.088, 1.116, 1.124 31.1%, 1.117 33.9%, 1.099, 1.075 39.6%, 1.046 44.4%, 1.018 49.9%, 0.997, 0.984 59.2%, 0.974 65.6%, 0.971 71.4%, 0.974, 0.984 88.8%, 0.998 100%);
+  --spring-bouncy:  linear(0, 0.018, 0.072, 0.162, 0.288, 0.444, 0.625 12.4%, 0.823, 1.005, 1.16, 1.282 21.2%, 1.367, 1.42, 1.443 27.4%, 1.443, 1.422, 1.385 33.3%, 1.293 37.4%, 1.205, 1.131, 1.075 47.4%, 1.039, 1.018 56%, 1.006, 1.001 71.5%, 1.001 100%);
+  --spring-snap:    linear(0, 0.027 3.2%, 0.106 6.4%, 0.226 9.7%, 0.378 13.0%, 0.55 16.4%, 0.73 19.8%, 0.908 23.4%, 1.077 27.0%, 1.231 30.7%, 1.365 34.5%, 1.475 38.5%, 1.557 42.6%, 1.609 46.9%, 1.629 51.4%, 1.617 56.2%, 1.576 61.4%, 1.51 67.1%, 1.421 73.4%, 1.317 80.6%, 1.205 89.0%, 1.094 100%);
+
+  /* ── Durations semánticos ── */
+  --dur-instant:       80ms;    /* hover state, micro feedback */
+  --dur-quick:         140ms;   /* button press, focus ring */
+  --dur-snappy:        220ms;   /* dropdown, tooltip, popover */
+  --dur-moderate:      320ms;   /* slide transition, card stagger */
+  --dur-deliberate:    480ms;   /* modal, drawer */
+  --dur-cinematic:     720ms;   /* hero entry, SideArt mount */
+  --dur-storytelling:  1200ms;  /* SVG path draw, multi-beat reveal */
+
+  /* ── Distancias para slide-in / translate ── */
+  --motion-dist-xs: 4px;
+  --motion-dist-sm: 8px;
+  --motion-dist-md: 16px;
+  --motion-dist-lg: 32px;
+
+  /* ── Blur tokens para crossfade ── */
+  --motion-blur-soft:  4px;
+  --motion-blur-base:  6px;
+  --motion-blur-deep:  12px;
+
+  /* ── Z-index orchestration (fix war silencioso del SideArt) ── */
+  --z-art-bg:       0;
+  --z-art-content:  1;
+  --z-art-slide:    2;
+  --z-art-floating: 3;  /* WhatsApp card, toast, banner */
+  --z-art-tooltip:  4;
+  --z-art-nav:      5;
+  --z-art-pause-ui: 6;
+
+  /* ── Legacy aliases — mantienen el comportamiento del código pre-v2 ── */
+  --ease-in:  cubic-bezier(.2, 0, 0, 1);                /* alias raw (preservado) */
+  --ease-out: cubic-bezier(.4, 0, .6, 1);               /* alias raw (preservado) */
+  --motion-ease-out:    var(--ease-standard-out);
   --motion-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
-  --motion-fast:        150ms;
-  --motion-base:        280ms;
-  --motion-slow:        480ms;
-  --motion-deliberate:  720ms;
+  --motion-fast:        var(--dur-quick);
+  --motion-base:        var(--dur-moderate);
+  --motion-slow:        var(--dur-deliberate);
+  --motion-deliberate:  var(--dur-cinematic);
 }
 
-/* Respeta prefers-reduced-motion globalmente */
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 80ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 80ms !important;
+/* CSS linear() fallback para browsers <Chrome 113 / Safari 17.4 (~5% global) */
+@supports not (transition-timing-function: linear(0, 1)) {
+  :root {
+    --spring-soft:   var(--ease-emphasized);
+    --spring-bouncy: var(--ease-overshoot);
+    --spring-snap:   var(--ease-emphasized-out);
   }
+}
+
+/* ═════════════ PREFERS-REDUCED-MOTION · política unificada ═════════════
+ * Política Folio (v2):
+ *   1. Global blando: animations decorativas no se desactivan completamente
+ *      (sería UI rota), se acortan a --dur-quick y limitan iteraciones a 1.
+ *   2. Decorativas infinitas (status dots, shimmers, pulses): OFF.
+ *   3. Slide transitions: solo opacity (sin transform/blur/filter).
+ *   4. SVG draws: estado final inmediato (stroke-dashoffset: 0).
+ *   5. Dots progress: instantáneo (scaleX: 1).
+ *   6. Floating overlays (toasts, banners, WhatsApp card): visibles sin
+ *      transform (NO display:none — la información sigue ahí).
+ *   7. Count-ups y phase sequences: skip-to-end (vía hooks JS, ver
+ *      use-count-up.ts y use-phase-sequence.ts).
+ * ═════════════════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  /* Global blando: cualquier animación se acorta + no loopea */
+  *, *::before, *::after {
+    animation-duration: var(--dur-quick) !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: var(--dur-quick) !important;
+  }
+  /* Decorativas infinitas: OFF (no aportan información) */
+  .au2-status-dot::before,
+  .au2-live-dot,
+  .au2-pill.is-pulsing,
+  .au2-shimmer,
+  .au2-ag2-status-dot,
+  .au2-rea2-pulse-dot,
+  .au2-cal2-now-dot,
+  .au2-ia3-fab.is-pulse,
+  .au2-ia-spark::after { animation: none !important; }
+  /* Slide transitions: solo opacity (sin transform/blur/filter, sin scale) */
+  .au2-slide,
+  .au2-foot-cap-item {
+    transition: opacity var(--dur-snappy) linear !important;
+    transform: none !important;
+    filter: none !important;
+  }
+  /* SVG draws: revelados sin animación */
+  .au2-fin-chart .au2-line,
+  .au2-fin3-line {
+    stroke-dashoffset: 0 !important;
+    animation: none !important;
+  }
+  .au2-fin-chart .au2-area,
+  .au2-fin-chart .au2-end-dot,
+  .au2-fin-chart .au2-tt-dot,
+  .au2-fin-tooltip { opacity: 1 !important; transform: none !important; }
+  /* Dots progress fill: estado final inmediato (no animación) */
+  .au2-dot-fill,
+  .au2-dot.is-active::after {
+    animation: none !important;
+    transform: scaleX(1) translateX(0) !important;
+  }
+  /* Floating overlays visibles sin transform (info preservada) */
+  .au2-cal-banner,
+  .au2-card-cal ~ .au2-ph-toast,
+  .au2-card-cal ~ .au2-ph-wa,
+  .au2-cal2-banner,
+  .au2-cal2-toast,
+  .au2-cal2-wa,
+  .au2-fin3-badge,
+  .au2-fin3-tip,
+  .au2-rea2-foot,
+  .au2-ag2-foot,
+  .au2-wiz-done {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .au-submit.is-hint { animation: none !important; }
 }
 
 /* ═════════════ TOKENS · DARK ═════════════ */
@@ -7494,32 +7611,7 @@ input:focus { outline: none; }
 }
 
 /* ── Reduced motion ─────────────────────────────── */
-@media (prefers-reduced-motion: reduce) {
-  .au2-slide,
-  .au2-foot-cap-item {
-    transition: opacity 200ms linear !important;
-    transform: none !important;
-  }
-  .au2-slide *,
-  .au2-art *,
-  .au2-status-dot::before,
-  .au2-ia-spark::after {
-    animation: none !important;
-    transition: none !important;
-  }
-  .au2-fin-chart .au2-line { stroke-dashoffset: 0 !important; }
-  .au2-fin-chart .au2-area,
-  .au2-fin-chart .au2-end-dot,
-  .au2-fin-chart .au2-tt-dot,
-  .au2-fin-tooltip { opacity: 1 !important; transform: none !important; }
-  .au2-toast { display: none !important; }
-  .au2-dot-fill { transform: translateX(0) !important; }
-  .au2-cal-banner,
-  .au2-card-cal ~ .au2-ph-toast,
-  .au2-card-cal ~ .au2-ph-wa,
-  .au2-wiz-done { opacity: 1 !important; transform: none !important; }
-  .au-submit.is-hint { animation: none !important; }
-}
+/* (Política reduced-motion del SideArt unificada en el bloque global de :root, línea ~136) */
 
 
 /* ═════════════════════════════════════════════════════════════════════

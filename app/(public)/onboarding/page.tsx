@@ -17,6 +17,7 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
 import { OnboardingApp } from "@/components/onboarding/onboarding-app";
+import { MotionProvider } from "@/components/motion/motion-provider";
 import { getOnboardingResumeState } from "@/lib/db/onboarding-resume";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -48,14 +49,16 @@ export default async function OnboardingPage() {
   }
 
   return (
-    <Suspense fallback={<OnboardingFallback />}>
-      <OnboardingApp
-        initialStep={initialStep}
-        initialData={initialData}
-        organizationId={organizationId}
-        initialSlug={initialSlug}
-      />
-    </Suspense>
+    <MotionProvider>
+      <Suspense fallback={<OnboardingFallback />}>
+        <OnboardingApp
+          initialStep={initialStep}
+          initialData={initialData}
+          organizationId={organizationId}
+          initialSlug={initialSlug}
+        />
+      </Suspense>
+    </MotionProvider>
   );
 }
 

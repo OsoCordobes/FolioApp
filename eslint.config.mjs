@@ -49,6 +49,21 @@ const eslintConfig = [
       ],
     },
   },
+  {
+    // Framer-motion: forzar import de `m` (no `motion`) para preservar el
+    // bundle splitting de LazyMotion. Si alguien importa `motion`, todos los
+    // features se incluyen full bundle (+25 KB). MotionProvider tiene strict
+    // mode que también lo bloquea en runtime; el lint da feedback antes.
+    rules: {
+      "no-restricted-imports": ["error", {
+        paths: [{
+          name: "framer-motion",
+          importNames: ["motion"],
+          message: "Importá `m` en lugar de `motion`. Folio usa LazyMotion (ver components/motion/motion-provider.tsx) y `motion` rompe el tree-shaking.",
+        }],
+      }],
+    },
+  },
 ];
 
 export default eslintConfig;
