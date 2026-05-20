@@ -29,15 +29,13 @@ import { SideArtShell } from "@/components/auth/side-art-shell";
 import { useReducedMotion } from "@/components/auth/use-reduced-motion";
 import { SideArtStage } from "@/components/auth/side-art-stage";
 import { tintClassFor } from "@/components/auth/side-art-tints";
-import { SlideAgenda } from "@/components/auth/slide-agenda";
-import { SlideCalendario } from "@/components/auth/slide-calendario";
-import { SlideFinanzas } from "@/components/auth/slide-finanzas";
-import { SlideIA } from "@/components/auth/slide-ia";
-import { SlideReagenda } from "@/components/auth/slide-reagenda";
+import { SlideCero } from "@/components/auth/slide-cero";
+import { SlideHoras } from "@/components/auth/slide-horas";
+import { SlidePlata } from "@/components/auth/slide-plata";
+import { SlideSiete } from "@/components/auth/slide-siete";
+import { SlideTercera } from "@/components/auth/slide-tercera";
 
 const SLIDE_MS = 5000;
-const SLIDE_MS_LONG = 6500;
-const SLIDE_MS_XLONG = 7500;
 const PAUSE_INDICATOR_DELAY_MS = 240;
 
 interface SlideDef {
@@ -52,45 +50,45 @@ interface SlideDef {
 
 const CAROUSEL: SlideDef[] = [
   {
-    id: "agenda",
-    eyebrow: "08:30 · antes del primer turno",
-    title: "Tu día ya está ordenado antes de que llegues.",
-    subtitle: "Folio prepara la agenda y las fichas mientras dormís. Vos abrís la app y empezás.",
-    comp: SlideAgenda,
-    dur: SLIDE_MS_LONG,
+    id: "cero",
+    eyebrow: "08:30 · lunes",
+    title: "Llegás y ya está todo confirmado.",
+    subtitle: "Folio respondió, recordó y armó tu día mientras dormías.",
+    comp: SlideCero,
+    dur: 6500,
   },
   {
-    id: "calendario",
-    eyebrow: "10:12 · mientras atendés",
-    title: "Mientras atendés, la app trabaja por vos.",
-    subtitle: "Reservas online, cobros y recordatorios — todo en background.",
-    comp: SlideCalendario,
-    dur: SLIDE_MS_LONG,
+    id: "horas",
+    eyebrow: "la cuenta que nadie te hace",
+    title: "Recuperá las 15 horas semanales que la admin te roba.",
+    subtitle: "Facturación AFIP, recordatorios y cobros — automáticos. Vos atendés.",
+    comp: SlideHoras,
+    dur: 6500,
   },
   {
-    id: "finanzas",
-    eyebrow: "19:40 · al cierre del día",
-    title: "Tu mes en una mirada.",
-    subtitle: "Recaudado, turnos atendidos y tu mejor día — al cerrar el consultorio.",
-    comp: SlideFinanzas,
-    dur: SLIDE_MS_XLONG,
+    id: "plata",
+    eyebrow: "lo que te costó el año pasado",
+    title: "Dejá de regalar $312.000 al año en no-shows.",
+    subtitle: "Seña automática por Mercado Pago. Tu no-show baja del 20% al 4%.",
+    comp: SlidePlata,
+    dur: 7500,
   },
   {
-    id: "reagenda",
-    eyebrow: "11:20 · antes de cerrar el turno",
-    title: "Reagendá el próximo turno en 2 clics.",
-    subtitle: "Sin levantarte de la consulta. El recordatorio queda programado solo, antes de que tu paciente salga.",
-    comp: SlideReagenda,
-    dur: SLIDE_MS_LONG,
+    id: "siete",
+    eyebrow: "11:47 · entre dos pacientes",
+    title: "Cobrá el próximo turno en 7 segundos.",
+    subtitle: "Sin pedir, sin perseguir. El link va al WhatsApp solo.",
+    comp: SlideSiete,
+    dur: 7700,  // 7000ms cronómetro + 700ms intro/outro
   },
   {
-    id: "ia",
-    eyebrow: "durante toda tu jornada · próximamente",
-    title: "Tu copiloto clínico",
-    subtitle: "Conoce a cada paciente, te avisa lo importante y te ayuda a crecer.",
-    comp: SlideIA,
-    dur: 7000, // C11: comprimido de 15000 a 7000 — 7 beats con FM stagger en bullets
+    id: "tercera",
+    eyebrow: "en la sala · próximo turno",
+    title: "Tu propia memoria, en el momento justo.",
+    subtitle: "Lo que escribiste hace 21 días, te llega cuando importa.",
+    comp: SlideTercera,
     plus: true,
+    dur: 7500,  // S5 sprint 2: subido de 7000 — cierra el loop, merece HOLD extra
   },
 ];
 

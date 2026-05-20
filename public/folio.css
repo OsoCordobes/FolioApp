@@ -6626,11 +6626,14 @@ input:focus { outline: none; }
    background del glow y grid). NO se anima la variable misma — se anima
    el color RESOLVED gracias a la transition CSS.
    ────────────────────────────────────────────────────────────────────── */
-.au2-art--tint-agenda     { --slide-tint: var(--accent); }
-.au2-art--tint-calendario { --slide-tint: color-mix(in oklab, var(--accent) 70%, var(--green) 30%); }
-.au2-art--tint-finanzas   { --slide-tint: color-mix(in oklab, var(--accent) 75%, var(--amber) 25%); }
-.au2-art--tint-reagenda   { --slide-tint: color-mix(in oklab, var(--accent) 68%, var(--slate) 32%); }
-.au2-art--tint-ia         { --slide-tint: color-mix(in oklab, var(--accent) 62%, #B888E4 38%); }
+/* v3 manifest — tints renombrados a los IDs de los 5 slides nuevos.
+   Slide 1 (cero) usa accent puro pero el slide en si tiene 0% accent dosing
+   (no hay barras ni iconos accent) — el tint del glow queda como ambient sutil. */
+.au2-art--tint-cero    { --slide-tint: var(--accent); }
+.au2-art--tint-horas   { --slide-tint: color-mix(in oklab, var(--accent) 70%, var(--green) 30%); }
+.au2-art--tint-plata   { --slide-tint: color-mix(in oklab, var(--accent) 75%, var(--amber) 25%); }
+.au2-art--tint-siete   { --slide-tint: color-mix(in oklab, var(--accent) 68%, var(--slate) 32%); }
+.au2-art--tint-tercera { --slide-tint: color-mix(in oklab, var(--accent) 62%, #B888E4 38%); }
 
 .au2-art > *:not(.au2-art-bg) { position: relative; z-index: 1; }
 
@@ -12737,6 +12740,65 @@ input:focus { outline: none; }
   z-index: var(--z-art-content);
 }
 
+/* Reveal verb · base — los elementos arrancan invisibles, .is-on los muestra */
+.au2-typo-eyebrow,
+.au2-typo-divider,
+.au2-typo-relevo,
+.au2-typo-relevo-strong,
+.au2-typo-sub,
+.au2-typo-tag,
+.au2-typo-impact,
+.au2-typo-disclaimer,
+.au2-typo-timestamp,
+.au2-typo-attribution,
+.au2-typo-cite {
+  opacity: 0;
+  filter: blur(4px);
+  transition:
+    opacity 320ms var(--ease-emphasized-out),
+    filter 320ms var(--ease-emphasized-out);
+}
+.au2-typo-eyebrow.is-on,
+.au2-typo-divider.is-on,
+.au2-typo-relevo.is-on,
+.au2-typo-relevo-strong.is-on,
+.au2-typo-sub.is-on,
+.au2-typo-tag.is-on,
+.au2-typo-impact.is-on,
+.au2-typo-disclaimer.is-on,
+.au2-typo-timestamp.is-on,
+.au2-typo-attribution.is-on,
+.au2-typo-cite.is-on {
+  opacity: 1;
+  filter: blur(0);
+}
+
+/* Settle verb · hero monumental + numeric + editorial */
+.au2-typo-hero-monumental,
+.au2-typo-hero-numeric,
+.au2-typo-hero-editorial {
+  opacity: 0;
+  transform: translateY(6px) scale(0.985);
+  transition:
+    opacity 720ms var(--ease-emphasized-out),
+    transform 720ms var(--ease-emphasized-out);
+}
+.au2-typo-hero-monumental.is-settled,
+.au2-typo-hero-numeric.is-settled,
+.au2-typo-hero-editorial.is-settled {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+/* Pulse verb (1 vez, sin loop) — micro-énfasis del "0" o nodos */
+.au2-typo-hero-monumental.is-arrived {
+  animation: au2-typo-pulse 360ms var(--spring-soft, cubic-bezier(.32,.72,0,1));
+}
+@keyframes au2-typo-pulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.04); }
+}
+
 /* Eyebrow M1 — UPPERCASE, separadores ` · `, --ink-3, NUNCA accent */
 .au2-typo-eyebrow {
   font-family: 'Geist Mono', monospace;
@@ -12994,6 +13056,25 @@ input:focus { outline: none; }
 }
 
 /* ─── Slide 4 · Siete — cronómetro real 7000ms ─────────────────────── */
+.au2-siete-hero {
+  /* el cross-fade entre "7s" y "✓" se hace con transition opacity en el
+     contenido — el componente swap-ea el children y el contenedor mantiene
+     la altura. Para evitar layout-shift, fijamos min-height al hero numeric. */
+  min-height: 1em;
+  display: inline-flex;
+  align-items: baseline;
+  transition: color 200ms var(--ease-emphasized-out);
+}
+.au2-siete-check {
+  color: var(--accent);
+  font-weight: 500;
+  animation: au2-siete-check-in 200ms var(--ease-emphasized-out);
+}
+@keyframes au2-siete-check-in {
+  from { opacity: 0; transform: scale(0.94); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
 .au2-siete-meter {
   width: 320px;
   height: 2px;
@@ -13022,12 +13103,26 @@ input:focus { outline: none; }
 
 /* ─── Slide 5 · Tercera — cita editorial + timeline ────────────────── */
 .au2-tercera-quote-glyph {
-  font-size: 88px;
-  font-weight: 600;
-  color: var(--accent);
-  line-height: 0.6;
-  margin: 40px 0 -8px;           /* B5 + nudge para acomodar la cita */
-  font-feature-settings: "ss01";
+  display: none;  /* placeholder hero — el quote real va dentro del headline. Removible si se decide ostentación adicional. */
+}
+.au2-tercera-caret {
+  display: inline-block;
+  width: 1ch;
+  height: 1em;
+  background: var(--ink-3);
+  vertical-align: baseline;
+  animation: au2-tercera-caret-blink 800ms steps(1) infinite;
+  opacity: 0.6;
+}
+@keyframes au2-tercera-caret-blink {
+  50% { opacity: 0; }
+}
+.au2-tercera-node.is-pulsed {
+  animation: au2-tercera-node-pulse 360ms var(--spring-soft, cubic-bezier(.32,.72,0,1));
+}
+@keyframes au2-tercera-node-pulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.3); }
 }
 .au2-tercera-timeline {
   display: inline-flex;
