@@ -26,6 +26,7 @@ import { useEffect, useMemo, useRef, useState, type ComponentType } from "react"
 
 import { MAside, MDiv } from "@/components/motion/m";
 import { SideArtShell } from "@/components/auth/side-art-shell";
+import { useReducedMotion } from "@/components/auth/use-reduced-motion";
 import { SideArtStage } from "@/components/auth/side-art-stage";
 import { tintClassFor } from "@/components/auth/side-art-tints";
 import { SlideAgenda } from "@/components/auth/slide-agenda";
@@ -96,11 +97,13 @@ const CAROUSEL: SlideDef[] = [
 export function SideArt() {
   const [now, setNow] = useState<Date | null>(null);
   const [idx, setIdx] = useState(0);
+  const [prevIdx, setPrevIdx] = useState(0);
   const [direction, setDirection] = useState<1 | -1>(1);
   const [paused, setPaused] = useState(false);
   const [hidden, setHidden] = useState(false);
   const [pauseIndicatorVisible, setPauseIndicatorVisible] = useState(false);
   const pauseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reducedMotion = useReducedMotion();
 
   // Clock (postmount + tick cada 30s para evitar hydration mismatch)
   useEffect(() => {
@@ -125,6 +128,7 @@ export function SideArt() {
     const id = setTimeout(() => {
       // auto-rotate: siempre forward (incluso wraparound 4→0)
       setDirection(1);
+      setPrevIdx(idx);
       setIdx((i) => (i + 1) % CAROUSEL.length);
     }, dur);
     return () => clearTimeout(id);
@@ -148,7 +152,7 @@ export function SideArt() {
     };
   }, [paused]);
 
-  // Navigation helpers — calculan direction antes de setIdx
+  // Navigation helpers — calculan direction antes de setIdx, trackean prevIdx
   const goTo = (target: number) => {
     const n = CAROUSEL.length;
     const next = ((target % n) + n) % n;
@@ -157,14 +161,17 @@ export function SideArt() {
     const forwardDist = (next - idx + n) % n;
     const backwardDist = (idx - next + n) % n;
     setDirection(forwardDist <= backwardDist ? 1 : -1);
+    setPrevIdx(idx);
     setIdx(next);
   };
   const goPrev = () => {
     setDirection(-1);
+    setPrevIdx(idx);
     setIdx((i) => (i - 1 + CAROUSEL.length) % CAROUSEL.length);
   };
   const goNext = () => {
     setDirection(1);
+    setPrevIdx(idx);
     setIdx((i) => (i + 1) % CAROUSEL.length);
   };
 
@@ -218,7 +225,13 @@ export function SideArt() {
         onNext={goNext}
         onGoTo={goTo}
       >
-        <SideArtStage slideKey={current.id} direction={direction}>
+        <SideArtStage
+          slideKey={current.id}
+          direction={direction}
+          fromIdx={prevIdx}
+          toIdx={idx}
+          reducedMotion={reducedMotion}
+        >
           <div className="au2-slide-inner">
             <header className="au2-slide-head">
               <span className="au2-slide-eyebrow">{current.eyebrow}</span>

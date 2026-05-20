@@ -120,6 +120,26 @@
   }
 }
 
+/* ═════════════ TYPOGRAPHY TOKENS · SideArt v3 manifest ═════════════
+ * 7 niveles tipográficos + 5 auxiliares mono. Los px exactos son la
+ * referencia desktop (1440px+); el clamp() permite degradación responsive.
+ * Cada nivel tiene su uso por slide documentado.
+ * ═════════════════════════════════════════════════════════════════════ */
+:root {
+  --typo-hero-monumental: clamp(140px, 16vw, 220px);  /* T1 · slide 1 "0" únicamente */
+  --typo-hero-numeric:    clamp(78px, 11vw, 110px);   /* T2 · slide 4 "7s" */
+  --typo-hero-editorial:  clamp(64px, 9vw, 96px);     /* T3 · slides 2, 3, 5 hero */
+  --typo-relevo-strong:   clamp(28px, 3.6vw, 38px);   /* T4 · slide 1 relevo */
+  --typo-relevo-soft:     clamp(24px, 3vw, 32px);     /* T5 · slides 2, 4 relevo */
+  --typo-cite:            clamp(20px, 2.6vw, 24px);   /* T6 · slide 5 cita italic */
+  --typo-sub:             15.5px;                      /* T7 · sub-headline 5 slides */
+  --typo-eyebrow:         10.5px;                      /* M1 · eyebrows */
+  --typo-tag:             12px;                        /* M2 · tags */
+  --typo-attribution:     13px;                        /* M3 · slide 5 attribution */
+  --typo-disclaimer:      10px;                        /* M4 · disclaimers */
+  --typo-timestamp:       10.5px;                      /* M5 · timestamps */
+}
+
 /* ═════════════ PREFERS-REDUCED-MOTION · política unificada ═════════════
  * Política Folio (v2):
  *   1. Global blando: animations decorativas no se desactivan completamente
@@ -6712,7 +6732,7 @@ input:focus { outline: none; }
 .au2-slide-inner {
   position: relative;
   width: 100%;
-  max-width: 420px;
+  max-width: 460px;            /* C2 sprint 2: subido de 420 para respirar tipografía 96-220px */
   display: flex; flex-direction: column;
   gap: 18px;
   align-items: stretch;
@@ -12689,4 +12709,358 @@ input:focus { outline: none; }
   font-size: 10.5px; color: var(--ink-3);
   padding-top: 6px;
   border-top: 1px solid var(--line-soft);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * SideArt v3 · Manifest tipográfico
+ *
+ * Reglas para los 5 slides nuevos (Cero, Horas, Plata, Siete, Tercera).
+ * Reemplazan los 5 slides viejos (Agenda, Calendario, Finanzas, Reagenda, IA)
+ * cuyo CSS legacy queda marcado /* DEPRECATED v3 */ y se borra en cleanup.
+ *
+ * Filosofía: 1 idea hero por slide + tipografía gigante + whitespace ≥ 45%.
+ * Baseline grid: 8px. Color discipline: accent + grayscale, 0-4% accent dosing.
+ *
+ * Verbos motion (importados de motion-tokens.ts): reveal, settle, count,
+ * draw, pulse, dim. Cada elemento declara su verbo en comentario inline.
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+/* Container — baseline grid 8px, gap 0, margins explícitos por elemento */
+.au2-typo {
+  display: flex; flex-direction: column;
+  gap: 0;                        /* margins por elemento, no gap colectivo */
+  padding: 40px 40px 32px;       /* 5B / 5B / 4B (B = 8px baseline) */
+  width: 100%;
+  max-width: 460px;
+  height: 100%;                  /* permite anchored bottom via margin-top: auto */
+  position: relative;
+  z-index: var(--z-art-content);
+}
+
+/* Eyebrow M1 — UPPERCASE, separadores ` · `, --ink-3, NUNCA accent */
+.au2-typo-eyebrow {
+  font-family: 'Geist Mono', monospace;
+  font-size: var(--typo-eyebrow);
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0;                     /* anchor top */
+}
+
+/* Divisor — única línea horizontal del sistema, 32px wide --line-soft */
+.au2-typo-divider {
+  height: 1px;
+  width: 32px;
+  background: var(--line-soft);
+  margin: 16px 0 0;              /* B2 below eyebrow */
+}
+
+/* Hero T1 · monumental (220px slide 1) */
+.au2-typo-hero-monumental {
+  font-size: var(--typo-hero-monumental);
+  font-weight: 500;
+  line-height: 1.0;
+  letter-spacing: -0.06em;
+  font-feature-settings: "ss11", "tnum";
+  font-variant-numeric: tabular-nums slashed-zero;
+  color: var(--ink);
+  margin: 40px 0 0;              /* B5 below divisor */
+  position: relative;
+}
+/* Slide 1 sombra prensada — homenaje brass-aged */
+.au2-typo-hero-monumental::after {
+  content: attr(data-shadow);
+  position: absolute; inset: 0;
+  transform: translate(2px, 2px);
+  opacity: 0.04;
+  color: var(--ink);
+  pointer-events: none;
+  font-feature-settings: "ss11", "tnum";
+}
+[data-theme="dark"] .au2-typo-hero-monumental::after { opacity: 0.10; }
+
+/* Hero T2 · numeric (110px slide 4) */
+.au2-typo-hero-numeric {
+  font-size: var(--typo-hero-numeric);
+  font-weight: 600;
+  line-height: 0.92;
+  letter-spacing: -0.045em;
+  font-feature-settings: "tnum", "ss01", "ss11";
+  font-variant-numeric: tabular-nums slashed-zero;
+  color: var(--ink);
+  margin: 40px 0 0;
+}
+
+/* Hero T3 · editorial (96px slides 2, 3, 5) */
+.au2-typo-hero-editorial {
+  font-size: var(--typo-hero-editorial);
+  font-weight: 600;
+  line-height: 0.94;
+  letter-spacing: -0.04em;
+  font-feature-settings: "ss01";  /* slides 3 + 4 agregan tnum/ss11 inline */
+  color: var(--ink);
+  margin: 40px 0 0;
+}
+
+/* Kerning wrappers — corrección óptica manual de pares específicos */
+.au2-typo-dollar {                /* slide 3 · "$" pegado a "3" */
+  font-weight: 400;
+  color: var(--ink-3);
+  margin-right: -0.04em;
+}
+.au2-typo-s-suffix {              /* slide 4 · "s" en "7s" — 55% size, weight 400 */
+  font-size: 0.55em;
+  font-weight: 400;
+  color: var(--ink-3);
+  vertical-align: baseline;
+  margin-left: 0.04em;
+}
+.au2-typo-quote-open {            /* slide 5 · " (U+201C) */
+  font-weight: 400;
+  color: var(--accent);
+  margin-right: 0.06em;
+}
+.au2-typo-quote-close {           /* slide 5 · " (U+201D) */
+  font-weight: 400;
+  color: var(--accent);
+  margin-left: 0.06em;
+}
+
+/* Hero modifier — unidad palabra-completa que va a 55% size + weight 400 */
+.au2-typo-hero-unit {
+  font-size: 0.55em;
+  font-weight: 400;
+  color: var(--ink-3);
+}
+
+/* Relevo T4 · strong (38px) — Sentence case con punto final */
+.au2-typo-relevo-strong {
+  font-size: var(--typo-relevo-strong);
+  font-weight: 400;
+  line-height: 1.10;
+  letter-spacing: -0.025em;
+  color: var(--ink-2);
+  margin: 32px 0 0;              /* B4 below hero */
+  max-width: 420px;
+}
+
+/* Relevo T5 · soft (32px) — variant para slides 2, 4 */
+.au2-typo-relevo {
+  font-size: var(--typo-relevo-soft);
+  font-weight: 400;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: var(--ink-2);
+  margin: 24px 0 0;
+  max-width: 420px;
+}
+
+/* Sub T7 · prose 15.5px */
+.au2-typo-sub {
+  font-size: var(--typo-sub);
+  font-weight: 400;
+  line-height: 1.55;
+  color: var(--ink-3);
+  margin: 16px 0 0;
+  max-width: 380px;
+}
+
+/* Tag M2 · 12px mono, UPPER o lower según slide */
+.au2-typo-tag {
+  font-family: 'Geist Mono', monospace;
+  font-size: var(--typo-tag);
+  font-weight: 500;
+  letter-spacing: 0.10em;
+  color: var(--ink-3);
+  margin: 16px 0 0;
+}
+.au2-typo-tag.is-upper { text-transform: uppercase; }
+/* slide 2 impact line — accent color, lowercase, conserva semántica de continuación */
+.au2-typo-impact {
+  font-family: 'Geist Mono', monospace;
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+  margin: 16px 0 0;
+}
+
+/* Disclaimer M4 · 10px lowercase, sin punto */
+.au2-typo-disclaimer {
+  font-family: 'Geist Mono', monospace;
+  font-size: var(--typo-disclaimer);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--ink-4);
+  margin-top: auto;              /* anchor bottom dentro del flex column */
+  padding-top: 32px;             /* respiro al bloque previo */
+}
+
+/* Timestamp M5 · 10.5px lowercase, separadores · */
+.au2-typo-timestamp {
+  font-family: 'Geist Mono', monospace;
+  font-size: var(--typo-timestamp);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--ink-4);
+  margin-top: auto;              /* anchored bottom */
+  padding-top: 48px;             /* B6 respiro extra */
+}
+
+/* Attribution M3 · 13px slide 5 con em-dash inicio */
+.au2-typo-attribution {
+  font-family: 'Geist Mono', monospace;
+  font-size: var(--typo-attribution);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--ink-3);
+  margin: 32px 0 0;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+/* Cita T6 · italic 24px slide 5 */
+.au2-typo-cite {
+  font-size: var(--typo-cite);
+  font-style: italic;
+  font-weight: 400;
+  line-height: 1.30;
+  letter-spacing: -0.005em;
+  color: var(--ink-2);
+  margin: 24px 0 0;
+  max-width: 380px;
+  font-feature-settings: "ss01", "cv11";
+}
+
+/* ─── Slide 1 · Cero ────────────────────────────────────────────────── */
+/* (el hero usa .au2-typo-hero-monumental ya definido arriba) */
+
+/* ─── Slide 2 · Horas — barra brass + 6 puntitos ──────────────────── */
+.au2-horas-bar {
+  width: 1px;
+  height: 56px;
+  background: var(--accent);
+  margin: 16px 0 0;              /* B2 below hero */
+  transform: scaleY(0);
+  transform-origin: top;
+  transition: transform 600ms cubic-bezier(.6, 0, .2, 1);  /* draw */
+}
+.au2-horas-bar.is-on { transform: scaleY(1); }
+
+.au2-horas-dots {
+  display: flex; gap: 10px;
+  margin: 24px 0 0;              /* B3 */
+}
+.au2-horas-dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--ink-4);
+  opacity: 1;
+  transition: opacity 320ms var(--ease-emphasized-in);  /* dim */
+}
+.au2-horas-dot.is-faded { opacity: 0.15; }
+
+/* ─── Slide 3 · Plata — 2 barras horizontales no-shows ─────────────── */
+.au2-plata-bar-row {
+  display: flex; align-items: center; gap: 12px;
+}
+.au2-plata-bar-row + .au2-plata-bar-row { margin-top: 16px; }  /* B2 entre las dos barras */
+.au2-plata-bar-track {
+  position: relative;
+  width: 320px;
+  height: 4px;
+  background: var(--surface-2);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.au2-plata-bar-fill {
+  position: absolute; inset: 0;
+  background: var(--accent);
+  border-radius: 2px;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 700ms cubic-bezier(.6, 0, .2, 1);  /* draw */
+}
+.au2-plata-bar-fill.is-on {
+  transform: scaleX(var(--fill, 0.2));
+}
+.au2-plata-bar-label {
+  font-family: 'Geist Mono', monospace;
+  font-size: 12px;
+  color: var(--ink-3);
+  letter-spacing: 0.04em;
+}
+
+/* ─── Slide 4 · Siete — cronómetro real 7000ms ─────────────────────── */
+.au2-siete-meter {
+  width: 320px;
+  height: 2px;
+  background: var(--surface-2);
+  border-radius: 1px;
+  margin: 24px 0 0;              /* B3 below hero */
+  overflow: hidden;
+}
+.au2-siete-meter-fill {
+  height: 100%;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left;
+}
+.au2-siete-meter-fill.is-running {
+  animation: au2-siete-fill 7000ms linear forwards;  /* measure: linear obligatorio */
+}
+@keyframes au2-siete-fill {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+.au2-art.is-paused .au2-siete-meter-fill,
+.au2-art.is-hidden .au2-siete-meter-fill {
+  animation-play-state: paused;
+}
+
+/* ─── Slide 5 · Tercera — cita editorial + timeline ────────────────── */
+.au2-tercera-quote-glyph {
+  font-size: 88px;
+  font-weight: 600;
+  color: var(--accent);
+  line-height: 0.6;
+  margin: 40px 0 -8px;           /* B5 + nudge para acomodar la cita */
+  font-feature-settings: "ss01";
+}
+.au2-tercera-timeline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.au2-tercera-node {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  border: 1px solid var(--ink-4);
+  box-sizing: border-box;
+}
+.au2-tercera-node.is-current {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.au2-tercera-arrow {
+  font-size: 10px;
+  color: var(--ink-4);
+  margin-left: 4px;
+}
+
+/* ─── Reduced-motion overrides para los verbos nuevos ──────────────── */
+@media (prefers-reduced-motion: reduce) {
+  /* draw verb · estado final inmediato */
+  .au2-horas-bar { transform: scaleY(1) !important; transition: none !important; }
+  .au2-plata-bar-fill { transform: scaleX(var(--fill, 1)) !important; transition: none !important; }
+  /* dim verb · puntitos en estado pasivo sin animar */
+  .au2-horas-dot { transition: none !important; }
+  .au2-horas-dot.is-faded { opacity: 1 !important; }
+  /* measure verb (cronómetro) · estado completo inmediato */
+  .au2-siete-meter-fill.is-running {
+    animation: none !important;
+    transform: scaleX(1) !important;
+  }
 }
