@@ -36,6 +36,7 @@ const PUBLIC_PREFIXES = [
   "/api/admin/",         // admin one-shot ops (migrate, etc; validado por CRON_SECRET bearer)
   "/api/whatsapp/",      // webhook Meta WhatsApp (validado por X-Hub-Signature)
   "/api/google/",        // OAuth callback Google + watch renew
+  "/api/mercadopago/",   // webhook Mercado Pago (validado por x-signature HMAC)
 ];
 
 function isPublicPath(pathname: string): boolean {
