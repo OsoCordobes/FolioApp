@@ -16,6 +16,7 @@
 
 import { useEffect, useState } from "react";
 
+import { MSpan } from "@/components/motion/m";
 import { usePhaseSequence } from "@/components/auth/use-phase-sequence";
 
 interface Props {
@@ -117,7 +118,13 @@ export function SlideCalendario({ active }: Props) {
           <div className="au2-cal2-meta">
             <span className={"au2-cal2-amount" + (phase >= 2 ? " is-bumped" : "")}>
               <span className="au2-cal2-amount-sym">$</span>
-              <span className="au2-cal2-amount-val">{amountStr}k</span>
+              <MSpan
+                layoutId="hero-money"
+                layout="position"
+                className="au2-cal2-amount-val"
+              >
+                {amountStr}k
+              </MSpan>
             </span>
             <span className={"au2-cal2-paid" + (phase >= 2 ? " is-bumped" : "")}>
               <span className="au2-cal2-paid-glyph">

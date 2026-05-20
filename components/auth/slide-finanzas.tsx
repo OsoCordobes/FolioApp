@@ -18,6 +18,7 @@
 
 import { type ReactNode } from "react";
 
+import { MDiv } from "@/components/motion/m";
 import { useCountUp } from "@/components/auth/use-count-up";
 import { usePhaseSequence } from "@/components/auth/use-phase-sequence";
 
@@ -131,7 +132,17 @@ export function SlideFinanzas({ active }: Props) {
               }
             >
               <span className="au2-fin3-kpi-lbl">{k.label}</span>
-              <div className="au2-fin3-kpi-val">{k.val}</div>
+              {/* C13: shared element con el "$221k" del Calendario. layoutId
+                  matchea entre slides; FM anima la transición física en el
+                  cross-fade. layout="position" para evitar jumps por width
+                  distinto entre las 2 cajas (el font-size cambia). */}
+              {k.tone === "primary" ? (
+                <MDiv layoutId="hero-money" layout="position" className="au2-fin3-kpi-val">
+                  {k.val}
+                </MDiv>
+              ) : (
+                <div className="au2-fin3-kpi-val">{k.val}</div>
+              )}
               <div className="au2-fin3-kpi-foot">
                 <span className="au2-fin3-kpi-sub">{k.sub}</span>
                 <span className="au2-fin3-kpi-delta is-pos">
