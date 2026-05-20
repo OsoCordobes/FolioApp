@@ -4609,6 +4609,45 @@ input:focus { outline: none; }
    step-9 reveal, save indicator, validation chrome.
    ════════════════════════════════════════════════════════════════════════ */
 
+/* STEP 1 · layout split con SideArt — mismo del /login para continuidad
+   visual entre las dos puertas de entrada del producto. */
+.onb-step1-app {
+  /* Hereda .au-app: grid 1.05fr 1fr + min-height 100vh. SideArt vive en la
+     columna izquierda con su propio carousel. El form va en la derecha. */
+}
+.onb-step1-main {
+  display: flex; flex-direction: column;
+  padding: 0;
+  background: var(--bg);
+  min-height: 100vh;
+}
+.onb-step1-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 20px 32px;
+  border-bottom: 1px solid var(--line);
+}
+.onb-step1-pane {
+  display: flex; flex-direction: column;
+  flex: 1; min-height: 0;
+}
+.onb-step1-pane > .onb-anim {
+  flex: 1;
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 56px 32px 80px;
+  overflow-y: auto;
+}
+.onb-step1-pane .onb-step {
+  width: 100%; max-width: 420px;
+}
+.onb-step1-pane .onb-step-head h1 {
+  font-size: 30px; line-height: 1.08;
+}
+@media (max-width: 920px) {
+  .onb-step1-pane > .onb-anim {
+    padding: 32px 20px 64px;
+  }
+}
+
 /* Step transitions: slide-X (16px) + fade, respeta prefers-reduced-motion */
 .onb-anim { animation: onb-step-in var(--motion-base) var(--motion-ease-out) both; }
 .onb-anim-forward { animation-name: onb-step-in-forward; }

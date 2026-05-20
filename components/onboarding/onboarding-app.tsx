@@ -27,6 +27,7 @@ import {
   signUpAndInitOrganization,
   updateOnboardingStep,
 } from "@/app/(public)/onboarding/actions";
+import { SideArt } from "@/components/auth/side-art";
 import { FolioMark } from "@/components/folio-mark";
 import { Step1Registro } from "@/components/onboarding/step1-registro";
 import { Step9Moment } from "@/components/onboarding/step9-moment";
@@ -325,6 +326,35 @@ export function OnboardingApp({
     direction,
   };
 
+  // ─── Step 1: layout split con SideArt (mismo del /login) ──────────────────
+  if (stepIdx === 1) {
+    return (
+      <div className="au-app onb-step1-app">
+        <SideArt />
+        <div className="au-main onb-step1-main">
+          <div className="onb-step1-pane">
+            <header className="onb-step1-head">
+              <div className="onb-app-brand">
+                <FolioMark size={24} />
+                <span className="onb-brand-name">folio</span>
+              </div>
+            </header>
+            <div key={stepKey} className={`onb-anim onb-anim-${direction}`}>
+              <Step1Registro
+                data={{ email: data.email, password: data.password }}
+                set={(patch) => set(patch)}
+                next={handleStep1Next}
+                loading={signingUp}
+                error={error}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Steps 2-9: layout estándar con CardPreview lateral integrado en StepShell ─
   return (
     <div className="onb-app">
       <header className="onb-app-head">
@@ -332,7 +362,7 @@ export function OnboardingApp({
           <FolioMark size={24} />
           <span className="onb-brand-name">folio</span>
         </div>
-        {stepIdx > 1 && stepIdx < 9 ? (
+        {stepIdx < 9 ? (
           <SaveIndicator state={saveState} />
         ) : (
           <span />
@@ -345,15 +375,6 @@ export function OnboardingApp({
         ) : null}
 
         <div key={stepKey} className={`onb-anim onb-anim-${direction}`}>
-          {stepIdx === 1 ? (
-            <Step1Registro
-              data={{ email: data.email, password: data.password }}
-              set={(patch) => set(patch)}
-              next={handleStep1Next}
-              loading={signingUp}
-              error={error}
-            />
-          ) : null}
           {stepIdx === 2 ? <Step2Profesional {...commonStepProps} /> : null}
           {stepIdx === 3 ? <Step3Consultorio {...commonStepProps} /> : null}
           {stepIdx === 4 ? <Step4Personalizacion {...commonStepProps} /> : null}
