@@ -6499,7 +6499,7 @@ input:focus { outline: none; }
   filter: blur(8px);
 }
 .au-submit.is-hint::after {
-  animation: au-submit-glow 1200ms cubic-bezier(.32, .72, 0, 1);
+  animation: au-submit-glow 1200ms var(--ease-emphasized);
 }
 @keyframes au-submit-glow {
   0%   { opacity: 0;    transform: scale(0.94); }
@@ -6674,8 +6674,8 @@ input:focus { outline: none; }
   pointer-events: none;
   transform: translateY(12px);
   transition:
-    opacity 320ms cubic-bezier(.32, .72, 0, 1),
-    transform 320ms cubic-bezier(.32, .72, 0, 1);
+    opacity 320ms var(--ease-emphasized),
+    transform 320ms var(--ease-emphasized);
   will-change: opacity, transform;
 }
 .au2-slide.is-active {
@@ -6717,7 +6717,7 @@ input:focus { outline: none; }
   position: absolute;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 600ms cubic-bezier(.32, .72, 0, 1) 100ms;
+  transition: opacity 600ms var(--ease-emphasized) 100ms;
 }
 .au2-slide.is-active .au2-mid { opacity: 1; }
 
@@ -6923,7 +6923,7 @@ input:focus { outline: none; }
   background: color-mix(in oklab, var(--accent) 7%, transparent);
   box-shadow: inset 2px 0 0 var(--accent);
   opacity: 0;
-  transition: opacity 500ms cubic-bezier(.32, .72, 0, 1);
+  transition: opacity 500ms var(--ease-emphasized);
   pointer-events: none;
   z-index: -1;
 }
@@ -6984,7 +6984,7 @@ input:focus { outline: none; }
 }
 .au2-slot.is-active .au2-slot-time,
 .au2-slot.is-active .au2-slot-motivo {
-  transition: color 500ms cubic-bezier(.32, .72, 0, 1);
+  transition: color 500ms var(--ease-emphasized);
 }
 .au2-timeline.is-lit .au2-slot.is-active .au2-slot-time { color: var(--accent); font-weight: 500; }
 .au2-timeline.is-lit .au2-slot.is-active .au2-slot-motivo {
@@ -7015,7 +7015,7 @@ input:focus { outline: none; }
   will-change: transform;
 }
 .au2-timeline.is-lit .au2-slot.is-active .au2-slot-progress-bar {
-  animation: au2-slot-fill 1200ms cubic-bezier(.32, .72, 0, 1) forwards;
+  animation: au2-slot-fill 1200ms var(--ease-emphasized) forwards;
 }
 @keyframes au2-slot-fill {
   from { transform: scaleX(0); }
@@ -7024,7 +7024,7 @@ input:focus { outline: none; }
 
 /* Entry stagger · 60ms */
 .au2-slide.is-active .au2-card-1 .au2-slot {
-  animation: au2-row-in 320ms cubic-bezier(.32, .72, 0, 1) backwards;
+  animation: au2-row-in 320ms var(--ease-emphasized) backwards;
 }
 .au2-slide.is-active .au2-card-1 .au2-slot:nth-child(1) { animation-delay: 0ms; }
 .au2-slide.is-active .au2-card-1 .au2-slot:nth-child(2) { animation-delay: 60ms; }
@@ -7074,7 +7074,7 @@ input:focus { outline: none; }
   height: 42px;
   box-sizing: border-box;
   border-radius: 0;
-  transition: background 300ms cubic-bezier(.32, .72, 0, 1);
+  transition: background 300ms var(--ease-emphasized);
 }
 .au2-pac.is-active {
   background: color-mix(in oklab, var(--accent) 8%, transparent);
@@ -7118,7 +7118,7 @@ input:focus { outline: none; }
   align-items: flex-start;
   pointer-events: none;
   z-index: 3;
-  transition: transform 1.1s cubic-bezier(.32, .72, 0, 1);
+  transition: transform 1.1s var(--ease-emphasized);
   will-change: transform;
 }
 .au2-cursor svg {
@@ -7142,7 +7142,7 @@ input:focus { outline: none; }
 
 /* Entry stagger · 40ms */
 .au2-slide.is-active .au2-card-2 .au2-pac {
-  animation: au2-row-in 400ms cubic-bezier(.32, .72, 0, 1) backwards;
+  animation: au2-row-in 400ms var(--ease-emphasized) backwards;
 }
 .au2-slide.is-active .au2-card-2 .au2-pac:nth-child(1) { animation-delay: 40ms; }
 .au2-slide.is-active .au2-card-2 .au2-pac:nth-child(2) { animation-delay: 80ms; }
@@ -7229,19 +7229,19 @@ input:focus { outline: none; }
 /* Transición entre slides (snappier) */
 .au2-slide {
   transition:
-    opacity 320ms cubic-bezier(.32, .72, 0, 1),
-    transform 320ms cubic-bezier(.32, .72, 0, 1);
+    opacity 320ms var(--ease-emphasized),
+    transform 320ms var(--ease-emphasized);
 }
 
 .au2-slide.is-active .au2-card-3 .au2-fin-chart .au2-line {
-  animation: au2-draw 1000ms cubic-bezier(.32, .72, 0, 1) 400ms forwards;
+  animation: au2-draw 1000ms var(--ease-emphasized) 400ms forwards;
 }
 @keyframes au2-draw {
   to { stroke-dashoffset: 0; }
 }
 .au2-fin-chart .au2-area { opacity: 0; }
 .au2-slide.is-active .au2-card-3 .au2-fin-chart .au2-area {
-  animation: au2-fade-in 400ms cubic-bezier(.32, .72, 0, 1) 1100ms forwards;
+  animation: au2-fade-in 400ms var(--ease-emphasized) 1100ms forwards;
 }
 @keyframes au2-fade-in {
   to { opacity: 1; }
@@ -7251,7 +7251,7 @@ input:focus { outline: none; }
   transform: scale(0);
 }
 .au2-slide.is-active .au2-card-3 .au2-fin-chart .au2-end-dot {
-  animation: au2-pop 500ms cubic-bezier(.32, .72, 0, 1) 1400ms forwards;
+  animation: au2-pop 500ms var(--ease-emphasized) 1400ms forwards;
 }
 @keyframes au2-pop {
   0%   { opacity: 0; transform: scale(0); }
@@ -7262,7 +7262,7 @@ input:focus { outline: none; }
   opacity: 0;
 }
 .au2-slide.is-active .au2-card-3 .au2-fin-chart .au2-tt-dot {
-  animation: au2-fade-in 300ms cubic-bezier(.32, .72, 0, 1) 1200ms forwards;
+  animation: au2-fade-in 300ms var(--ease-emphasized) 1200ms forwards;
 }
 
 .au2-fin-tooltip {
@@ -7299,7 +7299,7 @@ input:focus { outline: none; }
   transform: translateY(-50%) rotate(45deg);
 }
 .au2-slide.is-active .au2-card-3 .au2-fin-tooltip {
-  animation: au2-tooltip-in 400ms cubic-bezier(.32, .72, 0, 1) 1900ms forwards;
+  animation: au2-tooltip-in 400ms var(--ease-emphasized) 1900ms forwards;
 }
 
 /* Cursor SVG · llega desde la derecha en 300ms a T1900ms */
@@ -7314,7 +7314,7 @@ input:focus { outline: none; }
 }
 .au2-fin-cursor svg { display: block; }
 .au2-slide.is-active .au2-card-3 .au2-fin-cursor {
-  animation: au2-cursor-in 320ms cubic-bezier(.32, .72, 0, 1) 1900ms forwards;
+  animation: au2-cursor-in 320ms var(--ease-emphasized) 1900ms forwards;
 }
 @keyframes au2-cursor-in {
   from { opacity: 0; transform: translate(24px, -4px); }
@@ -7327,7 +7327,7 @@ input:focus { outline: none; }
 /* KPI entry */
 /* KPI entry (count-up 900ms a partir de T200ms) */
 .au2-slide.is-active .au2-card-3 .au2-kpi {
-  animation: au2-row-in 350ms cubic-bezier(.32, .72, 0, 1) backwards;
+  animation: au2-row-in 350ms var(--ease-emphasized) backwards;
 }
 .au2-slide.is-active .au2-card-3 .au2-kpi:nth-child(1) { animation-delay: 200ms; }
 .au2-slide.is-active .au2-card-3 .au2-kpi:nth-child(2) { animation-delay: 260ms; }
@@ -7434,7 +7434,7 @@ input:focus { outline: none; }
   pointer-events: none;
 }
 .au2-slide.is-active .au2-card-4 .au2-shimmer {
-  animation: au2-shimmer 6s cubic-bezier(.32, .72, 0, 1) infinite;
+  animation: au2-shimmer 6s var(--ease-emphasized) infinite;
 }
 @keyframes au2-shimmer {
   0%   { transform: translateX(0); }
@@ -7483,7 +7483,7 @@ input:focus { outline: none; }
 }
 .au2-slide.is-active .au2-card-4 ~ .au2-toast,
 .au2-slide.is-active .au2-toast {
-  animation: au2-toast 4s cubic-bezier(.32, .72, 0, 1) forwards;
+  animation: au2-toast 4s var(--ease-emphasized) forwards;
 }
 @keyframes au2-toast {
   0%   { opacity: 0; transform: translateY(-12px); }
@@ -7494,11 +7494,11 @@ input:focus { outline: none; }
 
 /* Reservas card entry */
 .au2-slide.is-active .au2-card-4 {
-  animation: au2-card-in 400ms cubic-bezier(.32, .72, 0, 1) backwards;
+  animation: au2-card-in 400ms var(--ease-emphasized) backwards;
 }
-.au2-slide.is-active .au2-rsv-ghost--1 { animation: au2-card-in 400ms cubic-bezier(.32, .72, 0, 1) 60ms backwards; }
-.au2-slide.is-active .au2-rsv-ghost--2 { animation: au2-card-in 400ms cubic-bezier(.32, .72, 0, 1) 120ms backwards; }
-.au2-slide.is-active .au2-rsv-ghost--3 { animation: au2-card-in 400ms cubic-bezier(.32, .72, 0, 1) 180ms backwards; }
+.au2-slide.is-active .au2-rsv-ghost--1 { animation: au2-card-in 400ms var(--ease-emphasized) 60ms backwards; }
+.au2-slide.is-active .au2-rsv-ghost--2 { animation: au2-card-in 400ms var(--ease-emphasized) 120ms backwards; }
+.au2-slide.is-active .au2-rsv-ghost--3 { animation: au2-card-in 400ms var(--ease-emphasized) 180ms backwards; }
 @keyframes au2-card-in {
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; }
@@ -7522,8 +7522,8 @@ input:focus { outline: none; }
   opacity: 0;
   transform: translateY(6px);
   transition:
-    opacity 400ms cubic-bezier(.32, .72, 0, 1) 80ms,
-    transform 400ms cubic-bezier(.32, .72, 0, 1) 80ms;
+    opacity 400ms var(--ease-emphasized) 80ms,
+    transform 400ms var(--ease-emphasized) 80ms;
 }
 .au2-foot-cap-item.is-active {
   opacity: 1;
@@ -7555,9 +7555,9 @@ input:focus { outline: none; }
   overflow: hidden;
   cursor: pointer;
   transition:
-    width 320ms cubic-bezier(.32, .72, 0, 1),
-    background 200ms cubic-bezier(.32, .72, 0, 1),
-    transform 200ms cubic-bezier(.32, .72, 0, 1);
+    width 320ms var(--ease-emphasized),
+    background 200ms var(--ease-emphasized),
+    transform 200ms var(--ease-emphasized);
   border: 0; padding: 0;
 }
 .au2-dot:hover { background: var(--ink-4); transform: translateY(-1px); }
@@ -7918,7 +7918,7 @@ input:focus { outline: none; }
 .au2-step-label,
 .au2-step-meta,
 .au2-step-arrow {
-  transition: all 350ms cubic-bezier(.32, .72, 0, 1);
+  transition: all 350ms var(--ease-emphasized);
 }
 
 .au2-wiz-done {
@@ -7932,7 +7932,7 @@ input:focus { outline: none; }
   font-weight: 500;
   color: var(--green);
   letter-spacing: -.005em;
-  animation: au2-wiz-done-in 400ms cubic-bezier(.32, .72, 0, 1) backwards;
+  animation: au2-wiz-done-in 400ms var(--ease-emphasized) backwards;
 }
 @keyframes au2-wiz-done-in {
   from { opacity: 0; transform: translateY(6px); }
@@ -7961,7 +7961,7 @@ input:focus { outline: none; }
   opacity: 0;
   transform: translateY(14px);
   transition:
-    opacity 360ms cubic-bezier(.32, .72, 0, 1),
+    opacity 360ms var(--ease-emphasized),
     transform 480ms cubic-bezier(.18, .89, .32, 1.18);
   z-index: 6;
   pointer-events: none;
@@ -8019,7 +8019,7 @@ input:focus { outline: none; }
   border-radius: 9px;
   background: radial-gradient(circle, color-mix(in oklab, var(--accent) 35%, transparent) 0%, transparent 70%);
   opacity: 0;
-  animation: au2-ia-glow 1400ms cubic-bezier(.32, .72, 0, 1) 200ms 1 forwards;
+  animation: au2-ia-glow 1400ms var(--ease-emphasized) 200ms 1 forwards;
   pointer-events: none;
   z-index: -1;
 }
@@ -8078,7 +8078,7 @@ input:focus { outline: none; }
 }
 .au2-chat-msg {
   display: flex; align-items: flex-end; gap: 8px;
-  animation: au2-msg-in 360ms cubic-bezier(.32, .72, 0, 1) backwards;
+  animation: au2-msg-in 360ms var(--ease-emphasized) backwards;
 }
 .au2-chat-msg--user { justify-content: flex-end; }
 .au2-chat-msg--ai   { justify-content: flex-start; }
@@ -8127,7 +8127,7 @@ input:focus { outline: none; }
   width: 5px; height: 5px;
   background: var(--ink-3);
   border-radius: 50%;
-  animation: au2-think 1100ms cubic-bezier(.32, .72, 0, 1) infinite;
+  animation: au2-think 1100ms var(--ease-emphasized) infinite;
 }
 .au2-chat-thinking span:nth-child(2) { animation-delay: 120ms; }
 .au2-chat-thinking span:nth-child(3) { animation-delay: 240ms; }
@@ -8148,7 +8148,7 @@ input:focus { outline: none; }
   border-radius: 6px;
   background: var(--surface);
   border: 1px solid var(--line-soft);
-  animation: au2-stat-in 320ms cubic-bezier(.32, .72, 0, 1) backwards;
+  animation: au2-stat-in 320ms var(--ease-emphasized) backwards;
 }
 @keyframes au2-stat-in {
   from { opacity: 0; transform: translateX(-6px); }
@@ -8183,7 +8183,7 @@ input:focus { outline: none; }
   color: var(--ink-2);
   line-height: 1.45;
   letter-spacing: -.005em;
-  animation: au2-msg-in 360ms cubic-bezier(.32, .72, 0, 1) backwards;
+  animation: au2-msg-in 360ms var(--ease-emphasized) backwards;
 }
 .au2-chat-summary b {
   color: var(--accent);
@@ -8265,7 +8265,7 @@ input:focus { outline: none; }
   line-height: 1.35;
   border: 1px solid var(--line-soft);
   background: var(--surface);
-  animation: au2-msg-in 360ms cubic-bezier(.32, .72, 0, 1) backwards;
+  animation: au2-msg-in 360ms var(--ease-emphasized) backwards;
 }
 .au2-action-card + .au2-action-card {
   margin-top: 5px;
@@ -8305,7 +8305,7 @@ input:focus { outline: none; }
   color: var(--ink-3);
   letter-spacing: -.005em;
   align-self: center;
-  animation: au2-msg-in 360ms cubic-bezier(.32, .72, 0, 1) backwards;
+  animation: au2-msg-in 360ms var(--ease-emphasized) backwards;
 }
 .au2-chat-summary-pill .au2-action-check {
   width: 12px; height: 12px;
@@ -8344,22 +8344,22 @@ input:focus { outline: none; }
 
 /* Card entry stagger para los placeholders */
 .au2-slide.is-active .au2-card-ph {
-  animation: au2-card-in 400ms cubic-bezier(.32, .72, 0, 1) backwards;
+  animation: au2-card-in 400ms var(--ease-emphasized) backwards;
 }
 .au2-slide.is-active .au2-ph-toast {
-  animation: au2-card-in 400ms cubic-bezier(.32, .72, 0, 1) 180ms backwards;
+  animation: au2-card-in 400ms var(--ease-emphasized) 180ms backwards;
 }
 .au2-slide.is-active .au2-ph-wa {
-  animation: au2-card-in 400ms cubic-bezier(.32, .72, 0, 1) 280ms backwards;
+  animation: au2-card-in 400ms var(--ease-emphasized) 280ms backwards;
 }
 .au2-slide.is-active .au2-step {
-  animation: au2-row-in 320ms cubic-bezier(.32, .72, 0, 1) backwards;
+  animation: au2-row-in 320ms var(--ease-emphasized) backwards;
 }
 .au2-slide.is-active .au2-step:nth-child(1) { animation-delay: 40ms; }
 .au2-slide.is-active .au2-step:nth-child(2) { animation-delay: 100ms; }
 .au2-slide.is-active .au2-step:nth-child(3) { animation-delay: 160ms; }
 .au2-slide.is-active .au2-ia-card {
-  animation: au2-row-in 320ms cubic-bezier(.32, .72, 0, 1) backwards;
+  animation: au2-row-in 320ms var(--ease-emphasized) backwards;
 }
 .au2-slide.is-active .au2-ia-card:nth-child(1) { animation-delay: 0ms; }
 .au2-slide.is-active .au2-ia-card:nth-child(2) { animation-delay: 120ms; }
@@ -8367,7 +8367,7 @@ input:focus { outline: none; }
 
 /* Plus pill pulse · 3 pulsos sincronizados con cada card */
 .au2-slide.is-active .au2-plus-badge {
-  animation: au2-plus-pulse 360ms cubic-bezier(.32, .72, 0, 1) 3;
+  animation: au2-plus-pulse 360ms var(--ease-emphasized) 3;
 }
 @keyframes au2-plus-pulse {
   0%, 100% { box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 6%, transparent); }
@@ -8550,8 +8550,8 @@ input:focus { outline: none; }
 .au2-card-cal ~ .au2-ph-wa {
   opacity: 0;
   transition:
-    opacity 320ms cubic-bezier(.32, .72, 0, 1),
-    transform 360ms cubic-bezier(.32, .72, 0, 1);
+    opacity 320ms var(--ease-emphasized),
+    transform 360ms var(--ease-emphasized);
   animation: none !important;
 }
 .au2-card-cal ~ .au2-ph-toast {
@@ -8593,16 +8593,16 @@ input:focus { outline: none; }
   font-size: 9.5px;
   letter-spacing: 0.02em;
   border: 1px solid color-mix(in oklab, var(--green) 22%, transparent);
-  transition: background 600ms cubic-bezier(.32, .72, 0, 1),
+  transition: background 600ms var(--ease-emphasized),
               color 600ms;
 }
 
 /* Chip smooth state transitions */
 .au2-week-chip {
   transition:
-    background-color 450ms cubic-bezier(.32, .72, 0, 1),
-    border-color 450ms cubic-bezier(.32, .72, 0, 1),
-    color 450ms cubic-bezier(.32, .72, 0, 1),
+    background-color 450ms var(--ease-emphasized),
+    border-color 450ms var(--ease-emphasized),
+    color 450ms var(--ease-emphasized),
     transform 200ms cubic-bezier(.2, 0, 0, 1);
 }
 .au2-week-chip.is-new {
@@ -8613,7 +8613,7 @@ input:focus { outline: none; }
 
 /* Story chip — entrada pop-in suave */
 .au2-week-chip.is-story {
-  animation: au2-chip-pop 450ms cubic-bezier(.32, .72, 0, 1) backwards;
+  animation: au2-chip-pop 450ms var(--ease-emphasized) backwards;
 }
 @keyframes au2-chip-pop {
   0%   { transform: scale(0.4); opacity: 0; }
@@ -8627,7 +8627,7 @@ input:focus { outline: none; }
   border-radius: 6px;
   border: 1.5px solid var(--accent);
   opacity: 0;
-  animation: au2-chip-halo 1s cubic-bezier(.32, .72, 0, 1) 200ms;
+  animation: au2-chip-halo 1s var(--ease-emphasized) 200ms;
   pointer-events: none;
 }
 @keyframes au2-chip-halo {
@@ -8649,7 +8649,7 @@ input:focus { outline: none; }
   opacity: 0;
   transform: translate(-50%, -12px);
   transition:
-    opacity 360ms cubic-bezier(.32, .72, 0, 1),
+    opacity 360ms var(--ease-emphasized),
     transform 500ms cubic-bezier(.18, .89, .32, 1.18);
   z-index: 5;
   pointer-events: none;
@@ -8791,7 +8791,7 @@ input:focus { outline: none; }
   border-color: color-mix(in oklab, var(--accent) 36%, transparent) !important;
   color: var(--accent) !important;
   transform: scale(0.97);
-  transition: transform 140ms cubic-bezier(.32, .72, 0, 1);
+  transition: transform 140ms var(--ease-emphasized);
 }
 .au2-quick-btn.is-on {
   background: color-mix(in oklab, var(--accent) 10%, var(--surface)) !important;
@@ -8811,9 +8811,9 @@ input:focus { outline: none; }
   left: 78%;
   bottom: -20px;
   transition:
-    left 700ms cubic-bezier(.32, .72, 0, 1),
-    bottom 700ms cubic-bezier(.32, .72, 0, 1),
-    opacity 220ms cubic-bezier(.32, .72, 0, 1);
+    left 700ms var(--ease-emphasized),
+    bottom 700ms var(--ease-emphasized),
+    opacity 220ms var(--ease-emphasized);
   will-change: left, bottom, opacity;
 }
 .au2-ag-cursor.is-on { opacity: 1; }
@@ -8839,7 +8839,7 @@ input:focus { outline: none; }
   border-left: 2px solid color-mix(in oklab, var(--accent) 28%, transparent);
   border-radius: 0;
   background: color-mix(in oklab, var(--accent) 4%, transparent);
-  animation: au2-history-in 380ms cubic-bezier(.32, .72, 0, 1) backwards;
+  animation: au2-history-in 380ms var(--ease-emphasized) backwards;
 }
 @keyframes au2-history-in {
   from { opacity: 0; transform: translateY(-4px); }
@@ -8870,29 +8870,29 @@ input:focus { outline: none; }
   overflow: hidden;
   border-bottom-width: 0;
   transition:
-    max-height 420ms cubic-bezier(.32, .72, 0, 1),
-    padding 420ms cubic-bezier(.32, .72, 0, 1),
-    opacity 280ms cubic-bezier(.32, .72, 0, 1);
+    max-height 420ms var(--ease-emphasized),
+    padding 420ms var(--ease-emphasized),
+    opacity 280ms var(--ease-emphasized);
 }
 .au2-card-1 .au2-ctx {
   max-height: 80px;
   transition:
-    max-height 420ms cubic-bezier(.32, .72, 0, 1),
-    padding 420ms cubic-bezier(.32, .72, 0, 1),
-    opacity 280ms cubic-bezier(.32, .72, 0, 1);
+    max-height 420ms var(--ease-emphasized),
+    padding 420ms var(--ease-emphasized),
+    opacity 280ms var(--ease-emphasized);
 }
 
 /* Filas no-activas se compactan cuando ficha abierta */
 .au2-card-1.is-focused .au2-slot:not(.is-active) {
   padding-top: 7px;
   padding-bottom: 7px;
-  transition: padding 320ms cubic-bezier(.32, .72, 0, 1);
+  transition: padding 320ms var(--ease-emphasized);
 }
 .au2-card-1.is-focused .au2-slot:not(.is-active) .au2-slot-motivo {
   opacity: 0.5;
 }
 .au2-card-1 .au2-slot {
-  transition: padding 320ms cubic-bezier(.32, .72, 0, 1);
+  transition: padding 320ms var(--ease-emphasized);
 }
   position: absolute;
   right: 10px;
@@ -8909,8 +8909,8 @@ input:focus { outline: none; }
   opacity: 0;
   transform: translateX(28px);
   transition:
-    opacity 360ms cubic-bezier(.32, .72, 0, 1),
-    transform 480ms cubic-bezier(.32, .72, 0, 1);
+    opacity 360ms var(--ease-emphasized),
+    transform 480ms var(--ease-emphasized);
   pointer-events: none;
   z-index: 5;
 }
@@ -8963,7 +8963,7 @@ input:focus { outline: none; }
   letter-spacing: 0.06em;
   text-transform: lowercase;
   color: var(--accent);
-  animation: au2-row-in 360ms cubic-bezier(.32, .72, 0, 1) backwards;
+  animation: au2-row-in 360ms var(--ease-emphasized) backwards;
   white-space: nowrap;
 }
 .au2-mode-dot {
@@ -8986,7 +8986,7 @@ input:focus { outline: none; }
 
 /* Period tab pulse cuando step >= 1 */
 .au2-mid-tabs.is-clicked .au2-mid-tab.is-active {
-  animation: au2-tab-click 380ms cubic-bezier(.32, .72, 0, 1);
+  animation: au2-tab-click 380ms var(--ease-emphasized);
 }
 @keyframes au2-tab-click {
   0%, 100% { transform: scale(1); }
@@ -8999,8 +8999,8 @@ input:focus { outline: none; }
   stroke-dashoffset: 100;
   opacity: 0;
   transition:
-    stroke-dashoffset 800ms cubic-bezier(.32, .72, 0, 1),
-    opacity 400ms cubic-bezier(.32, .72, 0, 1);
+    stroke-dashoffset 800ms var(--ease-emphasized),
+    opacity 400ms var(--ease-emphasized);
 }
 .au2-card-3.step-1 .au2-line-ghost,
 .au2-card-3.step-2 .au2-line-ghost,
@@ -9017,7 +9017,7 @@ input:focus { outline: none; }
   stroke-dasharray: 100;
   stroke-dashoffset: 100;
   animation: none !important;
-  transition: stroke-dashoffset 900ms cubic-bezier(.32, .72, 0, 1);
+  transition: stroke-dashoffset 900ms var(--ease-emphasized);
 }
 .au2-card-3.step-2 .au2-line,
 .au2-card-3.step-3 .au2-line,
@@ -9030,7 +9030,7 @@ input:focus { outline: none; }
 .au2-card-3 .au2-area {
   opacity: 0;
   animation: none !important;
-  transition: opacity 500ms cubic-bezier(.32, .72, 0, 1);
+  transition: opacity 500ms var(--ease-emphasized);
 }
 .au2-card-3.step-2 .au2-area,
 .au2-card-3.step-3 .au2-area,
@@ -9045,7 +9045,7 @@ input:focus { outline: none; }
   transform: scale(0);
   animation: none !important;
   transition:
-    opacity 400ms cubic-bezier(.32, .72, 0, 1),
+    opacity 400ms var(--ease-emphasized),
     transform 500ms cubic-bezier(.18, .89, .32, 1.18);
 }
 .au2-card-3.step-3 .au2-end-dot,
@@ -9060,7 +9060,7 @@ input:focus { outline: none; }
 .au2-end-halo {
   transform-box: fill-box;
   transform-origin: center;
-  animation: au2-end-halo-pulse 1800ms cubic-bezier(.32, .72, 0, 1) infinite;
+  animation: au2-end-halo-pulse 1800ms var(--ease-emphasized) infinite;
 }
 @keyframes au2-end-halo-pulse {
   0%   { transform: scale(1);   opacity: 0.7; stroke-width: 2; }
@@ -9075,7 +9075,7 @@ input:focus { outline: none; }
   letter-spacing: 0.08em;
   text-transform: lowercase;
   opacity: 0;
-  transition: opacity 400ms cubic-bezier(.32, .72, 0, 1);
+  transition: opacity 400ms var(--ease-emphasized);
   pointer-events: none;
 }
 .au2-card-3.step-1 .au2-line-label--apr,
@@ -9122,8 +9122,8 @@ input:focus { outline: none; }
   opacity: 0;
   transform: translateY(6px);
   transition:
-    opacity 300ms cubic-bezier(.32, .72, 0, 1),
-    transform 400ms cubic-bezier(.32, .72, 0, 1);
+    opacity 300ms var(--ease-emphasized),
+    transform 400ms var(--ease-emphasized);
   z-index: 4;
   white-space: nowrap;
   box-shadow: 0 6px 18px rgba(0,0,0,0.18);
@@ -9155,7 +9155,7 @@ input:focus { outline: none; }
 
 /* Delta pill pulse cuando step >= 5 */
 .au2-delta.is-pulse {
-  animation: au2-delta-pulse 700ms cubic-bezier(.32, .72, 0, 1) 2;
+  animation: au2-delta-pulse 700ms var(--ease-emphasized) 2;
 }
 @keyframes au2-delta-pulse {
   0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--green) 0%, transparent); }
@@ -9170,7 +9170,7 @@ input:focus { outline: none; }
   color: var(--ink-3);
   margin-top: 2px;
   opacity: 0;
-  transition: opacity 400ms cubic-bezier(.32, .72, 0, 1);
+  transition: opacity 400ms var(--ease-emphasized);
 }
 .au2-card-3.step-1 .au2-kpi-vs,
 .au2-card-3.step-2 .au2-kpi-vs,
@@ -9195,7 +9195,7 @@ input:focus { outline: none; }
   opacity: 0;
   transform: translate(-50%, 12px);
   transition:
-    opacity 360ms cubic-bezier(.32, .72, 0, 1),
+    opacity 360ms var(--ease-emphasized),
     transform 500ms cubic-bezier(.18, .89, .32, 1.18);
   pointer-events: none;
   z-index: 5;
@@ -9263,8 +9263,8 @@ input:focus { outline: none; }
   opacity: 0;
   transform: translateY(-2px);
   transition:
-    opacity 360ms cubic-bezier(.32, .72, 0, 1),
-    transform 360ms cubic-bezier(.32, .72, 0, 1);
+    opacity 360ms var(--ease-emphasized),
+    transform 360ms var(--ease-emphasized);
 }
 .au2-ag2-status.is-on { opacity: 1; transform: translateY(0); }
 .au2-ag2-status-dot {
@@ -9433,8 +9433,8 @@ input:focus { outline: none; }
   opacity: 0;
   transform: scale(0.9);
   transition:
-    opacity 260ms cubic-bezier(.32, .72, 0, 1),
-    transform 260ms cubic-bezier(.32, .72, 0, 1),
+    opacity 260ms var(--ease-emphasized),
+    transform 260ms var(--ease-emphasized),
     background 260ms ease,
     color 260ms ease,
     border-color 260ms ease;
@@ -9450,7 +9450,7 @@ input:focus { outline: none; }
 
 /* Entry stagger (reusa au2-row-in que ya está definido en slide 1 viejo) */
 .au2-slide.is-active .au2-ag2 .au2-ag2-row {
-  animation: au2-row-in 320ms cubic-bezier(.32, .72, 0, 1) backwards;
+  animation: au2-row-in 320ms var(--ease-emphasized) backwards;
 }
 .au2-slide.is-active .au2-ag2 .au2-ag2-row:nth-child(1) { animation-delay: 100ms; }
 .au2-slide.is-active .au2-ag2 .au2-ag2-row:nth-child(2) { animation-delay: 160ms; }
@@ -9459,7 +9459,7 @@ input:focus { outline: none; }
 
 /* Hero entry · subtle scale */
 .au2-slide.is-active .au2-ag2-hero {
-  animation: au2-ag2-hero-in 480ms cubic-bezier(.32, .72, 0, 1) backwards;
+  animation: au2-ag2-hero-in 480ms var(--ease-emphasized) backwards;
   animation-delay: 60ms;
 }
 @keyframes au2-ag2-hero-in {
@@ -9476,8 +9476,8 @@ input:focus { outline: none; }
   opacity: 0;
   transform: translateY(4px);
   transition:
-    opacity 380ms cubic-bezier(.32, .72, 0, 1),
-    transform 380ms cubic-bezier(.32, .72, 0, 1);
+    opacity 380ms var(--ease-emphasized),
+    transform 380ms var(--ease-emphasized);
 }
 .au2-ag2-foot.is-on { opacity: 1; transform: translateY(0); }
 .au2-ag2-foot-glyph {
@@ -9579,7 +9579,7 @@ input:focus { outline: none; }
   font-weight: 500;
   letter-spacing: 0;
   font-variant-numeric: tabular-nums;
-  transition: color 320ms cubic-bezier(.32, .72, 0, 1);
+  transition: color 320ms var(--ease-emphasized);
 }
 .au2-cal2-amount-sym { color: var(--ink-3); font-weight: 400; }
 .au2-cal2-amount.is-bumped {
@@ -9587,7 +9587,7 @@ input:focus { outline: none; }
 }
 .au2-cal2-amount.is-bumped .au2-cal2-amount-sym { color: color-mix(in oklab, var(--green) 70%, var(--ink-3)); }
 .au2-cal2-amount.is-bumped .au2-cal2-amount-val {
-  animation: au2-cal2-bump 420ms cubic-bezier(.32, .72, 0, 1);
+  animation: au2-cal2-bump 420ms var(--ease-emphasized);
 }
 @keyframes au2-cal2-bump {
   0%   { transform: translateY(0) scale(1); }
@@ -9604,9 +9604,9 @@ input:focus { outline: none; }
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
   transition:
-    background 320ms cubic-bezier(.32, .72, 0, 1),
-    border-color 320ms cubic-bezier(.32, .72, 0, 1),
-    color 320ms cubic-bezier(.32, .72, 0, 1);
+    background 320ms var(--ease-emphasized),
+    border-color 320ms var(--ease-emphasized),
+    color 320ms var(--ease-emphasized);
 }
 .au2-cal2-paid.is-bumped {
   background: var(--green-soft);
@@ -9624,7 +9624,7 @@ input:focus { outline: none; }
 .au2-cal2-paid.is-bumped .au2-cal2-paid-glyph {
   background: var(--green);
   color: #fff;
-  animation: au2-cal2-tick 480ms cubic-bezier(.32, .72, 0, 1);
+  animation: au2-cal2-tick 480ms var(--ease-emphasized);
 }
 @keyframes au2-cal2-tick {
   0%   { transform: scale(1); }
@@ -9644,8 +9644,8 @@ input:focus { outline: none; }
   box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 18%, transparent);
   border-radius: 6px;
   transition:
-    background 360ms cubic-bezier(.32, .72, 0, 1),
-    box-shadow 360ms cubic-bezier(.32, .72, 0, 1);
+    background 360ms var(--ease-emphasized),
+    box-shadow 360ms var(--ease-emphasized);
 }
 
 /* Footer override · más compacto */
@@ -9674,8 +9674,8 @@ input:focus { outline: none; }
   pointer-events: none;
   z-index: 5;
   transition:
-    opacity 360ms cubic-bezier(.32, .72, 0, 1),
-    transform 360ms cubic-bezier(.32, .72, 0, 1);
+    opacity 360ms var(--ease-emphasized),
+    transform 360ms var(--ease-emphasized);
   white-space: nowrap;
 }
 .au2-cal2-banner.is-on {
@@ -9730,7 +9730,7 @@ input:focus { outline: none; }
   border-bottom: 1.4px solid color-mix(in oklab, var(--accent) 50%, transparent);
 }
 .au2-cal2-banner.is-on .au2-cal2-banner-tail {
-  animation: au2-cal2-tail-draw 520ms cubic-bezier(.32, .72, 0, 1) 80ms backwards;
+  animation: au2-cal2-tail-draw 520ms var(--ease-emphasized) 80ms backwards;
 }
 @keyframes au2-cal2-tail-draw {
   from { height: 0; opacity: 0; }
@@ -9756,8 +9756,8 @@ input:focus { outline: none; }
   z-index: 5;
   transform: translateX(14px) scale(0.96);
   transition:
-    opacity 360ms cubic-bezier(.32, .72, 0, 1),
-    transform 360ms cubic-bezier(.32, .72, 0, 1);
+    opacity 360ms var(--ease-emphasized),
+    transform 360ms var(--ease-emphasized);
   white-space: nowrap;
 }
 .au2-cal2-toast.is-on {
@@ -9810,8 +9810,8 @@ input:focus { outline: none; }
   transform: translateY(8px) scale(0.96);
   transform-origin: bottom right;
   transition:
-    opacity 460ms cubic-bezier(.32, .72, 0, 1),
-    transform 460ms cubic-bezier(.32, .72, 0, 1);
+    opacity 460ms var(--ease-emphasized),
+    transform 460ms var(--ease-emphasized);
 }
 .au2-cal2-wa.is-on {
   opacity: 1;
@@ -9880,8 +9880,8 @@ input:focus { outline: none; }
    ES la prueba de automatización. Evita el overlap visual con el WA card. */
 .au2-cal2 .au2-cal-auto {
   transition:
-    opacity 360ms cubic-bezier(.32, .72, 0, 1),
-    transform 360ms cubic-bezier(.32, .72, 0, 1);
+    opacity 360ms var(--ease-emphasized),
+    transform 360ms var(--ease-emphasized);
 }
 .au2-cal2.is-phase-wa .au2-cal-auto {
   opacity: 0;
@@ -9944,8 +9944,8 @@ input:focus { outline: none; }
   opacity: 0;
   transform: translateY(6px);
   transition:
-    opacity 360ms cubic-bezier(.32, .72, 0, 1),
-    transform 360ms cubic-bezier(.32, .72, 0, 1);
+    opacity 360ms var(--ease-emphasized),
+    transform 360ms var(--ease-emphasized);
 }
 .au2-fin2-kpi:first-child { padding-left: 0; }
 .au2-fin2-kpi:last-child {
@@ -9998,8 +9998,8 @@ input:focus { outline: none; }
   opacity: 0;
   transform: translateY(2px);
   transition:
-    opacity 360ms cubic-bezier(.32, .72, 0, 1),
-    transform 360ms cubic-bezier(.32, .72, 0, 1);
+    opacity 360ms var(--ease-emphasized),
+    transform 360ms var(--ease-emphasized);
 }
 .au2-fin2-kpi-delta svg { color: currentColor; }
 .au2-fin2-kpi-delta-pct {
@@ -10046,8 +10046,8 @@ input:focus { outline: none; }
   stroke-dashoffset: 100;
   opacity: 0;
   transition:
-    stroke-dashoffset 650ms cubic-bezier(.32, .72, 0, 1),
-    opacity 400ms cubic-bezier(.32, .72, 0, 1);
+    stroke-dashoffset 650ms var(--ease-emphasized),
+    opacity 400ms var(--ease-emphasized);
 }
 .au2-fin2.phase-1 .au2-fin2-line-apr,
 .au2-fin2.phase-2 .au2-fin2-line-apr,
@@ -10061,7 +10061,7 @@ input:focus { outline: none; }
 .au2-fin2-line-may {
   stroke-dasharray: 100;
   stroke-dashoffset: 100;
-  transition: stroke-dashoffset 800ms cubic-bezier(.32, .72, 0, 1);
+  transition: stroke-dashoffset 800ms var(--ease-emphasized);
 }
 .au2-fin2.phase-2 .au2-fin2-line-may,
 .au2-fin2.phase-3 .au2-fin2-line-may,
@@ -10072,7 +10072,7 @@ input:focus { outline: none; }
 }
 .au2-fin2-area {
   opacity: 0;
-  transition: opacity 500ms cubic-bezier(.32, .72, 0, 1) 200ms;
+  transition: opacity 500ms var(--ease-emphasized) 200ms;
 }
 .au2-fin2.phase-2 .au2-fin2-area,
 .au2-fin2.phase-3 .au2-fin2-area,
@@ -10085,7 +10085,7 @@ input:focus { outline: none; }
   opacity: 0;
   transform: scale(0);
   transition:
-    opacity 320ms cubic-bezier(.32, .72, 0, 1),
+    opacity 320ms var(--ease-emphasized),
     transform 460ms cubic-bezier(.18, .89, .32, 1.28);
 }
 .au2-fin2.phase-3 .au2-fin2-dot,
@@ -10098,7 +10098,7 @@ input:focus { outline: none; }
 .au2-fin2-halo {
   transform-box: fill-box;
   transform-origin: center;
-  animation: au2-fin2-halo 1900ms cubic-bezier(.32, .72, 0, 1) infinite;
+  animation: au2-fin2-halo 1900ms var(--ease-emphasized) infinite;
 }
 @keyframes au2-fin2-halo {
   0%   { transform: scale(1);   opacity: 0.7; stroke-width: 2; }
@@ -10115,7 +10115,7 @@ input:focus { outline: none; }
   text-transform: uppercase;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 320ms cubic-bezier(.32, .72, 0, 1);
+  transition: opacity 320ms var(--ease-emphasized);
 }
 .au2-fin2-lbl-apr {
   color: var(--ink-3);
@@ -10154,7 +10154,7 @@ input:focus { outline: none; }
   gap: 0;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 360ms cubic-bezier(.32, .72, 0, 1);
+  transition: opacity 360ms var(--ease-emphasized);
 }
 .au2-fin2-tip.is-on { opacity: 1; }
 .au2-fin2-tip-leader {
@@ -10164,7 +10164,7 @@ input:focus { outline: none; }
   background: linear-gradient(180deg,
     color-mix(in oklab, var(--accent) 60%, transparent) 0%,
     color-mix(in oklab, var(--accent) 25%, transparent) 100%);
-  transition: height 480ms cubic-bezier(.32, .72, 0, 1) 80ms;
+  transition: height 480ms var(--ease-emphasized) 80ms;
 }
 .au2-fin2-tip.is-on .au2-fin2-tip-leader {
   height: 22px;
@@ -10180,7 +10180,7 @@ input:focus { outline: none; }
     0 8px 20px color-mix(in oklab, var(--ink) 28%, transparent),
     0 0 0 1px color-mix(in oklab, var(--accent) 16%, transparent);
   transform: translateY(4px);
-  transition: transform 360ms cubic-bezier(.32, .72, 0, 1);
+  transition: transform 360ms var(--ease-emphasized);
   white-space: nowrap;
 }
 .au2-fin2-tip.is-on .au2-fin2-tip-card {
@@ -10365,8 +10365,8 @@ input:focus { outline: none; }
   background: transparent;
   border: 1px solid transparent;
   transition:
-    background 320ms cubic-bezier(.32, .72, 0, 1),
-    border-color 320ms cubic-bezier(.32, .72, 0, 1);
+    background 320ms var(--ease-emphasized),
+    border-color 320ms var(--ease-emphasized);
 }
 .au2-rea2-step.is-active {
   background: color-mix(in oklab, var(--accent) 6%, var(--surface));
@@ -10388,9 +10388,9 @@ input:focus { outline: none; }
   color: var(--ink-3);
   letter-spacing: 0;
   transition:
-    background 320ms cubic-bezier(.32, .72, 0, 1),
-    border-color 320ms cubic-bezier(.32, .72, 0, 1),
-    color 320ms cubic-bezier(.32, .72, 0, 1);
+    background 320ms var(--ease-emphasized),
+    border-color 320ms var(--ease-emphasized),
+    color 320ms var(--ease-emphasized);
 }
 .au2-rea2-step.is-active .au2-rea2-step-n {
   background: color-mix(in oklab, var(--accent) 18%, var(--surface));
@@ -10451,8 +10451,8 @@ input:focus { outline: none; }
   opacity: 0;
   transform: translateY(2px);
   transition:
-    opacity 360ms cubic-bezier(.32, .72, 0, 1),
-    transform 360ms cubic-bezier(.32, .72, 0, 1);
+    opacity 360ms var(--ease-emphasized),
+    transform 360ms var(--ease-emphasized);
 }
 .au2-rea2-step.is-active .au2-rea2-step-content,
 .au2-rea2-step.is-done .au2-rea2-step-content {
@@ -10482,8 +10482,8 @@ input:focus { outline: none; }
   opacity: 0;
   transform: translateY(2px);
   transition:
-    opacity 360ms cubic-bezier(.32, .72, 0, 1),
-    transform 360ms cubic-bezier(.32, .72, 0, 1);
+    opacity 360ms var(--ease-emphasized),
+    transform 360ms var(--ease-emphasized);
 }
 .au2-rea2-step.is-active .au2-rea2-btn-wrap,
 .au2-rea2-step.is-done .au2-rea2-btn-wrap {
@@ -10503,7 +10503,7 @@ input:focus { outline: none; }
   font-weight: 500;
   letter-spacing: 0.02em;
   cursor: default;
-  transition: transform 200ms cubic-bezier(.32, .72, 0, 1), background 200ms ease;
+  transition: transform 200ms var(--ease-emphasized), background 200ms ease;
   box-shadow: 0 1px 0 color-mix(in oklab, var(--accent-2) 80%, var(--ink));
 }
 .au2-rea2-step.is-done .au2-rea2-btn {
@@ -10523,7 +10523,7 @@ input:focus { outline: none; }
     transparent 60%);
 }
 .au2-rea2.phase-3 .au2-rea2-btn {
-  animation: au2-rea2-btn-press 900ms cubic-bezier(.32, .72, 0, 1) forwards;
+  animation: au2-rea2-btn-press 900ms var(--ease-emphasized) forwards;
 }
 .au2-rea2.phase-3 .au2-rea2-btn::after {
   animation: au2-rea2-ripple 700ms cubic-bezier(.2, 0, 0, 1) 480ms forwards;
@@ -10552,7 +10552,7 @@ input:focus { outline: none; }
   filter: drop-shadow(0 2px 4px rgba(0,0,0,0.18));
 }
 .au2-rea2.phase-3 .au2-rea2-cursor {
-  animation: au2-rea2-cursor-path 1000ms cubic-bezier(.32, .72, 0, 1) forwards;
+  animation: au2-rea2-cursor-path 1000ms var(--ease-emphasized) forwards;
 }
 @keyframes au2-rea2-cursor-path {
   0%   { opacity: 0; transform: translate(20px, 26px) rotate(-12deg); }
@@ -10575,7 +10575,7 @@ input:focus { outline: none; }
   opacity: 0;
   transform: translateY(8px);
   transition:
-    opacity 460ms cubic-bezier(.32, .72, 0, 1),
+    opacity 460ms var(--ease-emphasized),
     transform 460ms cubic-bezier(.18, 1.2, .42, 1);
 }
 .au2-rea2-foot.is-on {
@@ -12045,7 +12045,7 @@ input:focus { outline: none; }
 .au2-fin3-halo {
   transform-box: fill-box;
   transform-origin: center;
-  animation: au2-fin3-halo 1900ms cubic-bezier(.32, .72, 0, 1) infinite;
+  animation: au2-fin3-halo 1900ms var(--ease-emphasized) infinite;
 }
 @keyframes au2-fin3-halo {
   0%   { transform: scale(1);   opacity: 0.7; stroke-width: 2; }
