@@ -6690,11 +6690,15 @@ input:focus { outline: none; }
   display: flex; align-items: center; justify-content: center;
   opacity: 0;
   pointer-events: none;
+  /* C15: removed permanent will-change. FM v2 controla animations via
+     inline styles (rAF tweens, no CSS transitions). will-change permanente
+     desperdiciaba GPU memory en los 4 slides inactivos sin beneficio.
+     Si en perf audit mobile resulta jank → mover will-change a JS
+     conditional vía style={{ willChange: isAnimating ? "..." : "auto" }}. */
   transform: translateY(12px);
   transition:
     opacity 320ms var(--ease-emphasized),
     transform 320ms var(--ease-emphasized);
-  will-change: opacity, transform;
 }
 .au2-slide.is-active {
   opacity: 1;
