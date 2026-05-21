@@ -8,14 +8,29 @@
 
 **Architecture:** Single new component `<PublicCard>` reading purely from CSS variables. Mood is applied via a `data-card-mood` attribute on the root — no JS token assembly. Logo lives in Supabase Storage (`org-logos/<org_id>/logo.png`), referenced by `organization.logo_url`. Mood is persisted in `organization.card_mood` (4-value text enum). The component is consumed in three places: onboarding live-preview, onboarding Step-9 reveal, and `/book/[slug]` hero.
 
-**Tech Stack:** Next.js 15 App Router · React 19 · TypeScript strict · Supabase (Postgres + Storage + RLS) · Prisma · framer-motion 11.11 · folio.css (motion language v2) · Vitest · Playwright · pgTAP.
+**Tech Stack:** Next.js 15 App Router (Turbopack, dev port **3010**) · React 19 · TypeScript strict · Supabase (Postgres + Storage + RLS) · Prisma · framer-motion 11.11 · folio.css (motion language v2) · **Playwright** (e2e + visual projects — the project has no Vitest installed) · pgTAP (Supabase).
+
+---
+
+## ⚠ Amendments (post-author critical review · 2026-05-21)
+
+Mechanical corrections applied after the plan was committed, after reading the actual repo state. Each preserves the design intent; only the *how* changes. Treat amendments as authoritative whenever the body conflicts.
+
+| # | Body says | Reality / corrected guidance | Why |
+|---|---|---|---|
+| A1 | CSS namespace `.pc-*` / `--pc-*` / `@keyframes pc-*` | **Renamed globally to `.fpc-*` / `--fpc-*` / `@keyframes fpc-*`** (Folio Public Card) | `public/folio.css` already uses `.pc-*` for the existing "Paciente Centro" (patient detail) screen — lines 3725-3905+. Collision is real; rename avoids it. |
+| A2 | "Add Fraunces via `next/font/google`" | **Extend the existing Google Fonts `<link>` in `app/layout.tsx`** with `&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600`. The `--font-display` token sets `'Fraunces', 'Iowan Old Style', Georgia, serif`. | Geist + Geist Mono already load via CDN `<link>`; introducing `next/font` for Fraunces only would split the loading mechanism and block the F11 self-host migration. F1.1 is rewritten in-body for this. |
+| A3 | "Write Vitest unit test for X" | **Use Playwright** in `tests/e2e/` against a dev preview route. Read computed styles via `page.evaluate(...)`; assert DOM selectors via `page.locator(...)`. Token-presence test lives in `tests/e2e/atelier-tokens.spec.ts`. Component primitives get a `app/(dev)/...` preview route. | The project has no Vitest installed (`package.json` confirms — only Playwright). Running `pnpm exec vitest` errors out. F1.2 and F1.3 are rewritten in-body for this. F2-F8 references to "Vitest" should be read as "Playwright against a dev route." |
+| A4 | `http://localhost:3000`, `pnpm test` | **`http://localhost:3010`, `pnpm test:app` / `pnpm test:all` / `pnpm exec playwright test --project=e2e ...`** | `pnpm dev` runs on port 3010 (per `package.json`). The script `pnpm test` does not exist; available scripts are `test:visual`, `test:app`, `test:all`. |
+
+These four amendments do not affect: the Folio Atelier identity, the 4 moods, the motion choreography, the data model (M21), the storage bucket design, or any acceptance criterion. They only change file-loading mechanism, test framework, port, and CSS prefix string.
 
 ---
 
 ## Conventions used throughout this plan
 
-- **Beat names** (e.g., `pc-enter-hero`, `pc-mood-card-select`) refer to the named motion beats defined in `design-language-recommendation.md` §3.5. The implementing agent must consult that section to know the easing token, duration, and properties for each beat.
-- **Token names** (e.g., `--accent-warm`, `--pc-radius`) refer to the palette/scale tokens defined in the same companion doc §3.2 and §3.3.
+- **Beat names** (e.g., `fpc-enter-hero`, `fpc-mood-card-select`) refer to the named motion beats defined in `design-language-recommendation.md` §3.5. The implementing agent must consult that section to know the easing token, duration, and properties for each beat.
+- **Token names** (e.g., `--accent-warm`, `--fpc-radius`) refer to the palette/scale tokens defined in the same companion doc §3.2 and §3.3.
 - **Visual gate** at the end of each phase means: implementing agent stops, starts the dev server (`pnpm dev`), navigates to the URLs listed under "Visual gate," and **explicitly asks the founder** to verify in browser before proceeding. Code metrics green is not a gate. The founder approval is the gate. See `feedback-visual-validation-required.md`.
 - **No `--no-verify`, no `--force`, no `--skip` ever.** If a hook fails, fix the root cause.
 - **Commits**: one commit per task, conventional commits, `feat(card): ...` / `fix(card): ...` / `chore(card): ...` / `test(card): ...`. Add `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>` footer when relevant.
@@ -71,7 +86,7 @@ The implementing agent uses the recommended default and adds a `<!-- ASSUMED_DEF
 
 ## 1 · F1 — Token bootstrap (no UI changes ship)
 
-**Goal of phase:** add the Folio Atelier tokens to `public/folio.css`, wire Fraunces into `app/layout.tsx` via `next/font/google`, register the decoration-primitive CSS classes, and verify zero visual regression on existing surfaces (dashboard, onboarding, login). Nothing should *look different* yet on the user-facing app; this phase only makes the new tokens *available*.
+**Goal of phase:** add the Folio Atelier tokens to `public/folio.css`, extend the Google Fonts `<link>` in `app/layout.tsx` to also fetch Fraunces, register the decoration-primitive React components + CSS classes, and verify zero visual regression on existing surfaces (dashboard, onboarding, login). Nothing should *look different* yet on the user-facing app; this phase only makes the new tokens *available*.
 
 **Why this phase ships nothing visible:** decoupling the foundation from the UI work means F4 (PublicCard) can be reviewed against a stable token surface, and any taste-rejection at the visual gate of F1 (e.g., "Fraunces feels wrong on dashboard text — actually we never used it there but we want to confirm it's loaded right") is cheap to roll back. Frequent commits = low blast radius.
 
@@ -79,32 +94,33 @@ The implementing agent uses the recommended default and adds a `<!-- ASSUMED_DEF
 - `pnpm typecheck && pnpm lint && pnpm build` green.
 - Dashboard (`/hoy`), onboarding step 2, login, `/book/<existing-slug>` render **identical** to pre-F1 (visual diff via Playwright screenshot if available, else founder eyeballs at the gate).
 - `document.fonts.check("1em Fraunces")` returns `true` after page load in `/onboarding`.
-- Computed style of `:root` exposes the new tokens (`--accent-ink`, `--pc-radius`, `--font-display`, `--space-4`, `--r-2xl`, `--track-tight-2`, `--shadow-card`).
+- Computed style of `:root` exposes the new tokens (`--accent-ink`, `--fpc-radius`, `--font-display`, `--space-4`, `--r-2xl`, `--track-tight-2`, `--shadow-card`).
 
 ### Files in F1
 
 - **Modify:** `public/folio.css` — token additions only (append a new block; do not edit existing tokens).
-- **Modify:** `app/layout.tsx` — register Fraunces via `next/font/google`.
+- **Modify:** `app/layout.tsx` — extend the existing Google Fonts `<link>` to also request Fraunces (variable, opsz axis + weights 400/500/600).
 - **Modify:** `next.config.ts` (only if needed) — no expected changes.
 - **Create:** `components/public-card/decoration.tsx` — exports `<EditorialRule />`, `<BrassCornerMark />`, `<DateBadge />` decoration primitives (small file, ~80 lines).
-- **Create:** `tests/unit/folio-tokens.test.ts` — Vitest test asserting that the new tokens exist on `:root`.
-- **Create:** `tests/e2e/atelier-tokens.spec.ts` — Playwright smoke test asserting Fraunces is loaded and decoration classes are registered.
+- **Create:** `app/(dev)/decoration/page.tsx` — dev-only preview route that renders the three primitives so Playwright can assert their DOM presence.
+- **Create:** `tests/e2e/atelier-tokens.spec.ts` — Playwright e2e (project `e2e`) covering: Fraunces `document.fonts.load` resolves; all required `:root` tokens have non-empty `getComputedStyle`; decoration primitives render at `/decoration`.
 
 ---
 
-### Task 1.1 — Add Fraunces via `next/font/google`
+### Task 1.1 — Add Fraunces via Google Fonts `<link>` (matches existing Geist convention)
 
 **Files:**
 - Modify: `app/layout.tsx`
 
+**Why CDN, not `next/font`:** the existing layout loads Geist + Geist Mono via `<link rel="stylesheet" href="https://fonts.googleapis.com/...">`. Folio standardised on this pattern in F11 backlog ("self-hosting evaluado en F11 si Lighthouse lo demanda"). Mixing `next/font` (Fraunces) with CDN-loaded Geist/Geist Mono would be inconsistent and would block the planned F11 self-host migration. Keep parity now; migrate all three together later.
+
 - [ ] **Step 1 — Read the current layout file.**
 
 ```bash
-# Capture current shape
 cat app/layout.tsx
 ```
 
-- [ ] **Step 2 — Write the failing E2E that checks for the font face.**
+- [ ] **Step 2 — Write the failing Playwright e2e that proves Fraunces is reachable.**
 
 Create `tests/e2e/atelier-tokens.spec.ts`:
 
@@ -112,10 +128,16 @@ Create `tests/e2e/atelier-tokens.spec.ts`:
 import { test, expect } from "@playwright/test";
 
 test.describe("Atelier tokens · F1 acceptance", () => {
-  test("Fraunces is loaded on the page", async ({ page }) => {
+  test("Fraunces is loadable on /onboarding", async ({ page }) => {
     await page.goto("/onboarding");
-    const isLoaded = await page.evaluate(() => document.fonts.check("1em Fraunces"));
-    expect(isLoaded).toBe(true);
+    // document.fonts.load triggers fetch + returns array of resolved FontFace.
+    // If Fraunces is unreachable, the promise resolves to []. Asserting length
+    // catches a missing <link> as well as a CDN block.
+    const loaded = await page.evaluate(async () => {
+      const faces = await document.fonts.load("400 1em Fraunces");
+      return faces.length;
+    });
+    expect(loaded).toBeGreaterThan(0);
   });
 });
 ```
@@ -123,46 +145,38 @@ test.describe("Atelier tokens · F1 acceptance", () => {
 - [ ] **Step 3 — Run it; expect FAIL.**
 
 ```bash
-pnpm exec playwright test tests/e2e/atelier-tokens.spec.ts -g "Fraunces is loaded" --reporter=line
+pnpm exec playwright test --project=e2e tests/e2e/atelier-tokens.spec.ts -g "Fraunces is loadable" --reporter=line
 ```
 
-Expected: FAIL — `document.fonts.check("1em Fraunces")` returns `false`.
+Expected: FAIL — `loaded === 0`.
 
-- [ ] **Step 4 — Add Fraunces to `app/layout.tsx`.**
+- [ ] **Step 4 — Add Fraunces to `app/layout.tsx` by extending the existing Geist `<link>`.**
 
-Patch (illustrative — adjust to actual existing layout structure):
+Replace the current Geist `<link>` element with a single combined link covering Geist + Geist Mono + Fraunces (one HTTP request, one stylesheet, one cached resource). The Fraunces axis spec uses Google Fonts API v2 syntax for the optical-size axis.
 
-```ts
-// app/layout.tsx — additions only
-
-import { Fraunces } from "next/font/google";
-
-const fraunces = Fraunces({
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  axes: ["opsz", "SOFT"],
-  variable: "--font-fraunces",
-  display: "swap",
-  fallback: ["Iowan Old Style", "Georgia", "serif"],
-});
-
-// in the <html> tag, add the font variable to className:
-// <html lang="es-AR" className={`${geist.variable} ${geistMono.variable} ${fraunces.variable}`}>
+```tsx
+// app/layout.tsx — replace the existing single <link> stylesheet line with:
+<link
+  href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&display=swap"
+  rel="stylesheet"
+/>
 ```
 
-- [ ] **Step 5 — Run the failing test; expect PASS.**
+Everything else in `layout.tsx` stays as-is. The `<link rel="preconnect">` lines already cover `fonts.googleapis.com` + `fonts.gstatic.com`.
+
+- [ ] **Step 5 — Run the test; expect PASS.**
 
 ```bash
-pnpm exec playwright test tests/e2e/atelier-tokens.spec.ts -g "Fraunces is loaded" --reporter=line
+pnpm exec playwright test --project=e2e tests/e2e/atelier-tokens.spec.ts -g "Fraunces is loadable" --reporter=line
 ```
 
-Expected: PASS.
+Expected: PASS — `loaded >= 1`.
 
-- [ ] **Step 6 — Typecheck + lint locally.**
+- [ ] **Step 6 — Typecheck + lint.**
 
 ```bash
 pnpm typecheck
-pnpm lint -- app/layout.tsx
+pnpm lint
 ```
 
 Expected: both green.
@@ -172,14 +186,17 @@ Expected: both green.
 ```bash
 git add app/layout.tsx tests/e2e/atelier-tokens.spec.ts
 git commit -m "$(cat <<'EOF'
-feat(typography): load Fraunces variable display font
+feat(typography): load Fraunces variable display font via Google Fonts <link>
 
-Adds Fraunces (Google Fonts, OFL, ~27 KB Latin subset woff2) under the
---font-fraunces CSS variable for use in PublicCard hero + Step 9 reveal
-+ editorial mood label. Body type stays Geist; mono stays Geist Mono.
+Extends the existing Geist + Geist Mono <link> in app/layout.tsx to also
+request Fraunces (opsz 9..144 + wght 400/500/600). Same delivery
+mechanism as Geist — single combined stylesheet, no next/font detour
+(F11 backlog will self-host all three together).
 
-Rationale documented in docs/specs/2026-05-21-design-language-recommendation.md
-section 3.3.
+For use in PublicCard hero + Step 9 reveal + editorial mood label.
+Body type stays Geist; mono stays Geist Mono.
+
+Rationale: docs/specs/2026-05-21-design-language-recommendation.md §3.3.
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
@@ -193,58 +210,67 @@ EOF
 **Files:**
 - Modify: `public/folio.css` (append a new block at the end of `:root { … }` and `[data-theme="dark"] { … }`).
 
-- [ ] **Step 1 — Write the failing token-presence test.**
+> **Note:** project uses Playwright only (no Vitest installed). Token-presence verification runs as a Playwright e2e that reads `getComputedStyle(:root)` against the running dev server.
 
-Create `tests/unit/folio-tokens.test.ts`:
+- [ ] **Step 1 — Write the failing token-presence Playwright test.**
+
+Append to `tests/e2e/atelier-tokens.spec.ts` (the same file created in 1.1):
 
 ```ts
-import { describe, it, expect, beforeAll } from "vitest";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+test.describe("Atelier tokens · :root computed style", () => {
+  const REQUIRED_TOKENS = [
+    "--accent-warm",
+    "--accent-warm-soft",
+    "--accent-warm-glow",
+    "--accent-ink",
+    "--accent-ink-soft",
+    "--accent-ink-glow",
+    "--fpc-accent",
+    "--fpc-bg-tint-style",
+    "--fpc-name-family",
+    "--fpc-name-weight",
+    "--fpc-bio-style",
+    "--fpc-radius",
+    "--fpc-decoration",
+    "--space-4",
+    "--r-2xl",
+    "--r-3xl",
+    "--r-pill",
+    "--shadow-card",
+    "--shadow-focus-warm",
+    "--shadow-focus-ink",
+    "--track-tight-2",
+    "--font-display",
+  ] as const;
 
-const CSS = readFileSync(resolve(__dirname, "../../public/folio.css"), "utf8");
-
-const REQUIRED_TOKENS_LIGHT = [
-  "--accent-warm:",
-  "--accent-warm-soft:",
-  "--accent-warm-glow:",
-  "--accent-ink:",
-  "--accent-ink-soft:",
-  "--accent-ink-glow:",
-  "--pc-accent:",
-  "--pc-bg-tint-style:",
-  "--pc-name-family:",
-  "--pc-name-weight:",
-  "--pc-bio-style:",
-  "--pc-radius:",
-  "--pc-decoration:",
-  "--space-4:",
-  "--r-2xl:",
-  "--r-3xl:",
-  "--r-pill:",
-  "--shadow-card:",
-  "--shadow-focus-warm:",
-  "--shadow-focus-ink:",
-  "--track-tight-2:",
-  "--font-display:",
-];
-
-describe("folio.css · Atelier token presence", () => {
-  for (const token of REQUIRED_TOKENS_LIGHT) {
-    it(`declares ${token.replace(":", "")} in :root or via next/font`, () => {
-      expect(CSS.includes(token)).toBe(true);
+  for (const token of REQUIRED_TOKENS) {
+    test(`:root declares ${token}`, async ({ page }) => {
+      await page.goto("/onboarding");
+      const value = await page.evaluate(
+        (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim(),
+        token,
+      );
+      expect(value, `${token} should resolve to a non-empty value`).not.toBe("");
     });
   }
+
+  test("--accent-ink resolves to #2A4365 in light mode", async ({ page }) => {
+    await page.goto("/onboarding");
+    const value = await page.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue("--accent-ink").trim().toLowerCase(),
+    );
+    expect(value).toBe("#2a4365");
+  });
 });
 ```
 
 - [ ] **Step 2 — Run it; expect FAIL on every missing token.**
 
 ```bash
-pnpm exec vitest run tests/unit/folio-tokens.test.ts
+pnpm exec playwright test --project=e2e tests/e2e/atelier-tokens.spec.ts -g "computed style" --reporter=line
 ```
 
-Expected: many FAILs.
+Expected: many FAILs (tokens not yet declared).
 
 - [ ] **Step 3 — Add the token block to folio.css.**
 
@@ -257,7 +283,7 @@ Then append:
 ```css
 /* ═════════════ FOLIO ATELIER · type-scale + track-scale tokens ═════════════ */
 :root {
-  --font-display: var(--font-fraunces), 'Iowan Old Style', Georgia, serif;
+  --font-display: 'Fraunces', 'Iowan Old Style', Georgia, serif;
   --font-sans:    'Geist', -apple-system, system-ui, sans-serif;
   --font-mono:    'Geist Mono', ui-monospace, monospace;
 
@@ -285,10 +311,10 @@ Then append:
 - [ ] **Step 4 — Run test; expect PASS.**
 
 ```bash
-pnpm exec vitest run tests/unit/folio-tokens.test.ts
+pnpm exec playwright test --project=e2e tests/e2e/atelier-tokens.spec.ts -g "computed style" --reporter=line
 ```
 
-Expected: PASS on all token presence checks.
+Expected: PASS on all token-presence checks + the `--accent-ink === #2a4365` assertion.
 
 - [ ] **Step 5 — Run typecheck + build.**
 
@@ -306,7 +332,7 @@ git commit -m "$(cat <<'EOF'
 feat(tokens): add Folio Atelier palette + type-scale + spacing tokens
 
 Adds --accent-ink (#2A4365, clinical functional accent), --accent-warm-*
-(brass identity layer), --pc-* (PublicCard mood overlay scaffold),
+(brass identity layer), --fpc-* (PublicCard mood overlay scaffold),
 --space-*, --r-2xl/3xl/pill, --shadow-card, --track-* scale, and
 --font-display alias. Back-compat: legacy --accent / --brass aliases
 still resolve to brass.
@@ -324,42 +350,31 @@ EOF
 
 **Files:**
 - Create: `components/public-card/decoration.tsx`
-- Create: `components/public-card/__tests__/decoration.test.tsx`
-- Modify: `public/folio.css` (append `.pc-rule`, `.pc-corner-mark`, `.pc-date-badge` styles)
+- Create: `app/(dev)/decoration/page.tsx` — dev preview rendering the three primitives.
+- Modify: `tests/e2e/atelier-tokens.spec.ts` — append decoration assertions.
+- Modify: `public/folio.css` — append `.fpc-rule`, `.fpc-corner-mark`, `.fpc-date-badge` styles.
 
-- [ ] **Step 1 — Write the failing component test.**
+- [ ] **Step 1 — Write the failing Playwright assertions.**
 
-Create `components/public-card/__tests__/decoration.test.tsx`:
+Append to `tests/e2e/atelier-tokens.spec.ts`:
 
-```tsx
-import { render } from "@testing-library/react";
-import { describe, it, expect } from "vitest";
-import { EditorialRule, BrassCornerMark, DateBadge } from "../decoration";
-
-describe("PublicCard decoration primitives", () => {
-  it("EditorialRule renders a 1px line element with .pc-rule class", () => {
-    const { container } = render(<EditorialRule />);
-    const el = container.querySelector(".pc-rule");
-    expect(el).not.toBeNull();
-  });
-  it("BrassCornerMark renders SVG with .pc-corner-mark class", () => {
-    const { container } = render(<BrassCornerMark />);
-    const svg = container.querySelector("svg.pc-corner-mark");
-    expect(svg).not.toBeNull();
-    expect(svg?.getAttribute("aria-hidden")).toBe("true");
-  });
-  it("DateBadge renders a span with .pc-date-badge containing the given label", () => {
-    const { getByText } = render(<DateBadge label="EST. 2026 · CÓRDOBA" />);
-    const el = getByText("EST. 2026 · CÓRDOBA");
-    expect(el.classList.contains("pc-date-badge")).toBe(true);
+```ts
+test.describe("Atelier decoration primitives", () => {
+  test("EditorialRule, BrassCornerMark, DateBadge render at /decoration", async ({ page }) => {
+    await page.goto("/decoration");
+    await expect(page.locator(".fpc-rule").first()).toBeVisible();
+    const svg = page.locator("svg.fpc-corner-mark").first();
+    await expect(svg).toBeVisible();
+    await expect(svg).toHaveAttribute("aria-hidden", "true");
+    await expect(page.getByText("EST. 2026 · CÓRDOBA")).toHaveClass(/fpc-date-badge/);
   });
 });
 ```
 
-- [ ] **Step 2 — Run; expect FAIL (decoration.tsx does not exist).**
+- [ ] **Step 2 — Run; expect FAIL (route 404 + selectors missing).**
 
 ```bash
-pnpm exec vitest run components/public-card/__tests__/decoration.test.tsx
+pnpm exec playwright test --project=e2e tests/e2e/atelier-tokens.spec.ts -g "decoration primitives" --reporter=line
 ```
 
 - [ ] **Step 3 — Create `components/public-card/decoration.tsx`.**
@@ -369,18 +384,18 @@ pnpm exec vitest run components/public-card/__tests__/decoration.test.tsx
  * Folio · PublicCard decoration primitives.
  *
  * Pure CSS-class-driven SVG/HTML primitives consumed by mood overrides.
- * No props beyond label; styling is governed by --pc-decoration-color set
+ * No props beyond label; styling is governed by --fpc-decoration-color set
  * by the mood block on the card root.
  */
 
 export function EditorialRule(props: { label?: string }) {
-  return <span className="pc-rule" aria-hidden>{props.label ?? ""}</span>;
+  return <span className="fpc-rule" aria-hidden>{props.label ?? ""}</span>;
 }
 
 export function BrassCornerMark() {
   return (
     <svg
-      className="pc-corner-mark"
+      className="fpc-corner-mark"
       width="18"
       height="18"
       viewBox="0 0 18 18"
@@ -389,7 +404,7 @@ export function BrassCornerMark() {
     >
       <path
         d="M 18 0 L 18 7 M 18 0 L 11 0"
-        stroke="var(--pc-decoration-color)"
+        stroke="var(--fpc-decoration-color)"
         strokeWidth="1.5"
         fill="none"
         strokeLinecap="round"
@@ -400,7 +415,7 @@ export function BrassCornerMark() {
 
 export function DateBadge({ label }: { label: string }) {
   return (
-    <span className="pc-date-badge" aria-label={`Marca de origen: ${label}`}>
+    <span className="fpc-date-badge" aria-label={`Marca de origen: ${label}`}>
       {label}
     </span>
   );
@@ -411,47 +426,75 @@ export function DateBadge({ label }: { label: string }) {
 
 ```css
 /* ═════════════ FOLIO ATELIER · decoration primitives ═════════════ */
-.pc-rule {
+.fpc-rule {
   display: block;
   height: 1px;
   width: 24px;
-  background: var(--pc-decoration-color, var(--ink-3));
+  background: var(--fpc-decoration-color, var(--ink-3));
   margin-bottom: 10px;
   opacity: 0.6;
 }
-.pc-corner-mark {
+.fpc-corner-mark {
   display: inline-block;
-  color: var(--pc-decoration-color, var(--accent-warm));
+  color: var(--fpc-decoration-color, var(--accent-warm));
   opacity: 0.7;
 }
-.pc-date-badge {
+.fpc-date-badge {
   display: inline-block;
   font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: var(--track-loose-2);
   color: var(--ink-3);
   padding: 3px 9px;
-  border: 1px solid var(--pc-decoration-color, var(--accent-warm));
+  border: 1px solid var(--fpc-decoration-color, var(--accent-warm));
   border-radius: var(--r-pill);
   background: transparent;
 }
 ```
 
-- [ ] **Step 5 — Run tests; expect PASS.**
+- [ ] **Step 5 — Create the dev preview route `app/(dev)/decoration/page.tsx`:**
+
+```tsx
+import { EditorialRule, BrassCornerMark, DateBadge } from "@/components/public-card/decoration";
+
+export const dynamic = "force-static";
+
+export default function DecorationDevPage() {
+  return (
+    <main style={{ padding: 40, display: "grid", gap: 24 }}>
+      <section>
+        <h2>EditorialRule</h2>
+        <EditorialRule />
+      </section>
+      <section style={{ position: "relative", padding: 24, border: "1px solid var(--line)", borderRadius: 12, width: 280 }}>
+        <h2>BrassCornerMark</h2>
+        <span style={{ position: "absolute", top: 8, right: 12 }}><BrassCornerMark /></span>
+      </section>
+      <section>
+        <h2>DateBadge</h2>
+        <DateBadge label="EST. 2026 · CÓRDOBA" />
+      </section>
+    </main>
+  );
+}
+```
+
+- [ ] **Step 6 — Run tests; expect PASS.**
 
 ```bash
-pnpm exec vitest run components/public-card/__tests__/decoration.test.tsx
+pnpm exec playwright test --project=e2e tests/e2e/atelier-tokens.spec.ts -g "decoration primitives" --reporter=line
 pnpm typecheck
 ```
 
-- [ ] **Step 6 — Commit.**
+- [ ] **Step 7 — Commit.**
 
 ```bash
-git add components/public-card/decoration.tsx components/public-card/__tests__/decoration.test.tsx public/folio.css
-git commit -m "feat(card): add decoration primitives (rule, corner-mark, date-badge)
+git add components/public-card/decoration.tsx app/\(dev\)/decoration/page.tsx public/folio.css tests/e2e/atelier-tokens.spec.ts
+git commit -m "feat(card): decoration primitives (rule, corner-mark, date-badge) + dev route
 
-Adds three pure-CSS-class decoration primitives used by the 4 mood
-presets. Color governed by --pc-decoration-color on the card root.
+Three pure-CSS-class decoration components consumed by the 4 mood
+presets. Color governed by --fpc-decoration-color on the card root.
+Preview at /decoration; Playwright e2e asserts DOM presence.
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 ```
@@ -874,7 +917,7 @@ psql "$SUPABASE_DB_URL" -c "SELECT policyname FROM pg_policies WHERE tablename='
 
 ## 3 · F3 — Logo upload component (`<LogoUpload>`)
 
-**Goal:** ship a self-contained `<LogoUpload>` component that supports drag-drop + click-to-browse + preview + error states, calls a server action to persist `logo_url` on the organization, and respects the motion beats `pc-logo-drop-enter` + `pc-logo-drop-error`.
+**Goal:** ship a self-contained `<LogoUpload>` component that supports drag-drop + click-to-browse + preview + error states, calls a server action to persist `logo_url` on the organization, and respects the motion beats `fpc-logo-drop-enter` + `fpc-logo-drop-error`.
 
 **Phase verification:**
 - Component renders standalone in a Storybook entry or test page.
@@ -890,7 +933,7 @@ psql "$SUPABASE_DB_URL" -c "SELECT policyname FROM pg_policies WHERE tablename='
 - **Create:** `components/public-card/__tests__/logo-upload.test.tsx`
 - **Modify:** `app/(public)/onboarding/actions.ts` — add `uploadOrgLogo` server action.
 - **Create:** `app/(public)/onboarding/__tests__/upload-logo.action.test.ts`
-- **Modify:** `public/folio.css` — append `.pc-dropzone-*` styles + keyframes for `pc-logo-drop-error` shake.
+- **Modify:** `public/folio.css` — append `.fpc-dropzone-*` styles + keyframes for `fpc-logo-drop-error` shake.
 
 ---
 
@@ -1049,19 +1092,19 @@ States:
 | `drag-over` | `dragover` event | dashed border `--accent-warm`, surface tint `--accent-warm-soft`, helper text → "Soltá para subir" |
 | `validating` | drop or file-pick fires | spinner badge top-right; preview thumb 80×80 px at 0.6 opacity |
 | `uploading` | server action in flight | spinner badge top-right; preview thumb at 1.0 opacity, brass progress hairline at bottom |
-| `success` | server action OK | beat `pc-logo-drop-enter` plays on preview (scale 0.92→1.00 + opacity, `--ease-overshoot`, 320 ms) |
-| `error` | server action rejects OR client validation fails | beat `pc-logo-drop-error` plays (3-cycle shake) + inline error in `--red`, dashed border becomes `--red` |
+| `success` | server action OK | beat `fpc-logo-drop-enter` plays on preview (scale 0.92→1.00 + opacity, `--ease-overshoot`, 320 ms) |
+| `error` | server action rejects OR client validation fails | beat `fpc-logo-drop-error` plays (3-cycle shake) + inline error in `--red`, dashed border becomes `--red` |
 
 Frame-by-frame motion:
 
-- **`pc-logo-drop-enter`** — at `T=0`: preview already painted at `opacity:0` `scale:0.92`. From `T=0` to `T=320 ms`, `opacity 0→1`, `transform: scale(0.92)→scale(1.00)`, easing `--ease-overshoot`. No follow-through. Rationale: overshoot reads as "stamping" — appropriate for a brand logo landing on a brand card.
-- **`pc-logo-drop-error`** — from `T=0` to `T=220 ms` over 3 sub-beats: `translateX(0→-6→+6→-3→+3→0)`, easing `--ease-anticipate`, total duration 220 ms; simultaneous border-color tween `--ink-4 → --red` over 140 ms. After `T=220 ms` the shake stops; border stays red until next drag-over or successful drop.
+- **`fpc-logo-drop-enter`** — at `T=0`: preview already painted at `opacity:0` `scale:0.92`. From `T=0` to `T=320 ms`, `opacity 0→1`, `transform: scale(0.92)→scale(1.00)`, easing `--ease-overshoot`. No follow-through. Rationale: overshoot reads as "stamping" — appropriate for a brand logo landing on a brand card.
+- **`fpc-logo-drop-error`** — from `T=0` to `T=220 ms` over 3 sub-beats: `translateX(0→-6→+6→-3→+3→0)`, easing `--ease-anticipate`, total duration 220 ms; simultaneous border-color tween `--ink-4 → --red` over 140 ms. After `T=220 ms` the shake stops; border stays red until next drag-over or successful drop.
 
 CSS additions to `public/folio.css`:
 
 ```css
 /* ═════════════ FOLIO ATELIER · LogoUpload dropzone ═════════════ */
-.pc-dropzone {
+.fpc-dropzone {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -1078,33 +1121,33 @@ CSS additions to `public/folio.css`:
     border-color var(--dur-quick) var(--ease-standard-out),
     background var(--dur-quick) var(--ease-standard-out);
 }
-.pc-dropzone:hover { border-color: var(--accent-warm); }
-.pc-dropzone.is-drag-over {
+.fpc-dropzone:hover { border-color: var(--accent-warm); }
+.fpc-dropzone.is-drag-over {
   border-color: var(--accent-warm);
   background: var(--accent-warm-soft);
 }
-.pc-dropzone.is-error {
+.fpc-dropzone.is-error {
   border-color: var(--red);
-  animation: pc-logo-drop-error var(--dur-snappy) var(--ease-anticipate);
+  animation: fpc-logo-drop-error var(--dur-snappy) var(--ease-anticipate);
 }
-.pc-dropzone-preview {
+.fpc-dropzone-preview {
   width: 80px;
   height: 80px;
   object-fit: contain;
   border-radius: var(--r-md);
   opacity: 0;
   transform: scale(0.92);
-  animation: pc-logo-drop-enter var(--dur-moderate) var(--ease-overshoot) forwards;
+  animation: fpc-logo-drop-enter var(--dur-moderate) var(--ease-overshoot) forwards;
 }
-.pc-dropzone-hint {
+.fpc-dropzone-hint {
   font-size: var(--fs-xs);
   color: var(--ink-3);
 }
 
-@keyframes pc-logo-drop-enter {
+@keyframes fpc-logo-drop-enter {
   to { opacity: 1; transform: scale(1.00); }
 }
-@keyframes pc-logo-drop-error {
+@keyframes fpc-logo-drop-error {
   0%   { transform: translateX(0);  }
   20%  { transform: translateX(-6px); }
   40%  { transform: translateX( 6px); }
@@ -1114,11 +1157,11 @@ CSS additions to `public/folio.css`:
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pc-dropzone-preview,
-  .pc-dropzone.is-error {
+  .fpc-dropzone-preview,
+  .fpc-dropzone.is-error {
     animation: none !important;
   }
-  .pc-dropzone-preview { opacity: 1; transform: none; }
+  .fpc-dropzone-preview { opacity: 1; transform: none; }
 }
 ```
 
@@ -1234,7 +1277,7 @@ export function LogoUpload({ currentLogoUrl, onUploaded, onRemoved }: LogoUpload
   const dragClass = status === "drag-over" ? "is-drag-over" : status === "error" ? "is-error" : "";
 
   return (
-    <div className={`pc-dropzone ${dragClass}`.trim()}
+    <div className={`fpc-dropzone ${dragClass}`.trim()}
       role="button"
       aria-label="Subir logo del consultorio"
       tabIndex={0}
@@ -1253,7 +1296,7 @@ export function LogoUpload({ currentLogoUrl, onUploaded, onRemoved }: LogoUpload
         onChange={onPick}
       />
       {localPreview ? (
-        <img src={localPreview} alt="Vista previa del logo" className="pc-dropzone-preview" />
+        <img src={localPreview} alt="Vista previa del logo" className="fpc-dropzone-preview" />
       ) : (
         <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor"
           strokeWidth="1.4" color="var(--ink-4)" aria-hidden>
@@ -1266,7 +1309,7 @@ export function LogoUpload({ currentLogoUrl, onUploaded, onRemoved }: LogoUpload
         <div style={{ fontWeight: 600, color: "var(--ink)" }}>
           {localPreview ? "Cambiar logo" : "Arrastrá tu logo aquí o hacé click"}
         </div>
-        <div className="pc-dropzone-hint">PNG, transparente, ≥512×512 — max 500 KB</div>
+        <div className="fpc-dropzone-hint">PNG, transparente, ≥512×512 — max 500 KB</div>
       </div>
       {error ? (
         <div role="alert" style={{ color: "var(--red)", fontSize: "var(--fs-sm)" }}>{error}</div>
@@ -1293,8 +1336,8 @@ export function LogoUpload({ currentLogoUrl, onUploaded, onRemoved }: LogoUpload
 git add components/public-card/logo-upload.tsx components/public-card/__tests__/logo-upload.test.tsx public/folio.css
 git commit -m "feat(card): LogoUpload component (drag-drop, validate, error shake)
 
-Implements pc-logo-drop-enter (320 ms overshoot stamp) and
-pc-logo-drop-error (220 ms 3-cycle shake). PNG-only client + server
+Implements fpc-logo-drop-enter (320 ms overshoot stamp) and
+fpc-logo-drop-error (220 ms 3-cycle shake). PNG-only client + server
 validation. Re-upload overwrites at <org_id>/logo.png. Reduce-motion
 honoured (animations stripped, final state preserved).
 
@@ -1331,7 +1374,7 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 - **Create:** `components/public-card/__tests__/public-card.test.tsx`
 - **Create:** `components/public-card/avatar-fallback.tsx` (extracted re-export of current `AvatarIniciales` to keep the public-card folder self-contained; no functional change — re-exports `AvatarIniciales`).
 - **Modify:** `components/onboarding/card-preview.tsx` — convert to a compat re-export of `PublicCard` (keeps existing imports working until F8 cleanup).
-- **Modify:** `public/folio.css` — append `.pc-card`, `.pc-hero`, `.pc-name`, `.pc-meta`, `.pc-bio`, `.pc-contact`, `.pc-services`, `.pc-cta`, `.pc-link-footer` plus their entry keyframes.
+- **Modify:** `public/folio.css` — append `.fpc-card`, `.fpc-hero`, `.fpc-name`, `.fpc-meta`, `.fpc-bio`, `.fpc-contact`, `.fpc-services`, `.fpc-cta`, `.fpc-link-footer` plus their entry keyframes.
 - **Modify:** `components/onboarding/step-shell.tsx` and `components/onboarding/step9-moment.tsx` — swap import.
 
 ---
@@ -1450,21 +1493,21 @@ export function PublicCard({ data, variant = "preview", appUrl = "", className =
 
   return (
     <article
-      className={`pc-card pc-variant-${variant} ${className}`.trim()}
+      className={`fpc-card fpc-variant-${variant} ${className}`.trim()}
       data-card-mood={mood}
       data-acento={acento}
       style={{
         // Acento per-pro override — moods may map this further via CSS.
-        ["--pc-accent" as string]: acento,
-        ["--pc-accent-soft" as string]: acentoSoft,
+        ["--fpc-accent" as string]: acento,
+        ["--fpc-accent-soft" as string]: acentoSoft,
       }}
     >
-      <header className="pc-hero">
+      <header className="fpc-hero">
         {data.logoUrl ? (
           <img
             src={data.logoUrl}
             alt={`Logo de ${consultorio}`}
-            className="pc-logo"
+            className="fpc-logo"
             width={isFull ? 120 : 80}
             height={isFull ? 120 : 80}
             loading="lazy"
@@ -1473,26 +1516,26 @@ export function PublicCard({ data, variant = "preview", appUrl = "", className =
         ) : (
           <AvatarIniciales fullName={fullName} acentoHex={acento} size={isFull ? "xl" : "lg"} />
         )}
-        <div className="pc-hero-text">
-          <h2 className="pc-name">{fullName}</h2>
-          <p className="pc-meta">
+        <div className="fpc-hero-text">
+          <h2 className="fpc-name">{fullName}</h2>
+          <p className="fpc-meta">
             {data.rubro || consultorio}
             {data.ciudad ? <span> · {data.ciudad}</span> : null}
           </p>
         </div>
         {/* Mood-applied decorations rendered conditionally per mood id */}
-        {mood === "calido"   ? <span className="pc-corner-slot"><BrassCornerMark /></span> : null}
-        {mood === "boutique" ? <span className="pc-date-slot"><DateBadge label="EST. 2026 · CÓRDOBA" /></span> : null}
+        {mood === "calido"   ? <span className="fpc-corner-slot"><BrassCornerMark /></span> : null}
+        {mood === "boutique" ? <span className="fpc-date-slot"><DateBadge label="EST. 2026 · CÓRDOBA" /></span> : null}
       </header>
 
       {data.bio ? (
-        <p className="pc-bio">{data.bio}</p>
+        <p className="fpc-bio">{data.bio}</p>
       ) : isEditing ? (
-        <p className="pc-bio is-placeholder">Agregá una bio del consultorio</p>
+        <p className="fpc-bio is-placeholder">Agregá una bio del consultorio</p>
       ) : null}
 
       {(data.direccionCompleta || data.telefonoPublico || data.instagramHandle) ? (
-        <section className="pc-contact" aria-label="Contacto">
+        <section className="fpc-contact" aria-label="Contacto">
           {mood === "editorial" || mood === "clinico" ? <EditorialRule /> : null}
           {data.direccionCompleta ? <Row icon={<IconPin />} text={data.direccionCompleta} /> : null}
           {data.telefonoPublico ? (
@@ -1507,32 +1550,32 @@ export function PublicCard({ data, variant = "preview", appUrl = "", className =
       ) : null}
 
       {data.servicios && data.servicios.length > 0 ? (
-        <section className="pc-services" aria-label="Servicios">
+        <section className="fpc-services" aria-label="Servicios">
           {mood === "editorial" || mood === "clinico" ? <EditorialRule /> : null}
-          <h3 className="pc-services-label fm-mono">Servicios</h3>
+          <h3 className="fpc-services-label fm-mono">Servicios</h3>
           <ul>
             {data.servicios.slice(0, isFull ? 5 : 3).map((s, i) => (
               <li key={i}>
-                <span className="pc-srv-name">{s.nombre}</span>
-                <span className="pc-srv-dur">· {s.dur} min</span>
-                <span className="pc-srv-price">{formatArs(s.precioCents / 100)}</span>
+                <span className="fpc-srv-name">{s.nombre}</span>
+                <span className="fpc-srv-dur">· {s.dur} min</span>
+                <span className="fpc-srv-price">{formatArs(s.precioCents / 100)}</span>
               </li>
             ))}
           </ul>
           {data.servicios.length > (isFull ? 5 : 3) ? (
-            <p className="pc-services-more">+ {data.servicios.length - (isFull ? 5 : 3)} más</p>
+            <p className="fpc-services-more">+ {data.servicios.length - (isFull ? 5 : 3)} más</p>
           ) : null}
         </section>
       ) : null}
 
       {isFull && data.slug ? (
-        <footer className="pc-footer">
-          <button type="button" className="pc-cta">Reservar turno</button>
+        <footer className="fpc-footer">
+          <button type="button" className="fpc-cta">Reservar turno</button>
         </footer>
       ) : null}
 
       {!isFull && linkText ? (
-        <div className="pc-link-footer fm-mono">{linkText}</div>
+        <div className="fpc-link-footer fm-mono">{linkText}</div>
       ) : null}
     </article>
   );
@@ -1551,61 +1594,61 @@ Append:
 
 ```css
 /* ═════════════ FOLIO ATELIER · PublicCard · base ═════════════ */
-.pc-card {
+.fpc-card {
   position: relative;
-  background: var(--pc-bg, var(--surface));
+  background: var(--fpc-bg, var(--surface));
   border: 1px solid var(--line);
-  border-radius: var(--pc-radius);
+  border-radius: var(--fpc-radius);
   box-shadow: var(--shadow-card);
   overflow: hidden;
   display: flex;
   flex-direction: column;
   isolation: isolate;                       /* lets ::before bg gradients sit behind text safely */
 }
-.pc-card::before {                         /* mood-driven hero tint */
+.fpc-card::before {                         /* mood-driven hero tint */
   content: "";
   position: absolute;
   inset: 0 0 60% 0;
   background: linear-gradient(180deg,
-    color-mix(in srgb, var(--pc-accent) calc(var(--pc-bg-tint-amount) * 100%), transparent) 0%,
+    color-mix(in srgb, var(--fpc-accent) calc(var(--fpc-bg-tint-amount) * 100%), transparent) 0%,
     transparent 100%);
   pointer-events: none;
   z-index: 0;
 }
-.pc-variant-full         { max-width: 560px; }
-.pc-variant-preview      { max-width: 360px; }
+.fpc-variant-full         { max-width: 560px; }
+.fpc-variant-preview      { max-width: 360px; }
 
-.pc-hero {
+.fpc-hero {
   position: relative; z-index: 1;
   display: grid; grid-template-columns: auto 1fr; gap: 16px;
   align-items: flex-start;
-  padding: var(--pc-hero-py-full) 28px calc(var(--pc-hero-py-full) - 12px);
-  border-bottom: 1px solid color-mix(in srgb, var(--pc-accent) 8%, transparent);
+  padding: var(--fpc-hero-py-full) 28px calc(var(--fpc-hero-py-full) - 12px);
+  border-bottom: 1px solid color-mix(in srgb, var(--fpc-accent) 8%, transparent);
 }
-.pc-variant-preview .pc-hero { padding: var(--pc-hero-py-prev) 20px calc(var(--pc-hero-py-prev) - 8px); }
+.fpc-variant-preview .fpc-hero { padding: var(--fpc-hero-py-prev) 20px calc(var(--fpc-hero-py-prev) - 8px); }
 
-.pc-logo { object-fit: contain; border-radius: var(--r-md); background: transparent; }
+.fpc-logo { object-fit: contain; border-radius: var(--r-md); background: transparent; }
 
-.pc-name {
+.fpc-name {
   margin: 0;
-  font-family: var(--pc-name-family, var(--font-sans));
-  font-weight: var(--pc-name-weight, 600);
-  letter-spacing: var(--pc-name-tracking, var(--track-tight-1));
-  font-size: var(--pc-name-size-full);
+  font-family: var(--fpc-name-family, var(--font-sans));
+  font-weight: var(--fpc-name-weight, 600);
+  letter-spacing: var(--fpc-name-tracking, var(--track-tight-1));
+  font-size: var(--fpc-name-size-full);
   line-height: 1.06;
   color: var(--ink);
   word-break: break-word;
 }
-.pc-variant-preview .pc-name { font-size: var(--pc-name-size-prev); line-height: 1.18; }
+.fpc-variant-preview .fpc-name { font-size: var(--fpc-name-size-prev); line-height: 1.18; }
 
-.pc-meta {
+.fpc-meta {
   margin: 6px 0 0;
   font-size: var(--fs-body);
   color: var(--ink-3);
   letter-spacing: var(--track-tight-0);
 }
 
-.pc-bio {
+.fpc-bio {
   position: relative; z-index: 1;
   margin: 0;
   padding: 16px 28px 0;
@@ -1613,20 +1656,20 @@ Append:
   line-height: 1.55;
   color: var(--ink-2);
 }
-.pc-bio.is-placeholder { color: var(--ink-4); font-style: italic; }
+.fpc-bio.is-placeholder { color: var(--ink-4); font-style: italic; }
 
-.pc-contact {
+.fpc-contact {
   position: relative; z-index: 1;
   padding: 18px 28px;
   display: flex; flex-direction: column; gap: 10px;
   border-bottom: 1px solid var(--line-soft);
 }
 
-.pc-services {
+.fpc-services {
   position: relative; z-index: 1;
   padding: 18px 28px 24px;
 }
-.pc-services-label {
+.fpc-services-label {
   font-size: var(--fs-xs);
   letter-spacing: var(--track-loose-2);
   text-transform: uppercase;
@@ -1634,22 +1677,22 @@ Append:
   font-weight: 600;
   margin: 0 0 12px;
 }
-.pc-services ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
-.pc-services li { display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: baseline; font-size: var(--fs-md); color: var(--ink); }
-.pc-srv-name  { font-weight: 500; }
-.pc-srv-dur   { color: var(--ink-3); }
-.pc-srv-price { font-variant-numeric: tabular-nums; font-weight: 500; grid-column: 2; }
-.pc-services-more { margin: 10px 0 0; font-size: var(--fs-xs); color: var(--ink-3); }
+.fpc-services ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.fpc-services li { display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: baseline; font-size: var(--fs-md); color: var(--ink); }
+.fpc-srv-name  { font-weight: 500; }
+.fpc-srv-dur   { color: var(--ink-3); }
+.fpc-srv-price { font-variant-numeric: tabular-nums; font-weight: 500; grid-column: 2; }
+.fpc-services-more { margin: 10px 0 0; font-size: var(--fs-xs); color: var(--ink-3); }
 
-.pc-footer {
+.fpc-footer {
   position: relative; z-index: 1;
   padding: 20px 28px 28px;
   border-top: 1px solid var(--line-soft);
 }
-.pc-cta {
+.fpc-cta {
   display: inline-flex; align-items: center; justify-content: center;
   width: 100%;
-  background: var(--pc-accent);
+  background: var(--fpc-accent);
   color: #FBF9F4;
   border: 0;
   border-radius: var(--r-lg);
@@ -1659,10 +1702,10 @@ Append:
   cursor: pointer;
   transition: transform var(--dur-quick) var(--ease-standard-out), box-shadow var(--dur-quick) var(--ease-standard-out);
 }
-.pc-cta:hover { transform: translateY(-0.5px); box-shadow: var(--shadow-2); }
-.pc-cta:active { transform: translateY(0.5px); transition-duration: var(--dur-instant); }
+.fpc-cta:hover { transform: translateY(-0.5px); box-shadow: var(--shadow-2); }
+.fpc-cta:active { transform: translateY(0.5px); transition-duration: var(--dur-instant); }
 
-.pc-link-footer {
+.fpc-link-footer {
   padding: 12px 20px;
   border-top: 1px solid var(--line-soft);
   background: var(--surface-2);
@@ -1671,29 +1714,29 @@ Append:
   word-break: break-all;
 }
 
-.pc-corner-slot { position: absolute; top: 14px; right: 16px; z-index: 2; }
-.pc-date-slot   { position: absolute; top: 14px; right: 16px; z-index: 2; }
+.fpc-corner-slot { position: absolute; top: 14px; right: 16px; z-index: 2; }
+.fpc-date-slot   { position: absolute; top: 14px; right: 16px; z-index: 2; }
 
 /* ═════════════ Entry choreography (mood-agnostic baseline) ═════════════ */
-.pc-card { animation: pc-enter-hero var(--dur-cinematic) var(--ease-emphasized-out) both; }
-.pc-hero            { animation: pc-enter-musical 320ms var(--ease-emphasized-out) both; animation-delay: var(--pc-stagger-musical-2); }
-.pc-bio             { animation: pc-enter-musical 320ms var(--ease-emphasized-out) both; animation-delay: var(--pc-stagger-musical-4); }
-.pc-contact         { animation: pc-enter-musical 320ms var(--ease-emphasized-out) both; animation-delay: var(--pc-stagger-musical-5); }
-.pc-services        { animation: pc-enter-musical 320ms var(--ease-emphasized-out) both; animation-delay: var(--pc-stagger-musical-6); }
-.pc-footer .pc-cta  { animation: pc-enter-musical 320ms var(--ease-emphasized-out) both; animation-delay: var(--pc-stagger-musical-7); }
-.pc-link-footer     { animation: pc-enter-musical 320ms var(--ease-emphasized-out) both; animation-delay: var(--pc-stagger-musical-8); }
+.fpc-card { animation: fpc-enter-hero var(--dur-cinematic) var(--ease-emphasized-out) both; }
+.fpc-hero            { animation: fpc-enter-musical 320ms var(--ease-emphasized-out) both; animation-delay: var(--fpc-stagger-musical-2); }
+.fpc-bio             { animation: fpc-enter-musical 320ms var(--ease-emphasized-out) both; animation-delay: var(--fpc-stagger-musical-4); }
+.fpc-contact         { animation: fpc-enter-musical 320ms var(--ease-emphasized-out) both; animation-delay: var(--fpc-stagger-musical-5); }
+.fpc-services        { animation: fpc-enter-musical 320ms var(--ease-emphasized-out) both; animation-delay: var(--fpc-stagger-musical-6); }
+.fpc-footer .fpc-cta  { animation: fpc-enter-musical 320ms var(--ease-emphasized-out) both; animation-delay: var(--fpc-stagger-musical-7); }
+.fpc-link-footer     { animation: fpc-enter-musical 320ms var(--ease-emphasized-out) both; animation-delay: var(--fpc-stagger-musical-8); }
 
-@keyframes pc-enter-hero {
-  from { opacity: 0; transform: translateY(var(--pc-hero-y-from)); filter: blur(var(--pc-hero-blur-from)); }
+@keyframes fpc-enter-hero {
+  from { opacity: 0; transform: translateY(var(--fpc-hero-y-from)); filter: blur(var(--fpc-hero-blur-from)); }
   to   { opacity: 1; transform: translateY(0); filter: blur(0); }
 }
-@keyframes pc-enter-musical {
+@keyframes fpc-enter-musical {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pc-card, .pc-hero, .pc-bio, .pc-contact, .pc-services, .pc-footer .pc-cta, .pc-link-footer {
+  .fpc-card, .fpc-hero, .fpc-bio, .fpc-contact, .fpc-services, .fpc-footer .fpc-cta, .fpc-link-footer {
     animation-duration: var(--dur-quick) !important;
     animation-delay: 0ms !important;
     transform: none !important;
@@ -1739,9 +1782,9 @@ pnpm typecheck && pnpm lint && pnpm build
 git add components/public-card/public-card.tsx components/public-card/__tests__/public-card.test.tsx components/onboarding/card-preview.tsx public/folio.css
 git commit -m "feat(card): introduce <PublicCard> (Layer A foundation, editorial default)
 
-New component reads --pc-* tokens. data-card-mood='editorial' default.
+New component reads --fpc-* tokens. data-card-mood='editorial' default.
 LogoUrl renders <img>; null → AvatarIniciales fallback. Musical-stagger
-entry beats (pc-enter-hero + pc-enter-musical). Reduce-motion compliant.
+entry beats (fpc-enter-hero + fpc-enter-musical). Reduce-motion compliant.
 CardPreview kept as compat shim re-export until F8 cleanup.
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
@@ -1755,15 +1798,15 @@ This is the **load-bearing motion table** for F4. Implementing agent verifies in
 
 | T (ms) | Layer | Element | Beat | Properties | Easing | Distance |
 |---|---|---|---|---|---|---|
-|   0 | A | `.pc-card` | `pc-enter-hero` start | opacity 0, translateY 12 px, blur 6 px | `--ease-emphasized-out` | — |
-|  90 | A | `.pc-hero`           | `pc-enter-musical` start (delay = `--pc-stagger-musical-2`) | opacity 0, y 8 px | `--ease-emphasized-out` | 8 px |
-| 200 | A | `.pc-meta` (within hero) | inherited from `.pc-hero` | — | — | — |
-| 340 | B | `.pc-bio`            | `pc-enter-musical` start (delay = `--pc-stagger-musical-4`) | opacity 0, y 8 px | `--ease-emphasized-out` | 8 px |
-| 480 | B | `.pc-contact`        | `pc-enter-musical` start (delay = `--pc-stagger-musical-5`) | opacity 0, y 8 px | `--ease-emphasized-out` | 8 px |
-| 620 | B | `.pc-services`       | `pc-enter-musical` start (delay = `--pc-stagger-musical-6`) | opacity 0, y 8 px | `--ease-emphasized-out` | 8 px |
-| 720 | A | `.pc-card`           | `pc-enter-hero` end (`--dur-cinematic` from 0) | opacity 1, y 0, blur 0 | — | — |
-| 760 | B | `.pc-footer .pc-cta` | `pc-enter-musical` start (delay = `--pc-stagger-musical-7`) | opacity 0, y 8 px | `--ease-emphasized-out` | 8 px |
-| 860 | B | `.pc-link-footer`    | `pc-enter-musical` start (delay = `--pc-stagger-musical-8`) | opacity 0, y 8 px | `--ease-emphasized-out` | 8 px |
+|   0 | A | `.fpc-card` | `fpc-enter-hero` start | opacity 0, translateY 12 px, blur 6 px | `--ease-emphasized-out` | — |
+|  90 | A | `.fpc-hero`           | `fpc-enter-musical` start (delay = `--fpc-stagger-musical-2`) | opacity 0, y 8 px | `--ease-emphasized-out` | 8 px |
+| 200 | A | `.fpc-meta` (within hero) | inherited from `.fpc-hero` | — | — | — |
+| 340 | B | `.fpc-bio`            | `fpc-enter-musical` start (delay = `--fpc-stagger-musical-4`) | opacity 0, y 8 px | `--ease-emphasized-out` | 8 px |
+| 480 | B | `.fpc-contact`        | `fpc-enter-musical` start (delay = `--fpc-stagger-musical-5`) | opacity 0, y 8 px | `--ease-emphasized-out` | 8 px |
+| 620 | B | `.fpc-services`       | `fpc-enter-musical` start (delay = `--fpc-stagger-musical-6`) | opacity 0, y 8 px | `--ease-emphasized-out` | 8 px |
+| 720 | A | `.fpc-card`           | `fpc-enter-hero` end (`--dur-cinematic` from 0) | opacity 1, y 0, blur 0 | — | — |
+| 760 | B | `.fpc-footer .fpc-cta` | `fpc-enter-musical` start (delay = `--fpc-stagger-musical-7`) | opacity 0, y 8 px | `--ease-emphasized-out` | 8 px |
+| 860 | B | `.fpc-link-footer`    | `fpc-enter-musical` start (delay = `--fpc-stagger-musical-8`) | opacity 0, y 8 px | `--ease-emphasized-out` | 8 px |
 | 1180 | — | (last musical beat ends 320 ms after its start) | — | — | — | — |
 
 **Why "musical" not uniform stagger:** the gaps between deltas widen progressively (90, 110, 140, 140, 140, 140, 100 ms) — that uneven cadence reads as natural typing rhythm rather than mechanical metronome ticking. The CTA appears slightly faster after services because the eye has just scanned a list and wants the resolution.
@@ -1787,7 +1830,7 @@ This is the **load-bearing motion table** for F4. Implementing agent verifies in
 
 ## 5 · F5 — Mood system (Layer B · 4 moods)
 
-**Goal:** implement the 4 mood-override blocks defined in `design-language-recommendation.md` §4. Each mood operates via `[data-card-mood="<id>"]` selector on `.pc-card`. No JS token assembly. Per-pro acento (custom hex) blends per mood rule (defined per-mood in 5.7).
+**Goal:** implement the 4 mood-override blocks defined in `design-language-recommendation.md` §4. Each mood operates via `[data-card-mood="<id>"]` selector on `.fpc-card`. No JS token assembly. Per-pro acento (custom hex) blends per mood rule (defined per-mood in 5.7).
 
 **Phase verification:**
 - All 4 moods render distinguishable at thumbnail scale (200×100 px) without reading text.
@@ -1897,7 +1940,7 @@ export function applyAcentoBlend(mood: CardMood, hex: string): string {
 In `public-card.tsx`, replace the line
 
 ```ts
-["--pc-accent" as string]: acento,
+["--fpc-accent" as string]: acento,
 ```
 
 with
@@ -1907,7 +1950,7 @@ import { applyAcentoBlend } from "./moods";
 // ...
 const blended = applyAcentoBlend(mood, acento);
 // ...
-["--pc-accent" as string]: blended,
+["--fpc-accent" as string]: blended,
 ```
 
 - [ ] **Step 5 — Commit.**
@@ -1934,72 +1977,72 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 
 /* ─── Cálido — Cercano y humano ─── */
 [data-card-mood="calido"] {
-  --pc-bg-tint-amount: 0.10;
-  --pc-bg-tint-style:  linear;
-  --pc-name-family:    var(--font-display);
-  --pc-name-weight:    500;
-  --pc-name-tracking:  -0.014em;
-  --pc-bio-style:      italic-serif;
-  --pc-radius:         16px;
-  --pc-decoration:     corner-mark;
-  --pc-decoration-color: var(--accent-warm);
-  --pc-hero-py-full:   36px;
+  --fpc-bg-tint-amount: 0.10;
+  --fpc-bg-tint-style:  linear;
+  --fpc-name-family:    var(--font-display);
+  --fpc-name-weight:    500;
+  --fpc-name-tracking:  -0.014em;
+  --fpc-bio-style:      italic-serif;
+  --fpc-radius:         16px;
+  --fpc-decoration:     corner-mark;
+  --fpc-decoration-color: var(--accent-warm);
+  --fpc-hero-py-full:   36px;
 }
-[data-card-mood="calido"] .pc-bio { font-family: var(--font-display); font-style: italic; }
+[data-card-mood="calido"] .fpc-bio { font-family: var(--font-display); font-style: italic; }
 
 /* ─── Clínico — Preciso y profesional ─── */
 [data-card-mood="clinico"] {
-  --pc-bg-tint-amount: 0;
-  --pc-bg-tint-style:  flat;
-  --pc-name-family:    var(--font-sans);
-  --pc-name-weight:    700;
-  --pc-name-tracking:  -0.022em;
-  --pc-bio-style:      plain;
-  --pc-radius:         10px;
-  --pc-decoration:     sub-line;
-  --pc-decoration-color: var(--accent-ink);
-  --pc-hero-py-full:   28px;
+  --fpc-bg-tint-amount: 0;
+  --fpc-bg-tint-style:  flat;
+  --fpc-name-family:    var(--font-sans);
+  --fpc-name-weight:    700;
+  --fpc-name-tracking:  -0.022em;
+  --fpc-bio-style:      plain;
+  --fpc-radius:         10px;
+  --fpc-decoration:     sub-line;
+  --fpc-decoration-color: var(--accent-ink);
+  --fpc-hero-py-full:   28px;
 }
-[data-card-mood="clinico"] .pc-cta { background: var(--accent-ink); color: #FBF9F4; }
-[data-card-mood="clinico"] .pc-services-label,
-[data-card-mood="clinico"] .pc-link-footer { letter-spacing: var(--track-loose-3); }
-[data-card-mood="clinico"] .pc-hero,
-[data-card-mood="clinico"] .pc-bio,
-[data-card-mood="clinico"] .pc-contact,
-[data-card-mood="clinico"] .pc-services,
-[data-card-mood="clinico"] .pc-footer .pc-cta,
-[data-card-mood="clinico"] .pc-link-footer {
+[data-card-mood="clinico"] .fpc-cta { background: var(--accent-ink); color: #FBF9F4; }
+[data-card-mood="clinico"] .fpc-services-label,
+[data-card-mood="clinico"] .fpc-link-footer { letter-spacing: var(--track-loose-3); }
+[data-card-mood="clinico"] .fpc-hero,
+[data-card-mood="clinico"] .fpc-bio,
+[data-card-mood="clinico"] .fpc-contact,
+[data-card-mood="clinico"] .fpc-services,
+[data-card-mood="clinico"] .fpc-footer .fpc-cta,
+[data-card-mood="clinico"] .fpc-link-footer {
   animation-delay: 0ms !important;
   animation-duration: 200ms !important;
 }
-[data-card-mood="clinico"] .pc-hero            { animation-delay:  60ms !important; }
-[data-card-mood="clinico"] .pc-bio             { animation-delay: 120ms !important; }
-[data-card-mood="clinico"] .pc-contact         { animation-delay: 180ms !important; }
-[data-card-mood="clinico"] .pc-services        { animation-delay: 240ms !important; }
-[data-card-mood="clinico"] .pc-footer .pc-cta  { animation-delay: 300ms !important; }
-[data-card-mood="clinico"] .pc-link-footer     { animation-delay: 360ms !important; }
+[data-card-mood="clinico"] .fpc-hero            { animation-delay:  60ms !important; }
+[data-card-mood="clinico"] .fpc-bio             { animation-delay: 120ms !important; }
+[data-card-mood="clinico"] .fpc-contact         { animation-delay: 180ms !important; }
+[data-card-mood="clinico"] .fpc-services        { animation-delay: 240ms !important; }
+[data-card-mood="clinico"] .fpc-footer .fpc-cta  { animation-delay: 300ms !important; }
+[data-card-mood="clinico"] .fpc-link-footer     { animation-delay: 360ms !important; }
 
 /* ─── Editorial — Refinado y selecto (DEFAULT) ─── */
 [data-card-mood="editorial"] {
-  --pc-bg-tint-amount: 0.06;
-  --pc-bg-tint-style:  radial;
-  --pc-name-family:    var(--font-display);
-  --pc-name-weight:    400;
-  --pc-name-tracking:  -0.018em;
-  --pc-bio-style:      quote-with-rule;
-  --pc-radius:         20px;
-  --pc-decoration:     sub-line;
-  --pc-decoration-color: var(--accent-warm);
-  --pc-hero-py-full:   40px;
+  --fpc-bg-tint-amount: 0.06;
+  --fpc-bg-tint-style:  radial;
+  --fpc-name-family:    var(--font-display);
+  --fpc-name-weight:    400;
+  --fpc-name-tracking:  -0.018em;
+  --fpc-bio-style:      quote-with-rule;
+  --fpc-radius:         20px;
+  --fpc-decoration:     sub-line;
+  --fpc-decoration-color: var(--accent-warm);
+  --fpc-hero-py-full:   40px;
 }
-[data-card-mood="editorial"] .pc-card::before {
+[data-card-mood="editorial"] .fpc-card::before {
   background: radial-gradient(at 0% 0%,
-    color-mix(in srgb, var(--pc-accent) calc(var(--pc-bg-tint-amount) * 100%), transparent) 0%,
+    color-mix(in srgb, var(--fpc-accent) calc(var(--fpc-bg-tint-amount) * 100%), transparent) 0%,
     transparent 60%);
   inset: 0 0 50% 0;
 }
-[data-card-mood="editorial"] .pc-bio {
-  border-left: 1px solid var(--pc-accent);
+[data-card-mood="editorial"] .fpc-bio {
+  border-left: 1px solid var(--fpc-accent);
   padding-left: 18px;
   font-style: italic;
   font-family: var(--font-display);
@@ -2008,28 +2051,28 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 
 /* ─── Boutique — Personal y curado ─── */
 [data-card-mood="boutique"] {
-  --pc-bg-tint-amount: 0;
-  --pc-bg-tint-style:  paper-noise;
-  --pc-name-family:    var(--font-display);
-  --pc-name-weight:    600;
-  --pc-name-tracking:  -0.022em;
-  --pc-bio-style:      italic-serif;
-  --pc-radius:         24px;
-  --pc-decoration:     date-badge;
-  --pc-decoration-color: var(--accent-warm-2);
-  --pc-hero-py-full:   36px;
+  --fpc-bg-tint-amount: 0;
+  --fpc-bg-tint-style:  paper-noise;
+  --fpc-name-family:    var(--font-display);
+  --fpc-name-weight:    600;
+  --fpc-name-tracking:  -0.022em;
+  --fpc-bio-style:      italic-serif;
+  --fpc-radius:         24px;
+  --fpc-decoration:     date-badge;
+  --fpc-decoration-color: var(--accent-warm-2);
+  --fpc-hero-py-full:   36px;
 }
-[data-card-mood="boutique"] .pc-card {
+[data-card-mood="boutique"] .fpc-card {
   background-image:
     var(--shadow-card),
     url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><filter id='n'><feTurbulence baseFrequency='0.85' numOctaves='2' seed='5'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.015 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
   background-blend-mode: normal, multiply;
 }
-[data-card-mood="boutique"] .pc-bio { font-family: var(--font-display); font-style: italic; }
-[data-card-mood="boutique"] .pc-link-footer { animation-delay: 920ms !important; }
+[data-card-mood="boutique"] .fpc-bio { font-family: var(--font-display); font-style: italic; }
+[data-card-mood="boutique"] .fpc-link-footer { animation-delay: 920ms !important; }
 
 @media (prefers-reduced-transparency: reduce) {
-  [data-card-mood="boutique"] .pc-card { background-image: none; }
+  [data-card-mood="boutique"] .fpc-card { background-image: none; }
 }
 ```
 
@@ -2079,7 +2122,7 @@ export default function CardMoodsDevPage() {
 
 ```bash
 pnpm dev
-# open http://localhost:3000/card-moods
+# open http://localhost:3010/card-moods
 ```
 
 Verify the founder-grade differentiation:
@@ -2240,15 +2283,15 @@ Design decision: **grid 2×2, not slider** (Open Decision 2 in spec §14). Reaso
 
 Frame-by-frame for the three micro-interactions:
 
-- **`pc-mood-card-hover`** — at `T=0`: card at rest. From `T=0` to `T=140 ms`, `translateY(0 → -1 px)` and `box-shadow: var(--shadow-1) → var(--shadow-2)`, easing `--ease-standard-out`. On `mouseleave`, reverse with `--dur-quick`.
-- **`pc-mood-card-select`** — at `T=0`: user clicks. From `T=0` to `T=480 ms` over 4 sub-frames:
+- **`fpc-mood-card-hover`** — at `T=0`: card at rest. From `T=0` to `T=140 ms`, `translateY(0 → -1 px)` and `box-shadow: var(--shadow-1) → var(--shadow-2)`, easing `--ease-standard-out`. On `mouseleave`, reverse with `--dur-quick`.
+- **`fpc-mood-card-select`** — at `T=0`: user clicks. From `T=0` to `T=480 ms` over 4 sub-frames:
   - `0–80 ms`: `scale(1.00 → 0.97)`, `--ease-emphasized-in`. Tactile press.
   - `80–280 ms`: `scale(0.97 → 1.02)`, `--spring-snap`. Spring up.
   - `280–480 ms`: `scale(1.02 → 1.00)`, `--ease-standard-out`. Settle.
-  - Simultaneous beat: the live preview to the right runs `pc-mood-morph` (border-radius, --pc-bg-tint-style transition, name font-family swap).
-- **`pc-mood-morph`** — at `T=0`: live preview shows old mood. From `T=0` to `T=480 ms`:
-  - `border-radius` tweens to the new mood's `--pc-radius` (CSS transition).
-  - `background` (the `::before` tint) crossfades — both ::before layers (old + new pseudo via JSswap is not possible; we instead key on `--pc-bg-tint-amount` transitioning). For mood changes that swap from `linear` to `radial`, the implementation acceptance is "no flash — the transition uses `transition: background 480ms var(--spring-soft);` which crossfades the gradient as a single property".
+  - Simultaneous beat: the live preview to the right runs `fpc-mood-morph` (border-radius, --fpc-bg-tint-style transition, name font-family swap).
+- **`fpc-mood-morph`** — at `T=0`: live preview shows old mood. From `T=0` to `T=480 ms`:
+  - `border-radius` tweens to the new mood's `--fpc-radius` (CSS transition).
+  - `background` (the `::before` tint) crossfades — both ::before layers (old + new pseudo via JSswap is not possible; we instead key on `--fpc-bg-tint-amount` transitioning). For mood changes that swap from `linear` to `radial`, the implementation acceptance is "no flash — the transition uses `transition: background 480ms var(--spring-soft);` which crossfades the gradient as a single property".
   - **Name font-family swap** is non-animatable in CSS — visually instantaneous. Acceptance: when the user switches Cálido → Clínico, the name re-renders in Geist instantly while the radius is still mid-tween. This is *correct*; trying to animate a font swap looks worse than the snap.
 
 - [ ] **Step 1 — Write test.**
@@ -2297,7 +2340,7 @@ interface MoodPickerProps {
 
 export function MoodPicker({ value, onChange }: MoodPickerProps) {
   return (
-    <div className="pc-mood-picker" role="radiogroup" aria-label="Estilo visual de tu card">
+    <div className="fpc-mood-picker" role="radiogroup" aria-label="Estilo visual de tu card">
       {MOOD_IDS.map((id) => {
         const active = value === id;
         return (
@@ -2306,12 +2349,12 @@ export function MoodPicker({ value, onChange }: MoodPickerProps) {
             type="button"
             role="radio"
             aria-checked={active}
-            className={`pc-mood-card ${active ? "is-active" : ""}`.trim()}
+            className={`fpc-mood-card ${active ? "is-active" : ""}`.trim()}
             onClick={() => onChange(id)}
           >
-            <span className="pc-mood-mini" data-card-mood={id} aria-hidden />
-            <span className="pc-mood-label">{MOOD_LABELS[id]}</span>
-            <span className="pc-mood-tag">{MOOD_TAGLINES[id]}</span>
+            <span className="fpc-mood-mini" data-card-mood={id} aria-hidden />
+            <span className="fpc-mood-label">{MOOD_LABELS[id]}</span>
+            <span className="fpc-mood-tag">{MOOD_TAGLINES[id]}</span>
           </button>
         );
       })}
@@ -2323,12 +2366,12 @@ export function MoodPicker({ value, onChange }: MoodPickerProps) {
 CSS to append:
 
 ```css
-.pc-mood-picker {
+.fpc-mood-picker {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
-.pc-mood-card {
+.fpc-mood-card {
   display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -2340,32 +2383,32 @@ CSS to append:
               box-shadow var(--dur-quick) var(--ease-standard-out),
               border-color var(--dur-quick) var(--ease-standard-out);
 }
-.pc-mood-card:hover { transform: translateY(-1px); box-shadow: var(--shadow-2); }
-.pc-mood-card.is-active { border-color: var(--accent-warm); box-shadow: var(--shadow-focus-warm); animation: pc-mood-card-select var(--dur-deliberate) var(--spring-snap); }
+.fpc-mood-card:hover { transform: translateY(-1px); box-shadow: var(--shadow-2); }
+.fpc-mood-card.is-active { border-color: var(--accent-warm); box-shadow: var(--shadow-focus-warm); animation: fpc-mood-card-select var(--dur-deliberate) var(--spring-snap); }
 
-.pc-mood-mini {
+.fpc-mood-mini {
   display: block; width: 100%; height: 56px;
   border-radius: 8px;
   background: linear-gradient(180deg, color-mix(in srgb, var(--accent-warm) 18%, transparent), transparent);
   border: 1px solid var(--line-soft);
 }
-.pc-mood-mini[data-card-mood="clinico"]  { background: var(--surface-2); border-color: var(--accent-ink); }
-.pc-mood-mini[data-card-mood="editorial"]{ background: radial-gradient(at 0% 0%, color-mix(in srgb, var(--accent-warm) 12%, transparent), transparent 60%); }
-.pc-mood-mini[data-card-mood="boutique"] { background:
+.fpc-mood-mini[data-card-mood="clinico"]  { background: var(--surface-2); border-color: var(--accent-ink); }
+.fpc-mood-mini[data-card-mood="editorial"]{ background: radial-gradient(at 0% 0%, color-mix(in srgb, var(--accent-warm) 12%, transparent), transparent 60%); }
+.fpc-mood-mini[data-card-mood="boutique"] { background:
   url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32'><filter id='n'><feTurbulence baseFrequency='0.85' numOctaves='2'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.035 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>"); }
 
-.pc-mood-label { font-weight: 600; color: var(--ink); font-size: var(--fs-md); }
-.pc-mood-tag   { font-size: var(--fs-sm); color: var(--ink-3); }
+.fpc-mood-label { font-weight: 600; color: var(--ink); font-size: var(--fs-md); }
+.fpc-mood-tag   { font-size: var(--fs-sm); color: var(--ink-3); }
 
-@keyframes pc-mood-card-select {
+@keyframes fpc-mood-card-select {
   0%   { transform: scale(1); }
   17%  { transform: scale(0.97); }
   58%  { transform: scale(1.02); }
   100% { transform: scale(1); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .pc-mood-card.is-active { animation: none; }
-  .pc-mood-card:hover { transform: none; }
+  .fpc-mood-card.is-active { animation: none; }
+  .fpc-mood-card:hover { transform: none; }
 }
 ```
 
@@ -2493,7 +2536,7 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 ### Task 6.5 — F6 Visual gate
 
 - [ ] Walk through onboarding as a new user. At Step 4:
-  - Upload a real PNG with transparent background. Verify stamp-in animation. Verify the preview card (right side, sticky) updates: it now shows the logo instead of initials, with the `pc-enter-musical` beat.
+  - Upload a real PNG with transparent background. Verify stamp-in animation. Verify the preview card (right side, sticky) updates: it now shows the logo instead of initials, with the `fpc-enter-musical` beat.
   - Click each mood. Verify the live preview morphs (radius + tint + name font + decoration). Verify the morph is smooth where smooth (radius, background) and snappy where snappy (name font swap is instant — that is correct).
   - Press "Saltar este paso". Verify the user lands at Step 5 with the existing defaults (acento=brass, mood=editorial, no logo).
   - Press "Atrás" from Step 5 → return to Step 4. Verify selections preserved.
@@ -2629,7 +2672,7 @@ If no public-book e2e exists yet, create a smoke:
 import { test, expect } from "@playwright/test";
 test("/book/<slug> renders PublicCard hero then booking flow", async ({ page }) => {
   await page.goto("/book/seed-slug");
-  await expect(page.locator(".pc-card.pc-variant-full")).toBeVisible();
+  await expect(page.locator(".fpc-card.fpc-variant-full")).toBeVisible();
   await expect(page.getByRole("heading", { name: /elegí el servicio/i })).toBeVisible();
 });
 ```
@@ -2653,7 +2696,7 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 
 Frame-by-frame:
 
-- **`pc-card-collapse-mobile`** — at `T=0`: the card hero is scrolled to the top; sentinel `<div>` placed at `top: 0` is visible. As scroll passes the sentinel (`IntersectionObserver` with `rootMargin: -56px 0px 0px 0px`), the sentinel reports `isIntersecting=false`. **From that moment** the sticky mini-header is rendered (CSS class `is-shown`); its entry is `pc-sticky-mini-emerge`:
+- **`fpc-card-collapse-mobile`** — at `T=0`: the card hero is scrolled to the top; sentinel `<div>` placed at `top: 0` is visible. As scroll passes the sentinel (`IntersectionObserver` with `rootMargin: -56px 0px 0px 0px`), the sentinel reports `isIntersecting=false`. **From that moment** the sticky mini-header is rendered (CSS class `is-shown`); its entry is `fpc-sticky-mini-emerge`:
   - `T=0` to `T=320 ms`: `opacity: 0 → 1`, `transform: translateY(-8px) → translateY(0)`, easing `--ease-emphasized-out`.
 - On scroll-up, sentinel returns `isIntersecting=true`, mini-header runs reverse with `--ease-emphasized-in`, `--dur-moderate`: `opacity 1 → 0`, `transform: 0 → translateY(-8px)`.
 - Reduce-motion: transform stripped, opacity-only.
@@ -2680,7 +2723,7 @@ CSS:
 .bk-mini-avatar img,
 .bk-mini-avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: contain; }
 .bk-mini-name { font-size: var(--fs-md); font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bk-mini-cta { background: var(--pc-accent, var(--accent-warm)); color: #FBF9F4; padding: 8px 14px; border-radius: var(--r-pill); font-size: var(--fs-sm); font-weight: 500; cursor: pointer; }
+.bk-mini-cta { background: var(--fpc-accent, var(--accent-warm)); color: #FBF9F4; padding: 8px 14px; border-radius: var(--r-pill); font-size: var(--fs-sm); font-weight: 500; cursor: pointer; }
 @media (max-width: 767px) { .bk-mini { display: flex; } }
 @media (prefers-reduced-motion: reduce) { .bk-mini { transition-duration: var(--dur-quick); transform: none; } }
 ```
@@ -2761,7 +2804,7 @@ test("mobile: sticky mini header emerges on scroll", async ({ page }) => {
 git add components/booking/sticky-mini-header.tsx components/booking/booking-wizard.tsx public/folio.css tests/e2e/book-public.spec.ts
 git commit -m "feat(book): mobile sticky mini-header on scroll past card hero
 
-IntersectionObserver pattern; pc-sticky-mini-emerge beat
+IntersectionObserver pattern; fpc-sticky-mini-emerge beat
 (opacity + 8 px translate, --ease-emphasized-out, 320 ms).
 Reduce-motion strips translate.
 
@@ -2817,7 +2860,7 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 
 ### Task 8.2 — Cleanup legacy `.card-preview-*` CSS
 
-- [ ] **Step 1 — Grep `public/folio.css` for `.card-preview` selectors.** Delete blocks (none should remain after F4 since the new component uses `.pc-*` classes; but verify).
+- [ ] **Step 1 — Grep `public/folio.css` for `.card-preview` selectors.** Delete blocks (none should remain after F4 since the new component uses `.fpc-*` classes; but verify).
 
 - [ ] **Step 2 — Run a CSS lint pass.**
 
@@ -2919,10 +2962,10 @@ Run at end of F8. Tick each only with hard evidence (screenshot, command output,
 - [ ] **AC-10** Bundle First Load `/book/[slug]` < 250 KB. Verified by `pnpm build` output (Next.js report).
 - [ ] **AC-11** Bundle First Load `/onboarding` < 275 KB. Same source.
 - [ ] **AC-12** `git grep -nE "CardPreview" -- '*.tsx' '*.ts'` returns zero results.
-- [ ] **AC-13** All 8 named motion beats from §3.5 of the design-language doc are present in `public/folio.css` (grep for `@keyframes pc-`).
+- [ ] **AC-13** All 8 named motion beats from §3.5 of the design-language doc are present in `public/folio.css` (grep for `@keyframes fpc-`).
 - [ ] **AC-14** Clínico mood pro-acento blend produces `applyAcentoBlend("clinico", "#FF5500") === "#AA4E3C"`. Verified by unit test.
-- [ ] **AC-15** All four mood `data-card-mood` selectors emit different computed `--pc-radius` (`16`, `10`, `20`, `24` respectively). Verified in DevTools.
-- [ ] **AC-16** Fraunces variable font subset is loaded and used for `.pc-name` in moods Cálido, Editorial, Boutique; **not** loaded by `/hoy` dashboard route. Verified via Network panel (`Fraunces` row only on the relevant route).
+- [ ] **AC-15** All four mood `data-card-mood` selectors emit different computed `--fpc-radius` (`16`, `10`, `20`, `24` respectively). Verified in DevTools.
+- [ ] **AC-16** Fraunces variable font subset is loaded and used for `.fpc-name` in moods Cálido, Editorial, Boutique; **not** loaded by `/hoy` dashboard route. Verified via Network panel (`Fraunces` row only on the relevant route).
 - [ ] **AC-17** Existing Step 9 reveal animation timings (logo 0-400 ms, headline 400-800 ms, card 800-1400 ms, CTAs 1400-1800 ms with 80 ms stagger) are unchanged from current `step9-moment.tsx`. (The card itself is now `PublicCard`, but the reveal envelope is untouched.)
 
 ---
@@ -2948,7 +2991,7 @@ These remain after this plan and should be resolved before, or surface as deviat
 10. **Default acento inconsistency** — `signUpAndInitOrganization` writes `#c89b3c` to a new org's `acento_hex`, but `ONBOARDING_INITIAL.acento` is `#8A6722`. New-org first paint shows `#c89b3c` until the user reaches Step 4. **Decision needed**: which is the "real default"? **Recommendation**: change `signUpAndInitOrganization` to use `#8A6722` so the default matches everywhere. **Out of scope for this PR** unless founder includes it. Flag as a separate one-line change in a follow-up sprint.
 11. **SVG logo support** — this plan rejects SVG (XSS sanitization risk; PNG with alpha covers 95% of pro logos). Defer to a v2 unless founder requests otherwise; track as Open Question 3 in spec §14.
 12. **Pre-mood quiz** — out of scope; v2 (spec §14.5).
-13. **Acento token unification** — should `data.acentoHex` (the per-pro hex) feed through `--pc-accent` AND back-compat `--accent` simultaneously, or should new `.pc-*` consumers stop reading `--accent`? **Recommendation**: feed only `--pc-accent` for new components; keep `--accent` consumers in the dashboard untouched. **Implementing agent must not propagate `--pc-accent` upward to `:root`.**
+13. **Acento token unification** — should `data.acentoHex` (the per-pro hex) feed through `--fpc-accent` AND back-compat `--accent` simultaneously, or should new `.fpc-*` consumers stop reading `--accent`? **Recommendation**: feed only `--fpc-accent` for new components; keep `--accent` consumers in the dashboard untouched. **Implementing agent must not propagate `--fpc-accent` upward to `:root`.**
 14. **`/configuracion` integration** — spec §3.3 lists `/configuracion` as a consumer of the unified `PublicCard` but does not define when. **Decision needed**: in F8 or in a follow-up sprint? **Recommendation**: follow-up. Document in §11.14 only if `/configuracion` is in scope.
 
 ---

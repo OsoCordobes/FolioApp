@@ -194,24 +194,24 @@ Folio's competitive edge is to **plant a stake in that empty quadrant** with a *
   --slate:        #355B6E;
   --slate-soft:   #DCE5E9;
 
-  /* Mood-overlay tokens (set by [data-card-mood="<id>"], read by .pc-* classes) */
-  --pc-accent:           var(--accent-warm);     /* per-pro acento override applies here */
-  --pc-accent-soft:      var(--accent-warm-soft);
-  --pc-accent-blend:     var(--accent-warm);     /* mood may shift hue toward warm or ink */
-  --pc-bg:               var(--surface);
-  --pc-bg-tint-amount:   0.06;                    /* gradient strength of acento over surface */
-  --pc-bg-tint-style:    linear;                  /* linear | radial | flat | paper-noise */
-  --pc-name-family:      'Geist', system-ui, sans-serif;
-  --pc-name-weight:      600;
-  --pc-name-tracking:    -0.018em;
-  --pc-name-size-full:   34px;
-  --pc-name-size-prev:   22px;
-  --pc-bio-style:        normal;                  /* normal | italic-serif | quote-with-rule */
-  --pc-radius:           20px;
-  --pc-decoration:       none;                    /* none | sub-line | corner-mark | date-badge */
-  --pc-decoration-color: var(--pc-accent);
-  --pc-hero-py-full:     36px;
-  --pc-hero-py-prev:     24px;
+  /* Mood-overlay tokens (set by [data-card-mood="<id>"], read by .fpc-* classes) */
+  --fpc-accent:           var(--accent-warm);     /* per-pro acento override applies here */
+  --fpc-accent-soft:      var(--accent-warm-soft);
+  --fpc-accent-blend:     var(--accent-warm);     /* mood may shift hue toward warm or ink */
+  --fpc-bg:               var(--surface);
+  --fpc-bg-tint-amount:   0.06;                    /* gradient strength of acento over surface */
+  --fpc-bg-tint-style:    linear;                  /* linear | radial | flat | paper-noise */
+  --fpc-name-family:      'Geist', system-ui, sans-serif;
+  --fpc-name-weight:      600;
+  --fpc-name-tracking:    -0.018em;
+  --fpc-name-size-full:   34px;
+  --fpc-name-size-prev:   22px;
+  --fpc-bio-style:        normal;                  /* normal | italic-serif | quote-with-rule */
+  --fpc-radius:           20px;
+  --fpc-decoration:       none;                    /* none | sub-line | corner-mark | date-badge */
+  --fpc-decoration-color: var(--fpc-accent);
+  --fpc-hero-py-full:     36px;
+  --fpc-hero-py-prev:     24px;
 
   /* Spacing scale (4 px grid) */
   --space-0:  0;
@@ -313,7 +313,7 @@ Folio's competitive edge is to **plant a stake in that empty quadrant** with a *
 - **Optical-size axis** lets us treat the same font as wireframe-headline (`opsz 144, SOFT 50`) and as small-caps eyebrow (`opsz 96, SOFT 30, font-variant-caps: small-caps`).
 - **Argentine designers love it** — culturally legible as "premium editorial," not "American hospital."
 
-**Why not a paid display serif?** Editorial New / GT Sectra / Reckless cost USD $300–800 commercial. Marginal craft gain over Fraunces for the **single slot** we'd use them in (the card hero name) is not worth a licence purchase on Folio's current MRR runway. If the founder later wants to invest, the **drop-in replacement** path is mechanical: swap one `@font-face` declaration; the rest of the system is family-agnostic via `--pc-name-family`. The recommended paid upgrade if pursued is **Editorial New Light** for Editorial/Boutique moods specifically (those moods can tolerate a paid font cost; Cálido + Clínico stay on Fraunces).
+**Why not a paid display serif?** Editorial New / GT Sectra / Reckless cost USD $300–800 commercial. Marginal craft gain over Fraunces for the **single slot** we'd use them in (the card hero name) is not worth a licence purchase on Folio's current MRR runway. If the founder later wants to invest, the **drop-in replacement** path is mechanical: swap one `@font-face` declaration; the rest of the system is family-agnostic via `--fpc-name-family`. The recommended paid upgrade if pursued is **Editorial New Light** for Editorial/Boutique moods specifically (those moods can tolerate a paid font cost; Cálido + Clínico stay on Fraunces).
 
 #### 3.3.2 Type scale (4 px grid baseline)
 
@@ -344,36 +344,30 @@ Folio's competitive edge is to **plant a stake in that empty quadrant** with a *
 
 #### 3.3.4 Font loading strategy
 
-```html
-<!-- in app/layout.tsx via next/font, recommended approach -->
-<!-- 1. Geist + Geist Mono — already in place. KEEP. -->
-<!-- 2. Fraunces — add as next/font/google with subset 'latin' + axes 'opsz', 'wght', 'SOFT', 'WONK' -->
-```
+**Convention check**: `app/layout.tsx` already loads Geist + Geist Mono via a single Google Fonts `<link rel="stylesheet">`. Fraunces is added by **extending the same `<link>`** — not by introducing `next/font`. Reasons:
 
-```ts
-// app/layout.tsx — illustrative
-import { Fraunces } from "next/font/google";
+- Consistency: three families through one mechanism beats two-of-three.
+- Self-host migration (in the F11 backlog already noted in `app/layout.tsx`) will lift all three to local woff2 in a single move; mixing now would block that.
+- Google Fonts API v2 supports the `opsz` axis range directly in the URL query.
 
-const fraunces = Fraunces({
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  axes: ["opsz", "SOFT"],            // 'WONK' added separately if desired
-  variable: "--font-fraunces",
-  display: "swap",
-  fallback: ["Iowan Old Style", "Georgia", "serif"],
-});
+```tsx
+// app/layout.tsx — replace the existing Geist stylesheet <link> with this one:
+<link
+  href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&display=swap"
+  rel="stylesheet"
+/>
 ```
 
 ```css
-/* folio.css — expose the next/font variable as a usable family token */
+/* folio.css — expose Fraunces as the display family token */
 :root {
-  --font-display: var(--font-fraunces), 'Iowan Old Style', Georgia, serif;
+  --font-display: 'Fraunces', 'Iowan Old Style', Georgia, serif;
 }
 ```
 
-**Budget**: Fraunces Latin subset variable ≈ 27 KB woff2 (measured against current bundle). Total typography payload after addition ≈ 117 KB woff2, comfortably inside the 250 KB `/book/[slug]` budget defined in the spec acceptance criteria.
+**Budget**: Google Fonts serves Fraunces variable subset on-demand at ≈ 30–40 KB depending on chosen weight range. Total typography over the wire after addition stays comfortably inside the 250 KB `/book/[slug]` budget.
 
-**No-network fallback**: `Iowan Old Style` ships with iOS/macOS and `Georgia` ships everywhere — the swap is graceful.
+**No-network fallback**: `Iowan Old Style` ships with iOS/macOS and `Georgia` ships everywhere — the swap is graceful via `display=swap`.
 
 ### 3.4 Spacing, radii, shadows — see §3.2
 
@@ -388,20 +382,20 @@ The existing `folio.css` motion language v2 (`--ease-emphasized`, `--ease-emphas
 ```css
 :root {
   /* Card-specific motion semantics (additive to motion language v2) */
-  --pc-stagger:        80ms;        /* default stagger step between card elements */
-  --pc-stagger-musical-1: 0ms;      /* logo */
-  --pc-stagger-musical-2: 90ms;     /* name */
-  --pc-stagger-musical-3: 200ms;    /* rubro/ciudad */
-  --pc-stagger-musical-4: 340ms;    /* bio */
-  --pc-stagger-musical-5: 480ms;    /* contacto grid */
-  --pc-stagger-musical-6: 620ms;    /* servicios */
-  --pc-stagger-musical-7: 760ms;    /* CTA */
-  --pc-stagger-musical-8: 860ms;    /* link-footer mono */
+  --fpc-stagger:        80ms;        /* default stagger step between card elements */
+  --fpc-stagger-musical-1: 0ms;      /* logo */
+  --fpc-stagger-musical-2: 90ms;     /* name */
+  --fpc-stagger-musical-3: 200ms;    /* rubro/ciudad */
+  --fpc-stagger-musical-4: 340ms;    /* bio */
+  --fpc-stagger-musical-5: 480ms;    /* contacto grid */
+  --fpc-stagger-musical-6: 620ms;    /* servicios */
+  --fpc-stagger-musical-7: 760ms;    /* CTA */
+  --fpc-stagger-musical-8: 860ms;    /* link-footer mono */
 
-  --pc-hero-blur-from:  6px;
-  --pc-hero-blur-to:    0px;
-  --pc-hero-y-from:     12px;
-  --pc-hero-y-to:       0px;
+  --fpc-hero-blur-from:  6px;
+  --fpc-hero-blur-to:    0px;
+  --fpc-hero-y-from:     12px;
+  --fpc-hero-y-to:       0px;
 }
 ```
 
@@ -409,18 +403,18 @@ The existing `folio.css` motion language v2 (`--ease-emphasized`, `--ease-emphas
 
 | Beat name | Easing | Duration | Distance | Properties animated |
 |---|---|---|---|---|
-| `pc-enter-hero` | `--ease-emphasized-out` | `--dur-cinematic` (720 ms) | `y: 12→0`, `blur: 6→0` | `opacity 0→1, transform translateY, filter blur` |
-| `pc-enter-musical` | `--ease-emphasized-out` | `320 ms` per element | `y: 8→0` | `opacity 0→1, transform translateY` |
-| `pc-mood-morph` | `--spring-soft` | `--dur-deliberate` (480 ms) | n/a | `border-radius, background, color, padding` |
-| `pc-logo-drop-enter` | `--ease-overshoot` | `--dur-moderate` (320 ms) | `scale: 0.92→1.00` | `opacity 0→1, transform scale` |
-| `pc-logo-drop-error` | `--ease-anticipate` | `--dur-snappy` (220 ms) | `x: -6 → +6 → -3 → +3 → 0` | shake on `transform translateX` (3 iterations) |
-| `pc-card-collapse-mobile` | `--ease-emphasized-in` | `--dur-moderate` (320 ms) | `y: 0→ -100%` | `transform translateY, opacity 1→0.92` |
-| `pc-sticky-mini-emerge` | `--ease-emphasized-out` | `--dur-moderate` (320 ms) | `y: -8→0` | `opacity 0→1, transform translateY` |
-| `pc-mood-card-hover` | `--ease-standard-out` | `--dur-quick` (140 ms) | n/a | `transform translateY(-1px), box-shadow` |
-| `pc-mood-card-select` | `--spring-snap` | `--dur-deliberate` (480 ms) | `scale: 1.00→0.97→1.02→1.00` | `transform scale` |
-| `pc-cta-hover` | `--ease-standard-out` | `--dur-quick` (140 ms) | `y: 0→-0.5px` | `transform translateY, box-shadow` |
-| `pc-cta-press` | `--ease-standard-out` | `--dur-instant` (80 ms) | `y: 0→0.5px` | `transform translateY` |
-| `pc-skeleton-shimmer` | `linear` | `1400 ms` infinite | `background-position 0%→100%` | gradient sweep on `linear-gradient` |
+| `fpc-enter-hero` | `--ease-emphasized-out` | `--dur-cinematic` (720 ms) | `y: 12→0`, `blur: 6→0` | `opacity 0→1, transform translateY, filter blur` |
+| `fpc-enter-musical` | `--ease-emphasized-out` | `320 ms` per element | `y: 8→0` | `opacity 0→1, transform translateY` |
+| `fpc-mood-morph` | `--spring-soft` | `--dur-deliberate` (480 ms) | n/a | `border-radius, background, color, padding` |
+| `fpc-logo-drop-enter` | `--ease-overshoot` | `--dur-moderate` (320 ms) | `scale: 0.92→1.00` | `opacity 0→1, transform scale` |
+| `fpc-logo-drop-error` | `--ease-anticipate` | `--dur-snappy` (220 ms) | `x: -6 → +6 → -3 → +3 → 0` | shake on `transform translateX` (3 iterations) |
+| `fpc-card-collapse-mobile` | `--ease-emphasized-in` | `--dur-moderate` (320 ms) | `y: 0→ -100%` | `transform translateY, opacity 1→0.92` |
+| `fpc-sticky-mini-emerge` | `--ease-emphasized-out` | `--dur-moderate` (320 ms) | `y: -8→0` | `opacity 0→1, transform translateY` |
+| `fpc-mood-card-hover` | `--ease-standard-out` | `--dur-quick` (140 ms) | n/a | `transform translateY(-1px), box-shadow` |
+| `fpc-mood-card-select` | `--spring-snap` | `--dur-deliberate` (480 ms) | `scale: 1.00→0.97→1.02→1.00` | `transform scale` |
+| `fpc-cta-hover` | `--ease-standard-out` | `--dur-quick` (140 ms) | `y: 0→-0.5px` | `transform translateY, box-shadow` |
+| `fpc-cta-press` | `--ease-standard-out` | `--dur-instant` (80 ms) | `y: 0→0.5px` | `transform translateY` |
+| `fpc-skeleton-shimmer` | `linear` | `1400 ms` infinite | `background-position 0%→100%` | gradient sweep on `linear-gradient` |
 
 All beats degrade per `prefers-reduced-motion: reduce` according to the unified policy already documented in `folio.css` (lines 123-192 of current file): durations collapse to `--dur-quick`, `transform: none !important`, infinite loops disabled, blur/filter neutralized.
 
@@ -433,12 +427,12 @@ A grammar of three reusable ornament primitives, used by the mood system. Implem
 A 1 px line in `--ink-3` (or `--accent-warm` in editorial mood) above section labels. Length = 24 px or 100% per declaration. Used in *Editorial* mood above the "Servicios" label.
 
 ```css
-.pc-rule::before {
+.fpc-rule::before {
   content: '';
   display: block;
   height: 1px;
   width: 24px;
-  background: var(--pc-decoration-color);
+  background: var(--fpc-decoration-color);
   margin-bottom: 10px;
   opacity: 0.6;
 }
@@ -450,8 +444,8 @@ A small L-shape SVG in `--accent-warm`, positioned top-right of the card hero. U
 
 ```jsx
 // inline JSX
-<svg className="pc-corner-mark" width="18" height="18" viewBox="0 0 18 18" aria-hidden>
-  <path d="M 18 0 L 18 7 M 18 0 L 11 0" stroke="var(--pc-decoration-color)" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+<svg className="fpc-corner-mark" width="18" height="18" viewBox="0 0 18 18" aria-hidden>
+  <path d="M 18 0 L 18 7 M 18 0 L 11 0" stroke="var(--fpc-decoration-color)" strokeWidth="1.5" fill="none" strokeLinecap="round" />
 </svg>
 ```
 
@@ -460,11 +454,11 @@ A small L-shape SVG in `--accent-warm`, positioned top-right of the card hero. U
 A pill-shaped mono date stamp with the org's onboarding completion date. Used in *Boutique* mood top-right of card hero. Style: `Geist Mono 11 px`, padding `4px 10px`, border `1px solid var(--accent-warm)`, radius `--r-pill`, colour `--ink-3`.
 
 ```jsx
-<span className="pc-date-badge fm-mono">{"EST. 2026 · CÓRDOBA"}</span>
+<span className="fpc-date-badge fm-mono">{"EST. 2026 · CÓRDOBA"}</span>
 ```
 
 ```css
-.pc-date-badge {
+.fpc-date-badge {
   display: inline-block;
   font-family: 'Geist Mono', ui-monospace, monospace;
   font-size: 10px;
@@ -479,7 +473,7 @@ A pill-shaped mono date stamp with the org's onboarding completion date. Used in
 
 #### 3.6.4 Primitive D · "Paper noise overlay"
 
-For *Boutique* mood only. A 1× SVG noise texture (`<feTurbulence baseFrequency="0.85" numOctaves="2"/>`) at 1.5 % opacity overlay on `--pc-bg`. Pre-rendered as a 64×64 px tile (~700 bytes), repeated via `background-repeat`. Adds tactile warmth without measurable performance cost. Disabled under `prefers-reduced-motion` is *not* required (it's static), but disabled under `prefers-reduced-transparency: reduce` (a real CSS media query in macOS Sequoia & iOS 18).
+For *Boutique* mood only. A 1× SVG noise texture (`<feTurbulence baseFrequency="0.85" numOctaves="2"/>`) at 1.5 % opacity overlay on `--fpc-bg`. Pre-rendered as a 64×64 px tile (~700 bytes), repeated via `background-repeat`. Adds tactile warmth without measurable performance cost. Disabled under `prefers-reduced-motion` is *not* required (it's static), but disabled under `prefers-reduced-transparency: reduce` (a real CSS media query in macOS Sequoia & iOS 18).
 
 #### 3.6.5 No-go list (anti-decoration)
 
@@ -507,32 +501,32 @@ Each mood is **fully expressible** as an override block applied via `[data-card-
 
 | Token | Value | Why |
 |---|---|---|
-| `--pc-accent` | per-pro override OR `var(--accent-warm)` | brass-default warmth |
-| `--pc-bg-tint-style` | `linear` | gentle top-down glow |
-| `--pc-bg-tint-amount` | `0.10` | warmer than default |
-| `--pc-name-family` | `var(--font-display), serif` (Fraunces) | warmth + editorial |
-| `--pc-name-weight` | `500` | softer presence |
-| `--pc-name-tracking` | `-0.014em` | slight loosening for warmth |
-| `--pc-bio-style` | `italic-serif` | the bio reads as a personal note |
-| `--pc-radius` | `16px` | softly rounded |
-| `--pc-decoration` | `corner-mark` (Primitive B) | hand-stamped warmth |
-| `--pc-hero-py-full` | `36px` | generous |
+| `--fpc-accent` | per-pro override OR `var(--accent-warm)` | brass-default warmth |
+| `--fpc-bg-tint-style` | `linear` | gentle top-down glow |
+| `--fpc-bg-tint-amount` | `0.10` | warmer than default |
+| `--fpc-name-family` | `var(--font-display), serif` (Fraunces) | warmth + editorial |
+| `--fpc-name-weight` | `500` | softer presence |
+| `--fpc-name-tracking` | `-0.014em` | slight loosening for warmth |
+| `--fpc-bio-style` | `italic-serif` | the bio reads as a personal note |
+| `--fpc-radius` | `16px` | softly rounded |
+| `--fpc-decoration` | `corner-mark` (Primitive B) | hand-stamped warmth |
+| `--fpc-hero-py-full` | `36px` | generous |
 | Stagger feel | musical (defined §3.5) | feels alive, not mechanical |
 
 ### 4.2 Mood `clínico` — "Preciso y profesional"
 
 | Token | Value | Why |
 |---|---|---|
-| `--pc-accent` | per-pro override OR `var(--accent-ink)` | clinical ink-blue dominant, brass demoted |
-| `--pc-bg-tint-style` | `flat` | no gradient — surgical clarity |
-| `--pc-bg-tint-amount` | `0` | suppress |
-| `--pc-name-family` | `var(--font-sans)` (Geist) | sharp sans, NO serif |
-| `--pc-name-weight` | `700` | high contrast |
-| `--pc-name-tracking` | `-0.022em` | tighter, more authoritative |
-| `--pc-bio-style` | `plain` + 13 px | functional |
-| `--pc-radius` | `10px` | sharper |
-| `--pc-decoration` | `sub-line` (Primitive A) | editorial ruler under section labels |
-| `--pc-hero-py-full` | `28px` | tighter |
+| `--fpc-accent` | per-pro override OR `var(--accent-ink)` | clinical ink-blue dominant, brass demoted |
+| `--fpc-bg-tint-style` | `flat` | no gradient — surgical clarity |
+| `--fpc-bg-tint-amount` | `0` | suppress |
+| `--fpc-name-family` | `var(--font-sans)` (Geist) | sharp sans, NO serif |
+| `--fpc-name-weight` | `700` | high contrast |
+| `--fpc-name-tracking` | `-0.022em` | tighter, more authoritative |
+| `--fpc-bio-style` | `plain` + 13 px | functional |
+| `--fpc-radius` | `10px` | sharper |
+| `--fpc-decoration` | `sub-line` (Primitive A) | editorial ruler under section labels |
+| `--fpc-hero-py-full` | `28px` | tighter |
 | Section labels | all-caps Geist Mono, tracking `0.10em` | scientific reading mode |
 | Stagger feel | **uniform** 60 ms steps, no musical pacing | mechanical = precise |
 
@@ -540,32 +534,32 @@ Each mood is **fully expressible** as an override block applied via `[data-card-
 
 | Token | Value | Why |
 |---|---|---|
-| `--pc-accent` | per-pro override OR `var(--accent-warm)` | warm but muted |
-| `--pc-bg-tint-style` | `radial` | subtle bloom from top-left corner |
-| `--pc-bg-tint-amount` | `0.06` | very gentle |
-| `--pc-name-family` | `var(--font-display), serif` (Fraunces) | editorial register |
-| `--pc-name-weight` | `400` regular, italic on second line if a tagline exists | refinement = restraint |
-| `--pc-name-tracking` | `-0.018em` | default |
-| `--pc-bio-style` | `quote-with-rule` (1 px brass rule left, padding-left 16, italic) | bio reads as pull-quote |
-| `--pc-radius` | `20px` | refined |
-| `--pc-decoration` | `sub-line` (Primitive A) above "Servicios" | minimal editorial rhythm |
-| `--pc-hero-py-full` | `40px` | generous editorial padding |
+| `--fpc-accent` | per-pro override OR `var(--accent-warm)` | warm but muted |
+| `--fpc-bg-tint-style` | `radial` | subtle bloom from top-left corner |
+| `--fpc-bg-tint-amount` | `0.06` | very gentle |
+| `--fpc-name-family` | `var(--font-display), serif` (Fraunces) | editorial register |
+| `--fpc-name-weight` | `400` regular, italic on second line if a tagline exists | refinement = restraint |
+| `--fpc-name-tracking` | `-0.018em` | default |
+| `--fpc-bio-style` | `quote-with-rule` (1 px brass rule left, padding-left 16, italic) | bio reads as pull-quote |
+| `--fpc-radius` | `20px` | refined |
+| `--fpc-decoration` | `sub-line` (Primitive A) above "Servicios" | minimal editorial rhythm |
+| `--fpc-hero-py-full` | `40px` | generous editorial padding |
 | Stagger feel | musical | cinematic |
 
 ### 4.4 Mood `boutique` — "Personal y curado"
 
 | Token | Value | Why |
 |---|---|---|
-| `--pc-accent` | per-pro override OR `var(--accent-warm-2)` (deeper brass) | curated, less light |
-| `--pc-bg-tint-style` | `paper-noise` (Primitive D) | tactile warmth |
-| `--pc-bg-tint-amount` | n/a — texture handles atmosphere | — |
-| `--pc-name-family` | `var(--font-display), serif` (Fraunces) | curated |
-| `--pc-name-weight` | `600` | heavy display |
-| `--pc-name-tracking` | `-0.022em` | tighter |
-| `--pc-bio-style` | `italic-serif` | personal note tone |
-| `--pc-radius` | `24px` | softly curved |
-| `--pc-decoration` | `date-badge` (Primitive C) | atelier signature: "EST. 2026 · CÓRDOBA" |
-| `--pc-hero-py-full` | `36px` | balanced |
+| `--fpc-accent` | per-pro override OR `var(--accent-warm-2)` (deeper brass) | curated, less light |
+| `--fpc-bg-tint-style` | `paper-noise` (Primitive D) | tactile warmth |
+| `--fpc-bg-tint-amount` | n/a — texture handles atmosphere | — |
+| `--fpc-name-family` | `var(--font-display), serif` (Fraunces) | curated |
+| `--fpc-name-weight` | `600` | heavy display |
+| `--fpc-name-tracking` | `-0.022em` | tighter |
+| `--fpc-bio-style` | `italic-serif` | personal note tone |
+| `--fpc-radius` | `24px` | softly curved |
+| `--fpc-decoration` | `date-badge` (Primitive C) | atelier signature: "EST. 2026 · CÓRDOBA" |
+| `--fpc-hero-py-full` | `36px` | balanced |
 | Stagger feel | musical with extra trailing pause on date-badge (920 ms) | the badge lands last like a signature |
 
 ### 4.5 Differentiation acceptance
@@ -588,7 +582,7 @@ Acceptance: two screenshots A/B of any pair of moods (e.g., Cálido vs Clínico)
 | **Spacing** | Implicit per-component px | Explicit 4 px scale (--space-*) | FORMALISE |
 | **Radii** | --r-sm/md/lg/xl (5/8/12/16) | + --r-2xl 20, --r-3xl 24, --r-pill | ADD 3 TOKENS |
 | **Shadow** | --shadow-1, --shadow-2, --shadow-hero | + --shadow-card, --shadow-focus-warm/ink | ADD 3 TOKENS |
-| **Motion language** | v2 (excellent — `--ease-*`, `--dur-*`, `--spring-*`) | UNCHANGED + 11 named beats (--pc-*) | EXTEND, NOT REPLACE |
+| **Motion language** | v2 (excellent — `--ease-*`, `--dur-*`, `--spring-*`) | UNCHANGED + 11 named beats (--fpc-*) | EXTEND, NOT REPLACE |
 | **Mood system** | Doesn't exist | 4 moods as pure CSS variable overrides | NEW |
 | **Card decoration** | None (or implicit gradient hero) | 4 primitives, used by moods | NEW |
 | **Dark mode** | Brass tinted toward ochre `#C29553` | Same + new `--accent-ink` dark variant `#6E89AE` | EVOLVE |
@@ -618,7 +612,7 @@ Acceptance: two screenshots A/B of any pair of moods (e.g., Cálido vs Clínico)
 | `--accent-ink` `#2A4365` reads as competitor blue | Low-Med | Medium | Always paired with cream `#F4F1E9` and brass — the *trio* is uncopyable; alone the blue alone would not be |
 | Brass + ink-blue + warm cream feels "too much palette" | Med | Low-Med | Used at different ratios — cream 80%, ink-text 15%, brass 3-4%, ink-blue 1-2%. Anchored, not balanced. |
 | Adding 27 KB Fraunces bumps `/book/[slug]` over budget on cold load | Low | Medium | Subset is Latin-only; `display: swap` prevents render-blocking; budget headroom is 130 KB+ |
-| Per-pro acento (custom hex) clashes with mood-fixed ink-blue accent in Clínico | Med | Med | Clínico mood defines `--pc-accent` *override* logic: if pro picked a warm hex, blend toward `--accent-ink` at 40 % saturation (specified in mood implementation in F5 of the plan) |
+| Per-pro acento (custom hex) clashes with mood-fixed ink-blue accent in Clínico | Med | Med | Clínico mood defines `--fpc-accent` *override* logic: if pro picked a warm hex, blend toward `--accent-ink` at 40 % saturation (specified in mood implementation in F5 of the plan) |
 | Founder's taste says "I want the manifesto-typographic look" again | Low | High (rework) | This recommendation is on the table for review before F1 — the gate is explicit |
 
 ---
@@ -627,10 +621,10 @@ Acceptance: two screenshots A/B of any pair of moods (e.g., Cálido vs Clínico)
 
 The companion implementation plan reflects this recommendation in the following load-bearing ways:
 
-- **F1 — Token bootstrap (new fase first)**: adds the token blocks of §3.2 (palette evolution), §3.3 (Fraunces via `next/font`), §3.5 (`--pc-stagger-*` tokens) and §3.6 decoration primitives (CSS classes `.pc-rule`, `.pc-corner-mark`, `.pc-date-badge`) to `public/folio.css` and `app/layout.tsx`. No UI changes ship in F1.
+- **F1 — Token bootstrap (new fase first)**: adds the token blocks of §3.2 (palette evolution), §3.3 (Fraunces via `next/font`), §3.5 (`--fpc-stagger-*` tokens) and §3.6 decoration primitives (CSS classes `.fpc-rule`, `.fpc-corner-mark`, `.fpc-date-badge`) to `public/folio.css` and `app/layout.tsx`. No UI changes ship in F1.
 - **F2 — Data foundation (was F1 in spec §13)**: migration M21 + Supabase Storage bucket. Uses `--accent-warm` and `--accent-ink` strictly via tokens already in place.
 - **F3 — Logo upload**: `LogoUpload` component, drop-zone styled with `--surface-2` + `--accent-warm` border on drag-hover.
-- **F4 — Public card foundation (Layer A)**: `PublicCard` component reads `--pc-*` tokens; default mood = `editorial`. Includes the named motion beats.
+- **F4 — Public card foundation (Layer A)**: `PublicCard` component reads `--fpc-*` tokens; default mood = `editorial`. Includes the named motion beats.
 - **F5 — Mood system (Layer B)**: implements the four mood override blocks of §4 verbatim.
 - **F6 — Onboarding "Identidad visual" step**: mood picker UI uses 4 preview cards rendering miniature `PublicCard`s with each mood applied.
 - **F7 — /book/[slug] integration**: replaces `BookingWizard` inline header with `<PublicCard variant="full" />`.
@@ -652,7 +646,7 @@ These are the *taste* and *scope* gates that this recommendation does not unilat
 | 4 | Inputs / buttons: keep current `fi-btn` recipe or refresh to use `--shadow-card` family? | **Keep** `fi-btn` recipe in this redesign (out of scope; touch in a separate sprint) | None — bounded scope |
 | 5 | Mood Editorial as default — keep or change to Cálido? | **Editorial** as default | Low — re-default is one constant change |
 | 6 | Ship all 4 moods or just Cálido + Clínico in v1? | **Ship 4** | Low — 4 is the spec's intent; 2 is the spec's Open Decision 1 |
-| 7 | Should the per-pro acento override the mood's `--pc-accent` in all moods, or only in Cálido/Editorial/Boutique (i.e., Clínico stays ink-blue regardless)? | **Override** in Cálido/Editorial/Boutique; in Clínico, blend toward ink (40% sat) | Medium — affects mood differentiation |
+| 7 | Should the per-pro acento override the mood's `--fpc-accent` in all moods, or only in Cálido/Editorial/Boutique (i.e., Clínico stays ink-blue regardless)? | **Override** in Cálido/Editorial/Boutique; in Clínico, blend toward ink (40% sat) | Medium — affects mood differentiation |
 | 8 | Dark mode for `/book/[slug]` — auto from `prefers-color-scheme`, opt-in per org, or light-only? | **Auto from `prefers-color-scheme`** (matches rest of Folio) | Low — single CSS gate |
 
 ---
@@ -690,7 +684,7 @@ If founder picks Open Question 1 → invest in paid display:
 2. Self-host woff2 (no Google Fonts hop) under `public/fonts/editorial-new/`.
 3. Replace `--font-fraunces` declaration in `app/layout.tsx` with `localFont` from `next/font/local`.
 4. Update `--font-display` in folio.css to point at the new family.
-5. Re-test optical-size: Editorial New does not have an `opsz` axis — adjust `--pc-name-tracking` per mood manually.
+5. Re-test optical-size: Editorial New does not have an `opsz` axis — adjust `--fpc-name-tracking` per mood manually.
 
 Total time: ~2 h. Token names unchanged, so consumers don't move.
 
@@ -700,18 +694,18 @@ Every motion beat in §3.5 obeys the unified policy:
 
 | Beat | Under prefers-reduced-motion: reduce |
 |---|---|
-| `pc-enter-hero` | duration → `--dur-quick`; `blur, transform` stripped; opacity 0→1 only |
-| `pc-enter-musical` | duration → `--dur-quick`; transform stripped; opacity only |
-| `pc-mood-morph` | duration → `--dur-quick`; spring → linear; properties limited to color + border-radius (no scale) |
-| `pc-logo-drop-enter` | duration → `--dur-quick`; scale stripped; opacity only |
-| `pc-logo-drop-error` | shake disabled; static red outline only |
-| `pc-card-collapse-mobile` | duration → `--dur-quick`; transform stripped; opacity 1→0 (display still preserved per policy) |
-| `pc-sticky-mini-emerge` | duration → `--dur-quick`; transform stripped |
-| `pc-mood-card-hover` | transform disabled; box-shadow only |
-| `pc-mood-card-select` | spring → linear `--dur-quick`; scale clamp to 1.00 |
-| `pc-cta-hover` | transform disabled |
-| `pc-cta-press` | transform disabled |
-| `pc-skeleton-shimmer` | animation: none — solid colour preserved |
+| `fpc-enter-hero` | duration → `--dur-quick`; `blur, transform` stripped; opacity 0→1 only |
+| `fpc-enter-musical` | duration → `--dur-quick`; transform stripped; opacity only |
+| `fpc-mood-morph` | duration → `--dur-quick`; spring → linear; properties limited to color + border-radius (no scale) |
+| `fpc-logo-drop-enter` | duration → `--dur-quick`; scale stripped; opacity only |
+| `fpc-logo-drop-error` | shake disabled; static red outline only |
+| `fpc-card-collapse-mobile` | duration → `--dur-quick`; transform stripped; opacity 1→0 (display still preserved per policy) |
+| `fpc-sticky-mini-emerge` | duration → `--dur-quick`; transform stripped |
+| `fpc-mood-card-hover` | transform disabled; box-shadow only |
+| `fpc-mood-card-select` | spring → linear `--dur-quick`; scale clamp to 1.00 |
+| `fpc-cta-hover` | transform disabled |
+| `fpc-cta-press` | transform disabled |
+| `fpc-skeleton-shimmer` | animation: none — solid colour preserved |
 
 ---
 
