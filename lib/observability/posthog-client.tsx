@@ -26,6 +26,13 @@ export function FolioPostHogProvider({ children }: { children: React.ReactNode }
     if (typeof window !== "undefined" && (navigator.doNotTrack === "1" || navigator.doNotTrack === "yes")) {
       return;
     }
+    // Audit-prep Phase 6b: gate PostHog init on explicit cookie consent.
+    // Banner stored in localStorage as 'folio.cookieConsent' = 'granted'|'denied'.
+    // If neither was selected yet, PostHog stays uninitialized; the
+    // CookieBanner re-renders the provider after the user accepts.
+    if (typeof window !== "undefined" && window.localStorage.getItem("folio.cookieConsent") !== "granted") {
+      return;
+    }
     posthog.init(KEY, {
       api_host: HOST,
       capture_pageview: true,

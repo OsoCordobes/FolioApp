@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { CookieBanner } from "@/components/cookie-banner";
 import { FolioPostHogProvider } from "@/lib/observability/posthog-client";
 import { QueryProvider } from "@/lib/query-client";
 import { TweaksProvider } from "@/lib/tweaks-context";
@@ -26,6 +27,10 @@ export const metadata: Metadata = {
  * `data-theme="light"` se setea en SSR para evitar FOUC; TweaksProvider
  * (en el cliente) puede sobreescribirlo post-hydration leyendo localStorage.
  * `suppressHydrationWarning` protege contra el diff esperado de ese cambio.
+ *
+ * CookieBanner (Phase 6b) renders fixed-bottom on first visit; the user's
+ * choice ('granted' | 'denied') persists in localStorage and gates the
+ * PostHog SDK init inside FolioPostHogProvider.
  */
 export default function RootLayout({
   children,
@@ -49,6 +54,7 @@ export default function RootLayout({
             <TweaksProvider>{children}</TweaksProvider>
           </QueryProvider>
         </FolioPostHogProvider>
+        <CookieBanner />
       </body>
     </html>
   );

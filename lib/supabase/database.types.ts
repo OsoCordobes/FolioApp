@@ -73,6 +73,9 @@ interface ProfileRow {
   consent_pii_text_version: string;    // NOT NULL via CHECK
   consent_pii_ip: string | null;       // inet
   consent_pii_user_agent: string | null;
+  // M24 · Ley 25.326 art. 16 right-to-erasure
+  deletion_requested_at: string | null;   // timestamptz
+  deletion_reason: string | null;
   avatar_url: string | null;
   two_factor_enabled: boolean;
   created_at: string;
