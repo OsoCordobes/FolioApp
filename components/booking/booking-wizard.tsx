@@ -15,6 +15,9 @@ import {
   createPedidoPublico,
   fetchSlotsPublico,
 } from "@/app/(public)/book/[slug]/actions";
+import { PublicCard } from "@/components/public-card/public-card";
+
+import { StickyMiniHeader } from "./sticky-mini-header";
 
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
 
@@ -44,6 +47,14 @@ interface OrgPublic {
   provincia: string | null;
   rubro: string | null;
   acentoHex: string;
+  /** Layer D · NULL → AvatarIniciales fallback in the public card. */
+  logoUrl: string | null;
+  /** Layer B · Defaults to 'editorial' if the column is somehow null. */
+  cardMood: "calido" | "clinico" | "editorial" | "boutique";
+  bio: string | null;
+  telefonoPublico: string | null;
+  direccionCompleta: string | null;
+  instagramHandle: string | null;
 }
 
 interface ServicioPublic {
@@ -120,6 +131,9 @@ export function BookingWizard({
   const captchaContainerRef = useRef<HTMLDivElement | null>(null);
   const captchaWidgetIdRef = useRef<string | null>(null);
   const [pending, startTransition] = useTransition();
+  // Sentinel used by <StickyMiniHeader>'s IntersectionObserver to detect
+  // when the hero card scrolls out of view on mobile.
+  const cardSentinelRef = useRef<HTMLDivElement | null>(null);
 
   // Renderizar Turnstile cuando entramos al paso "datos" (no antes para no
   // levantar challenge si el visitante solo revisa horarios).
@@ -161,24 +175,70 @@ export function BookingWizard({
     });
   }, [vista, servicioId, org.slug]);
 
-  const accent = org.acentoHex;
-  const ubicacion = [org.ciudad, org.provincia].filter(Boolean).join(", ");
+  const initials = (org.nombre || "F")
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((s) => s[0]?.toUpperCase() ?? "")
+    .join("");
+  const appHost =
+    typeof window !== "undefined" ? window.location.host : "folio-app-ten.vercel.app";
 
   // ─── Render ──────────────────────────────────────────────────────────
 
   return (
     <div className="bk-page" style={{ background: "var(--bg)", minHeight: "100vh" }}>
-      <main style={{ maxWidth: 720, margin: "0 auto", padding: "48px 24px" }}>
-        <header style={{ marginBottom: 32 }}>
-          <span className="fi-eyebrow" style={{ color: accent }}>
-            {org.rubro ? org.rubro.toUpperCase() : "RESERVAR"}
-          </span>
-          <h1 style={{ marginTop: 8, fontSize: 28 }}>{org.nombre}</h1>
-          {ubicacion ? (
-            <p style={{ color: "var(--ink-3)", marginTop: 4 }}>{ubicacion}</p>
-          ) : null}
-        </header>
+      <StickyMiniHeader
+        sentinelRef={cardSentinelRef}
+        name={org.nombre}
+        logoUrl={org.logoUrl}
+        initials={initials}
+        accentHex={org.acentoHex}
+        onReserveClick={() => {
+          setVista("servicio");
+          document
+            .getElementById("bk-flow")
+            ?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }}
+      />
+      <main style={{ maxWidth: 720, margin: "0 auto", padding: "32px 24px 96px" }}>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 32 }}>
+          <PublicCard
+            variant="full"
+            appUrl={appHost}
+            data={{
+              nombre: org.nombre,
+              rubro: org.rubro,
+              ciudad: org.ciudad,
+              provincia: org.provincia,
+              bio: org.bio,
+              telefonoPublico: org.telefonoPublico,
+              instagramHandle: org.instagramHandle,
+              direccionCompleta: org.direccionCompleta,
+              acentoHex: org.acentoHex,
+              logoUrl: org.logoUrl,
+              cardMood: org.cardMood,
+              slug: org.slug,
+              servicios: servicios.map((s) => ({
+                nombre: s.nombre,
+                dur: s.duracion_min,
+                precioCents: s.precio_cents,
+              })),
+            }}
+          />
+        </div>
 
+        {/* Sentinel sits in normal flow immediately after the hero. When it
+            scrolls past the top of the viewport (rootMargin -56 px), the
+            sticky mini-header emerges. Placing it here — not at top:0 with
+            position:absolute — means initial paint reports isIntersecting=true
+            and the mini stays hidden until real scroll. */}
+        <div
+          ref={cardSentinelRef}
+          aria-hidden
+          style={{ height: 1, width: "100%" }}
+        />
+
+        <div id="bk-flow">
         {vista === "servicio" ? (
           <section>
             <h2 style={{ fontSize: 16, marginBottom: 16 }}>Elegí el servicio</h2>
@@ -380,6 +440,7 @@ export function BookingWizard({
             </p>
           </section>
         ) : null}
+        </div>
       </main>
     </div>
   );

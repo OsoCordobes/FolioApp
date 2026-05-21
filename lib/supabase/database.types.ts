@@ -47,6 +47,16 @@ interface OrganizationRow {
   certificado_arca_cifrado: Buffer | null;
   opt_out_analytics: boolean;
   opt_out_public_listing: boolean;
+  // M20 · public-card fields + onboarding tracking
+  telefono_publico: string | null;
+  direccion_completa: string | null;
+  instagram_handle: string | null;
+  bio: string | null;
+  onboarding_completed: boolean;
+  onboarding_step_max: number;
+  // M21 · card personalization
+  logo_url: string | null;
+  card_mood: "calido" | "clinico" | "editorial" | "boutique";
   deleted_at: string | null;
   created_at: string;
   updated_at: string;

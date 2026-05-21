@@ -30,7 +30,7 @@ export default async function BookPage({ params }: PageProps) {
 
   const { data: org } = await service
     .from("organization")
-    .select("id, slug, nombre, ciudad, provincia, acento_hex, rubro, opt_out_public_listing")
+    .select("id, slug, nombre, ciudad, provincia, acento_hex, rubro, opt_out_public_listing, logo_url, card_mood, bio, telefono_publico, direccion_completa, instagram_handle")
     .eq("slug", slug)
     .is("deleted_at", null)
     .maybeSingle();
@@ -56,6 +56,16 @@ export default async function BookPage({ params }: PageProps) {
         provincia: org.provincia,
         rubro: org.rubro,
         acentoHex: org.acento_hex,
+        logoUrl: org.logo_url,
+        cardMood: (org.card_mood ?? "editorial") as
+          | "calido"
+          | "clinico"
+          | "editorial"
+          | "boutique",
+        bio: org.bio,
+        telefonoPublico: org.telefono_publico,
+        direccionCompleta: org.direccion_completa,
+        instagramHandle: org.instagram_handle,
       }}
       servicios={servicios ?? []}
     />
