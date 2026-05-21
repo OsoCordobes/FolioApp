@@ -379,7 +379,7 @@ export async function signUpAndInitOrganization(
       rubro: null,
       ciudad: null,
       provincia: null,
-      acento_hex: "#c89b3c",                     // default Folio
+      acento_hex: "#8A6722",                     // default Folio brass — matches ONBOARDING_INITIAL.acento + folio.css --accent-warm
       onboarding_completed: false,
       onboarding_step_max: 1,
     })

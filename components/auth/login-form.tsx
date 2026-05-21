@@ -20,6 +20,7 @@ import {
   signInWithGoogle,
   signInWithPassword,
 } from "@/app/(public)/login/actions";
+import { signUpAndInitOrganization } from "@/app/(public)/onboarding/actions";
 
 type Vista = "login" | "signup" | "forgot";
 
@@ -72,10 +73,17 @@ interface SubViewProps {
   setVista: (v: Vista) => void;
 }
 
-function Login({ setVista }: SubViewProps) {
+interface LoginProps extends SubViewProps {
+  prefilledEmail?: string;
+  /** Banner mostrado encima del form (p.ej. cuando viene de "ya existe ese email"). */
+  notice?: string | null;
+  clearNotice?: () => void;
+}
+
+function Login({ setVista, prefilledEmail, notice, clearNotice }: LoginProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(prefilledEmail ?? "");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [err, setErr] = useState("");
@@ -127,6 +135,20 @@ function Login({ setVista }: SubViewProps) {
         <h2>Entrar</h2>
       </header>
 
+      {notice ? (
+        <p className="au-notice" role="status" style={{
+          margin: "0 0 12px",
+          padding: "10px 12px",
+          background: "var(--accent-warm-soft)",
+          color: "var(--accent-warm-2)",
+          border: "1px solid var(--accent-warm)",
+          borderRadius: "var(--r-md)",
+          fontSize: "var(--fs-sm)",
+        }}>
+          {notice}
+        </p>
+      ) : null}
+
       <button type="button" className="au-btn-google" onClick={handleGoogle} disabled={pending}>
         <GoogleLogo />
         Continuar con Google
@@ -147,6 +169,7 @@ function Login({ setVista }: SubViewProps) {
             onChange={(e) => {
               setEmail(e.target.value);
               setErr("");
+              clearNotice?.();
             }}
             disabled={pending}
           />
@@ -197,22 +220,68 @@ function Login({ setVista }: SubViewProps) {
 
 // ─── Signup ────────────────────────────────────────────────────────────────
 
-function Signup({ setVista }: SubViewProps) {
+interface SignupProps extends SubViewProps {
+  switchToLoginWith: (email: string, notice: string) => void;
+}
+
+function Signup({ setVista, switchToLoginWith }: SignupProps) {
+  void setVista; // setVista is provided by SubViewProps; we use switchToLoginWith for the "already exists" path.
   const router = useRouter();
   const [nombre, setNombre] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
+  const [err, setErr] = useState("");
   const [pending, startTransition] = useTransition();
-  void pending;
 
-  // Signup desde /login → redirige al /onboarding que continúa el flow
-  // completo (signUpEmail + completeOnboarding) en Step 1+ con los datos
-  // pre-cargados via URL params.
-  const handleSignup = () => {
-    if (!email.match(/^[^@\s]+@[^@\s]+\.[^@\s]+$/) || password.length < 8) return;
-    const params = new URLSearchParams({ email, ...(nombre ? { nombre } : {}) });
-    startTransition(() => router.push(`/onboarding?${params.toString()}`));
+  // Signup desde /login crea la auth.user + organization placeholder + member
+  // OWNER en una sola server-action atomica. El password se consume server-side;
+  // si la action devuelve ok, hay cookie de sesión y el redirect a /onboarding
+  // resume en Step 2 (sin volver a pedir password).
+  //
+  // Si el email ya tiene cuenta:
+  //   - signUpAndInitOrganization detecta "already" en el error de admin.createUser
+  //     y intenta sign-in con el password recibido. Si el password coincide,
+  //     devuelve ok (la flow se retoma como un login normal).
+  //   - Si el password NO coincide, la action devuelve error y nosotros saltamos
+  //     a la vista login con el email prefillado + banner explicando.
+  const handleSignup = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!email.match(/^[^@\s]+@[^@\s]+\.[^@\s]+$/)) {
+      setErr("Ingresá un email válido");
+      return;
+    }
+    if (password.length < 8) {
+      setErr("Mínimo 8 caracteres");
+      return;
+    }
+    setErr("");
+    startTransition(async () => {
+      const result = await signUpAndInitOrganization(email, password);
+      if (!result.ok) {
+        const msg = result.error ?? "";
+        // Heuristic: existing-account paths surface error messages mentioning
+        // "already", "registered", "Invalid login credentials", "no pude entrar".
+        const looksLikeExistingAccount =
+          /already|registered|invalid login|no pude entrar|sesión|sesion/i.test(msg);
+        if (looksLikeExistingAccount) {
+          switchToLoginWith(
+            email,
+            "Esa cuenta ya existe. Entrá con tu contraseña — si la olvidaste, usá el link de abajo.",
+          );
+          return;
+        }
+        setErr(msg || "No pude crear la cuenta. Probá de nuevo.");
+        return;
+      }
+      // Account created + cookie set. Pass nombre via URL so Step 2 can prefill.
+      const params = new URLSearchParams(nombre ? { nombre } : {});
+      const qs = params.toString();
+      startTransition(() => {
+        router.push(qs ? `/onboarding?${qs}` : "/onboarding");
+        router.refresh();
+      });
+    });
   };
   const handleGoogle = () => {
     startTransition(async () => {
@@ -326,8 +395,14 @@ function Signup({ setVista }: SubViewProps) {
           .
         </p>
 
-        <button type="submit" className="fi-btn fi-btn-primary au-submit">
-          Empezar 7 días gratis
+        {err ? <p className="au-err">{err}</p> : null}
+
+        <button
+          type="submit"
+          className="fi-btn fi-btn-primary au-submit"
+          disabled={pending}
+        >
+          {pending ? "Creando cuenta…" : "Empezar 7 días gratis"}
           <ArrowRightTiny />
         </button>
       </form>
@@ -424,11 +499,29 @@ function Forgot({ setVista }: { setVista: (v: Vista) => void }) {
 
 export function AuthForms({ initialVista = "login" }: { initialVista?: Vista }) {
   const [vista, setVista] = useState<Vista>(initialVista);
+  const [prefilledEmail, setPrefilledEmail] = useState<string>("");
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const switchToLoginWith = (email: string, msg: string) => {
+    setPrefilledEmail(email);
+    setNotice(msg);
+    setVista("login");
+  };
+  const clearNotice = () => setNotice(null);
 
   return (
     <main className="au-main">
-      {vista === "login" ? <Login setVista={setVista} /> : null}
-      {vista === "signup" ? <Signup setVista={setVista} /> : null}
+      {vista === "login" ? (
+        <Login
+          setVista={setVista}
+          prefilledEmail={prefilledEmail}
+          notice={notice}
+          clearNotice={clearNotice}
+        />
+      ) : null}
+      {vista === "signup" ? (
+        <Signup setVista={setVista} switchToLoginWith={switchToLoginWith} />
+      ) : null}
       {vista === "forgot" ? <Forgot setVista={setVista} /> : null}
     </main>
   );
