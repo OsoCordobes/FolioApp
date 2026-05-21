@@ -21,6 +21,7 @@ import {
   signInWithPassword,
 } from "@/app/(public)/login/actions";
 import { signUpAndInitOrganization } from "@/app/(public)/onboarding/actions";
+import { safeRedirect } from "@/lib/security/safe-redirect";
 
 type Vista = "login" | "signup" | "forgot";
 
@@ -106,7 +107,10 @@ function Login({ setVista, prefilledEmail, notice, clearNotice }: LoginProps) {
         setErr(result.error ?? "Error al entrar");
         return;
       }
-      const redirect = searchParams.get("redirect") ?? "/hoy";
+      // Mitigate open-redirect (Ley 25.326 + OWASP A01). Only same-origin
+      // paths are honored; anything else (//evil.com, https://, javascript:,
+      // etc.) falls back to /hoy.
+      const redirect = safeRedirect(searchParams.get("redirect"), "/hoy");
       router.push(redirect);
       router.refresh();
     });
