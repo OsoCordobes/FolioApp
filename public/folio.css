@@ -12855,3 +12855,111 @@ input:focus { outline: none; }
   border-radius: var(--r-pill);
   background: transparent;
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   FOLIO ATELIER · LogoUpload dropzone
+   Consumed by <LogoUpload> in components/public-card/logo-upload.tsx.
+   Two named motion beats: fpc-logo-drop-enter (overshoot stamp on success)
+   and fpc-logo-drop-error (3-cycle shake on validation/upload failure).
+   ════════════════════════════════════════════════════════════════════════ */
+
+.fpc-dropzone {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 196px;
+  padding: 24px;
+  border: 1.5px dashed var(--ink-4);
+  border-radius: var(--r-xl);
+  background: transparent;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-quick) var(--ease-standard-out),
+    background var(--dur-quick) var(--ease-standard-out);
+  outline: none;
+}
+.fpc-dropzone:hover { border-color: var(--accent-warm); }
+.fpc-dropzone:focus-visible { box-shadow: var(--shadow-focus-warm); }
+
+.fpc-dropzone.is-drag-over {
+  border-color: var(--accent-warm);
+  background: var(--accent-warm-soft);
+}
+
+.fpc-dropzone.is-error {
+  border-color: var(--red);
+  animation: fpc-logo-drop-error var(--dur-snappy) var(--ease-anticipate);
+}
+
+.fpc-dropzone-preview {
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+  border-radius: var(--r-md);
+  opacity: 0;
+  transform: scale(0.92);
+  animation: fpc-logo-drop-enter var(--dur-moderate) var(--ease-overshoot) forwards;
+}
+
+.fpc-dropzone-headline {
+  font-weight: 600;
+  color: var(--ink);
+  font-size: var(--fs-md);
+}
+
+.fpc-dropzone-hint {
+  font-size: var(--fs-xs);
+  color: var(--ink-3);
+  margin-top: 2px;
+}
+
+.fpc-dropzone-error {
+  color: var(--red);
+  font-size: var(--fs-sm);
+  text-align: center;
+}
+
+.fpc-dropzone-remove {
+  margin-top: 4px;
+  font-size: var(--fs-sm);
+  color: var(--ink-3);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: var(--r-sm);
+}
+.fpc-dropzone-remove:hover {
+  color: var(--ink);
+  background: var(--surface-2);
+}
+
+@keyframes fpc-logo-drop-enter {
+  to {
+    opacity: 1;
+    transform: scale(1.00);
+  }
+}
+
+@keyframes fpc-logo-drop-error {
+  0%   { transform: translateX(0);    }
+  20%  { transform: translateX(-6px); }
+  40%  { transform: translateX( 6px); }
+  60%  { transform: translateX(-3px); }
+  80%  { transform: translateX( 3px); }
+  100% { transform: translateX(0);    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fpc-dropzone-preview,
+  .fpc-dropzone.is-error {
+    animation: none !important;
+  }
+  .fpc-dropzone-preview {
+    opacity: 1;
+    transform: none;
+  }
+}

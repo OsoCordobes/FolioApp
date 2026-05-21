@@ -705,3 +705,119 @@ export async function finalizeOnboarding(): Promise<{ ok: boolean; error?: strin
   if (error) return { ok: false, error: error.message };
   return { ok: true, slug: org.slug as string };
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// CARD PERSONALIZATION (F3 · logo upload · M21)
+// ════════════════════════════════════════════════════════════════════════════
+// Server actions invoked by <LogoUpload> at Step 4. Path convention:
+//   org-logos/<org_id>/logo.png  (upsert: true → re-upload overwrites)
+// RLS on storage.objects ya restringe write a OWNER/DIRECTOR; el server
+// usa service_role para saltar RLS porque la auth ya fue validada por
+// `getUser()` y la pertenencia se chequea contra `member` antes del upload.
+
+import {
+  LOGO_BUCKET,
+  LOGO_MAX_BYTES,
+  buildLogoPath,
+  buildLogoPublicUrl,
+} from "@/lib/storage/logos";
+
+export interface UploadOrgLogoResult {
+  ok: boolean;
+  error?: string;
+  logoUrl?: string;
+}
+
+/**
+ * Sube un PNG de logo del consultorio. Recibe FormData (campo "file")
+ * para que la transferencia no pase por base64 + JSON.
+ */
+export async function uploadOrgLogo(formData: FormData): Promise<UploadOrgLogoResult> {
+  const file = formData.get("file");
+  if (!(file instanceof File)) {
+    return { ok: false, error: "No recibimos un archivo." };
+  }
+  if (file.type !== "image/png") {
+    return { ok: false, error: "Solo aceptamos PNG." };
+  }
+  if (file.size === 0) {
+    return { ok: false, error: "El archivo está vacío." };
+  }
+  if (file.size > LOGO_MAX_BYTES) {
+    return { ok: false, error: "El logo supera los 500 KB." };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Sesión expirada. Volvé a entrar." };
+
+  const service = createSupabaseServiceClient();
+  const { data: member } = await service
+    .from("member")
+    .select("organization_id")
+    .eq("profile_id", user.id)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (!member?.organization_id) {
+    return { ok: false, error: "No pude resolver tu organización." };
+  }
+  const orgId = member.organization_id as string;
+
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const path = buildLogoPath(orgId);
+
+  const { error: upErr } = await service.storage.from(LOGO_BUCKET).upload(path, bytes, {
+    contentType: "image/png",
+    upsert: true,
+    cacheControl: "no-cache",
+  });
+  if (upErr) return { ok: false, error: `Error subiendo logo: ${upErr.message}` };
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+  const cacheBust = Date.now();
+  const logoUrl = `${buildLogoPublicUrl({ supabaseUrl, orgId })}?v=${cacheBust}`;
+
+  const { error: dbErr } = await service
+    .from("organization")
+    .update({ logo_url: logoUrl })
+    .eq("id", orgId);
+  if (dbErr) return { ok: false, error: `Error guardando logo_url: ${dbErr.message}` };
+
+  return { ok: true, logoUrl };
+}
+
+export interface RemoveOrgLogoResult {
+  ok: boolean;
+  error?: string;
+}
+
+/**
+ * Borra el logo del bucket y limpia organization.logo_url. Idempotente:
+ * si no había logo, no falla.
+ */
+export async function removeOrgLogo(): Promise<RemoveOrgLogoResult> {
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Sesión expirada." };
+
+  const service = createSupabaseServiceClient();
+  const { data: member } = await service
+    .from("member")
+    .select("organization_id")
+    .eq("profile_id", user.id)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (!member?.organization_id) {
+    return { ok: false, error: "No pude resolver tu organización." };
+  }
+  const orgId = member.organization_id as string;
+
+  const path = buildLogoPath(orgId);
+  const { error: rmErr } = await service.storage.from(LOGO_BUCKET).remove([path]);
+  if (rmErr && !/not.?found/i.test(rmErr.message)) {
+    return { ok: false, error: rmErr.message };
+  }
+
+  await service.from("organization").update({ logo_url: null }).eq("id", orgId);
+  return { ok: true };
+}
