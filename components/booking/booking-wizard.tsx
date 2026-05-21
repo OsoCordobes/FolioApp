@@ -32,6 +32,7 @@ declare global {
           "error-callback"?: () => void;
           "expired-callback"?: () => void;
           theme?: "light" | "dark" | "auto";
+          size?: "normal" | "compact" | "flexible";
         },
       ) => string;
       reset: (widgetId?: string) => void;

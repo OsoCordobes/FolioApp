@@ -263,25 +263,29 @@ export function OnboardingApp({
         return;
       }
       if (e.key === "Enter" && !isTextArea && !isContentEditable && stepIdx < 9) {
-        // En Step 1 dejamos que el botón maneje su validación
-        if (tag === "button") return;
+        // En Step 1 dejamos que el botón maneje su validación + captcha
+        if (tag === "button" || stepIdx === 1) return;
         e.preventDefault();
-        if (stepIdx === 1) {
-          handleStep1Next();
-        } else {
-          next();
-        }
+        next();
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stepIdx, next, back]);
 
   // ─── Step 1: signUpAndInitOrganization ───────────────────────────────────
-  const handleStep1Next = () => {
+  const handleStep1Submit = ({
+    turnstileToken,
+    consent,
+  }: {
+    turnstileToken: string | null;
+    consent: boolean;
+  }) => {
     startSignupTransition(async () => {
-      const result = await signUpAndInitOrganization(data.email, data.password);
+      const result = await signUpAndInitOrganization(data.email, data.password, {
+        turnstileToken,
+        consent,
+      });
       if (!result.ok) {
         setError(result.error ?? "Error en signup");
         return;
@@ -347,7 +351,7 @@ export function OnboardingApp({
               <Step1Registro
                 data={{ email: data.email, password: data.password }}
                 set={(patch) => set(patch)}
-                next={handleStep1Next}
+                onSubmit={handleStep1Submit}
                 loading={signingUp}
                 error={error}
               />

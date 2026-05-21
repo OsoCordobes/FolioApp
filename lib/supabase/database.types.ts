@@ -68,6 +68,11 @@ interface ProfileRow {
   nombre_cifrado: Buffer;
   apellido_cifrado: Buffer;
   matricula: string | null;
+  // M23 · Ley 25.326 art. 14 explicit consent at signup
+  consent_pii_signed_at: string;       // timestamptz NOT NULL via CHECK
+  consent_pii_text_version: string;    // NOT NULL via CHECK
+  consent_pii_ip: string | null;       // inet
+  consent_pii_user_agent: string | null;
   avatar_url: string | null;
   two_factor_enabled: boolean;
   created_at: string;

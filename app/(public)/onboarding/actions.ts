@@ -1,5 +1,10 @@
 "use server";
 
+import { headers } from "next/headers";
+
+import { limitByIp } from "@/lib/security/rate-limit";
+import { verifyTurnstile } from "@/lib/security/turnstile";
+
 /**
  * Folio · Server Actions de onboarding.
  *
@@ -307,12 +312,50 @@ export interface OnboardingBootstrapResult {
 export async function signUpAndInitOrganization(
   email: string,
   password: string,
+  options: { turnstileToken?: string | null; consent?: boolean } = {},
 ): Promise<OnboardingBootstrapResult> {
   const parsed = signUpSchema.safeParse({ email, password });
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos." };
   }
   ({ email, password } = parsed.data);
+
+  // ─── Audit-prep Phase 4: rate-limit + Turnstile + consent gate ─────────────
+  // Headers carry the caller's IP via Vercel's x-forwarded-for. In dev /
+  // self-hosted the proxy may not set it; fall back to "unknown" which the
+  // limiter buckets under a single key (acceptable for dev — it'll still
+  // throttle abuse).
+  const reqHeaders = await headers();
+  const ipRaw = reqHeaders.get("x-forwarded-for") ?? reqHeaders.get("x-real-ip") ?? null;
+  const ip = ipRaw ? ipRaw.split(",")[0].trim() : null;
+  const limit = await limitByIp("signup", ip, 5);
+  if (!limit.ok) {
+    return {
+      ok: false,
+      error: "Demasiados intentos de registro. Probá de nuevo en una hora.",
+    };
+  }
+  // Turnstile is mandatory in production. In dev the verifier is a no-op
+  // when TURNSTILE_SECRET_KEY is missing (returns true) so visual regression
+  // and quick local signup still work.
+  const captchaOk = await verifyTurnstile(options.turnstileToken, ip);
+  if (!captchaOk) {
+    return {
+      ok: false,
+      error: "No pude verificar el captcha. Recargá la página y probá de nuevo.",
+    };
+  }
+  // PII processing consent (Ley 25.326 art. 14). The /login signup form
+  // requires the checkbox; the /onboarding Step 1 form requires it too.
+  // Either form passes consent=true; absence (e.g. legacy clients) is
+  // refused. We also persist the consent record on the consentimiento
+  // table further below, after the org exists.
+  if (options.consent !== true) {
+    return {
+      ok: false,
+      error: "Tenés que aceptar el aviso de privacidad para continuar.",
+    };
+  }
 
   const service = createSupabaseServiceClient();
 
@@ -390,7 +433,10 @@ export async function signUpAndInitOrganization(
     return { ok: false, error: `Error creando consultorio: ${orgErr?.message ?? "desconocido"}` };
   }
 
-  // 5. Crear profile (vacío, sin nombre — se completa en step 2)
+  // 5. Crear profile (vacío, sin nombre — se completa en step 2).
+  //    Persistimos la aceptación del aviso de privacidad (Ley 25.326 art. 14):
+  //    timestamp, IP, user-agent, y la versión del texto legal.
+  const userAgent = reqHeaders.get("user-agent");
   const { error: profErr } = await service
     .from("profile")
     .upsert({
@@ -399,6 +445,10 @@ export async function signUpAndInitOrganization(
       nombre_cifrado: null,
       apellido_cifrado: null,
       matricula: null,
+      consent_pii_signed_at: new Date().toISOString(),
+      consent_pii_text_version: "v1",
+      consent_pii_ip: ip,
+      consent_pii_user_agent: userAgent,
     });
   if (profErr) {
     return { ok: false, error: `Error creando perfil: ${profErr.message}` };

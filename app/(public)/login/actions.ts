@@ -67,7 +67,10 @@ export async function requestPasswordReset(email: string): Promise<AuthResult> {
   const supabase = await createSupabaseServerClient();
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3010";
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${appUrl}/api/auth/reset`,
+    // Phase 4 fix · /reset-password is the canonical landing.
+    // /api/auth/reset stays as a 302 shim for any in-flight emails from
+    // before this change (see app/api/auth/reset/route.ts).
+    redirectTo: `${appUrl}/reset-password`,
   });
 
   if (error) {

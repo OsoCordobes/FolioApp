@@ -27,6 +27,7 @@ const PUBLIC_PATHS = [
   "/login",
   "/onboarding",
   "/forgot",
+  "/reset-password",        // Supabase password-recovery email landing (Phase 4)
   "/api/health",            // healthcheck (load balancer, uptime monitoring)
   "/api/analytics/refresh", // cron diario (validado por CRON_SECRET bearer)
 ];

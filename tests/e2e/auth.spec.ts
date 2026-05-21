@@ -49,6 +49,8 @@ test.describe("Auth · signup → onboarding", () => {
     //    cuenta…" while pending, then we get redirected.
     await page.locator('input[type="email"]').fill(email);
     await page.locator('input[type="password"]').fill(password);
+    // Ley 25.326 art. 14 consent (Phase 4): must be ticked before signup.
+    await page.locator('input[type="checkbox"]').first().check();
     await page.getByRole("button", { name: /empezar/i }).click();
 
     // 4. The signup action creates auth.user + org + member, then sets a
@@ -84,6 +86,8 @@ test.describe("Auth · signup → onboarding", () => {
     await page.getByRole("button", { name: /crear cuenta/i }).first().click();
     await page.locator('input[type="email"]').fill(email);
     await page.locator('input[type="password"]').fill(password);
+    // Ley 25.326 art. 14 consent (Phase 4): must be ticked before signup.
+    await page.locator('input[type="checkbox"]').first().check();
     await page.getByRole("button", { name: /empezar/i }).click();
     await page.waitForURL(/\/onboarding/, { timeout: 30_000 });
 
@@ -95,6 +99,7 @@ test.describe("Auth · signup → onboarding", () => {
     await page.getByRole("button", { name: /crear cuenta/i }).first().click();
     await page.locator('input[type="email"]').fill(email);
     await page.locator('input[type="password"]').fill("CompletelyDifferent9!");
+    await page.locator('input[type="checkbox"]').first().check();
     await page.getByRole("button", { name: /empezar/i }).click();
 
     // The flow should detect "already exists" and switch to login view with

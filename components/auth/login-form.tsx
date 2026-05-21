@@ -5,15 +5,21 @@
  *
  * En F3 los forms están conectados a Server Actions de Supabase:
  *   - Login → signInWithPassword / signInWithGoogle
- *   - Signup → signUpEmail (luego /onboarding completa el flow)
+ *   - Signup → signUpAndInitOrganization (Ley 25.326 consent + Turnstile +
+ *     rate-limit, audit-prep Phase 4)
  *   - Forgot → requestPasswordReset
  *
  * Estado pendiente del submit: `pending` flag deshabilita el botón y muestra
  * "Entrando..." mientras la Server Action resuelve.
  */
 
+import Script from "next/script";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState, useTransition, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
+
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
+
+// Window.turnstile global type lives in components/booking/booking-wizard.tsx
 
 import {
   requestPasswordReset,
@@ -229,14 +235,41 @@ interface SignupProps extends SubViewProps {
 }
 
 function Signup({ setVista, switchToLoginWith }: SignupProps) {
-  void setVista; // setVista is provided by SubViewProps; we use switchToLoginWith for the "already exists" path.
+  void setVista;
   const router = useRouter();
   const [nombre, setNombre] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [err, setErr] = useState("");
+  const [consent, setConsent] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const captchaContainerRef = useRef<HTMLDivElement | null>(null);
+  const captchaWidgetIdRef = useRef<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  // Render Turnstile when the Signup view mounts. Site-key absence
+  // (dev / visual regression) skips the widget; verifyTurnstile()
+  // server-side returns true under the same env condition.
+  useEffect(() => {
+    if (!TURNSTILE_SITE_KEY) return;
+    if (!captchaContainerRef.current) return;
+    if (!window.turnstile) return;
+    captchaWidgetIdRef.current = window.turnstile.render(captchaContainerRef.current, {
+      sitekey: TURNSTILE_SITE_KEY,
+      theme: "auto",
+      size: "flexible",
+      callback: (token) => setCaptchaToken(token),
+      "expired-callback": () => setCaptchaToken(null),
+      "error-callback": () => setCaptchaToken(null),
+    });
+    return () => {
+      if (captchaWidgetIdRef.current && window.turnstile) {
+        window.turnstile.remove(captchaWidgetIdRef.current);
+        captchaWidgetIdRef.current = null;
+      }
+    };
+  }, []);
 
   // Signup desde /login crea la auth.user + organization placeholder + member
   // OWNER en una sola server-action atomica. El password se consume server-side;
@@ -259,9 +292,20 @@ function Signup({ setVista, switchToLoginWith }: SignupProps) {
       setErr("Mínimo 8 caracteres");
       return;
     }
+    if (!consent) {
+      setErr("Tenés que aceptar el aviso de privacidad para continuar.");
+      return;
+    }
+    if (TURNSTILE_SITE_KEY && !captchaToken) {
+      setErr("Esperá unos segundos a que el captcha verifique.");
+      return;
+    }
     setErr("");
     startTransition(async () => {
-      const result = await signUpAndInitOrganization(email, password);
+      const result = await signUpAndInitOrganization(email, password, {
+        turnstileToken: captchaToken,
+        consent: true,
+      });
       if (!result.ok) {
         const msg = result.error ?? "";
         // Heuristic: existing-account paths surface error messages mentioning
@@ -387,24 +431,48 @@ function Signup({ setVista, switchToLoginWith }: SignupProps) {
           ) : null}
         </label>
 
-        <p className="au-fine">
-          Al crear tu cuenta, aceptás los{" "}
-          <a href="#" className="au-link">
-            términos
-          </a>{" "}
-          y la{" "}
-          <a href="#" className="au-link">
-            privacidad
-          </a>
-          .
-        </p>
+        {/* Ley 25.326 art. 14: explicit informed consent before processing PII */}
+        <label className="au-consent" style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: 13, lineHeight: 1.5 }}>
+          <input
+            type="checkbox"
+            checked={consent}
+            onChange={(e) => {
+              setConsent(e.target.checked);
+              setErr("");
+            }}
+            style={{ marginTop: 2, flexShrink: 0 }}
+          />
+          <span>
+            Acepto el{" "}
+            <a href="/privacidad" target="_blank" rel="noreferrer" className="au-link">
+              Aviso de Privacidad
+            </a>{" "}
+            (Ley 25.326) y los{" "}
+            <a href="/terminos" target="_blank" rel="noreferrer" className="au-link">
+              Términos
+            </a>
+            . Mis datos se procesan según el aviso.
+          </span>
+        </label>
+
+        {/* Cloudflare Turnstile — invisible captcha. Only rendered if a site key is set. */}
+        {TURNSTILE_SITE_KEY ? (
+          <>
+            <Script
+              src="https://challenges.cloudflare.com/turnstile/v0/api.js"
+              async
+              defer
+            />
+            <div ref={captchaContainerRef} style={{ marginTop: 4 }} />
+          </>
+        ) : null}
 
         {err ? <p className="au-err">{err}</p> : null}
 
         <button
           type="submit"
           className="fi-btn fi-btn-primary au-submit"
-          disabled={pending}
+          disabled={pending || !consent || (Boolean(TURNSTILE_SITE_KEY) && !captchaToken)}
         >
           {pending ? "Creando cuenta…" : "Empezar 7 días gratis"}
           <ArrowRightTiny />
