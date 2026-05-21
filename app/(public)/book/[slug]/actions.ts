@@ -27,6 +27,11 @@ async function clientIp(): Promise<string | null> {
   return h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
 }
 
+async function clientUserAgent(): Promise<string | null> {
+  const h = await headers();
+  return h.get("user-agent")?.slice(0, 500) ?? null;
+}
+
 const slotsInput = z.object({
   orgSlug: z.string().regex(/^[a-z0-9-]+$/),
   servicioId: z.string().uuid(),
@@ -108,6 +113,13 @@ const createPedidoInput = z.object({
   email: z.string().email().optional(),
   motivo: z.string().max(2000).optional(),
   captchaToken: z.string().optional(),                // F11: validar Turnstile / hCaptcha
+  // Consentimiento explícito (Ley 25.326 art. 5). Optional en el schema de
+  // entrada para no romper el build mientras Session B wire-up la checkbox
+  // del wizard. Runtime check abajo rechaza si falta. M22 agrega la columna
+  // pedido.consent_aceptado_en + constraint pedido_web_requires_consent.
+  // Ver docs/handoff-compliance-2026-05-21.md §C1.
+  consentAccepted: z.boolean().optional(),
+  consentVersion: z.string().min(8).max(32).optional(),
 });
 
 export async function createPedidoPublico(
@@ -116,6 +128,17 @@ export async function createPedidoPublico(
   const parsed = createPedidoInput.safeParse(input);
   if (!parsed.success) {
     return err("validation", "Datos del pedido inválidos.", parsed.error.message);
+  }
+
+  // Runtime enforcement de consentimiento (Ley 25.326 art. 5). Session B
+  // pasará consentAccepted=true desde la checkbox del wizard. Hasta entonces
+  // este chequeo rechaza submissions sin consentimiento — la DB también lo
+  // rechazaría por el constraint pedido_web_requires_consent.
+  if (parsed.data.consentAccepted !== true || !parsed.data.consentVersion) {
+    return err(
+      "validation",
+      "Para reservar debés aceptar la Política de Privacidad y los Términos.",
+    );
   }
 
   const ip = await clientIp();
@@ -219,6 +242,8 @@ export async function createPedidoPublico(
     return err("conflict", "Ese horario ya no está disponible. Por favor elegí otro.");
   }
 
+  const userAgent = await clientUserAgent();
+
   const { data: pedido, error } = await service
     .from("pedido")
     .insert({
@@ -233,6 +258,11 @@ export async function createPedidoPublico(
       servicio_id: servicio.id,
       motivo_cifrado: encryptColumn(parsed.data.motivo ?? null),
       precio_cents: servicio.precio_cents,
+      // Evidencia legal del consentimiento (Ley 25.326 art. 5 + M22 columnas).
+      consent_aceptado_en: new Date().toISOString(),
+      consent_ip: ip,
+      consent_user_agent: userAgent,
+      consent_version: parsed.data.consentVersion,
     })
     .select("id")
     .single();
