@@ -12963,3 +12963,306 @@ input:focus { outline: none; }
     transform: none;
   }
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   FOLIO ATELIER · PublicCard · baseline (Layer A · editorial-default)
+   F5 layers mood-specific overrides on top via [data-card-mood="..."].
+   ════════════════════════════════════════════════════════════════════════ */
+
+.fpc-card {
+  position: relative;
+  background: var(--fpc-bg, var(--surface));
+  border: 1px solid var(--line);
+  border-radius: var(--fpc-radius);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  isolation: isolate;
+  color: var(--ink);
+}
+.fpc-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 60% 0;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--fpc-accent) calc(var(--fpc-bg-tint-amount) * 100%), transparent) 0%,
+    transparent 100%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.fpc-variant-full    { max-width: 560px; width: 100%; }
+.fpc-variant-preview { max-width: 360px; width: 100%; }
+.fpc-variant-editing { max-width: 360px; width: 100%; }
+
+.fpc-hero {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 16px;
+  align-items: flex-start;
+  padding: var(--fpc-hero-py-full) 28px calc(var(--fpc-hero-py-full) - 12px);
+  border-bottom: 1px solid color-mix(in srgb, var(--fpc-accent) 8%, transparent);
+}
+.fpc-variant-preview .fpc-hero,
+.fpc-variant-editing .fpc-hero {
+  padding: var(--fpc-hero-py-prev) 20px calc(var(--fpc-hero-py-prev) - 8px);
+}
+
+.fpc-logo {
+  object-fit: contain;
+  border-radius: var(--r-md);
+  background: transparent;
+}
+
+.fpc-hero-text {
+  min-width: 0;
+  padding-top: 4px;
+}
+
+.fpc-name {
+  margin: 0;
+  font-family: var(--fpc-name-family, var(--font-sans));
+  font-weight: var(--fpc-name-weight, 600);
+  letter-spacing: var(--fpc-name-tracking, var(--track-tight-1));
+  font-size: var(--fpc-name-size-full);
+  line-height: 1.06;
+  color: var(--ink);
+  word-break: break-word;
+}
+.fpc-variant-preview .fpc-name,
+.fpc-variant-editing .fpc-name {
+  font-size: var(--fpc-name-size-prev);
+  line-height: 1.18;
+}
+
+.fpc-meta {
+  margin: 6px 0 0;
+  font-size: var(--fs-body);
+  color: var(--ink-3);
+  letter-spacing: var(--track-tight-0);
+  line-height: 1.3;
+}
+
+.fpc-bio {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  padding: 16px 28px 0;
+  font-size: var(--fs-md);
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+.fpc-variant-preview .fpc-bio,
+.fpc-variant-editing .fpc-bio { padding: 14px 20px 0; font-size: 13px; }
+.fpc-bio.is-placeholder { color: var(--ink-4); font-style: italic; }
+
+.fpc-contact {
+  position: relative;
+  z-index: 1;
+  padding: 18px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: var(--fs-body);
+  color: var(--ink-2);
+}
+.fpc-variant-preview .fpc-contact,
+.fpc-variant-editing .fpc-contact { padding: 14px 20px; font-size: 13px; }
+
+.fpc-services {
+  position: relative;
+  z-index: 1;
+  padding: 18px 28px 24px;
+}
+.fpc-variant-preview .fpc-services,
+.fpc-variant-editing .fpc-services { padding: 14px 20px 18px; }
+
+.fpc-services-label {
+  font-size: var(--fs-xs);
+  letter-spacing: var(--track-loose-2);
+  text-transform: uppercase;
+  color: var(--ink-3);
+  font-weight: 600;
+  margin: 0 0 12px;
+}
+
+.fpc-services ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.fpc-services li {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 6px;
+  align-items: baseline;
+  font-size: var(--fs-md);
+  color: var(--ink);
+}
+.fpc-variant-preview .fpc-services li,
+.fpc-variant-editing .fpc-services li { font-size: 13px; }
+.fpc-srv-name  { font-weight: 500; }
+.fpc-srv-dur   { color: var(--ink-3); }
+.fpc-srv-price {
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  grid-column: 3;
+  justify-self: end;
+}
+.fpc-services-more {
+  margin: 10px 0 0;
+  font-size: var(--fs-xs);
+  color: var(--ink-3);
+}
+
+.fpc-footer {
+  position: relative;
+  z-index: 1;
+  padding: 20px 28px 28px;
+  border-top: 1px solid var(--line-soft);
+}
+.fpc-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  background: var(--fpc-accent);
+  color: #FBF9F4;
+  border: 0;
+  border-radius: var(--r-lg);
+  padding: 14px 20px;
+  font-size: var(--fs-md);
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    transform var(--dur-quick) var(--ease-standard-out),
+    box-shadow var(--dur-quick) var(--ease-standard-out);
+}
+.fpc-cta:hover {
+  transform: translateY(-0.5px);
+  box-shadow: var(--shadow-2);
+}
+.fpc-cta:active {
+  transform: translateY(0.5px);
+  transition-duration: var(--dur-instant);
+}
+
+.fpc-link-footer {
+  padding: 12px 20px;
+  border-top: 1px solid var(--line-soft);
+  background: var(--surface-2);
+  font-size: var(--fs-xs);
+  color: var(--ink-3);
+  word-break: break-all;
+}
+
+.fpc-corner-slot,
+.fpc-date-slot {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  z-index: 2;
+}
+
+/* ─── Entry choreography (mood-agnostic baseline, musical stagger) ─── */
+
+.fpc-card {
+  animation: fpc-enter-hero var(--dur-cinematic) var(--ease-emphasized-out) both;
+}
+.fpc-hero {
+  animation: fpc-enter-musical var(--dur-moderate) var(--ease-emphasized-out) both;
+  animation-delay: var(--fpc-stagger-musical-2);
+}
+.fpc-bio {
+  animation: fpc-enter-musical var(--dur-moderate) var(--ease-emphasized-out) both;
+  animation-delay: var(--fpc-stagger-musical-4);
+}
+.fpc-contact {
+  animation: fpc-enter-musical var(--dur-moderate) var(--ease-emphasized-out) both;
+  animation-delay: var(--fpc-stagger-musical-5);
+}
+.fpc-services {
+  animation: fpc-enter-musical var(--dur-moderate) var(--ease-emphasized-out) both;
+  animation-delay: var(--fpc-stagger-musical-6);
+}
+.fpc-footer .fpc-cta {
+  animation: fpc-enter-musical var(--dur-moderate) var(--ease-emphasized-out) both;
+  animation-delay: var(--fpc-stagger-musical-7);
+}
+.fpc-link-footer {
+  animation: fpc-enter-musical var(--dur-moderate) var(--ease-emphasized-out) both;
+  animation-delay: var(--fpc-stagger-musical-8);
+}
+
+@keyframes fpc-enter-hero {
+  from {
+    opacity: 0;
+    transform: translateY(var(--fpc-hero-y-from));
+    filter: blur(var(--fpc-hero-blur-from));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(var(--fpc-hero-y-to));
+    filter: blur(var(--fpc-hero-blur-to));
+  }
+}
+@keyframes fpc-enter-musical {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fpc-card,
+  .fpc-hero,
+  .fpc-bio,
+  .fpc-contact,
+  .fpc-services,
+  .fpc-footer .fpc-cta,
+  .fpc-link-footer {
+    animation-duration: var(--dur-quick) !important;
+    animation-delay: 0ms !important;
+    transform: none !important;
+    filter: none !important;
+  }
+}
+
+/* ─── Editorial mood (default) — overrides applied via [data-card-mood] ─── */
+/*  The other three moods (calido, clinico, boutique) ship in F5.            */
+
+[data-card-mood="editorial"] {
+  --fpc-bg-tint-amount: 0.06;
+  --fpc-bg-tint-style:  radial;
+  --fpc-name-family:    var(--font-display);
+  --fpc-name-weight:    400;
+  --fpc-name-tracking:  -0.018em;
+  --fpc-bio-style:      quote-with-rule;
+  --fpc-radius:         20px;
+  --fpc-decoration:     sub-line;
+  --fpc-decoration-color: var(--accent-warm);
+  --fpc-hero-py-full:   40px;
+}
+[data-card-mood="editorial"].fpc-card::before {
+  background: radial-gradient(at 0% 0%,
+    color-mix(in srgb, var(--fpc-accent) calc(var(--fpc-bg-tint-amount) * 100%), transparent) 0%,
+    transparent 60%);
+  inset: 0 0 50% 0;
+}
+[data-card-mood="editorial"] .fpc-bio {
+  border-left: 1px solid var(--fpc-accent);
+  padding-left: 18px;
+  font-style: italic;
+  font-family: var(--font-display);
+  margin: 16px 28px 0;
+  padding-top: 0;
+}
+[data-card-mood="editorial"].fpc-variant-preview .fpc-bio,
+[data-card-mood="editorial"].fpc-variant-editing .fpc-bio {
+  margin: 14px 20px 0;
+}
