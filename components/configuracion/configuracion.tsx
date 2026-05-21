@@ -166,7 +166,7 @@ function SecCuenta({ c, set }: { c: ConsultorioData; set: (patch: Partial<Consul
             type="button"
             className="fi-btn fi-btn-secondary"
             disabled
-            title="Próximamente — F11 polish"
+            title="Próximamente"
             style={{ opacity: 0.5, cursor: "not-allowed" }}
           >
             Activar MFA
@@ -183,7 +183,7 @@ function SecCuenta({ c, set }: { c: ConsultorioData; set: (patch: Partial<Consul
             </div>
           </div>
           <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
-            Listado de otros dispositivos en F11 polish. Mientras tanto, usá &quot;Cerrar sesión&quot; del sidebar para cerrar esta sesión.
+            El listado de otros dispositivos llega en una próxima versión. Mientras tanto, usá &quot;Cerrar sesión&quot; del sidebar para cerrar esta sesión.
           </p>
         </Row>
       </Section>

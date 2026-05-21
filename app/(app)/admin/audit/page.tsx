@@ -1,13 +1,15 @@
 /**
  * Folio · /admin/audit
  *
- * Audit dashboard read-only para OWNER / DIRECTOR. Lista las últimas 100
- * entradas del audit_log de la org activa con filtros por fecha, actor,
- * recurso, acción.
+ * Audit dashboard read-only para OWNER. Lista las últimas 100 entradas del
+ * audit_log de la org activa con filtros por fecha, actor, recurso, acción.
  *
  * Compliance: cumple con Ley 25.326 art. 11 (acceso a logs por titular) y
  * Ley 26.529 art. 15 (custodia + autenticidad). Retención 10 años garantizada
  * por particionado mensual + política de archive a Storage (F12).
+ *
+ * Acceso restringido a OWNER (la RLS de M12 sólo permite OWNER; otros roles
+ * caen a notFound() para no filtrar la existencia del recurso).
  */
 
 import { notFound } from "next/navigation";

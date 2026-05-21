@@ -136,7 +136,7 @@ function SidebarSearch() {
       <span className="fi-search-ico">
         <I.Search size={14} />
       </span>
-      <input name="q" placeholder="Buscar paciente, turno…" />
+      <input name="q" placeholder="Buscar paciente…" aria-label="Buscar paciente" />
       <span className="fi-kbd">⌘K</span>
     </form>
   );

@@ -305,8 +305,18 @@ function BulkBar({ count, onClear, onWa, onTag, onArchivar, tagDisabled, archiva
 
 // ─── Reactivar widget ──────────────────────────────────────────────────────
 
+function openWhatsApp(tel: string): boolean {
+  const num = (tel ?? "").replace(/[^0-9]/g, "");
+  if (!num) return false;
+  window.open(`https://wa.me/${num}`, "_blank", "noopener");
+  return true;
+}
+
 function ReactivarWidget({ pacientes }: { pacientes: PacienteDir[] }) {
   if (pacientes.length === 0) return null;
+  const visibles = pacientes.slice(0, 3);
+  const conTelefono = pacientes.filter((p) => p.tel?.trim());
+  const noneHaveTel = conTelefono.length === 0;
   return (
     <section className="pd-reactivar">
       <header>
@@ -316,13 +326,34 @@ function ReactivarWidget({ pacientes }: { pacientes: PacienteDir[] }) {
           </span>
           <h3>Hace más de 60 días sin contacto.</h3>
         </div>
-        <button type="button" className="fi-btn fi-btn-secondary">
+        <button
+          type="button"
+          className="fi-btn fi-btn-secondary"
+          onClick={() => {
+            if (conTelefono.length === 0) {
+              alert("Ninguno de estos pacientes tiene teléfono cargado.");
+              return;
+            }
+            if (
+              conTelefono.length > 1 &&
+              !confirm(
+                `WhatsApp masivo abre una pestaña por paciente (${conTelefono.length}). ¿Continuar?`,
+              )
+            ) {
+              return;
+            }
+            for (const p of conTelefono) openWhatsApp(p.tel);
+          }}
+          disabled={noneHaveTel}
+          title={noneHaveTel ? "Ningún paciente tiene teléfono cargado" : undefined}
+        >
           Enviar a todos →
         </button>
       </header>
       <div className="pd-reactivar-list">
-        {pacientes.slice(0, 3).map((p) => {
+        {visibles.map((p) => {
           const dias = diasDesde(p.ultima) ?? 0;
+          const hasTel = !!p.tel?.trim();
           return (
             <div key={p.id} className="pd-reactivar-row">
               <div className="fi-avatar pd-avatar">{iniciales(p.nombre)}</div>
@@ -333,7 +364,13 @@ function ReactivarWidget({ pacientes }: { pacientes: PacienteDir[] }) {
               <span className="pd-reactivar-meta fm-mono">
                 última {fmtFechaCorta(p.ultima)} · hace {Math.floor(dias / 30)} meses
               </span>
-              <button type="button" className="fi-btn fi-btn-secondary">
+              <button
+                type="button"
+                className="fi-btn fi-btn-secondary"
+                onClick={() => openWhatsApp(p.tel)}
+                disabled={!hasTel}
+                title={hasTel ? `Abrir WhatsApp con ${p.nombre}` : "Sin teléfono cargado"}
+              >
                 <I.Phone size={11} /> Mensaje
               </button>
             </div>

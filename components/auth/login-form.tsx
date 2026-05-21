@@ -426,8 +426,6 @@ function Forgot({ setVista }: { setVista: (v: Vista) => void }) {
       setSent(true);
     });
   };
-  // pending exposed via disabled below
-  void pending;
 
   if (sent) {
     return (
@@ -486,8 +484,8 @@ function Forgot({ setVista }: { setVista: (v: Vista) => void }) {
             autoFocus
           />
         </label>
-        <button type="submit" className="fi-btn fi-btn-primary au-submit">
-          Enviar link
+        <button type="submit" className="fi-btn fi-btn-primary au-submit" disabled={pending}>
+          {pending ? "Enviando…" : "Enviar link"}
           <ArrowRightTiny />
         </button>
       </form>

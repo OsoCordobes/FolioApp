@@ -28,6 +28,13 @@ function fmtFecha(iso: string): string {
   return `${d.getDate()} ${MESES[d.getMonth()]}`;
 }
 
+function fmtAnio(iso: string): string {
+  if (!iso || iso === "—") return "";
+  const d = new Date(iso + (iso.length === 10 ? "T00:00:00" : ""));
+  if (isNaN(d.getTime())) return "";
+  return String(d.getFullYear());
+}
+
 function iniciales(nombre: string): string {
   return nombre.split(" ").map((p) => p[0]).filter(Boolean).join("").slice(0, 2).toUpperCase();
 }
@@ -310,7 +317,7 @@ function TabSesiones() {
           <div key={s.fecha} className="pc-sesion-row">
             <div className="pc-sesion-date">
               <b className="fm-mono">{fmtFecha(s.fecha)}</b>
-              <span className="muted">2026</span>
+              <span className="muted">{fmtAnio(s.fecha)}</span>
             </div>
             <div className="pc-sesion-body">
               <div className="pc-sesion-title">

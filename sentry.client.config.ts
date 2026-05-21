@@ -22,9 +22,14 @@ if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
       }),
     ],
     beforeSend(event) {
-      // Scrub PII básico (nombres y telefonos en el dom)
-      if (event.request?.url?.includes("/pacientes/")) {
-        event.request.url = event.request.url.replace(/\/pacientes\/[a-f0-9-]+/i, "/pacientes/<id>");
+      // Scrub IDs en URLs clínicas para no enviar identificadores de paciente
+      // ni turno a Sentry. El UUID/hex se reemplaza por <id> en todas las
+      // rutas que pueden tener datos sensibles.
+      if (event.request?.url) {
+        event.request.url = event.request.url.replace(
+          /\/(pacientes|focus|sesiones|book|turno|pedidos|consentimientos)\/[a-z0-9-]+/gi,
+          "/$1/<id>",
+        );
       }
       return event;
     },
