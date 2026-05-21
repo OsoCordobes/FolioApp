@@ -145,6 +145,24 @@ export function TurnoRow({ turno, paciente, isNext, onTransition, onOpenFicha }:
             {cta.icon}
           </button>
         ) : null}
+        {/* Audit-prep Phase 5: explicit cancel button on every non-terminal state.
+            Cancel writes to audit_log via the M12 trigger on turno UPDATE. */}
+        {turno.estado !== "cerrado" && turno.estado !== "cancelado" && turno.estado !== "no_asistio" && turno.estado !== "reagendado" ? (
+          <button
+            type="button"
+            className="fi-btn fi-btn-ghost fi-t-cancel"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (typeof window === "undefined") return;
+              if (!window.confirm(`¿Cancelar el turno de ${paciente.nombre}? Esta acción queda en el audit log y no se puede borrar.`)) return;
+              onTransition(turno.id, "cancelado");
+            }}
+            title="Cancelar turno"
+            aria-label={`Cancelar turno de ${paciente.nombre}`}
+          >
+            <I.X size={12} />
+          </button>
+        ) : null}
       </div>
     </div>
   );
