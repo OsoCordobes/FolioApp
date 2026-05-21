@@ -1,5 +1,13 @@
 import { expect, test } from "@playwright/test";
 
+// Phase 6b · pre-dismiss the cookie banner so it doesn't intercept
+// clicks + so the "Aviso de Privacidad" text isn't duplicated in DOM.
+test.beforeEach(async ({ context }) => {
+  await context.addInitScript(() => {
+    try { window.localStorage.setItem("folio.cookieConsent", "denied"); } catch { /* ignore */ }
+  });
+});
+
 /**
  * Folio · Phase 4 · signup consent + rate-limit acceptance.
  *
@@ -38,8 +46,11 @@ test.describe("/login signup · consent + Turnstile gates", () => {
   test("explicit consent text references Ley 25.326", async ({ page }) => {
     await page.goto("/login");
     await page.getByRole("button", { name: /crear cuenta/i }).first().click();
-    await expect(page.getByText(/Aviso de Privacidad/i)).toBeVisible();
-    await expect(page.getByText(/Ley 25\.326/)).toBeVisible();
+    // Scope to the signup form (not the cookie banner which also references
+    // the Aviso de Privacidad).
+    const form = page.locator("form.au-form");
+    await expect(form.getByText(/Aviso de Privacidad/i)).toBeVisible();
+    await expect(form.getByText(/Ley 25\.326/)).toBeVisible();
   });
 });
 

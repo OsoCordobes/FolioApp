@@ -25,6 +25,15 @@ import { expect, test } from "@playwright/test";
 
 const NS_E2E = "e2e-test";
 
+// Phase 6b · pre-dismiss the cookie banner so it doesn't intercept
+// clicks on fixed-bottom UI. Setting the consent in localStorage before
+// the first page.goto prevents the banner from rendering at all.
+test.beforeEach(async ({ context }) => {
+  await context.addInitScript(() => {
+    try { window.localStorage.setItem("folio.cookieConsent", "denied"); } catch { /* ignore */ }
+  });
+});
+
 function nuevoEmail(): string {
   const ts = Date.now();
   return `${NS_E2E}-${ts}@folio.app`;

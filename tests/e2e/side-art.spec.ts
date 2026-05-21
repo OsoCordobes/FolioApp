@@ -16,6 +16,14 @@
 
 import { expect, test } from "@playwright/test";
 
+// Phase 6b · pre-dismiss the cookie banner — it's fixed-bottom and can
+// intercept clicks on the SideArt dot navigation.
+test.beforeEach(async ({ context }) => {
+  await context.addInitScript(() => {
+    try { window.localStorage.setItem("folio.cookieConsent", "denied"); } catch { /* ignore */ }
+  });
+});
+
 test.describe("SideArt v2", () => {
   test("auto-rotate cycles through the 5 slides", async ({ page }) => {
     await page.goto("/login");
@@ -74,6 +82,11 @@ test.describe("SideArt v2", () => {
 
   test("reduced-motion → todo skip-to-end inmediato", async ({ browser }) => {
     const context = await browser.newContext({ reducedMotion: "reduce" });
+    // Phase 6b · the test-level newContext doesn't inherit the suite-level
+    // beforeEach init script, so reapply the cookie-banner dismissal here.
+    await context.addInitScript(() => {
+      try { window.localStorage.setItem("folio.cookieConsent", "denied"); } catch { /* ignore */ }
+    });
     const page = await context.newPage();
 
     await page.goto("/login");
