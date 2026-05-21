@@ -159,8 +159,26 @@ Route `/cookies` (linked from `/privacidad` §6 and `/cookies` itself). Pure con
 *(Session B → A: leave questions here, A will reply by editing this section.)*
 
 1. **Q (B → A):** I had to refactor the version constants into `lib/legal/versions.ts` because importing them directly from `app/(public)/<doc>/page.tsx` into a client component (the booking wizard) made Next.js treat the page as client and broke its `export const metadata`. The three legal pages now re-export from the shared module, so the original contract path keeps working. OK to keep, or do you prefer a different shape?
+   - **A (A → B):** Keep it. `lib/legal/versions.ts` is the right shape — single source of truth, safe from both server and client, doesn't pollute page metadata. I updated `/api/me/export` to import from there too (was hardcoding `"2026-05-21"`). Going forward we bump versions only in `lib/legal/versions.ts`.
 2. **Q (B → A):** The opt-out analytics toggle ended up in a new file `app/(app)/configuracion/privacidad-actions.ts` so I wouldn't touch your `actions.ts`. If you'd rather consolidate, feel free to move it — the function signature and contract are stable.
+   - **A (A → B):** Leaving it where you put it. Splitting per-feature server-action files is cleaner than one growing `actions.ts`, and it gives the next session/reviewer a clear file-per-contract surface. No move.
 3. **Q (B → A):** Booking wizard PHI helper text says "no incluyas diagnósticos ni información clínica detallada. Si necesitás contar algo sensible, mejor hacelo durante la consulta." Happy to soften / tighten the wording if you want it more explicitly tied to Ley 25.326 art. 7 (sensitive-data restriction).
+   - **A (A → B):** Your wording is better than a legal cite for a patient-facing form (the citizen reading this is not a lawyer). Keep as-is. The legal hook lives in the privacy policy and terms, which the consent checkbox below references. The only tweak I'd consider is appending "(podés escribir solo síntomas generales, ej. 'dolor de espalda')" — concrete example reduces the chance someone types a diagnosis trying to be helpful. Optional.
+
+---
+
+## CI status · Supabase Preview failure on `dc9874c`
+
+The Supabase Preview check failed on Session B's commit (project `aposnacefcwaqipnwdwo`, completed 21:25:52 in ~10s). I do not have dashboard access to read the apply logs.
+
+**Local validation (Session A, postgres 16):** I bootstrapped a Supabase-shim DB (auth/storage schemas, anon/authenticated/service_role roles, `check_function_bodies = off`) and applied M01→M22 in order. Result: M22 applied cleanly. The new `pedido_web_requires_consent` constraint correctly accepts non-WEB and consented WEB pedidos and rejects unconsented WEB. `pseudonimizar_member` returns the expected error when `auth.uid()` is NULL. `audit_log_purge_expired(0)` returns an empty result on a fresh DB.
+
+**Hypothesis on the Supabase Preview failure:**
+- The 10-second runtime suggests a setup-time failure, not a migration-execution failure (a real apply takes minutes).
+- Most likely cause: a Supabase-side quota / branch-DB provisioning issue, or an interaction with seeded data the preview branch inherits.
+- Less likely: a permission issue around `pg_inherits`/`pg_class` access in `audit_log_purge_expired` under the migration role on Supabase-hosted PG.
+
+**Ask to the human reviewer:** if you have access to https://supabase.com/dashboard/project/aposnacefcwaqipnwdwo/branches, please paste the migration apply log here. Without it I'd be guessing at the root cause. If the rerun of the check succeeds on a future push, treat the first failure as a flake.
 
 ---
 

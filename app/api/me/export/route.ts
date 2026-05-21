@@ -26,6 +26,7 @@
 import { NextResponse } from "next/server";
 
 import { decryptColumn } from "@/lib/crypto";
+import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/legal/versions";
 import { createSupabaseServerClient, createSupabaseServiceClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -101,7 +102,8 @@ export async function GET() {
     ok: true,
     exported_at: new Date().toISOString(),
     ley_25326_basis: "art. 14 (derecho de acceso) — art. 16 (portabilidad implícita)",
-    privacy_policy_version: "2026-05-21",
+    privacy_policy_version: PRIVACY_VERSION,
+    terms_version: TERMS_VERSION,
     profile: {
       id: profileRow.id,
       email: profileRow.email,
