@@ -13,7 +13,7 @@
  */
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState, useTransition, type ReactNode } from "react";
+import { useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
 
 import {
   requestPasswordReset,
@@ -498,9 +498,21 @@ function Forgot({ setVista }: { setVista: (v: Vista) => void }) {
 // ─── Composer (default export) ─────────────────────────────────────────────
 
 export function AuthForms({ initialVista = "login" }: { initialVista?: Vista }) {
+  const searchParams = useSearchParams();
   const [vista, setVista] = useState<Vista>(initialVista);
   const [prefilledEmail, setPrefilledEmail] = useState<string>("");
   const [notice, setNotice] = useState<string | null>(null);
+
+  // Banner post-eliminación de cuenta. Solo lo mostramos una vez al cargar.
+  useEffect(() => {
+    if (searchParams.get("cuenta_eliminada") === "1") {
+      setNotice(
+        "Tu cuenta fue eliminada y tu identidad se pseudonimizó. Si necesitás algo más, escribinos a privacidad@folio.app.",
+      );
+      setVista("login");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const switchToLoginWith = (email: string, msg: string) => {
     setPrefilledEmail(email);

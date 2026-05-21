@@ -31,12 +31,13 @@ Both sessions edit the same branch. Each PR must reference this handoff and the 
 | `/api/me/export` (ARCO Access JSON dump) | A | **DONE** | `app/api/me/export/route.ts`. Logs `profile.export` to audit_log. |
 | `eliminarCuentaAction` + `previewEliminarCuentaAction` server action (calls `pseudonimizar_member`) | A | **DONE** | `app/(app)/configuracion/actions.ts`. Validates emailConfirmacion vs session email + motivo >=20 chars. |
 | `docs/incident-response.md` breach SOP | A | **DONE** | `docs/incident-response.md` |
-| Booking wizard UI: consent checkbox + PHI warning under "motivo" | **B** | TODO | Consume contract C1 below. Build is currently green because A made consent fields TS-optional; you must still pass them. |
-| EliminarCuentaButton: wire to `eliminarCuentaAction` | **B** | TODO | Consume contract C2 below |
-| MFA UI (Activar MFA button) | **B** | — | Out of scope for this audit unless B has bandwidth |
-| Cookie banner UI (if added) | **B** | — | Optional — strict-necessary cookies don't legally require a banner per `/cookies` §3 |
-| Configuración → Privacidad section UI (opt-out analytics toggle, "Descargar mis datos" button calling `/api/me/export`) | **B** | TODO | Consume contract C3 below |
-| Onboarding consent UI (checkbox accepting Privacy + Terms at signup) | **B** | TODO | If you want server-side persistence, ping A — needs a new `profile.consent_version_accepted` column |
+| Booking wizard UI: consent checkbox + PHI warning under "motivo" | **B** | **DONE** | `components/booking/booking-wizard.tsx`. Checkbox above submit (disables it until accepted) + "no incluyas diagnósticos" helper under motivo. Passes `consentAccepted` + `consentVersion: PRIVACY_VERSION` to `createPedidoPublico`. |
+| EliminarCuentaButton: wire to `eliminarCuentaAction` | **B** | **DONE** | `components/configuracion/configuracion.tsx`. Inline confirmation card with motivo textarea (≥20 chars), email confirmation input, membership-impact preview, and redirect to `/login?cuenta_eliminada=1` (banner wired in `components/auth/login-form.tsx::AuthForms`). |
+| MFA UI (Activar MFA button) | **B** | — | Out of scope for this audit. Button still disabled with title "Próximamente". |
+| Cookie banner UI (if added) | **B** | — | Skipped per A's recommendation (Q3). `/cookies` page is linked from the new Privacidad section. |
+| Configuración → Privacidad section UI (opt-out analytics toggle, "Descargar mis datos" button calling `/api/me/export`) | **B** | **DONE** | New side-nav entry "Privacidad" in `components/configuracion/configuracion.tsx` with three subsections: Mis datos (download JSON, edit/delete pointers), Analytics agregadas (optimistic toggle wired to `setOptOutAnalyticsAction`), Documentos legales (links to /privacidad, /terminos, /cookies, mailto). |
+| Onboarding consent UI (checkbox accepting Privacy + Terms at signup) | **B** | — | Deferred. The booking wizard now enforces explicit consent (C1) which covers the patient-facing flow. Signup consent for the professional remains implicit per MVP scope; see Q1 answer below. |
+| Shared legal versions module | **B** | **DONE** | `lib/legal/versions.ts` exports `PRIVACY_VERSION`, `TERMS_VERSION`, `COOKIES_VERSION` from a single universal source. The three legal pages re-export from there so the contract path `import { PRIVACY_VERSION } from "@/app/(public)/privacidad/page"` keeps working (needed because importing constants directly from the page file made Next.js treat it as client and broke `export const metadata`). |
 
 ---
 
@@ -135,6 +136,12 @@ Route `/cookies` (linked from `/privacidad` §6 and `/cookies` itself). Pure con
 - `components/configuracion/configuracion.tsx`
 - Any new components in `components/cookies/`, `components/configuracion/privacidad/`, etc.
 - `app/(app)/configuracion/page.tsx` only for adding a new "Privacidad" section that consumes A's actions
+- **Cross-boundary edits during the C3 implementation (heads-up for A):**
+  - `lib/legal/versions.ts` (new) — universal source of truth for `PRIVACY_VERSION`, `TERMS_VERSION`, `COOKIES_VERSION`. **Required** to make the contract import path work from a client component without breaking the legal pages' `export const metadata`.
+  - `app/(public)/privacidad/page.tsx`, `app/(public)/terminos/page.tsx`, `app/(public)/cookies/page.tsx` — re-export the version constant from `@/lib/legal/versions` instead of declaring it locally. Same contract path still works for downstream importers. No other content changes.
+  - `lib/db/configuracion.ts` — added `optOutAnalytics: boolean` to the `ConfiguracionData` shape and read it from active context in `getConfiguracionData()`. Needed to seed the toggle state in the new Privacidad section.
+  - `app/(app)/configuracion/privacidad-actions.ts` (new) — server action `setOptOutAnalyticsAction` for the opt-out toggle. Kept in a separate file so we don't touch your `actions.ts` ownership. If you'd rather it live in `actions.ts`, please move it during your next pass.
+  - `components/auth/login-form.tsx` — small `useEffect` in `AuthForms` to read `?cuenta_eliminada=1` and show a banner. Needed to complete the C2 redirect-and-notice loop.
 
 ---
 
@@ -143,10 +150,17 @@ Route `/cookies` (linked from `/privacidad` §6 and `/cookies` itself). Pure con
 *(Session A → B: leave answers inline.)*
 
 1. **Q (A → B):** Do you want to add an onboarding consent checkbox at signup? If yes, ping here and I'll add a `profile.consent_version_accepted` column + persist on signup. Otherwise, signup is treated as implicit acceptance (which is legally weaker but common at MVP).
+   - **A (B → A):** Skip for this PR. The booking wizard now enforces explicit patient-side consent (which is the higher-risk surface, since pacientes don't sign the ToS in any other way). Professional signup remains implicit at MVP — happy to add `profile.consent_version_accepted` in a follow-up if you want me to persist it from `/onboarding` and from `/login` signup. Open follow-up: yes, low priority.
 2. **Q (A → B):** Should `eliminarCuentaAction` redirect to a new `/cuenta-eliminada` confirmation page, or to `/login` with a query param? I'll wire whatever you prefer.
+   - **A (B → A):** Went with `/login?cuenta_eliminada=1`. The login form's `AuthForms` reads the query param and shows a notice banner with the same `au-notice` style used for "ya existe esa cuenta". Single page to maintain, and the user lands somewhere actionable. If you want a dedicated `/cuenta-eliminada` page later (e.g., with CSAT survey or "why are you leaving?" capture), happy to refactor.
 3. **Q (A → B):** Cookie banner — want one? My recommendation: no banner needed legally for strict-necessary cookies; just keep `/cookies` page. If you disagree, ping.
+   - **A (B → A):** Agree, no banner. The new Configuración → Privacidad section links to `/cookies` so a curious user can find the policy. PostHog already respects DNT; the opt-out toggle in Privacidad covers users who want a stronger signal than DNT.
 
 *(Session B → A: leave questions here, A will reply by editing this section.)*
+
+1. **Q (B → A):** I had to refactor the version constants into `lib/legal/versions.ts` because importing them directly from `app/(public)/<doc>/page.tsx` into a client component (the booking wizard) made Next.js treat the page as client and broke its `export const metadata`. The three legal pages now re-export from the shared module, so the original contract path keeps working. OK to keep, or do you prefer a different shape?
+2. **Q (B → A):** The opt-out analytics toggle ended up in a new file `app/(app)/configuracion/privacidad-actions.ts` so I wouldn't touch your `actions.ts`. If you'd rather consolidate, feel free to move it — the function signature and contract are stable.
+3. **Q (B → A):** Booking wizard PHI helper text says "no incluyas diagnósticos ni información clínica detallada. Si necesitás contar algo sensible, mejor hacelo durante la consulta." Happy to soften / tighten the wording if you want it more explicitly tied to Ley 25.326 art. 7 (sensitive-data restriction).
 
 ---
 

@@ -15,6 +15,7 @@ import {
   createPedidoPublico,
   fetchSlotsPublico,
 } from "@/app/(public)/book/[slug]/actions";
+import { PRIVACY_VERSION } from "@/lib/legal/versions";
 import { PublicCard } from "@/components/public-card/public-card";
 
 import { StickyMiniHeader } from "./sticky-mini-header";
@@ -126,6 +127,7 @@ export function BookingWizard({
   const [telefono, setTelefono] = useState("");
   const [email, setEmail] = useState("");
   const [motivo, setMotivo] = useState("");
+  const [consentAccepted, setConsentAccepted] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const captchaContainerRef = useRef<HTMLDivElement | null>(null);
@@ -373,6 +375,10 @@ export function BookingWizard({
                   setErr("Nombre y teléfono son obligatorios.");
                   return;
                 }
+                if (!consentAccepted) {
+                  setErr("Tenés que aceptar la Política de Privacidad para solicitar el turno.");
+                  return;
+                }
                 setErr(null);
                 if (TURNSTILE_SITE_KEY && !captchaToken) {
                   setErr("Esperá unos segundos a que el captcha verifique.");
@@ -388,6 +394,8 @@ export function BookingWizard({
                     email: email || undefined,
                     motivo: motivo || undefined,
                     captchaToken: captchaToken ?? undefined,
+                    consentAccepted,
+                    consentVersion: PRIVACY_VERSION,
                   });
                   if (!result.ok) {
                     setErr(result.error.message);
@@ -413,6 +421,9 @@ export function BookingWizard({
               <label className="au-field">
                 <span>Motivo <small>opcional</small></span>
                 <textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={3} />
+                <small style={{ color: "var(--ink-3)", marginTop: 4, display: "block" }}>
+                  Por favor no incluyas diagnósticos ni información clínica detallada. Si necesitás contar algo sensible, mejor hacelo durante la consulta.
+                </small>
               </label>
               {TURNSTILE_SITE_KEY ? (
                 <>
@@ -424,8 +435,47 @@ export function BookingWizard({
                   <div ref={captchaContainerRef} style={{ marginTop: 4 }} />
                 </>
               ) : null}
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 10,
+                  fontSize: 13,
+                  color: "var(--ink-2)",
+                  lineHeight: 1.45,
+                  marginTop: 4,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={consentAccepted}
+                  onChange={(e) => {
+                    setConsentAccepted(e.target.checked);
+                    if (err) setErr(null);
+                  }}
+                  required
+                  style={{ marginTop: 3, flexShrink: 0 }}
+                  aria-describedby="bk-consent-text"
+                />
+                <span id="bk-consent-text">
+                  Acepto la{" "}
+                  <a href="/privacidad" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent-2)" }}>
+                    Política de Privacidad
+                  </a>{" "}
+                  y los{" "}
+                  <a href="/terminos" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent-2)" }}>
+                    Términos
+                  </a>{" "}
+                  y autorizo a Folio a procesar mis datos para responder a esta solicitud de turno.
+                </span>
+              </label>
               {err ? <p className="au-err">{err}</p> : null}
-              <button type="submit" className="fi-btn fi-btn-primary" disabled={pending}>
+              <button
+                type="submit"
+                className="fi-btn fi-btn-primary"
+                disabled={pending || !consentAccepted}
+                title={!consentAccepted ? "Aceptá la Política de Privacidad para continuar" : undefined}
+              >
                 {pending ? "Enviando..." : "Solicitar turno"}
               </button>
             </form>

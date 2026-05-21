@@ -16,7 +16,8 @@
 
 import Link from "next/link";
 
-export const TERMS_VERSION = "2026-05-21";
+export { TERMS_VERSION } from "@/lib/legal/versions";
+import { TERMS_VERSION } from "@/lib/legal/versions";
 
 export const metadata = {
   title: "Términos y Condiciones · Folio",

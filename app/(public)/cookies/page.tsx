@@ -10,7 +10,8 @@
 
 import Link from "next/link";
 
-export const COOKIES_VERSION = "2026-05-21";
+export { COOKIES_VERSION } from "@/lib/legal/versions";
+import { COOKIES_VERSION } from "@/lib/legal/versions";
 
 export const metadata = {
   title: "Política de Cookies · Folio",

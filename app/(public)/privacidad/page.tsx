@@ -16,7 +16,8 @@
 
 import Link from "next/link";
 
-export const PRIVACY_VERSION = "2026-05-21";
+export { PRIVACY_VERSION } from "@/lib/legal/versions";
+import { PRIVACY_VERSION } from "@/lib/legal/versions";
 
 export const metadata = {
   title: "Política de Privacidad · Folio",
