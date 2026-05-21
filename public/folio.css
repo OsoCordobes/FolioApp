@@ -12684,9 +12684,140 @@ input:focus { outline: none; }
   padding: 2px 7px; border-radius: 9px;
   background: var(--surface-2); color: var(--ink-2);
 }
-.cal-tip-foot {
-  display: flex; align-items: center; gap: 5px;
-  font-size: 10.5px; color: var(--ink-3);
-  padding-top: 6px;
-  border-top: 1px solid var(--line-soft);
+
+/* ════════════════════════════════════════════════════════════════════════
+   FOLIO ATELIER · Design language v3 tokens (additive over brass-aged v2)
+   See: docs/specs/2026-05-21-design-language-recommendation.md §3.2-3.3.
+   This block is APPENDED, never replacing existing :root values, so the
+   brass-aged identity of /hoy + onboarding + login surfaces is untouched
+   until consuming components opt in via the new --accent-ink / --fpc-*
+   tokens. Defensive `}` above this comment terminates any pre-existing
+   open rule (cascade-recovers if already closed upstream).
+   ════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ─── Accent · Warm (brass identity layer · used for ornament/highlight) ─── */
+  --accent-warm:         #8A6722;
+  --accent-warm-2:       #6E5119;
+  --accent-warm-soft:    #F0E6CC;
+  --accent-warm-soft-2:  #E8DAB1;
+  --accent-warm-glow:    rgba(138, 103, 34, 0.18);
+
+  /* ─── Accent · Ink (NEW · clinical functional layer · primary CTAs in Clínico mood) ─── */
+  --accent-ink:          #2A4365;
+  --accent-ink-2:        #1F3148;
+  --accent-ink-soft:     #DFE5EF;
+  --accent-ink-soft-2:   #C9D2E0;
+  --accent-ink-glow:     rgba(42, 67, 101, 0.22);
+
+  /* ─── Spacing scale (4 px grid) ─── */
+  --space-0:  0;
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-7:  28px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+
+  /* ─── Radii additions ─── */
+  --r-xs:   3px;
+  --r-2xl:  20px;
+  --r-3xl:  24px;
+  --r-pill: 9999px;
+
+  /* ─── Shadow additions ─── */
+  --shadow-card:
+    0 1px 0 rgba(255, 255, 255, 0.50) inset,
+    0 18px 40px rgba(20, 17, 11, 0.08),
+    0 3px 10px rgba(138, 103, 34, 0.06);
+  --shadow-focus-warm: 0 0 0 3px var(--accent-warm-glow);
+  --shadow-focus-ink:  0 0 0 3px var(--accent-ink-glow);
+
+  /* ─── Type families ─── */
+  --font-display: 'Fraunces', 'Iowan Old Style', Georgia, serif;
+  --font-sans:    'Geist', -apple-system, system-ui, sans-serif;
+  --font-mono:    'Geist Mono', ui-monospace, monospace;
+
+  /* ─── Type scale (px) ─── */
+  --fs-xs:      11px;
+  --fs-sm:      12.5px;
+  --fs-body:    14px;
+  --fs-md:      15px;
+  --fs-lg:      18px;
+  --fs-xl:      22px;
+  --fs-2xl:     28px;
+  --fs-3xl:     34px;
+  --fs-4xl:     44px;
+  --fs-display: 56px;
+
+  /* ─── Letter-spacing scale ─── */
+  --track-tight-2: -0.028em;
+  --track-tight-1: -0.018em;
+  --track-tight-0: -0.01em;
+  --track-normal:  0;
+  --track-loose-1: 0.04em;
+  --track-loose-2: 0.10em;
+  --track-loose-3: 0.14em;
+
+  /* ─── PublicCard mood-overlay scaffold (consumed in F4 by .fpc-* classes) ─── */
+  --fpc-accent:           var(--accent-warm);
+  --fpc-accent-soft:      var(--accent-warm-soft);
+  --fpc-accent-blend:     var(--accent-warm);
+  --fpc-bg:               var(--surface);
+  --fpc-bg-tint-amount:   0.06;
+  --fpc-bg-tint-style:    linear;
+  --fpc-name-family:      var(--font-sans);
+  --fpc-name-weight:      600;
+  --fpc-name-tracking:    -0.018em;
+  --fpc-name-size-full:   34px;
+  --fpc-name-size-prev:   22px;
+  --fpc-bio-style:        normal;
+  --fpc-radius:           20px;
+  --fpc-decoration:       none;
+  --fpc-decoration-color: var(--fpc-accent);
+  --fpc-hero-py-full:     36px;
+  --fpc-hero-py-prev:     24px;
+
+  /* ─── Card-specific motion semantics (additive to motion language v2) ─── */
+  --fpc-stagger:            80ms;
+  --fpc-stagger-musical-1:  0ms;
+  --fpc-stagger-musical-2:  90ms;
+  --fpc-stagger-musical-3:  200ms;
+  --fpc-stagger-musical-4:  340ms;
+  --fpc-stagger-musical-5:  480ms;
+  --fpc-stagger-musical-6:  620ms;
+  --fpc-stagger-musical-7:  760ms;
+  --fpc-stagger-musical-8:  860ms;
+
+  --fpc-hero-blur-from:  6px;
+  --fpc-hero-blur-to:    0px;
+  --fpc-hero-y-from:     12px;
+  --fpc-hero-y-to:       0px;
+}
+
+[data-theme="dark"] {
+  /* ─── Atelier dark-mode equivalents ─── */
+  --accent-warm:        #C29553;
+  --accent-warm-2:      #DDB070;
+  --accent-warm-soft:   rgba(194, 149, 83, 0.14);
+  --accent-warm-soft-2: rgba(194, 149, 83, 0.24);
+  --accent-warm-glow:   rgba(194, 149, 83, 0.30);
+
+  --accent-ink:         #6E89AE;
+  --accent-ink-2:       #88A0C3;
+  --accent-ink-soft:    rgba(110, 137, 174, 0.16);
+  --accent-ink-soft-2:  rgba(110, 137, 174, 0.28);
+  --accent-ink-glow:    rgba(110, 137, 174, 0.32);
+
+  --shadow-card:
+    0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 18px 40px rgba(0, 0, 0, 0.45),
+    0 3px 10px rgba(194, 149, 83, 0.08);
 }
