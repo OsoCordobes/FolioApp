@@ -1,0 +1,448 @@
+════════════════════════════════════════════════════════════════════════
+Folio · Pre-audit baseline metrics
+Captured: 2026-05-21T13:15:02Z
+Branch:   audit-prep
+HEAD:     d8a64ed575b8f0bc260928612c3c071e56ed61b5
+════════════════════════════════════════════════════════════════════════
+
+── pnpm typecheck ─────────────────────────────────────────────────────
+
+> folio-app@0.1.0 typecheck C:\Users\amiun\Desktop\folio-app
+> tsc --noEmit
+
+
+── pnpm lint ──────────────────────────────────────────────────────────
+
+> folio-app@0.1.0 lint C:\Users\amiun\Desktop\folio-app
+> eslint
+
+
+── pnpm test:unit ─────────────────────────────────────────────────────
+
+> folio-app@0.1.0 test:unit C:\Users\amiun\Desktop\folio-app
+> node --test --import tsx "tests/unit/**/*.test.ts"
+
+TAP version 13
+# Subtest: LOGO_BUCKET is 'org-logos'
+ok 1 - LOGO_BUCKET is 'org-logos'
+  ---
+  duration_ms: 0.7365
+  type: 'test'
+  ...
+# Subtest: LOGO_MAX_BYTES is 500 KB (under the bucket's 512 KB cap)
+ok 2 - LOGO_MAX_BYTES is 500 KB (under the bucket's 512 KB cap)
+  ---
+  duration_ms: 0.1122
+  type: 'test'
+  ...
+# Subtest: LOGO_ALLOWED_MIME is PNG-only
+ok 3 - LOGO_ALLOWED_MIME is PNG-only
+  ---
+  duration_ms: 0.4959
+  type: 'test'
+  ...
+# Subtest: LOGO_OBJECT_NAME is 'logo.png' (re-upload overwrites)
+ok 4 - LOGO_OBJECT_NAME is 'logo.png' (re-upload overwrites)
+  ---
+  duration_ms: 0.0747
+  type: 'test'
+  ...
+# Subtest: buildLogoPath produces <org_id>/logo.png
+ok 5 - buildLogoPath produces <org_id>/logo.png
+  ---
+  duration_ms: 0.0758
+  type: 'test'
+  ...
+# Subtest: buildLogoPublicUrl appends bucket + path against a clean Supabase URL
+ok 6 - buildLogoPublicUrl appends bucket + path against a clean Supabase URL
+  ---
+  duration_ms: 0.1133
+  type: 'test'
+  ...
+# Subtest: buildLogoPublicUrl strips trailing slashes on supabaseUrl
+ok 7 - buildLogoPublicUrl strips trailing slashes on supabaseUrl
+  ---
+  duration_ms: 0.1929
+  type: 'test'
+  ...
+# Subtest: validateLogoFile accepts a non-empty PNG under 500 KB
+ok 8 - validateLogoFile accepts a non-empty PNG under 500 KB
+  ---
+  duration_ms: 0.3006
+  type: 'test'
+  ...
+# Subtest: validateLogoFile rejects an empty file with code 'empty'
+ok 9 - validateLogoFile rejects an empty file with code 'empty'
+  ---
+  duration_ms: 0.2215
+  type: 'test'
+  ...
+# Subtest: validateLogoFile rejects a JPG with code 'wrong-mime'
+ok 10 - validateLogoFile rejects a JPG with code 'wrong-mime'
+  ---
+  duration_ms: 0.355
+  type: 'test'
+  ...
+# Subtest: validateLogoFile rejects > 500 KB with code 'too-big'
+ok 11 - validateLogoFile rejects > 500 KB with code 'too-big'
+  ---
+  duration_ms: 0.2748
+  type: 'test'
+  ...
+# Subtest: validateLogoFile accepts exactly LOGO_MAX_BYTES (boundary)
+ok 12 - validateLogoFile accepts exactly LOGO_MAX_BYTES (boundary)
+  ---
+  duration_ms: 0.2714
+  type: 'test'
+  ...
+# Subtest: MOOD_IDS lists 4 moods in canonical order
+ok 13 - MOOD_IDS lists 4 moods in canonical order
+  ---
+  duration_ms: 1.8112
+  type: 'test'
+  ...
+# Subtest: every mood has a Spanish label and a tagline
+ok 14 - every mood has a Spanish label and a tagline
+  ---
+  duration_ms: 0.1725
+  type: 'test'
+  ...
+# Subtest: applyAcentoBlend passes through for non-clinico moods
+ok 15 - applyAcentoBlend passes through for non-clinico moods
+  ---
+  duration_ms: 0.1215
+  type: 'test'
+  ...
+# Subtest: applyAcentoBlend blends 60/40 toward ink-blue (\#2A4365) for clinico
+ok 16 - applyAcentoBlend blends 60/40 toward ink-blue (\#2A4365) for clinico
+  ---
+  duration_ms: 0.179
+  type: 'test'
+  ...
+# Subtest: applyAcentoBlend leaves malformed hex untouched
+ok 17 - applyAcentoBlend leaves malformed hex untouched
+  ---
+  duration_ms: 0.1014
+  type: 'test'
+  ...
+# Subtest: applyAcentoBlend accepts hex with and without leading \#
+ok 18 - applyAcentoBlend accepts hex with and without leading \#
+  ---
+  duration_ms: 0.0735
+  type: 'test'
+  ...
+# Subtest: applyAcentoBlend rounds correctly at boundaries
+ok 19 - applyAcentoBlend rounds correctly at boundaries
+  ---
+  duration_ms: 0.1362
+  type: 'test'
+  ...
+1..19
+# tests 19
+# suites 0
+# pass 19
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 190.656
+
+── pnpm build ─────────────────────────────────────────────────────────
+
+> folio-app@0.1.0 build C:\Users\amiun\Desktop\folio-app
+> next build --turbopack
+
+   ▲ Next.js 15.5.18 (Turbopack)
+   - Environments: .env.local, .env.production, .env
+
+   Creating an optimized production build ...
+ ✓ Finished writing to disk in 214ms
+Turbopack build encountered 13 warnings:
+./node_modules/.pnpm/@opentelemetry+instrumentat_05c1dbe20c09462de13f6c82f6f5ce91/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package import-in-the-middle can't be external
+The request import-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install import-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_05c1dbe20c09462de13f6c82f6f5ce91/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package import-in-the-middle can't be external
+The request import-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install import-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_6bab8c084d97a5e5be695c4d57abd108/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package import-in-the-middle can't be external
+The request import-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install import-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_6bab8c084d97a5e5be695c4d57abd108/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package import-in-the-middle can't be external
+The request import-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install import-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_fad8dcc0f3efd98c26cc4a45a1c38911/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package import-in-the-middle can't be external
+The request import-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install import-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_fad8dcc0f3efd98c26cc4a45a1c38911/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package import-in-the-middle can't be external
+The request import-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install import-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@sentry+node-core@10.53.1_@_a069076ec7da9ab6bb6e077992e982e3/node_modules/@sentry/node-core/build/cjs/sdk
+Package import-in-the-middle can't be external
+The request import-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install import-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_05c1dbe20c09462de13f6c82f6f5ce91/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package require-in-the-middle can't be external
+The request require-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install require-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_05c1dbe20c09462de13f6c82f6f5ce91/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package require-in-the-middle can't be external
+The request require-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install require-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_6bab8c084d97a5e5be695c4d57abd108/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package require-in-the-middle can't be external
+The request require-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install require-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_6bab8c084d97a5e5be695c4d57abd108/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package require-in-the-middle can't be external
+The request require-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install require-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_fad8dcc0f3efd98c26cc4a45a1c38911/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package require-in-the-middle can't be external
+The request require-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install require-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_fad8dcc0f3efd98c26cc4a45a1c38911/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package require-in-the-middle can't be external
+The request require-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install require-in-the-middle from the project directory.
+
+
+ ✓ Compiled successfully in 13.5s
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/19) ...
+   Generating static pages (4/19) 
+   Generating static pages (9/19) 
+   Generating static pages (14/19) 
+ ✓ Generating static pages (19/19)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                              Size  First Load JS
+┌ ○ /                                     0 B         188 kB
+├ ○ /_not-found                           0 B         188 kB
+├ ƒ /admin/audit                          0 B         195 kB
+├ ƒ /api/admin/confirm-user               0 B            0 B
+├ ƒ /api/admin/migrate                    0 B            0 B
+├ ƒ /api/admin/seed-hoy-demo              0 B            0 B
+├ ƒ /api/analytics/refresh                0 B            0 B
+├ ƒ /api/auth/callback                    0 B            0 B
+├ ƒ /api/auth/signout                     0 B            0 B
+├ ƒ /api/cron/dispatch-recordatorios      0 B            0 B
+├ ƒ /api/cron/google-watch-renew          0 B            0 B
+├ ƒ /api/google/callback                  0 B            0 B
+├ ƒ /api/google/webhook                   0 B            0 B
+├ ƒ /api/health                           0 B            0 B
+├ ƒ /api/mercadopago/webhook              0 B            0 B
+├ ƒ /api/whatsapp/webhook                 0 B            0 B
+├ ƒ /book/[slug]                          0 B         196 kB
+├ ƒ /calendario                       4.36 kB         199 kB
+├ ƒ /configuracion                    6.83 kB         202 kB
+├ ƒ /configuracion/billing            3.26 kB         198 kB
+├ ○ /dev/book-preview                     0 B         196 kB
+├ ○ /dev/card                         3.44 kB         191 kB
+├ ○ /dev/card-moods                   4.33 kB         192 kB
+├ ○ /dev/decoration                       0 B         188 kB
+├ ○ /dev/identidad-visual             6.11 kB         194 kB
+├ ○ /dev/logo-upload                  2.15 kB         190 kB
+├ ƒ /finanzas                         3.88 kB         199 kB
+├ ƒ /focus/[turnoId]                     5 kB         193 kB
+├ ƒ /hoy                              4.12 kB         199 kB
+├ ○ /login                            4.14 kB         240 kB
+├ ƒ /onboarding                       18.3 kB         254 kB
+├ ƒ /pacientes                        3.81 kB         198 kB
+├ ƒ /pacientes/[id]                   5.71 kB         200 kB
+├ ○ /privacidad                           0 B         191 kB
+└ ○ /terminos                             0 B         191 kB
++ First Load JS shared by all          188 kB
+  ├ chunks/27db50eaec137e98.js        71.6 kB
+  ├ chunks/2a06e008841a8506.js          59 kB
+  ├ chunks/5ca9a1f2b1b7efd7.js        17.3 kB
+  ├ chunks/817f26a3414b1688.js        12.8 kB
+  └ other shared chunks (total)         27 kB
+
+
+ƒ Middleware                           185 kB
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
+
+── pnpm exec playwright test --project=e2e ────────────────────────────
+
+Running 60 tests using 1 worker
+
+[1A[2K[1/60] [e2e] › tests\e2e\atelier-tokens.spec.ts:17:7 › Atelier tokens · F1 acceptance › Fraunces is loadable on /onboarding
+[1A[2K[2m[WebServer] [22m [33m[1m⚠[22m[39m ./node_modules/.pnpm/@opentelemetry+instrumentat_05c1dbe20c09462de13f6c82f6f5ce91/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+[2m[WebServer] [22mPackage [32mimport-in-the-middle[39m can't be external
+[2m[WebServer] [22mThe request [32mimport-in-the-middle[39m matches [32mserverExternalPackages[39m (or the default list).
+[2m[WebServer] [22mThe request could not be resolved by Node.js from the project directory.
+[2m[WebServer] [22mPackages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+[2m[WebServer] [22mTry to install it into the project directory by running [32mnpm install import-in-the-middle[39m from the project directory.
+[2m[WebServer] [22m
+[2m[WebServer] [22m
+
+[1A[2K[2m[WebServer] [22m [33m[1m⚠[22m[39m ./node_modules/.pnpm/@opentelemetry+instrumentat_6bab8c084d97a5e5be695c4d57abd108/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+[2m[WebServer] [22mPackage [32mimport-in-the-middle[39m can't be external
+[2m[WebServer] [22mThe request [32mimport-in-the-middle[39m matches [32mserverExternalPackages[39m (or the default list).
+[2m[WebServer] [22mThe request could not be resolved by Node.js from the project directory.
+[2m[WebServer] [22mPackages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+[2m[WebServer] [22mTry to install it into the project directory by running [32mnpm install import-in-the-middle[39m from the project directory.
+[2m[WebServer] [22m
+[2m[WebServer] [22m
+[2m[WebServer] [22m [33m[1m⚠[22m[39m ./node_modules/.pnpm/@opentelemetry+instrumentat_fad8dcc0f3efd98c26cc4a45a1c38911/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+[2m[WebServer] [22mPackage [32mimport-in-the-middle[39m can't be external
+[2m[WebServer] [22mThe request [32mimport-in-the-middle[39m matches [32mserverExternalPackages[39m (or the default list).
+[2m[WebServer] [22mThe request could not be resolved by Node.js from the project directory.
+[2m[WebServer] [22mPackages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+[2m[WebServer] [22mTry to install it into the project directory by running [32mnpm install import-in-the-middle[39m from the project directory.
+[2m[WebServer] [22m
+[2m[WebServer] [22m
+[2m[WebServer] [22m [33m[1m⚠[22m[39m ./node_modules/.pnpm/@sentry+node-core@10.53.1_@_a069076ec7da9ab6bb6e077992e982e3/node_modules/@sentry/node-core/build/cjs/sdk
+[2m[WebServer] [22mPackage [32mimport-in-the-middle[39m can't be external
+[2m[WebServer] [22mThe request [32mimport-in-the-middle[39m matches [32mserverExternalPackages[39m (or the default list).
+[2m[WebServer] [22mThe request could not be resolved by Node.js from the project directory.
+[2m[WebServer] [22mPackages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+[2m[WebServer] [22mTry to install it into the project directory by running [32mnpm install import-in-the-middle[39m from the project directory.
+[2m[WebServer] [22m
+[2m[WebServer] [22m
+[2m[WebServer] [22m [33m[1m⚠[22m[39m ./node_modules/.pnpm/@opentelemetry+instrumentat_05c1dbe20c09462de13f6c82f6f5ce91/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+[2m[WebServer] [22mPackage [32mrequire-in-the-middle[39m can't be external
+[2m[WebServer] [22mThe request [32mrequire-in-the-middle[39m matches [32mserverExternalPackages[39m (or the default list).
+[2m[WebServer] [22mThe request could not be resolved by Node.js from the project directory.
+[2m[WebServer] [22mPackages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+[2m[WebServer] [22mTry to install it into the project directory by running [32mnpm install require-in-the-middle[39m from the project directory.
+[2m[WebServer] [22m
+[2m[WebServer] [22m
+[2m[WebServer] [22m [33m[1m⚠[22m[39m ./node_modules/.pnpm/@opentelemetry+instrumentat_6bab8c084d97a5e5be695c4d57abd108/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+[2m[WebServer] [22mPackage [32mrequire-in-the-middle[39m can't be external
+[2m[WebServer] [22mThe request [32mrequire-in-the-middle[39m matches [32mserverExternalPackages[39m (or the default list).
+[2m[WebServer] [22mThe request could not be resolved by Node.js from the project directory.
+[2m[WebServer] [22mPackages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+[2m[WebServer] [22mTry to install it into the project directory by running [32mnpm install require-in-the-middle[39m from the project directory.
+[2m[WebServer] [22m
+[2m[WebServer] [22m
+[2m[WebServer] [22m [33m[1m⚠[22m[39m ./node_modules/.pnpm/@opentelemetry+instrumentat_fad8dcc0f3efd98c26cc4a45a1c38911/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+[2m[WebServer] [22mPackage [32mrequire-in-the-middle[39m can't be external
+[2m[WebServer] [22mThe request [32mrequire-in-the-middle[39m matches [32mserverExternalPackages[39m (or the default list).
+[2m[WebServer] [22mThe request could not be resolved by Node.js from the project directory.
+[2m[WebServer] [22mPackages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+[2m[WebServer] [22mTry to install it into the project directory by running [32mnpm install require-in-the-middle[39m from the project directory.
+[2m[WebServer] [22m
+[2m[WebServer] [22m
+
+[1A[2K[2/60] [e2e] › tests\e2e\atelier-tokens.spec.ts:58:9 › Atelier tokens · :root computed style › :root declares --accent-warm
+[1A[2K[3/60] [e2e] › tests\e2e\atelier-tokens.spec.ts:58:9 › Atelier tokens · :root computed style › :root declares --accent-warm-soft
+[1A[2K[4/60] [e2e] › tests\e2e\atelier-tokens.spec.ts:58:9 › Atelier tokens · :root computed style › :root declares --accent-warm-glow
+[1A[2K[5/60] [e2e] › tests\e2e\atelier-tokens.spec.ts:58:9 › Atelier tokens · :root computed style › :root declares --accent-ink
+[1A[2K[6/60] [e2e] › tests\e2e\atelier-tokens.spec.ts:58:9 › Atelier tokens · :root computed style › :root declares --accent-ink-soft
+[1A[2K[7/60] [e2e] › tests\e2e\atelier-tokens.spec.ts:58:9 › Atelier tokens · :root computed style › :root declares --accent-ink-glow
+[1A[2K[8/60] [e2e] › tests\e2e\atelier-tokens.spec.ts:58:9 › Atelier tokens · :root computed style › :root declares --fpc-accent
+[1A[2K[9/60] [e2e] › tests\e2e\atelier-tokens.spec.ts:58:9 › Atelier tokens · :root computed style › :root declares --fpc-bg-tint-style
+[1A[2K[10/60] [e2e] › tests\e2e\atelier-tokens.spec.ts:58:9 › Atelier tokens · :root computed style › :root declares --fpc-name-family
+[1A[2K[11/60] [e2e] › tests\e2e\atelier-tokens.spec.ts:58:9 › Atelier tokens · :root computed style › :root declares --fpc-name-weight
+[1A[2K[12/60] [e2e] › tests\e2e\atelier-tokens.spec.ts:58:9 › Atelier tokens · :root computed style › :root declares --fpc-bio-style
+[1A[2K[13/60] [e2e] › tests\e2e\atelier-tokens.spec.ts:58:9 › Atelier tokens · :root computed style › :root declares --fpc-radius
+[1A[2K[14/60] [e2e] › tests\e2e\atelier-tokens.spec.ts:58:9 › Atelier tokens · :root computed style › :root declares --fpc-decoration
+[1A[2K[15/60] [e2e] › tests\e2e\atelier-tokens.spec.ts:58:9 › Atelier tokens · :root computed style › :root declares --space-4
+[1A[2K[16/60] [e2e] › tests\e2e\atelier-tokens.spec.ts:58:9 › Atelier tokens · :root computed style › :root declares --r-2xl
+[1A[2K[17/60] [e2e] › tests\e2e\atelier-tokens.spec.ts:58:9 › Atelier tokens · :root computed style › :root declares --r-3xl
+[1A[2K[18/60] [e2e] › tests\e2e\atelier-tokens.spec.ts:58:9 › Atelier tokens · :root computed style › :root declares --r-pill
+[1A[2K[19/60] [e2e] › tests\e2e\atelier-tokens.spec.ts:58:9 › Atelier tokens · :root computed style › :root declares --shadow-card
+[1A[2K[20/60] [e2e] › tests\e2e\atelier-tokens.spec.ts:58:9 › Atelier tokens · :root computed style › :root declares --shadow-focus-warm
+[1A[2K[21/60] [e2e] › tests\e2e\atelier-tokens.spec.ts:58:9 › Atelier tokens · :root computed style › :root declares --shadow-focus-ink
+[1A[2K[22/60] [e2e] › tests\e2e\atelier-tokens.spec.ts:58:9 › Atelier tokens · :root computed style › :root declares --track-tight-2
+[1A[2K[23/60] [e2e] › tests\e2e\atelier-tokens.spec.ts:58:9 › Atelier tokens · :root computed style › :root declares --font-display
+[1A[2K[24/60] [e2e] › tests\e2e\atelier-tokens.spec.ts:68:7 › Atelier tokens · :root computed style › --accent-ink resolves to #2A4365 in light mode
+[1A[2K[25/60] [e2e] › tests\e2e\atelier-tokens.spec.ts:81:7 › Atelier decoration primitives › EditorialRule, BrassCornerMark, DateBadge render at /dev/decoration
+[1A[2K[26/60] [e2e] › tests\e2e\auth.spec.ts:34:7 › Auth · signup → onboarding › happy path · /login signup creates account inline
+[1A[2K[27/60] [e2e] › tests\e2e\auth.spec.ts:65:7 › Auth · signup → onboarding › login form shows generic error for invalid credentials
+[1A[2K[28/60] [e2e] › tests\e2e\auth.spec.ts:76:7 › Auth · signup → onboarding › existing-email signup → switches to login view with banner
+[1A[2K[29/60] [e2e] › tests\e2e\book-public.spec.ts:19:7 › /dev/book-preview · PublicCard + booking flow › PublicCard hero (variant=full) sits above the booking flow
+[1A[2K[30/60] [e2e] › tests\e2e\book-public.spec.ts:29:7 › /dev/book-preview · PublicCard + booking flow › booking 3-step flow renders below the card with id='bk-flow'
+[1A[2K[31/60] [e2e] › tests\e2e\book-public.spec.ts:37:7 › /dev/book-preview · PublicCard + booking flow › desktop: sticky mini header is hidden
+[1A[2K[32/60] [e2e] › tests\e2e\book-public.spec.ts:46:7 › /dev/book-preview · PublicCard + booking flow › mobile: sticky mini header is mounted with expected DOM contract
+[1A[2K[33/60] [e2e] › tests\e2e\identidad-visual.spec.ts:22:7 › Identidad visual at /dev/identidad-visual › renders the 3 section headers
+[1A[2K[34/60] [e2e] › tests\e2e\identidad-visual.spec.ts:29:7 › Identidad visual at /dev/identidad-visual › MoodPicker change updates the preview card's data-card-mood
+[1A[2K[35/60] [e2e] › tests\e2e\identidad-visual.spec.ts:39:7 › Identidad visual at /dev/identidad-visual › acento change updates the preview's --fpc-accent inline style
+[1A[2K[36/60] [e2e] › tests\e2e\identidad-visual.spec.ts:49:7 › Identidad visual at /dev/identidad-visual › logo upload swaps AvatarIniciales for <img> in the preview
+[1A[2K[37/60] [e2e] › tests\e2e\logo-upload.spec.ts:27:7 › LogoUpload at /dev/logo-upload › idle: helper text visible
+[1A[2K[38/60] [e2e] › tests\e2e\logo-upload.spec.ts:35:7 › LogoUpload at /dev/logo-upload › drag-over: dropzone gets .is-drag-over class
+[1A[2K[39/60] [e2e] › tests\e2e\logo-upload.spec.ts:43:7 › LogoUpload at /dev/logo-upload › error on JPG: .is-error + Spanish PNG error
+[1A[2K[40/60] [e2e] › tests\e2e\logo-upload.spec.ts:55:7 › LogoUpload at /dev/logo-upload › error on > 500 KB PNG: .is-error + Spanish size error
+[1A[2K[41/60] [e2e] › tests\e2e\logo-upload.spec.ts:70:7 › LogoUpload at /dev/logo-upload › success on valid PNG: preview image appears
+[1A[2K[42/60] [e2e] › tests\e2e\moods.spec.ts:22:7 › Mood system at /dev/card-moods › all 4 moods render with their data-card-mood
+[1A[2K[43/60] [e2e] › tests\e2e\moods.spec.ts:31:7 › Mood system at /dev/card-moods › each mood resolves a distinct --fpc-radius
+[1A[2K[44/60] [e2e] › tests\e2e\moods.spec.ts:50:7 › Mood system at /dev/card-moods › MoodPicker is a radiogroup with 4 radios; editorial is initially active
+[1A[2K[45/60] [e2e] › tests\e2e\moods.spec.ts:61:7 › Mood system at /dev/card-moods › clicking a mood swaps the controlled card's data-card-mood
+[1A[2K[46/60] [e2e] › tests\e2e\moods.spec.ts:72:7 › Mood system at /dev/card-moods › Clínico mood CTA uses ink-blue (--accent-ink), not brass
+[1A[2K[47/60] [e2e] › tests\e2e\public-card.spec.ts:15:7 › PublicCard at /dev/card › renders all three variants with the correct chassis classes
+[1A[2K[48/60] [e2e] › tests\e2e\public-card.spec.ts:22:7 › PublicCard at /dev/card › default mood is editorial
+[1A[2K[49/60] [e2e] › tests\e2e\public-card.spec.ts:30:7 › PublicCard at /dev/card › preview variant: shows the public link footer (mono)
+[1A[2K[50/60] [e2e] › tests\e2e\public-card.spec.ts:38:7 › PublicCard at /dev/card › full variant: ships the 'Reservar turno' CTA
+[1A[2K[51/60] [e2e] › tests\e2e\public-card.spec.ts:44:7 › PublicCard at /dev/card › logoUrl drives <img> render; absence falls back to AvatarIniciales
+[1A[2K[52/60] [e2e] › tests\e2e\public-card.spec.ts:54:7 › PublicCard at /dev/card › editing variant: placeholder bio when bio is null
+[1A[2K[53/60] [e2e] › tests\e2e\public-card.spec.ts:60:7 › PublicCard at /dev/card › name uses Fraunces (the display family token)
+[1A[2K[54/60] [e2e] › tests\e2e\side-art.spec.ts:20:7 › SideArt v2 › auto-rotate cycles through the 5 slides
+[1A[2K[55/60] [e2e] › tests\e2e\side-art.spec.ts:34:7 › SideArt v2 › hover sostenido pausa auto-rotation y muestra pause indicator
+[1A[2K[56/60] [e2e] › tests\e2e\side-art.spec.ts:48:7 › SideArt v2 › arrow nav cambia de slide manualmente
+[1A[2K[57/60] [e2e] › tests\e2e\side-art.spec.ts:62:7 › SideArt v2 › dots permiten click directo a cualquier slide
+[1A[2K[58/60] [e2e] › tests\e2e\side-art.spec.ts:75:7 › SideArt v2 › reduced-motion → todo skip-to-end inmediato
+[1A[2K[59/60] [e2e] › tests\e2e\side-art.spec.ts:92:7 › SideArt v2 › background tint cambia entre slides
+[1A[2K[60/60] [e2e] › tests\e2e\side-art.spec.ts:115:7 › SideArt v2 › tab visibility pausa el carousel
+[1A[2K  60 passed (1.7m)
