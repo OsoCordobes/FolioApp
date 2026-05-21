@@ -487,6 +487,10 @@ export interface Step3Data {
 
 export interface Step4Data {
   acento: string;
+  /** Optional logo URL persisted by uploadOrgLogo separately. Step 4 stores it for resume. */
+  logoUrl?: string | null;
+  /** Visual mood of the public card. */
+  cardMood?: "calido" | "clinico" | "editorial" | "boutique";
 }
 
 export interface Step5Data {
@@ -594,10 +598,14 @@ export async function updateOnboardingStep(
       }
       case 4: {
         const d = data as Step4Data;
-        if (d.acento) {
+        const patch: Record<string, unknown> = {};
+        if (d.acento) patch.acento_hex = d.acento;
+        if (d.logoUrl !== undefined) patch.logo_url = d.logoUrl;
+        if (d.cardMood) patch.card_mood = d.cardMood;
+        if (Object.keys(patch).length > 0) {
           const { error } = await service
             .from("organization")
-            .update({ acento_hex: d.acento })
+            .update(patch)
             .eq("id", orgId);
           if (error) return { ok: false, error: error.message };
         }

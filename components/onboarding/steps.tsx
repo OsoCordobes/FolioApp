@@ -18,6 +18,9 @@ import { updateOnboardingStep } from "@/app/(public)/onboarding/actions";
 import { StepShell } from "@/components/onboarding/step-shell";
 import { SlugEditor } from "@/components/onboarding/slug-editor";
 import { type CardPreviewData } from "@/components/onboarding/card-preview";
+import { LogoUpload } from "@/components/public-card/logo-upload";
+import { MoodPicker } from "@/components/public-card/mood-picker";
+import { type CardMood } from "@/components/public-card/public-card";
 import { getRubroTemplate, listRubros } from "@/lib/onboarding/templates";
 
 // ─── Data shape compartido ──────────────────────────────────────────────────
@@ -40,6 +43,10 @@ export interface OnboardingDataState {
   /** Bio corta del consultorio (max 280 chars). */
   bio: string;
   acento: string;
+  /** URL pública del logo PNG (Supabase Storage). NULL → AvatarIniciales fallback. */
+  logoUrl: string | null;
+  /** Mood elegido por el pro para su card pública. */
+  cardMood: CardMood;
   diasActivos: string[];
   franjas: [string, string][];
   slotMin: number;
@@ -71,6 +78,8 @@ export const ONBOARDING_INITIAL: OnboardingDataState = {
   telefonoPublico: "",
   bio: "",
   acento: "#8A6722",
+  logoUrl: null,
+  cardMood: "editorial",
   diasActivos: ["lun", "mar", "mie", "jue", "vie"],
   franjas: [["09:00", "12:00"], ["15:00", "18:00"]],
   slotMin: 45,
@@ -111,6 +120,8 @@ function previewDataFor(data: OnboardingDataState): CardPreviewData {
     instagramHandle: data.instagram || undefined,
     direccionCompleta: data.direccion || undefined,
     acentoHex: data.acento,
+    logoUrl: data.logoUrl ?? undefined,
+    cardMood: data.cardMood,
     servicios: data.servicios
       .filter((s) => s.nombre.trim())
       .map((s) => ({
@@ -380,7 +391,7 @@ export function Step3Consultorio({ data, set, next, back, skip, orgId, orgSlug }
   );
 }
 
-// ─── Step 4 · Personalización (acento) ──────────────────────────────────────
+// ─── Step 4 · Identidad visual (logo + acento + mood) ──────────────────────
 
 const ACENTOS_CURADOS = [
   { id: "#8A6722", nombre: "Brass",         desc: "Cálido, sobrio" },
@@ -392,42 +403,75 @@ const ACENTOS_CURADOS = [
 export function Step4Personalizacion({ data, set, next, back, skip, orgSlug }: StepProps) {
   return (
     <StepShell stepIdx={4} back={back} next={next} skip={skip}
-      headline="Elegí tu color"
-      sub="Tu acento aparece en CTAs, tu mark y tu card pública. Lo cambiás cuando quieras."
+      headline="Tu identidad visual"
+      sub="Cómo se ve tu link público: logo, color y estilo. Lo cambiás cuando quieras."
       previewData={previewDataFor(data)}
       slug={orgSlug}
     >
-      <div className="onb-acentos">
-        {ACENTOS_CURADOS.map(a => {
-          const isActive = data.acento === a.id;
-          return (
-            <button key={a.id} type="button"
-              className={"onb-acento " + (isActive ? "is-active" : "")}
-              onClick={() => set({ acento: a.id })}>
-              <div className="onb-acento-preview">
-                <div className="onb-acento-chart">
-                  {[40, 65, 88, 72, 95, 60, 80].map((h, i) => (
-                    <span key={i} className="onb-chart-bar"
-                      style={{ height: h + "%", background: i === 4 ? a.id : `${a.id}33` }}/>
-                  ))}
-                </div>
-                <div className="onb-acento-cta" style={{ background: a.id }}>Confirmar</div>
-              </div>
-              <div className="onb-acento-meta">
-                <span className="onb-acento-swatch" style={{ background: a.id }}/>
-                <div>
-                  <b>{a.nombre}</b>
-                  <span>{a.desc}</span>
-                </div>
-                {isActive ? (
-                  <span className="onb-acento-check">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
-                  </span>
-                ) : null}
-              </div>
-            </button>
-          );
-        })}
+      <div className="onb-form">
+        <section className="onb-identity-section">
+          <h2 className="onb-identity-h">Logo</h2>
+          <p className="onb-identity-hint">
+            Opcional. Si lo subís, reemplaza el avatar de iniciales en tu card.
+          </p>
+          <LogoUpload
+            currentLogoUrl={data.logoUrl}
+            onUploaded={(url) => set({ logoUrl: url })}
+            onRemoved={() => set({ logoUrl: null })}
+          />
+        </section>
+
+        <section className="onb-identity-section">
+          <h2 className="onb-identity-h">Color de acento</h2>
+          <p className="onb-identity-hint">
+            Aparece en CTAs, tu mark, y la card pública. (En el mood Clínico se
+            atempera hacia ink-blue para preservar el registro clínico.)
+          </p>
+          <div className="onb-acentos">
+            {ACENTOS_CURADOS.map(a => {
+              const isActive = data.acento === a.id;
+              return (
+                <button key={a.id} type="button"
+                  className={"onb-acento " + (isActive ? "is-active" : "")}
+                  onClick={() => set({ acento: a.id })}>
+                  <div className="onb-acento-preview">
+                    <div className="onb-acento-chart">
+                      {[40, 65, 88, 72, 95, 60, 80].map((h, i) => (
+                        <span key={i} className="onb-chart-bar"
+                          style={{ height: h + "%", background: i === 4 ? a.id : `${a.id}33` }}/>
+                      ))}
+                    </div>
+                    <div className="onb-acento-cta" style={{ background: a.id }}>Confirmar</div>
+                  </div>
+                  <div className="onb-acento-meta">
+                    <span className="onb-acento-swatch" style={{ background: a.id }}/>
+                    <div>
+                      <b>{a.nombre}</b>
+                      <span>{a.desc}</span>
+                    </div>
+                    {isActive ? (
+                      <span className="onb-acento-check">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
+                      </span>
+                    ) : null}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="onb-identity-section">
+          <h2 className="onb-identity-h">Estilo de tu card</h2>
+          <p className="onb-identity-hint">
+            Define la tipografía, el contraste y la decoración. Elegí el que más
+            se parezca a tu práctica.
+          </p>
+          <MoodPicker
+            value={data.cardMood}
+            onChange={(mood) => set({ cardMood: mood })}
+          />
+        </section>
       </div>
     </StepShell>
   );

@@ -42,6 +42,8 @@ export interface OnboardingResumeState {
     instagram?: string;
     bio?: string;
     acento?: string;
+    logoUrl?: string | null;
+    cardMood?: "calido" | "clinico" | "editorial" | "boutique";
     diasActivos?: string[];
     franjas?: [string, string][];
     slotMin?: number;
@@ -91,7 +93,7 @@ export async function getOnboardingResumeState(
     service
       .from("organization")
       .select(
-        "id, slug, nombre, rubro, ciudad, provincia, acento_hex, telefono_publico, direccion_completa, instagram_handle, bio, onboarding_completed, onboarding_step_max",
+        "id, slug, nombre, rubro, ciudad, provincia, acento_hex, telefono_publico, direccion_completa, instagram_handle, bio, logo_url, card_mood, onboarding_completed, onboarding_step_max",
       )
       .eq("id", member.organization_id)
       .is("deleted_at", null)
@@ -118,6 +120,8 @@ export async function getOnboardingResumeState(
     direccion_completa: string | null;
     instagram_handle: string | null;
     bio: string | null;
+    logo_url: string | null;
+    card_mood: "calido" | "clinico" | "editorial" | "boutique" | null;
     onboarding_completed: boolean;
     onboarding_step_max: number;
   };
@@ -217,6 +221,8 @@ export async function getOnboardingResumeState(
       instagram: org.instagram_handle ?? undefined,
       bio: org.bio ?? undefined,
       acento: org.acento_hex ?? undefined,
+      logoUrl: org.logo_url ?? null,
+      cardMood: org.card_mood ?? "editorial",
       diasActivos,
       franjas,
       slotMin,

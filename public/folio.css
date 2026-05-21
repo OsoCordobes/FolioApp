@@ -13462,3 +13462,31 @@ input:focus { outline: none; }
   .fpc-mood-card.is-active { animation: none; }
   .fpc-mood-card:hover { transform: none; }
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   FOLIO ATELIER · Onboarding Step 4 · "Identidad visual" section layout
+   ════════════════════════════════════════════════════════════════════════ */
+
+.onb-identity-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.onb-identity-section + .onb-identity-section {
+  margin-top: 8px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line-soft);
+}
+.onb-identity-h {
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0;
+  letter-spacing: var(--track-tight-0);
+}
+.onb-identity-hint {
+  font-size: var(--fs-sm);
+  color: var(--ink-3);
+  margin: 0;
+  line-height: 1.5;
+}

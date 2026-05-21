@@ -152,7 +152,11 @@ export function OnboardingApp({
             });
             break;
           case 4:
-            result = await updateOnboardingStep(4, { acento: snapshot.acento });
+            result = await updateOnboardingStep(4, {
+              acento: snapshot.acento,
+              logoUrl: snapshot.logoUrl,
+              cardMood: snapshot.cardMood,
+            });
             break;
           case 5:
             result = await updateOnboardingStep(5, {
