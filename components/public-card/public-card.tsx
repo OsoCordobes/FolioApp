@@ -33,6 +33,7 @@ import { AvatarIniciales } from "@/components/avatar-iniciales";
 import { adjustHexLightness } from "@/lib/format/initials";
 
 import { BrassCornerMark, DateBadge, EditorialRule } from "./decoration";
+import { applyAcentoBlend } from "./moods";
 
 export type PublicCardVariant = "preview" | "full" | "editing";
 export type CardMood = "calido" | "clinico" | "editorial" | "boutique";
@@ -81,9 +82,12 @@ export function PublicCard({
   appUrl = "",
   className = "",
 }: PublicCardProps) {
-  const acento = isValidHex(data.acentoHex) ? data.acentoHex : DEFAULT_ACENTO;
-  const acentoSoft = adjustHexLightness(acento, 60);
+  const rawAcento = isValidHex(data.acentoHex) ? data.acentoHex : DEFAULT_ACENTO;
   const mood: CardMood = data.cardMood ?? "editorial";
+  // Clínico mood pulls the pro acento 40% toward ink-blue for clinical
+  // register; other moods pass the raw user hex through.
+  const acento = applyAcentoBlend(mood, rawAcento);
+  const acentoSoft = adjustHexLightness(acento, 60);
 
   const fullName =
     data.nombre?.trim() || data.consultorioNombre?.trim() || "Tu nombre";

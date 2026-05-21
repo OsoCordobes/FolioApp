@@ -13266,3 +13266,199 @@ input:focus { outline: none; }
 [data-card-mood="editorial"].fpc-variant-editing .fpc-bio {
   margin: 14px 20px 0;
 }
+
+/* ─── Cálido mood — "Cercano y humano" ─── */
+
+[data-card-mood="calido"] {
+  --fpc-bg-tint-amount: 0.10;
+  --fpc-bg-tint-style:  linear;
+  --fpc-name-family:    var(--font-display);
+  --fpc-name-weight:    500;
+  --fpc-name-tracking:  -0.014em;
+  --fpc-bio-style:      italic-serif;
+  --fpc-radius:         16px;
+  --fpc-decoration:     corner-mark;
+  --fpc-decoration-color: var(--accent-warm);
+  --fpc-hero-py-full:   36px;
+}
+[data-card-mood="calido"] .fpc-bio {
+  font-family: var(--font-display);
+  font-style: italic;
+  margin: 16px 28px 0;
+  padding-top: 0;
+}
+[data-card-mood="calido"].fpc-variant-preview .fpc-bio,
+[data-card-mood="calido"].fpc-variant-editing .fpc-bio {
+  margin: 14px 20px 0;
+}
+
+/* ─── Clínico mood — "Preciso y profesional" ─── */
+
+[data-card-mood="clinico"] {
+  --fpc-bg-tint-amount: 0;
+  --fpc-bg-tint-style:  flat;
+  --fpc-name-family:    var(--font-sans);
+  --fpc-name-weight:    700;
+  --fpc-name-tracking:  -0.022em;
+  --fpc-bio-style:      plain;
+  --fpc-radius:         10px;
+  --fpc-decoration:     sub-line;
+  --fpc-decoration-color: var(--accent-ink);
+  --fpc-hero-py-full:   28px;
+}
+[data-card-mood="clinico"].fpc-card::before { display: none; }
+[data-card-mood="clinico"] .fpc-cta {
+  background: var(--accent-ink);
+  color: #FBF9F4;
+}
+[data-card-mood="clinico"] .fpc-services-label,
+[data-card-mood="clinico"] .fpc-link-footer {
+  letter-spacing: var(--track-loose-3);
+  text-transform: uppercase;
+}
+/* Uniform stagger override — overrides the musical baseline. */
+[data-card-mood="clinico"] .fpc-hero            { animation-delay:  60ms !important; animation-duration: 200ms !important; }
+[data-card-mood="clinico"] .fpc-bio             { animation-delay: 120ms !important; animation-duration: 200ms !important; }
+[data-card-mood="clinico"] .fpc-contact         { animation-delay: 180ms !important; animation-duration: 200ms !important; }
+[data-card-mood="clinico"] .fpc-services        { animation-delay: 240ms !important; animation-duration: 200ms !important; }
+[data-card-mood="clinico"] .fpc-footer .fpc-cta { animation-delay: 300ms !important; animation-duration: 200ms !important; }
+[data-card-mood="clinico"] .fpc-link-footer     { animation-delay: 360ms !important; animation-duration: 200ms !important; }
+
+/* ─── Boutique mood — "Personal y curado" ─── */
+
+[data-card-mood="boutique"] {
+  --fpc-bg-tint-amount: 0;
+  --fpc-bg-tint-style:  paper-noise;
+  --fpc-name-family:    var(--font-display);
+  --fpc-name-weight:    600;
+  --fpc-name-tracking:  -0.022em;
+  --fpc-bio-style:      italic-serif;
+  --fpc-radius:         24px;
+  --fpc-decoration:     date-badge;
+  --fpc-decoration-color: var(--accent-warm-2);
+  --fpc-hero-py-full:   36px;
+}
+[data-card-mood="boutique"].fpc-card::before {
+  /* Suppress the gradient overlay; the noise texture replaces it. */
+  display: none;
+}
+[data-card-mood="boutique"].fpc-card {
+  /* Subtle 1.5% paper-noise overlay layered above the surface. ~700 bytes
+     inlined SVG (single seed) so no extra HTTP. Disabled under
+     prefers-reduced-transparency. */
+  background-image:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><filter id='n'><feTurbulence baseFrequency='0.85' numOctaves='2' seed='5'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.015 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}
+[data-card-mood="boutique"] .fpc-bio {
+  font-family: var(--font-display);
+  font-style: italic;
+  margin: 16px 28px 0;
+  padding-top: 0;
+}
+[data-card-mood="boutique"].fpc-variant-preview .fpc-bio,
+[data-card-mood="boutique"].fpc-variant-editing .fpc-bio {
+  margin: 14px 20px 0;
+}
+[data-card-mood="boutique"] .fpc-link-footer {
+  animation-delay: 920ms !important;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  [data-card-mood="boutique"].fpc-card { background-image: none; }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   FOLIO ATELIER · MoodPicker (4-card grid)
+   Consumed by <MoodPicker> at Onboarding Step 4 + dev preview.
+   ════════════════════════════════════════════════════════════════════════ */
+
+.fpc-mood-picker {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.fpc-mood-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform var(--dur-quick) var(--ease-standard-out),
+    box-shadow var(--dur-quick) var(--ease-standard-out),
+    border-color var(--dur-quick) var(--ease-standard-out);
+  font: inherit;
+  color: inherit;
+}
+.fpc-mood-card:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-2);
+}
+.fpc-mood-card:focus-visible {
+  box-shadow: var(--shadow-focus-warm);
+}
+.fpc-mood-card:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.fpc-mood-card.is-active {
+  border-color: var(--accent-warm);
+  box-shadow: var(--shadow-focus-warm);
+  animation: fpc-mood-card-select var(--dur-deliberate) var(--spring-snap);
+}
+
+.fpc-mood-mini {
+  display: block;
+  width: 100%;
+  height: 56px;
+  border-radius: var(--r-md);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent-warm) 18%, transparent),
+    transparent
+  );
+  border: 1px solid var(--line-soft);
+}
+.fpc-mood-mini[data-card-mood="clinico"] {
+  background: var(--surface-2);
+  border-color: var(--accent-ink);
+}
+.fpc-mood-mini[data-card-mood="editorial"] {
+  background: radial-gradient(
+    at 0% 0%,
+    color-mix(in srgb, var(--accent-warm) 12%, transparent),
+    transparent 60%
+  );
+}
+.fpc-mood-mini[data-card-mood="boutique"] {
+  background:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32'><filter id='n'><feTurbulence baseFrequency='0.85' numOctaves='2'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.035 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}
+
+.fpc-mood-label {
+  font-weight: 600;
+  color: var(--ink);
+  font-size: var(--fs-md);
+}
+.fpc-mood-tag {
+  font-size: var(--fs-sm);
+  color: var(--ink-3);
+}
+
+@keyframes fpc-mood-card-select {
+  0%   { transform: scale(1); }
+  17%  { transform: scale(0.97); }
+  58%  { transform: scale(1.02); }
+  100% { transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fpc-mood-card.is-active { animation: none; }
+  .fpc-mood-card:hover { transform: none; }
+}
