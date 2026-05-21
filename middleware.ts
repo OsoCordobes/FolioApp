@@ -15,6 +15,8 @@
  *   - /api/auth/callback — Supabase OAuth callbacks
  *   - /folio.css, favicons, public assets — estáticos
  *   - /book/* — booking público (no requiere auth, F7)
+ *   - /dev/* — preview routes para QA visual; en producción cada page
+ *     responde 404 vía notFound() (defensa en profundidad).
  */
 
 import { NextResponse, type NextRequest } from "next/server";
@@ -37,6 +39,7 @@ const PUBLIC_PREFIXES = [
   "/api/whatsapp/",      // webhook Meta WhatsApp (validado por X-Hub-Signature)
   "/api/google/",        // OAuth callback Google + watch renew
   "/api/mercadopago/",   // webhook Mercado Pago (validado por x-signature HMAC)
+  "/dev/",               // dev-only preview routes (decoration, card-moods, etc.) — pages themselves 404 in NODE_ENV=production
 ];
 
 function isPublicPath(pathname: string): boolean {

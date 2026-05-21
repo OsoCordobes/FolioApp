@@ -12821,3 +12821,37 @@ input:focus { outline: none; }
     0 18px 40px rgba(0, 0, 0, 0.45),
     0 3px 10px rgba(194, 149, 83, 0.08);
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   FOLIO ATELIER · Decoration primitives
+   Consumed by <EditorialRule />, <BrassCornerMark />, <DateBadge /> in
+   components/public-card/decoration.tsx. Mood-specific tint via the
+   --fpc-decoration-color override on the card root in F5.
+   ════════════════════════════════════════════════════════════════════════ */
+
+.fpc-rule {
+  display: block;
+  height: 1px;
+  width: 24px;
+  background: var(--fpc-decoration-color, var(--ink-3));
+  margin-bottom: 10px;
+  opacity: 0.6;
+}
+
+.fpc-corner-mark {
+  display: inline-block;
+  color: var(--fpc-decoration-color, var(--accent-warm));
+  opacity: 0.7;
+}
+
+.fpc-date-badge {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: var(--track-loose-2);
+  color: var(--ink-3);
+  padding: 3px 9px;
+  border: 1px solid var(--fpc-decoration-color, var(--accent-warm));
+  border-radius: var(--r-pill);
+  background: transparent;
+}

@@ -78,8 +78,10 @@ test.describe("Atelier tokens · :root computed style", () => {
 });
 
 test.describe("Atelier decoration primitives", () => {
-  test("EditorialRule, BrassCornerMark, DateBadge render at /decoration", async ({ page }) => {
-    await page.goto("/decoration");
+  test("EditorialRule, BrassCornerMark, DateBadge render at /dev/decoration", async ({ page }) => {
+    await page.goto("/dev/decoration");
+    // The page lives under /dev/* (public-prefixed in middleware) and 404s
+    // in production via notFound(); in dev/test it renders the three primitives.
     await expect(page.locator(".fpc-rule").first()).toBeVisible();
     const svg = page.locator("svg.fpc-corner-mark").first();
     await expect(svg).toBeVisible();
