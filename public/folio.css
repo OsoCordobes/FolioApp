@@ -4998,9 +4998,9 @@ input:focus { outline: none; }
 .onb-anim-cta-3 { animation: onb-moment-up 360ms var(--motion-ease-out) 1560ms both; }
 
 /* Avatar idle pulse en la card del moment (sutil, cada 4s) */
-.onb-moment-card .card-preview .avatar-pulse,
-.onb-moment-card .card-preview img,
-.onb-moment-card .card-preview [role="img"] {
+.onb-moment-card .fpc-card .avatar-pulse,
+.onb-moment-card .fpc-card img,
+.onb-moment-card .fpc-card [role="img"] {
   animation: onb-avatar-pulse 4s var(--motion-ease-in-out) 2400ms infinite;
 }
 @keyframes onb-avatar-pulse {
@@ -5028,8 +5028,8 @@ input:focus { outline: none; }
     animation: onb-step-fade 120ms var(--motion-ease-out) both !important;
     transform: none !important;
   }
-  .onb-moment-card .card-preview img,
-  .onb-moment-card .card-preview [role="img"] {
+  .onb-moment-card .fpc-card img,
+  .onb-moment-card .fpc-card [role="img"] {
     animation: none !important;
   }
 }

@@ -358,7 +358,7 @@ export function OnboardingApp({
     );
   }
 
-  // ─── Steps 2-9: layout estándar con CardPreview lateral integrado en StepShell ─
+  // ─── Steps 2-9: layout estándar con PublicCard lateral integrado en StepShell ─
   return (
     <div className="onb-app">
       <header className="onb-app-head">

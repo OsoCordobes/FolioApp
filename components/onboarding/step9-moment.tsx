@@ -24,7 +24,10 @@
 
 import { useEffect, useState } from "react";
 
-import { CardPreview, type CardPreviewData } from "@/components/onboarding/card-preview";
+import {
+  PublicCard,
+  type PublicCardData,
+} from "@/components/public-card/public-card";
 import { FolioMark } from "@/components/folio-mark";
 import { listRubros } from "@/lib/onboarding/templates";
 import type { OnboardingDataState } from "@/components/onboarding/steps";
@@ -68,7 +71,7 @@ export function Step9Moment({
   const publicUrl = slug ? `${APP_URL}/book/${slug}` : null;
   const linkText = slug ? `${stripScheme(APP_URL)}/book/${slug}` : "tu link público";
 
-  const cardData: CardPreviewData = {
+  const cardData: PublicCardData = {
     nombre: fullName,
     consultorioNombre: data.consultorioNombre,
     rubro: rubroLabel(data.rubro),
@@ -117,7 +120,7 @@ export function Step9Moment({
       </p>
 
       <div className="onb-moment-card onb-anim-card">
-        <CardPreview data={cardData} variant="full" appUrl={APP_URL} />
+        <PublicCard data={cardData} variant="full" appUrl={APP_URL} />
       </div>
 
       {publicUrl ? (

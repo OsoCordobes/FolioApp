@@ -4,7 +4,7 @@
  * Folio · Onboarding · Step shell con split layout + live preview.
  *
  * Desktop ≥1024px: split horizontal. Form a la izquierda (max 560px),
- * <CardPreviewLive /> sticky a la derecha (360px).
+ * <PublicCardLive /> sticky a la derecha (360px).
  *
  * Mobile <1024px: form full-width. Botón flotante "Ver mi card" abre un
  * drawer con el preview. Footer sticky bottom para que "Continuar" siempre
@@ -19,7 +19,10 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 
-import { CardPreview, type CardPreviewData } from "@/components/onboarding/card-preview";
+import {
+  PublicCard,
+  type PublicCardData,
+} from "@/components/public-card/public-card";
 
 export const ONB_TOTAL = 9;
 
@@ -34,8 +37,8 @@ interface StepShellProps {
   nextLabel?: string;
   nextDisabled?: boolean;
   isFinal?: boolean;
-  /** Datos para el <CardPreviewLive />. Si no hay → no se muestra preview. */
-  previewData?: CardPreviewData;
+  /** Datos para el <PublicCardLive />. Si no hay → no se muestra preview. */
+  previewData?: PublicCardData;
   /** URL base (folio-app-ten.vercel.app) para el link del preview. */
   appUrl?: string;
   /** Slug actual de la org (sirve también para el link del preview). */
@@ -65,7 +68,7 @@ export function StepShell({
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const showPreview = !!previewData && !isFinal && stepIdx >= 3;
-  const previewProps: CardPreviewData | undefined = previewData
+  const previewProps: PublicCardData | undefined = previewData
     ? { ...previewData, slug: slug ?? previewData.slug }
     : undefined;
 
@@ -131,7 +134,7 @@ export function StepShell({
           <aside className="onb-shell-preview" aria-label="Vista previa de tu card pública">
             <div className="onb-preview-sticky">
               <span className="onb-preview-label">Tu card pública</span>
-              <CardPreview
+              <PublicCard
                 data={previewProps}
                 variant="preview"
                 appUrl={appUrl ?? APP_URL_DEFAULT}
@@ -178,7 +181,7 @@ export function StepShell({
                     </svg>
                   </button>
                 </div>
-                <CardPreview
+                <PublicCard
                   data={previewProps}
                   variant="preview"
                   appUrl={appUrl ?? APP_URL_DEFAULT}

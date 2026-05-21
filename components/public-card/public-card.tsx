@@ -3,9 +3,7 @@
 /**
  * Folio · <PublicCard>
  *
- * The single component that renders a professional's public card. Replaces
- * the legacy <CardPreview> (kept as a compat re-export at
- * components/onboarding/card-preview.tsx until F8 cleanup).
+ * The single component that renders a professional's public card.
  *
  * Layers (per docs/specs/2026-05-21-public-card-and-onboarding-redesign.md):
  *   A foundation  — hero + bio + contact + services + CTA + link footer.

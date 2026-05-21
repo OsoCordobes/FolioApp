@@ -7,7 +7,7 @@
  *   - Validación inline (blur + onChange para limpiar errores).
  *   - Recibe `orgId` / `orgSlug` (premium architecture) y los usa donde corresponde.
  *   - Step 3 incluye <SlugEditor /> + bio textarea con contador + smart defaults por rubro.
- *   - StepShell renderiza <CardPreviewLive /> a la derecha (desktop) o vía drawer (mobile).
+ *   - StepShell renderiza <PublicCard variant="preview" /> a la derecha (desktop) o vía drawer (mobile).
  *
  * Step 9 vive en step9-moment.tsx (separado por su tamaño + animaciones propias).
  */
@@ -17,7 +17,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { updateOnboardingStep } from "@/app/(public)/onboarding/actions";
 import { StepShell } from "@/components/onboarding/step-shell";
 import { SlugEditor } from "@/components/onboarding/slug-editor";
-import { type CardPreviewData } from "@/components/onboarding/card-preview";
+import { type PublicCardData } from "@/components/public-card/public-card";
 import { LogoUpload } from "@/components/public-card/logo-upload";
 import { MoodPicker } from "@/components/public-card/mood-picker";
 import { type CardMood } from "@/components/public-card/public-card";
@@ -107,7 +107,7 @@ interface StepProps {
 
 const TEL_RE = /^[\d\s\-+()]{6,}$/;
 
-function previewDataFor(data: OnboardingDataState): CardPreviewData {
+function previewDataFor(data: OnboardingDataState): PublicCardData {
   const fullName = [data.nombre, data.apellido].filter(Boolean).join(" ").trim();
   return {
     nombre: fullName || data.consultorioNombre || undefined,
