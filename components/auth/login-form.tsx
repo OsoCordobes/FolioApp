@@ -385,11 +385,11 @@ function Signup({ setVista, switchToLoginWith }: SignupProps) {
 
         <p className="au-fine">
           Al crear tu cuenta, aceptás los{" "}
-          <a href="#" className="au-link">
+          <a href="/terminos" target="_blank" rel="noopener noreferrer" className="au-link">
             términos
           </a>{" "}
           y la{" "}
-          <a href="#" className="au-link">
+          <a href="/privacidad" target="_blank" rel="noopener noreferrer" className="au-link">
             privacidad
           </a>
           .

@@ -15,6 +15,7 @@ import { useState, useTransition, type ReactNode } from "react";
 import * as I from "@/components/icons";
 import { saveConsultorioAction } from "@/app/(app)/configuracion/actions";
 import type { ConsultorioData, ServicioRow } from "@/lib/db/configuracion";
+import { MP_PLAN_PRICE_ARS } from "@/lib/mercadopago/client";
 
 // Re-export tipos para mantener compat con sub-componentes locales.
 export type { ConsultorioData };
@@ -241,8 +242,9 @@ function EliminarCuentaButton({ email }: { email: string }) {
       return;
     }
     alert(
-      "Eliminación de cuenta: el endpoint de procesamiento entra en sprint posterior (audit log + " +
-      "pseudonimización requieren proceso revisado). Por ahora contactá a hola@folio.app.",
+      "Para eliminar tu cuenta enviá un email a hola@folio.app desde la dirección " +
+      "registrada. El proceso requiere validación humana porque el audit log y la " +
+      "pseudonimización clínica son irreversibles (Ley 26.529 art. 18).",
     );
   };
   return (
@@ -558,29 +560,25 @@ function SecIntegraciones() {
         }
         name="Google Calendar"
         desc="Los eventos personales bloquean slots automáticamente. Las reservas confirmadas se crean como eventos en tu Google."
-        status="Conectado · hace 2 min"
-        statusKind="ok"
+        status="Disponible próximamente"
+        statusKind="soon"
         action={
-          <>
-            <span className="cfg-int-account fm-mono">lorenzo.martinez.quiropraxia@gmail.com</span>
-            <button
-              type="button"
-              className="fi-btn fi-btn-ghost"
-              onClick={() => alert("Desconectar Google Calendar: próximamente desde el flow OAuth.\n\nPor ahora podés revocar el acceso desde myaccount.google.com/permissions.")}
-              title="Próximamente"
-            >
-              Desconectar
-            </button>
-          </>
+          <button type="button" className="fi-btn fi-btn-ghost" disabled>
+            Avisarme
+          </button>
         }
       />
       <IntegrationCard
         icon={<div className="cfg-mp-ico">MP</div>}
         name="Mercado Pago"
-        desc="Suscripciones recurrentes + cobros únicos. Los pacientes pueden pagar online al reservar."
-        status="Sin conectar"
-        statusKind="warn"
-        action={<button type="button" className="fi-btn fi-btn-primary">Conectar</button>}
+        desc="Cobro mensual de tu suscripción a Folio. La gestión se hace desde la sección Plan."
+        status="Gestionable desde Plan"
+        statusKind="ok"
+        action={
+          <a href="/configuracion/billing" className="fi-btn fi-btn-secondary">
+            Ir a Plan
+          </a>
+        }
       />
       <IntegrationCard
         icon={
@@ -605,13 +603,18 @@ function SecIntegraciones() {
 // ─── Sección: Plan ─────────────────────────────────────────────────────────
 
 function SecPlan() {
+  const precioLabel = new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency: "ARS",
+    maximumFractionDigits: 0,
+  }).format(MP_PLAN_PRICE_ARS);
   return (
     <>
       <Section title="Suscripción">
         <div className="cfg-plan-card">
           <div className="cfg-plan-card-l">
             <span className="fi-eyebrow">Plan actual</span>
-            <h3>Folio Profesional · $30.000 / mes</h3>
+            <h3>Folio Profesional · {precioLabel} / mes</h3>
             <p>
               Cobro automático mensual vía Mercado Pago. Podés cancelar cuando quieras.
               Durante los primeros 7 días tenés acceso completo sin tarjeta.

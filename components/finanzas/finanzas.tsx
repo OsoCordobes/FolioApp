@@ -32,8 +32,14 @@ const METODO_LBL: Record<MetodoPagoUI, { lbl: string; color: string }> = {
 
 const MESES_ABREV_FN = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
+const ARS_FORMATTER = new Intl.NumberFormat("es-AR", {
+  style: "currency",
+  currency: "ARS",
+  maximumFractionDigits: 0,
+});
+
 const fmtMoney = (n: number | null | undefined): string =>
-  "$ " + (n ?? 0).toLocaleString("es-AR");
+  ARS_FORMATTER.format(n ?? 0);
 
 const fmtMonth = (n: number): string => {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(".0", "") + "M";

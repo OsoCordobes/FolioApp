@@ -109,12 +109,11 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
         )}
       </div>
 
-      {/* FAB walk-in → /calendario para agendar (modal walk-in nativo entra en sprint posterior). */}
       {!fichaTurnoId && !walkInOpen ? (
         <a
-          href="/calendario#walkin"
+          href="/calendario"
           className="fi-fab"
-          title="Agendar un walk-in en el calendario"
+          title="Ir al calendario para agendar un walk-in"
         >
           <I.Plus size={14} /> Walk-in
         </a>

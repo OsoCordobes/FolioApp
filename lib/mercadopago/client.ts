@@ -143,9 +143,11 @@ export async function createPreapproval(
     back_url: input.backUrl,
     status: "pending" as const,
   };
-  // Idempotency key derivado del external_reference: dos calls con misma org
-  // y mismo timestamp de minuto no duplican preapproval ante retry de fetch.
-  const idemKey = `preapproval-${input.externalReference}-${Math.floor(Date.now() / 60000)}`;
+  // Idempotency key con precisión de segundo: dos clicks accidentales del mismo
+  // usuario dentro del mismo segundo colapsan a una sola preapproval (MP devuelve
+  // la primera). Clicks separados por >=1s crean preapprovals independientes
+  // (caso legítimo: usuario reintentó tras un error visible).
+  const idemKey = `preapproval-${input.externalReference}-${Math.floor(Date.now() / 1000)}`;
   return mpRequest<MpPreapproval>("POST", "/preapproval", body, idemKey);
 }
 

@@ -86,7 +86,14 @@ function Toolbar({ q, setQ, filtro, setFiltro, counts, onAddPaciente }: ToolbarP
           </button>
         ))}
       </div>
-      <button type="button" className="fi-btn fi-btn-primary pd-add" onClick={onAddPaciente}>
+      <button
+        type="button"
+        className="fi-btn fi-btn-primary pd-add"
+        onClick={onAddPaciente}
+        disabled
+        title="Próximamente. Los pacientes se crean automáticamente al confirmar un pedido entrante (booking público o WhatsApp)."
+        style={{ opacity: 0.55, cursor: "not-allowed" }}
+      >
         <I.Plus size={13} /> Nuevo paciente
       </button>
     </div>
@@ -241,9 +248,12 @@ interface BulkBarProps {
   onWa: () => void;
   onTag: () => void;
   onArchivar: () => void;
+  tagDisabled?: boolean;
+  archivarDisabled?: boolean;
 }
 
-function BulkBar({ count, onClear, onWa, onTag, onArchivar }: BulkBarProps) {
+function BulkBar({ count, onClear, onWa, onTag, onArchivar, tagDisabled, archivarDisabled }: BulkBarProps) {
+  const disabledStyle = { opacity: 0.45, cursor: "not-allowed" } as const;
   return (
     <div className="pd-bulk">
       <div className="pd-bulk-l">
@@ -260,14 +270,28 @@ function BulkBar({ count, onClear, onWa, onTag, onArchivar }: BulkBarProps) {
         <button type="button" className="fi-btn fi-btn-secondary" onClick={onWa}>
           <I.Phone size={12} /> Enviar mensaje WhatsApp
         </button>
-        <button type="button" className="fi-btn fi-btn-secondary" onClick={onTag}>
+        <button
+          type="button"
+          className="fi-btn fi-btn-secondary"
+          onClick={onTag}
+          disabled={tagDisabled}
+          title={tagDisabled ? "Próximamente — etiquetado masivo" : undefined}
+          style={tagDisabled ? disabledStyle : undefined}
+        >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
             <circle cx="7" cy="7" r="1.2" fill="currentColor" />
           </svg>
           Etiquetar
         </button>
-        <button type="button" className="fi-btn fi-btn-ghost" onClick={onArchivar}>
+        <button
+          type="button"
+          className="fi-btn fi-btn-ghost"
+          onClick={onArchivar}
+          disabled={archivarDisabled}
+          title={archivarDisabled ? "Próximamente — archivo masivo. La pseudonimización individual está disponible desde la ficha del paciente." : undefined}
+          style={archivarDisabled ? disabledStyle : undefined}
+        >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <rect x="3" y="4" width="18" height="4" rx="1" />
             <path d="M5 8v11a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8M10 13h4" />
@@ -448,9 +472,7 @@ export function PacientesDir({ pacientes, initialQuery = "" }: PacientesDirProps
           filtro={filtro}
           setFiltro={setFiltro}
           counts={counts}
-          onAddPaciente={() => alert(
-            "Crear paciente desde el directorio: próximamente.\n\nPor ahora los pacientes se crean automáticamente al confirmar un pedido entrante (booking público o WhatsApp).",
-          )}
+          onAddPaciente={() => undefined}
         />
 
         <div className="pd-table-wrap">
@@ -470,8 +492,10 @@ export function PacientesDir({ pacientes, initialQuery = "" }: PacientesDirProps
           count={selected.size}
           onClear={() => setSelected(new Set())}
           onWa={() => handleBulkWhatsApp(selected, pacientes)}
-          onTag={() => alert("Etiquetar masivamente: próximamente. Por ahora editá cada paciente individualmente.")}
-          onArchivar={() => alert("Archivar masivamente: próximamente. La pseudonimización individual está disponible desde la ficha del paciente.")}
+          onTag={() => undefined}
+          onArchivar={() => undefined}
+          tagDisabled
+          archivarDisabled
         />
       ) : null}
     </>

@@ -22,7 +22,7 @@ export default function PrivacidadPage() {
 
       <h1 style={{ marginBottom: 8 }}>Política de Privacidad</h1>
       <p style={{ color: "var(--ink-3)", marginBottom: 32 }}>
-        Última actualización: 19 de mayo de 2026
+        Última actualización: 21 de mayo de 2026
       </p>
 
       <section style={{ marginBottom: 32 }}>
@@ -104,6 +104,13 @@ export default function PrivacidadPage() {
             <b>Google Calendar</b> (sincronización de turnos si usted la activa).
             Folio envía solo título genérico + hora; nunca diagnóstico ni motivo.
           </li>
+          <li>
+            <b>Google Fonts</b> (CDN para tipografías Geist y Fraunces). El
+            navegador del usuario solicita los archivos de fuente directamente
+            a Google; no se envía contenido de la aplicación ni datos
+            identificatorios más allá de los inherentes a cualquier request
+            HTTP (IP, User-Agent).
+          </li>
         </ul>
       </section>
 
@@ -184,11 +191,6 @@ export default function PrivacidadPage() {
           </a>
         </p>
       </section>
-
-      <p style={{ marginTop: 48, padding: 16, background: "var(--surface-2)", borderRadius: 8, color: "var(--ink-3)", fontSize: 13 }}>
-        <b>Nota MVP:</b> Plantilla razonable redactada por software engineer.
-        ANTES de lanzamiento real, revisar con abogado especializado.
-      </p>
     </main>
   );
 }

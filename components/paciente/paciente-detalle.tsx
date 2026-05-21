@@ -32,8 +32,6 @@ function iniciales(nombre: string): string {
   return nombre.split(" ").map((p) => p[0]).filter(Boolean).join("").slice(0, 2).toUpperCase();
 }
 
-const TURNO_HOY_HORA = "hoy";
-
 type TabId = "informacion" | "plan" | "sesiones" | "documentos";
 
 // ─── Sub: SOAP stacked ─────────────────────────────────────────────────────
@@ -70,7 +68,7 @@ function SoapStacked({ soap, setSoap }: { soap: SoapState; setSoap: (s: SoapStat
     <div className="pc-soap">
       <header className="pc-soap-head">
         <span className="fi-eyebrow">
-          Nota SOAP · sesión 13 may · {TURNO_HOY_HORA}
+          Nota SOAP · sesión de hoy
         </span>
         <span className={"fm-save " + (savingId ? "fm-save--saving" : "fm-save--saved")}>
           {savingId ? (
@@ -118,8 +116,9 @@ function PlanTratamiento() {
         <button
           type="button"
           className="pc-link"
-          onClick={() => alert("Edición inline de este campo: próximamente. Por ahora editá desde Configuración → Consultorio o crea una nota nueva en Sesiones.")}
-          title="Próximamente"
+          disabled
+          title="Próximamente — edición inline del plan"
+          style={{ opacity: 0.45, cursor: "not-allowed" }}
         >
           Editar
         </button>
@@ -245,13 +244,14 @@ function TabInformacion() {
         <header className="pc-card-head">
           <span className="fi-eyebrow">Contacto</span>
           <button
-          type="button"
-          className="pc-link"
-          onClick={() => alert("Edición inline de este campo: próximamente. Por ahora editá desde Configuración → Consultorio o crea una nota nueva en Sesiones.")}
-          title="Próximamente"
-        >
-          Editar
-        </button>
+            type="button"
+            className="pc-link"
+            disabled
+            title="Próximamente — edición inline de contacto"
+            style={{ opacity: 0.45, cursor: "not-allowed" }}
+          >
+            Editar
+          </button>
         </header>
         <dl className="pc-dl">
           <dt>Teléfono</dt>
@@ -298,8 +298,9 @@ function TabSesiones() {
         <button
           type="button"
           className="fi-btn fi-btn-secondary"
-          onClick={() => alert("Crear sesión manual: próximamente. Por ahora las sesiones se generan al cerrar un turno desde /hoy.")}
-          title="Próximamente"
+          disabled
+          title="Próximamente. Las sesiones se crean automáticamente al cerrar un turno desde Hoy."
+          style={{ opacity: 0.45, cursor: "not-allowed" }}
         >
           <I.Plus size={12} /> Nueva sesión
         </button>
@@ -326,17 +327,13 @@ function TabSesiones() {
                 </div>
               ) : null}
             </div>
-            <button
-              type="button"
+            <span
               className="pc-link"
-              onClick={(e) => {
-                e.stopPropagation();
-                alert("Detalle expandido de la sesión: próximamente.");
-              }}
-              title="Próximamente"
+              title="Próximamente — detalle expandido de la sesión"
+              style={{ opacity: 0.45, cursor: "not-allowed", pointerEvents: "none" }}
             >
               Ver detalle
-            </button>
+            </span>
           </div>
         ))}
       </div>
@@ -359,8 +356,9 @@ function TabDocumentos() {
         <button
           type="button"
           className="fi-btn fi-btn-secondary"
-          onClick={() => alert("Subir documento clínico: próximamente. Sube a Supabase Storage cifrado con audit log automático.")}
-          title="Próximamente"
+          disabled
+          title="Próximamente. Carga cifrada a Supabase Storage con audit log automático."
+          style={{ opacity: 0.45, cursor: "not-allowed" }}
         >
           <I.Plus size={13} /> Subir documento
         </button>

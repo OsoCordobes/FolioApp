@@ -20,7 +20,7 @@ export default async function HoyPage() {
     throw new Error(`No se pudo cargar /hoy: ${ctx.error.message}`);
   }
 
-  const timezone = ctx.data.organization.timezone || "America/Argentina/Buenos_Aires";
+  const timezone = ctx.data.organization.timezone || "America/Argentina/Cordoba";
   const fechaIso = fechaHoyEnTz(timezone);
 
   const data = await getDashboardHoy({
