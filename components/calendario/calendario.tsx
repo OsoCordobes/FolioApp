@@ -20,6 +20,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import * as I from "@/components/icons";
+import { PedidoModal } from "@/components/calendario/pedido-modal";
 import type {
   Bloqueo,
   PacientesById,
@@ -290,7 +291,17 @@ function BloqueoCardSemana({ bloqueo, lane, totalLanes }: { bloqueo: Bloqueo; la
   );
 }
 
-function PedidoGhostCard({ pedido, lane, totalLanes }: { pedido: Pedido; lane: number; totalLanes: number }) {
+function PedidoGhostCard({
+  pedido,
+  lane,
+  totalLanes,
+  onClick,
+}: {
+  pedido: Pedido;
+  lane: number;
+  totalLanes: number;
+  onClick: (p: Pedido) => void;
+}) {
   const top = timeToTop(pedido.hora!);
   const height = Math.max(36, durToHeight(pedido.dur || 45) - 2);
   const lanePos = laneStyle(lane, totalLanes);
@@ -306,10 +317,12 @@ function PedidoGhostCard({ pedido, lane, totalLanes }: { pedido: Pedido; lane: n
     .toUpperCase();
 
   return (
-    <div
+    <button
+      type="button"
       className={"cal-pedido " + (isNarrow ? "is-narrow" : "")}
-      style={{ top, height, ...lanePos }}
+      style={{ top, height, ...lanePos, cursor: "pointer", border: "none", textAlign: "left" }}
       title={`Pedido vía ${canal.lbl} · ${pedido.nombre} · ${pedido.hora}`}
+      onClick={() => onClick(pedido)}
     >
       {isNarrow ? (
         <div className="cal-pedido-narrow">
@@ -328,7 +341,7 @@ function PedidoGhostCard({ pedido, lane, totalLanes }: { pedido: Pedido; lane: n
           </div>
         </>
       )}
-    </div>
+    </button>
   );
 }
 
@@ -503,6 +516,7 @@ function VistaSemana({
   hoyIso,
   nowHHMM,
   onOpenBandeja,
+  onSelectPedido,
 }: {
   turnos: TurnoSemana[];
   bloqueos: Bloqueo[];
@@ -512,6 +526,7 @@ function VistaSemana({
   hoyIso: string;
   nowHHMM: string;
   onOpenBandeja: () => void;
+  onSelectPedido: (p: Pedido) => void;
 }) {
   const pedidosSinFecha = pedidos.filter((p) => p.estado === "pendiente" && !p.fecha);
 
@@ -637,6 +652,7 @@ function VistaSemana({
                       pedido={ev.pedido}
                       lane={ev._lane}
                       totalLanes={ev._totalLanes}
+                      onClick={onSelectPedido}
                     />
                   );
                 }
@@ -698,6 +714,7 @@ export function Calendario({
   const [vista, setVista] = useState<Vista>("semana");
   const [estados, setEstados] = useState<Set<string>>(new Set());
   const [mostrarPedidos, setMostrarPedidos] = useState(true);
+  const [selectedPedido, setSelectedPedido] = useState<Pedido | null>(null);
 
   const pedidosPendientes = useMemo(() => pedidos.filter((p) => p.estado === "pendiente"), [pedidos]);
   const pedidosVisibles = mostrarPedidos ? pedidosPendientes : [];
@@ -733,25 +750,42 @@ export function Calendario({
           hoyIso={hoyIso}
           nowHHMM={nowHHMM}
           onOpenBandeja={() => setVista("bandeja")}
+          onSelectPedido={setSelectedPedido}
         />
       ) : vista === "bandeja" ? (
-        <VistaBandejaSimple pedidos={pedidosPendientes} />
+        <VistaBandejaSimple
+          pedidos={pedidosPendientes}
+          onSelectPedido={setSelectedPedido}
+        />
       ) : (
         <div className="fi-empty" style={{ marginTop: 32 }}>
           <h2>Vista mensual próximamente</h2>
           <p>Mientras tanto, navegá entre semanas con las flechas.</p>
         </div>
       )}
+
+      {selectedPedido ? (
+        <PedidoModal
+          pedido={selectedPedido}
+          onClose={() => setSelectedPedido(null)}
+          onResolved={() => setSelectedPedido(null)}
+        />
+      ) : null}
     </div>
   );
 }
 
 /**
- * Bandeja simple: lista cards de pedidos pendientes. La versión rica del
- * prototipo (con confirmar/reagendar/rechazar) llega cuando se cablee la
- * UI de modal cal-pedido-modal a `confirmarPedido` / `rechazarPedido`.
+ * Bandeja: lista cards clickeables de pedidos pendientes. Click sobre una
+ * card abre el PedidoModal que dispara aceptarPedidoAction / rechazarPedidoAction.
  */
-function VistaBandejaSimple({ pedidos }: { pedidos: Pedido[] }) {
+function VistaBandejaSimple({
+  pedidos,
+  onSelectPedido,
+}: {
+  pedidos: Pedido[];
+  onSelectPedido: (p: Pedido) => void;
+}) {
   if (pedidos.length === 0) {
     return (
       <div className="fi-empty" style={{ marginTop: 32 }}>
@@ -764,27 +798,36 @@ function VistaBandejaSimple({ pedidos }: { pedidos: Pedido[] }) {
     <div className="cal-tray" style={{ marginTop: 16, padding: 12 }}>
       <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 12 }}>
         {pedidos.map((p) => (
-          <li
-            key={p.id}
-            style={{
-              padding: 12,
-              border: "1px solid var(--line)",
-              borderRadius: 8,
-              background: "var(--surface)",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-              <b>{p.nombre}</b>
-              <span className="cal-pedido-canal">{p.canal}</span>
-            </div>
-            <div style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 4 }}>
-              {p.fecha ? `${p.fecha} · ${p.hora ?? "—"}` : "sin fecha propuesta"}
-              <span style={{ margin: "0 6px" }}>·</span>
-              {p.recibidoHace}
-            </div>
-            {p.motivo ? (
-              <p style={{ margin: "6px 0 0", fontSize: 13 }}>{p.motivo}</p>
-            ) : null}
+          <li key={p.id}>
+            <button
+              type="button"
+              onClick={() => onSelectPedido(p)}
+              style={{
+                display: "block",
+                width: "100%",
+                textAlign: "left",
+                padding: 12,
+                border: "1px solid var(--line)",
+                borderRadius: 8,
+                background: "var(--surface)",
+                cursor: "pointer",
+                font: "inherit",
+                color: "inherit",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                <b>{p.nombre}</b>
+                <span className="cal-pedido-canal">{p.canal}</span>
+              </div>
+              <div style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 4 }}>
+                {p.fecha ? `${p.fecha} · ${p.hora ?? "—"}` : "sin fecha propuesta"}
+                <span style={{ margin: "0 6px" }}>·</span>
+                {p.recibidoHace}
+              </div>
+              {p.motivo ? (
+                <p style={{ margin: "6px 0 0", fontSize: 13 }}>{p.motivo}</p>
+              ) : null}
+            </button>
           </li>
         ))}
       </ul>
