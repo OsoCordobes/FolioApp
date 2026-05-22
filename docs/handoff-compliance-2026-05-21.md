@@ -167,18 +167,25 @@ Route `/cookies` (linked from `/privacidad` §6 and `/cookies` itself). Pure con
 
 ---
 
-## CI status · Supabase Preview failure on `dc9874c`
+## CI status · Supabase Preview · ROOT CAUSED AND FIXED
 
-The Supabase Preview check failed on Session B's commit (project `aposnacefcwaqipnwdwo`, completed 21:25:52 in ~10s). I do not have dashboard access to read the apply logs.
+**Symptom:** Supabase Preview check failed on both `dc9874c` (Session B) and the preview rerun. The Supabase bot left the actual error as a PR comment that I'd missed earlier:
 
-**Local validation (Session A, postgres 16):** I bootstrapped a Supabase-shim DB (auth/storage schemas, anon/authenticated/service_role roles, `check_function_bodies = off`) and applied M01→M22 in order. Result: M22 applied cleanly. The new `pedido_web_requires_consent` constraint correctly accepts non-WEB and consented WEB pedidos and rejects unconsented WEB. `pseudonimizar_member` returns the expected error when `auth.uid()` is NULL. `audit_log_purge_expired(0)` returns an empty result on a fresh DB.
+```
+ERROR: relation "member" does not exist (SQLSTATE 42P01)
+At statement: 3
+CREATE OR REPLACE FUNCTION public.user_org_ids() ...
+```
 
-**Hypothesis on the Supabase Preview failure:**
-- The 10-second runtime suggests a setup-time failure, not a migration-execution failure (a real apply takes minutes).
-- Most likely cause: a Supabase-side quota / branch-DB provisioning issue, or an interaction with seeded data the preview branch inherits.
-- Less likely: a permission issue around `pg_inherits`/`pg_class` access in `audit_log_purge_expired` under the migration role on Supabase-hosted PG.
+**Root cause:** M01 declares SQL helper functions (`user_org_ids`, `user_role_in`, `user_member_id_in`) that reference the `member` table — but `member` is created in M02. Postgres with `check_function_bodies = ON` (the Supabase Preview default) validates function bodies against the schema at CREATE time and rejects the forward reference. Production survived because the main deploy path runs with the check off; preview branches don't.
 
-**Ask to the human reviewer:** if you have access to https://supabase.com/dashboard/project/aposnacefcwaqipnwdwo/branches, please paste the migration apply log here. Without it I'd be guessing at the root cause. If the rerun of the check succeeds on a future push, treat the first failure as a flake.
+This was a **latent pre-existing bug** in M01 unrelated to the compliance audit; M22 just exposed it by triggering more frequent preview applies.
+
+**Fix:** added `SET check_function_bodies = off;` at the top of M01 (session-scoped, idempotent for production replays — production already has M01 applied, and CREATE OR REPLACE inside that session is identical with or without the setting). Functions are still validated at call-time when `member` exists, so RLS policies keep working as before.
+
+**Verification:** reproduced the failure locally with `check_function_bodies = ON` against a clean DB, applied the fix, and re-ran M01→M22 — all 22 migrations now apply cleanly. Commit: `9c33c91` + the next push containing this fix.
+
+**Owner note:** M01 is pre-existing project code (neither Session A nor Session B owns it). The change is minimal and reversible; nothing else in M01 was touched.
 
 ---
 

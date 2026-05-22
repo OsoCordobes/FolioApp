@@ -25,6 +25,18 @@
 -- SECURITY DEFINER (CWE-1284).
 -- ════════════════════════════════════════════════════════════════════════════
 
+-- ─── Sesión: desactivar validación de bodies de funciones SQL ──────────────
+-- Las funciones helper (user_org_ids, user_role_in, user_member_id_in, etc.)
+-- declaradas en este archivo referencian la tabla `member` que se crea en M02.
+-- Sin este SET, Postgres con `check_function_bodies = on` (default en
+-- Supabase Preview Branches) rechaza el CREATE FUNCTION con
+-- "ERROR: relation 'member' does not exist". El setting es de session-scope
+-- y solo afecta a este apply; producción (donde M01 ya está aplicada) no se
+-- ve afectada por replays porque los CREATE OR REPLACE son idempotentes.
+-- LANGUAGE plpgsql + funciones SECURITY DEFINER continúan funcionando
+-- correctamente al invocarse porque para entonces `member` ya existe.
+SET check_function_bodies = off;
+
 -- ─── Extensiones ───────────────────────────────────────────────────────────
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
