@@ -10,6 +10,7 @@
  * persistencia real esté conectada.
  */
 
+import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 
 import * as I from "@/components/icons";
@@ -109,12 +110,11 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
         )}
       </div>
 
-      {/* FAB walk-in → /calendario para agendar (modal walk-in nativo entra en sprint posterior). */}
       {!fichaTurnoId && !walkInOpen ? (
         <a
-          href="/calendario#walkin"
+          href="/calendario"
           className="fi-fab"
-          title="Agendar un walk-in en el calendario"
+          title="Ir al calendario para agendar un walk-in"
         >
           <I.Plus size={14} /> Walk-in
         </a>
@@ -133,8 +133,16 @@ function EmptyState({ fechaLarga }: { fechaLarga: string }) {
         <h2 className="fi-empty-title">Sin turnos para hoy</h2>
         <p className="fi-empty-sub">
           No tenés turnos agendados para el {fechaLarga.toLowerCase()}. Podés crear uno desde
-          Calendario o cargar un walk-in.
+          el calendario o cargar un walk-in.
         </p>
+        <div className="fi-empty-actions" style={{ marginTop: 16, display: "flex", gap: 8, justifyContent: "center" }}>
+          <Link href="/calendario" className="fi-btn fi-btn-primary">
+            <I.Calendar size={13} /> Ir al calendario
+          </Link>
+          <Link href="/pacientes" className="fi-btn fi-btn-secondary">
+            <I.Users size={13} /> Ver pacientes
+          </Link>
+        </div>
       </div>
     </section>
   );

@@ -22,7 +22,7 @@ export default function TerminosPage() {
 
       <h1 style={{ marginBottom: 8 }}>Términos y Condiciones</h1>
       <p style={{ color: "var(--ink-3)", marginBottom: 32 }}>
-        Última actualización: 19 de mayo de 2026
+        Última actualización: 21 de mayo de 2026
       </p>
 
       <section style={{ marginBottom: 32 }}>
@@ -116,12 +116,6 @@ export default function TerminosPage() {
           Consultas: <a href="mailto:hola@folio.app">hola@folio.app</a>
         </p>
       </section>
-
-      <p style={{ marginTop: 48, padding: 16, background: "var(--surface-2)", borderRadius: 8, color: "var(--ink-3)", fontSize: 13 }}>
-        <b>Nota MVP:</b> Este documento es una plantilla razonable. ANTES de
-        lanzamiento comercial real consultar con abogado especializado en
-        datos personales y normativa de profesiones de la salud argentina.
-      </p>
     </main>
   );
 }

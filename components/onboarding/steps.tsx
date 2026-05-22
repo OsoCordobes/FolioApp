@@ -619,7 +619,7 @@ export function Step6Servicios({ data, set, next, back, skip, orgSlug }: StepPro
 
 // ─── Step 7 · Google Calendar ──────────────────────────────────────────────
 
-export function Step7Google({ data, set, next, back, skip, orgSlug }: StepProps) {
+export function Step7Google({ data, next, back, skip, orgSlug }: StepProps) {
   return (
     <StepShell stepIdx={7} back={back} next={next} skip={skip}
       headline="¿Conectamos tu Google Calendar?"
@@ -628,8 +628,7 @@ export function Step7Google({ data, set, next, back, skip, orgSlug }: StepProps)
       slug={orgSlug}
     >
       <div className="onb-integration">
-        <button type="button" className="onb-oauth-card"
-          onClick={() => { set({ googleConectado: true }); next(); }}>
+        <div className="onb-oauth-card" style={{ opacity: 0.55, cursor: "not-allowed" }} aria-disabled>
           <div className="onb-oauth-ico">
             <svg width="32" height="32" viewBox="0 0 24 24">
               <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -639,13 +638,10 @@ export function Step7Google({ data, set, next, back, skip, orgSlug }: StepProps)
             </svg>
           </div>
           <div className="onb-oauth-body">
-            <b>Conectar Google Calendar</b>
-            <p>Pedimos permiso para leer y crear eventos en tu calendar primario.</p>
+            <b>Google Calendar · Próximamente</b>
+            <p>La sincronización bidireccional con Google Calendar se habilita en los próximos sprints. Podés continuar y conectarlo más tarde desde Configuración.</p>
           </div>
-          <div className="onb-oauth-arrow">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-          </div>
-        </button>
+        </div>
         <p className="onb-fine">
           Tus datos del calendar quedan privados. Solo leemos eventos para bloquear slots; no se comparten con pacientes.
         </p>
@@ -686,7 +682,7 @@ export function Step8MercadoPago({ data, next, back, skip, orgSlug }: StepProps)
               </svg>
             </div>
             <div>
-              <b>Cuando quieras, ARS 35.000 / mes</b>
+              <b>Cuando quieras, ARS 30.000 / mes</b>
               <p>Suscripción mensual via Mercado Pago. Cancelás cuando quieras desde Configuración.</p>
             </div>
           </div>

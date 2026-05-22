@@ -48,8 +48,8 @@ export async function listAuditEntries(input: AuditQueryInput): Promise<Result<A
   }
   const session = await getActiveSession();
   if (!session.ok) return session;
-  if (session.data.role !== "OWNER" && session.data.role !== "DIRECTOR") {
-    return err("forbidden", "Solo OWNER o DIRECTOR puede ver el audit log.");
+  if (session.data.role !== "OWNER") {
+    return err("forbidden", "Solo OWNER puede ver el audit log.");
   }
 
   const supabase = await createSupabaseServerClient();
@@ -82,8 +82,8 @@ export async function getAuditStats(): Promise<
 > {
   const session = await getActiveSession();
   if (!session.ok) return session;
-  if (session.data.role !== "OWNER" && session.data.role !== "DIRECTOR") {
-    return err("forbidden", "Solo OWNER o DIRECTOR puede ver el audit log.");
+  if (session.data.role !== "OWNER") {
+    return err("forbidden", "Solo OWNER puede ver el audit log.");
   }
 
   const supabase = await createSupabaseServerClient();

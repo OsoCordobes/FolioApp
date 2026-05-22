@@ -385,11 +385,11 @@ function Signup({ setVista, switchToLoginWith }: SignupProps) {
 
         <p className="au-fine">
           Al crear tu cuenta, aceptás los{" "}
-          <a href="#" className="au-link">
+          <a href="/terminos" target="_blank" rel="noopener noreferrer" className="au-link">
             términos
           </a>{" "}
           y la{" "}
-          <a href="#" className="au-link">
+          <a href="/privacidad" target="_blank" rel="noopener noreferrer" className="au-link">
             privacidad
           </a>
           .
@@ -426,8 +426,6 @@ function Forgot({ setVista }: { setVista: (v: Vista) => void }) {
       setSent(true);
     });
   };
-  // pending exposed via disabled below
-  void pending;
 
   if (sent) {
     return (
@@ -486,8 +484,8 @@ function Forgot({ setVista }: { setVista: (v: Vista) => void }) {
             autoFocus
           />
         </label>
-        <button type="submit" className="fi-btn fi-btn-primary au-submit">
-          Enviar link
+        <button type="submit" className="fi-btn fi-btn-primary au-submit" disabled={pending}>
+          {pending ? "Enviando…" : "Enviar link"}
           <ArrowRightTiny />
         </button>
       </form>

@@ -55,7 +55,7 @@ export function Step1Registro({ data, set, next, loading, error }: Step1Registro
     <StepShell
       stepIdx={1}
       headline="Empezá creando tu cuenta."
-      sub="7 días de prueba sin tarjeta. Después, ARS 35.000 / mes."
+      sub="7 días de prueba sin tarjeta. Después, ARS 30.000 / mes."
       next={validateAndNext}
       canSkip={false}
       nextLabel={loading ? "Creando cuenta…" : "Continuar"}
