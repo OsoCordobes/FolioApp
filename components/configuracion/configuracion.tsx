@@ -13,8 +13,16 @@
 import { useState, useTransition, type ReactNode } from "react";
 
 import * as I from "@/components/icons";
-import { saveConsultorioAction } from "@/app/(app)/configuracion/actions";
-import type { ConsultorioData, ServicioRow } from "@/lib/db/configuracion";
+import {
+  connectGoogleCalendar,
+  disconnectGoogleCalendar,
+  saveConsultorioAction,
+} from "@/app/(app)/configuracion/actions";
+import type {
+  ConsultorioData,
+  IntegrationStatus,
+  ServicioRow,
+} from "@/lib/db/configuracion";
 
 // Re-export tipos para mantener compat con sub-componentes locales.
 export type { ConsultorioData };
@@ -544,9 +552,50 @@ function IntegrationCard({ icon, name, desc, status, statusKind, action }: {
   );
 }
 
-function SecIntegraciones() {
+function SecIntegraciones({ googleCalendar }: { googleCalendar: IntegrationStatus }) {
+  const [pending, startTransition] = useTransition();
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const onConnectGoogle = () => {
+    setActionError(null);
+    startTransition(async () => {
+      const result = await connectGoogleCalendar();
+      // connectGoogleCalendar() does a server-side redirect() on success, so
+      // we only reach this branch on a Result<void> error envelope (e.g.,
+      // GOOGLE_OAUTH_CLIENT_ID missing in env).
+      if (result && !result.ok) {
+        setActionError(result.error.message);
+      }
+    });
+  };
+
+  const onDisconnectGoogle = () => {
+    if (!window.confirm("¿Desconectar Google Calendar? Los eventos sincronizados quedan en tu Google. Vas a poder reconectar cuando quieras.")) {
+      return;
+    }
+    setActionError(null);
+    startTransition(async () => {
+      const result = await disconnectGoogleCalendar();
+      if (!result.ok) setActionError(result.error.message);
+    });
+  };
+
+  const googleStatus = googleCalendar.conectado
+    ? { label: googleStatusLabel(googleCalendar), kind: "ok" as const }
+    : { label: "Sin conectar", kind: "warn" as const };
+
   return (
-    <Section title="Integraciones" sub="Servicios externos conectados a tu cuenta.">
+    <Section
+      title="Integraciones"
+      sub="Servicios externos conectados a tu cuenta."
+      action={
+        actionError ? (
+          <p className="cfg-int-error" role="alert" style={{ color: "var(--red)", fontSize: 13, margin: 0 }}>
+            {actionError}
+          </p>
+        ) : null
+      }
+    >
       <IntegrationCard
         icon={
           <svg width="24" height="24" viewBox="0 0 24 24">
@@ -558,29 +607,41 @@ function SecIntegraciones() {
         }
         name="Google Calendar"
         desc="Los eventos personales bloquean slots automáticamente. Las reservas confirmadas se crean como eventos en tu Google."
-        status="Conectado · hace 2 min"
-        statusKind="ok"
+        status={googleStatus.label}
+        statusKind={googleStatus.kind}
         action={
-          <>
-            <span className="cfg-int-account fm-mono">lorenzo.martinez.quiropraxia@gmail.com</span>
+          googleCalendar.conectado ? (
             <button
               type="button"
               className="fi-btn fi-btn-ghost"
-              onClick={() => alert("Desconectar Google Calendar: próximamente desde el flow OAuth.\n\nPor ahora podés revocar el acceso desde myaccount.google.com/permissions.")}
-              title="Próximamente"
+              onClick={onDisconnectGoogle}
+              disabled={pending}
             >
-              Desconectar
+              {pending ? "Desconectando…" : "Desconectar"}
             </button>
-          </>
+          ) : (
+            <button
+              type="button"
+              className="fi-btn fi-btn-primary"
+              onClick={onConnectGoogle}
+              disabled={pending}
+            >
+              {pending ? "Abriendo Google…" : "Conectar"}
+            </button>
+          )
         }
       />
       <IntegrationCard
         icon={<div className="cfg-mp-ico">MP</div>}
         name="Mercado Pago"
-        desc="Suscripciones recurrentes + cobros únicos. Los pacientes pueden pagar online al reservar."
-        status="Sin conectar"
-        statusKind="warn"
-        action={<button type="button" className="fi-btn fi-btn-primary">Conectar</button>}
+        desc="Cobros a pacientes via Mercado Pago. Tu suscripción a Folio se gestiona aparte en Configuración → Plan."
+        status="Disponible próximamente"
+        statusKind="soon"
+        action={
+          <button type="button" className="fi-btn fi-btn-ghost" disabled title="Próximamente">
+            Conectar
+          </button>
+        }
       />
       <IntegrationCard
         icon={
@@ -600,6 +661,29 @@ function SecIntegraciones() {
       />
     </Section>
   );
+}
+
+function googleStatusLabel(s: IntegrationStatus): string {
+  if (!s.conectado) return "Sin conectar";
+  if (s.ultimoErrorTs) return "Error · reconectá";
+  if (s.ultimoUsoTs) {
+    const rel = relativeTimeEs(new Date(s.ultimoUsoTs));
+    return `Conectado · sync ${rel}`;
+  }
+  return "Conectado";
+}
+
+function relativeTimeEs(date: Date): string {
+  const diffMs = Date.now() - date.getTime();
+  const min = Math.round(diffMs / 60000);
+  if (min < 1) return "recién";
+  if (min < 60) return `hace ${min} min`;
+  const hr = Math.round(min / 60);
+  if (hr < 24) return `hace ${hr} h`;
+  const day = Math.round(hr / 24);
+  if (day < 30) return `hace ${day} d`;
+  const mo = Math.round(day / 30);
+  return `hace ${mo} m`;
 }
 
 // ─── Sección: Plan ─────────────────────────────────────────────────────────
@@ -689,10 +773,11 @@ function PageHeader({ dirty, onSave, onDiscard, isSaving, saveError, canEdit }: 
 interface ConfiguracionProps {
   initialConsultorio: ConsultorioData;
   initialServicios: ServicioCfg[];
+  googleCalendar: IntegrationStatus;
   canEdit: boolean;
 }
 
-export function Configuracion({ initialConsultorio, initialServicios, canEdit }: ConfiguracionProps) {
+export function Configuracion({ initialConsultorio, initialServicios, googleCalendar, canEdit }: ConfiguracionProps) {
   const [seccion, setSeccion] = useState<SeccionId>("consultorio");
   const [consultorio, setConsultorio] = useState<ConsultorioData>(initialConsultorio);
   const [snapshot, setSnapshot] = useState<ConsultorioData>(initialConsultorio);
@@ -763,7 +848,7 @@ export function Configuracion({ initialConsultorio, initialServicios, canEdit }:
               setServicios={(s) => { setServicios(s); }}
             />
           ) : null}
-          {seccion === "integraciones" ? <SecIntegraciones /> : null}
+          {seccion === "integraciones" ? <SecIntegraciones googleCalendar={googleCalendar} /> : null}
           {seccion === "plan"          ? <SecPlan /> : null}
         </div>
       </div>

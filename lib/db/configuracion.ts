@@ -47,10 +47,20 @@ export interface ServicioRow {
   paquete?: number;     // sesiones incluidas si es paquete
 }
 
+export interface IntegrationStatus {
+  conectado: boolean;
+  /** ISO timestamp when the OAuth token expires (refresh is automatic). */
+  expiraTs: string | null;
+  /** ISO timestamp of last sync activity, null when never used. */
+  ultimoUsoTs: string | null;
+  /** ISO timestamp of last error (token refresh failure, webhook reject, etc.). */
+  ultimoErrorTs: string | null;
+}
+
 export interface ConfiguracionData {
   consultorio: ConsultorioData;
   servicios: ServicioRow[];
-  googleConectado: boolean;
+  googleCalendar: IntegrationStatus;
 }
 
 // ─── Fetcher ───────────────────────────────────────────────────────────────
@@ -111,7 +121,12 @@ export async function getConfiguracionData(): Promise<Result<ConfiguracionData>>
   return ok({
     consultorio,
     servicios,
-    googleConectado: googleIntegration != null,
+    googleCalendar: {
+      conectado: googleIntegration != null,
+      expiraTs: googleIntegration?.expira_ts ?? null,
+      ultimoUsoTs: googleIntegration?.ultimo_uso_ts ?? null,
+      ultimoErrorTs: googleIntegration?.ultimo_error_ts ?? null,
+    },
   });
 }
 

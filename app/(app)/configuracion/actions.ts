@@ -56,5 +56,6 @@ export async function disconnectGoogleCalendar(): Promise<Result<void>> {
   if (error) {
     return err("db_error", "Error desconectando Google Calendar.", error.message);
   }
+  revalidatePath("/configuracion");
   return { ok: true, data: undefined };
 }
