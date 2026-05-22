@@ -16,6 +16,7 @@ import * as I from "@/components/icons";
 import { KpiStrip } from "@/components/hoy/kpi-strip";
 import { PageHeader } from "@/components/hoy/page-header";
 import { TurnoList } from "@/components/hoy/turno-list";
+import { TurnoCreateModal } from "@/components/hoy/turno-create-modal";
 import { applyTransition } from "@/lib/turno-states";
 import { useNow } from "@/lib/use-now";
 import type { EstadoTurno, PacientesById, Turno } from "@/lib/types";
@@ -34,7 +35,7 @@ interface DashboardProps {
 export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fechaAnio, nowIso }: DashboardProps) {
   const [turnos, setTurnos] = useState<Turno[]>(initialTurnos);
   const [fichaTurnoId, setFichaTurnoId] = useState<string | null>(null);
-  const [walkInOpen] = useState(false);
+  const [walkInOpen, setWalkInOpen] = useState(false);
   const [, startTransition] = useTransition();
   const now = useNow(nowIso, 60_000);
 
@@ -109,19 +110,25 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
         )}
       </div>
 
-      {/* FAB walk-in → /calendario para agendar (modal walk-in nativo entra en sprint posterior). */}
+      {/* FAB walk-in: abre el modal de creación rápida de turno. */}
       {!fichaTurnoId && !walkInOpen ? (
-        <a
-          href="/calendario#walkin"
+        <button
+          type="button"
           className="fi-fab"
-          title="Agendar un walk-in en el calendario"
+          title="Agendar un walk-in (turno ahora)"
+          onClick={() => setWalkInOpen(true)}
         >
           <I.Plus size={14} /> Walk-in
-        </a>
+        </button>
       ) : null}
 
-      {/* Ficha-panel y modal walk-in nativo: se materializan al cablear
-          la mutación de creación rápida de turnos. */}
+      {walkInOpen ? (
+        <TurnoCreateModal
+          origen="WALK_IN"
+          onClose={() => setWalkInOpen(false)}
+          onCreated={() => setWalkInOpen(false)}
+        />
+      ) : null}
     </>
   );
 }
