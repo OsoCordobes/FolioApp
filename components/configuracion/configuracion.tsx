@@ -10,10 +10,16 @@
  * En F5/F6 los toggles de Google/WhatsApp ejecutan el flow OAuth real.
  */
 
+import { useRouter } from "next/navigation";
 import { useState, useTransition, type ReactNode } from "react";
 
 import * as I from "@/components/icons";
-import { saveConsultorioAction } from "@/app/(app)/configuracion/actions";
+import {
+  eliminarCuentaAction,
+  previewEliminarCuentaAction,
+  saveConsultorioAction,
+} from "@/app/(app)/configuracion/actions";
+import { setOptOutAnalyticsAction } from "@/app/(app)/configuracion/privacidad-actions";
 import type { ConsultorioData, ServicioRow } from "@/lib/db/configuracion";
 
 // Re-export tipos para mantener compat con sub-componentes locales.
@@ -41,7 +47,14 @@ type ServicioCfg = ServicioRow;
 
 // ─── Side nav ──────────────────────────────────────────────────────────────
 
-type SeccionId = "cuenta" | "consultorio" | "horarios" | "servicios" | "integraciones" | "plan";
+type SeccionId =
+  | "cuenta"
+  | "consultorio"
+  | "horarios"
+  | "servicios"
+  | "integraciones"
+  | "plan"
+  | "privacidad";
 
 function SideNav({ active, setActive }: { active: SeccionId; setActive: (s: SeccionId) => void }) {
   const items: { id: SeccionId; label: string; icon: ReactNode }[] = [
@@ -51,6 +64,7 @@ function SideNav({ active, setActive }: { active: SeccionId; setActive: (s: Secc
     { id: "servicios",     label: "Servicios",      icon: <I.Wallet size={14} /> },
     { id: "integraciones", label: "Integraciones",  icon: <I.ExternalLink size={14} /> },
     { id: "plan",          label: "Plan",           icon: <I.Settings size={14} /> },
+    { id: "privacidad",    label: "Privacidad",     icon: <I.Settings size={14} /> },
   ];
   return (
     <nav className="cfg-sidenav">
@@ -229,26 +243,141 @@ function CambiarPasswordButton({ email }: { email: string }) {
 }
 
 function EliminarCuentaButton({ email }: { email: string }) {
-  const handler = () => {
-    const challenge = prompt(
-      `ATENCIÓN: la eliminación de cuenta es IRREVERSIBLE.\n\n` +
-      `Tus pacientes, sesiones clínicas y registros quedan retenidos 10 años por Ley 26.529 ` +
-      `pero tu identidad se pseudonimiza permanentemente.\n\n` +
-      `Para confirmar, escribí tu email exacto: ${email}`,
-    );
-    if (challenge !== email) {
-      if (challenge != null) alert("El email no coincide. Operación cancelada.");
+  const router = useRouter();
+  const [phase, setPhase] = useState<"idle" | "confirming" | "deleting" | "error">("idle");
+  const [memberships, setMemberships] = useState<number | null>(null);
+  const [motivo, setMotivo] = useState("");
+  const [emailConfirmacion, setEmailConfirmacion] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const startConfirm = () => {
+    setError(null);
+    setMotivo("");
+    setEmailConfirmacion("");
+    setMemberships(null);
+    setPhase("confirming");
+    // Calcular impacto en paralelo; si falla no bloqueamos el flow (mostramos "—").
+    startTransition(async () => {
+      const result = await previewEliminarCuentaAction();
+      if (result.ok) setMemberships(result.data.memberships);
+    });
+  };
+
+  const submit = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (motivo.trim().length < 20) {
+      setError("El motivo debe tener al menos 20 caracteres (Ley 25.326 art. 16).");
       return;
     }
-    alert(
-      "Eliminación de cuenta: el endpoint de procesamiento entra en sprint posterior (audit log + " +
-      "pseudonimización requieren proceso revisado). Por ahora contactá a hola@folio.app.",
-    );
+    if (emailConfirmacion.trim().toLowerCase() !== email.toLowerCase()) {
+      setError("El email de confirmación no coincide con tu cuenta.");
+      return;
+    }
+    setError(null);
+    setPhase("deleting");
+    startTransition(async () => {
+      const result = await eliminarCuentaAction({
+        motivo: motivo.trim(),
+        emailConfirmacion: emailConfirmacion.trim(),
+      });
+      if (!result.ok) {
+        setPhase("error");
+        setError(result.error.message);
+        return;
+      }
+      // Sesión cerrada server-side; redirigimos al login con banner.
+      router.push("/login?cuenta_eliminada=1");
+      router.refresh();
+    });
   };
+
+  if (phase === "idle") {
+    return (
+      <button type="button" className="fi-btn fi-btn-ghost cfg-btn-danger" onClick={startConfirm}>
+        Eliminar cuenta
+      </button>
+    );
+  }
+
   return (
-    <button type="button" className="fi-btn fi-btn-ghost cfg-btn-danger" onClick={handler}>
-      Eliminar cuenta
-    </button>
+    <div
+      style={{
+        border: "1px solid var(--red, #c14b3a)",
+        borderRadius: "var(--r-md)",
+        padding: 16,
+        background: "var(--surface)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 12,
+      }}
+    >
+      <div>
+        <b style={{ color: "var(--red, #c14b3a)" }}>Esta acción es irreversible.</b>
+        <p className="muted" style={{ fontSize: 13, marginTop: 6, lineHeight: 1.5 }}>
+          Tu identidad se pseudonimiza permanentemente. Los datos clínicos de tus pacientes
+          quedan retenidos 10 años (Ley 26.529 art. 18) sin tu nombre asociado.
+          {memberships != null ? (
+            <>
+              {" "}
+              Se cerrarán <b>{memberships}</b> membresía{memberships === 1 ? "" : "s"} activa
+              {memberships === 1 ? "" : "s"}.
+            </>
+          ) : pending ? (
+            <> Calculando impacto…</>
+          ) : null}
+        </p>
+      </div>
+      <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <span style={{ fontSize: 12, color: "var(--ink-2)" }}>
+            Motivo (mínimo 20 caracteres · queda registrado en el audit log)
+          </span>
+          <textarea
+            className="cfg-input"
+            value={motivo}
+            onChange={(e) => setMotivo(e.target.value)}
+            rows={3}
+            maxLength={500}
+            disabled={phase === "deleting"}
+            placeholder="Ej.: cambio de profesión, traslado al exterior, etc."
+            style={{ resize: "vertical", minHeight: 64 }}
+          />
+        </label>
+        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <span style={{ fontSize: 12, color: "var(--ink-2)" }}>
+            Escribí tu email exacto para confirmar: <b className="fm-mono">{email}</b>
+          </span>
+          <input
+            type="email"
+            className="cfg-input"
+            value={emailConfirmacion}
+            onChange={(e) => setEmailConfirmacion(e.target.value)}
+            autoComplete="off"
+            disabled={phase === "deleting"}
+            placeholder={email}
+          />
+        </label>
+        {error ? <p className="au-err" style={{ margin: 0 }}>{error}</p> : null}
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
+          <button
+            type="button"
+            className="fi-btn fi-btn-ghost"
+            onClick={() => setPhase("idle")}
+            disabled={phase === "deleting"}
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            className="fi-btn fi-btn-ghost cfg-btn-danger"
+            disabled={phase === "deleting"}
+          >
+            {phase === "deleting" ? "Eliminando…" : "Eliminar cuenta definitivamente"}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
 
@@ -639,6 +768,120 @@ function SecPlan() {
   );
 }
 
+// ─── Sección: Privacidad ─────────────────────────────────────────────────
+
+function SecPrivacidad({
+  initialOptOut,
+  canEdit,
+}: {
+  initialOptOut: boolean;
+  canEdit: boolean;
+}) {
+  const [optOut, setOptOut] = useState(initialOptOut);
+  const [optOutError, setOptOutError] = useState<string | null>(null);
+  const [optOutPending, startOptOutTransition] = useTransition();
+
+  const handleToggle = (next: boolean) => {
+    setOptOutError(null);
+    const prev = optOut;
+    setOptOut(next); // optimistic
+    startOptOutTransition(async () => {
+      const result = await setOptOutAnalyticsAction({ optOut: next });
+      if (!result.ok) {
+        setOptOut(prev);
+        setOptOutError(result.error.message);
+      }
+    });
+  };
+
+  return (
+    <>
+      <Section
+        title="Mis datos"
+        sub="Tus derechos como titular bajo la Ley 25.326 (Habeas Data) — acceso, rectificación, supresión y portabilidad."
+      >
+        <Row
+          label="Descargar mis datos"
+          sub="JSON portable con tu profile, memberships, integraciones y suscripciones (Ley 25.326 art. 14)."
+        >
+          <a
+            href="/api/me/export"
+            download
+            className="fi-btn fi-btn-secondary"
+            title="Descarga un archivo JSON con todos tus datos personales"
+          >
+            <I.ExternalLink size={12} /> Descargar JSON
+          </a>
+        </Row>
+        <Row
+          label="Rectificar mis datos"
+          sub="Editás nombre, matrícula, email y teléfono desde la sección Cuenta."
+        >
+          <span className="muted">Disponible en Configuración → Cuenta.</span>
+        </Row>
+        <Row
+          label="Eliminar mi cuenta"
+          sub="La supresión pseudonimiza tu identidad. Los datos clínicos de tus pacientes se retienen 10 años (Ley 26.529 art. 18)."
+        >
+          <span className="muted">Disponible en Configuración → Cuenta → Zona peligrosa.</span>
+        </Row>
+      </Section>
+
+      <Section
+        title="Analytics agregadas"
+        sub="Folio publica métricas anónimas k-anónimas (k≥5, k≥10 para precios) para que la comunidad de profesionales compare ticket promedio, ocupación, etc. Tu consultorio jamás aparece identificable."
+      >
+        <Row
+          label="Opt-out de analytics anonimizadas"
+          sub={
+            optOut
+              ? "Tu organización no contribuye a las métricas agregadas."
+              : "Tu organización contribuye anónimamente a las métricas agregadas."
+          }
+        >
+          <Toggle value={optOut} onChange={canEdit ? handleToggle : () => undefined} />
+          {!canEdit ? (
+            <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+              Solo OWNER o DIRECTOR puede cambiar este ajuste.
+            </p>
+          ) : null}
+          {optOutPending ? (
+            <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+              Guardando…
+            </p>
+          ) : null}
+          {optOutError ? (
+            <p style={{ color: "var(--red)", fontSize: 12, marginTop: 6 }}>{optOutError}</p>
+          ) : null}
+        </Row>
+      </Section>
+
+      <Section title="Documentos legales" sub="Versiones vigentes de los textos que aplican a tu cuenta.">
+        <Row label="Política de Privacidad">
+          <a href="/privacidad" target="_blank" rel="noopener noreferrer" className="cfg-link">
+            Leer política completa →
+          </a>
+        </Row>
+        <Row label="Términos y Condiciones">
+          <a href="/terminos" target="_blank" rel="noopener noreferrer" className="cfg-link">
+            Leer términos →
+          </a>
+        </Row>
+        <Row label="Política de Cookies">
+          <a href="/cookies" target="_blank" rel="noopener noreferrer" className="cfg-link">
+            Leer política →
+          </a>
+        </Row>
+        <Row label="Reportar un incidente de privacidad">
+          <a href="mailto:privacidad@folio.app" className="cfg-link">
+            privacidad@folio.app
+          </a>
+        </Row>
+      </Section>
+    </>
+  );
+}
+
 // ─── Page header con save bar ──────────────────────────────────────────────
 
 function PageHeader({ dirty, onSave, onDiscard, isSaving, saveError, canEdit }: { dirty: boolean; onSave: () => void; onDiscard: () => void; isSaving: boolean; saveError: string | null; canEdit: boolean }) {
@@ -689,10 +932,16 @@ function PageHeader({ dirty, onSave, onDiscard, isSaving, saveError, canEdit }: 
 interface ConfiguracionProps {
   initialConsultorio: ConsultorioData;
   initialServicios: ServicioCfg[];
+  initialOptOutAnalytics: boolean;
   canEdit: boolean;
 }
 
-export function Configuracion({ initialConsultorio, initialServicios, canEdit }: ConfiguracionProps) {
+export function Configuracion({
+  initialConsultorio,
+  initialServicios,
+  initialOptOutAnalytics,
+  canEdit,
+}: ConfiguracionProps) {
   const [seccion, setSeccion] = useState<SeccionId>("consultorio");
   const [consultorio, setConsultorio] = useState<ConsultorioData>(initialConsultorio);
   const [snapshot, setSnapshot] = useState<ConsultorioData>(initialConsultorio);
@@ -765,6 +1014,9 @@ export function Configuracion({ initialConsultorio, initialServicios, canEdit }:
           ) : null}
           {seccion === "integraciones" ? <SecIntegraciones /> : null}
           {seccion === "plan"          ? <SecPlan /> : null}
+          {seccion === "privacidad"    ? (
+            <SecPrivacidad initialOptOut={initialOptOutAnalytics} canEdit={canEdit} />
+          ) : null}
         </div>
       </div>
     </div>

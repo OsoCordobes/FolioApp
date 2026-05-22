@@ -51,6 +51,8 @@ export interface ConfiguracionData {
   consultorio: ConsultorioData;
   servicios: ServicioRow[];
   googleConectado: boolean;
+  /** Opt-out de analytics anonimizadas k-anónimas (organization.opt_out_analytics). */
+  optOutAnalytics: boolean;
 }
 
 // ─── Fetcher ───────────────────────────────────────────────────────────────
@@ -112,6 +114,7 @@ export async function getConfiguracionData(): Promise<Result<ConfiguracionData>>
     consultorio,
     servicios,
     googleConectado: googleIntegration != null,
+    optOutAnalytics: ctx.data.organization.optOutAnalytics,
   });
 }
 
