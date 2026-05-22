@@ -12,8 +12,9 @@
  * Step 9 vive en step9-moment.tsx (separado por su tamaño + animaciones propias).
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 
+import { connectGoogleCalendar } from "@/app/(app)/configuracion/actions";
 import { updateOnboardingStep } from "@/app/(public)/onboarding/actions";
 import { StepShell } from "@/components/onboarding/step-shell";
 import { SlugEditor } from "@/components/onboarding/slug-editor";
@@ -58,8 +59,6 @@ export interface OnboardingDataState {
     soloNuevos?: boolean;
     paquete?: boolean;
   }>;
-  googleConectado: boolean;
-  mpConectado: boolean;
 }
 
 export const ONBOARDING_INITIAL: OnboardingDataState = {
@@ -88,8 +87,6 @@ export const ONBOARDING_INITIAL: OnboardingDataState = {
     { id: 2, nombre: "Seguimiento",      dur: 45, precio: 22000 },
     { id: 3, nombre: "Pack 5 sesiones",  dur: 45, precio: 95000, paquete: true },
   ],
-  googleConectado: false,
-  mpConectado: false,
 };
 
 interface StepProps {
@@ -619,7 +616,24 @@ export function Step6Servicios({ data, set, next, back, skip, orgSlug }: StepPro
 
 // ─── Step 7 · Google Calendar ──────────────────────────────────────────────
 
-export function Step7Google({ data, set, next, back, skip, orgSlug }: StepProps) {
+export function Step7Google({ data, next, back, skip, orgSlug }: StepProps) {
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const handleConnect = () => {
+    setError(null);
+    startTransition(async () => {
+      const result = await connectGoogleCalendar();
+      // On success, connectGoogleCalendar() does a server-side redirect() to
+      // Google's OAuth URL and the navigation happens — we never reach here.
+      // We only get a Result back on the error envelope (e.g. missing
+      // GOOGLE_OAUTH_CLIENT_ID env).
+      if (result && !result.ok) {
+        setError(result.error.message);
+      }
+    });
+  };
+
   return (
     <StepShell stepIdx={7} back={back} next={next} skip={skip}
       headline="¿Conectamos tu Google Calendar?"
@@ -628,8 +642,12 @@ export function Step7Google({ data, set, next, back, skip, orgSlug }: StepProps)
       slug={orgSlug}
     >
       <div className="onb-integration">
-        <button type="button" className="onb-oauth-card"
-          onClick={() => { set({ googleConectado: true }); next(); }}>
+        <button
+          type="button"
+          className="onb-oauth-card"
+          onClick={handleConnect}
+          disabled={pending}
+        >
           <div className="onb-oauth-ico">
             <svg width="32" height="32" viewBox="0 0 24 24">
               <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -639,15 +657,23 @@ export function Step7Google({ data, set, next, back, skip, orgSlug }: StepProps)
             </svg>
           </div>
           <div className="onb-oauth-body">
-            <b>Conectar Google Calendar</b>
+            <b>{pending ? "Abriendo Google…" : "Conectar Google Calendar"}</b>
             <p>Pedimos permiso para leer y crear eventos en tu calendar primario.</p>
           </div>
           <div className="onb-oauth-arrow">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
           </div>
         </button>
+        {error ? (
+          <p className="onb-err" role="alert" style={{ marginTop: 8 }}>
+            {error}
+          </p>
+        ) : null}
         <p className="onb-fine">
           Tus datos del calendar quedan privados. Solo leemos eventos para bloquear slots; no se comparten con pacientes.
+        </p>
+        <p className="onb-fine" style={{ marginTop: 4 }}>
+          Después del consent en Google volvés a Folio. Si querés saltar este paso, podés conectarlo más tarde desde <b>Configuración → Integraciones</b>.
         </p>
       </div>
     </StepShell>
