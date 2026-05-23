@@ -147,15 +147,20 @@ async function processJob(
     return;
   }
 
-  const [{ data: ident }, { data: org }, { data: servicio }] = await Promise.all([
+  // paciente → identidad_id → paciente_identidad. La tabla paciente_identidad
+  // no tiene una FK directa a paciente.id (el split es 1:1 con la FK al revés:
+  // paciente.identidad_id → paciente_identidad.id). Por eso necesitamos el
+  // lookup en dos pasos. M20 renombró organization.direccion a
+  // direccion_completa — usamos ese nombre.
+  const [{ data: paciente }, { data: org }, { data: servicio }] = await Promise.all([
     service
-      .from("paciente_identidad")
-      .select("nombre_cifrado, telefono_cifrado")
-      .eq("paciente_id", turno.paciente_id)
+      .from("paciente")
+      .select("identidad_id")
+      .eq("id", turno.paciente_id)
       .maybeSingle(),
     service
       .from("organization")
-      .select("nombre, direccion, ciudad")
+      .select("nombre, direccion_completa, ciudad")
       .eq("id", job.organization_id)
       .maybeSingle(),
     service
@@ -165,8 +170,17 @@ async function processJob(
       .maybeSingle(),
   ]);
 
-  if (!ident) throw new Error("paciente_identidad no encontrada (pseudonimizado?)");
   if (!org) throw new Error("organization no encontrada");
+  if (!paciente?.identidad_id) {
+    throw new Error("paciente sin identidad (pseudonimizado?)");
+  }
+
+  const { data: ident } = await service
+    .from("paciente_identidad")
+    .select("nombre_cifrado, telefono_cifrado")
+    .eq("id", paciente.identidad_id)
+    .maybeSingle();
+  if (!ident) throw new Error("paciente_identidad no encontrada");
 
   const nombre = decryptColumn(ident.nombre_cifrado);
   const telefono = decryptColumn(ident.telefono_cifrado);
@@ -184,7 +198,7 @@ async function processJob(
     minute: "2-digit",
     timeZone: "America/Argentina/Cordoba",
   });
-  const direccion = [org.direccion, org.ciudad].filter(Boolean).join(", ");
+  const direccion = [org.direccion_completa, org.ciudad].filter(Boolean).join(", ");
 
   const phoneE164 = normalizeArPhone(telefono);
 
