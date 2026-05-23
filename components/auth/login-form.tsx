@@ -87,6 +87,19 @@ interface LoginProps extends SubViewProps {
   clearNotice?: () => void;
 }
 
+/**
+ * Mapeo de códigos de error del OAuth callback (definido en
+ * app/api/auth/callback/route.ts:mapAuthError) a mensajes user-facing.
+ * El callback redirige a /login?error=<code> cuando exchangeCodeForSession falla.
+ */
+const OAUTH_ERROR_MESSAGES: Record<string, string> = {
+  oauth_failed:  "No pude completar el ingreso con Google. Reintentá.",
+  rate_limited:  "Demasiados intentos seguidos. Esperá un minuto y reintentá.",
+  code_expired:  "El link de Google expiró. Volvé a apretar 'Ingresar con Google'.",
+  code_invalid:  "El código de Google no es válido. Reintentá el ingreso.",
+  network:       "Hubo un problema de red al validar tu ingreso. Reintentá.",
+};
+
 function Login({ setVista, prefilledEmail, notice, clearNotice }: LoginProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -95,6 +108,16 @@ function Login({ setVista, prefilledEmail, notice, clearNotice }: LoginProps) {
   const [showPw, setShowPw] = useState(false);
   const [err, setErr] = useState("");
   const [pending, startTransition] = useTransition();
+
+  // Si la URL trae ?error=<code> (típicamente desde el OAuth callback),
+  // traducir y mostrar el mensaje amigable en el banner de error.
+  useEffect(() => {
+    const errorCode = searchParams.get("error");
+    if (errorCode) {
+      const msg = OAUTH_ERROR_MESSAGES[errorCode] ?? "Algo salió mal con el ingreso. Reintentá.";
+      setErr(msg);
+    }
+  }, [searchParams]);
 
   const submit = (e?: React.FormEvent) => {
     e?.preventDefault();
