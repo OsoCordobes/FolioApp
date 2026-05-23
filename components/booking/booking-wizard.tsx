@@ -137,18 +137,36 @@ export function BookingWizard({
   const cardSentinelRef = useRef<HTMLDivElement | null>(null);
 
   // Renderizar Turnstile cuando entramos al paso "datos" (no antes para no
-  // levantar challenge si el visitante solo revisa horarios).
+  // levantar challenge si el visitante solo revisa horarios). El Script de
+  // Cloudflare puede no haber cargado aún cuando el useEffect corre, así que
+  // polleamos brevemente esperándolo (mismo patrón que /onboarding step1).
   useEffect(() => {
     if (vista !== "datos" || !TURNSTILE_SITE_KEY) return;
     if (!captchaContainerRef.current) return;
-    if (!window.turnstile) return;                 // Script todavía cargando
-    captchaWidgetIdRef.current = window.turnstile.render(captchaContainerRef.current, {
-      sitekey: TURNSTILE_SITE_KEY,
-      theme: "auto",
-      callback: (token) => setCaptchaToken(token),
-      "expired-callback": () => setCaptchaToken(null),
-      "error-callback": () => setCaptchaToken(null),
-    });
+
+    const tryRender = () => {
+      if (!window.turnstile) return false;
+      if (captchaWidgetIdRef.current) return true;
+      captchaWidgetIdRef.current = window.turnstile.render(captchaContainerRef.current!, {
+        sitekey: TURNSTILE_SITE_KEY,
+        theme: "auto",
+        callback: (token) => setCaptchaToken(token),
+        "expired-callback": () => setCaptchaToken(null),
+        "error-callback": () => setCaptchaToken(null),
+      });
+      return true;
+    };
+
+    if (!tryRender()) {
+      const id = setInterval(() => { if (tryRender()) clearInterval(id); }, 200);
+      return () => {
+        clearInterval(id);
+        if (captchaWidgetIdRef.current && window.turnstile) {
+          window.turnstile.remove(captchaWidgetIdRef.current);
+          captchaWidgetIdRef.current = null;
+        }
+      };
+    }
     return () => {
       if (captchaWidgetIdRef.current && window.turnstile) {
         window.turnstile.remove(captchaWidgetIdRef.current);

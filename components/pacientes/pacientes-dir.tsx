@@ -105,7 +105,7 @@ interface TablaPacientesProps {
   onAgendar: (p: PacienteDir) => void;
 }
 
-function TablaPacientes({ pacientes, selected, setSelected, onOpen, onAgendar }: TablaPacientesProps) {
+function TablaPacientes({ pacientes, selected, setSelected, onOpen, onAgendar, totalOrg }: TablaPacientesProps & { totalOrg: number }) {
   const allOn = pacientes.length > 0 && selected.size === pacientes.length;
 
   const toggleAll = () => {
@@ -120,6 +120,20 @@ function TablaPacientes({ pacientes, selected, setSelected, onOpen, onAgendar }:
   };
 
   if (pacientes.length === 0) {
+    // Diferenciar "filtrado vacío" (hay pacientes pero los filtros los esconden)
+    // de "directorio vacío" (org sin pacientes todavía). El segundo caso
+    // necesita un CTA distinto.
+    if (totalOrg === 0) {
+      return (
+        <div className="fi-empty">
+          <h2>Todavía no tenés pacientes.</h2>
+          <p>
+            Creá el primero con el botón <b>Nuevo paciente</b> de arriba, o esperá a que entre uno
+            por tu link público de reservas.
+          </p>
+        </div>
+      );
+    }
     return (
       <div className="fi-empty">
         <h2>Sin pacientes con esos criterios.</h2>
@@ -476,6 +490,7 @@ export function PacientesDir({ pacientes, initialQuery = "" }: PacientesDirProps
         <div className="pd-table-wrap">
           <TablaPacientes
             pacientes={filtered}
+            totalOrg={pacientes.length}
             selected={selected}
             setSelected={setSelected}
             onOpen={(p) => {

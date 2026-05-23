@@ -17,7 +17,7 @@
  * de "ahora", MANUAL en cualquier otro caso.
  */
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 // Escape para cerrar (UX estándar de modales). Solo cuando no estamos en medio
 // del submit.
@@ -116,6 +116,16 @@ export function TurnoCreateModal({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose, submitting]);
+
+  // Focus inicial: cuando termina de cargar, enfocamos el primer input
+  // relevante según el modo. Mejor a11y para usuarios de teclado.
+  const focusTargetRef = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    if (loading || !meta || meta.servicios.length === 0) return;
+    // Pequeño microtask para que el input ya esté montado en el DOM.
+    const t = setTimeout(() => focusTargetRef.current?.focus(), 50);
+    return () => clearTimeout(t);
+  }, [loading, meta, mode]);
 
   // Cuando cambia servicio, reset duración al default del servicio (si el
   // usuario no la había tocado todavía, mejor; aquí lo hacemos simple y
@@ -249,6 +259,7 @@ export function TurnoCreateModal({
               {mode === "existente" ? (
                 <>
                   <input
+                    ref={focusTargetRef}
                     type="text"
                     placeholder="Buscar por nombre, apellido o teléfono"
                     value={pacienteQuery}
@@ -313,6 +324,7 @@ export function TurnoCreateModal({
                 <div style={{ display: "grid", gap: 8 }}>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                     <input
+                      ref={focusTargetRef}
                       type="text"
                       placeholder="Nombre"
                       value={nuevo.nombre}
