@@ -14,6 +14,7 @@
 import { useMemo, useState } from "react";
 
 import * as I from "@/components/icons";
+import { TurnoCreateModal } from "@/components/hoy/turno-create-modal";
 import { PacienteCreateModal } from "@/components/pacientes/paciente-create-modal";
 import type { PacienteDirRow } from "@/lib/db/pacientes-dir";
 
@@ -101,9 +102,10 @@ interface TablaPacientesProps {
   selected: Set<string>;
   setSelected: (s: Set<string>) => void;
   onOpen: (p: PacienteDir) => void;
+  onAgendar: (p: PacienteDir) => void;
 }
 
-function TablaPacientes({ pacientes, selected, setSelected, onOpen }: TablaPacientesProps) {
+function TablaPacientes({ pacientes, selected, setSelected, onOpen, onAgendar }: TablaPacientesProps) {
   const allOn = pacientes.length > 0 && selected.size === pacientes.length;
 
   const toggleAll = () => {
@@ -214,7 +216,10 @@ function TablaPacientes({ pacientes, selected, setSelected, onOpen }: TablaPacie
                   <button
                     type="button"
                     className="pd-cta-mini"
-                    onClick={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onAgendar(p);
+                    }}
                   >
                     <I.Plus size={11} /> Agendar
                   </button>
@@ -403,6 +408,7 @@ export function PacientesDir({ pacientes, initialQuery = "" }: PacientesDirProps
   const [filtro, setFiltro] = useState("todos");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [createOpen, setCreateOpen] = useState(false);
+  const [agendarFor, setAgendarFor] = useState<PacienteDir | null>(null);
 
   const paraReactivar = useMemo(
     () =>
@@ -475,6 +481,7 @@ export function PacientesDir({ pacientes, initialQuery = "" }: PacientesDirProps
             onOpen={(p) => {
               window.location.href = `/pacientes/${p.id}`;
             }}
+            onAgendar={(p) => setAgendarFor(p)}
           />
         </div>
       </div>
@@ -497,6 +504,15 @@ export function PacientesDir({ pacientes, initialQuery = "" }: PacientesDirProps
             // que pueda completar motivo de consulta, tags, etc.
             window.location.href = `/pacientes/${id}`;
           }}
+        />
+      ) : null}
+
+      {agendarFor ? (
+        <TurnoCreateModal
+          origen="MANUAL"
+          preselectPacienteId={agendarFor.id}
+          onClose={() => setAgendarFor(null)}
+          onCreated={() => setAgendarFor(null)}
         />
       ) : null}
     </>
