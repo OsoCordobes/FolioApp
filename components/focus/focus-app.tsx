@@ -398,9 +398,8 @@ export function FocusApp() {
   const { elapsed, paused, toggle } = useFocusTimer(startedAt);
   const [vertStates, setVertStates] = useState<Record<string, EstadoVert>>(VERT_INIT);
   const [soap, setSoap] = useState<SoapState>(SOAP_INIT);
-  const [cerrarOpen, setCerrarOpen] = useState(false);
 
-  // Keyboard shortcuts (espacio pausa, ⌘+Enter cerrar, Esc cancelar modal)
+  // Keyboard shortcuts (espacio pausa, ⌘+Enter cerrar, Esc salir)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName;
@@ -410,16 +409,18 @@ export function FocusApp() {
       }
       if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
         e.preventDefault();
-        setCerrarOpen(true);
+        window.location.href = "/hoy";
       }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
       }
-      if (e.key === "Escape" && cerrarOpen) setCerrarOpen(false);
+      if (e.key === "Escape") {
+        window.location.href = "/hoy";
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [toggle, cerrarOpen]);
+  }, [toggle]);
 
   return (
     <div className="fm-app">
@@ -476,12 +477,16 @@ export function FocusApp() {
         <SoapEditor soap={soap} setSoap={setSoap} />
       </div>
 
-      <BottomBar paused={paused} onCerrar={() => setCerrarOpen(true)} />
-
-      {/* Modal "Cerrar y cobrar" se materializa pero arranca cerrado
-          (no aparece en el baseline). La logica de pago se conecta a
-          Mercado Pago en F6/F10. */}
-      {cerrarOpen ? null : null}
+      <BottomBar
+        paused={paused}
+        onCerrar={() => {
+          // En modo preview no hay turno real para cerrar — volvemos a /hoy.
+          // El cierre real (transición a CERRADO + cobro MP) se hace desde la
+          // tarjeta del turno en /hoy mientras esta pantalla queda como
+          // referencia visual del flow de atención.
+          window.location.href = "/hoy";
+        }}
+      />
     </div>
   );
 }
