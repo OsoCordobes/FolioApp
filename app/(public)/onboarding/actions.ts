@@ -27,256 +27,17 @@ import { verifyTurnstile } from "@/lib/security/turnstile";
 import { redirect } from "next/navigation";
 
 import { encryptColumn } from "@/lib/crypto";
-import {
-  completeOnboardingSchema,
-  signUpSchema,
-} from "@/lib/onboarding/schemas";
+import { signUpSchema } from "@/lib/onboarding/schemas";
 import {
   createSupabaseServerClient,
   createSupabaseServiceClient,
 } from "@/lib/supabase/server";
 
-export interface SignUpResult {
-  ok: boolean;
-  error?: string;
-  needsConfirmation?: boolean;
-}
-
-export async function signUpEmail(
-  email: string,
-  password: string,
-): Promise<SignUpResult> {
-  const parsed = signUpSchema.safeParse({ email, password });
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos." };
-  }
-  ({ email, password } = parsed.data);
-
-  // Usamos admin.createUser (NO signUp) por dos razones:
-  //   1. signUp dispara el email de confirmación de Supabase y el SMTP por
-  //      default tiene rate limit (~4 emails/hora). Eso bloquea signups
-  //      legítimos en Supabase Free.
-  //   2. admin.createUser con email_confirm:true crea al usuario YA confirmado
-  //      sin mandar mail. Apropiado para MVP hasta que integremos SMTP propio
-  //      (Resend/SendGrid en F12) y el email de bienvenida con verificación.
-  //
-  // Después abrimos sesión con signInWithPassword en el client cookie-based
-  // para que las server actions siguientes (completeOnboarding) vean al user.
-  const service = createSupabaseServiceClient();
-  const { data: created, error: createErr } = await service.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-  });
-
-  if (createErr) {
-    // 'User already registered' → intentamos auto-confirmar (puede haber quedado
-    // un user previo sin confirmar) y luego abrir sesión.
-    if (createErr.message.toLowerCase().includes("already") || createErr.message.toLowerCase().includes("registered")) {
-      const { data: list } = await service.auth.admin.listUsers({ page: 1, perPage: 200 });
-      const existing = list?.users?.find((u) => u.email?.toLowerCase() === email.toLowerCase());
-      if (existing && !existing.email_confirmed_at) {
-        await service.auth.admin.updateUserById(existing.id, { email_confirm: true });
-      }
-      // Caer a signInWithPassword más abajo
-    } else {
-      return { ok: false, error: createErr.message };
-    }
-  }
-
-  const supabase = await createSupabaseServerClient();
-  const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
-  if (signInErr) {
-    return { ok: false, error: `Cuenta creada pero no pude entrar: ${signInErr.message}` };
-  }
-
-  void created;
-  return { ok: true, needsConfirmation: false };
-}
-
-export interface OnboardingData {
-  nombre: string;
-  apellido: string;
-  matricula: string;
-  tel: string;
-  consultorioNombre: string;
-  rubro: string;
-  direccion: string;
-  ciudad: string;
-  provincia: string;
-  instagram?: string;
-  acento: string;
-  diasActivos: string[];                          // ['lun','mar',...]
-  franjas: [string, string][];
-  slotMin: number;
-  servicios: Array<{
-    nombre: string;
-    dur: number;
-    precioCents: number;
-    tipoCanonico: string;
-  }>;
-}
-
-export interface OnboardingResult {
-  ok: boolean;
-  error?: string;
-  organizationId?: string;
-  memberId?: string;
-}
-
-function slugify(s: string): string {
-  return s
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")          // strip diacritics
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 50);
-}
-
-export async function completeOnboarding(
-  data: OnboardingData,
-): Promise<OnboardingResult> {
-  // Validación server-side estricta con Zod.
-  const parsed = completeOnboardingSchema.safeParse(data);
-  if (!parsed.success) {
-    const firstIssue = parsed.error.issues[0];
-    const path = firstIssue?.path?.join(".") ?? "datos";
-    return {
-      ok: false,
-      error: `${path}: ${firstIssue?.message ?? "inválido"}`,
-    };
-  }
-  data = parsed.data as OnboardingData;
-
-  // Obtener user desde sesión actual
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return { ok: false, error: "No autenticado. Volvé a entrar." };
-  }
-
-  // Service client para crear org + profile + member en una operación admin
-  const service = createSupabaseServiceClient();
-
-  // 1. Slug único de la org
-  const baseSlug = slugify(`${data.nombre}-${data.apellido}`);
-  let slug = baseSlug;
-  let attempt = 0;
-  while (attempt < 5) {
-    const { data: exists } = await service
-      .from("organization")
-      .select("id")
-      .eq("slug", slug)
-      .maybeSingle();
-    if (!exists) break;
-    attempt++;
-    slug = `${baseSlug}-${attempt}`;
-  }
-
-  // 2. Crear organization
-  const { data: org, error: orgErr } = await service
-    .from("organization")
-    .insert({
-      slug,
-      nombre: data.consultorioNombre,
-      rubro: data.rubro,
-      ciudad: data.ciudad,
-      provincia: data.provincia,
-      acento_hex: data.acento,
-    })
-    .select("id")
-    .single();
-
-  if (orgErr || !org) {
-    return { ok: false, error: `Error creando consultorio: ${orgErr?.message ?? "desconocido"}` };
-  }
-
-  // 3. Crear profile (cifrando PII)
-  const nombreCifrado = encryptColumn(data.nombre);
-  const apellidoCifrado = encryptColumn(data.apellido);
-  if (!nombreCifrado || !apellidoCifrado) {
-    return { ok: false, error: "Error cifrando datos personales." };
-  }
-
-  const { error: profErr } = await service
-    .from("profile")
-    .upsert({
-      id: user.id,
-      email: user.email!,
-      nombre_cifrado: nombreCifrado,
-      apellido_cifrado: apellidoCifrado,
-      matricula: data.matricula || null,
-    });
-
-  if (profErr) {
-    return { ok: false, error: `Error creando perfil: ${profErr.message}` };
-  }
-
-  // 4. Crear member OWNER + es_colegiado=true (el founder es médico activo)
-  const { data: member, error: memErr } = await service
-    .from("member")
-    .insert({
-      organization_id: org.id,
-      profile_id: user.id,
-      role: "OWNER",
-      es_colegiado: true,
-      accepted_at: new Date().toISOString(),
-    })
-    .select("id")
-    .single();
-
-  if (memErr || !member) {
-    return { ok: false, error: `Error creando membresía: ${memErr?.message ?? "desconocido"}` };
-  }
-
-  // 5. Crear servicios default
-  if (data.servicios && data.servicios.length > 0) {
-    const { error: servErr } = await service.from("servicio").insert(
-      data.servicios.map((s) => ({
-        organization_id: org.id,
-        nombre: s.nombre,
-        tipo_canonico: s.tipoCanonico,
-        duracion_min: s.dur,
-        precio_cents: s.precioCents,
-      })),
-    );
-    if (servErr) {
-      console.warn("[onboarding] servicios default fallaron:", servErr.message);
-      // No bloqueamos onboarding por esto — el OWNER puede crearlos manualmente.
-    }
-  }
-
-  // 6. Crear disponibilidad_profesional default
-  if (data.diasActivos.length > 0 && data.franjas.length > 0) {
-    const dowMap: Record<string, number> = {
-      dom: 0, lun: 1, mar: 2, mie: 3, jue: 4, vie: 5, sab: 6,
-    };
-    const dispRows = data.diasActivos.flatMap((dia) =>
-      data.franjas.map(([from, to]) => ({
-        organization_id: org.id,
-        member_id: member.id,
-        dia_semana: dowMap[dia] ?? 1,
-        hora_inicio: from,
-        hora_fin: to,
-      })),
-    );
-    if (dispRows.length > 0) {
-      const { error: dispErr } = await service.from("disponibilidad_profesional").insert(dispRows);
-      if (dispErr) {
-        console.warn("[onboarding] disponibilidad default falló:", dispErr.message);
-      }
-    }
-  }
-
-  return {
-    ok: true,
-    organizationId: org.id,
-    memberId: member.id,
-  };
-}
+// ─── Legacy cleanup (auditoría LOW): las funciones `signUpEmail` y
+// `completeOnboarding` fueron eliminadas en Phase 10. No tenían callers
+// (grep confirmado) y representaban un attack surface no auditado — sin
+// rate-limit, sin Turnstile, sin consent gate. Toda creación de cuenta
+// ahora pasa por `signUpAndInitOrganization` (premium architecture).
 
 export async function finishOnboardingAndGoToApp(): Promise<void> {
   redirect("/hoy");
@@ -285,12 +46,13 @@ export async function finishOnboardingAndGoToApp(): Promise<void> {
 // ════════════════════════════════════════════════════════════════════════════
 // PREMIUM ONBOARDING ARCHITECTURE (M20+)
 // ════════════════════════════════════════════════════════════════════════════
-// Nuevo flow: la org se crea en step 1 (post-signup) con onboarding_completed=false.
+// Flow oficial: la org se crea en step 1 (post-signup) con onboarding_completed=false.
 // Cada step persiste su delta con updateOnboardingStep. Step 9 llama finalizeOnboarding
 // que solo marca completed=true.
 //
-// Las funciones viejas (signUpEmail, completeOnboarding) quedan para compat
-// del UI legacy mientras se refactoriza. Eventualmente se eliminan.
+// El bootstrap atómico de profile+org+member usa el RPC SECURITY DEFINER de M33
+// (bootstrap_org_atomic). Reemplazó al flow viejo de inserts manuales + DELETEs
+// compensatorios que tenía el legacy completeOnboarding (removido en Phase 10).
 
 export interface OnboardingBootstrapResult {
   ok: boolean;
@@ -371,12 +133,10 @@ export async function signUpAndInitOrganization(
 
   if (createErr) {
     if (createErr.message.toLowerCase().includes("already") || createErr.message.toLowerCase().includes("registered")) {
-      // El user ya existe en auth.users. Buscarlo por email para resolver su id.
-      // listUsers no escala a >200 users pero alcanza para el MVP; al pasar
-      // ese umbral migrar a service.auth.admin.getUserByEmail si está disponible
-      // o iterar páginas. P1 acción, no bloqueante.
-      const { data: list } = await service.auth.admin.listUsers({ page: 1, perPage: 200 });
-      const existing = list?.users?.find((u) => u.email?.toLowerCase() === email.toLowerCase());
+      // El user ya existe en auth.users. Buscarlo por email vía paginated
+      // listUsers (M33 fix: el old code hardcodeaba perPage:200 → se rompía
+      // a partir del usuario 201).
+      const existing = await findUserByEmailPaginated(service, email);
       if (!existing) {
         return {
           ok: false,
@@ -412,95 +172,42 @@ export async function signUpAndInitOrganization(
     return { ok: false, error: `Cuenta creada pero no pude entrar: ${signInErr.message}` };
   }
 
-  // 3. ¿Ya tiene member/org? Si sí, devolverla (resume scenario).
-  const { data: existingMember } = await service
-    .from("member")
-    .select("organization_id")
-    .eq("profile_id", userId)
-    .is("deleted_at", null)
-    .maybeSingle();
-
-  if (existingMember?.organization_id) {
-    const { data: existingOrg } = await service
-      .from("organization")
-      .select("id, slug")
-      .eq("id", existingMember.organization_id)
-      .maybeSingle();
-    if (existingOrg) {
-      return { ok: true, organizationId: existingOrg.id as string, slug: existingOrg.slug as string };
-    }
-  }
-
-  // 4. Crear org placeholder con slug provisional del email
-  //    (ej. "lautaro-gmail-com" → slugificado). Se cambia en step 3.
+  // 3. Bootstrap atómico vía M33 RPC.
+  //
+  // Reemplaza los pasos 3-6 viejos (existing-check + org insert + profile
+  // upsert + member insert con DELETEs compensatorios). Garantía Postgres
+  // de atomicidad real: si falla a mitad, rollback automático, no quedan
+  // huérfanos.
+  //
+  // El pickFreshSlug local se preserva como UX optimization (slug-2, slug-3
+  // en vez del random hash); la RPC tiene fallback con sufijo random para
+  // race conditions de concurrencia.
   const emailBase = email.split("@")[0] || "consultorio";
   const provisionalSlug = await pickFreshSlug(service, slugifyInline(emailBase));
-
-  const { data: org, error: orgErr } = await service
-    .from("organization")
-    .insert({
-      slug: provisionalSlug,
-      nombre: "Mi consultorio",                  // placeholder, user lo cambia en step 3
-      rubro: null,
-      ciudad: null,
-      provincia: null,
-      acento_hex: "#8A6722",                     // default Folio brass — matches ONBOARDING_INITIAL.acento + folio.css --accent-warm
-      onboarding_completed: false,
-      onboarding_step_max: 1,
-    })
-    .select("id, slug")
-    .single();
-
-  if (orgErr || !org) {
-    return { ok: false, error: `Error creando consultorio: ${orgErr?.message ?? "desconocido"}` };
-  }
-
-  // 5. Crear profile (vacío, sin nombre — se completa en step 2).
-  //    Persistimos la aceptación del aviso de privacidad (Ley 25.326 art. 14):
-  //    timestamp, IP, user-agent, y la versión del texto legal.
   const userAgent = reqHeaders.get("user-agent");
-  const { error: profErr } = await service
-    .from("profile")
-    .upsert({
-      id: userId,
-      email,
-      nombre_cifrado: null,
-      apellido_cifrado: null,
-      matricula: null,
-      consent_pii_signed_at: new Date().toISOString(),
-      consent_pii_text_version: "v1",
-      consent_pii_ip: ip,
-      consent_pii_user_agent: userAgent,
-    });
-  if (profErr) {
-    // Rollback: borrar la org huérfana que creamos arriba. Si dejamos la org,
-    // el próximo retry crea una nueva → terminamos con N orgs huérfanas.
-    await service.from("organization").delete().eq("id", org.id);
-    return { ok: false, error: `Error creando perfil: ${profErr.message}` };
+
+  const { data: bootstrapped, error: bootstrapErr } = await service.rpc(
+    "bootstrap_org_atomic",
+    {
+      p_user_id: userId,
+      p_email: email,
+      p_provisional_slug: provisionalSlug,
+      p_consent_ip: ip,
+      p_consent_user_agent: userAgent,
+      p_consent_legal_text_version: "v1",
+    },
+  );
+
+  if (bootstrapErr || !bootstrapped) {
+    return {
+      ok: false,
+      error: `Error inicializando consultorio: ${bootstrapErr?.message ?? "desconocido"}`,
+    };
   }
 
-  // 6. Crear member OWNER
-  const { error: memErr } = await service
-    .from("member")
-    .insert({
-      organization_id: org.id,
-      profile_id: userId,
-      role: "OWNER",
-      es_colegiado: true,
-      accepted_at: new Date().toISOString(),
-    });
-
-  if (memErr) {
-    // Rollback: org + profile. El profile podría ser compartido con otra org
-    // en el futuro (clinic-mode), pero al momento del signup es 1:1 con el
-    // signup en curso; si falla member, lo borramos también.
-    await service.from("organization").delete().eq("id", org.id);
-    await service.from("profile").delete().eq("id", userId);
-    return { ok: false, error: `Error creando membresía: ${memErr.message}` };
-  }
-
+  const result = bootstrapped as { organization_id: string; member_id: string; slug: string; created: boolean };
   void created;
-  return { ok: true, organizationId: org.id as string, slug: org.slug as string };
+  return { ok: true, organizationId: result.organization_id, slug: result.slug };
 }
 
 /**
@@ -545,82 +252,57 @@ export async function bootstrapOrgForAuthenticatedUser(
 
   const service = createSupabaseServiceClient();
 
-  // Si ya tiene member/org, devolverla (idempotente).
-  const { data: existingMember } = await service
-    .from("member")
-    .select("organization_id")
-    .eq("profile_id", user.id)
-    .is("deleted_at", null)
-    .maybeSingle();
-
-  if (existingMember?.organization_id) {
-    const { data: existingOrg } = await service
-      .from("organization")
-      .select("id, slug")
-      .eq("id", existingMember.organization_id)
-      .maybeSingle();
-    if (existingOrg) {
-      return { ok: true, organizationId: existingOrg.id as string, slug: existingOrg.slug as string };
-    }
-  }
-
-  // Crear org placeholder con slug provisional del email.
+  // Bootstrap atómico vía M33 RPC. La función es idempotente y devuelve la
+  // membership existente si el user ya tiene una — no necesitamos chequear
+  // antes. Reemplaza los 3 inserts manuales + rollbacks compensatorios.
   const emailBase = (user.email ?? "consultorio").split("@")[0] || "consultorio";
   const provisionalSlug = await pickFreshSlug(service, slugifyInline(emailBase));
 
-  const { data: org, error: orgErr } = await service
-    .from("organization")
-    .insert({
-      slug: provisionalSlug,
-      nombre: "Mi consultorio",
-      rubro: null,
-      ciudad: null,
-      provincia: null,
-      acento_hex: "#8A6722",
-      onboarding_completed: false,
-      onboarding_step_max: 1,
-    })
-    .select("id, slug")
-    .single();
-  if (orgErr || !org) {
-    return { ok: false, error: `Error creando consultorio: ${orgErr?.message ?? "desconocido"}` };
+  const { data: bootstrapped, error: bootstrapErr } = await service.rpc(
+    "bootstrap_org_atomic",
+    {
+      p_user_id: user.id,
+      p_email: user.email ?? "",
+      p_provisional_slug: provisionalSlug,
+      p_consent_ip: ip,
+      p_consent_user_agent: userAgent,
+      p_consent_legal_text_version: "v1",
+    },
+  );
+
+  if (bootstrapErr || !bootstrapped) {
+    return {
+      ok: false,
+      error: `Error inicializando consultorio: ${bootstrapErr?.message ?? "desconocido"}`,
+    };
   }
 
-  // Profile + consent (Ley 25.326 art. 14)
-  const { error: profErr } = await service
-    .from("profile")
-    .upsert({
-      id: user.id,
-      email: user.email ?? "",
-      nombre_cifrado: null,
-      apellido_cifrado: null,
-      matricula: null,
-      consent_pii_signed_at: new Date().toISOString(),
-      consent_pii_text_version: "v1",
-      consent_pii_ip: ip,
-      consent_pii_user_agent: userAgent,
-    });
-  if (profErr) {
-    await service.from("organization").delete().eq("id", org.id);
-    return { ok: false, error: `Error creando perfil: ${profErr.message}` };
-  }
+  const result = bootstrapped as { organization_id: string; member_id: string; slug: string; created: boolean };
+  return { ok: true, organizationId: result.organization_id, slug: result.slug };
+}
 
-  const { error: memErr } = await service
-    .from("member")
-    .insert({
-      organization_id: org.id,
-      profile_id: user.id,
-      role: "OWNER",
-      es_colegiado: true,
-      accepted_at: new Date().toISOString(),
-    });
-  if (memErr) {
-    await service.from("organization").delete().eq("id", org.id);
-    await service.from("profile").delete().eq("id", user.id);
-    return { ok: false, error: `Error creando membresía: ${memErr.message}` };
+// Helper: busca un user por email iterando páginas de admin.listUsers().
+// Reemplaza el viejo perPage:200 ceiling (rompía a partir del usuario 201).
+// Cap defensivo de 50k para que no haga loop infinito si la API se rompe.
+async function findUserByEmailPaginated(
+  service: ReturnType<typeof createSupabaseServiceClient>,
+  email: string,
+) {
+  const target = email.toLowerCase();
+  const perPage = 1000;
+  for (let page = 1; page <= 50; page++) {
+    const { data, error } = await service.auth.admin.listUsers({ page, perPage });
+    if (error) {
+      console.warn("[onboarding] listUsers error on page", page, error.message);
+      return null;
+    }
+    const users = data?.users ?? [];
+    const found = users.find((u) => u.email?.toLowerCase() === target);
+    if (found) return found;
+    if (users.length < perPage) return null; // last page
   }
-
-  return { ok: true, organizationId: org.id as string, slug: org.slug as string };
+  console.warn("[onboarding] findUserByEmailPaginated: hit 50k cap without finding", email);
+  return null;
 }
 
 // Helper interno: pickea un slug libre buscando un sufijo numérico si está tomado.
