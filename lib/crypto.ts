@@ -170,6 +170,48 @@ export function blindIndex(plain: string | null | undefined): string | null {
 }
 
 /**
+ * Blind index para teléfonos. Normaliza extrayendo SOLO dígitos y tomando
+ * los últimos 10 (drop código de país, paréntesis, espacios, guiones). Así
+ * "+54 9 351 555 1234", "(351) 555-1234" y "3515551234" producen el mismo
+ * hash y se consideran duplicados en M30 partial UNIQUE.
+ *
+ * Devuelve null si la entrada no tiene al menos 8 dígitos (no es un
+ * teléfono válido para dedup — no queremos colisionar dos "rojo" + "verde"
+ * solo porque la normalización los reduce a cadena vacía).
+ *
+ * Output: hex string de 64 chars (256 bits) o null.
+ *
+ * Se computa con el mismo HMAC key que blindIndex() — single key rotation.
+ */
+export function blindIndexPhone(rawPhone: string | null | undefined): string | null {
+  if (rawPhone === null || rawPhone === undefined) return null;
+  const digits = rawPhone.replace(/\D/g, "");
+  if (digits.length < 8) return null;
+  const last10 = digits.slice(-10);
+  return createHmac("sha256", getHmacKey()).update(`tel:${last10}`, "utf8").digest("hex");
+}
+
+/**
+ * Try-decrypt: igual que decryptColumn pero captura excepciones y devuelve
+ * null en su lugar (loggeando warning con un label opcional). Útil cuando un
+ * solo ciphertext corrupto no debe romper toda la pantalla — defensa
+ * operativa post key-rotation o restore parcial.
+ */
+export function tryDecrypt(
+  value: string | Buffer | Uint8Array | null | undefined,
+  label = "field",
+): string | null {
+  if (value === null || value === undefined) return null;
+  try {
+    return decryptColumn(value);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[crypto] decrypt failed on ${label}:`, msg);
+    return null;
+  }
+}
+
+/**
  * Genera una key aleatoria base64 (32 bytes / 256 bits) para usar como
  * valor de `FOLIO_ENC_KEY` o `FOLIO_ENC_HMAC_KEY`. Helper para setup
  * inicial; NO se invoca en producción.

@@ -4,7 +4,7 @@
 
 import { z } from "zod";
 
-import { blindIndex, decryptColumn, encryptColumn } from "@/lib/crypto";
+import { blindIndex, blindIndexPhone, decryptColumn, encryptColumn } from "@/lib/crypto";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import { err, mapSupabaseError, ok, type Result } from "./errors";
@@ -269,6 +269,7 @@ export async function aceptarPedido(
         telefono_cifrado: encryptColumn(telefono)!,
         email_cifrado: encryptColumn(email ?? null),
         nombre_hash: blindIndex(nombreFull),
+        telefono_hash: blindIndexPhone(telefono),     // M30 dedup partial UNIQUE
       })
       .select("id")
       .single();

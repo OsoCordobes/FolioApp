@@ -53,6 +53,22 @@ export function mapSupabaseError(error: { message: string; code?: string; detail
     return { code: "transition_invalid", message: "Esa transición no está permitida.", detail: msg };
   }
   if (code === "23505") {
+    // M30: violaciones específicas de partial UNIQUE de paciente.
+    const detail = `${error.details ?? ""} ${msg}`;
+    if (detail.includes("paciente_identidad_dni_unique_active")) {
+      return {
+        code: "conflict",
+        message: "Ya existe un paciente con ese DNI en tu organización.",
+        detail: msg,
+      };
+    }
+    if (detail.includes("paciente_identidad_telefono_unique_active")) {
+      return {
+        code: "conflict",
+        message: "Ya existe un paciente con ese teléfono en tu organización.",
+        detail: msg,
+      };
+    }
     return { code: "conflict", message: "Ya existe un registro con esos datos.", detail: msg };
   }
   if (code === "23503") {

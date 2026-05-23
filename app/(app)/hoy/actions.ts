@@ -18,7 +18,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-import { blindIndex, encryptColumn } from "@/lib/crypto";
+import { blindIndex, blindIndexPhone, encryptColumn } from "@/lib/crypto";
 import { err, mapSupabaseError, ok, type Result } from "@/lib/db/errors";
 import { getActiveSession } from "@/lib/db/session";
 import { listPacientesDirectorio } from "@/lib/db/pacientes";
@@ -181,6 +181,7 @@ export async function createTurnoAction(
         telefono_cifrado: encryptColumn(np.telefono)!,
         email_cifrado: encryptColumn(np.email && np.email.length > 0 ? np.email : null),
         nombre_hash: blindIndex(nombreFull),
+        telefono_hash: blindIndexPhone(np.telefono),
       })
       .select("id")
       .single();

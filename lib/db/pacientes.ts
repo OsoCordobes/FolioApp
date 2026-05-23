@@ -9,7 +9,7 @@
 
 import { z } from "zod";
 
-import { blindIndex, decryptColumn, encryptColumn } from "@/lib/crypto";
+import { blindIndex, blindIndexPhone, decryptColumn, encryptColumn } from "@/lib/crypto";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import { err, mapSupabaseError, ok, type Result } from "./errors";
@@ -176,6 +176,7 @@ export async function createPaciente(input: CreatePacienteInput): Promise<Result
       domicilio_cp: d.domicilioCp ?? null,
       nombre_hash: blindIndex(nombreFull),
       dni_hash: d.numeroDoc ? blindIndex(d.numeroDoc) : null,
+      telefono_hash: blindIndexPhone(d.telefono),
     })
     .select("id")
     .single();
