@@ -12,7 +12,7 @@
  */
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useState } from "react";
 
 import * as I from "@/components/icons";
 import { SpineMap } from "@/components/paciente/spine-map";
@@ -46,44 +46,23 @@ const SOAP_SECTIONS = [
 ];
 
 type SoapState = PlanData["soap"];
-type SoapKey = keyof SoapState;
 
 function SoapStacked({ soap, setSoap }: { soap: SoapState; setSoap: (s: SoapState) => void }) {
-  const [savingId, setSavingId] = useState<SoapKey | null>(null);
-  const [lastSaved, setLastSaved] = useState("11:08");
-  const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-
-  const onChange = (id: SoapKey, v: string) => {
-    setSoap({ ...soap, [id]: v });
-    setSavingId(id);
-    if (timers.current[id]) clearTimeout(timers.current[id]);
-    timers.current[id] = setTimeout(() => {
-      const now = new Date();
-      setLastSaved(
-        `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`,
-      );
-      setSavingId(null);
-    }, 800);
-  };
-
+  // Persistencia real del SOAP está pendiente — los textareas son editables
+  // localmente pero los cambios NO viajan al server todavía. Para no engañar
+  // al usuario, no mostramos "Guardado · 11:08" como antes; mostramos una
+  // etiqueta honesta "Borrador local".
   return (
     <div className="pc-soap">
       <header className="pc-soap-head">
         <span className="fi-eyebrow">
           Nota SOAP · sesión 13 may · {TURNO_HOY_HORA}
         </span>
-        <span className={"fm-save " + (savingId ? "fm-save--saving" : "fm-save--saved")}>
-          {savingId ? (
-            <>
-              <span className="fm-save-spinner" />
-              Guardando…
-            </>
-          ) : (
-            <>
-              <I.Check size={11} />
-              Guardado · <span className="fm-mono">{lastSaved}</span>
-            </>
-          )}
+        <span
+          className="fm-save"
+          title="Persistencia del SOAP en sprint posterior. Por ahora editás localmente."
+        >
+          Borrador local
         </span>
       </header>
       {SOAP_SECTIONS.map((s) => (
@@ -95,7 +74,7 @@ function SoapStacked({ soap, setSoap }: { soap: SoapState; setSoap: (s: SoapStat
           <textarea
             className="pc-soap-textarea"
             value={soap[s.id]}
-            onChange={(e) => onChange(s.id, e.target.value)}
+            onChange={(e) => setSoap({ ...soap, [s.id]: e.target.value })}
             placeholder={`Escribí el ${s.label.toLowerCase()}…`}
             spellCheck={false}
             rows={Math.max(3, Math.ceil((soap[s.id]?.length ?? 0) / 60))}
