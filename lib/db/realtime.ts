@@ -4,15 +4,29 @@
  * Folio · Supabase Realtime helpers.
  *
  * Wrapper sobre `supabase.channel()` que tipa las suscripciones a tablas
- * críticas (turno, pedido, sesion).
+ * críticas (turno, pedido, sesion). Usa `postgres_changes` (eventos de DB),
+ * NO `broadcast` ni `presence`.
  *
- * Las suscripciones se filtran por `organization_id` para que cada cliente
- * solo reciba eventos de su tenant. Esto es CRÍTICO — RLS no aplica a
- * Realtime broadcasts en Supabase free tier; el filtro del client es la
- * primera línea de defensa.
+ * Seguridad multi-tenant (verificado 2026-05-23):
+ *   - postgres_changes en Supabase v2 enforza RLS SERVER-SIDE: si la RLS
+ *     SELECT de la tabla deniega la row, el client NO recibe el evento,
+ *     independientemente del filtro client-side.
+ *   - Las tablas que suscribimos (turno, pedido, sesion) tienen
+ *     `ALTER TABLE ... FORCE ROW LEVEL SECURITY` en sus migrations
+ *     respectivas (M03, M09, M10). RLS NO bypaseable.
+ *   - El filter `organization_id=eq.${organizationId}` es una OPTIMIZACIÓN
+ *     (reduce el volumen que el server evalúa contra RLS) — NO es la
+ *     línea de defensa. La línea de defensa es la RLS policy.
  *
- * En F11 habilitar Realtime Authorization en Supabase para enforcement
- * server-side.
+ * Por qué la auditoría 2026-05-23 confundió esto:
+ *   El doc histórico decía "RLS no aplica a Realtime broadcasts". Eso es
+ *   parcialmente cierto para `broadcast` y `presence` (que sí necesitan
+ *   policies sobre `realtime.messages`), pero falso para `postgres_changes`,
+ *   que es lo único que usamos.
+ *
+ * Si en el futuro agregamos broadcast (ej. presence indicator del calendario
+ * compartido), levantar migration con policies en realtime.messages topic
+ * "org:{uuid}:{channel}".
  */
 
 import { useEffect } from "react";
