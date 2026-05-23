@@ -15,6 +15,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import * as I from "@/components/icons";
+import { TurnoCreateModal } from "@/components/hoy/turno-create-modal";
 import { SpineMap } from "@/components/paciente/spine-map";
 import { PacienteFichaProvider, usePacienteFicha } from "@/components/paciente/contexto";
 import type { EstadoVertebra, PacienteFichaInfo, PlanData } from "@/lib/db/paciente-ficha";
@@ -383,6 +384,7 @@ function PacienteWhatsAppButton({ telefono, nombre }: { telefono: string; nombre
 function PacienteHeader() {
   const { paciente, plan, cumple } = usePacienteFicha();
   const ultimaVisita = plan.sesiones[0]?.fecha ?? null;
+  const [agendarOpen, setAgendarOpen] = useState(false);
   return (
     <header className="pc-head">
       <Link href="/pacientes" className="pc-back">
@@ -415,15 +417,30 @@ function PacienteHeader() {
         </div>
         <div className="pc-actions">
           <PacienteWhatsAppButton telefono={paciente.tel} nombre={paciente.nombre} />
-          <a
-            href={`/calendario?paciente=${encodeURIComponent(paciente.id)}`}
+          <button
+            type="button"
             className="fi-btn fi-btn-secondary"
             title="Agendar un nuevo turno para este paciente"
+            onClick={() => setAgendarOpen(true)}
           >
             <I.Calendar size={13} /> Sacar turno
-          </a>
+          </button>
         </div>
       </div>
+
+      {agendarOpen ? (
+        <TurnoCreateModal
+          origen="MANUAL"
+          preselectPacienteId={paciente.id}
+          onClose={() => setAgendarOpen(false)}
+          onCreated={() => {
+            setAgendarOpen(false);
+            // El nuevo turno aparece en /hoy si es hoy, sino en /calendario.
+            // Acá no necesitamos refrescar la ficha — el plan/sesiones se
+            // actualizan cuando el turno se cierra (cron + transición).
+          }}
+        />
+      ) : null}
     </header>
   );
 }

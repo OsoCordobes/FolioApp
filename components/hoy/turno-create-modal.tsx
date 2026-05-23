@@ -33,6 +33,8 @@ import {
 interface TurnoCreateModalProps {
   defaultInicio?: string; // ISO with offset
   origen?: "MANUAL" | "WALK_IN";
+  /** Si está set, abrimos en modo "existente" con el paciente preseleccionado. */
+  preselectPacienteId?: string;
   onClose: () => void;
   onCreated: (turnoId: string) => void;
 }
@@ -49,6 +51,7 @@ const EMPTY_NUEVO: NuevoPacienteState = { nombre: "", apellido: "", telefono: ""
 export function TurnoCreateModal({
   defaultInicio,
   origen = "MANUAL",
+  preselectPacienteId,
   onClose,
   onCreated,
 }: TurnoCreateModalProps) {
@@ -57,7 +60,7 @@ export function TurnoCreateModal({
   const [loadErr, setLoadErr] = useState<string | null>(null);
 
   const [mode, setMode] = useState<"existente" | "nuevo">("existente");
-  const [pacienteId, setPacienteId] = useState<string | null>(null);
+  const [pacienteId, setPacienteId] = useState<string | null>(preselectPacienteId ?? null);
   const [pacienteQuery, setPacienteQuery] = useState("");
   const [nuevo, setNuevo] = useState<NuevoPacienteState>(EMPTY_NUEVO);
   const [servicioId, setServicioId] = useState<string | null>(null);
@@ -66,7 +69,9 @@ export function TurnoCreateModal({
   const [submitting, startTransition] = useTransition();
   const [submitErr, setSubmitErr] = useState<string | null>(null);
 
-  // Hidratar metadata.
+  // Hidratar metadata. La pre-selección de paciente la usamos una sola vez
+  // al montar — si cambia el prop después, ignoramos (el modal se rerenderea
+  // si el caller lo desmonta y monta de nuevo).
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -82,8 +87,15 @@ export function TurnoCreateModal({
         setServicioId(result.data.servicios[0].id);
         setDuracion(result.data.servicios[0].duracionMin);
       }
-      // Si no hay pacientes recientes, abrir directamente el flujo "nuevo".
-      if (result.data.pacientes.length === 0) {
+      // Si vino con preselectPacienteId: forzamos modo "existente". Sino, si no
+      // hay pacientes recientes, abrir directamente el flujo "nuevo".
+      if (preselectPacienteId) {
+        setMode("existente");
+        // Pre-llenar el query con el nombre del paciente para que aparezca
+        // en el typeahead aunque no esté en los top 50.
+        const pac = result.data.pacientes.find((p) => p.id === preselectPacienteId);
+        if (pac) setPacienteQuery(`${pac.nombre} ${pac.apellido}`.trim());
+      } else if (result.data.pacientes.length === 0) {
         setMode("nuevo");
       }
       setLoading(false);
@@ -91,7 +103,7 @@ export function TurnoCreateModal({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [preselectPacienteId]);
 
   // Escape cierra el modal cuando no estamos en submit.
   useEffect(() => {
