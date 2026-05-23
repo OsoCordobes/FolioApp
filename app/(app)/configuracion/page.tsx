@@ -34,6 +34,8 @@ export default async function ConfiguracionPage() {
     <Configuracion
       initialConsultorio={data.data.consultorio}
       initialServicios={data.data.servicios}
+      initialDias={data.data.dias}
+      initialSlotMin={data.data.slotMin}
       googleCalendar={data.data.googleCalendar}
       canEdit={canEdit}
     />

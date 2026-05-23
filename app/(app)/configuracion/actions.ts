@@ -9,7 +9,14 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { saveConsultorio, type SaveConsultorioInput } from "@/lib/db/configuracion";
+import {
+  saveConsultorio,
+  saveHorarios,
+  saveServicios,
+  type SaveConsultorioInput,
+  type SaveHorariosInput,
+  type SaveServiciosInput,
+} from "@/lib/db/configuracion";
 import { getActiveSession } from "@/lib/db/session";
 import { err, type Result } from "@/lib/db/errors";
 import { getAuthUrl as getGoogleAuthUrl } from "@/lib/google/oauth";
@@ -19,6 +26,25 @@ export async function saveConsultorioAction(input: SaveConsultorioInput): Promis
   if (result.ok) {
     revalidatePath("/configuracion");
     revalidatePath("/", "layout");
+  }
+  return result;
+}
+
+export async function saveHorariosAction(input: SaveHorariosInput): Promise<Result<void>> {
+  const result = await saveHorarios(input);
+  if (result.ok) {
+    revalidatePath("/configuracion");
+    revalidatePath("/book/[slug]", "page");
+  }
+  return result;
+}
+
+export async function saveServiciosAction(input: SaveServiciosInput): Promise<Result<void>> {
+  const result = await saveServicios(input);
+  if (result.ok) {
+    revalidatePath("/configuracion");
+    revalidatePath("/book/[slug]", "page");
+    revalidatePath("/hoy");
   }
   return result;
 }

@@ -17,9 +17,13 @@ import {
   connectGoogleCalendar,
   disconnectGoogleCalendar,
   saveConsultorioAction,
+  saveHorariosAction,
+  saveServiciosAction,
 } from "@/app/(app)/configuracion/actions";
 import type {
   ConsultorioData,
+  DiaHorarios,
+  DiaSemanaId,
   IntegrationStatus,
   ServicioRow,
 } from "@/lib/db/configuracion";
@@ -30,15 +34,7 @@ export type { ConsultorioData };
 type DiaId = "lun" | "mar" | "mie" | "jue" | "vie" | "sab" | "dom";
 type Dia = { on: boolean; franjas: [string, string][] };
 
-const DIAS_INIT: Record<DiaId, Dia> = {
-  lun: { on: true,  franjas: [["09:00", "12:00"], ["15:00", "18:00"]] },
-  mar: { on: true,  franjas: [["09:00", "12:00"], ["15:00", "18:00"]] },
-  mie: { on: true,  franjas: [["09:00", "12:00"], ["15:00", "18:00"]] },
-  jue: { on: true,  franjas: [["09:00", "12:00"], ["15:00", "18:00"]] },
-  vie: { on: true,  franjas: [["09:00", "12:00"]] },
-  sab: { on: false, franjas: [] },
-  dom: { on: false, franjas: [] },
-};
+// Los defaults de horarios ahora vienen del server (getConfiguracionData).
 
 const DIAS_LBLS: Record<DiaId, string> = {
   lun: "Lunes", mar: "Martes", mie: "Miércoles", jue: "Jueves",
@@ -195,9 +191,11 @@ function SecCuenta({ c, set }: { c: ConsultorioData; set: (patch: Partial<Consul
         </Row>
       </Section>
 
-      <Section title="Zona peligrosa">
-        <Row label="Eliminar cuenta" sub="Borra tu cuenta y todos tus datos. No se puede deshacer.">
-          <EliminarCuentaButton email={c.email} />
+      <Section title="Tus datos y derechos" sub="Habeas Data (Ley 25.326): exportar tus datos o solicitar eliminación de cuenta.">
+        <Row label="Acceso a tus datos" sub="Exportar JSON con todo, o solicitar eliminación con grace period de 30 días.">
+          <a href="/configuracion/datos" className="fi-btn fi-btn-ghost">
+            Abrir mis datos →
+          </a>
         </Row>
       </Section>
     </>
@@ -236,29 +234,8 @@ function CambiarPasswordButton({ email }: { email: string }) {
   );
 }
 
-function EliminarCuentaButton({ email }: { email: string }) {
-  const handler = () => {
-    const challenge = prompt(
-      `ATENCIÓN: la eliminación de cuenta es IRREVERSIBLE.\n\n` +
-      `Tus pacientes, sesiones clínicas y registros quedan retenidos 10 años por Ley 26.529 ` +
-      `pero tu identidad se pseudonimiza permanentemente.\n\n` +
-      `Para confirmar, escribí tu email exacto: ${email}`,
-    );
-    if (challenge !== email) {
-      if (challenge != null) alert("El email no coincide. Operación cancelada.");
-      return;
-    }
-    alert(
-      "Eliminación de cuenta: el endpoint de procesamiento entra en sprint posterior (audit log + " +
-      "pseudonimización requieren proceso revisado). Por ahora contactá a hola@folio.app.",
-    );
-  };
-  return (
-    <button type="button" className="fi-btn fi-btn-ghost cfg-btn-danger" onClick={handler}>
-      Eliminar cuenta
-    </button>
-  );
-}
+// EliminarCuentaButton removido: la eliminación canónica vive en /configuracion/datos
+// (Phase 6a) con grace period de 30 días + UI para cancelar/restaurar.
 
 // ─── Sección: Consultorio ──────────────────────────────────────────────────
 
@@ -270,7 +247,13 @@ function SecConsultorio({ c, set }: { c: ConsultorioData; set: (patch: Partial<C
           <TextInput value={c.nombre} onChange={(v) => set({ nombre: v })} />
         </Row>
         <Row label="Foto del consultorio" sub="Opcional · 1200×600 recomendado">
-          <button type="button" className="cfg-upload">
+          <button
+            type="button"
+            className="cfg-upload"
+            disabled
+            title="Próximamente — el logo se sube desde Onboarding > Identidad visual"
+            aria-disabled="true"
+          >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="3" width="18" height="18" rx="2.5" />
               <circle cx="8.5" cy="9" r="1.5" />
@@ -773,55 +756,108 @@ function PageHeader({ dirty, onSave, onDiscard, isSaving, saveError, canEdit }: 
 interface ConfiguracionProps {
   initialConsultorio: ConsultorioData;
   initialServicios: ServicioCfg[];
+  initialDias: Record<DiaSemanaId, DiaHorarios>;
+  initialSlotMin: number;
   googleCalendar: IntegrationStatus;
   canEdit: boolean;
 }
 
-export function Configuracion({ initialConsultorio, initialServicios, googleCalendar, canEdit }: ConfiguracionProps) {
+interface DirtyState {
+  consultorio: boolean;
+  horarios: boolean;
+  servicios: boolean;
+}
+
+const NO_DIRTY: DirtyState = { consultorio: false, horarios: false, servicios: false };
+
+export function Configuracion({
+  initialConsultorio,
+  initialServicios,
+  initialDias,
+  initialSlotMin,
+  googleCalendar,
+  canEdit,
+}: ConfiguracionProps) {
   const [seccion, setSeccion] = useState<SeccionId>("consultorio");
   const [consultorio, setConsultorio] = useState<ConsultorioData>(initialConsultorio);
-  const [snapshot, setSnapshot] = useState<ConsultorioData>(initialConsultorio);
-  const [dias, setDias] = useState<Record<DiaId, Dia>>(DIAS_INIT);
-  const [slotMin, setSlotMin] = useState(45);
+  const [consultorioSnap, setConsultorioSnap] = useState<ConsultorioData>(initialConsultorio);
+  const [dias, setDias] = useState<Record<DiaId, Dia>>(initialDias);
+  const [diasSnap, setDiasSnap] = useState<Record<DiaId, Dia>>(initialDias);
+  const [slotMin, setSlotMin] = useState(initialSlotMin);
+  const [slotMinSnap, setSlotMinSnap] = useState(initialSlotMin);
   const [servicios, setServicios] = useState<ServicioCfg[]>(initialServicios);
-  const [dirty, setDirty] = useState(false);
+  const [serviciosSnap, setServiciosSnap] = useState<ServicioCfg[]>(initialServicios);
+  const [dirty, setDirty] = useState<DirtyState>(NO_DIRTY);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isSaving, startSavingTransition] = useTransition();
 
+  const anyDirty = dirty.consultorio || dirty.horarios || dirty.servicios;
+
   const setC = (patch: Partial<ConsultorioData>) => {
     setConsultorio((prev) => ({ ...prev, ...patch }));
-    setDirty(true);
+    setDirty((d) => ({ ...d, consultorio: true }));
   };
 
   const handleSave = () => {
     setSaveError(null);
     startSavingTransition(async () => {
-      const result = await saveConsultorioAction({
-        nombre: consultorio.nombre,
-        profesional: consultorio.profesional,
-        matricula: consultorio.matricula,
-        ciudad: consultorio.ciudad,
-        provincia: consultorio.provincia,
-      });
-      if (!result.ok) {
-        setSaveError(result.error.message);
-        return;
+      // Save secciones marcadas dirty en serie. Si una falla, paramos y reportamos.
+      if (dirty.consultorio) {
+        const result = await saveConsultorioAction({
+          nombre: consultorio.nombre,
+          profesional: consultorio.profesional,
+          matricula: consultorio.matricula,
+          ciudad: consultorio.ciudad,
+          provincia: consultorio.provincia,
+          tel: consultorio.tel,
+          direccion: consultorio.direccion,
+          instagram: consultorio.instagram,
+        });
+        if (!result.ok) {
+          setSaveError(`Consultorio: ${result.error.message}`);
+          return;
+        }
+        setConsultorioSnap(consultorio);
       }
-      setSnapshot(consultorio);
-      setDirty(false);
+
+      if (dirty.horarios) {
+        const result = await saveHorariosAction({ dias, slotMin });
+        if (!result.ok) {
+          setSaveError(`Horarios: ${result.error.message}`);
+          return;
+        }
+        setDiasSnap(dias);
+        setSlotMinSnap(slotMin);
+      }
+
+      if (dirty.servicios) {
+        const result = await saveServiciosAction({ servicios });
+        if (!result.ok) {
+          setSaveError(`Servicios: ${result.error.message}`);
+          return;
+        }
+        setServiciosSnap(servicios);
+      }
+
+      setDirty(NO_DIRTY);
     });
   };
 
   const handleDiscard = () => {
-    setConsultorio(snapshot);
-    setDirty(false);
+    if (dirty.consultorio) setConsultorio(consultorioSnap);
+    if (dirty.horarios) {
+      setDias(diasSnap);
+      setSlotMin(slotMinSnap);
+    }
+    if (dirty.servicios) setServicios(serviciosSnap);
+    setDirty(NO_DIRTY);
     setSaveError(null);
   };
 
   return (
     <div className="fi-content cfg-content">
       <PageHeader
-        dirty={dirty}
+        dirty={anyDirty}
         onSave={handleSave}
         onDiscard={handleDiscard}
         isSaving={isSaving}
@@ -837,15 +873,15 @@ export function Configuracion({ initialConsultorio, initialServicios, googleCale
           {seccion === "horarios"      ? (
             <SecHorarios
               dias={dias}
-              setDias={(d) => { setDias(d); setDirty(true); }}
+              setDias={(d) => { setDias(d); setDirty((dd) => ({ ...dd, horarios: true })); }}
               slotMin={slotMin}
-              setSlotMin={(n) => { setSlotMin(n); setDirty(true); }}
+              setSlotMin={(n) => { setSlotMin(n); setDirty((dd) => ({ ...dd, horarios: true })); }}
             />
           ) : null}
           {seccion === "servicios"     ? (
             <SecServicios
               servicios={servicios}
-              setServicios={(s) => { setServicios(s); }}
+              setServicios={(s) => { setServicios(s); setDirty((dd) => ({ ...dd, servicios: true })); }}
             />
           ) : null}
           {seccion === "integraciones" ? <SecIntegraciones googleCalendar={googleCalendar} /> : null}
