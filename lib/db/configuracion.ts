@@ -376,14 +376,20 @@ export async function saveServicios(input: SaveServiciosInput): Promise<Result<v
 
   const supabase = await createSupabaseServerClient();
 
-  // Lookup existentes para diff (encontrar los borrados).
+  // Lookup existentes para diff (encontrar los borrados) y para preservar
+  // tipo_canonico cuando el usuario solo cambia nombre/precio/duración. Sin esto,
+  // un servicio originalmente PACK_SESIONES o SERVICIO_ESPECIALIZADO se resetea
+  // a CONSULTA_INICIAL o SEGUIMIENTO_ESTANDAR en cada save — pérdida de info.
   const { data: existentes } = await supabase
     .from("servicio")
-    .select("id")
+    .select("id, tipo_canonico")
     .eq("organization_id", ctx.data.organization.id)
     .is("deleted_at", null);
 
   const existingIds = new Set((existentes ?? []).map((r) => r.id as string));
+  const existingTipoCanonico = new Map(
+    (existentes ?? []).map((r) => [r.id as string, r.tipo_canonico as string]),
+  );
   const incomingIds = new Set(d.servicios.filter((s) => !s.id.startsWith("tmp-")).map((s) => s.id));
 
   // Soft-delete los que ya no están.
@@ -396,10 +402,13 @@ export async function saveServicios(input: SaveServiciosInput): Promise<Result<v
       .eq("organization_id", ctx.data.organization.id);
   }
 
-  // Updates / inserts.
+  // Updates / inserts. Para nuevos servicios el tipo se deriva del flag
+  // paraNuevos (UI simplificada — solo dos opciones). Para servicios existentes
+  // preservamos el tipo_canonico previo a menos que el flag paraNuevos haya
+  // cambiado de manera que requiera moverse entre CONSULTA_INICIAL y otro tipo.
   for (const s of d.servicios) {
-    const tipoCanonico = s.paraNuevos ? "CONSULTA_INICIAL" : "SEGUIMIENTO_ESTANDAR";
     if (s.id.startsWith("tmp-")) {
+      const tipoCanonico = s.paraNuevos ? "CONSULTA_INICIAL" : "SEGUIMIENTO_ESTANDAR";
       const { error } = await supabase.from("servicio").insert({
         organization_id: ctx.data.organization.id,
         nombre: s.nombre,
@@ -413,6 +422,18 @@ export async function saveServicios(input: SaveServiciosInput): Promise<Result<v
         return err(mapped.code, mapped.message, error.message);
       }
     } else {
+      // Preservar tipo_canonico existente, salvo que el toggle paraNuevos
+      // contradiga el tipo actual (ej. paraNuevos=true en algo que no era
+      // CONSULTA_INICIAL → hay que reasignarlo).
+      const prev = existingTipoCanonico.get(s.id);
+      const isCurrentlyConsultaInicial = prev === "CONSULTA_INICIAL" || prev === "consulta_inicial";
+      let tipoCanonico = prev ?? (s.paraNuevos ? "CONSULTA_INICIAL" : "SEGUIMIENTO_ESTANDAR");
+      if (s.paraNuevos && !isCurrentlyConsultaInicial) {
+        tipoCanonico = "CONSULTA_INICIAL";
+      } else if (!s.paraNuevos && isCurrentlyConsultaInicial) {
+        tipoCanonico = "SEGUIMIENTO_ESTANDAR";
+      }
+
       const { error } = await supabase
         .from("servicio")
         .update({
