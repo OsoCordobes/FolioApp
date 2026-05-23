@@ -423,6 +423,22 @@ export function FocusApp() {
 
   return (
     <div className="fm-app">
+      <div
+        role="status"
+        aria-live="polite"
+        style={{
+          background: "var(--amber-soft, #fef3c7)",
+          color: "var(--amber, #92400e)",
+          padding: "10px 16px",
+          fontSize: 13,
+          textAlign: "center",
+          borderBottom: "1px solid var(--line)",
+        }}
+      >
+        <b>Vista preview.</b> Esta pantalla usa datos de muestra (Diego Peralta).
+        Conectar a un turno real entra en sprint posterior — por ahora cerrá turnos
+        desde <a href="/hoy" style={{ color: "inherit", textDecoration: "underline" }}>/hoy</a>.
+      </div>
       <header className="fm-top">
         <CronometroXL elapsed={elapsed} paused={paused} toggle={toggle} startedAt={startedAt} />
         <div className="fm-id">
