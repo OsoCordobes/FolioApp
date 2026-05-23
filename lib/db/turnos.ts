@@ -111,10 +111,18 @@ export async function createTurno(input: CreateTurnoInput): Promise<Result<{ id:
   // Programar recordatorios 24h y 2h (idempotente vía UNIQUE turno_id,tipo).
   // Si el insert de recordatorios falla no rollbackeamos el turno — el dispatcher
   // reintentará via /api/cron y/o el user puede re-programarlos desde la UI.
-  void scheduleRecordatoriosForTurno({
+  // Fire-and-forget pero capturando errores en Sentry (auditoría MEDIUM-
+  // observabilidad: el patrón `void promise` silenciaba fallos previamente).
+  scheduleRecordatoriosForTurno({
     organizationId: session.data.organizationId,
     turnoId: data.id,
     inicio: new Date(parsed.data.inicio),
+  }).catch(async (err) => {
+    const { captureException } = await import("@sentry/nextjs");
+    captureException(err, {
+      tags: { component: "turno-create", op: "scheduleRecordatorios" },
+      extra: { turnoId: data.id, organizationId: session.data.organizationId },
+    });
   });
 
   return ok({ id: data.id });
@@ -152,16 +160,29 @@ export async function transitionTurno(input: z.infer<typeof transitionSchema>): 
     return err(mapped.code, mapped.message, error.message);
   }
 
-  // Hooks de transición de estado para la cola de recordatorios
+  // Hooks de transición de estado para la cola de recordatorios.
+  // Fire-and-forget con captura Sentry (mismo razonamiento que createTurno).
   if (parsed.data.to === "CERRADO") {
-    void schedulePostVisitaForTurno({
+    schedulePostVisitaForTurno({
       organizationId: session.data.organizationId,
       turnoId: parsed.data.turnoId,
       closedAt: new Date(),
+    }).catch(async (err) => {
+      const { captureException } = await import("@sentry/nextjs");
+      captureException(err, {
+        tags: { component: "turno-transition", op: "schedulePostVisita" },
+        extra: { turnoId: parsed.data.turnoId },
+      });
     });
   }
   if (parsed.data.to === "CANCELADO" || parsed.data.to === "REAGENDADO") {
-    void cancelRecordatoriosForTurno(parsed.data.turnoId);
+    cancelRecordatoriosForTurno(parsed.data.turnoId).catch(async (err) => {
+      const { captureException } = await import("@sentry/nextjs");
+      captureException(err, {
+        tags: { component: "turno-transition", op: "cancelRecordatorios" },
+        extra: { turnoId: parsed.data.turnoId, newEstado: parsed.data.to },
+      });
+    });
   }
 
   return ok(undefined);

@@ -39,8 +39,20 @@ export async function createSupabaseServerClient() {
             toSet.forEach(({ name, value, options }) => {
               cookieStore.set(name, value, options);
             });
-          } catch {
-            // Server Components no pueden setear cookies; ignore.
+          } catch (e) {
+            // En Server Components Next.js no permite setear cookies — eso es
+            // esperado y harmless (el middleware refresca la sesión). Pero
+            // OTROS errores (header size limit, valor malformado, etc.)
+            // significarían sesión rota silenciosamente. Solo tragamos el
+            // caso conocido de RSC; logueamos el resto en dev para que no
+            // pasen desapercibidos.
+            const msg = e instanceof Error ? e.message : String(e);
+            const isExpectedRSC =
+              msg.includes("Cookies can only be modified") ||
+              msg.includes("Server Components");
+            if (!isExpectedRSC && process.env.NODE_ENV !== "production") {
+              console.warn("[supabase] unexpected cookie set failure:", msg);
+            }
           }
         },
       },

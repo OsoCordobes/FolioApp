@@ -9,7 +9,7 @@
 
 import { z } from "zod";
 
-import { blindIndex, blindIndexPhone, decryptColumn, encryptColumn } from "@/lib/crypto";
+import { blindIndex, blindIndexPhone, encryptColumn, tryDecrypt } from "@/lib/crypto";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import { err, mapSupabaseError, ok, type Result } from "./errors";
@@ -79,10 +79,10 @@ export async function listPacientesDirectorio(): Promise<Result<PacienteDecoded[
   const decoded: PacienteDecoded[] = (data ?? []).map((row: Record<string, unknown>) => ({
     id: String(row.paciente_id),
     identidadId: (row.identidad_id as string | null) ?? null,
-    nombre: decryptColumn((row.nombre_cifrado as Buffer | null) ?? null),
-    apellido: decryptColumn((row.apellido_cifrado as Buffer | null) ?? null),
-    telefono: decryptColumn((row.telefono_cifrado as Buffer | null) ?? null),
-    email: decryptColumn((row.email_cifrado as Buffer | null) ?? null),
+    nombre: tryDecrypt((row.nombre_cifrado as Buffer | null) ?? null, "paciente.nombre"),
+    apellido: tryDecrypt((row.apellido_cifrado as Buffer | null) ?? null, "paciente.apellido"),
+    telefono: tryDecrypt((row.telefono_cifrado as Buffer | null) ?? null, "paciente.telefono"),
+    email: tryDecrypt((row.email_cifrado as Buffer | null) ?? null, "paciente.email"),
     tipo: (row.tipo_paciente as "NUEVO" | "RECURRENTE") ?? "NUEVO",
     tags: (row.tags as string[]) ?? [],
     pseudonimizado: row.pseudonimizado_en != null,
@@ -123,10 +123,10 @@ export async function buscarPaciente(query: string): Promise<Result<PacienteDeco
   const decoded: PacienteDecoded[] = (data ?? []).map((row: Record<string, unknown>) => ({
     id: String(row.paciente_id),
     identidadId: (row.identidad_id as string | null) ?? null,
-    nombre: decryptColumn((row.nombre_cifrado as Buffer | null) ?? null),
-    apellido: decryptColumn((row.apellido_cifrado as Buffer | null) ?? null),
-    telefono: decryptColumn((row.telefono_cifrado as Buffer | null) ?? null),
-    email: decryptColumn((row.email_cifrado as Buffer | null) ?? null),
+    nombre: tryDecrypt((row.nombre_cifrado as Buffer | null) ?? null, "paciente.nombre"),
+    apellido: tryDecrypt((row.apellido_cifrado as Buffer | null) ?? null, "paciente.apellido"),
+    telefono: tryDecrypt((row.telefono_cifrado as Buffer | null) ?? null, "paciente.telefono"),
+    email: tryDecrypt((row.email_cifrado as Buffer | null) ?? null, "paciente.email"),
     tipo: (row.tipo_paciente as "NUEVO" | "RECURRENTE") ?? "NUEVO",
     tags: (row.tags as string[]) ?? [],
     pseudonimizado: row.pseudonimizado_en != null,
@@ -234,14 +234,14 @@ export async function getPacienteCompleto(pacienteId: string): Promise<Result<Re
   const row = data as Record<string, unknown>;
   return ok({
     ...row,
-    nombre: decryptColumn(row.nombre_cifrado as Buffer | null),
-    apellido: decryptColumn(row.apellido_cifrado as Buffer | null),
-    telefono: decryptColumn(row.telefono_cifrado as Buffer | null),
-    email: decryptColumn(row.email_cifrado as Buffer | null),
-    numero_doc: decryptColumn(row.numero_doc_cifrado as Buffer | null),
-    domicilio_calle: decryptColumn(row.domicilio_calle_cifrado as Buffer | null),
-    domicilio_numero: decryptColumn(row.domicilio_numero_cifrado as Buffer | null),
-    motivo_consulta: decryptColumn(row.motivo_consulta_cifrado as Buffer | null),
-    notas_importantes: decryptColumn(row.notas_importantes_cifrado as Buffer | null),
+    nombre: tryDecrypt(row.nombre_cifrado as Buffer | null, "paciente.nombre"),
+    apellido: tryDecrypt(row.apellido_cifrado as Buffer | null, "paciente.apellido"),
+    telefono: tryDecrypt(row.telefono_cifrado as Buffer | null, "paciente.telefono"),
+    email: tryDecrypt(row.email_cifrado as Buffer | null, "paciente.email"),
+    numero_doc: tryDecrypt(row.numero_doc_cifrado as Buffer | null, "paciente.numero_doc"),
+    domicilio_calle: tryDecrypt(row.domicilio_calle_cifrado as Buffer | null, "paciente.domicilio_calle"),
+    domicilio_numero: tryDecrypt(row.domicilio_numero_cifrado as Buffer | null, "paciente.domicilio_numero"),
+    motivo_consulta: tryDecrypt(row.motivo_consulta_cifrado as Buffer | null, "paciente.motivo_consulta"),
+    notas_importantes: tryDecrypt(row.notas_importantes_cifrado as Buffer | null, "paciente.notas_importantes"),
   });
 }
