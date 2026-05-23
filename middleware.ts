@@ -28,6 +28,8 @@ const PUBLIC_PATHS = [
   "/onboarding",
   "/forgot",
   "/reset-password",        // Supabase password-recovery email landing (Phase 4)
+  "/privacidad",            // Aviso de privacidad (Ley 25.326) — linkeado desde consent del signup
+  "/terminos",              // Términos del servicio — linkeado desde consent del signup
   "/api/health",            // healthcheck (load balancer, uptime monitoring)
   "/api/analytics/refresh", // cron diario (validado por CRON_SECRET bearer)
 ];

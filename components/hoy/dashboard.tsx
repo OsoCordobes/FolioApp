@@ -36,6 +36,7 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
   const [turnos, setTurnos] = useState<Turno[]>(initialTurnos);
   const [fichaTurnoId, setFichaTurnoId] = useState<string | null>(null);
   const [walkInOpen, setWalkInOpen] = useState(false);
+  const [transitionError, setTransitionError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const now = useNow(nowIso, 60_000);
 
@@ -43,9 +44,10 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
    * Optimistic transition + persistencia via Server Action.
    * - Aplica la transición local inmediatamente (UI responsiva).
    * - Dispara `transitionTurnoAction` en server.
-   * - Si falla, revierte al estado anterior.
+   * - Si falla, revierte al estado anterior y muestra el error inline.
    */
   const handleTransition = (id: string, to: EstadoTurno, extra: Partial<Turno> = {}) => {
+    setTransitionError(null);
     setTurnos((prev) => {
       const idx = prev.findIndex((t) => t.id === id);
       if (idx === -1) return prev;
@@ -65,6 +67,7 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
         });
         if (!result.ok) {
           console.warn("[hoy] transición rechazada:", result.error.message);
+          setTransitionError(result.error.message);
           setTurnos((curr) => curr.map((t) => (t.id === id ? before : t)));
         }
       });
@@ -95,8 +98,36 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
           fechaLarga={fechaLarga}
           fechaAnio={fechaAnio}
           now={now}
+          onOpenWalkIn={() => setWalkInOpen(true)}
         />
         <KpiStrip turnos={turnos} pacientes={pacientes} now={now} />
+        {transitionError ? (
+          <div
+            role="alert"
+            style={{
+              margin: "12px 0",
+              padding: "10px 14px",
+              background: "var(--red-soft, #fee2e2)",
+              color: "var(--red, #991b1b)",
+              borderRadius: 8,
+              fontSize: 14,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 12,
+            }}
+          >
+            <span>No se pudo guardar el cambio: {transitionError}</span>
+            <button
+              type="button"
+              onClick={() => setTransitionError(null)}
+              style={{ background: "transparent", border: "none", color: "inherit", cursor: "pointer", fontSize: 16, padding: 0 }}
+              aria-label="Cerrar mensaje"
+            >
+              ×
+            </button>
+          </div>
+        ) : null}
         {turnos.length === 0 ? (
           <EmptyState fechaLarga={fechaLarga} />
         ) : (

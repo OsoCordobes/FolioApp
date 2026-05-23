@@ -471,7 +471,7 @@ function CalFilters({
   const chips: [string, string][] = [
     ["confirmado", "Confirmados"],
     ["atendiendo", "En curso"],
-    ["facturado", "Facturados"],
+    ["cerrado", "Cerrados"],
     ["agendado", "Sin confirmar"],
   ];
 

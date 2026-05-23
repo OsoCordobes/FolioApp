@@ -118,8 +118,9 @@ function PlanTratamiento() {
         <button
           type="button"
           className="pc-link"
-          onClick={() => alert("Edición inline de este campo: próximamente. Por ahora editá desde Configuración → Consultorio o crea una nota nueva en Sesiones.")}
-          title="Próximamente"
+          disabled
+          title="Próximamente — editá desde Configuración o agregá nota en Sesiones"
+          aria-disabled="true"
         >
           Editar
         </button>
@@ -247,8 +248,9 @@ function TabInformacion() {
           <button
           type="button"
           className="pc-link"
-          onClick={() => alert("Edición inline de este campo: próximamente. Por ahora editá desde Configuración → Consultorio o crea una nota nueva en Sesiones.")}
-          title="Próximamente"
+          disabled
+          title="Próximamente — editá desde Configuración o agregá nota en Sesiones"
+          aria-disabled="true"
         >
           Editar
         </button>
@@ -298,8 +300,9 @@ function TabSesiones() {
         <button
           type="button"
           className="fi-btn fi-btn-secondary"
-          onClick={() => alert("Crear sesión manual: próximamente. Por ahora las sesiones se generan al cerrar un turno desde /hoy.")}
-          title="Próximamente"
+          disabled
+          title="Próximamente — las sesiones se generan al cerrar un turno desde /hoy"
+          aria-disabled="true"
         >
           <I.Plus size={12} /> Nueva sesión
         </button>
@@ -329,11 +332,9 @@ function TabSesiones() {
             <button
               type="button"
               className="pc-link"
-              onClick={(e) => {
-                e.stopPropagation();
-                alert("Detalle expandido de la sesión: próximamente.");
-              }}
-              title="Próximamente"
+              disabled
+              title="Próximamente — vista detallada de cada sesión"
+              aria-disabled="true"
             >
               Ver detalle
             </button>
@@ -359,8 +360,9 @@ function TabDocumentos() {
         <button
           type="button"
           className="fi-btn fi-btn-secondary"
-          onClick={() => alert("Subir documento clínico: próximamente. Sube a Supabase Storage cifrado con audit log automático.")}
-          title="Próximamente"
+          disabled
+          title="Próximamente — Supabase Storage cifrado con audit log automático"
+          aria-disabled="true"
         >
           <I.Plus size={13} /> Subir documento
         </button>

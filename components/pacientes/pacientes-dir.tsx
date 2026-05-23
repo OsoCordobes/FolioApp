@@ -14,6 +14,7 @@
 import { useMemo, useState } from "react";
 
 import * as I from "@/components/icons";
+import { PacienteCreateModal } from "@/components/pacientes/paciente-create-modal";
 import type { PacienteDirRow } from "@/lib/db/pacientes-dir";
 
 // Re-export con el alias del prototipo para no tocar el resto del archivo.
@@ -260,14 +261,28 @@ function BulkBar({ count, onClear, onWa, onTag, onArchivar }: BulkBarProps) {
         <button type="button" className="fi-btn fi-btn-secondary" onClick={onWa}>
           <I.Phone size={12} /> Enviar mensaje WhatsApp
         </button>
-        <button type="button" className="fi-btn fi-btn-secondary" onClick={onTag}>
+        <button
+          type="button"
+          className="fi-btn fi-btn-secondary"
+          onClick={onTag}
+          disabled
+          title="Próximamente — editar tags individuales desde la ficha del paciente"
+          aria-disabled="true"
+        >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
             <circle cx="7" cy="7" r="1.2" fill="currentColor" />
           </svg>
           Etiquetar
         </button>
-        <button type="button" className="fi-btn fi-btn-ghost" onClick={onArchivar}>
+        <button
+          type="button"
+          className="fi-btn fi-btn-ghost"
+          onClick={onArchivar}
+          disabled
+          title="Próximamente — pseudonimización individual disponible desde la ficha del paciente"
+          aria-disabled="true"
+        >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <rect x="3" y="4" width="18" height="4" rx="1" />
             <path d="M5 8v11a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8M10 13h4" />
@@ -387,6 +402,7 @@ export function PacientesDir({ pacientes, initialQuery = "" }: PacientesDirProps
   const [q, setQ] = useState(initialQuery);
   const [filtro, setFiltro] = useState("todos");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [createOpen, setCreateOpen] = useState(false);
 
   const paraReactivar = useMemo(
     () =>
@@ -448,9 +464,7 @@ export function PacientesDir({ pacientes, initialQuery = "" }: PacientesDirProps
           filtro={filtro}
           setFiltro={setFiltro}
           counts={counts}
-          onAddPaciente={() => alert(
-            "Crear paciente desde el directorio: próximamente.\n\nPor ahora los pacientes se crean automáticamente al confirmar un pedido entrante (booking público o WhatsApp).",
-          )}
+          onAddPaciente={() => setCreateOpen(true)}
         />
 
         <div className="pd-table-wrap">
@@ -470,8 +484,19 @@ export function PacientesDir({ pacientes, initialQuery = "" }: PacientesDirProps
           count={selected.size}
           onClear={() => setSelected(new Set())}
           onWa={() => handleBulkWhatsApp(selected, pacientes)}
-          onTag={() => alert("Etiquetar masivamente: próximamente. Por ahora editá cada paciente individualmente.")}
-          onArchivar={() => alert("Archivar masivamente: próximamente. La pseudonimización individual está disponible desde la ficha del paciente.")}
+          onTag={() => undefined /* botón disabled, ver BulkBar */}
+          onArchivar={() => undefined /* botón disabled, ver BulkBar */}
+        />
+      ) : null}
+
+      {createOpen ? (
+        <PacienteCreateModal
+          onClose={() => setCreateOpen(false)}
+          onCreated={(id) => {
+            // Tras crear, mandar al user a la ficha del paciente nuevo para
+            // que pueda completar motivo de consulta, tags, etc.
+            window.location.href = `/pacientes/${id}`;
+          }}
         />
       ) : null}
     </>

@@ -424,7 +424,12 @@ function csvEscapeFn(v: string): string {
 
 // ─── Page header ────────────────────────────────────────────────────────────
 
-function PageHeader({ periodo, setPeriodo, mesLabel, nowLabel }: { periodo: string; setPeriodo: (v: string) => void; mesLabel: string; nowLabel: string }) {
+function PageHeader({ mesLabel, nowLabel }: { mesLabel: string; nowLabel: string }) {
+  // Selector de período (Hoy / Semana / Mes / 6m / Año) está deshabilitado:
+  // el server fetcher actual `getFinanzasData` siempre devuelve el mes corriente.
+  // Para habilitarlo hay que aceptar un query param ?periodo= en /finanzas y
+  // pasar el rango de fechas al fetcher. Lo dejamos visible pero disabled
+  // para no romper UX prometiendo algo que no hace.
   const periods: [string, string][] = [
     ["hoy", "Hoy"],
     ["semana", "Semana"],
@@ -445,8 +450,10 @@ function PageHeader({ periodo, setPeriodo, mesLabel, nowLabel }: { periodo: stri
             <button
               key={id}
               type="button"
-              className={"fn-period-btn " + (periodo === id ? "is-active" : "")}
-              onClick={() => setPeriodo(id)}
+              className={"fn-period-btn " + (id === "mes" ? "is-active" : "")}
+              disabled={id !== "mes"}
+              title={id === "mes" ? "Período actual" : "Próximamente"}
+              aria-disabled={id !== "mes"}
             >
               {lbl}
             </button>
@@ -464,7 +471,6 @@ interface FinanzasProps {
 }
 
 export function Finanzas({ data }: FinanzasProps) {
-  const [periodo, setPeriodo] = useState("mes");
   void useMemo; // keep import compat con sub-componentes
 
   const deltaLabel = data.deltaIngresosVsMesPasadoPct == null
@@ -474,8 +480,6 @@ export function Finanzas({ data }: FinanzasProps) {
   return (
     <div className="fi-content fn-content">
       <PageHeader
-        periodo={periodo}
-        setPeriodo={setPeriodo}
         mesLabel={data.mesLabel}
         nowLabel={`al día ${data.diaActual}`}
       />

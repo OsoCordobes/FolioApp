@@ -16,9 +16,10 @@ interface PageHeaderProps {
   fechaLarga: string;
   fechaAnio: number;
   now: Date;
+  onOpenWalkIn?: () => void;
 }
 
-export function PageHeader({ turnos, pacientes, fechaLarga, fechaAnio, now }: PageHeaderProps) {
+export function PageHeader({ turnos, pacientes, fechaLarga, fechaAnio, now, onOpenWalkIn }: PageHeaderProps) {
   const proximo = turnos.find(
     (t) =>
       ["agendado", "confirmado", "en_sala"].includes(t.estado) &&
@@ -54,13 +55,14 @@ export function PageHeader({ turnos, pacientes, fechaLarga, fechaAnio, now }: Pa
         >
           <I.Printer size={13} /> Imprimir
         </button>
-        <a
-          href="/calendario#walkin"
+        <button
+          type="button"
           className="fi-btn fi-btn-secondary"
-          title="Agendar un walk-in en el calendario"
+          onClick={() => onOpenWalkIn?.()}
+          title="Agendar un walk-in (turno ahora)"
         >
           <I.Plus size={13} /> Turno walk-in
-        </a>
+        </button>
       </div>
     </header>
   );

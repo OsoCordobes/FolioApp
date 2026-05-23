@@ -73,7 +73,16 @@ export function TurnoRow({ turno, paciente, isNext, onTransition, onOpenFicha }:
       kind: "primary",
       label: "Cerrar turno",
       icon: <I.Check size={12} />,
-      onClick: () => onTransition(turno.id, "cerrado", { duracionMin: 38 }),
+      onClick: () => {
+        // duracionReal: minutos transcurridos desde atendiendoDesde hasta ahora.
+        // Si no hay timestamp (no debería pasar en estado atendiendo), default a la
+        // duración planificada del turno.
+        const fromIso = turno.atendiendoDesde;
+        const duracionMin = fromIso
+          ? Math.max(1, Math.round((Date.now() - new Date(fromIso).getTime()) / 60000))
+          : (turno.duracionMin ?? 45);
+        onTransition(turno.id, "cerrado", { duracionMin });
+      },
     };
   }
 
