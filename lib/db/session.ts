@@ -75,8 +75,48 @@ export async function getActiveSession(): Promise<Result<ActiveSession>> {
   });
 }
 
-/** Switchear la org activa (set cookie). Usado por <OrgSwitcher />. */
+/**
+ * Switchear la org activa (set cookie). Usado por <OrgSwitcher />.
+ *
+ * Defense in depth: valida que el user sea member ACTIVO de esa org antes
+ * de setear la cookie. Sin este check, cualquier user puede modificar su
+ * propia cookie a un organization_id ajeno; aunque getActiveSession()
+ * intersecta con memberships (línea 65 falla closed), futuros code paths
+ * que confíen en la cookie sin pasar por getActiveSession heredarían una
+ * fuga cross-tenant. Cerramos en el punto de entrada.
+ *
+ * Valida también formato uuid para fail-fast ante input malformado.
+ */
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function setActiveOrg(organizationId: string): Promise<Result<void>> {
+  if (!UUID_REGEX.test(organizationId)) {
+    return err("validation", "Identificador de organización inválido.");
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return err("auth_required", "No estás autenticado.");
+  }
+
+  const { data: membership, error: mErr } = await supabase
+    .from("member")
+    .select("id")
+    .eq("profile_id", user.id)
+    .eq("organization_id", organizationId)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (mErr) {
+    return err("db_error", "Error validando organización.", mErr.message);
+  }
+  if (!membership) {
+    return err("forbidden", "No tenés acceso a esa organización.");
+  }
+
   const cookieStore = await cookies();
   cookieStore.set(ACTIVE_ORG_COOKIE, organizationId, {
     httpOnly: true,
