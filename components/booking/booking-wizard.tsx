@@ -433,12 +433,56 @@ export function BookingWizard({
           </section>
         ) : null}
 
-        {vista === "ok" ? (
+        {vista === "ok" && slotPicked ? (
           <section style={{ textAlign: "center", paddingTop: 32 }}>
-            <h2 style={{ fontSize: 24 }}>¡Listo!</h2>
+            <div
+              aria-hidden
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: "50%",
+                background: "var(--green-soft, #dcfce7)",
+                color: "var(--green, #166534)",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto 16px",
+              }}
+            >
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </div>
+            <h2 style={{ fontSize: 24 }}>¡Solicitud enviada!</h2>
             <p style={{ color: "var(--ink-2)", marginTop: 12 }}>
-              Tu solicitud llegó al consultorio. Te van a confirmar por WhatsApp en las próximas horas.
+              {fmtDia(slotPicked.inicio)} · {fmtHora(slotPicked.inicio)} hs
             </p>
+            <p style={{ color: "var(--ink-3)", marginTop: 8, fontSize: 13, lineHeight: 1.6 }}>
+              Te van a confirmar por WhatsApp al <span className="fm-mono">{telefono}</span> en las próximas horas.
+              {email ? (
+                <>
+                  <br />También te enviamos una confirmación a <span className="fm-mono">{email}</span> cuando el consultorio acepte.
+                </>
+              ) : null}
+            </p>
+            <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 24 }}>
+              <button
+                type="button"
+                className="fi-btn fi-btn-ghost"
+                onClick={() => {
+                  // Reset y volver al inicio del wizard para reservar otro turno
+                  setVista("servicio");
+                  setSlotPicked(null);
+                  setNombre("");
+                  setTelefono("");
+                  setEmail("");
+                  setMotivo("");
+                  setCaptchaToken(null);
+                }}
+              >
+                Reservar otro turno
+              </button>
+            </div>
           </section>
         ) : null}
         </div>

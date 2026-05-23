@@ -10,6 +10,7 @@
  * persistencia real esté conectada.
  */
 
+import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 
 import * as I from "@/components/icons";
@@ -33,8 +34,8 @@ interface DashboardProps {
 }
 
 export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fechaAnio, nowIso }: DashboardProps) {
+  const router = useRouter();
   const [turnos, setTurnos] = useState<Turno[]>(initialTurnos);
-  const [fichaTurnoId, setFichaTurnoId] = useState<string | null>(null);
   const [walkInOpen, setWalkInOpen] = useState(false);
   const [transitionError, setTransitionError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
@@ -136,13 +137,19 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
             pacientes={pacientes}
             nextId={nextId}
             onTransition={handleTransition}
-            onOpenFicha={(id) => setFichaTurnoId(id)}
+            onOpenFicha={(turnoId) => {
+              // Side panel-style ficha planeado para sprint posterior. Mientras
+              // tanto, navegar a la ficha completa del paciente — toda la info
+              // clínica + plan + sesiones está allí.
+              const turno = turnos.find((t) => t.id === turnoId);
+              if (turno) router.push(`/pacientes/${turno.pacienteId}`);
+            }}
           />
         )}
       </div>
 
       {/* FAB walk-in: abre el modal de creación rápida de turno. */}
-      {!fichaTurnoId && !walkInOpen ? (
+      {!walkInOpen ? (
         <button
           type="button"
           className="fi-fab"

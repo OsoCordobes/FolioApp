@@ -15,7 +15,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 import { FolioMark } from "@/components/folio-mark";
 import * as I from "@/components/icons";
@@ -129,15 +129,42 @@ export function Sidebar({ organization, profile, role, googleSync }: SidebarProp
  * Buscador del sidebar (⌘K). Para MVP redirige a /pacientes con query
  * preescrita en `?q=`. F11 polish: dialog modal con búsqueda fuzzy en
  * pacientes + turnos + pedidos sin navegar.
+ *
+ * Atajo: Cmd+K (Mac) o Ctrl+K (Windows/Linux) enfoca el input. Si el
+ * usuario está en un input/textarea distinto, ignorar para no robar foco
+ * mientras escribe.
  */
 function SidebarSearch() {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      if (e.key.toLowerCase() !== "k") return;
+      // Si el target ya es un input/textarea, dejamos pasar (puede tener
+      // su propio ⌘K). Solo activamos cuando el foco está en body / nav.
+      const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea") return;
+      e.preventDefault();
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   return (
     <form className="fi-search" action="/pacientes" method="GET">
       <span className="fi-search-ico">
         <I.Search size={14} />
       </span>
-      <input name="q" placeholder="Buscar paciente, turno…" />
-      <span className="fi-kbd">⌘K</span>
+      <input
+        ref={inputRef}
+        name="q"
+        placeholder="Buscar paciente, turno…"
+        aria-label="Buscar paciente (Cmd+K)"
+      />
+      <span className="fi-kbd" aria-hidden>⌘K</span>
     </form>
   );
 }
