@@ -473,6 +473,123 @@ export async function signUpAndInitOrganization(
   return { ok: true, organizationId: org.id as string, slug: org.slug as string };
 }
 
+/**
+ * Bootstrap del onboarding para un user que YA tiene sesión (típicamente
+ * llegó por Google OAuth en /api/auth/callback). No crea ni toca password
+ * — el user ya está autenticado y, si entró por OAuth, podría no tener
+ * password de Supabase Auth nada más. Esta action es el equivalente a los
+ * pasos 4-6 de `signUpAndInitOrganization` (crear org placeholder + profile
+ * con consent + member OWNER), saltando los pasos de auth.
+ *
+ * Sigue requiriendo consent (Ley 25.326 art. 14) + Turnstile, porque al
+ * loguearse vía Google el user no vió todavía nuestro aviso de privacidad.
+ */
+export async function bootstrapOrgForAuthenticatedUser(
+  options: { turnstileToken?: string | null; consent?: boolean } = {},
+): Promise<OnboardingBootstrapResult> {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { ok: false, error: "Sesión expirada. Volvé a entrar." };
+  }
+
+  const reqHeaders = await headers();
+  const ipRaw = reqHeaders.get("x-forwarded-for") ?? reqHeaders.get("x-real-ip") ?? null;
+  const ip = ipRaw ? ipRaw.split(",")[0].trim() : null;
+  const userAgent = reqHeaders.get("user-agent");
+
+  // Rate-limit + captcha gates (mantengo simetría con signUpAndInitOrganization).
+  const limit = await limitByIp("onboarding-bootstrap", ip, 5);
+  if (!limit.ok) {
+    return { ok: false, error: "Demasiados intentos. Probá de nuevo en un rato." };
+  }
+  const captchaOk = await verifyTurnstile(options.turnstileToken, ip);
+  if (!captchaOk) {
+    return { ok: false, error: "No pude verificar el captcha. Recargá la página." };
+  }
+  if (options.consent !== true) {
+    return { ok: false, error: "Tenés que aceptar el aviso de privacidad para continuar." };
+  }
+
+  const service = createSupabaseServiceClient();
+
+  // Si ya tiene member/org, devolverla (idempotente).
+  const { data: existingMember } = await service
+    .from("member")
+    .select("organization_id")
+    .eq("profile_id", user.id)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (existingMember?.organization_id) {
+    const { data: existingOrg } = await service
+      .from("organization")
+      .select("id, slug")
+      .eq("id", existingMember.organization_id)
+      .maybeSingle();
+    if (existingOrg) {
+      return { ok: true, organizationId: existingOrg.id as string, slug: existingOrg.slug as string };
+    }
+  }
+
+  // Crear org placeholder con slug provisional del email.
+  const emailBase = (user.email ?? "consultorio").split("@")[0] || "consultorio";
+  const provisionalSlug = await pickFreshSlug(service, slugifyInline(emailBase));
+
+  const { data: org, error: orgErr } = await service
+    .from("organization")
+    .insert({
+      slug: provisionalSlug,
+      nombre: "Mi consultorio",
+      rubro: null,
+      ciudad: null,
+      provincia: null,
+      acento_hex: "#8A6722",
+      onboarding_completed: false,
+      onboarding_step_max: 1,
+    })
+    .select("id, slug")
+    .single();
+  if (orgErr || !org) {
+    return { ok: false, error: `Error creando consultorio: ${orgErr?.message ?? "desconocido"}` };
+  }
+
+  // Profile + consent (Ley 25.326 art. 14)
+  const { error: profErr } = await service
+    .from("profile")
+    .upsert({
+      id: user.id,
+      email: user.email ?? "",
+      nombre_cifrado: null,
+      apellido_cifrado: null,
+      matricula: null,
+      consent_pii_signed_at: new Date().toISOString(),
+      consent_pii_text_version: "v1",
+      consent_pii_ip: ip,
+      consent_pii_user_agent: userAgent,
+    });
+  if (profErr) {
+    return { ok: false, error: `Error creando perfil: ${profErr.message}` };
+  }
+
+  const { error: memErr } = await service
+    .from("member")
+    .insert({
+      organization_id: org.id,
+      profile_id: user.id,
+      role: "OWNER",
+      es_colegiado: true,
+      accepted_at: new Date().toISOString(),
+    });
+  if (memErr) {
+    return { ok: false, error: `Error creando membresía: ${memErr.message}` };
+  }
+
+  return { ok: true, organizationId: org.id as string, slug: org.slug as string };
+}
+
 // Helper interno: pickea un slug libre buscando un sufijo numérico si está tomado.
 async function pickFreshSlug(
   service: ReturnType<typeof createSupabaseServiceClient>,

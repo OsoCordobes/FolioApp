@@ -32,8 +32,13 @@ export default async function OnboardingPage() {
   let initialData: Record<string, unknown> | undefined;
   let organizationId: string | undefined;
   let initialSlug: string | undefined;
+  // Email del user autenticado. Si está set, /onboarding sabe que NO tiene
+  // que mostrar el form de email+password de Step 1 — basta con consent +
+  // bootstrap (los users de Google OAuth no tienen password de Supabase).
+  let authedEmail: string | undefined;
 
   if (user) {
+    authedEmail = user.email ?? undefined;
     const result = await getOnboardingResumeState(user.id, user.email ?? "");
     if (result.ok) {
       if (!result.data.shouldShowOnboarding) {
@@ -56,6 +61,7 @@ export default async function OnboardingPage() {
           initialData={initialData}
           organizationId={organizationId}
           initialSlug={initialSlug}
+          authedEmail={authedEmail}
         />
       </Suspense>
     </MotionProvider>

@@ -23,12 +23,14 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 
 import {
+  bootstrapOrgForAuthenticatedUser,
   finalizeOnboarding,
   signUpAndInitOrganization,
   updateOnboardingStep,
 } from "@/app/(public)/onboarding/actions";
 import { SideArt } from "@/components/auth/side-art";
 import { FolioMark } from "@/components/folio-mark";
+import { Step1Consent } from "@/components/onboarding/step1-consent";
 import { Step1Registro } from "@/components/onboarding/step1-registro";
 import { Step9Moment } from "@/components/onboarding/step9-moment";
 import {
@@ -64,6 +66,12 @@ interface OnboardingAppProps {
   initialData?: Record<string, unknown>;
   organizationId?: string;
   initialSlug?: string;
+  /**
+   * Email del user ya autenticado. Si está set, /onboarding sabe que NO tiene
+   * que mostrar el form email+password (los users de Google OAuth no tienen
+   * password de Supabase). En su lugar, Step 1 pide solo consent y captcha.
+   */
+  authedEmail?: string;
 }
 
 interface SaveState {
@@ -77,6 +85,7 @@ export function OnboardingApp({
   initialData,
   organizationId,
   initialSlug,
+  authedEmail,
 }: OnboardingAppProps = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -91,11 +100,19 @@ export function OnboardingApp({
   const [direction, setDirection] = useState<"forward" | "back">("forward");
 
   // Hidratación: prioriza initialData (DB) > localStorage > URL params.
+  // Importante: NUNCA restauramos `password` del localStorage. Es secret + no
+  // queremos mostrar la contraseña de un signup previo en la pantalla del
+  // siguiente user en la misma máquina.
   useEffect(() => {
     let restored: Partial<OnboardingDataState> = {};
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) restored = JSON.parse(raw);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Record<string, unknown>;
+        // Guard legado: si una versión vieja guardó password, no lo restauramos.
+        delete parsed.password;
+        restored = parsed as Partial<OnboardingDataState>;
+      }
     } catch {
       // ignore
     }
@@ -110,10 +127,14 @@ export function OnboardingApp({
     }));
   }, [searchParams, initialData]);
 
-  // Persistir cada cambio en localStorage (backup)
+  // Persistir cada cambio en localStorage (backup). Excluimos `password`: es
+  // un secreto que no debe quedar en disco, y si dos usuarios distintos usan
+  // la misma máquina, el password viejo aparecería pre-cargado en el form.
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      const { password: _omitPassword, ...safeSnapshot } = data;
+      void _omitPassword;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(safeSnapshot));
     } catch {
       // quota / privacy mode
     }
@@ -273,7 +294,12 @@ export function OnboardingApp({
     return () => window.removeEventListener("keydown", onKey);
   }, [stepIdx, next, back]);
 
-  // ─── Step 1: signUpAndInitOrganization ───────────────────────────────────
+  // ─── Step 1: signup (cuenta nueva) o consent-only (Google OAuth) ──────────
+  //
+  // Si `authedEmail` viene set, el user ya está autenticado (vino por Google
+  // OAuth, no tiene password de Supabase). Saltamos signUp y solo creamos
+  // la org + profile + member vía bootstrapOrgForAuthenticatedUser.
+  // Si no está set, es signup desde cero con email+password.
   const handleStep1Submit = ({
     turnstileToken,
     consent,
@@ -282,10 +308,12 @@ export function OnboardingApp({
     consent: boolean;
   }) => {
     startSignupTransition(async () => {
-      const result = await signUpAndInitOrganization(data.email, data.password, {
-        turnstileToken,
-        consent,
-      });
+      const result = authedEmail
+        ? await bootstrapOrgForAuthenticatedUser({ turnstileToken, consent })
+        : await signUpAndInitOrganization(data.email, data.password, {
+            turnstileToken,
+            consent,
+          });
       if (!result.ok) {
         setError(result.error ?? "Error en signup");
         return;
@@ -348,13 +376,22 @@ export function OnboardingApp({
               </div>
             </header>
             <div key={stepKey} className={`onb-anim onb-anim-${direction}`}>
-              <Step1Registro
-                data={{ email: data.email, password: data.password }}
-                set={(patch) => set(patch)}
-                onSubmit={handleStep1Submit}
-                loading={signingUp}
-                error={error}
-              />
+              {authedEmail ? (
+                <Step1Consent
+                  email={authedEmail}
+                  onSubmit={handleStep1Submit}
+                  loading={signingUp}
+                  error={error}
+                />
+              ) : (
+                <Step1Registro
+                  data={{ email: data.email, password: data.password }}
+                  set={(patch) => set(patch)}
+                  onSubmit={handleStep1Submit}
+                  loading={signingUp}
+                  error={error}
+                />
+              )}
             </div>
           </div>
         </div>
