@@ -165,13 +165,8 @@ export const serviciosListSchema = z
   .min(1, "Configurá al menos un servicio.")
   .max(20);
 
-// ─── Onboarding completo (step 9 finish) ───────────────────────────────────
-
-export const completeOnboardingSchema = identidadProfesionalSchema
-  .merge(consultorioBaseSchema)
-  .merge(horariosSchema)
-  .extend({
-    servicios: serviciosListSchema,
-  });
-
-export type CompleteOnboardingInput = z.infer<typeof completeOnboardingSchema>;
+// completeOnboardingSchema removed in Phase 10 — el legacy completeOnboarding
+// se eliminó. La Premium Architecture persiste cada step independientemente
+// vía updateOnboardingStep, con su propio schema por step. No hay schema
+// "completo" — el step 9 (finalizeOnboarding) solo marca onboarding_completed
+// y no necesita validar un blob agregado.

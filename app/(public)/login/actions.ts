@@ -25,8 +25,12 @@ export async function signInWithPassword(
   if (!email || !email.match(/^[^@\s]+@[^@\s]+\.[^@\s]+$/)) {
     return { ok: false, error: "Email inválido." };
   }
-  if (!password || password.length < 8) {
-    return { ok: false, error: "Contraseña inválida." };
+  // No enforzamos length >= 8 acá: el signup ya lo enforza al crear la
+  // cuenta. Login no debería rechazar una password vieja que cumple la
+  // policy histórica del momento en que fue creada. Auditoría LOW: dejar
+  // que Supabase responda con "contraseña incorrecta" si no matchea.
+  if (!password || password.length === 0) {
+    return { ok: false, error: "Ingresá tu contraseña." };
   }
 
   const supabase = await createSupabaseServerClient();
