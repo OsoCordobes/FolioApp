@@ -37,6 +37,13 @@ export default async function AppShellLayout({
   }
   const { organization, profile, session, accessGate } = ctx.data;
 
+  // Si el wizard de onboarding no se completó, no dejamos entrar a la app.
+  // El user vería /hoy con datos parciales (org sin nombre, sin servicios,
+  // sin horarios). Lo mandamos a terminar primero.
+  if (!organization.onboardingCompleted) {
+    redirect("/onboarding");
+  }
+
   // Gating de suscripción (M19/S0 billing). Si vencido el grace period y la
   // suscripción no está activa, forzamos al usuario a /configuracion/billing.
   // Excepción: si ya estamos en billing, dejamos pasar — sería loop infinito.

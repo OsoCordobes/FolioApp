@@ -83,5 +83,12 @@ export async function requestPasswordReset(email: string): Promise<AuthResult> {
 export async function signOut(): Promise<void> {
   const supabase = await createSupabaseServerClient();
   await supabase.auth.signOut();
+
+  // Limpiar la cookie de org activa para que el próximo user en el mismo
+  // navegador no herede el switcher del anterior.
+  const { cookies } = await import("next/headers");
+  const cookieStore = await cookies();
+  cookieStore.delete("folio.active_org");
+
   redirect("/login");
 }

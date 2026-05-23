@@ -53,6 +53,7 @@ export interface ActiveOrganization {
   condicionIva: "MONOTRIBUTO" | "RESPONSABLE_INSCRIPTO" | "EXENTO";
   optOutAnalytics: boolean;
   optOutPublicListing: boolean;
+  onboardingCompleted: boolean;
 }
 
 export interface ActiveProfile {
@@ -108,7 +109,7 @@ export async function getActiveContext(): Promise<Result<ActiveContext>> {
     supabase
       .from("organization")
       .select(
-        "id, slug, nombre, rubro, ciudad, provincia, acento_hex, tema, timezone, moneda, cuit, razon_social, condicion_iva, opt_out_analytics, opt_out_public_listing, created_at",
+        "id, slug, nombre, rubro, ciudad, provincia, acento_hex, tema, timezone, moneda, cuit, razon_social, condicion_iva, opt_out_analytics, opt_out_public_listing, onboarding_completed, created_at",
       )
       .eq("id", session.organizationId)
       .is("deleted_at", null)
@@ -144,6 +145,7 @@ export async function getActiveContext(): Promise<Result<ActiveContext>> {
     condicion_iva: "MONOTRIBUTO" | "RESPONSABLE_INSCRIPTO" | "EXENTO";
     opt_out_analytics: boolean;
     opt_out_public_listing: boolean;
+    onboarding_completed: boolean;
     created_at: string;
   };
 
@@ -180,6 +182,7 @@ export async function getActiveContext(): Promise<Result<ActiveContext>> {
     condicionIva: orgRow.condicion_iva,
     optOutAnalytics: orgRow.opt_out_analytics,
     optOutPublicListing: orgRow.opt_out_public_listing,
+    onboardingCompleted: orgRow.onboarding_completed,
   };
 
   const profile: ActiveProfile = {

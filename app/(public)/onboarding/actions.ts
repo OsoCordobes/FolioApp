@@ -359,8 +359,10 @@ export async function signUpAndInitOrganization(
 
   const service = createSupabaseServiceClient();
 
-  // 1. Crear o resolver auth.user
+  // 1. Crear o resolver auth.user. `wasExisting` recuerda si el user ya existía
+  //    para diferenciar mensajes downstream cuando signInWithPassword falla.
   let userId: string;
+  let wasExisting = false;
   const { data: created, error: createErr } = await service.auth.admin.createUser({
     email,
     password,
@@ -369,13 +371,23 @@ export async function signUpAndInitOrganization(
 
   if (createErr) {
     if (createErr.message.toLowerCase().includes("already") || createErr.message.toLowerCase().includes("registered")) {
+      // El user ya existe en auth.users. Buscarlo por email para resolver su id.
+      // listUsers no escala a >200 users pero alcanza para el MVP; al pasar
+      // ese umbral migrar a service.auth.admin.getUserByEmail si está disponible
+      // o iterar páginas. P1 acción, no bloqueante.
       const { data: list } = await service.auth.admin.listUsers({ page: 1, perPage: 200 });
       const existing = list?.users?.find((u) => u.email?.toLowerCase() === email.toLowerCase());
-      if (!existing) return { ok: false, error: "No pude resolver tu cuenta. Probá ingresar." };
+      if (!existing) {
+        return {
+          ok: false,
+          error: "Ya existe una cuenta con este email. Iniciá sesión desde /login.",
+        };
+      }
       if (!existing.email_confirmed_at) {
         await service.auth.admin.updateUserById(existing.id, { email_confirm: true });
       }
       userId = existing.id;
+      wasExisting = true;
     } else {
       return { ok: false, error: createErr.message };
     }
@@ -387,6 +399,16 @@ export async function signUpAndInitOrganization(
   const supabase = await createSupabaseServerClient();
   const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
   if (signInErr) {
+    // Si el user ya existía y signInWithPassword falla, lo más probable es
+    // que: a) escribió mal su password vieja, b) la cuenta es de Google OAuth
+    // sin password, o c) password reset pendiente. Mensaje específico para
+    // que sepa qué hacer.
+    if (wasExisting) {
+      return {
+        ok: false,
+        error: "Ya existe una cuenta con este email. Iniciá sesión en /login con tu contraseña, o usá 'Olvidé mi contraseña'.",
+      };
+    }
     return { ok: false, error: `Cuenta creada pero no pude entrar: ${signInErr.message}` };
   }
 
@@ -451,6 +473,9 @@ export async function signUpAndInitOrganization(
       consent_pii_user_agent: userAgent,
     });
   if (profErr) {
+    // Rollback: borrar la org huérfana que creamos arriba. Si dejamos la org,
+    // el próximo retry crea una nueva → terminamos con N orgs huérfanas.
+    await service.from("organization").delete().eq("id", org.id);
     return { ok: false, error: `Error creando perfil: ${profErr.message}` };
   }
 
@@ -466,6 +491,11 @@ export async function signUpAndInitOrganization(
     });
 
   if (memErr) {
+    // Rollback: org + profile. El profile podría ser compartido con otra org
+    // en el futuro (clinic-mode), pero al momento del signup es 1:1 con el
+    // signup en curso; si falla member, lo borramos también.
+    await service.from("organization").delete().eq("id", org.id);
+    await service.from("profile").delete().eq("id", userId);
     return { ok: false, error: `Error creando membresía: ${memErr.message}` };
   }
 
@@ -571,6 +601,7 @@ export async function bootstrapOrgForAuthenticatedUser(
       consent_pii_user_agent: userAgent,
     });
   if (profErr) {
+    await service.from("organization").delete().eq("id", org.id);
     return { ok: false, error: `Error creando perfil: ${profErr.message}` };
   }
 
@@ -584,6 +615,8 @@ export async function bootstrapOrgForAuthenticatedUser(
       accepted_at: new Date().toISOString(),
     });
   if (memErr) {
+    await service.from("organization").delete().eq("id", org.id);
+    await service.from("profile").delete().eq("id", user.id);
     return { ok: false, error: `Error creando membresía: ${memErr.message}` };
   }
 

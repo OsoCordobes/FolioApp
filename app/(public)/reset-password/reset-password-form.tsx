@@ -28,27 +28,52 @@ export function ResetPasswordForm() {
   const [err, setErr] = useState<string | null>(null);
   const [ok, setOk] = useState(false);
   const [exchangeError, setExchangeError] = useState<string | null>(null);
+  const [exchanging, setExchanging] = useState(true);
   const [pending, startTransition] = useTransition();
 
-  // The Supabase JS client picks up `code` or `token_hash` on mount via
-  // detectSessionInUrl. We instantiate the browser client once.
+  // El link de recuperación de Supabase trae un `code` (PKCE) que tenemos que
+  // intercambiar manualmente por una sesión en el cliente. Sin ese exchange
+  // explícito, `updateUser({ password })` tira "Auth session missing".
+  // detectSessionInUrl=true en @supabase/ssr cubre el caso del hash fragment,
+  // pero el code-param requiere exchangeCodeForSession explícito.
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
-    // Listen for PASSWORD_RECOVERY events; the SDK fires this when the
-    // URL params are valid + the session is established.
-    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY") {
-        // ready to submit the new password
-      }
-    });
-    return () => sub.subscription.unsubscribe();
-  }, []);
+    const code = searchParams.get("code");
+    const errorParam =
+      searchParams.get("error_description") ?? searchParams.get("error");
 
-  // Detect a stale / used link early. Supabase passes back error params
-  // on failure (e.g. ?error=expired).
-  useEffect(() => {
-    const error = searchParams.get("error") ?? searchParams.get("error_description");
-    if (error) setExchangeError(decodeURIComponent(error));
+    if (errorParam) {
+      setExchangeError(decodeURIComponent(errorParam));
+      setExchanging(false);
+      return;
+    }
+
+    if (!code) {
+      // Tal vez el link viene como hash fragment (#access_token=...). En ese
+      // caso @supabase/ssr ya hizo el work via detectSessionInUrl; verificamos
+      // que haya sesión antes de mostrar el form.
+      supabase.auth.getSession().then(({ data }) => {
+        if (!data.session) {
+          setExchangeError(
+            "Link inválido o expirado. Pedí uno nuevo desde el login.",
+          );
+        }
+        setExchanging(false);
+      });
+      return;
+    }
+
+    let cancelled = false;
+    supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
+      if (cancelled) return;
+      if (error) {
+        setExchangeError(error.message);
+      }
+      setExchanging(false);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [searchParams]);
 
   const onSubmit = (e?: React.FormEvent) => {
@@ -91,6 +116,17 @@ export function ResetPasswordForm() {
         >
           Volver a /login
         </button>
+      </div>
+    );
+  }
+
+  if (exchanging) {
+    return (
+      <div className="au-form-pane" style={{ maxWidth: 420 }}>
+        <h2>Verificando link…</h2>
+        <p style={{ color: "var(--ink-3)", fontSize: 13 }}>
+          Esto tarda un segundo.
+        </p>
       </div>
     );
   }

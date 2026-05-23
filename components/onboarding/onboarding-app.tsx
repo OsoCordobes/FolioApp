@@ -99,10 +99,23 @@ export function OnboardingApp({
   const [saveState, setSaveState] = useState<SaveState>({ status: "idle" });
   const [direction, setDirection] = useState<"forward" | "back">("forward");
 
+  // ─── Auto-save refs declarados antes del useEffect de hidratación porque
+  //     la hidratación los inicializa para evitar un auto-save espurio
+  //     inmediatamente después del primer render. ───────────────────────────
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSavedSnapshotRef = useRef<string>("");
+  const pendingStepRef = useRef<number | null>(null);
+
   // Hidratación: prioriza initialData (DB) > localStorage > URL params.
   // Importante: NUNCA restauramos `password` del localStorage. Es secret + no
   // queremos mostrar la contraseña de un signup previo en la pantalla del
   // siguiente user en la misma máquina.
+  //
+  // `hydratedRef` evita que el primer setData (la hidratación) dispare el
+  // auto-save effect — sin esto, al volver al wizard tras reload, el cliente
+  // haría DELETE+INSERT inmediato de horarios/servicios sobre los datos
+  // recién leídos de la DB. Marcamos el snapshot inicial como "ya guardado".
+  const hydratedRef = useRef(false);
   useEffect(() => {
     let restored: Partial<OnboardingDataState> = {};
     try {
@@ -118,14 +131,21 @@ export function OnboardingApp({
     }
     const prefillEmail = searchParams.get("email");
     const prefillNombre = searchParams.get("nombre");
-    setData((prev) => ({
-      ...prev,
-      ...restored,
-      ...(initialData ?? {}),
-      ...(prefillEmail ? { email: prefillEmail } : {}),
-      ...(prefillNombre ? { nombre: prefillNombre } : {}),
-    }));
-  }, [searchParams, initialData]);
+    setData((prev) => {
+      const next = {
+        ...prev,
+        ...restored,
+        ...(initialData ?? {}),
+        ...(prefillEmail ? { email: prefillEmail } : {}),
+        ...(prefillNombre ? { nombre: prefillNombre } : {}),
+      };
+      // Tras hidratar, marcar el snapshot resultante como "ya guardado" para
+      // que el auto-save no lo persista en el primer ciclo.
+      lastSavedSnapshotRef.current = JSON.stringify({ step: stepIdx, data: next });
+      hydratedRef.current = true;
+      return next;
+    });
+  }, [searchParams, initialData, stepIdx]);
 
   // Persistir cada cambio en localStorage (backup). Excluimos `password`: es
   // un secreto que no debe quedar en disco, y si dos usuarios distintos usan
@@ -141,9 +161,6 @@ export function OnboardingApp({
   }, [data]);
 
   // ─── Auto-save por step (debounce 800ms) ─────────────────────────────────
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastSavedSnapshotRef = useRef<string>("");
-  const pendingStepRef = useRef<number | null>(null);
 
   const persistStep = useCallback(
     async (step: number, snapshot: OnboardingDataState) => {

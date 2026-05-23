@@ -49,8 +49,16 @@ export default async function OnboardingPage() {
       initialData = result.data.initialData as Record<string, unknown>;
       organizationId = result.data.organizationId ?? undefined;
       initialSlug = result.data.slug ?? undefined;
+    } else {
+      // No silenciar errores de DB: si no podemos leer el estado del wizard,
+      // mandamos al user a /hoy con su sesión activa. El layout (app) tiene
+      // su propio getActiveContext que decidirá si redirigir de vuelta a
+      // onboarding o tirar error boundary. Loguear para investigar.
+      console.error(
+        `[onboarding] getOnboardingResumeState falló para user ${user.id}: ${result.error.message}`,
+      );
+      redirect("/hoy");
     }
-    // Si falla el lookup, dejamos initial* en undefined → cliente arranca de cero.
   }
 
   return (
