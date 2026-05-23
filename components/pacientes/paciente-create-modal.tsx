@@ -11,7 +11,7 @@
  */
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 
 import { createPacienteAction } from "@/app/(app)/pacientes/actions";
 
@@ -43,6 +43,18 @@ export function PacienteCreateModal({ onClose, onCreated }: PacienteCreateModalP
   const [form, setForm] = useState<FormState>(EMPTY);
   const [pending, startTransition] = useTransition();
   const [err, setErr] = useState<string | null>(null);
+
+  // Escape cierra el modal cuando no estamos en submit.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !pending) {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose, pending]);
 
   const canSubmit =
     !pending &&

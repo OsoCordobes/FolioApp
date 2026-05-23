@@ -15,7 +15,7 @@
  * sugiere crear turno manual desde el calendario (post P0 #4).
  */
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 
 import {
   aceptarPedidoAction,
@@ -34,6 +34,19 @@ export function PedidoModal({ pedido, onClose, onResolved }: PedidoModalProps) {
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<"view" | "reject">("view");
   const [motivo, setMotivo] = useState("");
+
+  // Escape cierra el modal (UX estándar). Solo cuando no estamos en medio
+  // de un submit — para no interrumpir una operación en vuelo.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !pending) {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose, pending]);
 
   const handleAccept = () => {
     setError(null);

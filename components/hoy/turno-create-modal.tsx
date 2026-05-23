@@ -19,6 +19,9 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 
+// Escape para cerrar (UX estándar de modales). Solo cuando no estamos en medio
+// del submit.
+
 import {
   createTurnoAction,
   loadCreateTurnoMeta,
@@ -89,6 +92,18 @@ export function TurnoCreateModal({
       cancelled = true;
     };
   }, []);
+
+  // Escape cierra el modal cuando no estamos en submit.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !submitting) {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose, submitting]);
 
   // Cuando cambia servicio, reset duración al default del servicio (si el
   // usuario no la había tocado todavía, mejor; aquí lo hacemos simple y
