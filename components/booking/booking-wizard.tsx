@@ -243,6 +243,25 @@ export function BookingWizard({
         {vista === "servicio" ? (
           <section>
             <h2 style={{ fontSize: 16, marginBottom: 16 }}>Elegí el servicio</h2>
+            {servicios.length === 0 ? (
+              <div
+                style={{
+                  padding: 24,
+                  background: "var(--surface)",
+                  border: "1px dashed var(--line)",
+                  borderRadius: "var(--r-md)",
+                  textAlign: "center",
+                  color: "var(--ink-3)",
+                }}
+              >
+                <p style={{ margin: 0, fontSize: 14 }}>
+                  Este consultorio todavía no publicó servicios disponibles para reserva.
+                </p>
+                <p style={{ margin: "8px 0 0", fontSize: 13 }}>
+                  Si el profesional te dijo de reservar acá, escribile por WhatsApp o probá más tarde.
+                </p>
+              </div>
+            ) : null}
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {servicios.map((s) => (
                 <button
