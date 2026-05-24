@@ -10,6 +10,7 @@
 import { z } from "zod";
 
 import { blindIndex, blindIndexPhone, encryptColumn, tryDecrypt } from "@/lib/crypto";
+import { trackEvent } from "@/lib/observability/events";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import { err, mapSupabaseError, ok, type Result } from "./errors";
@@ -242,6 +243,16 @@ export async function createPaciente(input: CreatePacienteInput): Promise<Result
     const mapped = pacErr ? mapSupabaseError(pacErr) : { code: "db_error" as const, message: "No se creó el paciente." };
     return err(mapped.code, mapped.message, pacErr?.message);
   }
+
+  // Business event (Sprint 2 T2.2). Fire-and-forget: si PostHog falla no
+  // bloquea el flow del usuario. captureServerEvent ya hace no-op si
+  // POSTHOG_KEY no está configurada.
+  void trackEvent.pacienteCreated({
+    orgId: session.data.organizationId,
+    source: "manual",
+    hasDni: Boolean(d.numeroDoc),
+    hasEmail: Boolean(d.email),
+  });
 
   return ok({ id: paciente.id });
 }
