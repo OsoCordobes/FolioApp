@@ -18,6 +18,30 @@
  *
  * Connection: prefiere POSTGRES_URL_NON_POOLING (direct, 5432) porque las
  * migrations corren múltiples statements pesados y el transaction pooler corta.
+ *
+ * ─── Audit 2026-05-23 finding C1: gate sobre ?reset=true ───────────────────
+ *
+ * `?reset=true` ejecuta DROP SCHEMA public CASCADE — destructivo total. La
+ * única protección histórica era `Bearer ${CRON_SECRET}`. Si el secret leaks
+ * (commit accidental, log dump, error de Vercel, ex-colaborador con acceso),
+ * un atacante con un solo curl borra toda la DB.
+ *
+ * Threat model post-fix:
+ *   - Producción: el reset requiere `ALLOW_PROD_RESET=yes-im-sure-2026` setea-
+ *     da explícitamente en Vercel + Bearer secret. Dos factores independientes.
+ *   - Preview/dev: el reset funciona con solo Bearer (las preview deployments
+ *     usan una DB temporal y dev usa la DB local; ambos casos sin impacto si
+ *     se borran).
+ *
+ * Cuándo setear ALLOW_PROD_RESET:
+ *   1. Decidiste que querés un reset destructivo (recovery total, no usual).
+ *   2. Configurás la env en Vercel temporalmente con el valor exacto.
+ *   3. Trigger redeploy para que la env se propague.
+ *   4. Ejecutás el curl.
+ *   5. **Inmediatamente** quitás la env y trigger otro redeploy.
+ *
+ * Long-term (Sprint 3): reemplazar este endpoint con `supabase db push`
+ * ejecutado vía GitHub Actions con OIDC; el endpoint se borra del repo.
  */
 
 import { readFile, readdir } from "node:fs/promises";
@@ -25,6 +49,8 @@ import path from "node:path";
 
 import { NextResponse } from "next/server";
 import { Client } from "pg";
+
+import { checkAdminGate } from "@/lib/security/admin-gate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -89,6 +115,16 @@ export async function POST(req: Request) {
   const fromPrefix = url.searchParams.get("from");
   if (!["all", "migrations", "seeds"].includes(mode)) {
     return NextResponse.json({ ok: false, error: "mode debe ser all|migrations|seeds" }, { status: 400 });
+  }
+
+  // Audit C1 gate: el reset destructivo requiere un escape hatch explícito
+  // en producción además del Bearer secret. Ver doc de cabecera.
+  if (reset) {
+    const gated = checkAdminGate({
+      mode: "prod-escape-hatch",
+      escapeHatch: { envVar: "ALLOW_PROD_RESET", expected: "yes-im-sure-2026" },
+    });
+    if (gated) return gated;
   }
 
   const rawDsn = process.env.POSTGRES_URL_NON_POOLING ?? process.env.POSTGRES_URL;
