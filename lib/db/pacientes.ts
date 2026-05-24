@@ -105,19 +105,54 @@ export async function buscarPaciente(query: string): Promise<Result<PacienteDeco
   if (!session.ok) return session;
 
   const supabase = await createSupabaseServerClient();
-  const queryHash = blindIndex(query);
+  const orgId = session.data.organizationId;
+
+  // Per-tenant salt (Sprint 1 T1.5.3 / audit A2). Computamos ambos hashes
+  // (con y sin salt) durante la ventana de transición; primero buscamos
+  // con salt, y si no hay resultados intentamos con el hash legacy. Una
+  // vez que el rehash (T1.5.4) corra y 72h pasen sin fallbacks legacy,
+  // el código del fallback se remueve en T1.5.5.
+  const queryHash = blindIndex(query, orgId);
+  const queryHashLegacy = blindIndex(query);
   if (!queryHash) return ok([]);
 
-  // Buscar por nombre_hash O dni_hash
-  const { data, error } = await supabase
+  // Buscar por nombre_hash O dni_hash con el hash salted.
+  const { data: salted, error: saltedErr } = await supabase
     .from("paciente_directorio_lite")
     .select("*")
-    .eq("organization_id", session.data.organizationId)
+    .eq("organization_id", orgId)
     .or(`nombre_hash.eq.${queryHash},dni_hash.eq.${queryHash}`)
     .is("deleted_at", null)
     .limit(20);
 
-  if (error) return err("db_error", "Error buscando pacientes.", error.message);
+  if (saltedErr) return err("db_error", "Error buscando pacientes.", saltedErr.message);
+
+  let data = salted ?? [];
+
+  // Fallback legacy: si el salted lookup no devolvió nada y el legacy hash
+  // es distinto, probar con el hash sin salt. Loguear a Sentry para
+  // monitorear el progreso del backfill — cuando este log deja de aparecer
+  // por 72h, T1.5.5 puede remover el fallback.
+  if (data.length === 0 && queryHashLegacy && queryHashLegacy !== queryHash) {
+    const { data: legacy, error: legacyErr } = await supabase
+      .from("paciente_directorio_lite")
+      .select("*")
+      .eq("organization_id", orgId)
+      .or(`nombre_hash.eq.${queryHashLegacy},dni_hash.eq.${queryHashLegacy}`)
+      .is("deleted_at", null)
+      .limit(20);
+
+    if (legacyErr) return err("db_error", "Error buscando pacientes.", legacyErr.message);
+    if (legacy && legacy.length > 0) {
+      const { captureMessage } = await import("@sentry/nextjs");
+      captureMessage("blind-index-legacy-fallback fired in buscarPaciente", {
+        level: "warning",
+        tags: { audit: "A2", fallback: "buscarPaciente" },
+        extra: { orgId, hitCount: legacy.length },
+      });
+      data = legacy;
+    }
+  }
 
   // Decode (igual que listPacientesDirectorio)
   const decoded: PacienteDecoded[] = (data ?? []).map((row: Record<string, unknown>) => ({
@@ -174,9 +209,10 @@ export async function createPaciente(input: CreatePacienteInput): Promise<Result
       domicilio_ciudad: d.domicilioCiudad ?? null,
       domicilio_provincia: d.domicilioProvincia ?? null,
       domicilio_cp: d.domicilioCp ?? null,
-      nombre_hash: blindIndex(nombreFull),
-      dni_hash: d.numeroDoc ? blindIndex(d.numeroDoc) : null,
-      telefono_hash: blindIndexPhone(d.telefono),
+      // Per-tenant salt (Sprint 1 T1.5.3 / audit A2)
+      nombre_hash: blindIndex(nombreFull, session.data.organizationId),
+      dni_hash: d.numeroDoc ? blindIndex(d.numeroDoc, session.data.organizationId) : null,
+      telefono_hash: blindIndexPhone(d.telefono, session.data.organizationId),
     })
     .select("id")
     .single();

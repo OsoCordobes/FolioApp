@@ -171,7 +171,8 @@ export async function POST(req: Request) {
     const apellidoCif = encryptColumn(dp.apellido)!;
     const telCif = encryptColumn(dp.telefono)!;
     const fullName = `${dp.nombre} ${dp.apellido}`.toLowerCase();
-    const nombreHash = blindIndex(fullName);
+    // Per-tenant salt (Sprint 1 T1.5.3 / audit A2)
+    const nombreHash = blindIndex(fullName, orgId);
 
     const { data: ident, error: ie } = await supabase
       .from("paciente_identidad")

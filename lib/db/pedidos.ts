@@ -268,8 +268,9 @@ export async function aceptarPedido(
         tipo_doc: "DNI",
         telefono_cifrado: encryptColumn(telefono)!,
         email_cifrado: encryptColumn(email ?? null),
-        nombre_hash: blindIndex(nombreFull),
-        telefono_hash: blindIndexPhone(telefono),     // M30 dedup partial UNIQUE
+        // Per-tenant salt (Sprint 1 T1.5.3 / audit A2)
+        nombre_hash: blindIndex(nombreFull, session.data.organizationId),
+        telefono_hash: blindIndexPhone(telefono, session.data.organizationId), // M30 dedup partial UNIQUE
       })
       .select("id")
       .single();
