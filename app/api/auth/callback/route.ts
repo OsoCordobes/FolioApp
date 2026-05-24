@@ -4,9 +4,21 @@
  * Supabase Auth redirige aquí post-OAuth (Google) y post-email-verify. Acá
  * cambiamos el `code` por una sesión y redirigimos:
  *   - Sin sesión → /login (algo falló en el exchange)
- *   - Con sesión, sin profile → /onboarding (signup mid-flow, viene por Google)
- *   - Con sesión + profile + onboarding_completed=false → /onboarding (resume)
- *   - Con sesión + profile + onboarding_completed=true → /hoy (o el redirect param)
+ *   - Con sesión pero sin org bootstrapeada (sin member o member sin org) →
+ *     /onboarding (signup mid-flow, viene por Google o profile + member
+ *     creados a medias por un retry abortado)
+ *   - Con sesión + member + organization.onboarding_completed=false → /onboarding (resume)
+ *   - Con sesión + member + organization.onboarding_completed=true → /hoy (o ?redirect)
+ *
+ * ─── Sprint 2 T2.1 · Consolidación de queries (audit Medio · perf) ──────
+ *
+ * El handler anterior hacía 4 round-trips seriales (exchangeCodeForSession,
+ * getUser, profile, member, organization), sumando ~400-800ms post-OAuth.
+ *
+ * Tras T2.1: getUser + 1 query con join member→organization. El profile no
+ * se chequea por separado porque la FK profile_id en member implica que
+ * existe; los casos legacy "profile sin member" caen al mismo destination
+ * (/onboarding) que el flow original chequeaba con un query extra inútil.
  */
 
 import { NextResponse, type NextRequest } from "next/server";
@@ -26,6 +38,11 @@ function mapAuthError(message: string): string {
   if (lower.includes("network") || lower.includes("timeout")) return "network";
   if (lower.includes("invalid") && lower.includes("code")) return "code_invalid";
   return "oauth_failed";
+}
+
+interface MemberWithOrg {
+  organization_id: string | null;
+  organization: { onboarding_completed: boolean | null } | null;
 }
 
 export async function GET(request: NextRequest) {
@@ -55,38 +72,24 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/login`);
   }
 
-  // Verificar estado del onboarding antes de mandar a la app. Un usuario que
-  // tiene profile + member pero no terminó el wizard debe volver a onboarding,
-  // no aterrizar en /hoy con datos incompletos.
-  const { data: profile } = await supabase
-    .from("profile")
-    .select("id")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (!profile) {
-    return NextResponse.redirect(`${origin}/onboarding`);
-  }
-
+  // Consolidated lookup: member + organization en 1 query con inner join.
+  // Reemplaza 3 queries seriales (profile, member, organization) del flow
+  // anterior. El select usa la FK `organization` (PostgREST detecta el FK
+  // automáticamente por el campo organization_id en member).
   const { data: member } = await supabase
     .from("member")
-    .select("organization_id")
+    .select("organization_id, organization!inner(onboarding_completed)")
     .eq("profile_id", user.id)
     .is("deleted_at", null)
-    .maybeSingle();
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle<MemberWithOrg>();
 
-  if (!member?.organization_id) {
+  if (!member?.organization_id || !member.organization) {
     return NextResponse.redirect(`${origin}/onboarding`);
   }
 
-  const { data: org } = await supabase
-    .from("organization")
-    .select("onboarding_completed")
-    .eq("id", member.organization_id)
-    .is("deleted_at", null)
-    .maybeSingle();
-
-  if (!org || org.onboarding_completed === false) {
+  if (member.organization.onboarding_completed !== true) {
     return NextResponse.redirect(`${origin}/onboarding`);
   }
 
