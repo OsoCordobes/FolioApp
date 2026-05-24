@@ -161,12 +161,27 @@ function toBufferForDecrypt(value: string | Buffer | Uint8Array): Buffer | null 
  *
  * Output: hex string de 64 chars (256 bits), compatible con la función
  * SQL `public.hmac_blind(text)` declarada en M01.
+ *
+ * ─── Per-tenant salt (audit finding A2 · Sprint 1 T1.5) ────────────────
+ *
+ * El argumento opcional `salt` (típicamente `organization_id`) se prepend
+ * al input antes del HMAC: `HMAC(key, salt + ":" + normalized)`. Esto
+ * limita el blast radius si la HMAC key se filtra: el atacante debe
+ * precomputar el universo de plaintexts × N orgs en vez de × 1.
+ *
+ * Backward compatible: si `salt` es undefined, comportamiento idéntico al
+ * pre-Sprint 1 (sin prefijo). Los call sites se migran gradualmente con
+ * un fallback de lectura legacy durante la transición (Task 1.5.3).
  */
-export function blindIndex(plain: string | null | undefined): string | null {
+export function blindIndex(
+  plain: string | null | undefined,
+  salt?: string,
+): string | null {
   if (plain === null || plain === undefined) return null;
   const normalized = plain.trim().toLowerCase();
   if (normalized === "") return null;
-  return createHmac("sha256", getHmacKey()).update(normalized, "utf8").digest("hex");
+  const input = salt ? `${salt}:${normalized}` : normalized;
+  return createHmac("sha256", getHmacKey()).update(input, "utf8").digest("hex");
 }
 
 /**
@@ -182,13 +197,20 @@ export function blindIndex(plain: string | null | undefined): string | null {
  * Output: hex string de 64 chars (256 bits) o null.
  *
  * Se computa con el mismo HMAC key que blindIndex() — single key rotation.
+ *
+ * Per-tenant salt: ver `blindIndex` arriba. Si `salt` definido:
+ * `HMAC(key, salt + ":tel:" + last10)`. Backward-compatible.
  */
-export function blindIndexPhone(rawPhone: string | null | undefined): string | null {
+export function blindIndexPhone(
+  rawPhone: string | null | undefined,
+  salt?: string,
+): string | null {
   if (rawPhone === null || rawPhone === undefined) return null;
   const digits = rawPhone.replace(/\D/g, "");
   if (digits.length < 8) return null;
   const last10 = digits.slice(-10);
-  return createHmac("sha256", getHmacKey()).update(`tel:${last10}`, "utf8").digest("hex");
+  const input = salt ? `${salt}:tel:${last10}` : `tel:${last10}`;
+  return createHmac("sha256", getHmacKey()).update(input, "utf8").digest("hex");
 }
 
 /**
