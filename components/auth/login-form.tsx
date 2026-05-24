@@ -602,6 +602,24 @@ function Forgot({ setVista }: { setVista: (v: Vista) => void }) {
           <ArrowRightTiny />
         </button>
       </form>
+      <p
+        style={{
+          fontSize: 12,
+          color: "var(--ink-2)",
+          marginTop: 16,
+          textAlign: "center",
+          lineHeight: 1.5,
+        }}
+      >
+        ¿Perdiste acceso al email también?{" "}
+        <a
+          href="mailto:soporte@folio.app?subject=Recuperaci%C3%B3n%20de%20cuenta"
+          className="au-link"
+        >
+          Escribinos a soporte
+        </a>{" "}
+        con tu nombre y matrícula.
+      </p>
     </AuthShell>
   );
 }

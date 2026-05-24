@@ -180,8 +180,9 @@ export async function createTurnoAction(
         tipo_doc: "DNI",
         telefono_cifrado: encryptColumn(np.telefono)!,
         email_cifrado: encryptColumn(np.email && np.email.length > 0 ? np.email : null),
-        nombre_hash: blindIndex(nombreFull),
-        telefono_hash: blindIndexPhone(np.telefono),
+        // Per-tenant salt (Sprint 1 T1.5.3 / audit A2)
+        nombre_hash: blindIndex(nombreFull, session.data.organizationId),
+        telefono_hash: blindIndexPhone(np.telefono, session.data.organizationId),
       })
       .select("id")
       .single();
