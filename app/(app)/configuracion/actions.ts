@@ -53,16 +53,27 @@ export async function connectGoogleCalendar(): Promise<Result<void>> {
   const session = await getActiveSession();
   if (!session.ok) return session;
 
+  // CRITICAL: redirect() de next/navigation funciona vía throw interno
+  // (NEXT_REDIRECT). Si se ejecuta dentro de un try/catch, el catch lo
+  // intercepta y el redirect nunca sucede. Por eso construimos la URL
+  // dentro del try (puede fallar si faltan envs) pero `redirect(url)`
+  // queda FUERA del try/catch.
+  //
+  // Si `getGoogleAuthUrl` tira (envs missing en runtime), el catch
+  // devuelve un Result.err amigable. Si la URL se construye OK,
+  // redirect() hace su throw normal y Next navega al consent de Google.
+  let url: string;
   try {
-    const url = getGoogleAuthUrl(session.data.memberId);
-    redirect(url);
+    url = getGoogleAuthUrl(session.data.memberId);
   } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e);
     return err(
       "validation",
-      "Google Calendar no está configurado. Setear GOOGLE_OAUTH_CLIENT_ID en .env.local.",
-      e instanceof Error ? e.message : String(e),
+      "Google Calendar no está configurado. Avisanos para activarlo.",
+      detail,
     );
   }
+  redirect(url);
 }
 
 export async function disconnectGoogleCalendar(): Promise<Result<void>> {
