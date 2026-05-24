@@ -12,8 +12,8 @@ Multi-tenant + clinic-ready desde día 1. Cumple Ley 25.326 (Habeas Data) y Ley 
 - **Supabase** (Postgres + Auth + RLS `FORCE`d + Storage privado con RLS)
 - Encriptación columnar **app-side AES-256-GCM** (no pgsodium) — ver [`docs/audit/encryption-exceptions.md`](./docs/audit/encryption-exceptions.md)
 - **Playwright** visual regression pixel-perfect + E2E
-- **pgTAP** para tests SQL (RLS, triggers, append-only invariants)
-- **Sentry** + **PostHog** observabilidad
+- **SQL specs** (`tests/sql/*.spec.sql`) corridos en CI vía `.github/workflows/pgtap.yml` contra postgres:16 + stubs de Supabase
+- **Sentry** + **PostHog** observabilidad (events tipados en `lib/observability/events.ts`)
 - es-AR · America/Argentina/Cordoba · ARS centavos
 
 ## Setup local
