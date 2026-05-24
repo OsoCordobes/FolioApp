@@ -12,13 +12,9 @@
     "test:visual": "playwright test --project=prototype",
     "test:visual:update": "playwright test --project=prototype --update-snapshots",
     "test:app": "playwright test --project=app",
-    "test:all": "playwright test",
-    "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate dev",
-    "db:studio": "prisma studio"
+    "test:all": "playwright test"
   },
   "dependencies": {
-    "@prisma/client": "^7.8.0",
     "@sentry/nextjs": "^10.53.1",
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.105.4",
@@ -46,7 +42,6 @@
     "eslint": "^9",
     "eslint-config-next": "15.5.18",
     "pg": "^8.21.0",
-    "prisma": "^7.8.0",
     "serve": "^14.2.6",
     "supabase": "^2.98.2",
     "tsx": "^4.22.1",
@@ -54,9 +49,6 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "@prisma/client",
-      "@prisma/engines",
-      "prisma",
       "sharp",
       "supabase",
       "unrs-resolver"

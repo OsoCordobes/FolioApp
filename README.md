@@ -57,6 +57,8 @@ El template completo vive en [`.env.local.example`](./.env.local.example) con co
 | `pnpm test:app` | Playwright visual contra la app real (`project: app`) |
 | `pnpm test:all` | Toda la suite Playwright (prototype + app + e2e) |
 
+Migrations: se aplican vía `/api/admin/migrate` (Bearer + escape hatch) o vía Supabase CLI (`supabase db push`). Prisma quedó removido en Sprint 2 — el schema vivo está en `supabase/migrations/`.
+
 ## Estado actual de fases (post-audit Sprint 0 — 2026-05-24)
 
 El plan maestro original (`docs/superpowers/plans/...`) divide el trabajo en 12 fases. La realidad post-Sprint 0 de pre-launch hardening:
