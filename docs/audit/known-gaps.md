@@ -136,6 +136,17 @@ These are accepted by-design choices, defensible at audit. Full rationale lives 
 
 ## Post-audit hardening (Sprint 0 — 2026-05-24)
 
+### A1 — `rejectUnauthorized: false` en cliente pg directo
+
+- **Status**: aceptado como excepción con threat model documentado.
+- **Detail**: aplica solo al endpoint admin `/api/admin/migrate` (~10
+  invocaciones en la vida del proyecto, gateado con escape hatch). Path
+  Vercel↔Supabase, infra cloud privada, MITM = costo alto. La excepción
+  completa con threat model + mitigations vive en
+  [`docs/audit/encryption-exceptions.md`](./encryption-exceptions.md#a1--rejectunauthorized-false-en-cliente-pg-directo-admin-migrations).
+- **Long-term fix (Sprint 3)**: reemplazar el endpoint con `supabase db push`
+  vía GitHub Actions OIDC; deshabilita la necesidad de cliente `pg` directo.
+
 ### C1 — `/api/admin/migrate?reset=true` escape hatch
 
 - **Status**: closed via dual-factor gate.

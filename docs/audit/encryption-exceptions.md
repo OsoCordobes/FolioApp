@@ -214,3 +214,44 @@ Run: `pnpm test:unit` (or `node --import tsx --test tests/unit/crypto-roundtrip.
 ---
 
 *Reviewed and signed off at audit-prep Phase 3. Companion `rls-matrix.md` to be authored at Phase 9.*
+
+---
+
+## Post-audit exceptions (Sprint 1 — 2026-05-24)
+
+### A1 · `rejectUnauthorized: false` en cliente `pg` directo (admin migrations)
+
+**Aplicación**: única — `app/api/admin/migrate/route.ts:110-114`.
+
+**Por qué existe**: Supabase Pooler expone un certificado auto-firmado en el chain de Vercel ECS Lambda. El cliente `pg` (`node-pg`), al construir la conexión, valida el chain por default y dispara `Error: self signed certificate in certificate chain`. La opción `rejectUnauthorized: false` deshabilita esa validación para que la conexión proceda.
+
+**Path afectado**: Vercel function → Supabase Pooler (puerto 5432 direct, sslmode=no-verify).
+
+**Otros paths a Supabase NO afectados**: el tráfico de usuarios va por `supabase-js` (HTTPS, cert validado por default vía el bundle de CAs de Node). PostgREST, Realtime, Auth, Storage — todos validan cert.
+
+**Volumen**: el endpoint `/api/admin/migrate` se invoca ~10 veces en la vida total del proyecto (1 por deploy de migrations significativo). En operación normal nunca corre.
+
+**Threat model**:
+- **Atacante MITM**: tendría que comprometer infra interna de AWS y/o Vercel/Supabase para interceptar tráfico entre dos endpoints cloud privados. Probabilidad: muy baja.
+- **Impacto si se materializa**: el atacante observa los statements SQL de las migrations (estructura del schema, ya pública en este repo) y potencialmente roba el `CRON_SECRET` del header Authorization. No accede a PII/PHI (las migrations son DDL puro, no consultan datos de pacientes).
+
+**Mitigaciones existentes**:
+- El endpoint admin completo está gateado con `ALLOW_PROD_RESET=yes-im-sure-2026` para resets destructivos (Sprint 0 Task 0.3 / audit C1).
+- `CRON_SECRET` rotado post-auditoría 2026-05-24 (Sprint 0 Task 0.6).
+- Cada invocación queda en logs de Vercel + Sentry trace.
+
+**Long-term fix (Sprint 3+)**:
+Reemplazar `/api/admin/migrate` con `supabase db push` ejecutado vía GitHub Actions con OIDC. El endpoint desaparece del repo y la conexión la maneja la CLI oficial de Supabase, que sí valida el cert del proyecto correctamente.
+
+**Estado**: **excepción aceptada con mitigation**, deferida a Sprint 3+ para reemplazo arquitectural.
+
+---
+
+### A2 · Blind-index salt per-tenant — EN PROGRESO
+
+Status post-Sprint 1: la `FOLIO_ENC_HMAC_KEY` global se utiliza tal cual para todos los blind indexes (`nombre_hash`, `dni_hash`, `telefono_hash`). Si la key se filtra (improbable, vive en Vercel encrypted-at-rest, separada del DB), el atacante con acceso al `dni_hash` puede precomputar ~99M hashes de DNIs argentinos (8 dígitos) y des-anonimizar TODA la DB.
+
+**Mitigación elegida**: agregar salt per-tenant (`HMAC(key, org_id || ":" || normalized)`). Si la key leaks, el atacante necesita re-precomputar 99M × N orgs en vez de 99M × 1 — multiplica el costo por el número de tenants.
+
+**Implementación**: Sprint 1 Tasks 1.5.1–1.5.6 (refactor crypto.ts + rehash script + dual-read fallback + remove legacy fallback post-72h). Esta sección se actualiza a "resolved" cuando Task 1.5.6 cierre.
+
