@@ -92,3 +92,30 @@ export function limitByIp(scope: string, ip: string | null, maxPerHour = 20) {
   const key = ip ?? "unknown";
   return rateLimit(scope, key, { maxRequests: maxPerHour, windowSec: 3600 });
 }
+
+/**
+ * Wrapper conveniente para gates por identidad de cuenta (email, user id,
+ * org id). Útil para defenderse de ataques de brute-force contra un email
+ * específico que vengan distribuidos en muchas IPs.
+ */
+export function limitByKey(scope: string, key: string | null, maxPerHour = 5) {
+  const safeKey = key && key.trim() !== "" ? key.trim().toLowerCase() : "unknown";
+  return rateLimit(scope, safeKey, { maxRequests: maxPerHour, windowSec: 3600 });
+}
+
+/**
+ * Convierte el `resetIn` (segundos) de un `RateLimitResult` en un mensaje
+ * user-facing en español argentino, redondeando hacia arriba a minutos
+ * enteros y manejando singular/plural.
+ *
+ *   formatResetMessage(45)   → "Esperá 1 minuto e intentá de nuevo."
+ *   formatResetMessage(120)  → "Esperá 2 minutos e intentá de nuevo."
+ *   formatResetMessage(0)    → "Esperá un momento e intentá de nuevo."
+ */
+export function formatResetMessage(resetInSeconds: number): string {
+  if (!Number.isFinite(resetInSeconds) || resetInSeconds <= 0) {
+    return "Esperá un momento e intentá de nuevo.";
+  }
+  const mins = Math.ceil(resetInSeconds / 60);
+  return `Esperá ${mins} minuto${mins === 1 ? "" : "s"} e intentá de nuevo.`;
+}

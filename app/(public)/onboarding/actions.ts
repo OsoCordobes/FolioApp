@@ -2,7 +2,7 @@
 
 import { headers } from "next/headers";
 
-import { limitByIp } from "@/lib/security/rate-limit";
+import { formatResetMessage, limitByIp, limitByKey } from "@/lib/security/rate-limit";
 import { verifyTurnstile } from "@/lib/security/turnstile";
 
 /**
@@ -91,11 +91,24 @@ export async function signUpAndInitOrganization(
   const reqHeaders = await headers();
   const ipRaw = reqHeaders.get("x-forwarded-for") ?? reqHeaders.get("x-real-ip") ?? null;
   const ip = ipRaw ? ipRaw.split(",")[0].trim() : null;
-  const limit = await limitByIp("signup", ip, 5);
-  if (!limit.ok) {
+  // Cascada doble (audit-prep finding A4):
+  //   - 10/h por IP: balanceado entre "varios colegas en el mismo wifi de
+  //     la clínica" y "una IP intentando brute-force masivo".
+  //   - 5/h por email: defensa adicional contra distribución por IP a un
+  //     mismo email (ej. botnet probando credenciales contra una cuenta).
+  // Ambos miden ventanas independientes; cualquier limit triggered bloquea.
+  const ipLimit = await limitByIp("signup", ip, 10);
+  if (!ipLimit.ok) {
     return {
       ok: false,
-      error: "Demasiados intentos de registro. Probá de nuevo en una hora.",
+      error: `Demasiados intentos de registro desde tu red. ${formatResetMessage(ipLimit.resetIn)}`,
+    };
+  }
+  const emailLimit = await limitByKey("signup-email", email, 5);
+  if (!emailLimit.ok) {
+    return {
+      ok: false,
+      error: `Demasiados intentos para este email. ${formatResetMessage(emailLimit.resetIn)}`,
     };
   }
   // Turnstile is mandatory in production. In dev the verifier is a no-op
@@ -239,9 +252,13 @@ export async function bootstrapOrgForAuthenticatedUser(
   const userAgent = reqHeaders.get("user-agent");
 
   // Rate-limit + captcha gates (mantengo simetría con signUpAndInitOrganization).
-  const limit = await limitByIp("onboarding-bootstrap", ip, 5);
+  // 10/h por IP — calibrado en audit-prep finding A4 (Sprint 0 Task 0.7).
+  const limit = await limitByIp("onboarding-bootstrap", ip, 10);
   if (!limit.ok) {
-    return { ok: false, error: "Demasiados intentos. Probá de nuevo en un rato." };
+    return {
+      ok: false,
+      error: `Demasiados intentos. ${formatResetMessage(limit.resetIn)}`,
+    };
   }
   const captchaOk = await verifyTurnstile(options.turnstileToken, ip);
   if (!captchaOk) {

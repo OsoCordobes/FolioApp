@@ -20,9 +20,14 @@ test.beforeEach(async ({ context }) => {
  * disabled-state assertion; the server-side gate is covered by direct
  * verifyTurnstile unit checks (not asserted here).
  *
- * Rate limit: the action limits 5 signups / IP / hour. We don't burn
- * the limit in this test (would block subsequent CI runs from the same
- * IP). The server-side wiring is verified by the unit test suite.
+ * Rate limit (Sprint 0 T0.7 calibration, audit finding A4):
+ *   - 10 signups / IP / hour (was 5; calibrated up to not block clinics
+ *     where 2-3 colleagues sign up from the same wifi).
+ *   - 5 signups / email / hour (new cascade; defends against distributed
+ *     brute-force against a single account).
+ * We don't burn the limit in this test (would block subsequent CI runs
+ * from the same IP). The server-side wiring is verified by unit tests
+ * (lib/security/rate-limit.ts formatResetMessage suite).
  */
 
 test.describe("/login signup · consent + Turnstile gates", () => {
