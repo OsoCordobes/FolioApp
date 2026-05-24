@@ -26,6 +26,7 @@ import { verifyTurnstile } from "@/lib/security/turnstile";
 
 import { redirect } from "next/navigation";
 
+import { findUserByEmail } from "@/lib/auth/find-user-by-email";
 import { encryptColumn } from "@/lib/crypto";
 import { signUpSchema } from "@/lib/onboarding/schemas";
 import {
@@ -135,8 +136,8 @@ export async function signUpAndInitOrganization(
     if (createErr.message.toLowerCase().includes("already") || createErr.message.toLowerCase().includes("registered")) {
       // El user ya existe en auth.users. Buscarlo por email vía paginated
       // listUsers (M33 fix: el old code hardcodeaba perPage:200 → se rompía
-      // a partir del usuario 201).
-      const existing = await findUserByEmailPaginated(service, email);
+      // a partir del usuario 201). Helper extraído a lib/auth (Sprint 0 T0.2).
+      const existing = await findUserByEmail(service, email);
       if (!existing) {
         return {
           ok: false,
@@ -279,30 +280,6 @@ export async function bootstrapOrgForAuthenticatedUser(
 
   const result = bootstrapped as { organization_id: string; member_id: string; slug: string; created: boolean };
   return { ok: true, organizationId: result.organization_id, slug: result.slug };
-}
-
-// Helper: busca un user por email iterando páginas de admin.listUsers().
-// Reemplaza el viejo perPage:200 ceiling (rompía a partir del usuario 201).
-// Cap defensivo de 50k para que no haga loop infinito si la API se rompe.
-async function findUserByEmailPaginated(
-  service: ReturnType<typeof createSupabaseServiceClient>,
-  email: string,
-) {
-  const target = email.toLowerCase();
-  const perPage = 1000;
-  for (let page = 1; page <= 50; page++) {
-    const { data, error } = await service.auth.admin.listUsers({ page, perPage });
-    if (error) {
-      console.warn("[onboarding] listUsers error on page", page, error.message);
-      return null;
-    }
-    const users = data?.users ?? [];
-    const found = users.find((u) => u.email?.toLowerCase() === target);
-    if (found) return found;
-    if (users.length < perPage) return null; // last page
-  }
-  console.warn("[onboarding] findUserByEmailPaginated: hit 50k cap without finding", email);
-  return null;
 }
 
 // Helper interno: pickea un slug libre buscando un sufijo numérico si está tomado.
