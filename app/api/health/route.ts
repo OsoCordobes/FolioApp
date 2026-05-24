@@ -33,7 +33,7 @@ export async function GET() {
     if (error) throw new Error(error.message);
   });
 
-  // 2. Env críticas presentes
+  // 2. Env críticas presentes (bloquean boot si faltan)
   const requiredEnv = [
     "NEXT_PUBLIC_SUPABASE_URL",
     "NEXT_PUBLIC_SUPABASE_ANON_KEY",
@@ -43,6 +43,35 @@ export async function GET() {
   const missing = requiredEnv.filter((k) => !process.env[k]);
   checks.env = { ok: missing.length === 0, error: missing.length > 0 ? `falta: ${missing.join(",")}` : undefined };
 
+  // 3. Envs de integraciones runtime (no bloquean boot pero sí features).
+  // Reporta presencia (boolean) sin leak de valores. Útil para diagnosticar
+  // qué features están funcionales en este deploy.
+  const integrations = {
+    google_calendar: Boolean(
+      process.env.GOOGLE_OAUTH_CLIENT_ID &&
+      process.env.GOOGLE_OAUTH_CLIENT_SECRET &&
+      process.env.GOOGLE_OAUTH_REDIRECT_URI,
+    ),
+    whatsapp: Boolean(
+      process.env.WHATSAPP_ACCESS_TOKEN &&
+      process.env.WHATSAPP_PHONE_NUMBER_ID,
+    ),
+    mercadopago: Boolean(
+      process.env.MP_ACCESS_TOKEN &&
+      process.env.MP_WEBHOOK_SECRET,
+    ),
+    turnstile: Boolean(
+      process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY &&
+      process.env.TURNSTILE_SECRET_KEY,
+    ),
+    upstash_redis: Boolean(
+      process.env.UPSTASH_REDIS_REST_URL &&
+      process.env.UPSTASH_REDIS_REST_TOKEN,
+    ),
+    sentry: Boolean(process.env.NEXT_PUBLIC_SENTRY_DSN),
+    posthog: Boolean(process.env.NEXT_PUBLIC_POSTHOG_KEY),
+  };
+
   const ok = Object.values(checks).every((c) => c.ok);
 
   return NextResponse.json(
@@ -50,7 +79,9 @@ export async function GET() {
       ok,
       version: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "dev",
       env: process.env.VERCEL_ENV ?? "development",
+      region: process.env.VERCEL_REGION ?? "unknown",
       checks,
+      integrations,
       timestamp: new Date().toISOString(),
     },
     { status: ok ? 200 : 503 },
