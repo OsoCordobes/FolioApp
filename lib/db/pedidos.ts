@@ -5,6 +5,7 @@
 import { z } from "zod";
 
 import { blindIndex, blindIndexPhone, decryptColumn, encryptColumn } from "@/lib/crypto";
+import { trackEvent } from "@/lib/observability/events";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import { err, mapSupabaseError, ok, type Result } from "./errors";
@@ -299,6 +300,15 @@ export async function aceptarPedido(
       return err(mapped.code, mapped.message, pacErr?.message);
     }
     pacienteId = paciente.id;
+
+    // Business event: paciente nuevo creado desde un pedido aceptado
+    // (Sprint 2 T2.2).
+    void trackEvent.pacienteCreated({
+      orgId: session.data.organizationId,
+      source: "pedido",
+      hasDni: false,                       // pedidos no piden DNI
+      hasEmail: Boolean(email),
+    });
   }
 
   // 2. Crear turno en CONFIRMADO con fecha_propuesta + servicio del pedido.

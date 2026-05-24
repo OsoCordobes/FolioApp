@@ -18,6 +18,7 @@ import { z } from "zod";
 import { encryptColumn } from "@/lib/crypto";
 import { err, ok, type Result } from "@/lib/db/errors";
 import { getSlotsDisponibles, type Slot } from "@/lib/booking/availability";
+import { trackEvent } from "@/lib/observability/events";
 import { limitByIp } from "@/lib/security/rate-limit";
 import { verifyTurnstile } from "@/lib/security/turnstile";
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
@@ -240,5 +241,14 @@ export async function createPedidoPublico(
   if (error || !pedido) {
     return err("db_error", "No se pudo crear el pedido.", error?.message);
   }
+
+  // Business event: pedido público creado (Sprint 2 T2.2). distinctId =
+  // org.slug porque el pedido es anónimo (no hay user authenticated en el
+  // contexto público); tracking a nivel org.
+  void trackEvent.bookingPublicCompleted({
+    orgSlug: parsed.data.orgSlug,
+    servicioId: servicio.id,
+  });
+
   return ok({ id: pedido.id });
 }

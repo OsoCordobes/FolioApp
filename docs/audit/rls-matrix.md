@@ -121,3 +121,9 @@ Three findings from the audit-prep Explore scan turned out to be already-handled
 | `09_card_personalization.sql` | M21 | 11 | green |
 | `10_M22_rls_hardening.sql` | M22 (NEW) | 11 | green |
 | `11_M25_pseudonimizacion_audit.sql` | M25 (NEW) | 9 | green |
+
+---
+
+## Service-role bypass auditing
+
+Cada uso de `createSupabaseServiceClient()` (RLS bypass por SERVICE_ROLE_KEY) tiene un riesgo de cross-tenant leak si no está gateado. El proceso de re-audit trimestral y la lista de call sites esperados viven en [`quarterly-service-role-audit.md`](./quarterly-service-role-audit.md).

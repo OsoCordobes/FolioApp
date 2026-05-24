@@ -1,4 +1,12 @@
+import withBundleAnalyzer from "@next/bundle-analyzer";
 import type { NextConfig } from "next";
+
+// Sprint 2 T2.4: ANALYZE=true pnpm build → genera report HTML en
+// .next/analyze para identificar chunks pesados (objetivo: onboarding
+// initial bundle < 180KB).
+const withAnalyzer = withBundleAnalyzer({
+  enabled: process.env.ANALYZE === "true",
+});
 
 /**
  * Folio · Next.js config.
@@ -92,4 +100,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withAnalyzer(nextConfig);
