@@ -11,10 +11,29 @@
  *
  * No fail-loud — devuelve resumen del estado actual del user, incluso si ya
  * estaba confirmado.
+ *
+ * ─── Audit 2026-05-23 finding C3 + A3 ─────────────────────────────────────
+ *
+ * C3: el endpoint permite confirmar emails arbitrarios con solo Bearer. Si el
+ * secret leaks, un atacante crea un user externo y bypassea el email-verify.
+ *
+ * A3: la versión histórica usaba `listUsers({ perPage: 200 })` — se rompía a
+ * partir del usuario 201 ("user no encontrado" cuando sí existía).
+ *
+ * Fix Sprint 0 Task 0.4:
+ *   - prod-escape-hatch: en producción requiere ALLOW_PROD_CONFIRM_USER=
+ *     yes-im-sure-2026 explícita además del Bearer. Procedimiento de uso
+ *     idéntico al de migrate (set env → redeploy → curl → unset → redeploy).
+ *   - Paginated lookup vía `findUserByEmail` helper (lib/auth/find-user-by-email).
+ *
+ * Long-term: este endpoint debería desaparecer y reemplazarse por una UI
+ * supervisada en `/admin/usuarios` con audit log explícito.
  */
 
 import { NextResponse } from "next/server";
 
+import { findUserByEmail } from "@/lib/auth/find-user-by-email";
+import { checkAdminGate } from "@/lib/security/admin-gate";
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -27,6 +46,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
+  // Audit C3 gate: requiere escape hatch explícito en producción.
+  const gated = checkAdminGate({
+    mode: "prod-escape-hatch",
+    escapeHatch: { envVar: "ALLOW_PROD_CONFIRM_USER", expected: "yes-im-sure-2026" },
+  });
+  if (gated) return gated;
+
   const url = new URL(req.url);
   const email = url.searchParams.get("email");
   if (!email) {
@@ -35,16 +61,8 @@ export async function POST(req: Request) {
 
   const service = createSupabaseServiceClient();
 
-  // Buscar el user por email
-  const { data: list, error: listErr } = await service.auth.admin.listUsers({
-    page: 1,
-    perPage: 200,
-  });
-  if (listErr) {
-    return NextResponse.json({ ok: false, error: listErr.message }, { status: 500 });
-  }
-
-  const user = list.users.find((u) => u.email?.toLowerCase() === email.toLowerCase());
+  // Audit A3: paginated lookup en vez del viejo perPage:200 ceiling.
+  const user = await findUserByEmail(service, email);
   if (!user) {
     return NextResponse.json({ ok: false, error: "user no encontrado" }, { status: 404 });
   }

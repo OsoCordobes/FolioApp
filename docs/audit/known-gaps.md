@@ -134,6 +134,25 @@ These are accepted by-design choices, defensible at audit. Full rationale lives 
 
 ---
 
+## Post-audit hardening (Sprint 0 — 2026-05-24)
+
+### C1 — `/api/admin/migrate?reset=true` escape hatch
+
+- **Status**: closed via dual-factor gate.
+- **Detail**: el `?reset=true` ejecuta `DROP SCHEMA public CASCADE`. Histórica-
+  mente solo protegido por `Bearer ${CRON_SECRET}`. Sprint 0 Task 0.3 agrega
+  un escape hatch obligatorio en producción: `ALLOW_PROD_RESET=yes-im-sure-2026`.
+  Sin esa env explícita, el endpoint retorna 403 incluso con Bearer válido.
+- **Cómo se usa cuando hace falta**:
+  1. Setear `ALLOW_PROD_RESET=yes-im-sure-2026` en Vercel Production env vars.
+  2. Trigger redeploy para propagar.
+  3. Ejecutar el `curl ?reset=true`.
+  4. **Inmediatamente** quitar la env + redeploy nuevamente.
+- **Long-term fix (Sprint 3)**: reemplazar el endpoint completo con
+  `supabase db push` ejecutado vía GitHub Actions con OIDC.
+
+---
+
 ## Open questions for the auditor (transparency)
 
 1. **Plaintext geo for k-anonymity**: do you accept the trade-off, or require encrypting `domicilio_{ciudad,provincia,cp}` with a per-org decrypt key for analytics? (Folio's current position: the trade-off is defensible. If you object, the cipher-column migration M23a from the deferred plan can land in 1-2 days.)

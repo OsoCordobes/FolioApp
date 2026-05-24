@@ -11,13 +11,22 @@
  * Auth: Bearer ${CRON_SECRET}.
  * Query: ?email=lautaro-folio-test@folio.app (default).
  *
- * NOTA: endpoint solo para QA del MVP. Se elimina cuando haya UI de creación
- * manual de turnos (T-1.5 en /calendario).
+ * ─── Audit 2026-05-23 finding C3 ──────────────────────────────────────────
+ *
+ * Este endpoint inyecta data fake. Aunque no es destructivo, ensucia la org
+ * objetivo y NO debe existir en producción. Sprint 0 Task 0.5 lo gatea con
+ * `mode: "prod-disabled"`: retorna 404 en `VERCEL_ENV === "production"`
+ * incluso con Bearer válido. En preview y dev sigue funcionando (donde
+ * realmente lo usamos para QA).
+ *
+ * Long-term: este endpoint debería removerse una vez que la UI de creación
+ * manual de turnos (T-1.5 en /calendario) esté completa.
  */
 
 import { NextResponse } from "next/server";
 
 import { blindIndex, encryptColumn } from "@/lib/crypto";
+import { checkAdminGate } from "@/lib/security/admin-gate";
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -87,6 +96,10 @@ export async function POST(req: Request) {
   if (!authHeader || authHeader !== expected) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
+
+  // Audit C3 gate: este endpoint nunca debe correr en producción.
+  const gated = checkAdminGate({ mode: "prod-disabled" });
+  if (gated) return gated;
 
   const url = new URL(req.url);
   const email = url.searchParams.get("email") ?? "lautaro-folio-test@folio.app";
