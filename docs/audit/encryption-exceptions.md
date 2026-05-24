@@ -247,11 +247,44 @@ Reemplazar `/api/admin/migrate` con `supabase db push` ejecutado vía GitHub Act
 
 ---
 
-### A2 · Blind-index salt per-tenant — EN PROGRESO
+### A2 · Blind-index salt per-tenant — CODE COMPLETE, REHASH PENDIENTE
 
-Status post-Sprint 1: la `FOLIO_ENC_HMAC_KEY` global se utiliza tal cual para todos los blind indexes (`nombre_hash`, `dni_hash`, `telefono_hash`). Si la key se filtra (improbable, vive en Vercel encrypted-at-rest, separada del DB), el atacante con acceso al `dni_hash` puede precomputar ~99M hashes de DNIs argentinos (8 dígitos) y des-anonimizar TODA la DB.
+**Antes (audit finding)**: la `FOLIO_ENC_HMAC_KEY` global se utilizaba tal cual para todos los blind indexes (`nombre_hash`, `dni_hash`, `telefono_hash`). Si la key se filtra (improbable, vive en Vercel encrypted-at-rest, separada del DB), un atacante con acceso al `dni_hash` puede precomputar ~99M hashes de DNIs argentinos (8 dígitos) y des-anonimizar TODA la DB.
 
-**Mitigación elegida**: agregar salt per-tenant (`HMAC(key, org_id || ":" || normalized)`). Si la key leaks, el atacante necesita re-precomputar 99M × N orgs en vez de 99M × 1 — multiplica el costo por el número de tenants.
+**Solución aplicada (Sprint 1 Tasks 1.5.1–1.5.3 deployed)**:
 
-**Implementación**: Sprint 1 Tasks 1.5.1–1.5.6 (refactor crypto.ts + rehash script + dual-read fallback + remove legacy fallback post-72h). Esta sección se actualiza a "resolved" cuando Task 1.5.6 cierre.
+1. `lib/crypto.ts`: `blindIndex(plain, salt?)` y `blindIndexPhone(rawPhone, salt?)` aceptan segundo arg opcional. Si presente, se prepend al input antes del HMAC: `HMAC(key, salt + ":" + normalized)`.
+2. Call sites de **escritura** (`lib/db/pacientes.ts` `createPaciente`, `lib/db/pedidos.ts` `acceptPedido`, `app/(app)/hoy/actions.ts` walk-in inline, `app/api/admin/seed-hoy-demo`) pasan `organization_id` como salt.
+3. Call site de **lectura** (`lib/db/pacientes.ts` `buscarPaciente`) computa hash con salt y consulta primero; si vacío, fallback al hash sin salt (legacy). Hit del fallback loggea `captureMessage("blind-index-legacy-fallback fired in buscarPaciente", level="warning", tags.audit=A2)` para tracking del backfill.
+
+**Estado actual**:
+
+- Datos nuevos (post-deploy Sprint 1) se escriben con hash salted.
+- Datos viejos siguen con hash sin salt → el fallback de lectura los encuentra.
+
+**Pendiente para "resolved" completo** (Tasks 1.5.4 + 1.5.5):
+
+1. Correr `scripts/rehash-blind-indexes.mjs --dry-run` + `--live` + `--verify` en producción para backfill historical hashes (Task 1.5.4, user action).
+2. Esperar 72 h sin que el fallback legacy dispare en Sentry.
+3. Remover el código de fallback legacy (Task 1.5.5) — el comportamiento queda salt-only.
+
+**Efecto post-completo**: si la HMAC key se filtra, el atacante necesita re-precomputar 99M × N orgs (no 99M × 1). El blast radius queda contenido a 1 org en lugar de toda la DB.
+
+**Procedimiento de rehash** (para el ejecutor de Task 1.5.4):
+
+```bash
+# 1. Backup PITR de Supabase confirmado.
+# 2. Bajar envs de prod a un .env temporal.
+vercel env pull .env.production.local
+# 3. Dry-run primero. Esperado: "X pacientes serían actualizados", exit 0.
+node --env-file=.env.production.local scripts/rehash-blind-indexes.mjs --dry-run
+# 4. Live (UPDATE batches de 500, transactional por org).
+node --env-file=.env.production.local scripts/rehash-blind-indexes.mjs --live
+# 5. Verify (5 pacientes random tienen hash con salt esperado).
+node --env-file=.env.production.local scripts/rehash-blind-indexes.mjs --verify
+# 6. Monitorear Sentry: que blind-index-legacy-fallback NO aparezca por 1h.
+# 7. Borrar .env.production.local (NO commitear).
+```
+
+**Rollback**: restore de PITR (Supabase Pro, 7-day window). Los plaintexts cifrados están intactos; solo los hashes mutan. RTO ~30 min.
 
