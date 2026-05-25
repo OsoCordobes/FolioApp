@@ -92,12 +92,13 @@ export async function signUpAndInitOrganization(
   const ipRaw = reqHeaders.get("x-forwarded-for") ?? reqHeaders.get("x-real-ip") ?? null;
   const ip = ipRaw ? ipRaw.split(",")[0].trim() : null;
   // Cascada doble (audit-prep finding A4):
-  //   - 10/h por IP: balanceado entre "varios colegas en el mismo wifi de
-  //     la clínica" y "una IP intentando brute-force masivo".
+  //   - 50/h por IP: contempla demos / wifi compartido de clínica donde
+  //     varios profesionales registran a la vez. El cap real anti-abuso
+  //     viene del per-email (5/h) más Turnstile.
   //   - 5/h por email: defensa adicional contra distribución por IP a un
   //     mismo email (ej. botnet probando credenciales contra una cuenta).
   // Ambos miden ventanas independientes; cualquier limit triggered bloquea.
-  const ipLimit = await limitByIp("signup", ip, 10);
+  const ipLimit = await limitByIp("signup", ip, 50);
   if (!ipLimit.ok) {
     return {
       ok: false,
@@ -252,8 +253,8 @@ export async function bootstrapOrgForAuthenticatedUser(
   const userAgent = reqHeaders.get("user-agent");
 
   // Rate-limit + captcha gates (mantengo simetría con signUpAndInitOrganization).
-  // 10/h por IP — calibrado en audit-prep finding A4 (Sprint 0 Task 0.7).
-  const limit = await limitByIp("onboarding-bootstrap", ip, 10);
+  // 50/h por IP — alineado con signup IP cap (demos / wifi compartido).
+  const limit = await limitByIp("onboarding-bootstrap", ip, 50);
   if (!limit.ok) {
     return {
       ok: false,
