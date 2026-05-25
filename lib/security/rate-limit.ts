@@ -71,12 +71,22 @@ export async function rateLimit(
       resetIn: typeof ttl === "number" && ttl > 0 ? ttl : options.windowSec,
     };
   } catch (e) {
-    // Sin Upstash en dev: permitir. En producción, esto rompe el flow para
-    // que el dev se entere y configure las env vars.
+    // Sin Upstash configurado: fail-open con warning ruidoso en prod.
+    //
+    // Hubo un período fail-closed en prod (audit-prep) que terminó bloqueando
+    // signup en demos reales porque la integración Upstash nunca se conectó
+    // — todo usuario veía "Esperá 60 minutos" desde el primer intento.
+    // Mientras Upstash no esté wired, Turnstile + el rate-limit propio de
+    // Supabase Auth sostienen la defensa.
+    //
+    // TODO(infra): instalar Upstash Redis via `vercel marketplace`, popular
+    // UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN en prod, y volver
+    // a fail-closed acá.
     if (e instanceof Error && e.message === "upstash_not_configured") {
       if (process.env.NODE_ENV === "production") {
-        console.error("[rate-limit] Upstash no configurado en producción — fail-closed");
-        return { ok: false, remaining: 0, resetIn: options.windowSec };
+        console.warn(
+          `[rate-limit] Upstash no configurado en producción — fail-open para scope="${scope}". Configurar UPSTASH_REDIS_REST_URL/TOKEN.`,
+        );
       }
       return { ok: true, remaining: options.maxRequests, resetIn: 0 };
     }
