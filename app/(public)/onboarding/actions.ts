@@ -93,10 +93,12 @@ export async function signUpAndInitOrganization(
   const ip = ipRaw ? ipRaw.split(",")[0].trim() : null;
   // Cascada doble (audit-prep finding A4):
   //   - 50/h por IP: contempla demos / wifi compartido de clínica donde
-  //     varios profesionales registran a la vez. El cap real anti-abuso
-  //     viene del per-email (5/h) más Turnstile.
-  //   - 5/h por email: defensa adicional contra distribución por IP a un
-  //     mismo email (ej. botnet probando credenciales contra una cuenta).
+  //     varios profesionales registran a la vez.
+  //   - 50/h por email: defensa contra credential-stuffing distribuido
+  //     (botnet probando passwords contra un mismo email desde N IPs).
+  //     Original 5/h era muy ajustado: cada error de UX (password débil,
+  //     captcha vencido) quemaba un slot y bloqueaba al user 1h. Turnstile
+  //     + el rate-limit propio de Supabase Auth sostienen la defensa real.
   // Ambos miden ventanas independientes; cualquier limit triggered bloquea.
   const ipLimit = await limitByIp("signup", ip, 50);
   if (!ipLimit.ok) {
@@ -105,7 +107,7 @@ export async function signUpAndInitOrganization(
       error: `Demasiados intentos de registro desde tu red. ${formatResetMessage(ipLimit.resetIn)}`,
     };
   }
-  const emailLimit = await limitByKey("signup-email", email, 5);
+  const emailLimit = await limitByKey("signup-email", email, 50);
   if (!emailLimit.ok) {
     return {
       ok: false,
