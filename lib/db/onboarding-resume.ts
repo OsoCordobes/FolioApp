@@ -59,12 +59,17 @@ export interface OnboardingResumeState {
 /**
  * Lee el estado del onboarding del user actual. Si el user no tiene auth.user,
  * el caller debe redirigir a /login antes de llamar a esta función.
+ *
+ * El parámetro `serviceOverride` permite inyectar un mock para tests (mismo
+ * patrón que `lib/auth/find-user-by-email.ts`). En producción siempre se
+ * construye el service client real.
  */
 export async function getOnboardingResumeState(
   userId: string,
   email: string,
+  serviceOverride?: ReturnType<typeof createSupabaseServiceClient>,
 ): Promise<Result<OnboardingResumeState>> {
-  const service = createSupabaseServiceClient();
+  const service = serviceOverride ?? createSupabaseServiceClient();
 
   // 1. Buscar member del user (la membership a una org).
   const { data: member, error: memErr } = await service
@@ -79,6 +84,41 @@ export async function getOnboardingResumeState(
   // Caso A: no tiene member → todavía no pasó por signUpAndInitOrganization.
   // Devolver estado "step 1, nada pre-llenado".
   if (!member) {
+    return ok({
+      shouldShowOnboarding: true,
+      initialStep: 1,
+      slug: null,
+      organizationId: null,
+      initialData: { email },
+    });
+  }
+
+  // ─── Caso A.1: orphan membership (M37 defense in depth) ──────────────────
+  // Antes de leer org con `deleted_at IS NULL`, distinguir "org soft-deleted"
+  // de "org no existe". El primer caso causaba un loop infinito en producción:
+  //   /hoy → (app)/layout veía not_found en active-context → redirect /onboarding
+  //   /onboarding → este mismo helper retornaba error → page redirect /hoy
+  // El audit del 2026-05-26 marcó esto como HIGH. La migración M37 agrega un
+  // trigger de cascade soft-delete sobre member para que esta condición no
+  // pueda surgir orgánicamente, pero también necesitamos manejar filas legacy
+  // (orgs soft-deleted antes de M37).
+  const { data: orgExistence, error: existsErr } = await service
+    .from("organization")
+    .select("id, deleted_at")
+    .eq("id", member.organization_id)
+    .maybeSingle();
+
+  if (existsErr) return err("db_error", "Error verificando organización.", existsErr.message);
+
+  if (!orgExistence || orgExistence.deleted_at !== null) {
+    // La org desapareció (deleted_at set, o nunca existió). Limpiar el member
+    // huérfano para no volver acá, y devolver step 1 para re-bootstrap.
+    if (orgExistence && orgExistence.deleted_at !== null) {
+      await service
+        .from("member")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", member.id);
+    }
     return ok({
       shouldShowOnboarding: true,
       initialStep: 1,
