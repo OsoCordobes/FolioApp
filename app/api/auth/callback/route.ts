@@ -23,6 +23,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 
+import { safeRedirect } from "@/lib/security/safe-redirect";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 /**
@@ -93,5 +94,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/onboarding`);
   }
 
-  return NextResponse.redirect(`${origin}${redirectTo ?? "/hoy"}`);
+  // Open-redirect mitigation (audit 2026-05-26 finding #5): `redirect` is a
+  // query param controlled by the request URL. Without `safeRedirect`, an
+  // attacker could craft a callback URL like `?redirect=//evil.com` and the
+  // post-login bounce would send the authenticated user off-domain. The login
+  // form already wraps the same param; this closes the symmetric gap.
+  const safe = safeRedirect(redirectTo, "/hoy");
+  return NextResponse.redirect(`${origin}${safe}`);
 }

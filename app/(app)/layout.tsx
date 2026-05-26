@@ -47,7 +47,12 @@ export default async function AppShellLayout({
   // Gating de suscripción (M19/S0 billing). Si vencido el grace period y la
   // suscripción no está activa, forzamos al usuario a /configuracion/billing.
   // Excepción: si ya estamos en billing, dejamos pasar — sería loop infinito.
-  if (!accessGate.allowed) {
+  //
+  // M37 · is_internal_account bypass: demo/internal/test tenants skip the
+  // gate entirely. The flag is auditable (tg_audit_organization_internal_flag
+  // logs every flip) and surfaced in the sidebar as a "Cuenta interna" badge
+  // so it can never silently affect a real customer.
+  if (!organization.isInternalAccount && !accessGate.allowed) {
     const pathname = (await headers()).get("x-pathname") ?? "";
     if (!pathname.startsWith(BILLING_PATH)) {
       redirect(`${BILLING_PATH}?gate=${accessGate.reason ?? "denied"}`);
@@ -63,6 +68,7 @@ export default async function AppShellLayout({
           nombre: organization.nombre,
           rubro: organization.rubro,
           slug: organization.slug,
+          isInternalAccount: organization.isInternalAccount,
         }}
         profile={{
           nombre: profile.nombre,
