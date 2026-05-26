@@ -15,6 +15,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { EmailVerifyBanner } from "@/components/auth/email-verify-banner";
 import { Sidebar, type GoogleSyncStatus } from "@/components/sidebar";
 import { getActiveContext } from "@/lib/db/active-context";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -71,7 +72,12 @@ export default async function AppShellLayout({
         role={session.role}
         googleSync={googleSync}
       />
-      <main className="fi-main">{children}</main>
+      <main className="fi-main">
+        {session.emailVerified === false ? (
+          <EmailVerifyBanner email={session.email} />
+        ) : null}
+        {children}
+      </main>
     </div>
   );
 }
