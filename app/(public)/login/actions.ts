@@ -9,9 +9,13 @@
  * post-login para que el middleware refresque la sesión).
  */
 
+import { captureException } from "@sentry/nextjs";
 import { redirect } from "next/navigation";
 
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  createSupabaseServerClient,
+  createSupabaseServiceClient,
+} from "@/lib/supabase/server";
 
 export interface AuthResult {
   ok: boolean;
@@ -37,10 +41,61 @@ export async function signInWithPassword(
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
-    // Mensaje genérico para evitar enumeración de usuarios (no decir "user not found")
-    return { ok: false, error: "Email o contraseña incorrectos." };
+    // Default: generic error to avoid user enumeration ("no decir 'user not
+    // found'"). Mantenemos ese default por seguridad.
+    //
+    // M38 / W6 exception: if the account exists and has ONLY Google as an
+    // auth identity (no password), surface a specific message — those users
+    // get stuck typing passwords that never existed. We check this AFTER the
+    // failed sign-in so we don't leak whether an email is registered for
+    // arbitrary lookups (the failed sign-in already confirms a session can't
+    // be opened; we're only refining the *reason*).
+    const specific = await maybeProviderSpecificError(email);
+    return { ok: false, error: specific ?? "Email o contraseña incorrectos." };
   }
   return { ok: true };
+}
+
+/**
+ * Returns a provider-specific error message when the email belongs to a
+ * Google-OAuth-only account (no "email" identity = no password). Returns
+ * null in every other case (account doesn't exist, account has both
+ * providers, RPC fails) so the caller falls back to the generic message
+ * and we preserve the no-enumeration property.
+ *
+ * Uses the M38 SECURITY DEFINER RPC `user_providers_by_email` so we don't
+ * pay for the full admin SDK round-trip just to read the identity list.
+ */
+async function maybeProviderSpecificError(email: string): Promise<string | null> {
+  try {
+    const service = createSupabaseServiceClient();
+    const { data, error } = await service.rpc("user_providers_by_email", {
+      p_email: email,
+    });
+    if (error) {
+      // Silent failure: we still return the generic message. Captured for
+      // observability — a broken RPC shouldn't worsen the login UX.
+      captureException(error, {
+        tags: { fn: "maybeProviderSpecificError" },
+        extra: { email },
+      });
+      return null;
+    }
+    // RPC returns a sorted JSONB array (M38). Treat unexpected shapes as
+    // "unknown" → generic error.
+    if (!Array.isArray(data)) return null;
+    const providers = data as string[];
+    if (providers.length === 0) return null; // no user → generic
+    const hasPassword = providers.includes("email");
+    const hasGoogle = providers.includes("google");
+    if (hasGoogle && !hasPassword) {
+      return "Esta cuenta entra con Google. Probá 'Continuar con Google' arriba.";
+    }
+    return null;
+  } catch (e) {
+    captureException(e, { tags: { fn: "maybeProviderSpecificError", stage: "unexpected" } });
+    return null;
+  }
 }
 
 export async function signInWithGoogle(): Promise<AuthResult> {

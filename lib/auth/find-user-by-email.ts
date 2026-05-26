@@ -1,66 +1,73 @@
 /**
- * Folio · findUserByEmail — paginated lookup en auth.users.
+ * Folio · findUserByEmail — direct-SQL lookup with admin hydration.
  *
- * Audit 2026-05-23 finding A3: el `listUsers({ page: 1, perPage: 200 })` que
- * Supabase admin SDK trae por default rompe el lookup a partir del usuario
- * 201. Este helper itera páginas de 1000 hasta encontrar el match o agotar el
- * universo de users.
+ * Pre-M38 this helper paginated `admin.listUsers` in pages of 1000, up to
+ * 50 pages. With ~200ms per admin call, an existing-email signup attempt
+ * could spend 10+ seconds in this function alone. The Sprint 0 fix
+ * (extracted from inline code) preserved the behavior; M38 finally
+ * replaces the underlying mechanism with a SECURITY DEFINER RPC that does
+ * a single indexed query against `auth.users`.
  *
- * Cap defensivo: 50 páginas (50k usuarios) para evitar loops si la API trae
- * páginas truncadas mal. Si el cap se alcanza, el helper retorna null y
- * captura un mensaje a Sentry (no es una fail-loud porque el caller a veces
- * usa null como "no existe").
+ * Flow now:
+ *   1. RPC `find_user_id_by_email` → uuid (one round-trip).
+ *   2. If found, `admin.getUserById` → full user object (one round-trip).
+ *      We still need this because callers read fields like
+ *      `email_confirmed_at` and `identities` (see actions.ts:163).
  *
- * Comportamiento idéntico al inline `findUserByEmailPaginated` que vivía en
- * `app/(public)/onboarding/actions.ts` antes de Sprint 0 (Phase 7 M33 fix),
- * extraído aquí para reuso desde `/api/admin/confirm-user` (Task 0.4 / C3+A3).
+ * Total: at most 2 round-trips instead of up to 50.
+ *
+ * The exported signature is unchanged so callers in
+ * `app/(public)/onboarding/actions.ts` and
+ * `app/api/admin/confirm-user/route.ts` keep working without edits.
  */
 
-import { captureException, captureMessage } from "@sentry/nextjs";
+import { captureException } from "@sentry/nextjs";
 
 import type { createSupabaseServiceClient } from "@/lib/supabase/server";
 
 type ServiceClient = ReturnType<typeof createSupabaseServiceClient>;
 
-type ListUsersUser = Awaited<
-  ReturnType<ServiceClient["auth"]["admin"]["listUsers"]>
-> extends { data: { users: infer U } | null }
-  ? U extends Array<infer T>
-    ? T
-    : never
-  : never;
+type AdminGetUserResult = Awaited<
+  ReturnType<ServiceClient["auth"]["admin"]["getUserById"]>
+>;
 
-const PER_PAGE = 1000;
-const MAX_PAGES = 50;
+type AdminUser = AdminGetUserResult extends { data: { user: infer U } | null }
+  ? NonNullable<U>
+  : never;
 
 export async function findUserByEmail(
   service: ServiceClient,
   email: string,
-): Promise<ListUsersUser | null> {
-  const target = email.toLowerCase();
-  for (let page = 1; page <= MAX_PAGES; page++) {
-    const { data, error } = await service.auth.admin.listUsers({
-      page,
-      perPage: PER_PAGE,
-    });
-    if (error) {
-      captureException(error, {
-        tags: { helper: "findUserByEmail" },
-        extra: { page, perPage: PER_PAGE },
-      });
-      return null;
-    }
-    const users = data?.users ?? [];
-    const found = users.find((u) => u.email?.toLowerCase() === target);
-    if (found) return found;
-    if (users.length < PER_PAGE) return null; // última página
-  }
-  captureMessage(
-    `findUserByEmail: hit ${MAX_PAGES}-page cap (${MAX_PAGES * PER_PAGE} users) without finding match`,
-    {
-      level: "warning",
-      tags: { helper: "findUserByEmail" },
-    },
+): Promise<AdminUser | null> {
+  const normalized = email.trim();
+  if (!normalized) return null;
+
+  // 1. SQL lookup via the M38 SECURITY DEFINER RPC.
+  const { data: userId, error: rpcErr } = await service.rpc(
+    "find_user_id_by_email",
+    { p_email: normalized },
   );
-  return null;
+
+  if (rpcErr) {
+    captureException(rpcErr, {
+      tags: { helper: "findUserByEmail", step: "rpc" },
+      extra: { email: normalized },
+    });
+    return null;
+  }
+  if (!userId) return null;
+
+  // 2. Hydrate the full user object via admin SDK (callers read
+  //    `email_confirmed_at`, `identities`, etc).
+  const { data, error: adminErr } = await service.auth.admin.getUserById(
+    userId as string,
+  );
+  if (adminErr) {
+    captureException(adminErr, {
+      tags: { helper: "findUserByEmail", step: "hydrate" },
+      extra: { userId },
+    });
+    return null;
+  }
+  return (data?.user ?? null) as AdminUser | null;
 }
