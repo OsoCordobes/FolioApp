@@ -22,6 +22,14 @@ import { err, ok, type Result } from "./errors";
 export interface ActiveSession {
   userId: string;
   email: string;
+  /**
+   * W9 · `true` cuando `auth.users.email_confirmed_at IS NOT NULL`. El signup
+   * actual auto-confirma (`email_confirm: true`) por velocidad de demo, así
+   * que en producción siempre es true por ahora; el campo está pensado para
+   * los flows de email-change (que sí re-disparan verificación) y para el
+   * futuro switch a signup verificado de verdad.
+   */
+  emailVerified: boolean;
   organizationId: string;
   memberId: string;
   role: "OWNER" | "DIRECTOR" | "PROFESIONAL" | "COORDINADOR" | "ASISTENTE";
@@ -68,6 +76,7 @@ export async function getActiveSession(): Promise<Result<ActiveSession>> {
   return ok({
     userId: user.id,
     email: user.email ?? "",
+    emailVerified: Boolean(user.email_confirmed_at),
     organizationId: picked.organization_id,
     memberId: picked.id,
     role: picked.role,
