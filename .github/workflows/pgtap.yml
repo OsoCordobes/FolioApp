@@ -76,7 +76,9 @@ jobs:
             CREATE TABLE IF NOT EXISTS storage.buckets (
               id text PRIMARY KEY,
               name text,
-              public boolean DEFAULT false
+              public boolean DEFAULT false,
+              file_size_limit bigint,
+              allowed_mime_types text[]
             );
             CREATE TABLE IF NOT EXISTS storage.objects (
               id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
