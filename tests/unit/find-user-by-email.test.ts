@@ -3,38 +3,54 @@ import test from "node:test";
 
 import { findUserByEmail } from "../../lib/auth/find-user-by-email";
 
-// Mock liviano del service client. Solo expone `auth.admin.listUsers` con la
-// shape que consume el helper. La fixture de cada test define el comportamiento
-// de las páginas.
+/**
+ * Folio · findUserByEmail · M38 direct-SQL refactor.
+ *
+ * Before M38 this helper paginated `admin.listUsers`. Tests covered the
+ * pagination edge cases. The new flow is rpc → admin.getUserById, so the
+ * mock surface area is different: we stub `rpc("find_user_id_by_email")`
+ * and `auth.admin.getUserById(id)`.
+ */
+
 interface MockUser {
   id: string;
   email: string;
+  email_confirmed_at: string | null;
 }
 
-interface PageFixture {
-  users: MockUser[];
-  error?: { message: string };
+interface Fixture {
+  /** uuid returned by the RPC, or null if not found, or "error" to simulate failure. */
+  rpcResult: string | null | "error";
+  /** user object returned by getUserById, or null, or "error". */
+  hydrate?: MockUser | null | "error";
 }
 
-function makeMockService(pages: PageFixture[]): {
+interface CallLog {
+  rpcCalls: Array<{ fn: string; args: Record<string, unknown> }>;
+  hydrateCalls: string[];
+}
+
+function makeMockService(fixture: Fixture): {
   service: Parameters<typeof findUserByEmail>[0];
-  calls: Array<{ page: number; perPage: number }>;
+  calls: CallLog;
 } {
-  const calls: Array<{ page: number; perPage: number }> = [];
+  const calls: CallLog = { rpcCalls: [], hydrateCalls: [] };
   const service = {
+    rpc: async (fn: string, args: Record<string, unknown>) => {
+      calls.rpcCalls.push({ fn, args });
+      if (fixture.rpcResult === "error") {
+        return { data: null, error: { message: "rpc failed" } };
+      }
+      return { data: fixture.rpcResult, error: null };
+    },
     auth: {
       admin: {
-        listUsers: async ({ page, perPage }: { page: number; perPage: number }) => {
-          calls.push({ page, perPage });
-          const fixture = pages[page - 1];
-          if (!fixture) {
-            // Páginas más allá del array → vacías (simula fin de userset).
-            return { data: { users: [] }, error: null };
+        getUserById: async (id: string) => {
+          calls.hydrateCalls.push(id);
+          if (fixture.hydrate === "error") {
+            return { data: null, error: { message: "admin failed" } };
           }
-          if (fixture.error) {
-            return { data: null, error: fixture.error };
-          }
-          return { data: { users: fixture.users }, error: null };
+          return { data: { user: fixture.hydrate ?? null }, error: null };
         },
       },
     },
@@ -42,107 +58,66 @@ function makeMockService(pages: PageFixture[]): {
   return { service, calls };
 }
 
-test("findUserByEmail: encuentra user en la primera página", async () => {
-  const { service, calls } = makeMockService([
-    { users: [{ id: "u1", email: "lautaro@folio.app" }] },
-  ]);
-  const result = await findUserByEmail(service, "lautaro@folio.app");
-  assert.equal(result?.id, "u1");
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].page, 1);
-});
-
-test("findUserByEmail: encuentra user case-insensitive", async () => {
-  const { service } = makeMockService([
-    { users: [{ id: "u1", email: "Lautaro@Folio.App" }] },
-  ]);
-  const result = await findUserByEmail(service, "LAUTARO@folio.APP");
-  assert.equal(result?.id, "u1");
-});
-
-test("findUserByEmail: pagina hasta encontrar (página 3)", async () => {
-  const fullPage = (offset: number): PageFixture => ({
-    users: Array.from({ length: 1000 }, (_, i) => ({
-      id: `u${offset + i}`,
-      email: `user${offset + i}@folio.app`,
-    })),
+test("rpc returns id → hydrates and returns the full user", async () => {
+  const { service, calls } = makeMockService({
+    rpcResult: "user-uuid-1",
+    hydrate: { id: "user-uuid-1", email: "lautaro@folio.app", email_confirmed_at: "2026-05-20T00:00:00Z" },
   });
-  const target: PageFixture = {
-    users: [
-      ...Array.from({ length: 999 }, (_, i) => ({
-        id: `u_p3_${i}`,
-        email: `bulk${i}@folio.app`,
-      })),
-      { id: "target", email: "target@folio.app" },
-    ],
-  };
-  const { service, calls } = makeMockService([fullPage(0), fullPage(1000), target]);
-  const result = await findUserByEmail(service, "target@folio.app");
-  assert.equal(result?.id, "target");
-  assert.equal(calls.length, 3);
-  assert.deepEqual(
-    calls.map((c) => c.page),
-    [1, 2, 3],
-  );
+  const result = await findUserByEmail(service, "lautaro@folio.app");
+  assert.equal(result?.id, "user-uuid-1");
+  assert.equal(result?.email, "lautaro@folio.app");
+  assert.equal(calls.rpcCalls.length, 1);
+  assert.equal(calls.rpcCalls[0].fn, "find_user_id_by_email");
+  assert.equal(calls.rpcCalls[0].args.p_email, "lautaro@folio.app");
+  assert.deepEqual(calls.hydrateCalls, ["user-uuid-1"]);
 });
 
-test("findUserByEmail: retorna null si no encuentra y la última página fue truncada", async () => {
-  const { service, calls } = makeMockService([
-    {
-      users: [
-        { id: "u1", email: "alguien@folio.app" },
-        { id: "u2", email: "otro@folio.app" },
-      ],
-    },
-  ]);
+test("rpc returns null → returns null without hydrating", async () => {
+  const { service, calls } = makeMockService({ rpcResult: null });
   const result = await findUserByEmail(service, "nope@folio.app");
   assert.equal(result, null);
-  assert.equal(calls.length, 1); // se cortó porque users.length < perPage
+  assert.equal(calls.hydrateCalls.length, 0);
 });
 
-test("findUserByEmail: retorna null cuando listUsers reporta error en alguna página", async () => {
-  const { service } = makeMockService([
-    {
-      users: Array.from({ length: 1000 }, (_, i) => ({
-        id: `u${i}`,
-        email: `user${i}@folio.app`,
-      })),
-    },
-    { users: [], error: { message: "rate limited" } },
-  ]);
-  const result = await findUserByEmail(service, "target@folio.app");
+test("rpc fails → returns null and skips hydration (caller treats as not-found)", async () => {
+  const { service, calls } = makeMockService({ rpcResult: "error" });
+  const result = await findUserByEmail(service, "x@folio.app");
+  assert.equal(result, null);
+  assert.equal(calls.hydrateCalls.length, 0);
+});
+
+test("hydrate fails → returns null even if rpc found the id", async () => {
+  const { service } = makeMockService({
+    rpcResult: "user-uuid-1",
+    hydrate: "error",
+  });
+  const result = await findUserByEmail(service, "x@folio.app");
   assert.equal(result, null);
 });
 
-test("findUserByEmail: ignora users sin email", async () => {
-  const { service } = makeMockService([
-    {
-      users: [
-        { id: "u-nullemail", email: "" },
-        { id: "u-target", email: "match@folio.app" },
-      ],
-    },
-  ]);
-  const result = await findUserByEmail(service, "match@folio.app");
-  assert.equal(result?.id, "u-target");
+test("hydrate returns null user → returns null (race: user deleted between rpc and admin call)", async () => {
+  const { service } = makeMockService({
+    rpcResult: "user-uuid-1",
+    hydrate: null,
+  });
+  const result = await findUserByEmail(service, "x@folio.app");
+  assert.equal(result, null);
 });
 
-test("findUserByEmail: corta en perPage strict (página llena no truncada NO termina prematuramente)", async () => {
-  // Página 1 llena (1000), página 2 truncada (500). Debe paginar a página 2.
-  const fullPage: PageFixture = {
-    users: Array.from({ length: 1000 }, (_, i) => ({
-      id: `u${i}`,
-      email: `bulk${i}@folio.app`,
-    })),
-  };
-  const lastPage: PageFixture = {
-    users: Array.from({ length: 500 }, (_, i) => ({
-      id: `last${i}`,
-      email: `last${i}@folio.app`,
-    })),
-  };
-  const { service, calls } = makeMockService([fullPage, lastPage]);
-  const result = await findUserByEmail(service, "last250@folio.app");
-  assert.equal(result?.id, "last250");
-  assert.equal(calls.length, 2);
+test("empty / whitespace email → returns null without hitting RPC", async () => {
+  const { service, calls } = makeMockService({ rpcResult: null });
+  assert.equal(await findUserByEmail(service, ""), null);
+  assert.equal(await findUserByEmail(service, "   "), null);
+  assert.equal(calls.rpcCalls.length, 0);
+});
+
+test("email normalization: trims whitespace before RPC", async () => {
+  const { service, calls } = makeMockService({
+    rpcResult: "u",
+    hydrate: { id: "u", email: "lautaro@folio.app", email_confirmed_at: null },
+  });
+  await findUserByEmail(service, "  lautaro@folio.app  ");
+  // Case is preserved (the RPC does case-insensitive matching); only
+  // surrounding whitespace is stripped.
+  assert.equal(calls.rpcCalls[0].args.p_email, "lautaro@folio.app");
 });
