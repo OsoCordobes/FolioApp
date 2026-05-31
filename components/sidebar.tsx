@@ -49,7 +49,16 @@ export type GoogleSyncStatus =
 
 export interface SidebarProps {
   /** Datos del consultorio (org). */
-  organization: { nombre: string; rubro: string | null; slug?: string };
+  organization: {
+    nombre: string;
+    rubro: string | null;
+    slug?: string;
+    /**
+     * M37 · true = demo/internal/test tenant; bypasses the billing gate. The
+     * sidebar shows a visible badge so internal status can never be invisible.
+     */
+    isInternalAccount?: boolean;
+  };
   /** Datos del profesional logueado (PII ya desencriptada en server). */
   profile: { nombre: string | null; apellido: string | null };
   /** Rol del member en esta org. */
@@ -76,6 +85,8 @@ export function Sidebar({ organization, profile, role, googleSync }: SidebarProp
           </span>
         </div>
       </div>
+
+      {organization.isInternalAccount ? <InternalAccountBadge /> : null}
 
       <SidebarSearch />
 
@@ -166,6 +177,39 @@ function SidebarSearch() {
       />
       <span className="fi-kbd" aria-hidden>⌘K</span>
     </form>
+  );
+}
+
+/**
+ * M37 · "Cuenta interna" badge. Rendered when organization.isInternalAccount
+ * is true so internal/demo accounts never look identical to real customers.
+ * Bypassing the billing gate without a visible marker is how internal flags
+ * end up accidentally on paying customers.
+ */
+function InternalAccountBadge() {
+  return (
+    <div
+      className="fi-internal-badge"
+      title="Esta organización tiene el flag is_internal_account=true. El gate de suscripción no aplica."
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        margin: "8px 12px 0",
+        padding: "6px 10px",
+        background: "var(--surface-soft, #fff7e0)",
+        border: "1px solid var(--accent-warm, #d8b766)",
+        borderRadius: 6,
+        fontSize: 11,
+        fontWeight: 600,
+        color: "var(--ink-2, #6b5a2e)",
+        letterSpacing: 0.3,
+        textTransform: "uppercase",
+      }}
+    >
+      <span aria-hidden style={{ fontSize: 13, lineHeight: 1 }}>●</span>
+      Cuenta interna
+    </div>
   );
 }
 
