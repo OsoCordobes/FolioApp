@@ -242,6 +242,29 @@ body {
 }
 button { font: inherit; color: inherit; border: 0; background: transparent; cursor: pointer; padding: 0; }
 button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+
+/* A11y (audit 2026-06): keyboard focus for link-buttons (.fi-btn on <a>), role=button,
+   and custom interactive widgets that aren't native <button> — the rule above only
+   covered native <button>. */
+.fi-btn:focus-visible,
+[role="button"]:focus-visible,
+[role="switch"]:focus-visible,
+[role="tab"]:focus-visible,
+[role="menuitem"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+/* Screen-reader-only utility (audit 2026-06) */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 input  { font: inherit; color: inherit; border: 0; background: transparent; }
 input:focus { outline: none; }
 .mono { font-family: 'Geist Mono', ui-monospace, monospace; letter-spacing: -.005em; }
@@ -420,6 +443,13 @@ input:focus { outline: none; }
   color: var(--ink-3);
 }
 .fi-btn-ghost:hover { color: var(--ink); background: var(--surface-2); }
+/* Destructive action variant (audit 2026-06) — outlined red, distinct from secondary. */
+.fi-btn-danger {
+  background: var(--surface);
+  border-color: var(--red-soft);
+  color: var(--red);
+}
+.fi-btn-danger:hover { background: var(--red-soft); border-color: var(--red); }
 
 /* ═════════════ KPIs ═════════════ */
 .fi-kpis {

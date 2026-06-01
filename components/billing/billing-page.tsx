@@ -84,13 +84,6 @@ export function BillingPage({
   };
 
   const onCancel = () => {
-    if (
-      !window.confirm(
-        "¿Cancelar la suscripción? Vas a poder seguir usando Folio hasta el final del período pagado.",
-      )
-    ) {
-      return;
-    }
     setError(null);
     startTransition(async () => {
       const res = await cancelSubscriptionAction();
@@ -117,7 +110,7 @@ export function BillingPage({
           <span className="fi-eyebrow">facturación</span>
           <h1>Suscripción Folio</h1>
           {error ? (
-            <p style={{ color: "var(--red)", marginTop: 4, fontSize: 13 }}>{error}</p>
+            <p role="alert" style={{ color: "var(--red)", marginTop: 4, fontSize: 13 }}>{error}</p>
           ) : null}
         </div>
         <Link href="/configuracion" className="fi-btn fi-btn-ghost">
@@ -166,6 +159,7 @@ function SubscriptionCard({
   onCancel: () => void;
 }) {
   const monto = formatArs(planPriceArs);
+  const [confirming, setConfirming] = useState(false);
 
   if (!subscription || subscription.estado === "CANCELADA") {
     return (
@@ -185,7 +179,7 @@ function SubscriptionCard({
                 Pagás con tarjeta a través de Mercado Pago. Te cobramos automáticamente cada mes.
                 Podés cancelar cuando quieras.
               </p>
-              <p style={{ fontSize: 13, color: "var(--muted)", marginTop: 8 }}>
+              <p style={{ fontSize: 13, color: "var(--ink-3)", marginTop: 8 }}>
                 El cobro queda asociado a <b>{payerEmail}</b>.
               </p>
             </div>
@@ -302,15 +296,39 @@ function SubscriptionCard({
             </div>
           </div>
         ) : null}
-        <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
-          <button
-            type="button"
-            className="fi-btn fi-btn-secondary"
-            onClick={onCancel}
-            disabled={pending}
-          >
-            {pending ? "Cancelando…" : "Cancelar suscripción"}
-          </button>
+        <div style={{ marginTop: 16, display: "flex", gap: 8, alignItems: "center" }}>
+          {confirming ? (
+            <>
+              <span style={{ fontSize: 13, color: "var(--ink-2)" }}>
+                ¿Cancelar? Seguís con acceso hasta el final del período pagado.
+              </span>
+              <button
+                type="button"
+                className="fi-btn fi-btn-danger"
+                onClick={onCancel}
+                disabled={pending}
+              >
+                {pending ? "Cancelando…" : "Sí, cancelar"}
+              </button>
+              <button
+                type="button"
+                className="fi-btn fi-btn-ghost"
+                onClick={() => setConfirming(false)}
+                disabled={pending}
+              >
+                Volver
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="fi-btn fi-btn-danger"
+              onClick={() => setConfirming(true)}
+              disabled={pending}
+            >
+              Cancelar suscripción
+            </button>
+          )}
         </div>
       </div>
     </section>
@@ -340,12 +358,13 @@ function ChargesTable({ charges }: { charges: ChargeRow[] }) {
       </header>
       <div className="cfg-section-body">
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+          <caption className="sr-only">Historial de cobros de la suscripción</caption>
           <thead>
             <tr style={{ textAlign: "left", borderBottom: "1px solid var(--line)" }}>
-              <th style={{ padding: "8px 4px" }}>Fecha</th>
-              <th style={{ padding: "8px 4px" }}>Monto</th>
-              <th style={{ padding: "8px 4px" }}>Estado</th>
-              <th style={{ padding: "8px 4px" }}>ID MP</th>
+              <th scope="col" style={{ padding: "8px 4px" }}>Fecha</th>
+              <th scope="col" style={{ padding: "8px 4px" }}>Monto</th>
+              <th scope="col" style={{ padding: "8px 4px" }}>Estado</th>
+              <th scope="col" style={{ padding: "8px 4px" }}>ID MP</th>
             </tr>
           </thead>
           <tbody>
@@ -368,53 +387,59 @@ function ChargesTable({ charges }: { charges: ChargeRow[] }) {
   );
 }
 
-function StatusBadge({ estado }: { estado: SubscriptionRow["estado"] }) {
-  const map: Record<SubscriptionRow["estado"], { label: string; bg: string; fg: string }> = {
-    ACTIVA: { label: "Activa", bg: "var(--green-soft, #dcfce7)", fg: "var(--green, #166534)" },
-    PENDIENTE_ACTIVACION: { label: "Pendiente", bg: "var(--amber-soft, #fef3c7)", fg: "var(--amber, #92400e)" },
-    PAUSADA: { label: "Pausada", bg: "var(--gray-soft, #e5e7eb)", fg: "var(--muted, #6b7280)" },
-    CANCELADA: { label: "Cancelada", bg: "var(--red-soft, #fee2e2)", fg: "var(--red, #991b1b)" },
-    MOROSA: { label: "En cobro", bg: "var(--amber-soft, #fef3c7)", fg: "var(--amber, #92400e)" },
-  };
-  const s = map[estado];
+// Shared badge tone system — brass-harmonized Folio tokens (audit 2026-06).
+// Replaces per-badge hardcoded Tailwind fallbacks: --gray-soft/--muted/--blue*
+// did NOT exist in folio.css, so they rendered as off-theme Tailwind hex.
+type BadgeTone = "success" | "warning" | "danger" | "neutral";
+
+const BADGE_TONES: Record<BadgeTone, { bg: string; fg: string }> = {
+  success: { bg: "var(--green-soft)", fg: "var(--green)" },
+  warning: { bg: "var(--amber-soft)", fg: "var(--amber)" },
+  danger: { bg: "var(--red-soft)", fg: "var(--red)" },
+  neutral: { bg: "var(--surface-2)", fg: "var(--ink-2)" },
+};
+
+function Badge({ tone, label }: { tone: BadgeTone; label: string }) {
+  const t = BADGE_TONES[tone];
   return (
     <span
       style={{
         padding: "3px 10px",
-        borderRadius: 6,
-        background: s.bg,
-        color: s.fg,
+        borderRadius: "var(--r-sm)",
+        background: t.bg,
+        color: t.fg,
         fontWeight: 500,
         fontSize: 13,
       }}
     >
-      {s.label}
+      {label}
     </span>
   );
 }
 
+const SUB_STATUS: Record<SubscriptionRow["estado"], { label: string; tone: BadgeTone }> = {
+  ACTIVA: { label: "Activa", tone: "success" },
+  PENDIENTE_ACTIVACION: { label: "Pendiente", tone: "warning" },
+  PAUSADA: { label: "Pausada", tone: "neutral" },
+  CANCELADA: { label: "Cancelada", tone: "danger" },
+  MOROSA: { label: "En cobro", tone: "warning" },
+};
+
+const CHARGE_STATUS: Record<ChargeRow["estado"], { label: string; tone: BadgeTone }> = {
+  APROBADO: { label: "Aprobado", tone: "success" },
+  PENDIENTE: { label: "Pendiente", tone: "warning" },
+  RECHAZADO: { label: "Rechazado", tone: "danger" },
+  REFUNDED: { label: "Reintegrado", tone: "neutral" },
+};
+
+function StatusBadge({ estado }: { estado: SubscriptionRow["estado"] }) {
+  const s = SUB_STATUS[estado];
+  return <Badge tone={s.tone} label={s.label} />;
+}
+
 function ChargeBadge({ estado }: { estado: ChargeRow["estado"] }) {
-  const map: Record<ChargeRow["estado"], { label: string; bg: string; fg: string }> = {
-    APROBADO: { label: "Aprobado", bg: "var(--green-soft, #dcfce7)", fg: "var(--green, #166534)" },
-    PENDIENTE: { label: "Pendiente", bg: "var(--amber-soft, #fef3c7)", fg: "var(--amber, #92400e)" },
-    RECHAZADO: { label: "Rechazado", bg: "var(--red-soft, #fee2e2)", fg: "var(--red, #991b1b)" },
-    REFUNDED: { label: "Reintegrado", bg: "var(--gray-soft, #e5e7eb)", fg: "var(--muted, #6b7280)" },
-  };
-  const s = map[estado];
-  return (
-    <span
-      style={{
-        padding: "2px 8px",
-        borderRadius: 6,
-        background: s.bg,
-        color: s.fg,
-        fontWeight: 500,
-        fontSize: 12,
-      }}
-    >
-      {s.label}
-    </span>
-  );
+  const s = CHARGE_STATUS[estado];
+  return <Badge tone={s.tone} label={s.label} />;
 }
 
 function GraceBanner({ reason }: { reason: string }) {
@@ -434,9 +459,9 @@ function GraceBanner({ reason }: { reason: string }) {
       style={{
         marginTop: 16,
         padding: "12px 16px",
-        background: "var(--red-soft, #fee2e2)",
-        color: "var(--red, #991b1b)",
-        borderRadius: 8,
+        background: "var(--red-soft)",
+        color: "var(--red)",
+        borderRadius: "var(--r-md)",
         fontSize: 14,
         fontWeight: 500,
       }}
@@ -453,9 +478,9 @@ function GraceCountdownBanner({ days }: { days: number }) {
       style={{
         marginTop: 16,
         padding: "10px 14px",
-        background: "var(--amber-soft, #fef3c7)",
-        color: "var(--amber, #92400e)",
-        borderRadius: 8,
+        background: "var(--amber-soft)",
+        color: "var(--amber)",
+        borderRadius: "var(--r-md)",
         fontSize: 13,
       }}
     >
@@ -470,9 +495,9 @@ function ActivationPendingBanner({ onRefresh }: { onRefresh: () => void }) {
       style={{
         marginTop: 16,
         padding: "12px 16px",
-        background: "var(--blue-soft, #dbeafe)",
-        color: "var(--blue, #1e40af)",
-        borderRadius: 8,
+        background: "var(--slate-soft)",
+        color: "var(--slate)",
+        borderRadius: "var(--r-md)",
         fontSize: 14,
         display: "flex",
         justifyContent: "space-between",
