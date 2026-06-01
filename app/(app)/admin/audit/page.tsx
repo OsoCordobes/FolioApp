@@ -41,11 +41,21 @@ export default async function AuditPage({ searchParams }: PageProps) {
     getAuditStats(),
   ]);
 
-  if (!entriesResult.ok && entriesResult.error.code === "forbidden") {
-    notFound();
+  if (!entriesResult.ok) {
+    // forbidden → 404 (no revelar existencia del recurso a roles sin permiso).
+    if (entriesResult.error.code === "forbidden") {
+      notFound();
+    }
+    // Cualquier otra falla (db_error, etc.) NO debe renderizar una tabla vacía:
+    // sería indistinguible de "no hay eventos" y es un riesgo de compliance
+    // (Ley 25.326 / 26.529). Lanzamos para que error.tsx muestre el fallo.
+    throw new Error(
+      `No se pudo cargar el audit log: ${entriesResult.error.message}` +
+        (entriesResult.error.detail ? ` (${entriesResult.error.detail})` : ""),
+    );
   }
 
-  const entries = entriesResult.ok ? entriesResult.data : [];
+  const entries = entriesResult.data;
   const stats = statsResult.ok ? statsResult.data : null;
 
   return (

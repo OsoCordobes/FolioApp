@@ -32,14 +32,20 @@ interface Group {
   turnos: Turno[];
 }
 
+const CANCELADOS_ESTADOS: EstadoTurno[] = ["cancelado", "no_asistio", "reagendado"];
+
 export function TurnoList({ turnos, pacientes, nextId, onTransition, onOpenFicha, dense }: TurnoListProps) {
   const [showCerrados, setShowCerrados] = useState(true);
+  const [showCancelados, setShowCancelados] = useState(false);
 
   const activos = turnos.filter(
-    (t) => !["cerrado", "cancelado", "no_asistio"].includes(t.estado),
+    (t) => !["cerrado", "cancelado", "no_asistio", "reagendado"].includes(t.estado),
   );
   const cerrados = turnos
     .filter((t) => t.estado === "cerrado")
+    .sort((a, b) => a.hora.localeCompare(b.hora));
+  const cancelados = turnos
+    .filter((t) => CANCELADOS_ESTADOS.includes(t.estado))
     .sort((a, b) => a.hora.localeCompare(b.hora));
 
   const groups = useMemo<Group[]>(() => {
@@ -52,6 +58,12 @@ export function TurnoList({ turnos, pacientes, nextId, onTransition, onOpenFicha
   }, [activos]);
 
   const cerradosTotal = cerrados.reduce((s, t) => s + t.precio, 0);
+
+  const estadoLabel: Partial<Record<EstadoTurno, string>> = {
+    cancelado: "Cancelado",
+    no_asistio: "No asistió",
+    reagendado: "Reagendado",
+  };
 
   return (
     <div className={"fi-list " + (dense ? "is-dense" : "")}>
@@ -108,6 +120,61 @@ export function TurnoList({ turnos, pacientes, nextId, onTransition, onOpenFicha
                   paciente={pacientes[t.pacienteId]}
                   onOpenFicha={onOpenFicha}
                 />
+              ))}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      {cancelados.length ? (
+        <section className="fi-cerrados">
+          <header
+            className="fi-cerrados-head"
+            onClick={() => setShowCancelados((v) => !v)}
+            role="button"
+            tabIndex={0}
+          >
+            <span className="fi-cerrados-chev" data-open={showCancelados}>
+              <I.ChevronDown size={12} />
+            </span>
+            <span className="fi-block-lbl">Cancelados / No asistió</span>
+            <span className="fi-cerrados-meta">
+              {cancelados.length} {cancelados.length === 1 ? "turno" : "turnos"}
+            </span>
+            <span className="fi-block-line" />
+          </header>
+          {showCancelados ? (
+            <div className="fi-cerrados-rows">
+              {cancelados.map((t) => (
+                <div
+                  key={t.id}
+                  className="fi-cerrado-row is-muted"
+                  onClick={() => onOpenFicha(t.id)}
+                  role="button"
+                  tabIndex={0}
+                >
+                  <div className="fi-t-time">
+                    <b>{t.hora}</b>
+                  </div>
+                  <span className="fi-t-dot-wrap">
+                    <span className="fi-t-dot" style={{ background: "var(--ink-3)" }} />
+                  </span>
+                  <div className="fi-t-who">
+                    <div className="fi-t-name-row">
+                      <b className="fi-t-name">{pacientes[t.pacienteId]?.nombre ?? "Paciente"}</b>
+                    </div>
+                    <div className="fi-t-meta">
+                      <span>{t.servicio}</span>
+                      <span className="fi-cerrados-dot">·</span>
+                      <span>{estadoLabel[t.estado] ?? t.estado}</span>
+                    </div>
+                  </div>
+                  <div className="fi-cerrado-cta">
+                    <span className="fi-btn fi-btn-ghost">
+                      Ver ficha <I.ArrowRight size={11} />
+                    </span>
+                  </div>
+                </div>
               ))}
             </div>
           ) : null}

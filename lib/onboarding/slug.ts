@@ -14,6 +14,17 @@
  */
 
 /**
+ * Mínimo real de caracteres del slug. El constraint de DB es
+ * `slug ~ '^[a-z0-9][a-z0-9-]{2,62}[a-z0-9]$'`, que exige al menos
+ * 1 (start) + 2 (middle, {2,...}) + 1 (end) = 4 caracteres. Los
+ * validadores client/zod estaban en 3 (por debajo del mínimo real),
+ * por eso un slug de 3 chars pasaba la validación manual pero rompía
+ * el INSERT. Alineamos todo a 4 (BL-1).
+ */
+export const SLUG_MIN_LENGTH = 4;
+export const SLUG_MAX_LENGTH = 50;
+
+/**
  * Convierte un string a slug seguro para URL. Puro, idempotente.
  *
  * Ejemplos:
@@ -42,12 +53,39 @@ export function slugify(input: string): string {
  */
 export function validateSlugFormat(slug: string): string | null {
   if (!slug) return "Elegí un link.";
-  if (slug.length < 3) return "Mínimo 3 caracteres.";
-  if (slug.length > 50) return "Máximo 50 caracteres.";
+  if (slug.length < SLUG_MIN_LENGTH) return `Mínimo ${SLUG_MIN_LENGTH} caracteres.`;
+  if (slug.length > SLUG_MAX_LENGTH) return `Máximo ${SLUG_MAX_LENGTH} caracteres.`;
   if (!/^[a-z0-9-]+$/.test(slug)) return "Solo minúsculas, números y guiones.";
   if (slug.startsWith("-") || slug.endsWith("-")) return "No puede empezar ni terminar con guión.";
   if (slug.includes("--")) return "Sin guiones consecutivos.";
   return null;
+}
+
+/**
+ * Deriva un slug provisional SIEMPRE válido contra el constraint de DB a
+ * partir de un texto libre (típicamente el local-part del email). Garantiza:
+ *   - solo [a-z0-9-], sin diacríticos, sin guiones colgantes
+ *   - empieza y termina en alfanumérico
+ *   - largo entre SLUG_MIN_LENGTH y SLUG_MAX_LENGTH
+ *
+ * Si el slugify del input queda vacío o por debajo del mínimo (emails con
+ * local-part corto: "dr@", "jo@", iniciales), lo reemplaza/completa con una
+ * base segura ("consultorio") más un sufijo random corto. El resultado todavía
+ * pasa por `pickFreshSlug` para resolver colisiones (BL-1).
+ *
+ * Puro/idempotente salvo por el sufijo random (solo se usa en el fallback).
+ */
+export function deriveProvisionalSlug(input: string): string {
+  const base = slugify(input ?? "");
+  if (base.length >= SLUG_MIN_LENGTH) {
+    return base.slice(0, SLUG_MAX_LENGTH);
+  }
+  // Demasiado corto o vacío: garantizamos >= SLUG_MIN_LENGTH usando una base
+  // segura + sufijo random. "consultorio" ya supera el mínimo; el sufijo evita
+  // que dos local-parts cortos colisionen siempre en el mismo slug.
+  const safeBase = base || "consultorio";
+  const suffix = Math.random().toString(36).slice(2, 7);
+  return `${safeBase}-${suffix}`.slice(0, SLUG_MAX_LENGTH);
 }
 
 /**

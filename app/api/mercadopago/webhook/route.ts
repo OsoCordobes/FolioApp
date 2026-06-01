@@ -105,6 +105,13 @@ export async function POST(request: NextRequest) {
           rawPayload: payload,
         });
         if (!res.ok) {
+          // M-BILL-1: si la suscripción todavía no está linkeada (el webhook de
+          // cargo llegó antes que el de preapproval), devolvemos 5xx para que MP
+          // reintente más tarde — si no, el primer cobro se perdería para siempre.
+          if (res.error.code === "not_found") {
+            console.warn(`[mp-webhook] recordChargeAttempt not_found: ${res.error.message}. Devolviendo 503 para retry de MP.`);
+            return new NextResponse("subscription-not-linked-yet", { status: 503 });
+          }
           console.warn(`[mp-webhook] recordChargeAttempt falló: ${res.error.message}`);
         }
         break;

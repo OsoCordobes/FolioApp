@@ -25,6 +25,21 @@ export interface Slot {
   fin: string;
 }
 
+/**
+ * Error de lectura de agenda. Se lanza (en vez de devolver `[]`) cuando una de
+ * las queries de disponibilidad falla, para que el caller distinga un error
+ * transitorio de DB de un resultado legítimo de cero slots. Sin esto el booking
+ * público mostraría "sin turnos" y rechazaría pacientes reales ante un fallo.
+ */
+export class AvailabilityDbError extends Error {
+  readonly code = "db_error" as const;
+  constructor(detail?: string) {
+    super("No pudimos leer la agenda. Probá de nuevo.");
+    this.name = "AvailabilityDbError";
+    if (detail) this.cause = detail;
+  }
+}
+
 // Argentina UTC-3 fijo (sin horario de verano desde 2009). En el futuro podríamos
 // usar `Intl.DateTimeFormat` para soporte multi-zona, pero hoy todos los clientes
 // están en AR.
@@ -67,17 +82,22 @@ export async function getSlotsDisponibles(input: {
   const supabase = createSupabaseServiceClient();
 
   // 1. Disponibilidad del profesional (vigente y activa)
-  const { data: disps } = await supabase
+  const { data: disps, error: dispsErr } = await supabase
     .from("disponibilidad_profesional")
     .select("dia_semana, hora_inicio, hora_fin, vigencia_desde, vigencia_hasta")
     .eq("organization_id", input.organizationId)
     .eq("member_id", input.profesionalId)
     .eq("activa", true);
 
+  // Un error de DB debe propagarse como falla (no como "sin slots"): de lo
+  // contrario el booking público mostraría agenda vacía y rechazaría pacientes
+  // reales ante un error transitorio. Una agenda sin disponibilidad configurada
+  // SÍ es un resultado legítimo de cero slots ([]).
+  if (dispsErr) throw new AvailabilityDbError(dispsErr.message);
   if (!disps || disps.length === 0) return [];
 
   // 2. Bloqueos del rango
-  const { data: bloqueos } = await supabase
+  const { data: bloqueos, error: bloqueosErr } = await supabase
     .from("bloqueo")
     .select("inicio, duracion_min")
     .eq("organization_id", input.organizationId)
@@ -85,8 +105,10 @@ export async function getSlotsDisponibles(input: {
     .gte("inicio", input.rangeStart.toISOString())
     .lt("inicio", input.rangeEnd.toISOString());
 
+  if (bloqueosErr) throw new AvailabilityDbError(bloqueosErr.message);
+
   // 3. Turnos del rango (no cerrados/cancelados)
-  const { data: turnos } = await supabase
+  const { data: turnos, error: turnosErr } = await supabase
     .from("turno")
     .select("inicio, duracion_min")
     .eq("organization_id", input.organizationId)
@@ -95,8 +117,10 @@ export async function getSlotsDisponibles(input: {
     .gte("inicio", input.rangeStart.toISOString())
     .lt("inicio", input.rangeEnd.toISOString());
 
+  if (turnosErr) throw new AvailabilityDbError(turnosErr.message);
+
   // 4. Pedidos pendientes con fecha en el rango (reservados tentativamente)
-  const { data: pedidos } = await supabase
+  const { data: pedidos, error: pedidosErr } = await supabase
     .from("pedido")
     .select("fecha_propuesta, duracion_min")
     .eq("organization_id", input.organizationId)
@@ -104,6 +128,8 @@ export async function getSlotsDisponibles(input: {
     .not("fecha_propuesta", "is", null)
     .gte("fecha_propuesta", input.rangeStart.toISOString())
     .lt("fecha_propuesta", input.rangeEnd.toISOString());
+
+  if (pedidosErr) throw new AvailabilityDbError(pedidosErr.message);
 
   // Intervalos ocupados [startUtcMs, endUtcMs)
   type DispRow = {

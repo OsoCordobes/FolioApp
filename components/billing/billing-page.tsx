@@ -450,6 +450,8 @@ function GraceBanner({ reason }: { reason: string }) {
       "Tu suscripción está cancelada. Volvé a activarla para seguir usando Folio.",
     subscription_morosa_expired:
       "Hubo un problema con tu cobro y se canceló la suscripción. Volvé a activarla.",
+    subscription_paused:
+      "Tu suscripción está pausada. Reactivala para seguir usando Folio.",
     denied:
       "Necesitás activar la suscripción para seguir usando Folio.",
   };

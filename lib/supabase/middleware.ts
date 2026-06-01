@@ -17,7 +17,15 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/lib/supabase/database.types";
 
 export async function updateSupabaseSession(request: NextRequest) {
-  let response = NextResponse.next({ request });
+  // Inyectamos el pathname de la request en los REQUEST headers para que los
+  // Server Components (p.ej. el layout de (app)) puedan leerlo vía `headers()`.
+  // `headers()` en un RSC devuelve los headers de la request ENTRANTE, no los
+  // del response del middleware — por eso debe ir acá, sobre `request.headers`,
+  // y propagarse a cada `NextResponse.next({ request: { headers } })`.
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-pathname", request.nextUrl.pathname);
+
+  let response = NextResponse.next({ request: { headers: requestHeaders } });
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -32,7 +40,7 @@ export async function updateSupabaseSession(request: NextRequest) {
       },
       setAll(toSet) {
         toSet.forEach(({ name, value }) => request.cookies.set(name, value));
-        response = NextResponse.next({ request });
+        response = NextResponse.next({ request: { headers: requestHeaders } });
         toSet.forEach(({ name, value, options }) => {
           response.cookies.set(name, value, options);
         });

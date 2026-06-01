@@ -14,7 +14,9 @@
  *   - transacciones: top 20 más recientes con paciente desencriptado.
  *   - kpiDelta vs mes pasado (porcentaje).
  *
- * RLS hereda de turno_extendido + pago (security_invoker=true en la vista).
+ * Multi-tenant: `pago` y `turno` son tablas base, así que cada query filtra
+ * explícitamente por `organization_id` (no hay vista con security_invoker que
+ * herede el scoping).
  */
 
 import { decryptColumn } from "@/lib/crypto";
@@ -146,6 +148,7 @@ export async function getFinanzasDelMes(input: FetcherInput): Promise<Result<Fin
         "paciente:paciente_id(identidad:identidad_id(nombre_cifrado, apellido_cifrado)), " +
         "servicio:servicio_id(nombre, tipo_canonico))",
     )
+    .eq("organization_id", input.organizationId)
     .gte("created_at", startUtc)
     .lt("created_at", endUtc)
     .order("created_at", { ascending: false });
@@ -156,6 +159,7 @@ export async function getFinanzasDelMes(input: FetcherInput): Promise<Result<Fin
   const { data: prevPagosAgg } = await supabase
     .from("pago")
     .select("monto_cents")
+    .eq("organization_id", input.organizationId)
     .eq("estado", "PAGADO")
     .gte("created_at", prevStartUtc)
     .lt("created_at", prevEndUtc);
