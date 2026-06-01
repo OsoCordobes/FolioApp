@@ -16,6 +16,7 @@ import {
   fetchSlotsPublico,
 } from "@/app/(public)/book/[slug]/actions";
 import { PublicCard } from "@/components/public-card/public-card";
+import { PRIVACY_VERSION } from "@/lib/legal/versions";
 
 import { StickyMiniHeader } from "./sticky-mini-header";
 
@@ -127,6 +128,7 @@ export function BookingWizard({
   const [telefono, setTelefono] = useState("");
   const [email, setEmail] = useState("");
   const [motivo, setMotivo] = useState("");
+  const [consentAccepted, setConsentAccepted] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const captchaContainerRef = useRef<HTMLDivElement | null>(null);
@@ -411,6 +413,12 @@ export function BookingWizard({
                   setErr("Nombre y teléfono son obligatorios.");
                   return;
                 }
+                if (!consentAccepted) {
+                  setErr(
+                    "Tenés que aceptar la Política de Privacidad para solicitar el turno.",
+                  );
+                  return;
+                }
                 setErr(null);
                 if (TURNSTILE_SITE_KEY && !captchaToken) {
                   setErr("Esperá unos segundos a que el captcha verifique.");
@@ -426,6 +434,8 @@ export function BookingWizard({
                     email: email || undefined,
                     motivo: motivo || undefined,
                     captchaToken: captchaToken ?? undefined,
+                    consentAccepted,
+                    consentVersion: PRIVACY_VERSION,
                   });
                   if (!result.ok) {
                     setErr(result.error.message);
@@ -462,8 +472,47 @@ export function BookingWizard({
                   <div ref={captchaContainerRef} style={{ marginTop: 4 }} />
                 </>
               ) : null}
+              {/* Consentimiento explícito (Ley 25.326 art. 5). El submit y el
+                  server action exigen consentAccepted=true. */}
+              <label
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  alignItems: "flex-start",
+                  fontSize: 13,
+                  lineHeight: 1.5,
+                  color: "var(--ink-2)",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={consentAccepted}
+                  onChange={(e) => {
+                    setConsentAccepted(e.target.checked);
+                    if (e.target.checked) setErr(null);
+                  }}
+                  style={{ marginTop: 3 }}
+                  aria-describedby="bk-consent-text"
+                />
+                <span id="bk-consent-text">
+                  Acepto la{" "}
+                  <a href="/privacidad" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent-2)" }}>
+                    Política de Privacidad
+                  </a>{" "}
+                  y los{" "}
+                  <a href="/terminos" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent-2)" }}>
+                    Términos
+                  </a>{" "}
+                  y consiento el tratamiento de mis datos para gestionar este turno.
+                </span>
+              </label>
               {err ? <p className="au-err">{err}</p> : null}
-              <button type="submit" className="fi-btn fi-btn-primary" disabled={pending}>
+              <button
+                type="submit"
+                className="fi-btn fi-btn-primary"
+                disabled={pending || !consentAccepted}
+                title={!consentAccepted ? "Aceptá la Política de Privacidad para continuar" : undefined}
+              >
                 {pending ? "Enviando..." : "Solicitar turno"}
               </button>
             </form>
