@@ -58,5 +58,7 @@ next-env.d.ts
 # real es claude-mem; .flow/ es la cache local de cada workstation.
 /.flow/
 
-# Local Claude Code permissions / settings — never commit
-/.claude/
+# Local Claude Code permissions / settings — never commit.
+# Exception: .claude/skills/ IS versioned (shared design/UX skills for the team).
+/.claude/*
+!/.claude/skills/
