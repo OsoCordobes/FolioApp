@@ -170,6 +170,7 @@ export async function confirmarPedido(
     session.data.organizationId,
     inicio,
     pedido.duracion_min,
+    profesionalId,
   );
   if (ocupado) {
     return err(
@@ -336,6 +337,7 @@ export async function aceptarPedido(
     session.data.organizationId,
     pedidoRaw.fecha_propuesta,
     pedidoRaw.duracion_min,
+    session.data.memberId,
   );
   if (ocupado) {
     return err(

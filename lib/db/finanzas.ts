@@ -14,9 +14,10 @@
  *   - transacciones: top 20 más recientes con paciente desencriptado.
  *   - kpiDelta vs mes pasado (porcentaje).
  *
- * Multi-tenant: `pago` y `turno` son tablas base, así que cada query filtra
- * explícitamente por `organization_id` (no hay vista con security_invoker que
- * herede el scoping).
+ * Multi-tenant: la tabla `pago` NO tiene columna `organization_id` (su tenancy
+ * deriva de `turno_id → turno.organization_id` + RLS). Por eso solo la query de
+ * `turno` filtra explícitamente por `organization_id`; las queries de `pago`
+ * confían en el join (turno) + RLS para el scoping.
  */
 
 import { decryptColumn } from "@/lib/crypto";
@@ -148,7 +149,6 @@ export async function getFinanzasDelMes(input: FetcherInput): Promise<Result<Fin
         "paciente:paciente_id(identidad:identidad_id(nombre_cifrado, apellido_cifrado)), " +
         "servicio:servicio_id(nombre, tipo_canonico))",
     )
-    .eq("organization_id", input.organizationId)
     .gte("created_at", startUtc)
     .lt("created_at", endUtc)
     .order("created_at", { ascending: false });
@@ -159,7 +159,6 @@ export async function getFinanzasDelMes(input: FetcherInput): Promise<Result<Fin
   const { data: prevPagosAgg } = await supabase
     .from("pago")
     .select("monto_cents")
-    .eq("organization_id", input.organizationId)
     .eq("estado", "PAGADO")
     .gte("created_at", prevStartUtc)
     .lt("created_at", prevEndUtc);

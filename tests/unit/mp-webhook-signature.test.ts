@@ -61,9 +61,9 @@ test("verifyMpSignature: forged v1 → mismatch", () => {
   });
 });
 
-test("verifyMpSignature: stale ts (>5min) → stale, before HMAC compare", () => {
+test("verifyMpSignature: stale ts (>6h) → stale, before HMAC compare", () => {
   withEnv({ MP_WEBHOOK_SECRET: SECRET, NODE_ENV: "production" }, () => {
-    const staleTs = Math.floor(Date.now() / 1000) - 600; // 10 min atrás
+    const staleTs = Math.floor(Date.now() / 1000) - 7 * 60 * 60; // 7h atrás (fuera de la ventana de 6h)
     // Firma criptográficamente válida para ese ts, pero rancia.
     const res = verifyMpSignature({
       signatureHeader: signedHeader(staleTs),
@@ -75,9 +75,9 @@ test("verifyMpSignature: stale ts (>5min) → stale, before HMAC compare", () =>
   });
 });
 
-test("verifyMpSignature: ts just inside 5min window → verified", () => {
+test("verifyMpSignature: ts just inside 6h window → verified", () => {
   withEnv({ MP_WEBHOOK_SECRET: SECRET, NODE_ENV: "production" }, () => {
-    const ts = Math.floor(Date.now() / 1000) - 290; // dentro de 300s
+    const ts = Math.floor(Date.now() / 1000) - (6 * 60 * 60 - 60); // dentro de 21600s
     const res = verifyMpSignature({
       signatureHeader: signedHeader(ts),
       requestIdHeader: REQUEST_ID,

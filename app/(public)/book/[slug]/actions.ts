@@ -17,7 +17,7 @@ import { z } from "zod";
 
 import { encryptColumn } from "@/lib/crypto";
 import { err, ok, type Result } from "@/lib/db/errors";
-import { getSlotsDisponibles, type Slot } from "@/lib/booking/availability";
+import { AvailabilityDbError, getSlotsDisponibles, type Slot } from "@/lib/booking/availability";
 import { trackEvent } from "@/lib/observability/events";
 import { limitByIp } from "@/lib/security/rate-limit";
 import { verifyTurnstile } from "@/lib/security/turnstile";
@@ -94,13 +94,24 @@ export async function fetchSlotsPublico(
   const rangeEnd = new Date();
   rangeEnd.setDate(rangeEnd.getDate() + parsed.data.diasAdelante);
 
-  const slots = await getSlotsDisponibles({
-    organizationId: org.id,
-    profesionalId: profesional.id,
-    duracionMin: servicio.duracion_min,
-    rangeStart,
-    rangeEnd,
-  });
+  // getSlotsDisponibles lanza AvailabilityDbError ante un fallo de DB (en vez de
+  // devolver []), para no mostrar "sin turnos" y rechazar pacientes reales ante
+  // un error transitorio. Lo traducimos a un Result err para honrar el contrato.
+  let slots: Slot[];
+  try {
+    slots = await getSlotsDisponibles({
+      organizationId: org.id,
+      profesionalId: profesional.id,
+      duracionMin: servicio.duracion_min,
+      rangeStart,
+      rangeEnd,
+    });
+  } catch (e) {
+    if (e instanceof AvailabilityDbError) {
+      return err("db_error", e.message, typeof e.cause === "string" ? e.cause : undefined);
+    }
+    throw e;
+  }
 
   return ok(slots);
 }
@@ -188,6 +199,10 @@ export async function createPedidoPublico(
   let ocupado = false;
   if (overlap.error || overlap.data === null) {
     const finIso = finDate.toISOString();
+    // Ventana de -8h para capturar turnos largos que arrancan antes pero todavía
+    // solapan (la duración máxima de un turno es 480min = 8h). Mismo lookback que
+    // checkSlotOcupado (lib/db/turnos.ts).
+    const lookbackIso = new Date(inicioDate.getTime() - 8 * 60 * 60_000).toISOString();
 
     const [{ data: turnoConflict }, { data: pedidoConflict }, { data: bloqueoConflict }] =
       await Promise.all([
@@ -197,7 +212,7 @@ export async function createPedidoPublico(
           .eq("organization_id", org.id)
           .in("estado", ["AGENDADO", "CONFIRMADO", "EN_SALA", "ATENDIENDO"])
           .lt("inicio", finIso)
-          .gte("inicio", new Date(inicioDate.getTime() - 4 * 60 * 60_000).toISOString())
+          .gte("inicio", lookbackIso)
           .limit(20),
         service
           .from("pedido")
@@ -205,14 +220,14 @@ export async function createPedidoPublico(
           .eq("organization_id", org.id)
           .eq("estado", "PENDIENTE")
           .not("fecha_propuesta", "is", null)
-          .gte("fecha_propuesta", new Date(inicioDate.getTime() - 4 * 60 * 60_000).toISOString())
+          .gte("fecha_propuesta", lookbackIso)
           .lt("fecha_propuesta", finIso)
           .limit(20),
         service
           .from("bloqueo")
           .select("id, inicio, duracion_min")
           .eq("organization_id", org.id)
-          .gte("inicio", new Date(inicioDate.getTime() - 4 * 60 * 60_000).toISOString())
+          .gte("inicio", lookbackIso)
           .lt("inicio", finIso)
           .limit(20),
       ]);

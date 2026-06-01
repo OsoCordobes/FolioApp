@@ -36,8 +36,15 @@ export interface MpSignatureInput {
   dataId: string | null;            // payload.data.id
 }
 
-/** Tolerancia de frescura del `ts` firmado (segundos). MP firma con epoch en segundos. */
-const SIGNATURE_MAX_SKEW_SECONDS = 300; // 5 min
+/**
+ * Tolerancia de frescura del `ts` firmado (segundos). MP firma con epoch en
+ * segundos. Lo fijamos en 6h para superar cómodamente la cadencia de reintentos
+ * de MP (~15 min): esta ventana es defense-in-depth contra replay, no la
+ * garantía de idempotencia real (esa la da UNIQUE(mp_payment_id) +
+ * mp_last_modified). Una ventana más corta corría riesgo de rechazar reintentos
+ * legítimos de MP.
+ */
+const SIGNATURE_MAX_SKEW_SECONDS = 21600; // 6h
 
 /**
  * Fail-closed en producción. MP_WEBHOOK_SECRET ausente debe bloquear tanto en
@@ -69,7 +76,7 @@ export function verifyMpSignature(input: MpSignatureInput): MpSignatureCheckResu
 
   // CR-2 (replay): el `ts` está dentro del manifest firmado, pero su VALOR nunca
   // se comparaba con el reloj. Rechazamos firmas viejas ANTES del HMAC compare
-  // para que un POST capturado no pueda reproducirse pasados 5 min.
+  // para que un POST capturado no pueda reproducirse pasada la ventana de 6h.
   const tsSeconds = Number(parsed.ts);
   const nowSeconds = Date.now() / 1000;
   if (Math.abs(nowSeconds - tsSeconds) > SIGNATURE_MAX_SKEW_SECONDS) {

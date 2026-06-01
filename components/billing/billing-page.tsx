@@ -456,13 +456,18 @@ function GraceBanner({ reason }: { reason: string }) {
       "Necesitás activar la suscripción para seguir usando Folio.",
   };
   const msg = messages[reason] ?? messages.denied;
+  // Una suscripción PAUSADA es recuperable (reactivable) → tono ámbar/warning.
+  // El resto (grace vencida, cancelada, morosa vencida, denied) usa rojo.
+  const isWarning = reason === "subscription_paused";
+  const bg = isWarning ? "var(--amber-soft)" : "var(--red-soft)";
+  const fg = isWarning ? "var(--amber)" : "var(--red)";
   return (
     <div
       style={{
         marginTop: 16,
         padding: "12px 16px",
-        background: "var(--red-soft)",
-        color: "var(--red)",
+        background: bg,
+        color: fg,
         borderRadius: "var(--r-md)",
         fontSize: 14,
         fontWeight: 500,

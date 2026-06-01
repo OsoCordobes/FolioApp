@@ -109,6 +109,7 @@ export async function checkSlotOcupado(
   organizationId: string,
   inicioIso: string,
   duracionMin: number,
+  profesionalId: string,
 ): Promise<boolean> {
   const inicioDate = new Date(inicioIso);
   const finDate = new Date(inicioDate.getTime() + duracionMin * 60_000);
@@ -123,10 +124,11 @@ export async function checkSlotOcupado(
     return overlap.data === true;
   }
 
-  // Fallback manual (mismo patrón que createPedidoPublico). Ventana de -4h
-  // para capturar turnos largos que arrancan antes pero todavía solapan.
+  // Fallback manual (mismo patrón que createPedidoPublico). Ventana de -8h
+  // para capturar turnos largos que arrancan antes pero todavía solapan
+  // (la duración máxima de un turno es 480min = 8h).
   const finIso = finDate.toISOString();
-  const lookbackIso = new Date(inicioDate.getTime() - 4 * 60 * 60_000).toISOString();
+  const lookbackIso = new Date(inicioDate.getTime() - 8 * 60 * 60_000).toISOString();
 
   const [{ data: turnoConflict }, { data: pedidoConflict }, { data: bloqueoConflict }] =
     await Promise.all([
@@ -134,11 +136,16 @@ export async function checkSlotOcupado(
         .from("turno")
         .select("id, inicio, duracion_min")
         .eq("organization_id", organizationId)
+        // M-A: M40 (EXCLUDE constraint) keyea por profesional_id; alineamos el
+        // pre-check de la app al mismo scope per-professional.
+        .eq("profesional_id", profesionalId)
         .in("estado", ["AGENDADO", "CONFIRMADO", "EN_SALA", "ATENDIENDO"])
         .is("deleted_at", null)
         .lt("inicio", finIso)
         .gte("inicio", lookbackIso)
         .limit(20),
+      // Los chequeos de pedido/bloqueo siguen org-scoped: son pre-checks
+      // app-only (no los respalda el EXCLUDE de M40, que solo cubre `turno`).
       supabase
         .from("pedido")
         .select("id, fecha_propuesta, duracion_min")
@@ -210,11 +217,6 @@ export async function listTurnosSemana(fechaDesde: string, fechaHasta: string): 
 
 export async function createTurno(
   input: CreateTurnoInput,
-  // CR-6: por default chequeamos solapamiento y devolvemos conflict si hay
-  // otro turno/pedido/bloqueo a esa hora. El caller puede pasar force:true
-  // para sobre-escribir tras confirmación del usuario (los consultorios a
-  // veces sobre-agendan a propósito).
-  opts?: { force?: boolean },
 ): Promise<Result<{ id: string }>> {
   const parsed = turnoSchema.safeParse(input);
   if (!parsed.success) {
@@ -225,20 +227,16 @@ export async function createTurno(
 
   const supabase = await createSupabaseServerClient();
 
-  // CR-6: chequeo de doble-reserva (skippeable con force).
-  if (!opts?.force) {
-    const ocupado = await checkSlotOcupado(
-      supabase,
-      session.data.organizationId,
-      parsed.data.inicio,
-      parsed.data.duracion_min,
-    );
-    if (ocupado) {
-      return err(
-        "conflict",
-        "Ya hay un turno a esa hora. Confirmá si querés agendar igual.",
-      );
-    }
+  // CR-6: chequeo de doble-reserva (siempre corre; sin bypass).
+  const ocupado = await checkSlotOcupado(
+    supabase,
+    session.data.organizationId,
+    parsed.data.inicio,
+    parsed.data.duracion_min,
+    parsed.data.profesional_id,
+  );
+  if (ocupado) {
+    return err("conflict", "Ese horario ya está ocupado.");
   }
 
   const { data, error } = await supabase

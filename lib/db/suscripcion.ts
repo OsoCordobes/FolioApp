@@ -214,6 +214,11 @@ export async function createOrRenewPendingSubscription(
     estado: mapPreapprovalStatus(preapproval.status),
     ultimo_error: null,
     fecha_cancelacion: null,
+    // M-E: reseteamos el watermark monotónico (CR-3) al escribir un nuevo
+    // mp_preapproval_id. Si no, applyMpPreapprovalUpdate compararía el
+    // last_modified del nuevo preapproval contra el del anterior y podría
+    // descartar el evento `authorized` de la re-suscripción como stale.
+    mp_last_modified: null,
   };
   const { data: upserted, error: upErr } = await supabase
     .from("suscripcion")
@@ -399,7 +404,10 @@ export async function recordChargeAttempt(input: {
       mp_authorized_payment_id: String(ap.id),
       monto_cents: montoCents,
       estado,
-      fecha_intento: ap.debit_date,
+      // L-B: fecha_intento es NOT NULL. ap.debit_date puede venir null en
+      // payloads de cobro rechazado → un INSERT con null tiraría 500 y MP
+      // reintentaría infinito. Caemos a date_created y, en última instancia, now.
+      fecha_intento: ap.debit_date ?? ap.date_created ?? new Date().toISOString(),
       fecha_acreditacion: estado === "APROBADO" ? new Date().toISOString() : null,
       raw_payload: input.rawPayload as object,
     })

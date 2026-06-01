@@ -138,9 +138,6 @@ const createTurnoActionSchema = z
     inicio: z.string().datetime({ offset: true }),
     duracionMin: z.number().int().min(5).max(480),
     origen: z.enum(["MANUAL", "WALK_IN"]).default("MANUAL"),
-    // CR-6: si el usuario ya vio el warning de solapamiento y confirmó,
-    // el cliente reenvía con force:true para saltear el chequeo.
-    force: z.boolean().optional(),
   })
   .refine((d) => d.pacienteId != null || d.pacienteNuevo != null, {
     message: "Hay que elegir un paciente existente o crear uno nuevo.",
@@ -222,21 +219,17 @@ export async function createTurnoAction(
     .maybeSingle();
 
   // 3. Crear turno via createTurno (incluye scheduleRecordatorios + chequeo
-  //    de solapamiento CR-6). Si hay conflicto y no se forzó, createTurno
-  //    devuelve err("conflict", ...) que propagamos tal cual para que el
-  //    cliente muestre el warning confirmable y reintente con force:true.
-  const result = await createTurno(
-    {
-      paciente_id: pacienteId,
-      servicio_id: d.servicioId,
-      profesional_id: session.data.memberId,
-      inicio: d.inicio,
-      duracion_min: d.duracionMin,
-      precio_cents: (servicio?.precio_cents as number | undefined) ?? 0,
-      origen: d.origen,
-    },
-    { force: d.force },
-  );
+  //    de solapamiento CR-6). Si el horario está ocupado, createTurno devuelve
+  //    err("conflict", "Ese horario ya está ocupado.") que propagamos tal cual.
+  const result = await createTurno({
+    paciente_id: pacienteId,
+    servicio_id: d.servicioId,
+    profesional_id: session.data.memberId,
+    inicio: d.inicio,
+    duracion_min: d.duracionMin,
+    precio_cents: (servicio?.precio_cents as number | undefined) ?? 0,
+    origen: d.origen,
+  });
 
   if (!result.ok) return result;
 

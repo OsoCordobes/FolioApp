@@ -74,6 +74,12 @@ export function mapSupabaseError(error: { message: string; code?: string; detail
   if (code === "23503") {
     return { code: "conflict", message: "No se puede borrar: hay datos relacionados.", detail: msg };
   }
+  if (code === "23P01") {
+    // exclusion_violation: M40 EXCLUDE constraint (turno por profesional/horario).
+    // Cubre el hit de doble-reserva tanto en createTurno como en el CAS de
+    // aceptar pedido.
+    return { code: "conflict", message: "Ese profesional ya tiene un turno en ese horario.", detail: msg };
+  }
   if (code === "PGRST116" || msg.includes("no rows")) {
     return { code: "not_found", message: "No se encontró el recurso.", detail: msg };
   }

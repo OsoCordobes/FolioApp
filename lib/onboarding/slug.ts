@@ -84,7 +84,10 @@ export function deriveProvisionalSlug(input: string): string {
   // segura + sufijo random. "consultorio" ya supera el mínimo; el sufijo evita
   // que dos local-parts cortos colisionen siempre en el mismo slug.
   const safeBase = base || "consultorio";
-  const suffix = Math.random().toString(36).slice(2, 7);
+  // slice(2,7) puede quedar vacío si Math.random() es exactamente 0
+  // ("0".toString(36) === "0" → slice(2) === ""), dejando un slug con guion
+  // colgante ("consultorio-"). Garantizamos un sufijo no vacío.
+  const suffix = Math.random().toString(36).slice(2, 7) || "x0";
   return `${safeBase}-${suffix}`.slice(0, SLUG_MAX_LENGTH);
 }
 
