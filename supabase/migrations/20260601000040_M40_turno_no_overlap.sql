@@ -33,6 +33,20 @@
 
 create extension if not exists btree_gist;
 
+-- `timestamptz + interval` es STABLE (depende del TimeZone por DST), y Postgres
+-- rechaza funciones no-IMMUTABLE en expresiones de índice/EXCLUDE. Las duraciones
+-- de turno son a nivel minuto (sin ambigüedad de DST), así que envolvemos el
+-- cálculo del rango en una función IMMUTABLE — patrón estándar para constraints
+-- de exclusión sobre rangos de duración.
+create or replace function public.turno_tstzrange(p_inicio timestamptz, p_duracion_min int)
+returns tstzrange
+language sql
+immutable
+parallel safe
+as $$
+  select tstzrange(p_inicio, p_inicio + make_interval(mins => p_duracion_min));
+$$;
+
 do $$
 begin
   if not exists (
@@ -42,7 +56,7 @@ begin
       add constraint turno_no_overlap_excl
       exclude using gist (
         profesional_id with =,
-        tstzrange(inicio, inicio + (duracion_min * interval '1 minute')) with &&
+        public.turno_tstzrange(inicio, duracion_min) with &&
       )
       where (estado not in ('CANCELADO', 'NO_ASISTIO', 'REAGENDADO')
              and deleted_at is null);
