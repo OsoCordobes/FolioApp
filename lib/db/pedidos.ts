@@ -9,7 +9,52 @@ import { trackEvent } from "@/lib/observability/events";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import { err, mapSupabaseError, ok, type Result } from "./errors";
+import { scheduleRecordatoriosForTurno } from "./recordatorios";
 import { getActiveSession } from "./session";
+import { checkSlotOcupado } from "./turnos";
+
+/**
+ * CR-7 — decisión pura del compare-and-swap del estado del pedido.
+ *
+ * El CAS se hace con un UPDATE guardado (`.eq('estado','PENDIENTE')`) que
+ * devuelve las filas afectadas. Esta función traduce ese resultado a una
+ * decisión testeable sin DB:
+ *   - error de DB           → "db_error"
+ *   - 0 filas               → "conflict" (otro acepte ganó la carrera)
+ *   - exactamente 1 fila    → "ok"
+ *   - >1 fila               → "ok" (no debería pasar; el id es PK único)
+ */
+export function decidePedidoCas(
+  rowsAffected: number,
+  hadError: boolean,
+): "ok" | "conflict" | "db_error" {
+  if (hadError) return "db_error";
+  if (rowsAffected < 1) return "conflict";
+  return "ok";
+}
+
+/**
+ * Helper compartido: programa los recordatorios 24h/2h de un turno recién
+ * creado desde un pedido aceptado/confirmado (H-APP-1). Fire-and-forget con
+ * captura en Sentry, mismo patrón que createTurno (turnos.ts:116).
+ */
+function scheduleRecordatoriosFireAndForget(
+  organizationId: string,
+  turnoId: string,
+  inicioIso: string,
+): void {
+  scheduleRecordatoriosForTurno({
+    organizationId,
+    turnoId,
+    inicio: new Date(inicioIso),
+  }).catch(async (e) => {
+    const { captureException } = await import("@sentry/nextjs");
+    captureException(e, {
+      tags: { component: "pedido-accept", op: "scheduleRecordatorios" },
+      extra: { turnoId, organizationId },
+    });
+  });
+}
 
 const canalSchema = z.enum(["WEB", "WHATSAPP", "INSTAGRAM", "TELEFONO"]);
 
@@ -117,7 +162,50 @@ export async function confirmarPedido(
     return err("not_found", "Pedido no encontrado.");
   }
 
-  // Crear turno
+  // ── CR-5: chequeo de solapamiento ANTES de tocar el estado del pedido.
+  //    Si el slot está ocupado abortamos sin haber modificado nada → el
+  //    pedido queda PENDIENTE (no se stranda en CONFIRMADO).
+  const ocupado = await checkSlotOcupado(
+    supabase,
+    session.data.organizationId,
+    inicio,
+    pedido.duracion_min,
+    profesionalId,
+  );
+  if (ocupado) {
+    return err(
+      "conflict",
+      "Ya hay un turno a esa hora. No se confirmó el pedido.",
+    );
+  }
+
+  // ── CR-7: compare-and-swap del estado. Flippeamos PENDIENTE→CONFIRMADO de
+  //    forma atómica ANTES de crear el turno. La guarda `.eq('estado',
+  //    'PENDIENTE')` garantiza que sólo un acepte concurrente gane: el que
+  //    obtiene la fila procede, el resto recibe 0 filas → conflict.
+  const { data: casRows, error: casErr } = await supabase
+    .from("pedido")
+    .update({
+      estado: "CONFIRMADO",
+      confirmado_ts: new Date().toISOString(),
+      paciente_id: pacienteId,
+    })
+    .eq("id", pedidoId)
+    .eq("organization_id", session.data.organizationId)
+    .eq("estado", "PENDIENTE")
+    .select("id");
+
+  const casDecision = decidePedidoCas(casRows?.length ?? 0, Boolean(casErr));
+  if (casDecision === "db_error") {
+    const mapped = mapSupabaseError(casErr ?? { message: "cas failed" });
+    return err(mapped.code, "No se pudo actualizar el pedido.", casErr?.message);
+  }
+  if (casDecision === "conflict") {
+    return err("conflict", "El pedido ya fue procesado por otra persona.");
+  }
+
+  // ── Crear turno. Si falla, rollback del CAS (volver el pedido a PENDIENTE)
+  //    para no dejarlo CONFIRMADO sin turno asociado.
   const { data: turno, error: turnoErr } = await supabase
     .from("turno")
     .insert({
@@ -135,6 +223,11 @@ export async function confirmarPedido(
     .single();
 
   if (turnoErr || !turno) {
+    await supabase
+      .from("pedido")
+      .update({ estado: "PENDIENTE", confirmado_ts: null })
+      .eq("id", pedidoId)
+      .eq("organization_id", session.data.organizationId);
     return err(
       mapSupabaseError(turnoErr ?? { message: "no turno" }).code,
       "No se pudo crear el turno desde el pedido.",
@@ -142,11 +235,9 @@ export async function confirmarPedido(
     );
   }
 
-  // Marcar pedido como confirmado
-  await supabase
-    .from("pedido")
-    .update({ estado: "CONFIRMADO", confirmado_ts: new Date().toISOString(), paciente_id: pacienteId })
-    .eq("id", pedidoId);
+  // ── H-APP-1: programar recordatorios 24h/2h (los pacientes que reservan
+  //    por web no los recibían). Fire-and-forget con captura Sentry.
+  scheduleRecordatoriosFireAndForget(session.data.organizationId, turno.id, inicio);
 
   return ok({ turnoId: turno.id });
 }
@@ -238,6 +329,23 @@ export async function aceptarPedido(
     );
   }
 
+  // ── CR-5: chequeo de solapamiento ANTES de cualquier mutación (crear
+  //    paciente / flippear estado). Si el slot está ocupado abortamos limpio:
+  //    el pedido sigue PENDIENTE y no creamos ningún paciente nuevo.
+  const ocupado = await checkSlotOcupado(
+    supabase,
+    session.data.organizationId,
+    pedidoRaw.fecha_propuesta,
+    pedidoRaw.duracion_min,
+    session.data.memberId,
+  );
+  if (ocupado) {
+    return err(
+      "conflict",
+      "Ya hay un turno a esa hora. No se aceptó el pedido.",
+    );
+  }
+
   // 1. Resolver paciente. Si pedido.paciente_id existe → usar ese.
   //    Sino, crear desde los datos cifrados del pedido (nombre + telefono +
   //    email opcional + motivo).
@@ -311,7 +419,41 @@ export async function aceptarPedido(
     });
   }
 
-  // 2. Crear turno en CONFIRMADO con fecha_propuesta + servicio del pedido.
+  // 2. CR-7: compare-and-swap del estado del pedido ANTES de crear el turno.
+  //    El UPDATE guardado `.eq('estado','PENDIENTE')` es atómico: si dos
+  //    acepts corren en paralelo, sólo uno flippea la fila (1 row); el otro
+  //    obtiene 0 filas → conflict y nunca llega a insertar un turno duplicado.
+  const { data: casRows, error: casErr } = await supabase
+    .from("pedido")
+    .update({
+      estado: "CONFIRMADO",
+      confirmado_ts: new Date().toISOString(),
+      paciente_id: pacienteId,
+    })
+    .eq("id", pedidoId)
+    .eq("organization_id", session.data.organizationId)
+    .eq("estado", "PENDIENTE")
+    .select("id");
+
+  const casDecision = decidePedidoCas(casRows?.length ?? 0, Boolean(casErr));
+  if (casDecision === "db_error") {
+    // L-APP: antes el update descartaba su error. Ahora lo capturamos.
+    const { captureException } = await import("@sentry/nextjs");
+    captureException(casErr ?? new Error("pedido CAS failed"), {
+      tags: { component: "pedido-accept", op: "cas" },
+      extra: { pedidoId, organizationId: session.data.organizationId },
+    });
+    const mapped = mapSupabaseError(casErr ?? { message: "cas failed" });
+    return err(mapped.code, "No se pudo actualizar el pedido.", casErr?.message);
+  }
+  if (casDecision === "conflict") {
+    return err("conflict", "El pedido ya fue procesado por otra persona.");
+  }
+
+  // 3. Crear turno en CONFIRMADO con fecha_propuesta + servicio del pedido.
+  //    Si falla, rollback del CAS para no dejar el pedido CONFIRMADO sin
+  //    turno (L-APP: un pedido CONFIRMADO huérfano no es re-aceptable y
+  //    perdería la cita; volverlo a PENDIENTE permite reintentar).
   const { data: turno, error: turnoErr } = await supabase
     .from("turno")
     .insert({
@@ -329,6 +471,11 @@ export async function aceptarPedido(
     .single();
 
   if (turnoErr || !turno) {
+    await supabase
+      .from("pedido")
+      .update({ estado: "PENDIENTE", confirmado_ts: null })
+      .eq("id", pedidoId)
+      .eq("organization_id", session.data.organizationId);
     return err(
       mapSupabaseError(turnoErr ?? { message: "no turno" }).code,
       "No se pudo crear el turno desde el pedido.",
@@ -336,15 +483,12 @@ export async function aceptarPedido(
     );
   }
 
-  // 3. Marcar pedido CONFIRMADO + linkear paciente resuelto.
-  await supabase
-    .from("pedido")
-    .update({
-      estado: "CONFIRMADO",
-      confirmado_ts: new Date().toISOString(),
-      paciente_id: pacienteId,
-    })
-    .eq("id", pedidoId);
+  // 4. H-APP-1: programar recordatorios 24h/2h para el paciente que reservó.
+  scheduleRecordatoriosFireAndForget(
+    session.data.organizationId,
+    turno.id,
+    pedidoRaw.fecha_propuesta,
+  );
 
   return ok({ turnoId: turno.id, pacienteId });
 }

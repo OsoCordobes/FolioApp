@@ -218,7 +218,9 @@ export async function createTurnoAction(
     .eq("organization_id", session.data.organizationId)
     .maybeSingle();
 
-  // 3. Crear turno via createTurno (incluye scheduleRecordatorios)
+  // 3. Crear turno via createTurno (incluye scheduleRecordatorios + chequeo
+  //    de solapamiento CR-6). Si el horario está ocupado, createTurno devuelve
+  //    err("conflict", "Ese horario ya está ocupado.") que propagamos tal cual.
   const result = await createTurno({
     paciente_id: pacienteId,
     servicio_id: d.servicioId,

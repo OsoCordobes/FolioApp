@@ -54,10 +54,10 @@ export async function middleware(request: NextRequest) {
   const { response, user } = await updateSupabaseSession(request);
   const { pathname } = request.nextUrl;
 
-  // Header siempre seteado: el layout lo lee para decidir si el gating de
-  // suscripción debe redirigir o dejar pasar (cuando ya estás en billing,
-  // no podés redirigir a billing — sería loop infinito).
-  response.headers.set("x-pathname", pathname);
+  // El `x-pathname` lo inyecta `updateSupabaseSession` sobre los REQUEST
+  // headers (no el response) para que el layout lo lea vía `headers()`. El
+  // layout lo usa para el gating de suscripción: cuando ya estás en billing
+  // no podés redirigir a billing — sería loop infinito.
 
   // Sin Supabase configurado, no aplicamos auth gating
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {

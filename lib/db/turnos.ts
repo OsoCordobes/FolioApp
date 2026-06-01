@@ -42,6 +42,135 @@ const transitionSchema = z.object({
 
 export type CreateTurnoInput = z.infer<typeof turnoSchema>;
 
+// ─── Overlap / double-booking check ─────────────────────────────────────
+//
+// CR-5 / CR-6: las paths internas (aceptar pedido + crear turno manual) no
+// chequeaban solapamiento. El booking público sí (ver app/(public)/book/
+// [slug]/actions.ts). Centralizamos acá la misma lógica para reusarla.
+//
+// `slotRangesOverlap` es una función pura (testeable sin DB): dos rangos
+// [aInicio, aFin) y [bInicio, bFin) se solapan si aInicio < bFin && bInicio < aFin.
+
+export function slotRangesOverlap(
+  aInicioMs: number,
+  aFinMs: number,
+  bInicioMs: number,
+  bFinMs: number,
+): boolean {
+  return aInicioMs < bFinMs && bInicioMs < aFinMs;
+}
+
+interface SlotConflictRow {
+  inicio?: string;
+  fecha_propuesta?: string;
+  duracion_min: number;
+}
+
+/**
+ * `decideSlotOcupado` — función pura que decide si un slot está ocupado a
+ * partir de las filas candidatas (turnos, pedidos y bloqueos) que se
+ * solapan con el rango [inicio, fin). Aislada para poder testearla sin DB.
+ */
+export function decideSlotOcupado(
+  inicioMs: number,
+  finMs: number,
+  candidatos: {
+    turnos: SlotConflictRow[] | null;
+    pedidos: SlotConflictRow[] | null;
+    bloqueos: SlotConflictRow[] | null;
+  },
+): boolean {
+  const overlapsWith = (rows: SlotConflictRow[] | null, field: "inicio" | "fecha_propuesta") =>
+    (rows ?? []).some((r) => {
+      const startMs = new Date(r[field]!).getTime();
+      const endMs = startMs + r.duracion_min * 60_000;
+      return slotRangesOverlap(inicioMs, finMs, startMs, endMs);
+    });
+
+  return (
+    overlapsWith(candidatos.turnos, "inicio") ||
+    overlapsWith(candidatos.pedidos, "fecha_propuesta") ||
+    overlapsWith(candidatos.bloqueos, "inicio")
+  );
+}
+
+/**
+ * Chequea si un slot [inicio, inicio+duracionMin) ya está ocupado para la
+ * org. Mismo enfoque que el booking público: intenta el RPC `slot_ocupado`
+ * y, si no existe / falla, cae al chequeo manual contra turno + pedido +
+ * bloqueo. Excluye opcionalmente un turno (para reagendas, no usado todavía).
+ *
+ * NB: el RPC `slot_ocupado` no está definido en migraciones todavía, así que
+ * en la práctica corre siempre el fallback manual (igual que en el booking
+ * público). Lo dejamos primero para cuando exista una garantía dura en SQL.
+ */
+export async function checkSlotOcupado(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  organizationId: string,
+  inicioIso: string,
+  duracionMin: number,
+  profesionalId: string,
+): Promise<boolean> {
+  const inicioDate = new Date(inicioIso);
+  const finDate = new Date(inicioDate.getTime() + duracionMin * 60_000);
+
+  const overlap = await supabase.rpc("slot_ocupado", {
+    p_org: organizationId,
+    p_inicio: inicioDate.toISOString(),
+    p_fin: finDate.toISOString(),
+  });
+
+  if (!(overlap.error || overlap.data === null)) {
+    return overlap.data === true;
+  }
+
+  // Fallback manual (mismo patrón que createPedidoPublico). Ventana de -8h
+  // para capturar turnos largos que arrancan antes pero todavía solapan
+  // (la duración máxima de un turno es 480min = 8h).
+  const finIso = finDate.toISOString();
+  const lookbackIso = new Date(inicioDate.getTime() - 8 * 60 * 60_000).toISOString();
+
+  const [{ data: turnoConflict }, { data: pedidoConflict }, { data: bloqueoConflict }] =
+    await Promise.all([
+      supabase
+        .from("turno")
+        .select("id, inicio, duracion_min")
+        .eq("organization_id", organizationId)
+        // M-A: M40 (EXCLUDE constraint) keyea por profesional_id; alineamos el
+        // pre-check de la app al mismo scope per-professional.
+        .eq("profesional_id", profesionalId)
+        .in("estado", ["AGENDADO", "CONFIRMADO", "EN_SALA", "ATENDIENDO"])
+        .is("deleted_at", null)
+        .lt("inicio", finIso)
+        .gte("inicio", lookbackIso)
+        .limit(20),
+      // Los chequeos de pedido/bloqueo siguen org-scoped: son pre-checks
+      // app-only (no los respalda el EXCLUDE de M40, que solo cubre `turno`).
+      supabase
+        .from("pedido")
+        .select("id, fecha_propuesta, duracion_min")
+        .eq("organization_id", organizationId)
+        .eq("estado", "PENDIENTE")
+        .not("fecha_propuesta", "is", null)
+        .gte("fecha_propuesta", lookbackIso)
+        .lt("fecha_propuesta", finIso)
+        .limit(20),
+      supabase
+        .from("bloqueo")
+        .select("id, inicio, duracion_min")
+        .eq("organization_id", organizationId)
+        .gte("inicio", lookbackIso)
+        .lt("inicio", finIso)
+        .limit(20),
+    ]);
+
+  return decideSlotOcupado(inicioDate.getTime(), finDate.getTime(), {
+    turnos: turnoConflict as SlotConflictRow[] | null,
+    pedidos: pedidoConflict as SlotConflictRow[] | null,
+    bloqueos: bloqueoConflict as SlotConflictRow[] | null,
+  });
+}
+
 // ─── Listar turnos del día / rango ──────────────────────────────────────
 
 export async function listTurnosDelDia(fecha: string): Promise<Result<unknown[]>> {
@@ -86,7 +215,9 @@ export async function listTurnosSemana(fechaDesde: string, fechaHasta: string): 
 
 // ─── Crear turno ────────────────────────────────────────────────────────
 
-export async function createTurno(input: CreateTurnoInput): Promise<Result<{ id: string }>> {
+export async function createTurno(
+  input: CreateTurnoInput,
+): Promise<Result<{ id: string }>> {
   const parsed = turnoSchema.safeParse(input);
   if (!parsed.success) {
     return err("validation", "Datos del turno inválidos.", parsed.error.message);
@@ -95,6 +226,19 @@ export async function createTurno(input: CreateTurnoInput): Promise<Result<{ id:
   if (!session.ok) return session;
 
   const supabase = await createSupabaseServerClient();
+
+  // CR-6: chequeo de doble-reserva (siempre corre; sin bypass).
+  const ocupado = await checkSlotOcupado(
+    supabase,
+    session.data.organizationId,
+    parsed.data.inicio,
+    parsed.data.duracion_min,
+    parsed.data.profesional_id,
+  );
+  if (ocupado) {
+    return err("conflict", "Ese horario ya está ocupado.");
+  }
+
   const { data, error } = await supabase
     .from("turno")
     .insert({

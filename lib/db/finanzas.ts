@@ -14,7 +14,10 @@
  *   - transacciones: top 20 más recientes con paciente desencriptado.
  *   - kpiDelta vs mes pasado (porcentaje).
  *
- * RLS hereda de turno_extendido + pago (security_invoker=true en la vista).
+ * Multi-tenant: la tabla `pago` NO tiene columna `organization_id` (su tenancy
+ * deriva de `turno_id → turno.organization_id` + RLS). Por eso solo la query de
+ * `turno` filtra explícitamente por `organization_id`; las queries de `pago`
+ * confían en el join (turno) + RLS para el scoping.
  */
 
 import { decryptColumn } from "@/lib/crypto";

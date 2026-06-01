@@ -109,7 +109,7 @@ export const consultorioBaseSchema = z.object({
     .string()
     .trim()
     .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, "Link inválido: solo minúsculas, números y guiones simples.")
-    .min(3, "Link mínimo 3 caracteres.")
+    .min(4, "Link mínimo 4 caracteres.")
     .max(50, "Link máximo 50 caracteres.")
     .optional()
     .or(z.literal("")),

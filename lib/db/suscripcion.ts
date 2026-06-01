@@ -67,7 +67,12 @@ export interface AccessGate {
   /** true si la org puede usar la app normal. false → redirect a /configuracion/billing. */
   allowed: boolean;
   /** Razón por la que está bloqueada. null si allowed=true. */
-  reason: "grace_expired" | "subscription_cancelled" | "subscription_morosa_expired" | null;
+  reason:
+    | "grace_expired"
+    | "subscription_cancelled"
+    | "subscription_morosa_expired"
+    | "subscription_paused"
+    | null;
   /** Días que quedan de grace period si la suscripción aún no está activa. null si no aplica. */
   graceDaysLeft: number | null;
 }
@@ -209,6 +214,11 @@ export async function createOrRenewPendingSubscription(
     estado: mapPreapprovalStatus(preapproval.status),
     ultimo_error: null,
     fecha_cancelacion: null,
+    // M-E: reseteamos el watermark monotónico (CR-3) al escribir un nuevo
+    // mp_preapproval_id. Si no, applyMpPreapprovalUpdate compararía el
+    // last_modified del nuevo preapproval contra el del anterior y podría
+    // descartar el evento `authorized` de la re-suscripción como stale.
+    mp_last_modified: null,
   };
   const { data: upserted, error: upErr } = await supabase
     .from("suscripcion")
@@ -275,19 +285,46 @@ export async function applyMpPreapprovalUpdate(
   const supabase = createSupabaseServiceClient();
 
   const newEstado = mapPreapprovalStatus(preapproval.status);
+
+  // CR-3 (orden no monotónico): MP no garantiza el orden de entrega de los
+  // webhooks. Leemos el estado actual + el último last_modified aplicado y
+  // SOLO escribimos si el evento entrante es más nuevo. Así un `authorized`
+  // stale/reenviado no resucita una suscripción CANCELADA.
+  const { data: current, error: curErr } = await supabase
+    .from("suscripcion")
+    .select("fecha_activacion, mp_last_modified, estado")
+    .eq("mp_preapproval_id", preapproval.id)
+    .maybeSingle();
+  if (curErr) return err("db_error", "Error leyendo suscripción.", curErr.message);
+  if (!current) return ok(null);
+
+  const incomingModified = preapproval.last_modified
+    ? new Date(preapproval.last_modified).getTime()
+    : null;
+  const storedModified =
+    (current as { mp_last_modified?: string | null }).mp_last_modified
+      ? new Date((current as { mp_last_modified: string }).mp_last_modified).getTime()
+      : null;
+
+  // Si tenemos un last_modified guardado y el entrante NO es estrictamente más
+  // nuevo (o no trae last_modified), descartamos el evento como stale.
+  if (storedModified !== null && (incomingModified === null || incomingModified <= storedModified)) {
+    console.warn(
+      `[mp] preapproval ${preapproval.id}: evento stale descartado (incoming=${preapproval.last_modified ?? "null"} <= stored).`,
+    );
+    // No tocamos la fila. Devolvemos null (no es un error; el caller solo loguea).
+    return ok(null);
+  }
+
   const patch: Record<string, unknown> = {
     estado: newEstado,
     proxima_cobro: preapproval.next_payment_date ?? null,
+    mp_last_modified: preapproval.last_modified ?? null,
   };
   if (newEstado === "ACTIVA") {
     // fecha_activacion solo se setea la primera vez (COALESCE en SQL no aplica
     // acá; lo manejamos leyendo y escribiendo si era null).
-    const { data: current } = await supabase
-      .from("suscripcion")
-      .select("fecha_activacion")
-      .eq("mp_preapproval_id", preapproval.id)
-      .maybeSingle();
-    if (current && !current.fecha_activacion) {
+    if (!current.fecha_activacion) {
       patch.fecha_activacion = new Date().toISOString();
     }
   }
@@ -321,11 +358,16 @@ export async function recordChargeAttempt(input: {
   // Resolver suscripcion local por preapprovalId.
   const { data: sus, error: susErr } = await supabase
     .from("suscripcion")
-    .select("id")
+    .select("id, estado")
     .eq("mp_preapproval_id", input.preapprovalId)
     .maybeSingle();
   if (susErr) return err("db_error", "Error buscando suscripción.", susErr.message);
+  // M-BILL-1: la suscripción puede no estar linkeada aún si el webhook de cargo
+  // llega antes que el de preapproval. Devolvemos not_found para que el route
+  // responda 5xx y MP reintente (no perdemos el primer cobro).
   if (!sus) return err("not_found", `Suscripción no existe para preapproval ${input.preapprovalId}.`);
+
+  const currentEstado = (sus as { estado: EstadoSuscripcion }).estado;
 
   const ap = input.authorizedPayment;
   // Solo registramos cargos que ya tienen payment asociado. Los "scheduled" sin payment
@@ -337,35 +379,85 @@ export async function recordChargeAttempt(input: {
   const mpPaymentId = String(ap.payment.id);
   const estado = mapPaymentStatus(ap.payment.status);
 
-  const { error: insErr } = await supabase
+  // M-BILL-2: validar moneda y monto contra el plan canónico (MP_PLAN_PRICE_CENTS).
+  // Un cargo en moneda distinta de ARS, o con un monto que se desvía más de 1
+  // centavo del esperado, NO debe activar/recuperar la suscripción: lo
+  // registramos pero marcamos warning para revisión manual.
+  const montoCents = Math.round(ap.transaction_amount * 100);
+  const currencyOk = ap.currency_id === "ARS";
+  const amountOk = Math.abs(montoCents - MP_PLAN_PRICE_CENTS) <= 1;
+  const montoWarning = !currencyOk
+    ? `Cargo en moneda inesperada (${ap.currency_id}); esperado ARS.`
+    : !amountOk
+      ? `Monto inesperado (${montoCents / 100} ${ap.currency_id}); esperado ${MP_PLAN_PRICE_CENTS / 100} ARS.`
+      : null;
+
+  // INSERT idempotente. `select` + ausencia de error nos dice si creó fila nueva
+  // (data presente) vs duplicado (23505 → data null). En duplicado SALTEAMOS la
+  // mutación de estado de la suscripción (CR-4): re-entregas viejas no deben
+  // pisar el estado actual.
+  const { data: inserted, error: insErr } = await supabase
     .from("cargo_suscripcion")
     .insert({
       suscripcion_id: sus.id,
       mp_payment_id: mpPaymentId,
       mp_authorized_payment_id: String(ap.id),
-      monto_cents: Math.round(ap.transaction_amount * 100),
+      monto_cents: montoCents,
       estado,
-      fecha_intento: ap.debit_date,
+      // L-B: fecha_intento es NOT NULL. ap.debit_date puede venir null en
+      // payloads de cobro rechazado → un INSERT con null tiraría 500 y MP
+      // reintentaría infinito. Caemos a date_created y, en última instancia, now.
+      fecha_intento: ap.debit_date ?? ap.date_created ?? new Date().toISOString(),
       fecha_acreditacion: estado === "APROBADO" ? new Date().toISOString() : null,
       raw_payload: input.rawPayload as object,
-    });
+    })
+    .select("id")
+    .maybeSingle();
 
   // 23505 = unique_violation → ya lo procesamos antes (idempotencia OK).
   if (insErr && !insErr.message.includes("duplicate key")) {
     return err("db_error", "Error registrando cargo.", insErr.message);
   }
 
-  // Si el cobro fue exitoso, actualizar ultimo_cobro_ts y limpiar morosa.
-  if (estado === "APROBADO") {
-    await supabase
-      .from("suscripcion")
-      .update({
-        ultimo_cobro_ts: new Date().toISOString(),
-        estado: "ACTIVA",
-        ultimo_error: null,
-      })
-      .eq("id", sus.id);
-  } else if (estado === "RECHAZADO") {
+  const isNewCharge = !insErr && !!inserted;
+
+  // CR-4: solo mutamos el estado de la suscripción si el cargo es NUEVO. En una
+  // re-entrega (duplicado) no tocamos nada — evita que un "rejected" reenviado
+  // tire a MOROSA una org ya recuperada, o que un "approved" reenviado limpie un
+  // ultimo_error legítimo.
+  if (isNewCharge && estado === "APROBADO") {
+    if (montoWarning) {
+      // Cargo aprobado pero sospechoso: registramos el warning y NO marcamos ACTIVA.
+      console.warn(`[mp] cargo ${mpPaymentId} aprobado pero ${montoWarning}`);
+      await supabase
+        .from("suscripcion")
+        .update({
+          ultimo_cobro_ts: new Date().toISOString(),
+          ultimo_error: montoWarning,
+        })
+        .eq("id", sus.id);
+    } else if (currentEstado === "MOROSA" || currentEstado === "PENDIENTE_ACTIVACION") {
+      // Solo recuperación MOROSA->ACTIVA y activación pending->ACTIVA. NO forzamos
+      // ACTIVA si la suscripción está CANCELADA o PAUSADA (CR-4).
+      await supabase
+        .from("suscripcion")
+        .update({
+          ultimo_cobro_ts: new Date().toISOString(),
+          estado: "ACTIVA",
+          ultimo_error: null,
+        })
+        .eq("id", sus.id);
+    } else {
+      // ACTIVA u otro estado terminal: solo registramos el cobro, sin forzar estado.
+      await supabase
+        .from("suscripcion")
+        .update({
+          ultimo_cobro_ts: new Date().toISOString(),
+          ultimo_error: null,
+        })
+        .eq("id", sus.id);
+    }
+  } else if (isNewCharge && estado === "RECHAZADO") {
     await supabase
       .from("suscripcion")
       .update({
@@ -439,9 +531,10 @@ export function computeAccessGate(
     return { allowed: true, reason: null, graceDaysLeft: null };
   }
 
-  // Caso 3: pausada → bloqueado.
+  // Caso 3: pausada → bloqueado. Razón propia (H-BILL-3): la copy de
+  // subscription_morosa_expired dice "se canceló", que es incorrecto para PAUSADA.
   if (subscription?.estado === "PAUSADA") {
-    return { allowed: false, reason: "subscription_morosa_expired", graceDaysLeft: null };
+    return { allowed: false, reason: "subscription_paused", graceDaysLeft: null };
   }
 
   // Caso 5: pendiente o sin suscripción → grace period.

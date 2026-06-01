@@ -29,6 +29,7 @@ import { redirect } from "next/navigation";
 import { findUserByEmail } from "@/lib/auth/find-user-by-email";
 import { encryptColumn } from "@/lib/crypto";
 import { signUpSchema } from "@/lib/onboarding/schemas";
+import { deriveProvisionalSlug } from "@/lib/onboarding/slug";
 import {
   createSupabaseServerClient,
   createSupabaseServiceClient,
@@ -199,8 +200,13 @@ export async function signUpAndInitOrganization(
   // El pickFreshSlug local se preserva como UX optimization (slug-2, slug-3
   // en vez del random hash); la RPC tiene fallback con sufijo random para
   // race conditions de concurrencia.
+  // BL-1: `deriveProvisionalSlug` garantiza un slug >= SLUG_MIN_LENGTH (4) y
+  // válido contra el constraint de DB ANTES de que `pickFreshSlug` resuelva
+  // colisiones. Sin esto, un email con local-part corto ("dr@", "jo@")
+  // generaba un slug de 2-3 chars que disparaba check_violation en el INSERT
+  // del RPC (que solo captura unique_violation) → bootstrap rollback.
   const emailBase = email.split("@")[0] || "consultorio";
-  const provisionalSlug = await pickFreshSlug(service, slugifyInline(emailBase));
+  const provisionalSlug = await pickFreshSlug(service, deriveProvisionalSlug(emailBase));
   const userAgent = reqHeaders.get("user-agent");
 
   const { data: bootstrapped, error: bootstrapErr } = await service.rpc(
@@ -276,8 +282,11 @@ export async function bootstrapOrgForAuthenticatedUser(
   // Bootstrap atómico vía M33 RPC. La función es idempotente y devuelve la
   // membership existente si el user ya tiene una — no necesitamos chequear
   // antes. Reemplaza los 3 inserts manuales + rollbacks compensatorios.
+  // BL-1: misma garantía de slug válido que en el path email/password (ver
+  // signUpAndInitOrganization). El path Google-OAuth también pasaba el slug
+  // crudo del email al RPC.
   const emailBase = (user.email ?? "consultorio").split("@")[0] || "consultorio";
-  const provisionalSlug = await pickFreshSlug(service, slugifyInline(emailBase));
+  const provisionalSlug = await pickFreshSlug(service, deriveProvisionalSlug(emailBase));
 
   const { data: bootstrapped, error: bootstrapErr } = await service.rpc(
     "bootstrap_org_atomic",
@@ -322,19 +331,10 @@ async function pickFreshSlug(
   return `${baseSlug}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
-// Helper interno: slugify mínimo (sin diacritics, lowercase, alphanumeric-dashes).
-// Duplicado del lib/onboarding/slug.ts a propósito para evitar import circular.
-function slugifyInline(input: string): string {
-  if (!input) return "";
-  return input
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .replace(/-+/g, "-")
-    .slice(0, 50);
-}
+// slugifyInline fue removido (BL-1): la derivación del slug provisional ahora
+// usa `deriveProvisionalSlug` de lib/onboarding/slug.ts, que además garantiza
+// el mínimo de 4 chars exigido por el constraint de DB. slug.ts no importa
+// este módulo, así que no hay riesgo de import circular.
 
 // ─── updateOnboardingStep: persiste delta de un step ────────────────────────
 

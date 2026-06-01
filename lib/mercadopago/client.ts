@@ -20,13 +20,35 @@
 const API_BASE = "https://api.mercadopago.com";
 
 /**
- * Precio del plan Folio en centavos ARS. Source of truth para crear preapproval.
+ * Precio del plan Folio en centavos ARS. Source of truth ÚNICO para el cobro
+ * (crear preapproval) y para validar el monto de cada cargo.
+ *
+ * Se lee de la env `MP_PLAN_PRICE_CENTS`; si no está seteada cae al default
+ * histórico (3.000.000 = 30.000 ARS). Antes el valor estaba hardcodeado acá y
+ * el display venía de NEXT_PUBLIC_MP_PLAN_PRICE_ARS, así que podían driftear
+ * (M-HARD-1). Para que charge y display deriven de una sola fuente, configurá
+ * `MP_PLAN_PRICE_CENTS` y derivá el display de éste valor.
+ *
  * Si cambia, también hay que actualizar:
- *   - NEXT_PUBLIC_MP_PLAN_PRICE_ARS (display)
  *   - suscripcion.monto_cents default en M19 (cosmético, no afecta runtime)
  *   - preapproval ya existentes en MP via PUT /preapproval/{id} (manual migration)
  */
-export const MP_PLAN_PRICE_CENTS = 3000000;
+const MP_PLAN_PRICE_CENTS_DEFAULT = 3000000;
+
+function resolvePlanPriceCents(): number {
+  const raw = process.env.MP_PLAN_PRICE_CENTS;
+  if (!raw) return MP_PLAN_PRICE_CENTS_DEFAULT;
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    console.warn(
+      `[mp] MP_PLAN_PRICE_CENTS inválido (${raw}); usando default ${MP_PLAN_PRICE_CENTS_DEFAULT}.`,
+    );
+    return MP_PLAN_PRICE_CENTS_DEFAULT;
+  }
+  return parsed;
+}
+
+export const MP_PLAN_PRICE_CENTS = resolvePlanPriceCents();
 export const MP_PLAN_PRICE_ARS = MP_PLAN_PRICE_CENTS / 100;
 export const MP_PLAN_CURRENCY = "ARS";
 export const MP_PLAN_REASON = "Folio - Plan Profesional";
