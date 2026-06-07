@@ -416,3 +416,171 @@ export function shiftWeek(weekStartIso: string, deltaWeeks: number): string {
   const dd = String(dt.getUTCDate()).padStart(2, "0");
   return `${yy}-${mm}-${dd}`;
 }
+
+// ─── Vista mensual (PR E) ──────────────────────────────────────────────────
+
+const MESES_FULL = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+];
+
+export interface MonthGridCell {
+  dateIso: string;        // "YYYY-MM-DD"
+  inCurrentMonth: boolean;
+  isToday: boolean;
+}
+
+/**
+ * `monthAnchorInTz` — dado un `?mes=YYYY-MM` (o null), devuelve el ancla
+ * "YYYY-MM" del mes a mostrar. Default: el mes actual en la TZ dada.
+ */
+export function monthAnchorInTz(monthOrNull: string | null, timezone: string): string {
+  const tz = timezone || "America/Argentina/Cordoba";
+  if (monthOrNull && /^\d{4}-\d{2}$/.test(monthOrNull)) {
+    return monthOrNull;
+  }
+  return ymdInTz(new Date().toISOString(), tz).slice(0, 7);
+}
+
+/** Avanza/retrocede N meses sobre un ancla "YYYY-MM". */
+export function shiftMonth(monthIso: string, deltaMonths: number): string {
+  const [y, m] = monthIso.split("-").map(Number);
+  const total = (y * 12 + (m - 1)) + deltaMonths;
+  const yy = Math.floor(total / 12);
+  const mm = (total % 12) + 1;
+  return `${yy}-${String(mm).padStart(2, "0")}`;
+}
+
+/** Etiqueta legible del mes: "junio 2026". */
+export function formatMonthLabel(monthIso: string): string {
+  const [y, m] = monthIso.split("-").map(Number);
+  return `${MESES_FULL[m - 1]} ${y}`;
+}
+
+/**
+ * `buildMonthGrid` — función pura que construye la grilla mensual visible:
+ * desde el lunes en/antes del día 1 hasta el domingo en/después del último
+ * día (semanas completas, longitud múltiplo de 7; típicamente 35 o 42 celdas).
+ *
+ * `todayIso` es el "YYYY-MM-DD" de hoy en la TZ (se pasa pre-computado para
+ * mantener la función pura/testeable sin DB ni reloj).
+ */
+export function buildMonthGrid(monthIso: string, todayIso: string): MonthGridCell[] {
+  const [y, m] = monthIso.split("-").map(Number);
+
+  // Lunes en/antes del día 1 (cálculo vía mediodía UTC, no cruza día).
+  const firstMidday = Date.UTC(y, m - 1, 1, 12, 0, 0);
+  const dow = new Date(firstMidday).getUTCDay(); // 0 dom..6 sab
+  const offset = (dow + 6) % 7;                   // 0 si lunes
+  const gridStart = Date.UTC(y, m - 1, 1 - offset);
+
+  // Último día del mes.
+  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const lastMidday = Date.UTC(y, m - 1, lastDay, 12, 0, 0);
+  const lastDow = new Date(lastMidday).getUTCDay();
+  const tailOffset = (7 - ((lastDow + 6) % 7) - 1); // días hasta el domingo
+  const gridEnd = Date.UTC(y, m - 1, lastDay + tailOffset);
+
+  const cells: MonthGridCell[] = [];
+  for (
+    let t = gridStart;
+    t <= gridEnd;
+    t = Date.UTC(new Date(t).getUTCFullYear(), new Date(t).getUTCMonth(), new Date(t).getUTCDate() + 1)
+  ) {
+    const dt = new Date(t);
+    const yy = dt.getUTCFullYear();
+    const mm = String(dt.getUTCMonth() + 1).padStart(2, "0");
+    const dd = String(dt.getUTCDate()).padStart(2, "0");
+    const dateIso = `${yy}-${mm}-${dd}`;
+    cells.push({
+      dateIso,
+      inCurrentMonth: dateIso.slice(0, 7) === monthIso,
+      isToday: dateIso === todayIso,
+    });
+  }
+  return cells;
+}
+
+export interface CalendarioMesData {
+  monthIso: string;                // "YYYY-MM"
+  monthLabel: string;              // "junio 2026"
+  hoyIso: string;                  // "YYYY-MM-DD" en TZ
+  grid: MonthGridCell[];           // semanas completas (length % 7 === 0)
+  /** Turnos confirmados/activos del rango visible, ya en fecha/hora TZ. */
+  turnos: TurnoSemana[];
+  pacientes: PacientesById;
+}
+
+interface MesFetcherInput {
+  organizationId: string;
+  monthIso: string;                // "YYYY-MM"
+  timezone: string;
+  profesionalId?: string | null;
+}
+
+/**
+ * `getCalendarioMes` — turnos del rango cubierto por la grilla mensual
+ * visible (lunes antes del 1 → domingo después del último día). Mismo client
+ * autenticado y RLS que la vista semanal. Devuelve turnos activos (no
+ * cancelados/no-asistió/reagendados) para los conteos/preview por día.
+ */
+export async function getCalendarioMes(input: MesFetcherInput): Promise<Result<CalendarioMesData>> {
+  const { organizationId, monthIso, timezone, profesionalId } = input;
+  const tz = timezone || "America/Argentina/Cordoba";
+  const supabase = await createSupabaseServerClient();
+
+  const hoyIso = ymdInTz(new Date().toISOString(), tz);
+  const grid = buildMonthGrid(monthIso, hoyIso);
+  const firstIso = grid[0].dateIso;
+  const lastIso = grid[grid.length - 1].dateIso;
+
+  const [fy, fm, fd] = firstIso.split("-").map(Number);
+  const [ly, lm, ld] = lastIso.split("-").map(Number);
+  const startUtc = wallClockInTzToUtc(fy, fm, fd, 0, 0, 0, tz).toISOString();
+  // Fin exclusivo: medianoche del día siguiente al último de la grilla.
+  const endUtc = wallClockInTzToUtc(ly, lm, ld + 1, 0, 0, 0, tz).toISOString();
+
+  let q = supabase
+    .from("turno_extendido")
+    .select(
+      "id, organization_id, inicio, duracion_min, estado, origen, " +
+        "paciente_id, paciente_nombre_cifrado, paciente_apellido_cifrado, paciente_telefono_cifrado, " +
+        "paciente_tipo, paciente_tags, paciente_alerta_alergia, servicio_nombre",
+    )
+    .eq("organization_id", organizationId)
+    .in("estado", ["AGENDADO", "CONFIRMADO", "EN_SALA", "ATENDIENDO", "CERRADO"])
+    .gte("inicio", startUtc)
+    .lt("inicio", endUtc)
+    .order("inicio", { ascending: true });
+  if (profesionalId) q = q.eq("profesional_id", profesionalId);
+
+  const turnosRes = await q;
+  if (turnosRes.error) return err("db_error", "Error leyendo turnos del mes.", turnosRes.error.message);
+
+  const turnoRows = (turnosRes.data ?? []) as unknown as TurnoExtendidoRow[];
+  const pacientesAcum = new Map<string, Paciente>();
+  const turnos: TurnoSemana[] = turnoRows.map((row) => {
+    if (!pacientesAcum.has(row.paciente_id)) {
+      pacientesAcum.set(row.paciente_id, turnoRowToPaciente(row));
+    }
+    return {
+      id: row.id,
+      fecha: ymdInTz(row.inicio, tz),
+      hora: hhmmInTz(row.inicio, tz),
+      dur: row.duracion_min,
+      pacienteId: row.paciente_id,
+      servicio: row.servicio_nombre,
+      estado: ESTADO_DB_TO_UI[row.estado],
+      origen: ORIGEN_DB_TO_UI[row.origen],
+    };
+  });
+
+  return ok({
+    monthIso,
+    monthLabel: formatMonthLabel(monthIso),
+    hoyIso,
+    grid,
+    turnos,
+    pacientes: Object.fromEntries(pacientesAcum.entries()),
+  });
+}

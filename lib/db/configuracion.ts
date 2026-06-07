@@ -35,6 +35,8 @@ export interface ConsultorioData {
   ciudad: string;
   provincia: string;
   instagram: string;
+  /** IANA timezone de la org (M02 organization.timezone). */
+  timezone: string;
 }
 
 export interface ServicioRow {
@@ -71,6 +73,10 @@ export interface ConfiguracionData {
   dias: Record<DiaSemanaId, DiaHorarios>;
   /** Duración por defecto de slots en el booking público. */
   slotMin: number;
+  /** M43 · si true, las reservas del link público se confirman automáticamente. */
+  autoConfirmarReservas: boolean;
+  /** M43 · minutos de margen entre slots ofrecidos en el booking público. */
+  slotMargenMin: number;
 }
 
 // ─── Fetcher ───────────────────────────────────────────────────────────────
@@ -115,7 +121,7 @@ export async function getConfiguracionData(): Promise<Result<ConfiguracionData>>
   // 3. Organization fields nuevos (M20 agregó telefono_publico / direccion_completa / instagram_handle).
   const { data: orgExtra } = await supabase
     .from("organization")
-    .select("telefono_publico, direccion_completa, instagram_handle")
+    .select("telefono_publico, direccion_completa, instagram_handle, auto_confirmar_reservas, slot_margen_min")
     .eq("id", ctx.data.organization.id)
     .maybeSingle();
 
@@ -150,6 +156,7 @@ export async function getConfiguracionData(): Promise<Result<ConfiguracionData>>
     ciudad: ctx.data.organization.ciudad ?? "",
     provincia: ctx.data.organization.provincia ?? "",
     instagram: (orgExtra?.instagram_handle as string | null) ?? "",
+    timezone: ctx.data.organization.timezone || "America/Argentina/Cordoba",
   };
 
   const servicios: ServicioRow[] = (serviciosRaw ?? []).map(
@@ -174,6 +181,11 @@ export async function getConfiguracionData(): Promise<Result<ConfiguracionData>>
     },
     dias,
     slotMin: 45,
+    // M43 · default true (igual que el DEFAULT de la columna) si la org es
+    // anterior a la migración o el campo viene null.
+    autoConfirmarReservas: (orgExtra?.auto_confirmar_reservas as boolean | null) ?? true,
+    // M43 · default 0 (sin margen) si la org es anterior a la migración o null.
+    slotMargenMin: (orgExtra?.slot_margen_min as number | null) ?? 0,
   });
 }
 
@@ -188,6 +200,7 @@ const saveConsultorioSchema = z.object({
   tel: z.string().max(30).optional(),
   direccion: z.string().max(200).optional(),
   instagram: z.string().max(60).optional(),
+  timezone: z.string().min(1).max(60).optional(),
 });
 
 export type SaveConsultorioInput = z.infer<typeof saveConsultorioSchema>;
@@ -222,6 +235,9 @@ export async function saveConsultorio(input: SaveConsultorioInput): Promise<Resu
     direccion_completa: d.direccion && d.direccion.length > 0 ? d.direccion : null,
     instagram_handle: d.instagram && d.instagram.length > 0 ? d.instagram : null,
   };
+  if (d.timezone) {
+    orgPatch.timezone = d.timezone;
+  }
   const { error: orgErr } = await supabase
     .from("organization")
     .update(orgPatch)
@@ -450,6 +466,60 @@ export async function saveServicios(input: SaveServiciosInput): Promise<Result<v
         return err(mapped.code, mapped.message, error.message);
       }
     }
+  }
+
+  return ok(undefined);
+}
+
+// ─── Mutation: guardar preferencias de booking (M43) ──────────────────────
+
+const saveBookingPrefsSchema = z.object({
+  autoConfirmarReservas: z.boolean().optional(),
+  slotMargenMin: z.number().int().min(0).max(120).optional(),
+});
+
+export type SaveBookingPrefsInput = z.infer<typeof saveBookingPrefsSchema>;
+
+/**
+ * Guarda las preferencias del booking público en `organization`:
+ * `auto_confirmar_reservas` y `slot_margen_min` (M43). Ambos campos son
+ * opcionales — solo se persisten los provistos (patch parcial). Requiere
+ * OWNER/DIRECTOR (igual que
+ * saveConsultorio). Nota B2: la policy org_update_owner (M02) solo permite
+ * UPDATE de organization al OWNER en DB; DIRECTOR pasa el gate de la app pero
+ * el UPDATE devuelve 0 filas. Para la demo el profesional es OWNER.
+ */
+export async function saveBookingPrefs(input: SaveBookingPrefsInput): Promise<Result<void>> {
+  const parsed = saveBookingPrefsSchema.safeParse(input);
+  if (!parsed.success) {
+    return err("validation", "Datos inválidos.", parsed.error.message);
+  }
+
+  const ctx = await getActiveContext();
+  if (!ctx.ok) return ctx;
+  if (ctx.data.session.role !== "OWNER" && ctx.data.session.role !== "DIRECTOR") {
+    return err("forbidden", "Solo OWNER/DIRECTOR puede editar las preferencias de reservas.");
+  }
+
+  const patch: Record<string, unknown> = {};
+  if (parsed.data.autoConfirmarReservas !== undefined) {
+    patch.auto_confirmar_reservas = parsed.data.autoConfirmarReservas;
+  }
+  if (parsed.data.slotMargenMin !== undefined) {
+    patch.slot_margen_min = parsed.data.slotMargenMin;
+  }
+  if (Object.keys(patch).length === 0) {
+    return ok(undefined);
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error: orgErr } = await supabase
+    .from("organization")
+    .update(patch)
+    .eq("id", ctx.data.organization.id);
+  if (orgErr) {
+    const mapped = mapSupabaseError(orgErr);
+    return err(mapped.code, mapped.message, orgErr.message);
   }
 
   return ok(undefined);

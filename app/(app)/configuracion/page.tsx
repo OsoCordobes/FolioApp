@@ -36,6 +36,8 @@ export default async function ConfiguracionPage() {
       initialServicios={data.data.servicios}
       initialDias={data.data.dias}
       initialSlotMin={data.data.slotMin}
+      initialAutoConfirmar={data.data.autoConfirmarReservas}
+      initialSlotMargenMin={data.data.slotMargenMin}
       googleCalendar={data.data.googleCalendar}
       canEdit={canEdit}
     />

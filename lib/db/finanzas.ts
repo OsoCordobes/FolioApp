@@ -68,6 +68,14 @@ interface FetcherInput {
   timezone: string;
   /** ISO YYYY-MM-01 del mes a leer (default: mes en curso en TZ). */
   monthAnchor?: string;
+  /**
+   * Rango explícito (UTC) que sobreescribe el cálculo mensual. Lo usa el
+   * selector de período de /finanzas (hoy/semana/mes/6m/año). Cuando está
+   * presente, los KPIs y transacciones se computan sobre [startUtc, endUtc).
+   * Para rangos largos (>~1 mes) el chart diario se omite (ingresosPorDia vacío)
+   * y se reportan solo los totales.
+   */
+  rangeOverride?: { startUtc: string; endUtc: string; label: string };
 }
 
 // ─── Tipos de rows DB ──────────────────────────────────────────────────────
@@ -129,14 +137,25 @@ export async function getFinanzasDelMes(input: FetcherInput): Promise<Result<Fin
   const monthAnchor = input.monthAnchor ?? `${nowParts.year}-${String(nowParts.month).padStart(2, "0")}-01`;
   const [y, m] = monthAnchor.split("-").map(Number);
 
-  const startUtc = wallClockInTzToUtc(y, m, 1, 0, 0, 0, tz).toISOString();
-  const nextMonth = m === 12 ? { y: y + 1, m: 1 } : { y, m: m + 1 };
-  const endUtc = wallClockInTzToUtc(nextMonth.y, nextMonth.m, 1, 0, 0, 0, tz).toISOString();
+  const override = input.rangeOverride;
 
-  // Mes pasado para delta.
+  // Bounds del período. Por defecto el mes en curso; con override usamos sus
+  // bounds UTC explícitos.
+  const startUtc = override ? override.startUtc : wallClockInTzToUtc(y, m, 1, 0, 0, 0, tz).toISOString();
+  const nextMonth = m === 12 ? { y: y + 1, m: 1 } : { y, m: m + 1 };
+  const monthEndUtc = wallClockInTzToUtc(nextMonth.y, nextMonth.m, 1, 0, 0, 0, tz).toISOString();
+  const endUtc = override ? override.endUtc : monthEndUtc;
+
+  // Delta vs período anterior: solo tiene sentido para el mes (comparamos contra
+  // el mes pasado). Con override de rango arbitrario lo omitimos (null).
   const prevMonth = m === 1 ? { y: y - 1, m: 12 } : { y, m: m - 1 };
   const prevStartUtc = wallClockInTzToUtc(prevMonth.y, prevMonth.m, 1, 0, 0, 0, tz).toISOString();
   const prevEndUtc = wallClockInTzToUtc(y, m, 1, 0, 0, 0, tz).toISOString();
+
+  // El chart diario solo se llena cuando el rango cabe razonablemente en un mes.
+  // Para 6m/año (rangos largos) devolvemos ingresosPorDia vacío y solo totales.
+  const rangeMs = new Date(endUtc).getTime() - new Date(startUtc).getTime();
+  const isLongRange = rangeMs > 40 * 24 * 60 * 60_000; // > ~40 días
 
   // 1. Pagos del mes con join expandido para hidratar paciente + servicio.
   // PostgREST relational nesting:
@@ -182,8 +201,13 @@ export async function getFinanzasDelMes(input: FetcherInput): Promise<Result<Fin
   const pagos = (pagosRaw ?? []) as unknown as PagoTurnoRow[];
 
   const diasDelMes = new Date(Date.UTC(y, m, 0)).getUTCDate(); // último día
+  // El chart diario se llena por día-del-mes. Solo tiene sentido para rangos
+  // cortos (default mes, hoy, semana). Para rangos largos queda vacío.
+  const buildDailyChart = !isLongRange;
   const ingresosPorDiaMap = new Map<number, number>();
-  for (let d = 1; d <= diasDelMes; d++) ingresosPorDiaMap.set(d, 0);
+  if (buildDailyChart) {
+    for (let d = 1; d <= diasDelMes; d++) ingresosPorDiaMap.set(d, 0);
+  }
 
   const serviciosMap = new Map<string, { nombre: string; count: number; monto: number }>();
   let totalIngresosCents = 0;
@@ -194,8 +218,10 @@ export async function getFinanzasDelMes(input: FetcherInput): Promise<Result<Fin
     const monto = pago.monto_cents ?? 0;
     if (pago.estado === "PAGADO") {
       totalIngresosCents += monto;
-      const day = dayInTz(pago.pagado_ts ?? pago.created_at, tz);
-      ingresosPorDiaMap.set(day, (ingresosPorDiaMap.get(day) ?? 0) + monto);
+      if (buildDailyChart) {
+        const day = dayInTz(pago.pagado_ts ?? pago.created_at, tz);
+        ingresosPorDiaMap.set(day, (ingresosPorDiaMap.get(day) ?? 0) + monto);
+      }
     }
 
     if (pago.turno?.servicio) {
@@ -232,12 +258,14 @@ export async function getFinanzasDelMes(input: FetcherInput): Promise<Result<Fin
   const diaActual = nowParts.year === y && nowParts.month === m
     ? nowParts.day
     : diasDelMes;
-  const proyeccionFinDeMes = diaActual > 0 && diaActual < diasDelMes
+  // La proyección lineal solo aplica al mes en curso (sin override).
+  const proyeccionFinDeMes = !override && diaActual > 0 && diaActual < diasDelMes
     ? Math.round(totalIngresos * (diasDelMes / diaActual))
     : totalIngresos;
 
   const prevTotal = Math.round(prevTotalCents / 100);
-  const deltaIngresosVsMesPasadoPct = prevTotal > 0
+  // El delta vs mes pasado solo tiene sentido para la vista mensual default.
+  const deltaIngresosVsMesPasadoPct = !override && prevTotal > 0
     ? Math.round(((totalIngresos - prevTotal) / prevTotal) * 100)
     : null;
 
@@ -256,7 +284,7 @@ export async function getFinanzasDelMes(input: FetcherInput): Promise<Result<Fin
     .sort((a, b) => b.monto - a.monto);
 
   return ok({
-    mesLabel: `${nombreMes(m)} ${y}`,
+    mesLabel: override ? override.label : `${nombreMes(m)} ${y}`,
     mesNumero: m,
     anio: y,
     diaActual,
@@ -294,7 +322,7 @@ function nombreMes(m: number): string {
   return NOMBRES_MES[m - 1] ?? `mes-${m}`;
 }
 
-function formatDateInTz(date: Date, timeZone: string): { year: number; month: number; day: number } {
+export function formatDateInTz(date: Date, timeZone: string): { year: number; month: number; day: number } {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone, year: "numeric", month: "2-digit", day: "2-digit",
   }).formatToParts(date);
@@ -309,7 +337,7 @@ function dayInTz(isoTs: string, timeZone: string): number {
   return formatDateInTz(new Date(isoTs), timeZone).day;
 }
 
-function wallClockInTzToUtc(
+export function wallClockInTzToUtc(
   year: number, month: number, day: number,
   hour: number, minute: number, second: number,
   timeZone: string,
@@ -331,4 +359,67 @@ function getTzOffsetMs(utcDate: Date, timeZone: string): number {
   const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? 0);
   const asTzUtcMs = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second"));
   return asTzUtcMs - utcDate.getTime();
+}
+
+// ─── Períodos del selector de /finanzas ────────────────────────────────────
+
+export type FinanzasPeriodo = "hoy" | "semana" | "mes" | "6m" | "anio";
+
+const PERIODO_LABELS: Record<FinanzasPeriodo, string> = {
+  hoy: "Hoy",
+  semana: "Esta semana",
+  mes: "Este mes",
+  "6m": "Últimos 6 meses",
+  anio: "Este año",
+};
+
+/** Día de la semana (0=domingo) de una fecha wall-clock en la TZ dada. */
+function dowInTz(year: number, month: number, day: number, timeZone: string): number {
+  // El mediodía UTC de ese día wall-clock no cruza fronteras de día en AR (UTC-3),
+  // así que getUTCDay del instante construido refleja el dow correcto.
+  const utc = wallClockInTzToUtc(year, month, day, 12, 0, 0, timeZone);
+  return utc.getUTCDay();
+}
+
+/**
+ * Computa los bounds UTC [startUtc, endUtc) + label para un período del selector
+ * de Finanzas, anclado a "ahora" en la TZ de la org. `mes` devuelve undefined
+ * (el fetcher cae al cálculo mensual default). Semana = lunes..ahora (ISO).
+ */
+export function computeRangeOverride(
+  periodo: FinanzasPeriodo,
+  timeZone: string,
+  now: Date = new Date(),
+): { startUtc: string; endUtc: string; label: string } | undefined {
+  if (periodo === "mes") return undefined;
+
+  const { year: y, month: m, day: d } = formatDateInTz(now, timeZone);
+  // Fin exclusivo: arranque del día siguiente (cubre todo "hoy").
+  const endUtc = wallClockInTzToUtc(y, m, d + 1, 0, 0, 0, timeZone).toISOString();
+  const label = PERIODO_LABELS[periodo];
+
+  let start: Date;
+  switch (periodo) {
+    case "hoy":
+      start = wallClockInTzToUtc(y, m, d, 0, 0, 0, timeZone);
+      break;
+    case "semana": {
+      // Lunes de la semana en curso (ISO: lunes=1 .. domingo=0→7).
+      const dow = dowInTz(y, m, d, timeZone);
+      const backToMonday = dow === 0 ? 6 : dow - 1;
+      start = wallClockInTzToUtc(y, m, d - backToMonday, 0, 0, 0, timeZone);
+      break;
+    }
+    case "6m":
+      // Inicio del mes 5 meses atrás (ventana de 6 meses naturales).
+      start = wallClockInTzToUtc(y, m - 5, 1, 0, 0, 0, timeZone);
+      break;
+    case "anio":
+      start = wallClockInTzToUtc(y, 1, 1, 0, 0, 0, timeZone);
+      break;
+    default:
+      return undefined;
+  }
+
+  return { startUtc: start.toISOString(), endUtc, label };
 }

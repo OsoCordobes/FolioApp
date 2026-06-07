@@ -2466,6 +2466,80 @@ input:focus { outline: none; }
 .cal-day-head.is-cerrado .cal-day-num { color: var(--ink-3); }
 .cal-day-sub { font-size: 11px; color: var(--ink-3); }
 
+/* ─── Vista Mes (PR E) ─── */
+.cal-range-mes { text-transform: capitalize; }
+.cal-mes { margin-top: 22px; }
+.cal-mes-headers {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  border: 1px solid var(--line);
+  border-bottom: none;
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  background: var(--surface);
+}
+.cal-mes-dow {
+  padding: 10px 12px;
+  border-right: 1px solid var(--line-soft);
+  font-family: 'Geist Mono', monospace; font-size: 10.5px;
+  color: var(--ink-3); letter-spacing: .08em; text-transform: uppercase;
+}
+.cal-mes-dow:last-child { border-right: none; }
+.cal-mes-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  border: 1px solid var(--line);
+  border-radius: 0 0 var(--r-lg) var(--r-lg);
+  overflow: hidden;
+  background: var(--surface);
+}
+.cal-mes-cell {
+  position: relative;
+  min-height: 112px;
+  padding: 8px 8px 6px;
+  border-right: 1px solid var(--line-soft);
+  border-top: 1px solid var(--line-soft);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.cal-mes-cell:nth-child(7n) { border-right: none; }
+.cal-mes-cell:nth-child(-n + 7) { border-top: none; }
+.cal-mes-cell.is-out { background: var(--surface-2); }
+.cal-mes-cell.is-hoy {
+  background: linear-gradient(180deg, var(--accent-soft) 0%, var(--surface) 100%);
+}
+.cal-mes-cell-head {
+  display: flex; align-items: center; justify-content: space-between;
+}
+.cal-mes-num {
+  font-size: 14px; font-weight: 600; color: var(--ink);
+  font-variant-numeric: tabular-nums; line-height: 1;
+}
+.cal-mes-cell.is-out .cal-mes-num { color: var(--ink-3); font-weight: 500; }
+.cal-mes-cell.is-hoy .cal-mes-num { color: var(--accent-2); }
+.cal-mes-count {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 16px; padding: 0 5px;
+  border-radius: 9px;
+  background: var(--green-soft); color: var(--green);
+  font-family: 'Geist Mono', monospace; font-size: 10px; font-weight: 600;
+}
+.cal-mes-events {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: 3px;
+}
+.cal-mes-event {
+  display: flex; align-items: baseline; gap: 5px;
+  padding: 2px 6px; border-radius: var(--r-sm);
+  background: var(--green-soft);
+  font-size: 11px; color: var(--green);
+  overflow: hidden; white-space: nowrap;
+}
+.cal-mes-event-h { flex: none; font-size: 10px; opacity: 0.9; }
+.cal-mes-event-n { overflow: hidden; text-overflow: ellipsis; color: var(--ink-2); }
+.cal-mes-more {
+  font-size: 10.5px; color: var(--ink-3); padding: 1px 6px;
+  font-family: 'Geist Mono', monospace;
+}
+
 .cal-grid {
   display: grid;
   grid-template-columns: 56px repeat(7, 1fr);
@@ -5224,9 +5298,10 @@ input:focus { outline: none; }
   border-radius: var(--r-md);
 }
 .fn-period-btn {
+  display: inline-block;
   padding: 6px 12px; border-radius: 5px;
   font-size: 12px; font-weight: 500; color: var(--ink-3);
-  cursor: default;
+  cursor: pointer; text-decoration: none;
   transition: background 120ms var(--ease-in), color 120ms var(--ease-in);
 }
 .fn-period-btn:hover { color: var(--ink); }

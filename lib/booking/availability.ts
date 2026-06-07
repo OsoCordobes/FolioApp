@@ -69,6 +69,40 @@ function arDateString(y: number, m: number, d: number): string {
 }
 
 /**
+ * Genera los slots ofrecidos dentro de una franja horaria (pura, testeable).
+ *
+ * Avanza el cursor por `duracionMs + margenMs` entre slots ofrecidos: el margen
+ * SOLO afecta el espaciado de los slots OFRECIDOS, nunca la detección de
+ * ocupación/conflicto (los rangos `ocupados` mantienen su span real).
+ *
+ * Un slot `[t, t+duracionMs)` se incluye sii:
+ *   - `t + duracionMs <= franjaEndMs` (entra completo en la franja),
+ *   - `t > nowMs` (no es pasado),
+ *   - no solapa ningún rango en `ocupados` (half-open overlap).
+ */
+export function generateSlotsForFranja(
+  franjaStartMs: number,
+  franjaEndMs: number,
+  duracionMs: number,
+  margenMs: number,
+  nowMs: number,
+  ocupados: Array<[number, number]>,
+): Array<{ inicio: number; fin: number }> {
+  const out: Array<{ inicio: number; fin: number }> = [];
+  if (duracionMs <= 0) return out;
+  const step = duracionMs + Math.max(0, margenMs);
+  const isOcupado = (start: number, end: number) =>
+    ocupados.some(([oStart, oEnd]) => oStart < end && oEnd > start);
+
+  for (let t = franjaStartMs; t + duracionMs <= franjaEndMs; t += step) {
+    if (t <= nowMs) continue;
+    if (isOcupado(t, t + duracionMs)) continue;
+    out.push({ inicio: t, fin: t + duracionMs });
+  }
+  return out;
+}
+
+/**
  * Devuelve slots disponibles en un rango para un profesional, dada la
  * duración requerida por el servicio.
  */
@@ -78,6 +112,8 @@ export async function getSlotsDisponibles(input: {
   duracionMin: number;
   rangeStart: Date;
   rangeEnd: Date;
+  /** M43 · minutos de margen entre slots ofrecidos (no afecta conflictos). */
+  margenMin?: number;
 }): Promise<Slot[]> {
   const supabase = createSupabaseServiceClient();
 
@@ -158,12 +194,10 @@ export async function getSlotsDisponibles(input: {
     }),
   ];
 
-  const isOcupado = (start: number, end: number) =>
-    ocupados.some(([oStart, oEnd]) => oStart < end && oEnd > start);
-
   // Iterar por día AR-calendar dentro del rango
   const slots: Slot[] = [];
   const dur = input.duracionMin * 60_000;
+  const margenMs = Math.max(0, input.margenMin ?? 0) * 60_000;
   const now = Date.now();
   const rangeStartMs = input.rangeStart.getTime();
   const rangeEndMs = input.rangeEnd.getTime();
@@ -191,13 +225,15 @@ export async function getSlotsDisponibles(input: {
       const franjaStartMs = arToUtcMs(y, m, d, hI, mI);
       const franjaEndMs = arToUtcMs(y, m, d, hF, mF);
 
-      for (let t = franjaStartMs; t + dur <= franjaEndMs; t += dur) {
-        if (t <= now) continue;
-        if (t < rangeStartMs || t + dur > rangeEndMs) continue;
-        if (isOcupado(t, t + dur)) continue;
+      const franjaSlots = generateSlotsForFranja(
+        franjaStartMs, franjaEndMs, dur, margenMs, now, ocupados,
+      );
+      for (const s of franjaSlots) {
+        // Clamp al rango pedido (next 14d). El margen NO afecta este chequeo.
+        if (s.inicio < rangeStartMs || s.fin > rangeEndMs) continue;
         slots.push({
-          inicio: new Date(t).toISOString(),
-          fin: new Date(t + dur).toISOString(),
+          inicio: new Date(s.inicio).toISOString(),
+          fin: new Date(s.fin).toISOString(),
         });
       }
     }

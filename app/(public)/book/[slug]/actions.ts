@@ -17,6 +17,8 @@ import { z } from "zod";
 
 import { encryptColumn } from "@/lib/crypto";
 import { err, ok, type Result } from "@/lib/db/errors";
+import { buildAutoConfirmDecision, promotePedidoToTurno } from "@/lib/db/pedidos";
+import { notifyBookingRecibida } from "@/lib/email/notify";
 import { AvailabilityDbError, getSlotsDisponibles, type Slot } from "@/lib/booking/availability";
 import { trackEvent } from "@/lib/observability/events";
 import { limitByIp } from "@/lib/security/rate-limit";
@@ -55,7 +57,7 @@ export async function fetchSlotsPublico(
   const service = createSupabaseServiceClient();
   const { data: org } = await service
     .from("organization")
-    .select("id, opt_out_public_listing")
+    .select("id, opt_out_public_listing, slot_margen_min")
     .eq("slug", parsed.data.orgSlug)
     .maybeSingle();
 
@@ -105,6 +107,7 @@ export async function fetchSlotsPublico(
       duracionMin: servicio.duracion_min,
       rangeStart,
       rangeEnd,
+      margenMin: (org.slot_margen_min as number | null) ?? 0,
     });
   } catch (e) {
     if (e instanceof AvailabilityDbError) {
@@ -135,7 +138,7 @@ const createPedidoInput = z.object({
 
 export async function createPedidoPublico(
   input: z.infer<typeof createPedidoInput>,
-): Promise<Result<{ id: string }>> {
+): Promise<Result<{ id: string; autoConfirmado: boolean }>> {
   const parsed = createPedidoInput.safeParse(input);
   if (!parsed.success) {
     return err("validation", "Datos del pedido inválidos.", parsed.error.message);
@@ -170,18 +173,31 @@ export async function createPedidoPublico(
   const service = createSupabaseServiceClient();
   const { data: org } = await service
     .from("organization")
-    .select("id")
+    .select("id, auto_confirmar_reservas")
     .eq("slug", parsed.data.orgSlug)
     .maybeSingle();
   if (!org) return err("not_found", "Consultorio no encontrado.");
 
   const { data: servicio } = await service
     .from("servicio")
-    .select("id, organization_id, duracion_min, precio_cents")
+    .select("id, organization_id, duracion_min, precio_cents, nombre")
     .eq("id", parsed.data.servicioId)
     .eq("organization_id", org.id)
     .maybeSingle();
   if (!servicio) return err("not_found", "Servicio no disponible.");
+
+  // Resolver el profesional destino (mismo criterio que fetchSlotsPublico:
+  // primer member es_colegiado). Necesario para persistir pedido.profesional_id
+  // y para poder auto-confirmar contra el profesional correcto (M40 keyea por
+  // profesional_id).
+  const { data: profesional } = await service
+    .from("member")
+    .select("id")
+    .eq("organization_id", org.id)
+    .eq("es_colegiado", true)
+    .is("deleted_at", null)
+    .limit(1)
+    .maybeSingle();
 
   // Re-chequear que el slot siga libre. Race window mínimo: alguien podría haber
   // tomado el mismo horario entre que el wizard cargó la lista y este submit.
@@ -271,6 +287,7 @@ export async function createPedidoPublico(
       fecha_propuesta: parsed.data.inicio,
       duracion_min: servicio.duracion_min,
       servicio_id: servicio.id,
+      profesional_id: profesional?.id ?? null,
       motivo_cifrado: encryptColumn(parsed.data.motivo ?? null),
       precio_cents: servicio.precio_cents,
       // Evidencia legal del consentimiento (Ley 25.326 art. 5 + M39 columnas).
@@ -294,5 +311,75 @@ export async function createPedidoPublico(
     servicioId: servicio.id,
   });
 
-  return ok({ id: pedido.id });
+  // Auto-confirmación configurable (M43). Si la org lo tiene activado y hay un
+  // profesional resuelto, promovemos el pedido a turno CONFIRMADO de inmediato
+  // usando los plaintext ya validados (no hace falta descifrar).
+  const decision = buildAutoConfirmDecision(
+    { auto_confirmar_reservas: Boolean(org.auto_confirmar_reservas) },
+    { profesional_id: profesional?.id ?? null },
+  );
+
+  // Email "solicitud recibida" (fire-and-forget, fail-safe). Solo cuando el
+  // pedido queda PENDIENTE: auto-confirm apagado/sin profesional, o falló por
+  // un error que no es conflicto. notifyBookingRecibida ya es no-throw.
+  const notifyBookingRecibidaFireAndForget = (): void => {
+    if (!parsed.data.email) return;
+    notifyBookingRecibida({
+      client: service,
+      organizationId: org.id,
+      pacienteEmail: parsed.data.email ?? null,
+      pacienteNombre: parsed.data.nombre,
+      servicioNombre: servicio.nombre,
+      inicioIso: parsed.data.inicio,
+    }).catch(async (e) => {
+      const { captureException } = await import("@sentry/nextjs");
+      captureException(e, {
+        tags: { component: "book-public", op: "notifyBookingRecibida" },
+        extra: { pedidoId: pedido.id, organizationId: org.id },
+      });
+    });
+  };
+
+  if (decision.shouldAutoConfirm && decision.profesionalId) {
+    const promote = await promotePedidoToTurno(service, {
+      pedidoId: pedido.id,
+      organizationId: org.id,
+      profesionalId: decision.profesionalId,
+      servicioId: servicio.id,
+      fechaPropuesta: parsed.data.inicio,
+      duracionMin: servicio.duracion_min,
+      precioCents: servicio.precio_cents,
+      canal: "WEB",
+      pacienteId: null,
+      nombre: parsed.data.nombre,
+      telefono: parsed.data.telefono,
+      email: parsed.data.email ?? null,
+      motivo: parsed.data.motivo ?? null,
+    });
+
+    if (promote.ok) {
+      // El email de confirmación ya salió desde promotePedidoToTurno (cubre
+      // tanto este auto-confirm como aceptarPedido). No mandamos "recibida".
+      return ok({ id: pedido.id, autoConfirmado: true });
+    }
+
+    if (promote.error.code === "conflict") {
+      return err("conflict", "Ese horario ya no está disponible. Por favor elegí otro.");
+    }
+
+    // Otro error: el pedido queda PENDIENTE (el profesional lo acepta a mano).
+    // Logueamos + Sentry pero devolvemos ok (la solicitud quedó registrada).
+    console.error("[createPedidoPublico] auto-confirm falló:", promote.error);
+    void import("@sentry/nextjs").then(({ captureException }) =>
+      captureException(new Error(`auto-confirm falló: ${promote.error.message}`), {
+        tags: { component: "book-public", op: "auto-confirm" },
+        extra: { pedidoId: pedido.id, organizationId: org.id, code: promote.error.code },
+      }),
+    );
+    notifyBookingRecibidaFireAndForget();
+    return ok({ id: pedido.id, autoConfirmado: false });
+  }
+
+  notifyBookingRecibidaFireAndForget();
+  return ok({ id: pedido.id, autoConfirmado: false });
 }

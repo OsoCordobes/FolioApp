@@ -21,6 +21,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import * as I from "@/components/icons";
 import { PedidoModal } from "@/components/calendario/pedido-modal";
+import type { MonthGridCell } from "@/lib/db/calendario";
 import type {
   Bloqueo,
   PacientesById,
@@ -384,6 +385,10 @@ function CalHeader({
   prevWeekIso,
   nextWeekIso,
   hoyWeekStartIso,
+  mesLabel,
+  prevMonthIso,
+  nextMonthIso,
+  hoyMonthIso,
 }: {
   vista: Vista;
   setVista: (v: Vista) => void;
@@ -396,6 +401,10 @@ function CalHeader({
   prevWeekIso: string;
   nextWeekIso: string;
   hoyWeekStartIso: string;
+  mesLabel: string;
+  prevMonthIso: string;
+  nextMonthIso: string;
+  hoyMonthIso: string;
 }) {
   return (
     <header className="cal-head">
@@ -424,20 +433,41 @@ function CalHeader({
       </div>
       <div className="cal-nav">
         <div className="cal-nav-l">
-          <Link href={`/calendario?w=${prevWeekIso}`} className="cal-nav-btn" aria-label="Semana anterior">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M15 18l-6-6 6-6" />
-            </svg>
-          </Link>
-          <Link href={`/calendario?w=${hoyWeekStartIso}`} className="cal-nav-today" title="Semana actual">
-            Hoy
-          </Link>
-          <Link href={`/calendario?w=${nextWeekIso}`} className="cal-nav-btn" aria-label="Semana siguiente">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 18l6-6-6-6" />
-            </svg>
-          </Link>
-          <span className="cal-range">{weekRangeLabel}</span>
+          {vista === "mes" ? (
+            <>
+              <Link href={`/calendario?vista=mes&mes=${prevMonthIso}`} className="cal-nav-btn" aria-label="Mes anterior">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M15 18l-6-6 6-6" />
+                </svg>
+              </Link>
+              <Link href={`/calendario?vista=mes&mes=${hoyMonthIso}`} className="cal-nav-today" title="Mes actual">
+                Hoy
+              </Link>
+              <Link href={`/calendario?vista=mes&mes=${nextMonthIso}`} className="cal-nav-btn" aria-label="Mes siguiente">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 18l6-6-6-6" />
+                </svg>
+              </Link>
+              <span className="cal-range cal-range-mes">{mesLabel}</span>
+            </>
+          ) : (
+            <>
+              <Link href={`/calendario?w=${prevWeekIso}`} className="cal-nav-btn" aria-label="Semana anterior">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M15 18l-6-6 6-6" />
+                </svg>
+              </Link>
+              <Link href={`/calendario?w=${hoyWeekStartIso}`} className="cal-nav-today" title="Semana actual">
+                Hoy
+              </Link>
+              <Link href={`/calendario?w=${nextWeekIso}`} className="cal-nav-btn" aria-label="Semana siguiente">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 18l6-6-6-6" />
+                </svg>
+              </Link>
+              <span className="cal-range">{weekRangeLabel}</span>
+            </>
+          )}
         </div>
         <div className="cal-nav-r">
           <CalFilters estados={estados} setEstados={setEstados} pedidosPendientesCount={pedidosPendientesCount} mostrarPedidos={mostrarPedidos} setMostrarPedidos={setMostrarPedidos} />
@@ -681,6 +711,90 @@ function VistaSemana({
   );
 }
 
+// ─── VistaMes ────────────────────────────────────────────────────────────────
+
+const DIAS_MES = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+const MAX_PREVIEW = 3;
+
+function VistaMes({
+  grid,
+  turnos,
+  pacientes,
+  hoyIso,
+}: {
+  grid: MonthGridCell[];
+  turnos: TurnoSemana[];
+  pacientes: PacientesById;
+  hoyIso: string;
+}) {
+  // Agrupar turnos por fecha (YYYY-MM-DD).
+  const turnosPorDia = useMemo(() => {
+    const map = new Map<string, TurnoSemana[]>();
+    for (const t of turnos) {
+      const arr = map.get(t.fecha);
+      if (arr) arr.push(t);
+      else map.set(t.fecha, [t]);
+    }
+    // Ordenar cada día por hora.
+    for (const arr of map.values()) arr.sort((a, b) => hmToMin(a.hora) - hmToMin(b.hora));
+    return map;
+  }, [turnos]);
+
+  return (
+    <div className="cal-mes">
+      <div className="cal-mes-headers">
+        {DIAS_MES.map((d) => (
+          <div key={d} className="cal-mes-dow">{d}</div>
+        ))}
+      </div>
+      <div className="cal-mes-grid">
+        {grid.map((cell) => {
+          const dayTurnos = turnosPorDia.get(cell.dateIso) ?? [];
+          const numero = Number(cell.dateIso.slice(-2));
+          const isHoy = cell.dateIso === hoyIso;
+          const overflow = dayTurnos.length - MAX_PREVIEW;
+          return (
+            <div
+              key={cell.dateIso}
+              className={
+                "cal-mes-cell " +
+                (cell.inCurrentMonth ? "" : "is-out ") +
+                (isHoy ? "is-hoy" : "")
+              }
+            >
+              <div className="cal-mes-cell-head">
+                <span className="cal-mes-num">{numero}</span>
+                {dayTurnos.length > 0 ? (
+                  <span className="cal-mes-count" aria-label={`${dayTurnos.length} turnos`}>
+                    {dayTurnos.length}
+                  </span>
+                ) : null}
+              </div>
+              {dayTurnos.length > 0 ? (
+                <ul className="cal-mes-events">
+                  {dayTurnos.slice(0, MAX_PREVIEW).map((t) => {
+                    const paciente = pacientes[t.pacienteId];
+                    const nombre = paciente ? abreviar(paciente.nombre) : "Turno";
+                    return (
+                      <li key={t.id} className="cal-mes-event" title={`${t.hora} · ${nombre}`}>
+                        <span className="fi-mono cal-mes-event-h">{t.hora}</span>
+                        <span className="cal-mes-event-n">{nombre}</span>
+                      </li>
+                    );
+                  })}
+                  {overflow > 0 ? (
+                    <li className="cal-mes-more">+{overflow} más</li>
+                  ) : null}
+                </ul>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── Root ──────────────────────────────────────────────────────────────────
 
 interface CalendarioProps {
@@ -696,6 +810,16 @@ interface CalendarioProps {
   prevWeekIso: string;
   nextWeekIso: string;
   hoyWeekStartIso: string;
+  initialVista?: Vista;
+  // Vista mensual (PR E)
+  mesGrid: MonthGridCell[];
+  mesTurnos: TurnoSemana[];
+  mesPacientes: PacientesById;
+  mesLabel: string;
+  mesHoyIso: string;
+  prevMonthIso: string;
+  nextMonthIso: string;
+  hoyMonthIso: string;
 }
 
 export function Calendario({
@@ -710,8 +834,17 @@ export function Calendario({
   prevWeekIso,
   nextWeekIso,
   hoyWeekStartIso,
+  initialVista = "semana",
+  mesGrid,
+  mesTurnos,
+  mesPacientes,
+  mesLabel,
+  mesHoyIso,
+  prevMonthIso,
+  nextMonthIso,
+  hoyMonthIso,
 }: CalendarioProps) {
-  const [vista, setVista] = useState<Vista>("semana");
+  const [vista, setVista] = useState<Vista>(initialVista);
   const [estados, setEstados] = useState<Set<string>>(new Set());
   const [mostrarPedidos, setMostrarPedidos] = useState(true);
   const [selectedPedido, setSelectedPedido] = useState<Pedido | null>(null);
@@ -738,6 +871,10 @@ export function Calendario({
         prevWeekIso={prevWeekIso}
         nextWeekIso={nextWeekIso}
         hoyWeekStartIso={hoyWeekStartIso}
+        mesLabel={mesLabel}
+        prevMonthIso={prevMonthIso}
+        nextMonthIso={nextMonthIso}
+        hoyMonthIso={hoyMonthIso}
       />
 
       {vista === "semana" ? (
@@ -758,10 +895,12 @@ export function Calendario({
           onSelectPedido={setSelectedPedido}
         />
       ) : (
-        <div className="fi-empty" style={{ marginTop: 32 }}>
-          <h2>Vista mensual próximamente</h2>
-          <p>Mientras tanto, navegá entre semanas con las flechas.</p>
-        </div>
+        <VistaMes
+          grid={mesGrid}
+          turnos={mesTurnos}
+          pacientes={mesPacientes}
+          hoyIso={mesHoyIso}
+        />
       )}
 
       {selectedPedido ? (
