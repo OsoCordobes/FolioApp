@@ -16,6 +16,7 @@ import * as I from "@/components/icons";
 import {
   connectGoogleCalendar,
   disconnectGoogleCalendar,
+  saveBookingPrefsAction,
   saveConsultorioAction,
   saveHorariosAction,
   saveServiciosAction,
@@ -40,6 +41,31 @@ const DIAS_LBLS: Record<DiaId, string> = {
   lun: "Lunes", mar: "Martes", mie: "Miércoles", jue: "Jueves",
   vie: "Viernes", sab: "Sábado", dom: "Domingo",
 };
+
+// Zonas horarias IANA de Argentina (todas UTC-3, sin DST desde 2009).
+const TIMEZONES_AR: { value: string; label: string }[] = [
+  { value: "America/Argentina/Buenos_Aires", label: "Buenos Aires (UTC-3)" },
+  { value: "America/Argentina/Cordoba", label: "Córdoba (UTC-3)" },
+  { value: "America/Argentina/Mendoza", label: "Mendoza (UTC-3)" },
+  { value: "America/Argentina/Salta", label: "Salta (UTC-3)" },
+  { value: "America/Argentina/Jujuy", label: "Jujuy (UTC-3)" },
+  { value: "America/Argentina/Tucuman", label: "Tucumán (UTC-3)" },
+  { value: "America/Argentina/Catamarca", label: "Catamarca (UTC-3)" },
+  { value: "America/Argentina/La_Rioja", label: "La Rioja (UTC-3)" },
+  { value: "America/Argentina/San_Juan", label: "San Juan (UTC-3)" },
+  { value: "America/Argentina/San_Luis", label: "San Luis (UTC-3)" },
+  { value: "America/Argentina/Ushuaia", label: "Ushuaia (UTC-3)" },
+  { value: "America/Argentina/Rio_Gallegos", label: "Río Gallegos (UTC-3)" },
+];
+
+// Opciones de margen entre turnos (M43 slot_margen_min). 0 = "Sin margen".
+const MARGEN_OPTS: { value: number; label: string }[] = [
+  { value: 0, label: "Sin margen" },
+  { value: 5, label: "5 minutos" },
+  { value: 10, label: "10 minutos" },
+  { value: 15, label: "15 minutos" },
+  { value: 20, label: "20 minutos" },
+];
 
 type ServicioCfg = ServicioRow;
 
@@ -279,8 +305,14 @@ function SecConsultorio({ c, set }: { c: ConsultorioData; set: (patch: Partial<C
           </div>
         </Row>
         <Row label="Zona horaria" sub="Sin DST · Argentina">
-          <select className="cfg-input cfg-input-fixed" value="America/Argentina/Cordoba" onChange={() => {}}>
-            <option>America/Argentina/Cordoba (UTC-3)</option>
+          <select
+            className="cfg-input cfg-input-fixed"
+            value={c.timezone}
+            onChange={(e) => set({ timezone: e.target.value })}
+          >
+            {TIMEZONES_AR.map((tz) => (
+              <option key={tz.value} value={tz.value}>{tz.label}</option>
+            ))}
           </select>
         </Row>
       </Section>
@@ -330,13 +362,60 @@ function PublicLinkRow({ nombreConsultorio }: { nombreConsultorio: string }) {
   );
 }
 
+// ─── Sub-sección: Reservas web (M43 auto-confirmar) ────────────────────────
+
+function SecBookingPrefs({ initialAutoConfirmar, canEdit }: { initialAutoConfirmar: boolean; canEdit: boolean }) {
+  const [autoConfirmar, setAutoConfirmar] = useState(initialAutoConfirmar);
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const onToggle = (next: boolean) => {
+    if (!canEdit) return;
+    const prev = autoConfirmar;
+    setAutoConfirmar(next); // optimista
+    setError(null);
+    startTransition(async () => {
+      const result = await saveBookingPrefsAction({ autoConfirmarReservas: next });
+      if (!result.ok) {
+        setAutoConfirmar(prev); // revertir
+        setError(result.error.message);
+      }
+    });
+  };
+
+  return (
+    <Section
+      title="Reservas web"
+      sub="Cómo se procesan las reservas que llegan por tu link público."
+      action={
+        error ? (
+          <p role="alert" style={{ color: "var(--red)", fontSize: 13, margin: 0 }}>{error}</p>
+        ) : pending ? (
+          <span className="cfg-save-msg"><span className="cfg-save-dot" /> Guardando…</span>
+        ) : null
+      }
+    >
+      <Row
+        label="Auto-confirmar reservas web"
+        sub="Si está activo, las reservas del link público se confirman automáticamente sin tu aprobación manual."
+      >
+        <Toggle value={autoConfirmar} onChange={onToggle} />
+      </Row>
+    </Section>
+  );
+}
+
 // ─── Sección: Horarios ─────────────────────────────────────────────────────
 
-function SecHorarios({ dias, setDias, slotMin, setSlotMin }: {
+function SecHorarios({ dias, setDias, slotMin, setSlotMin, slotMargenMin, onMargenChange, margenPending, canEdit }: {
   dias: Record<DiaId, Dia>;
   setDias: (d: Record<DiaId, Dia>) => void;
   slotMin: number;
   setSlotMin: (n: number) => void;
+  slotMargenMin: number;
+  onMargenChange: (n: number) => void;
+  margenPending: boolean;
+  canEdit: boolean;
 }) {
   const setDia = (id: DiaId, patch: Partial<Dia>) =>
     setDias({ ...dias, [id]: { ...dias[id], ...patch } });
@@ -410,12 +489,20 @@ function SecHorarios({ dias, setDias, slotMin, setSlotMin }: {
             ))}
           </div>
         </Row>
-        <Row label="Margen entre turnos" sub="Tiempo libre entre dos turnos consecutivos">
-          <select className="cfg-input cfg-input-fixed" defaultValue="Sin margen">
-            <option>Sin margen</option>
-            <option>5 minutos</option>
-            <option>10 minutos</option>
-            <option>15 minutos</option>
+        <Row
+          label="Margen entre turnos"
+          sub={margenPending ? "Guardando…" : "Tiempo libre entre dos turnos consecutivos"}
+        >
+          <select
+            className="cfg-input cfg-input-fixed"
+            value={slotMargenMin}
+            disabled={!canEdit || margenPending}
+            title={canEdit ? undefined : "Solo OWNER/DIRECTOR puede editar"}
+            onChange={(e) => onMargenChange(Number(e.target.value))}
+          >
+            {MARGEN_OPTS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
           </select>
         </Row>
       </Section>
@@ -758,6 +845,8 @@ interface ConfiguracionProps {
   initialServicios: ServicioCfg[];
   initialDias: Record<DiaSemanaId, DiaHorarios>;
   initialSlotMin: number;
+  initialAutoConfirmar: boolean;
+  initialSlotMargenMin: number;
   googleCalendar: IntegrationStatus;
   canEdit: boolean;
 }
@@ -775,6 +864,8 @@ export function Configuracion({
   initialServicios,
   initialDias,
   initialSlotMin,
+  initialAutoConfirmar,
+  initialSlotMargenMin,
   googleCalendar,
   canEdit,
 }: ConfiguracionProps) {
@@ -790,6 +881,26 @@ export function Configuracion({
   const [dirty, setDirty] = useState<DirtyState>(NO_DIRTY);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isSaving, startSavingTransition] = useTransition();
+
+  // Margen entre turnos (M43 slot_margen_min). Persiste on-change vía
+  // saveBookingPrefsAction (mismo patrón que el toggle auto-confirmar), no por
+  // la save-bar de Consultorio/Horarios.
+  const [slotMargenMin, setSlotMargenMin] = useState(initialSlotMargenMin);
+  const [margenPending, startMargenTransition] = useTransition();
+
+  const onMargenChange = (next: number) => {
+    if (!canEdit) return;
+    const prev = slotMargenMin;
+    setSlotMargenMin(next); // optimista
+    setSaveError(null);
+    startMargenTransition(async () => {
+      const result = await saveBookingPrefsAction({ slotMargenMin: next });
+      if (!result.ok) {
+        setSlotMargenMin(prev); // revertir
+        setSaveError(`Margen: ${result.error.message}`);
+      }
+    });
+  };
 
   const anyDirty = dirty.consultorio || dirty.horarios || dirty.servicios;
 
@@ -812,6 +923,7 @@ export function Configuracion({
           tel: consultorio.tel,
           direccion: consultorio.direccion,
           instagram: consultorio.instagram,
+          timezone: consultorio.timezone,
         });
         if (!result.ok) {
           setSaveError(`Consultorio: ${result.error.message}`);
@@ -871,12 +983,19 @@ export function Configuracion({
           {seccion === "cuenta"        ? <SecCuenta c={consultorio} set={setC} /> : null}
           {seccion === "consultorio"   ? <SecConsultorio c={consultorio} set={setC} /> : null}
           {seccion === "horarios"      ? (
-            <SecHorarios
-              dias={dias}
-              setDias={(d) => { setDias(d); setDirty((dd) => ({ ...dd, horarios: true })); }}
-              slotMin={slotMin}
-              setSlotMin={(n) => { setSlotMin(n); setDirty((dd) => ({ ...dd, horarios: true })); }}
-            />
+            <>
+              <SecHorarios
+                dias={dias}
+                setDias={(d) => { setDias(d); setDirty((dd) => ({ ...dd, horarios: true })); }}
+                slotMin={slotMin}
+                setSlotMin={(n) => { setSlotMin(n); setDirty((dd) => ({ ...dd, horarios: true })); }}
+                slotMargenMin={slotMargenMin}
+                onMargenChange={onMargenChange}
+                margenPending={margenPending}
+                canEdit={canEdit}
+              />
+              <SecBookingPrefs initialAutoConfirmar={initialAutoConfirmar} canEdit={canEdit} />
+            </>
           ) : null}
           {seccion === "servicios"     ? (
             <SecServicios

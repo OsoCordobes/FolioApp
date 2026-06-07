@@ -9,6 +9,7 @@
 
 import { z } from "zod";
 
+import { cancelTurnoEnGoogle, pushTurnoToGoogle } from "@/lib/google/sync";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import { err, mapSupabaseError, ok, type Result } from "./errors";
@@ -269,6 +270,20 @@ export async function createTurno(
     });
   });
 
+  // Push a Google Calendar (fire-and-forget, fail-safe — nunca cambia el Result).
+  pushTurnoToGoogle({
+    client: supabase,
+    turnoId: data.id,
+    organizationId: session.data.organizationId,
+    profesionalMemberId: parsed.data.profesional_id,
+  }).catch(async (err) => {
+    const { captureException } = await import("@sentry/nextjs");
+    captureException(err, {
+      tags: { component: "turno-create", op: "pushTurnoToGoogle" },
+      extra: { turnoId: data.id, organizationId: session.data.organizationId },
+    });
+  });
+
   return ok({ id: data.id });
 }
 
@@ -293,16 +308,19 @@ export async function transitionTurno(input: z.infer<typeof transitionSchema>): 
     patch.duracion_real_min = parsed.data.duracionRealMin;
   }
 
-  const { error } = await supabase
+  const { data: updatedRows, error } = await supabase
     .from("turno")
     .update(patch)
     .eq("id", parsed.data.turnoId)
-    .eq("organization_id", session.data.organizationId);
+    .eq("organization_id", session.data.organizationId)
+    .select("profesional_id");
 
   if (error) {
     const mapped = mapSupabaseError(error);
     return err(mapped.code, mapped.message, error.message);
   }
+
+  const profesionalMemberId = (updatedRows?.[0]?.profesional_id as string | undefined) ?? null;
 
   // Hooks de transición de estado para la cola de recordatorios.
   // Fire-and-forget con captura Sentry (mismo razonamiento que createTurno).
@@ -327,6 +345,22 @@ export async function transitionTurno(input: z.infer<typeof transitionSchema>): 
         extra: { turnoId: parsed.data.turnoId, newEstado: parsed.data.to },
       });
     });
+
+    // Cancelar el evento en Google Calendar (fire-and-forget, fail-safe).
+    if (profesionalMemberId) {
+      cancelTurnoEnGoogle({
+        client: supabase,
+        turnoId: parsed.data.turnoId,
+        organizationId: session.data.organizationId,
+        profesionalMemberId,
+      }).catch(async (err) => {
+        const { captureException } = await import("@sentry/nextjs");
+        captureException(err, {
+          tags: { component: "turno-transition", op: "cancelTurnoEnGoogle" },
+          extra: { turnoId: parsed.data.turnoId, newEstado: parsed.data.to },
+        });
+      });
+    }
   }
 
   return ok(undefined);

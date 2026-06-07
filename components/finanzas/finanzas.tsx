@@ -10,6 +10,7 @@
  * server-side vía Server Component que consulta `Pago` con RLS por org.
  */
 
+import Link from "next/link";
 import { useState, useMemo, type ReactNode } from "react";
 
 import * as I from "@/components/icons";
@@ -424,40 +425,39 @@ function csvEscapeFn(v: string): string {
 
 // ─── Page header ────────────────────────────────────────────────────────────
 
-function PageHeader({ mesLabel, nowLabel }: { mesLabel: string; nowLabel: string }) {
-  // Selector de período (Hoy / Semana / Mes / 6m / Año) está deshabilitado:
-  // el server fetcher actual `getFinanzasData` siempre devuelve el mes corriente.
-  // Para habilitarlo hay que aceptar un query param ?periodo= en /finanzas y
-  // pasar el rango de fechas al fetcher. Lo dejamos visible pero disabled
-  // para no romper UX prometiendo algo que no hace.
+function PageHeader({ mesLabel, nowLabel, periodo }: { mesLabel: string; nowLabel: string; periodo: string }) {
+  // Selector de período: navega a /finanzas?periodo=<id>. El Server Component
+  // lee el query param y calcula el rango (lib/db/finanzas computeRangeOverride).
   const periods: [string, string][] = [
     ["hoy", "Hoy"],
     ["semana", "Semana"],
     ["mes", "Este mes"],
     ["6m", "6 meses"],
-    ["12m", "Año"],
+    ["anio", "Año"],
   ];
   return (
     <header className="fn-head">
       <div>
         <span className="fi-eyebrow">finanzas · {mesLabel}</span>
-        <h1>Ingresos del mes</h1>
+        <h1>Ingresos del período</h1>
         <p className="fn-head-sub">Jornada en curso · datos {nowLabel}</p>
       </div>
       <div className="fn-head-controls">
         <div className="fn-period">
-          {periods.map(([id, lbl]) => (
-            <button
-              key={id}
-              type="button"
-              className={"fn-period-btn " + (id === "mes" ? "is-active" : "")}
-              disabled={id !== "mes"}
-              title={id === "mes" ? "Período actual" : "Próximamente"}
-              aria-disabled={id !== "mes"}
-            >
-              {lbl}
-            </button>
-          ))}
+          {periods.map(([id, lbl]) => {
+            const active = id === periodo;
+            return (
+              <Link
+                key={id}
+                href={`/finanzas?periodo=${id}`}
+                className={"fn-period-btn " + (active ? "is-active" : "")}
+                aria-current={active ? "page" : undefined}
+                title={lbl}
+              >
+                {lbl}
+              </Link>
+            );
+          })}
         </div>
       </div>
     </header>
@@ -468,9 +468,10 @@ function PageHeader({ mesLabel, nowLabel }: { mesLabel: string; nowLabel: string
 
 interface FinanzasProps {
   data: FinanzasData;
+  periodo?: string;
 }
 
-export function Finanzas({ data }: FinanzasProps) {
+export function Finanzas({ data, periodo = "mes" }: FinanzasProps) {
   void useMemo; // keep import compat con sub-componentes
 
   const deltaLabel = data.deltaIngresosVsMesPasadoPct == null
@@ -482,6 +483,7 @@ export function Finanzas({ data }: FinanzasProps) {
       <PageHeader
         mesLabel={data.mesLabel}
         nowLabel={`al día ${data.diaActual}`}
+        periodo={periodo}
       />
       <KpiStrip
         totalIngresos={data.totalIngresos}

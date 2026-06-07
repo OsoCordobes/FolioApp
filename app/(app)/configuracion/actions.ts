@@ -10,9 +10,11 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import {
+  saveBookingPrefs,
   saveConsultorio,
   saveHorarios,
   saveServicios,
+  type SaveBookingPrefsInput,
   type SaveConsultorioInput,
   type SaveHorariosInput,
   type SaveServiciosInput,
@@ -45,6 +47,14 @@ export async function saveServiciosAction(input: SaveServiciosInput): Promise<Re
     revalidatePath("/configuracion");
     revalidatePath("/book/[slug]", "page");
     revalidatePath("/hoy");
+  }
+  return result;
+}
+
+export async function saveBookingPrefsAction(input: SaveBookingPrefsInput): Promise<Result<void>> {
+  const result = await saveBookingPrefs(input);
+  if (result.ok) {
+    revalidatePath("/configuracion");
   }
   return result;
 }

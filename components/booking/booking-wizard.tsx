@@ -129,6 +129,7 @@ export function BookingWizard({
   const [email, setEmail] = useState("");
   const [motivo, setMotivo] = useState("");
   const [consentAccepted, setConsentAccepted] = useState(false);
+  const [autoConfirmado, setAutoConfirmado] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const captchaContainerRef = useRef<HTMLDivElement | null>(null);
@@ -441,6 +442,7 @@ export function BookingWizard({
                     setErr(result.error.message);
                     return;
                   }
+                  setAutoConfirmado(result.data.autoConfirmado);
                   setVista("ok");
                 });
               }}
@@ -539,18 +541,32 @@ export function BookingWizard({
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             </div>
-            <h2 style={{ fontSize: 24 }}>¡Solicitud enviada!</h2>
+            <h2 style={{ fontSize: 24 }}>
+              {autoConfirmado ? "¡Turno confirmado!" : "¡Solicitud enviada!"}
+            </h2>
             <p style={{ color: "var(--ink-2)", marginTop: 12 }}>
               {fmtDia(slotPicked.inicio)} · {fmtHora(slotPicked.inicio)} hs
             </p>
-            <p style={{ color: "var(--ink-3)", marginTop: 8, fontSize: 13, lineHeight: 1.6 }}>
-              Te van a confirmar por WhatsApp al <span className="fm-mono">{telefono}</span> en las próximas horas.
-              {email ? (
-                <>
-                  <br />También te enviamos una confirmación a <span className="fm-mono">{email}</span> cuando el consultorio acepte.
-                </>
-              ) : null}
-            </p>
+            {autoConfirmado ? (
+              <p style={{ color: "var(--ink-3)", marginTop: 8, fontSize: 13, lineHeight: 1.6 }}>
+                Te esperamos el <b>{fmtDia(slotPicked.inicio)}</b> a las{" "}
+                <b>{fmtHora(slotPicked.inicio)} hs</b>.
+                {email ? (
+                  <>
+                    <br />Te enviamos la confirmación a <span className="fm-mono">{email}</span>.
+                  </>
+                ) : null}
+              </p>
+            ) : (
+              <p style={{ color: "var(--ink-3)", marginTop: 8, fontSize: 13, lineHeight: 1.6 }}>
+                Te van a confirmar por WhatsApp al <span className="fm-mono">{telefono}</span> en las próximas horas.
+                {email ? (
+                  <>
+                    <br />También te enviamos una confirmación a <span className="fm-mono">{email}</span> cuando el consultorio acepte.
+                  </>
+                ) : null}
+              </p>
+            )}
             <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 24 }}>
               <button
                 type="button"
@@ -564,6 +580,7 @@ export function BookingWizard({
                   setEmail("");
                   setMotivo("");
                   setCaptchaToken(null);
+                  setAutoConfirmado(false);
                 }}
               >
                 Reservar otro turno

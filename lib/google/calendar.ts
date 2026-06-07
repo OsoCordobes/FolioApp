@@ -71,17 +71,19 @@ export async function createEvent(
     end: string;
     location?: string;
     attendeeEmail?: string;
+    timeZone?: string;
   },
   calendarId = "primary",
 ): Promise<string> {
   const cal = clientFor(refreshToken);
+  const timeZone = payload.timeZone ?? "America/Argentina/Cordoba";
   const res = await cal.events.insert({
     calendarId,
     requestBody: {
       summary: payload.summary,
       description: payload.description,
-      start: { dateTime: payload.start, timeZone: "America/Argentina/Cordoba" },
-      end: { dateTime: payload.end, timeZone: "America/Argentina/Cordoba" },
+      start: { dateTime: payload.start, timeZone },
+      end: { dateTime: payload.end, timeZone },
       location: payload.location,
       attendees: payload.attendeeEmail ? [{ email: payload.attendeeEmail }] : undefined,
       reminders: { useDefault: true },
@@ -95,17 +97,24 @@ export async function createEvent(
 export async function updateEvent(
   refreshToken: string,
   eventId: string,
-  patch: { start?: string; end?: string; summary?: string; status?: "confirmed" | "cancelled" },
+  patch: {
+    start?: string;
+    end?: string;
+    summary?: string;
+    status?: "confirmed" | "cancelled";
+    timeZone?: string;
+  },
   calendarId = "primary",
 ) {
   const cal = clientFor(refreshToken);
+  const timeZone = patch.timeZone ?? "America/Argentina/Cordoba";
   await cal.events.patch({
     calendarId,
     eventId,
     requestBody: {
       ...(patch.summary ? { summary: patch.summary } : {}),
-      ...(patch.start ? { start: { dateTime: patch.start, timeZone: "America/Argentina/Cordoba" } } : {}),
-      ...(patch.end ? { end: { dateTime: patch.end, timeZone: "America/Argentina/Cordoba" } } : {}),
+      ...(patch.start ? { start: { dateTime: patch.start, timeZone } } : {}),
+      ...(patch.end ? { end: { dateTime: patch.end, timeZone } } : {}),
       ...(patch.status ? { status: patch.status } : {}),
     },
   });
