@@ -55,8 +55,11 @@ export default async function FinanzasPage({
 
   return (
     <>
-      <InsightsCard bundle={insightsBundle} />
       <Finanzas data={finanzasResult.data} periodo={periodo} />
+      {/* Insights k-anónimos al pie: es contenido secundario (y suele estar
+          en estado "cohort insuficiente") — no debe desplazar al título y
+          los KPIs del período, que son lo que el profesional vino a ver. */}
+      <InsightsCard bundle={insightsBundle} />
     </>
   );
 }
