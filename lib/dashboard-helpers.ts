@@ -12,15 +12,36 @@ import type { EstadoTurno, EstadoTurnoConfig } from "./types";
 export const fmtMoney = (n: number | null | undefined): string =>
   "$" + (n ?? 0).toLocaleString("es-AR");
 
-export function minutesTo(horaStr: string, now: Date = new Date()): number {
+/**
+ * Minutos hasta `horaStr` (hh:mm en hora de pared de la org). El cálculo es
+ * wall-clock vs wall-clock: `now` se proyecta al timezone de la org con Intl
+ * en vez de interpretarse en el TZ del runtime. Sin esto, server (TZ org) y
+ * browser (TZ del visitante) disienten sobre si un turno es "próximo" y la
+ * hidratación del header de /hoy falla para usuarios fuera del TZ del server.
+ */
+export function minutesTo(horaStr: string, now: Date = new Date(), timeZone?: string): number {
   const [h, m] = horaStr.split(":").map(Number);
-  const t = new Date(now);
-  t.setHours(h, m, 0, 0);
-  return Math.round((t.getTime() - now.getTime()) / 60000);
+  let nowH: number;
+  let nowM: number;
+  try {
+    [nowH, nowM] = new Intl.DateTimeFormat("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone,
+    })
+      .format(now)
+      .split(":")
+      .map(Number);
+  } catch {
+    nowH = now.getHours();
+    nowM = now.getMinutes();
+  }
+  return h * 60 + m - (nowH * 60 + nowM);
 }
 
-export function relativeTo(horaStr: string, now: Date = new Date()): string {
-  const d = minutesTo(horaStr, now);
+export function relativeTo(horaStr: string, now: Date = new Date(), timeZone?: string): string {
+  const d = minutesTo(horaStr, now, timeZone);
   if (d === 0) return "ahora";
   if (d > 0) {
     if (d < 60) return `en ${d} min`;

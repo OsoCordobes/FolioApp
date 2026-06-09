@@ -31,9 +31,11 @@ interface DashboardProps {
   fechaLarga: string; // "miércoles 13 de mayo"
   fechaAnio: number;
   nowIso: string; // ISO del SSR, hydration-safe
+  /** IANA timezone de la org — los labels "próximo en X min" se calculan acá. */
+  timezone: string;
 }
 
-export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fechaAnio, nowIso }: DashboardProps) {
+export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fechaAnio, nowIso, timezone }: DashboardProps) {
   const router = useRouter();
   const [turnos, setTurnos] = useState<Turno[]>(initialTurnos);
   const [walkInOpen, setWalkInOpen] = useState(false);
@@ -99,9 +101,10 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
           fechaLarga={fechaLarga}
           fechaAnio={fechaAnio}
           now={now}
+          timezone={timezone}
           onOpenWalkIn={() => setWalkInOpen(true)}
         />
-        <KpiStrip turnos={turnos} pacientes={pacientes} now={now} />
+        <KpiStrip turnos={turnos} pacientes={pacientes} now={now} timezone={timezone} />
         {transitionError ? (
           <div
             role="alert"

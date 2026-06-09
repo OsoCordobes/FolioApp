@@ -40,11 +40,14 @@ export function mapSupabaseError(error: { message: string; code?: string; detail
   const msg = error.message ?? "";
   const code = error.code ?? "";
 
-  if (msg.includes("JWT") || code === "42501") {
-    return { code: "auth_required", message: "Volvé a iniciar sesión.", detail: msg };
-  }
+  // RLS primero: PostgREST reporta las violaciones de RLS con SQLSTATE 42501
+  // (insufficient_privilege) — si chequeáramos 42501 antes, un problema de
+  // permisos se disfrazaría de sesión vencida ("Volvé a iniciar sesión").
   if (msg.includes("violates row-level security")) {
     return { code: "forbidden", message: "No tenés permiso para esa acción.", detail: msg };
+  }
+  if (msg.includes("JWT") || code === "42501") {
+    return { code: "auth_required", message: "Volvé a iniciar sesión.", detail: msg };
   }
   if (msg.includes("Sesión bloqueada")) {
     return { code: "locked", message: "La sesión está bloqueada. Usá una enmienda para corregir.", detail: msg };

@@ -16,16 +16,18 @@ interface PageHeaderProps {
   fechaLarga: string;
   fechaAnio: number;
   now: Date;
+  /** IANA timezone de la org (cálculo wall-clock de "próximo en X min"). */
+  timezone?: string;
   onOpenWalkIn?: () => void;
 }
 
-export function PageHeader({ turnos, pacientes, fechaLarga, fechaAnio, now, onOpenWalkIn }: PageHeaderProps) {
+export function PageHeader({ turnos, pacientes, fechaLarga, fechaAnio, now, timezone, onOpenWalkIn }: PageHeaderProps) {
   const proximo = turnos.find(
     (t) =>
       ["agendado", "confirmado", "en_sala"].includes(t.estado) &&
-      minutesTo(t.hora, now) >= 0,
+      minutesTo(t.hora, now, timezone) >= 0,
   );
-  const eta = proximo ? relativeTo(proximo.hora, now) : null;
+  const eta = proximo ? relativeTo(proximo.hora, now, timezone) : null;
   const activos = turnos.filter(
     (t) => !["cerrado", "cancelado", "no_asistio"].includes(t.estado),
   ).length;
@@ -37,7 +39,7 @@ export function PageHeader({ turnos, pacientes, fechaLarga, fechaAnio, now, onOp
         <span className="fi-eyebrow">{fechaLarga} · {fechaAnio}</span>
         <h1>Tu agenda hoy</h1>
         <p className="fi-page-sub">
-          {activos} turnos por delante
+          {activos === 1 ? "1 turno por delante" : `${activos} turnos por delante`}
           {eta && proximoPaciente ? (
             <>
               <span className="fi-sep">·</span>

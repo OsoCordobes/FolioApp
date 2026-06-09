@@ -13,7 +13,11 @@ interface KpiStripProps {
   turnos: Turno[];
   pacientes: PacientesById;
   now: Date;
+  /** IANA timezone de la org (cálculo wall-clock de "próximo en X min"). */
+  timezone?: string;
 }
+
+const plural = (n: number, sing: string, plur: string) => `${n} ${n === 1 ? sing : plur}`;
 
 interface KpiItem {
   lbl: string;
@@ -23,7 +27,7 @@ interface KpiItem {
   tone?: "green";
 }
 
-export function KpiStrip({ turnos, pacientes, now }: KpiStripProps) {
+export function KpiStrip({ turnos, pacientes, now, timezone }: KpiStripProps) {
   const total = turnos.length;
   const cerrados = turnos.filter((t) => t.estado === "cerrado").length;
   const recaudado = turnos
@@ -36,18 +40,18 @@ export function KpiStrip({ turnos, pacientes, now }: KpiStripProps) {
   const proximo = turnos.find(
     (t) =>
       ["agendado", "confirmado", "en_sala"].includes(t.estado) &&
-      minutesTo(t.hora, now) >= 0,
+      minutesTo(t.hora, now, timezone) >= 0,
   );
   const proximoPaciente = proximo ? pacientes[proximo.pacienteId] : null;
   const proximoTxt = proximo && proximoPaciente
-    ? `${proximoPaciente.nombre.split(" ")[0]} · ${relativeTo(proximo.hora, now)}`
+    ? `${proximoPaciente.nombre.split(" ")[0]} · ${relativeTo(proximo.hora, now, timezone)}`
     : "—";
 
   const kpis: KpiItem[] = [
     {
       lbl: "Turnos hoy",
       val: total,
-      sub: `${cerrados} cerrados · ${total - cerrados} pendientes`,
+      sub: `${plural(cerrados, "cerrado", "cerrados")} · ${plural(total - cerrados, "pendiente", "pendientes")}`,
       kind: "count",
     },
     {

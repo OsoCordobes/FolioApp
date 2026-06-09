@@ -33,12 +33,16 @@ export default async function DatosPage() {
 
   return (
     <main className="fi-content" style={{ maxWidth: 760 }}>
+      {/* fi-page-head es flex row (bloque de título + acciones): el título
+          va envuelto en un div para que eyebrow/h1/sub apilen en columna. */}
       <header className="fi-page-head">
-        <span className="fi-eyebrow">CONFIGURACIÓN · DATOS</span>
-        <h1>Mis datos</h1>
-        <p className="fi-page-sub">
-          Tus derechos bajo la Ley 25.326 (Habeas Data) — exportar tus datos y eliminar tu cuenta.
-        </p>
+        <div>
+          <span className="fi-eyebrow">Configuración · Datos</span>
+          <h1>Mis datos</h1>
+          <p className="fi-page-sub">
+            Tus derechos bajo la Ley 25.326 (Habeas Data) — exportar tus datos y eliminar tu cuenta.
+          </p>
+        </div>
       </header>
 
       <DatosClient

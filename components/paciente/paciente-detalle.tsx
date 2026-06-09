@@ -56,9 +56,7 @@ function SoapStacked({ soap, setSoap }: { soap: SoapState; setSoap: (s: SoapStat
   return (
     <div className="pc-soap">
       <header className="pc-soap-head">
-        <span className="fi-eyebrow">
-          Nota SOAP · sesión 13 may · {TURNO_HOY_HORA}
-        </span>
+        <span className="fi-eyebrow">Nota SOAP · sesión de {TURNO_HOY_HORA}</span>
         <span
           className="fm-save"
           title="Persistencia del SOAP en sprint posterior. Por ahora editás localmente."
@@ -200,7 +198,6 @@ function TabPlan() {
       <div className="pc-module-badge">
         <I.Vertebra size={14} />
         <span>Módulo · Quiropraxia</span>
-        <span className="pc-module-hint">esta tab cambia por profesión</span>
       </div>
 
       <div className="pc-plan-grid">
