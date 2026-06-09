@@ -303,6 +303,11 @@ export async function transitionTurno(input: z.infer<typeof transitionSchema>): 
   const patch: Record<string, unknown> = { estado: parsed.data.to };
   if (parsed.data.to === "ATENDIENDO") {
     patch.atendiendo_desde = new Date().toISOString();
+  } else {
+    // turno_atendiendo_consistency (M09): atendiendo_desde solo puede estar
+    // seteado mientras estado = ATENDIENDO. Sin este null, cerrar/cancelar un
+    // turno en atención viola el CHECK y la transición se rechaza siempre.
+    patch.atendiendo_desde = null;
   }
   if (parsed.data.to === "CERRADO" && parsed.data.duracionRealMin != null) {
     patch.duracion_real_min = parsed.data.duracionRealMin;
@@ -313,7 +318,7 @@ export async function transitionTurno(input: z.infer<typeof transitionSchema>): 
     .update(patch)
     .eq("id", parsed.data.turnoId)
     .eq("organization_id", session.data.organizationId)
-    .select("profesional_id");
+    .select("profesional_id, precio_cents");
 
   if (error) {
     const mapped = mapSupabaseError(error);
@@ -321,6 +326,33 @@ export async function transitionTurno(input: z.infer<typeof transitionSchema>): 
   }
 
   const profesionalMemberId = (updatedRows?.[0]?.profesional_id as string | undefined) ?? null;
+  const precioCents = (updatedRows?.[0]?.precio_cents as number | undefined) ?? 0;
+
+  // Registrar el cobro al cerrar. El dashboard de /hoy ya cuenta los turnos
+  // CERRADOS como recaudado; sin esta fila /finanzas (que lee `pago`) mostraba
+  // $0 para el mismo día. Idempotente vía UNIQUE(turno_id); no-fatal: si la
+  // RLS lo rechaza (rol sin permiso de pagos) el cierre del turno sigue
+  // valiendo y el pago se puede registrar después desde finanzas.
+  if (parsed.data.to === "CERRADO" && precioCents > 0) {
+    const { error: pagoErr } = await supabase.from("pago").upsert(
+      {
+        turno_id: parsed.data.turnoId,
+        monto_cents: precioCents,
+        metodo: "EFECTIVO",
+        estado: "PAGADO",
+        pagado_ts: new Date().toISOString(),
+        notas: "Registrado automáticamente al cerrar el turno.",
+      },
+      { onConflict: "turno_id", ignoreDuplicates: true },
+    );
+    if (pagoErr) {
+      const { captureException } = await import("@sentry/nextjs");
+      captureException(new Error(`pago auto-registro falló: ${pagoErr.message}`), {
+        tags: { component: "turno-transition", op: "autoPago" },
+        extra: { turnoId: parsed.data.turnoId },
+      });
+    }
+  }
 
   // Hooks de transición de estado para la cola de recordatorios.
   // Fire-and-forget con captura Sentry (mismo razonamiento que createTurno).

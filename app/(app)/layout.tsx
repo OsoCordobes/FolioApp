@@ -76,6 +76,7 @@ export default async function AppShellLayout({
           apellido: profile.apellido,
         }}
         role={session.role}
+        esColegiado={session.esColegiado}
         googleSync={googleSync}
       />
       <main className="fi-main">

@@ -283,23 +283,10 @@ function SpineMap({
 
 function SoapEditor({ soap, setSoap }: { soap: SoapState; setSoap: (s: SoapState) => void }) {
   const [active, setActive] = useState<SoapKey>("subjetivo");
-  const [saveState, setSaveState] = useState<"saving" | "saved">("saved");
-  const [lastSavedAt, setLastSavedAt] = useState("11:08");
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const v = e.target.value;
-    setSoap({ ...soap, [active]: v });
-    setSaveState("saving");
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => {
-      const now = new Date();
-      setLastSavedAt(
-        `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`,
-      );
-      setSaveState("saved");
-    }, 800);
+    setSoap({ ...soap, [active]: e.target.value });
   };
 
   useEffect(() => {
@@ -311,19 +298,13 @@ function SoapEditor({ soap, setSoap }: { soap: SoapState; setSoap: (s: SoapState
   return (
     <div className="fm-soap">
       <header className="fm-soap-head">
-        <span className="fi-eyebrow">Nota SOAP · sesión 13 may</span>
-        <span className={"fm-save fm-save--" + saveState}>
-          {saveState === "saving" ? (
-            <>
-              <span className="fm-save-spinner" />
-              Guardando…
-            </>
-          ) : (
-            <>
-              <I.Check size={11} />
-              Guardado · <span className="fm-mono">{lastSavedAt}</span>
-            </>
-          )}
+        <span className="fi-eyebrow">Nota SOAP</span>
+        {/* Igual que en la ficha del paciente: la persistencia del SOAP llega
+            en un sprint posterior. Antes este indicador simulaba "Guardando…/
+            Guardado · hh:mm" sin persistir nada — inaceptable para notas
+            clínicas. Etiqueta honesta hasta que el upsertSesion esté cableado. */}
+        <span className="fm-save" title="Persistencia del SOAP en sprint posterior. Por ahora editás localmente.">
+          Borrador local
         </span>
       </header>
 

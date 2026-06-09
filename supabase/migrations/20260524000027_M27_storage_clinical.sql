@@ -214,8 +214,17 @@ END$$;
 -- COMMENTS
 -- ════════════════════════════════════════════════════════════════════════════
 
-COMMENT ON POLICY "documentos-clinicos clinical read" ON storage.objects IS
-  'M27 · clinical-role members de la org dueña del path pueden leer documentos. Path: {org_uuid}/{paciente_uuid}/{file.ext}';
-
-COMMENT ON POLICY "consentimientos-firmados clinical read" ON storage.objects IS
-  'M27 · clinical-role members de la org dueña del path pueden leer PDFs de consentimientos. Path: {org_uuid}/{paciente_uuid}/{file.pdf}';
+-- COMMENT ON POLICY requiere ser OWNER de storage.objects (regla de Postgres,
+-- no un privilegio granteable). En prod/superuser aplica; en la Supabase
+-- preview branch y `supabase db reset` el runner no es dueño de
+-- storage.objects (lo es supabase_storage_admin) y abortaría con SQLSTATE
+-- 42501. Los comentarios son metadata cosmética: se aplican best-effort y se
+-- saltean sin abortar la migration si falta privilegio o la policy no existe.
+DO $$
+BEGIN
+  EXECUTE $C$COMMENT ON POLICY "documentos-clinicos clinical read" ON storage.objects IS 'M27 · clinical-role members de la org dueña del path pueden leer documentos. Path: {org_uuid}/{paciente_uuid}/{file.ext}'$C$;
+  EXECUTE $C$COMMENT ON POLICY "consentimientos-firmados clinical read" ON storage.objects IS 'M27 · clinical-role members de la org dueña del path pueden leer PDFs de consentimientos. Path: {org_uuid}/{paciente_uuid}/{file.pdf}'$C$;
+EXCEPTION
+  WHEN insufficient_privilege OR undefined_object THEN
+    RAISE NOTICE 'M27: skip COMMENT ON POLICY storage.objects (runner no es owner — esperado en preview branch / db reset)';
+END$$;

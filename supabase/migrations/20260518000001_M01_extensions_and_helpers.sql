@@ -25,6 +25,22 @@
 -- SECURITY DEFINER (CWE-1284).
 -- ════════════════════════════════════════════════════════════════════════════
 
+-- Las funciones helper de abajo (user_org_ids, user_role_in, …) son LANGUAGE
+-- sql y referencian `member`, que recién se crea en M02 (referencia circular
+-- inherente: estas funciones definen la RLS que protege a member). Con el
+-- default `check_function_bodies = on` de Postgres, crear una función sql
+-- valida su cuerpo en CREATE y falla con `relation "member" does not exist`.
+--
+-- El pgTAP CI ya corre cada migration con `SET check_function_bodies = off`,
+-- pero eso es externo al archivo: la Supabase preview branch y un
+-- `supabase db reset` local usan el default y fallan en M01. Lo seteamos acá
+-- para que la migration sea auto-suficiente y replaye limpio en CUALQUIER
+-- runner (vanilla PG, branching, local). No cambia el schema resultante —
+-- solo difiere el chequeo del cuerpo hasta runtime, donde member ya existe.
+-- Mantener las funciones como LANGUAGE sql es deliberado: el planner las
+-- inlinea en las policies RLS (plpgsql no se inlinea).
+set check_function_bodies = off;
+
 -- ─── Extensiones ───────────────────────────────────────────────────────────
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;

@@ -55,6 +55,12 @@ export interface ActiveOrganization {
   optOutPublicListing: boolean;
   onboardingCompleted: boolean;
   /**
+   * M49 · INDEPENDIENTE = consultorio de un solo profesional; CLINICA = org con
+   * Director + N médicos + secretaría. El onboarding ramifica y la UI decide
+   * qué selectores de profesional / pestaña de equipo mostrar según este valor.
+   */
+  tipo: "INDEPENDIENTE" | "CLINICA";
+  /**
    * M37 · true = demo/internal/test tenant; (app)/layout.tsx skips the
    * billing gate when set. Set manually via service-role only; audited.
    */
@@ -114,7 +120,7 @@ export async function getActiveContext(): Promise<Result<ActiveContext>> {
     supabase
       .from("organization")
       .select(
-        "id, slug, nombre, rubro, ciudad, provincia, acento_hex, tema, timezone, moneda, cuit, razon_social, condicion_iva, opt_out_analytics, opt_out_public_listing, onboarding_completed, is_internal_account, created_at",
+        "id, slug, nombre, rubro, ciudad, provincia, acento_hex, tema, timezone, moneda, cuit, razon_social, condicion_iva, opt_out_analytics, opt_out_public_listing, onboarding_completed, tipo, is_internal_account, created_at",
       )
       .eq("id", session.organizationId)
       .is("deleted_at", null)
@@ -151,6 +157,7 @@ export async function getActiveContext(): Promise<Result<ActiveContext>> {
     opt_out_analytics: boolean;
     opt_out_public_listing: boolean;
     onboarding_completed: boolean;
+    tipo: "INDEPENDIENTE" | "CLINICA";
     is_internal_account: boolean;
     created_at: string;
   };
@@ -189,6 +196,7 @@ export async function getActiveContext(): Promise<Result<ActiveContext>> {
     optOutAnalytics: orgRow.opt_out_analytics,
     optOutPublicListing: orgRow.opt_out_public_listing,
     onboardingCompleted: orgRow.onboarding_completed,
+    tipo: orgRow.tipo,
     isInternalAccount: orgRow.is_internal_account,
   };
 

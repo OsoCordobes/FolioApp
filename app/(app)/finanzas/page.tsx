@@ -9,8 +9,11 @@
  * lugar arriba del dashboard.
  */
 
+import { notFound } from "next/navigation";
+
 import { Finanzas } from "@/components/finanzas/finanzas";
 import { InsightsCard } from "@/components/finanzas/insights-card";
+import { capabilitiesForSession } from "@/lib/auth/guard";
 import { getActiveContext } from "@/lib/db/active-context";
 import { computeRangeOverride, getFinanzasDelMes, type FinanzasPeriodo } from "@/lib/db/finanzas";
 import { getInsightsForActiveOrg } from "@/lib/db/insights";
@@ -34,6 +37,13 @@ export default async function FinanzasPage({
     throw new Error(`No se pudo cargar /finanzas: ${ctx.error.message}`);
   }
 
+  // Recepción/coordinación no tiene panel de finanzas (cobra en el cierre de
+  // turno, no ve el dashboard). El nav ya lo oculta; esto corta el acceso por
+  // URL directa. Director ve todo; cada médico/a ve lo suyo (scoping en P6).
+  if (!capabilitiesForSession(ctx.data.session).canSeeFinanzas) {
+    notFound();
+  }
+
   const tz = ctx.data.organization.timezone || "America/Argentina/Cordoba";
   const sp = await searchParams;
   const periodo = parsePeriodo(sp?.periodo);
@@ -55,8 +65,11 @@ export default async function FinanzasPage({
 
   return (
     <>
-      <InsightsCard bundle={insightsBundle} />
       <Finanzas data={finanzasResult.data} periodo={periodo} />
+      {/* Insights k-anónimos al pie: es contenido secundario (y suele estar
+          en estado "cohort insuficiente") — no debe desplazar al título y
+          los KPIs del período, que son lo que el profesional vino a ver. */}
+      <InsightsCard bundle={insightsBundle} />
     </>
   );
 }

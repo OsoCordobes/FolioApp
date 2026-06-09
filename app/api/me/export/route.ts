@@ -79,7 +79,9 @@ export async function GET() {
   // 4. Suscripción (si existe la tabla en este deploy).
   const { data: suscripciones } = await service
     .from("suscripcion")
-    .select("id, organization_id, estado, plan, periodo_actual_fin, created_at")
+    .select(
+      "id, organization_id, estado, monto_cents, moneda, fecha_alta, proxima_cobro, fecha_cancelacion, created_at",
+    )
     .in(
       "organization_id",
       (members ?? []).map((m) => m.organization_id),
