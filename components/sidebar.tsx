@@ -19,6 +19,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 
 import { FolioMark } from "@/components/folio-mark";
 import * as I from "@/components/icons";
+import { capabilitiesFor, type Capabilities, type Role } from "@/lib/auth/capabilities";
 import { formatRubro, formatProfesionalDisplay } from "@/lib/format/identity";
 
 interface NavItem {
@@ -28,13 +29,15 @@ interface NavItem {
   href: string;
   matchPrefixes?: string[]; // rutas adicionales que activan el item (ej. /pacientes/[id])
   badge?: number | null;
+  /** Si está presente, el item solo se muestra cuando la capacidad es true. */
+  requires?: (caps: Capabilities) => boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
   { id: "hoy",        label: "Hoy",          icon: <I.CalendarDay size={16} />, href: "/hoy" },
   { id: "calendario", label: "Calendario",   icon: <I.Calendar    size={16} />, href: "/calendario" },
   { id: "pacientes",  label: "Pacientes",    icon: <I.Users       size={16} />, href: "/pacientes", matchPrefixes: ["/pacientes/"] },
-  { id: "finanzas",   label: "Finanzas",     icon: <I.Wallet      size={16} />, href: "/finanzas" },
+  { id: "finanzas",   label: "Finanzas",     icon: <I.Wallet      size={16} />, href: "/finanzas", requires: (c) => c.canSeeFinanzas },
   { id: "config",     label: "Configuración",icon: <I.Settings    size={16} />, href: "/configuracion" },
 ];
 
@@ -62,13 +65,16 @@ export interface SidebarProps {
   /** Datos del profesional logueado (PII ya desencriptada en server). */
   profile: { nombre: string | null; apellido: string | null };
   /** Rol del member en esta org. */
-  role: "OWNER" | "DIRECTOR" | "PROFESIONAL" | "COORDINADOR" | "ASISTENTE";
+  role: Role;
+  /** Director colegiado (médico) vs administrativo: cambia el acceso clínico. */
+  esColegiado?: boolean;
   /** Estado de Google Calendar sync. */
   googleSync?: GoogleSyncStatus;
 }
 
-export function Sidebar({ organization, profile, role, googleSync }: SidebarProps) {
-  void role; // gating por rol entra en S2; por ahora todos los items visibles para todos los roles
+export function Sidebar({ organization, profile, role, esColegiado = false, googleSync }: SidebarProps) {
+  const caps = capabilitiesFor(role, esColegiado);
+  const navItems = NAV_ITEMS.filter((item) => !item.requires || item.requires(caps));
   const pathname = usePathname() ?? "/";
   const profesionalLine = formatProfesionalDisplay(profile, organization);
   const rubroLabel = formatRubro(organization.rubro);
@@ -91,7 +97,7 @@ export function Sidebar({ organization, profile, role, googleSync }: SidebarProp
       <SidebarSearch />
 
       <nav className="fi-nav">
-        {NAV_ITEMS.map((item) => {
+        {navItems.map((item) => {
           const active = isActive(pathname, item);
           return (
             <Link
