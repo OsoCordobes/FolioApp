@@ -24,12 +24,14 @@ import { NextResponse, type NextRequest } from "next/server";
 import { updateSupabaseSession } from "@/lib/supabase/middleware";
 
 const PUBLIC_PATHS = [
+  "/",                      // landing de marketing
   "/login",
   "/onboarding",
   "/forgot",
   "/reset-password",        // Supabase password-recovery email landing (Phase 4)
   "/privacidad",            // Aviso de privacidad (Ley 25.326) — linkeado desde consent del signup
   "/terminos",              // Términos del servicio — linkeado desde consent del signup
+  "/cookies",               // Política de cookies — bugfix: la página es pública (app/(public)/cookies) pero anónimos eran redirigidos a /login
   "/api/health",            // healthcheck (load balancer, uptime monitoring)
   "/api/analytics/refresh", // cron diario (validado por CRON_SECRET bearer)
 ];
@@ -66,7 +68,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Si no hay user y la ruta NO es pública → redirect a login
-  if (!user && !isPublicPath(pathname) && pathname !== "/") {
+  if (!user && !isPublicPath(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("redirect", pathname);

@@ -13678,3 +13678,52 @@ input:focus { outline: none; }
     transform: none;
   }
 }
+
+/* ═════════════ LANDING · marketing público (.fl-*) ═════════════
+ * Esqueleto Fase A — los agentes de Fase B agregan los estilos de cada
+ * sección debajo de este bloque. Solo tokens existentes; ningún selector
+ * de elemento global (el archivo lo comparte el prototipo con visual
+ * regression a 0.001). */
+
+/* fl-base */
+.fl-root {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.fl-main {
+  display: block;
+}
+
+/* fl-section · contenedor vertical estándar de cada bloque del landing */
+.fl-section {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: var(--space-20) var(--space-6);
+}
+
+@media (min-width: 1024px) {
+  .fl-section {
+    padding-top: var(--space-24);
+    padding-bottom: var(--space-24);
+  }
+}
+
+/* fl-anchors · offset para navegación por ancla (#producto, #precios, …)
+ * bajo el header sticky que llega en Fase B */
+.fl-main [id] {
+  scroll-margin-top: 80px;
+}
+
+/* fl-hero · provisional (Fase B lo reemplaza) */
+.fl-hero-title {
+  font-family: var(--font-display);
+  font-size: clamp(2.4rem, 5.2vw, 4.2rem);
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  text-wrap: balance;
+  margin: 0 0 var(--space-6);
+}

@@ -105,7 +105,10 @@ export function Step1Registro({ data, set, onSubmit, loading, error }: Step1Regi
     <StepShell
       stepIdx={1}
       headline="Empezá creando tu cuenta."
-      sub="7 días de prueba sin tarjeta. Después, ARS 35.000 / mes."
+      // Precio: fuente canónica MP_PLAN_PRICE_CENTS (lib/mercadopago/client.ts,
+      // default 3.000.000 centavos = ARS 30.000). No se importa acá: componente
+      // client y la constante resuelve de env server-side (no NEXT_PUBLIC).
+      sub="7 días de prueba sin tarjeta. Después, ARS 30.000 / mes."
       next={validateAndNext}
       canSkip={false}
       nextLabel={loading ? "Creando cuenta…" : "Continuar"}

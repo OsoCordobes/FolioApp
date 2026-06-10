@@ -842,7 +842,10 @@ export function Step8MercadoPago({ data, next, back, skip, orgSlug }: StepProps)
               </svg>
             </div>
             <div>
-              <b>Cuando quieras, ARS 35.000 / mes</b>
+              {/* Precio: fuente canónica MP_PLAN_PRICE_CENTS (lib/mercadopago/client.ts,
+                  default 3.000.000 centavos = ARS 30.000). No se importa acá: componente
+                  client y la constante resuelve de env server-side (no NEXT_PUBLIC). */}
+              <b>Cuando quieras, ARS 30.000 / mes</b>
               <p>Suscripción mensual via Mercado Pago. Cancelás cuando quieras desde Configuración.</p>
             </div>
           </div>
