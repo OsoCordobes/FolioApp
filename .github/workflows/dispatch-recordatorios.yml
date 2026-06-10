@@ -1,0 +1,49 @@
+# Folio · trigger de /api/cron/dispatch-recordatorios cada 15 minutos.
+#
+# Por qué acá y no en vercel.json: la cuenta de Vercel está en plan Hobby,
+# que limita los crons a frecuencia diaria (el deploy RECHAZA "*/15").
+# La cola de recordatorios (recordatorio_job) descarta jobs con >6h de
+# atraso, así que con una corrida diaria los recordatorios 24h/2h vencían
+# sin enviarse. GitHub Actions no tiene esa limitación.
+#
+# El cron diario de vercel.json queda como backstop (la cola es idempotente:
+# enviado_ts evita dobles envíos). Si la cuenta sube a Vercel Pro, mover el
+# schedule "*/15 * * * *" a vercel.json y borrar este workflow.
+#
+# Requiere:
+#   - Secret de Actions `CRON_SECRET` = mismo valor que en Vercel.
+#   - (Opcional) Variable de Actions `APP_URL` si cambia el dominio.
+#
+# Nota: los schedules de Actions son best-effort (pueden atrasarse minutos)
+# y GitHub los pausa tras 60 días sin actividad en el repo — suficiente
+# para recordatorios, no para SLAs duros.
+
+name: Cron · dispatch-recordatorios (15min)
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: dispatch-recordatorios
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Invocar endpoint
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_URL: ${{ vars.APP_URL != '' && vars.APP_URL || 'https://folio-app-ten.vercel.app' }}
+        run: |
+          set -euo pipefail
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::Falta el secret de Actions CRON_SECRET (mismo valor que en Vercel)." >&2
+            exit 1
+          fi
+          curl --fail-with-body -sS -m 55 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_URL/api/cron/dispatch-recordatorios"
