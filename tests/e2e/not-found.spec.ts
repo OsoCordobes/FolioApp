@@ -24,7 +24,7 @@ test.describe("404 pages styled", () => {
     await expect(page.getByRole("link", { name: /volver al inicio/i })).toHaveAttribute("href", "/hoy");
     await expect(page.getByRole("link", { name: /escribir a soporte/i })).toHaveAttribute(
       "href",
-      /^mailto:soporte@folio\.app/,
+      /^mailto:folioasistencia@gmail\.com/,
     );
   });
 

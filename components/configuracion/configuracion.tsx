@@ -37,6 +37,7 @@ import {
   ESPECIALIDAD_SLUGS,
   type EspecialidadSlug,
 } from "@/lib/especialidades/meta";
+import { SUPPORT_EMAIL, supportMailto } from "@/lib/support";
 import type {
   ConsultorioData,
   DiaHorarios,
@@ -1197,6 +1198,17 @@ function SecPlan() {
         <Row label="Historial de cobros" sub="Tus últimos movimientos">
           <a href="/configuracion/billing" className="cfg-link">
             Ver historial completo
+          </a>
+        </Row>
+      </Section>
+
+      <Section
+        title="Ayuda y soporte"
+        sub="Problemas con tu cuenta, cobros o cualquier cosa que no funcione."
+      >
+        <Row label="Escribinos" sub={SUPPORT_EMAIL}>
+          <a href={supportMailto("Soporte Folio")} className="cfg-link">
+            Enviar email
           </a>
         </Row>
       </Section>

@@ -28,6 +28,7 @@ import {
 } from "@/app/(public)/login/actions";
 import { signUpAndInitOrganization } from "@/app/(public)/onboarding/actions";
 import { safeRedirect } from "@/lib/security/safe-redirect";
+import { supportMailto } from "@/lib/support";
 
 type Vista = "login" | "signup" | "forgot";
 
@@ -613,7 +614,7 @@ function Forgot({ setVista }: { setVista: (v: Vista) => void }) {
       >
         ¿Perdiste acceso al email también?{" "}
         <a
-          href="mailto:soporte@folio.app?subject=Recuperaci%C3%B3n%20de%20cuenta"
+          href={supportMailto("Recuperación de cuenta")}
           className="au-link"
         >
           Escribinos a soporte
