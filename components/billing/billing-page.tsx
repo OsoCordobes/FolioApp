@@ -48,6 +48,16 @@ interface AccessGate {
   graceDaysLeft: number | null;
 }
 
+/** Fase C · desglose display del plan Clínica (el cobro real sigue siendo el plan vigente hasta Fase E). */
+export interface ClinicPricingView {
+  /** Members activos (incluye OWNER). */
+  seats: number;
+  extraSeats: number;
+  basePriceArs: number;
+  seatPriceArs: number;
+  totalArs: number;
+}
+
 interface Props {
   subscription: SubscriptionRow | null;
   charges: ChargeRow[];
@@ -56,6 +66,8 @@ interface Props {
   payerEmail: string;
   gateBanner: string | null;
   activationOk: boolean;
+  orgTipo: "INDEPENDIENTE" | "CLINICA";
+  clinicPricing: ClinicPricingView | null;
 }
 
 export function BillingPage({
@@ -66,6 +78,8 @@ export function BillingPage({
   payerEmail,
   gateBanner,
   activationOk,
+  orgTipo,
+  clinicPricing,
 }: Props) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -126,6 +140,10 @@ export function BillingPage({
       ) : null}
 
       <div className="cfg-section-body" style={{ marginTop: 16 }}>
+        {orgTipo === "CLINICA" && clinicPricing ? (
+          <ClinicPlanCard pricing={clinicPricing} planPriceArs={planPriceArs} />
+        ) : null}
+
         <SubscriptionCard
           subscription={subscription}
           planPriceArs={planPriceArs}
@@ -142,6 +160,81 @@ export function BillingPage({
 }
 
 // ─── Subcomponentes ────────────────────────────────────────────────────────
+
+/**
+ * Fase C · plan Clínica: desglose base + integrantes adicionales = total
+ * ESTIMADO. Display-only: el preapproval de Mercado Pago NO se modifica acá
+ * (el débito variable por seats llega en Fase E) — la nota lo dice honesto.
+ */
+function ClinicPlanCard({
+  pricing,
+  planPriceArs,
+}: {
+  pricing: ClinicPricingView;
+  planPriceArs: number;
+}) {
+  return (
+    <section className="cfg-section">
+      <header>
+        <div>
+          <h2>Plan Clínica</h2>
+          <p>
+            {formatArs(pricing.basePriceArs)}/mes base + {formatArs(pricing.seatPriceArs)} por
+            integrante adicional.
+          </p>
+        </div>
+      </header>
+      <div className="cfg-section-body">
+        <div className="cfg-row">
+          <div className="cfg-row-label">
+            <span>Base (incluye 1 integrante)</span>
+          </div>
+          <div className="cfg-row-control">
+            <span className="fm-mono">{formatArs(pricing.basePriceArs)}</span>
+          </div>
+        </div>
+        <div className="cfg-row">
+          <div className="cfg-row-label">
+            <span>Integrantes adicionales</span>
+            <span className="cfg-row-sub">
+              {pricing.seats} {pricing.seats === 1 ? "miembro activo" : "miembros activos"} en total
+            </span>
+          </div>
+          <div className="cfg-row-control">
+            <span className="fm-mono">
+              {pricing.extraSeats} × {formatArs(pricing.seatPriceArs)} ={" "}
+              {formatArs(pricing.extraSeats * pricing.seatPriceArs)}
+            </span>
+          </div>
+        </div>
+        <div className="cfg-row">
+          <div className="cfg-row-label">
+            <span>Total mensual estimado</span>
+          </div>
+          <div className="cfg-row-control">
+            <span className="fm-mono" style={{ fontWeight: 600 }}>
+              {formatArs(pricing.totalArs)}
+            </span>
+          </div>
+        </div>
+        <p
+          style={{
+            marginTop: 12,
+            padding: "10px 14px",
+            background: "var(--amber-soft)",
+            color: "var(--amber)",
+            borderRadius: "var(--r-md)",
+            fontSize: 13,
+            lineHeight: 1.55,
+          }}
+        >
+          El débito automático por integrante se activa próximamente. Por ahora Mercado Pago te
+          debita el plan vigente de {formatArs(planPriceArs)}/mes.
+        </p>
+      </div>
+    </section>
+  );
+}
 
 function SubscriptionCard({
   subscription,

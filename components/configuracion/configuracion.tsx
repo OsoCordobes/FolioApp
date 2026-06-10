@@ -15,12 +15,28 @@ import { useState, useTransition, type ReactNode } from "react";
 import * as I from "@/components/icons";
 import {
   connectGoogleCalendar,
+  countSesionesOtraEspecialidadAction,
   disconnectGoogleCalendar,
+  inviteMemberAction,
+  removeMemberAction,
+  revokeInvitationAction,
   saveBookingPrefsAction,
   saveConsultorioAction,
   saveHorariosAction,
   saveServiciosAction,
 } from "@/app/(app)/configuracion/actions";
+import { roleLabel } from "@/lib/auth/capabilities";
+import type {
+  CreateInvitationInput,
+  InvitableRole,
+  TeamInvitationRow,
+  TeamMemberRow,
+} from "@/lib/db/members";
+import {
+  ESPECIALIDADES_META,
+  ESPECIALIDAD_SLUGS,
+  type EspecialidadSlug,
+} from "@/lib/especialidades/meta";
 import type {
   ConsultorioData,
   DiaHorarios,
@@ -71,12 +87,15 @@ type ServicioCfg = ServicioRow;
 
 // ─── Side nav ──────────────────────────────────────────────────────────────
 
-type SeccionId = "cuenta" | "consultorio" | "horarios" | "servicios" | "integraciones" | "plan";
+type SeccionId = "cuenta" | "consultorio" | "equipo" | "horarios" | "servicios" | "integraciones" | "plan";
 
-function SideNav({ active, setActive }: { active: SeccionId; setActive: (s: SeccionId) => void }) {
+function SideNav({ active, setActive, showEquipo }: { active: SeccionId; setActive: (s: SeccionId) => void; showEquipo: boolean }) {
   const items: { id: SeccionId; label: string; icon: ReactNode }[] = [
     { id: "cuenta",        label: "Cuenta",         icon: <I.Users size={14} /> },
     { id: "consultorio",   label: "Consultorio",    icon: <I.Calendar size={14} /> },
+    ...(showEquipo
+      ? [{ id: "equipo" as const, label: "Equipo", icon: <I.Users size={14} /> }]
+      : []),
     { id: "horarios",      label: "Horarios",       icon: <I.CalendarDay size={14} /> },
     { id: "servicios",     label: "Servicios",      icon: <I.Wallet size={14} /> },
     { id: "integraciones", label: "Integraciones",  icon: <I.ExternalLink size={14} /> },
@@ -265,7 +284,41 @@ function CambiarPasswordButton({ email }: { email: string }) {
 
 // ─── Sección: Consultorio ──────────────────────────────────────────────────
 
-function SecConsultorio({ c, set }: { c: ConsultorioData; set: (patch: Partial<ConsultorioData>) => void }) {
+function SecConsultorio({
+  c,
+  set,
+  savedEspecialidad,
+  orgTipo,
+  canEdit,
+}: {
+  c: ConsultorioData;
+  set: (patch: Partial<ConsultorioData>) => void;
+  /** Especialidad persistida en DB (snapshot) — para detectar el cambio pendiente. */
+  savedEspecialidad: EspecialidadSlug;
+  orgTipo: "INDEPENDIENTE" | "CLINICA";
+  canEdit: boolean;
+}) {
+  // M50 · count de sesiones cargadas con la herramienta de OTRA especialidad.
+  // Se consulta server-side al cambiar el selector; si hay, mostramos la
+  // advertencia ANTES de que el user guarde (el save real va por la save-bar).
+  const [otrasSesiones, setOtrasSesiones] = useState<number | null>(null);
+  const [, startCountTransition] = useTransition();
+
+  const onEspecialidadChange = (slug: EspecialidadSlug) => {
+    set({ especialidad: slug });
+    if (slug === savedEspecialidad) {
+      setOtrasSesiones(null);
+      return;
+    }
+    startCountTransition(async () => {
+      const result = await countSesionesOtraEspecialidadAction(slug);
+      setOtrasSesiones(result.ok ? result.data : null);
+    });
+  };
+
+  const especialidadCambiada = c.especialidad !== savedEspecialidad;
+  const nombreAnterior = ESPECIALIDADES_META[savedEspecialidad].nombre;
+
   return (
     <>
       <Section title="Identidad del consultorio" sub="Aparece en el sidebar, recordatorios y el link público.">
@@ -287,6 +340,50 @@ function SecConsultorio({ c, set }: { c: ConsultorioData; set: (patch: Partial<C
             </svg>
             <span>Subir imagen</span>
           </button>
+        </Row>
+      </Section>
+
+      <Section
+        title="Especialidad y equipo"
+        sub="La especialidad define la herramienta clínica de la ficha del paciente."
+      >
+        <Row label="Especialidad" sub="Aplica a las fichas de toda la organización." vertical={especialidadCambiada && otrasSesiones !== null && otrasSesiones > 0}>
+          <select
+            className="cfg-input cfg-input-fixed"
+            value={c.especialidad}
+            disabled={!canEdit}
+            title={canEdit ? undefined : "Solo OWNER/DIRECTOR puede editar"}
+            onChange={(e) => onEspecialidadChange(e.target.value as EspecialidadSlug)}
+          >
+            {ESPECIALIDAD_SLUGS.map((slug) => (
+              <option key={slug} value={slug}>{ESPECIALIDADES_META[slug].nombre}</option>
+            ))}
+          </select>
+          {especialidadCambiada && otrasSesiones !== null && otrasSesiones > 0 ? (
+            <p
+              role="alert"
+              style={{
+                color: "var(--amber)",
+                background: "var(--amber-soft)",
+                borderRadius: "var(--r-sm)",
+                padding: "8px 12px",
+                fontSize: 12.5,
+                lineHeight: 1.55,
+                marginTop: 8,
+              }}
+            >
+              Tu organización tiene {otrasSesiones} {otrasSesiones === 1 ? "sesión cargada" : "sesiones cargadas"} con {nombreAnterior}.
+              {" "}Los datos clínicos cargados con {nombreAnterior} se conservan pero dejan de mostrarse en la ficha.
+            </p>
+          ) : null}
+        </Row>
+        <Row
+          label="Tipo de organización"
+          sub="El cambio a Clínica llega junto con la facturación por equipo — todavía no se edita desde acá."
+        >
+          <span className="muted" style={{ fontSize: 13 }}>
+            {orgTipo === "CLINICA" ? "Clínica" : "Consultorio independiente"}
+          </span>
         </Row>
       </Section>
 
@@ -756,6 +853,320 @@ function relativeTimeEs(date: Date): string {
   return `hace ${mo} m`;
 }
 
+// ─── Sección: Equipo (M49/M51 · Fase C) ────────────────────────────────────
+
+const ROLES_INVITABLES: { value: InvitableRole; label: string }[] = [
+  { value: "PROFESIONAL", label: "Médico/a" },
+  { value: "ASISTENTE",   label: "Secretaría" },
+  { value: "COORDINADOR", label: "Coordinación" },
+  { value: "DIRECTOR",    label: "Dirección / Administración" },
+];
+
+function fechaCorta(iso: string): string {
+  return new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "short" }).format(new Date(iso));
+}
+
+function EstadoInvitacionBadge({ estado }: { estado: TeamInvitationRow["estado"] }) {
+  const isPendiente = estado === "PENDIENTE";
+  return (
+    <span
+      style={{
+        padding: "3px 10px",
+        borderRadius: "var(--r-sm)",
+        background: isPendiente ? "var(--amber-soft)" : "var(--slate-soft)",
+        color: isPendiente ? "var(--amber)" : "var(--slate)",
+        fontWeight: 500,
+        fontSize: 12.5,
+      }}
+    >
+      {isPendiente ? "Pendiente" : "Expirada"}
+    </span>
+  );
+}
+
+function SecEquipo({
+  orgTipo,
+  isOwner,
+  initialMembers,
+  initialInvitations,
+}: {
+  orgTipo: "INDEPENDIENTE" | "CLINICA";
+  isOwner: boolean;
+  initialMembers: TeamMemberRow[];
+  initialInvitations: TeamInvitationRow[];
+}) {
+  const [members, setMembers] = useState<TeamMemberRow[]>(initialMembers);
+  const [invitations, setInvitations] = useState<TeamInvitationRow[]>(initialInvitations);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [lastAcceptUrl, setLastAcceptUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [pending, startTransition] = useTransition();
+
+  // Form de invitación.
+  const [invEmail, setInvEmail] = useState("");
+  const [invRole, setInvRole] = useState<InvitableRole>("PROFESIONAL");
+  const [invColegiado, setInvColegiado] = useState(false);
+
+  if (orgTipo !== "CLINICA") {
+    // Upsell honesto: el equipo es del plan Clínica. Sin form.
+    return (
+      <Section
+        title="Equipo"
+        sub="Invitá médicos, secretaría y dirección a trabajar en la misma organización."
+      >
+        <div className="cfg-plan-card">
+          <div className="cfg-plan-card-l">
+            <span className="fi-eyebrow">Plan Clínica</span>
+            <h3>El equipo es del plan Clínica</h3>
+            <p>
+              Tu organización está en el plan individual (un solo profesional). El plan Clínica
+              cuesta ARS 100.000/mes base e incluye a quien dirige la cuenta; cada integrante
+              adicional (médico/a o secretaría) suma ARS 25.000/mes.
+            </p>
+            <p style={{ fontSize: 13, color: "var(--ink-3)", marginTop: 8 }}>
+              El cambio de plan se hace al crear una organización tipo clínica. Si querés migrar
+              esta cuenta, escribinos a soporte.
+            </p>
+          </div>
+        </div>
+      </Section>
+    );
+  }
+
+  const submitInvite = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!invEmail.match(/^[^@\s]+@[^@\s]+\.[^@\s]+$/)) {
+      setError("Ingresá un email válido.");
+      return;
+    }
+    setError(null);
+    setNotice(null);
+    setLastAcceptUrl(null);
+    startTransition(async () => {
+      const input: CreateInvitationInput = {
+        email: invEmail.trim(),
+        role: invRole,
+        esColegiado: invRole === "DIRECTOR" ? invColegiado : undefined,
+      };
+      const result = await inviteMemberAction(input);
+      if (!result.ok) {
+        setError(result.error.message);
+        return;
+      }
+      // Reemplaza una pendiente previa del mismo email si existía.
+      setInvitations((prev) => [
+        result.data.invitation,
+        ...prev.filter((i) => i.email !== result.data.invitation.email),
+      ]);
+      setInvEmail("");
+      setInvColegiado(false);
+      setLastAcceptUrl(result.data.acceptUrl);
+      setNotice(
+        result.data.emailEnviado
+          ? `Le enviamos la invitación a ${result.data.invitation.email}. También podés copiar el link y pasárselo directo.`
+          : "El envío de emails no está configurado — copiá el link y pasáselo directo. La invitación vence en 7 días.",
+      );
+    });
+  };
+
+  const copyAcceptUrl = async () => {
+    if (!lastAcceptUrl) return;
+    try {
+      await navigator.clipboard.writeText(lastAcceptUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      alert(`No pude copiar automáticamente. Copialo a mano:\n\n${lastAcceptUrl}`);
+    }
+  };
+
+  const onRevoke = (inv: TeamInvitationRow) => {
+    if (!window.confirm(`¿Revocar la invitación a ${inv.email}? El link que recibió deja de funcionar.`)) return;
+    setError(null);
+    startTransition(async () => {
+      const result = await revokeInvitationAction(inv.id);
+      if (!result.ok && result.error.code !== "not_found") {
+        setError(result.error.message);
+        return;
+      }
+      setInvitations((prev) => prev.filter((i) => i.id !== inv.id));
+    });
+  };
+
+  const onRemove = (m: TeamMemberRow) => {
+    const nombre = [m.nombre, m.apellido].filter(Boolean).join(" ") || m.email || "este miembro";
+    if (!window.confirm(`¿Dar de baja a ${nombre}? Pierde el acceso a la organización (sus datos clínicos cargados se conservan).`)) return;
+    setError(null);
+    startTransition(async () => {
+      const result = await removeMemberAction(m.memberId);
+      if (!result.ok) {
+        setError(result.error.message);
+        return;
+      }
+      setMembers((prev) => prev.filter((x) => x.memberId !== m.memberId));
+    });
+  };
+
+  return (
+    <>
+      <Section
+        title="Miembros"
+        sub="Quiénes trabajan en esta organización y con qué rol."
+        action={
+          error ? (
+            <p role="alert" style={{ color: "var(--red)", fontSize: 13, margin: 0 }}>{error}</p>
+          ) : null
+        }
+      >
+        <table className="cfg-table">
+          <thead>
+            <tr>
+              <th>Persona</th>
+              <th>Rol</th>
+              <th>Alta</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {members.map((m) => {
+              const nombre = [m.nombre, m.apellido].filter(Boolean).join(" ");
+              return (
+                <tr key={m.memberId}>
+                  <td>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                      <b style={{ fontSize: 13.5 }}>
+                        {nombre || m.email || "—"}
+                        {m.esVos ? <span className="cfg-tag-now" style={{ marginLeft: 8 }}>Vos</span> : null}
+                      </b>
+                      {nombre && m.email ? (
+                        <span className="muted" style={{ fontSize: 12 }}>{m.email}</span>
+                      ) : null}
+                    </div>
+                  </td>
+                  <td>{roleLabel(m.role, m.esColegiado)}</td>
+                  <td className="muted" style={{ fontSize: 12.5 }}>
+                    {m.acceptedAt ? fechaCorta(m.acceptedAt) : fechaCorta(m.createdAt)}
+                  </td>
+                  <td>
+                    {isOwner && !m.esVos && m.role !== "OWNER" ? (
+                      <button
+                        type="button"
+                        className="fi-btn fi-btn-ghost"
+                        onClick={() => onRemove(m)}
+                        disabled={pending}
+                      >
+                        Dar de baja
+                      </button>
+                    ) : null}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </Section>
+
+      <Section
+        title="Invitar al equipo"
+        sub="La persona recibe un link por email, crea su cuenta y entra directo a tu organización. Cada integrante adicional suma ARS 25.000/mes al plan Clínica."
+      >
+        <form onSubmit={submitInvite}>
+          <Row label="Email" sub="A dónde mandamos la invitación (vence en 7 días)">
+            <TextInput
+              type="email"
+              value={invEmail}
+              onChange={(v) => { setInvEmail(v); setError(null); }}
+              placeholder="medico@clinica.com"
+            />
+          </Row>
+          <Row label="Rol" sub="Define qué ve y qué puede hacer">
+            <select
+              className="cfg-input cfg-input-fixed"
+              value={invRole}
+              onChange={(e) => setInvRole(e.target.value as InvitableRole)}
+            >
+              {ROLES_INVITABLES.map((r) => (
+                <option key={r.value} value={r.value}>{r.label}</option>
+              ))}
+            </select>
+          </Row>
+          {invRole === "DIRECTOR" ? (
+            <Row label="¿Es profesional colegiado?" sub="Dirección médica ve datos clínicos; administración pura, no.">
+              <Toggle value={invColegiado} onChange={setInvColegiado} />
+            </Row>
+          ) : null}
+          <Row label="" sub="">
+            <button type="submit" className="fi-btn fi-btn-primary" disabled={pending}>
+              {pending ? "Invitando…" : "Enviar invitación"}
+            </button>
+          </Row>
+        </form>
+
+        {notice ? (
+          <p role="status" style={{
+            color: "var(--green)",
+            background: "var(--green-soft)",
+            borderRadius: "var(--r-sm)",
+            padding: "8px 12px",
+            fontSize: 12.5,
+            lineHeight: 1.55,
+            marginTop: 8,
+          }}>
+            {notice}
+          </p>
+        ) : null}
+        {lastAcceptUrl ? (
+          <div className="cfg-public-link" style={{ marginTop: 8 }}>
+            <code className="fm-mono" style={{ overflowWrap: "anywhere" }}>{lastAcceptUrl}</code>
+            <button type="button" className="fi-btn fi-btn-ghost" onClick={copyAcceptUrl}>
+              {copied ? "¡Copiado!" : "Copiar"}
+            </button>
+          </div>
+        ) : null}
+      </Section>
+
+      <Section title="Invitaciones pendientes" sub="Links enviados que todavía no se aceptaron.">
+        {invitations.length === 0 ? (
+          <p className="muted" style={{ fontSize: 13 }}>No hay invitaciones pendientes.</p>
+        ) : (
+          <table className="cfg-table">
+            <thead>
+              <tr>
+                <th>Email</th>
+                <th>Rol</th>
+                <th>Estado</th>
+                <th>Vence</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {invitations.map((inv) => (
+                <tr key={inv.id} className={inv.estado === "EXPIRADA" ? "is-off" : ""}>
+                  <td style={{ fontSize: 13 }}>{inv.email}</td>
+                  <td>{roleLabel(inv.role, inv.esColegiado)}</td>
+                  <td><EstadoInvitacionBadge estado={inv.estado} /></td>
+                  <td className="muted" style={{ fontSize: 12.5 }}>{fechaCorta(inv.expiresAt)}</td>
+                  <td>
+                    <button
+                      type="button"
+                      className="fi-btn fi-btn-ghost"
+                      onClick={() => onRevoke(inv)}
+                      disabled={pending}
+                    >
+                      Revocar
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Section>
+    </>
+  );
+}
+
 // ─── Sección: Plan ─────────────────────────────────────────────────────────
 
 function SecPlan() {
@@ -848,7 +1259,15 @@ interface ConfiguracionProps {
   initialAutoConfirmar: boolean;
   initialSlotMargenMin: number;
   googleCalendar: IntegrationStatus;
+  /** M49 · tipo de organización — solo display (el upgrade llega con billing por seats). */
+  orgTipo: "INDEPENDIENTE" | "CLINICA";
   canEdit: boolean;
+  /** M49/M51 · solo OWNER/DIRECTOR ven y gestionan la sección Equipo. */
+  canManageTeam: boolean;
+  /** Solo el OWNER puede dar de baja miembros (policy member_update_owner, M02). */
+  isOwner: boolean;
+  equipoMembers: TeamMemberRow[];
+  equipoInvitations: TeamInvitationRow[];
 }
 
 interface DirtyState {
@@ -867,7 +1286,12 @@ export function Configuracion({
   initialAutoConfirmar,
   initialSlotMargenMin,
   googleCalendar,
+  orgTipo,
   canEdit,
+  canManageTeam,
+  isOwner,
+  equipoMembers,
+  equipoInvitations,
 }: ConfiguracionProps) {
   const [seccion, setSeccion] = useState<SeccionId>("consultorio");
   const [consultorio, setConsultorio] = useState<ConsultorioData>(initialConsultorio);
@@ -924,6 +1348,7 @@ export function Configuracion({
           direccion: consultorio.direccion,
           instagram: consultorio.instagram,
           timezone: consultorio.timezone,
+          especialidad: consultorio.especialidad,
         });
         if (!result.ok) {
           setSaveError(`Consultorio: ${result.error.message}`);
@@ -978,10 +1403,26 @@ export function Configuracion({
       />
 
       <div className="cfg-grid">
-        <SideNav active={seccion} setActive={setSeccion} />
+        <SideNav active={seccion} setActive={setSeccion} showEquipo={canManageTeam} />
         <div className="cfg-pane">
           {seccion === "cuenta"        ? <SecCuenta c={consultorio} set={setC} /> : null}
-          {seccion === "consultorio"   ? <SecConsultorio c={consultorio} set={setC} /> : null}
+          {seccion === "consultorio"   ? (
+            <SecConsultorio
+              c={consultorio}
+              set={setC}
+              savedEspecialidad={consultorioSnap.especialidad}
+              orgTipo={orgTipo}
+              canEdit={canEdit}
+            />
+          ) : null}
+          {seccion === "equipo" && canManageTeam ? (
+            <SecEquipo
+              orgTipo={orgTipo}
+              isOwner={isOwner}
+              initialMembers={equipoMembers}
+              initialInvitations={equipoInvitations}
+            />
+          ) : null}
           {seccion === "horarios"      ? (
             <>
               <SecHorarios

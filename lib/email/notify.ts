@@ -15,6 +15,7 @@ import type { createSupabaseServerClient } from "@/lib/supabase/server";
 import { sendEmail } from "./client";
 import { buildBookingConfirmadaEmail } from "./templates/booking-confirmada";
 import { buildBookingRecibidaEmail } from "./templates/booking-recibida";
+import { buildMemberInvitationEmail } from "./templates/member-invitation";
 
 type ServerClient = Awaited<ReturnType<typeof createSupabaseServerClient>>;
 
@@ -83,6 +84,49 @@ export async function notifyBookingConfirmada(input: {
     captureException(e, {
       tags: { component: "email", op: "notifyBookingConfirmada" },
       extra: { turnoId, organizationId },
+    });
+  }
+}
+
+// ─── Invitación de equipo (M49/M51 · Fase C) ───────────────────────────────
+
+/**
+ * Envía el email de invitación al equipo. Fail-safe como el resto del módulo:
+ * si Resend no está configurado o falla, NO rompe la creación de la
+ * invitación — la UI de /configuracion siempre muestra el link para copiar,
+ * así que la invitación nunca se pierde. El `acceptUrl` contiene el token
+ * crudo: jamás loguearlo (acá solo viaja al proveedor de email).
+ */
+export async function notifyMemberInvitation(input: {
+  to: string;
+  organizationNombre: string;
+  rolLabel: string;
+  invitadoPorNombre: string | null;
+  acceptUrl: string;
+  expiresAtIso: string;
+  timezone: string | null;
+}): Promise<void> {
+  try {
+    const expiraLabel = new Intl.DateTimeFormat("es-AR", {
+      timeZone: input.timezone || DEFAULT_TZ,
+      dateStyle: "long",
+    }).format(new Date(input.expiresAtIso));
+
+    const { subject, html } = buildMemberInvitationEmail({
+      organizationNombre: input.organizationNombre,
+      rolLabel: input.rolLabel,
+      invitadoPorNombre: input.invitadoPorNombre,
+      acceptUrl: input.acceptUrl,
+      expiraLabel,
+    });
+
+    await sendEmail({ to: input.to, subject, html });
+  } catch (e) {
+    const { captureException } = await import("@sentry/nextjs");
+    captureException(e, {
+      tags: { component: "email", op: "notifyMemberInvitation" },
+      // NO incluir acceptUrl en extra: contiene el token crudo.
+      extra: { to: input.to },
     });
   }
 }

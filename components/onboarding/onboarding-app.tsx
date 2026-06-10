@@ -219,6 +219,8 @@ export function OnboardingApp({
             result = await updateOnboardingStep(3, {
               consultorioNombre: snapshot.consultorioNombre,
               rubro: snapshot.rubro,
+              especialidad: snapshot.especialidad,
+              tipo: snapshot.tipo,
               ciudad: snapshot.ciudad,
               provincia: snapshot.provincia,
               direccion: snapshot.direccion,
@@ -247,7 +249,9 @@ export function OnboardingApp({
                 nombre: s.nombre,
                 dur: s.dur,
                 precioCents: Math.round(s.precio * 100),
-                tipoCanonico: inferTipoCanonico(s.nombre),
+                // Los templates (rubro/especialidad) ya traen el enum correcto;
+                // para servicios tipeados a mano lo inferimos por nombre.
+                tipoCanonico: s.tipoCanonico ?? inferTipoCanonico(s.nombre),
               })),
             });
             break;

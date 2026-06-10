@@ -25,11 +25,14 @@ import { verifyTurnstile } from "@/lib/security/turnstile";
  */
 
 import { redirect } from "next/navigation";
+import { z } from "zod";
 
 import { findUserByEmail } from "@/lib/auth/find-user-by-email";
 import { encryptColumn } from "@/lib/crypto";
+import { ESPECIALIDAD_SLUGS } from "@/lib/especialidades/meta";
 import { signUpSchema } from "@/lib/onboarding/schemas";
 import { deriveProvisionalSlug } from "@/lib/onboarding/slug";
+import { TIPOS_CANONICOS_VALIDOS } from "@/lib/onboarding/templates";
 import {
   createSupabaseServerClient,
   createSupabaseServiceClient,
@@ -365,6 +368,10 @@ export interface Step2Data {
 export interface Step3Data {
   consultorioNombre: string;
   rubro: string;
+  /** M50 · slug de especialidad. Validado server-side contra ESPECIALIDAD_SLUGS. */
+  especialidad?: string;
+  /** M49 · tipo de organización. Validado server-side contra el enum organizacion_tipo. */
+  tipo?: string;
   ciudad: string;
   provincia: string;
   direccion?: string;
@@ -397,6 +404,19 @@ export interface Step6Data {
     tipoCanonico: string;
   }>;
 }
+
+// M49/M50 · validación server-side de los campos arquitecturales del Step 3.
+// El cliente manda strings libres; acá los chequeamos contra los valores
+// reales (CHECK organization_especialidad_valida + enum organizacion_tipo)
+// ANTES de tocar la DB, para devolver un error claro en vez de un 23514.
+const step3ArquitecturaSchema = z.object({
+  especialidad: z.enum(ESPECIALIDAD_SLUGS).optional(),
+  tipo: z.enum(["INDEPENDIENTE", "CLINICA"]).optional(),
+});
+
+// M09 · valores válidos de tipo_servicio_canonico. Un valor fuera del enum
+// rompería el INSERT del Step 6 — degradamos a SERVICIO_ESPECIALIZADO.
+const TIPOS_CANONICOS_SET = new Set<string>(TIPOS_CANONICOS_VALIDOS);
 
 /**
  * Persiste el delta de un step específico. El cliente llama con debounce
@@ -447,9 +467,18 @@ export async function updateOnboardingStep(
       }
       case 3: {
         const d = data as Step3Data;
+        const arq = step3ArquitecturaSchema.safeParse({
+          especialidad: d.especialidad,
+          tipo: d.tipo,
+        });
+        if (!arq.success) {
+          return { ok: false, error: "Especialidad o tipo de organización inválidos." };
+        }
         const orgPatch: Record<string, unknown> = {};
         if (d.consultorioNombre !== undefined) orgPatch.nombre = d.consultorioNombre;
         if (d.rubro !== undefined) orgPatch.rubro = d.rubro;
+        if (arq.data.especialidad !== undefined) orgPatch.especialidad = arq.data.especialidad;
+        if (arq.data.tipo !== undefined) orgPatch.tipo = arq.data.tipo;
         if (d.ciudad !== undefined) orgPatch.ciudad = d.ciudad;
         if (d.provincia !== undefined) orgPatch.provincia = d.provincia;
         if (d.telefonoPublico !== undefined) orgPatch.telefono_publico = d.telefonoPublico || null;
@@ -544,7 +573,9 @@ export async function updateOnboardingStep(
             d.servicios.map((s) => ({
               organization_id: orgId,
               nombre: s.nombre,
-              tipo_canonico: s.tipoCanonico,
+              tipo_canonico: TIPOS_CANONICOS_SET.has(s.tipoCanonico)
+                ? s.tipoCanonico
+                : "SERVICIO_ESPECIALIZADO",
               duracion_min: s.dur,
               precio_cents: s.precioCents,
             })),

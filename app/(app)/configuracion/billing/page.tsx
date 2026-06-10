@@ -12,7 +12,8 @@
 
 import { notFound } from "next/navigation";
 
-import { BillingPage } from "@/components/billing/billing-page";
+import { BillingPage, type ClinicPricingView } from "@/components/billing/billing-page";
+import { computeClinicBreakdownCents } from "@/lib/billing/pricing";
 import { getActiveContext } from "@/lib/db/active-context";
 import {
   loadRecentCharges,
@@ -20,6 +21,7 @@ import {
   type CargoRow,
 } from "@/lib/db/suscripcion";
 import { MP_PLAN_PRICE_ARS } from "@/lib/mercadopago/client";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +52,28 @@ export default async function BillingRoutePage({
     if (chargesRes.ok) charges = chargesRes.data;
   }
 
+  // Fase C · tiers: para orgs CLINICA mostramos el desglose base + seats
+  // (SOLO display — el preapproval de MP sigue cobrando el plan vigente;
+  // el débito variable por integrante llega en Fase E). Seats = members
+  // activos de la org (deleted_at IS NULL), incluyendo al OWNER.
+  let clinicPricing: ClinicPricingView | null = null;
+  if (ctx.data.organization.tipo === "CLINICA") {
+    const supabase = await createSupabaseServerClient();
+    const { count } = await supabase
+      .from("member")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", ctx.data.organization.id)
+      .is("deleted_at", null);
+    const breakdown = computeClinicBreakdownCents(count ?? 1);
+    clinicPricing = {
+      seats: breakdown.seats,
+      extraSeats: breakdown.extraSeats,
+      basePriceArs: breakdown.basePriceCents / 100,
+      seatPriceArs: breakdown.seatPriceCents / 100,
+      totalArs: breakdown.totalCents / 100,
+    };
+  }
+
   return (
     <BillingPage
       subscription={subRes.data}
@@ -59,6 +83,8 @@ export default async function BillingRoutePage({
       payerEmail={ctx.data.profile.email}
       gateBanner={sp.gate ?? null}
       activationOk={sp.activation === "ok"}
+      orgTipo={ctx.data.organization.tipo}
+      clinicPricing={clinicPricing}
     />
   );
 }

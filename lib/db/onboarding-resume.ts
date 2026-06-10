@@ -34,6 +34,10 @@ export interface OnboardingResumeState {
     tel?: string;
     consultorioNombre?: string;
     rubro?: string;
+    /** M50 · especialidad arquitectural de la org. */
+    especialidad?: string;
+    /** M49 · tipo de organización. */
+    tipo?: "INDEPENDIENTE" | "CLINICA";
     ciudad?: string;
     provincia?: string;
     direccion?: string;
@@ -133,7 +137,7 @@ export async function getOnboardingResumeState(
     service
       .from("organization")
       .select(
-        "id, slug, nombre, rubro, ciudad, provincia, acento_hex, telefono_publico, direccion_completa, instagram_handle, bio, logo_url, card_mood, onboarding_completed, onboarding_step_max",
+        "id, slug, nombre, rubro, especialidad, tipo, ciudad, provincia, acento_hex, telefono_publico, direccion_completa, instagram_handle, bio, logo_url, card_mood, onboarding_completed, onboarding_step_max",
       )
       .eq("id", member.organization_id)
       .is("deleted_at", null)
@@ -153,6 +157,8 @@ export async function getOnboardingResumeState(
     slug: string;
     nombre: string | null;
     rubro: string | null;
+    especialidad: string | null;
+    tipo: "INDEPENDIENTE" | "CLINICA" | null;
     ciudad: string | null;
     provincia: string | null;
     acento_hex: string | null;
@@ -253,6 +259,8 @@ export async function getOnboardingResumeState(
       matricula: prof.matricula ?? undefined,
       consultorioNombre: org.nombre ?? undefined,
       rubro: org.rubro ?? undefined,
+      especialidad: org.especialidad ?? undefined,
+      tipo: org.tipo ?? undefined,
       ciudad: org.ciudad ?? undefined,
       provincia: org.provincia ?? undefined,
       direccion: org.direccion_completa ?? undefined,

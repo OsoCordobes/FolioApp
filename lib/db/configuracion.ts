@@ -18,7 +18,11 @@
 import { z } from "zod";
 
 import { encryptColumn } from "@/lib/crypto";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { ESPECIALIDAD_SLUGS, type EspecialidadSlug } from "@/lib/especialidades/meta";
+import {
+  createSupabaseServerClient,
+  createSupabaseServiceClient,
+} from "@/lib/supabase/server";
 
 import { getActiveContext } from "./active-context";
 import { err, mapSupabaseError, ok, type Result } from "./errors";
@@ -37,6 +41,8 @@ export interface ConsultorioData {
   instagram: string;
   /** IANA timezone de la org (M02 organization.timezone). */
   timezone: string;
+  /** M50 · especialidad arquitectural de la org (editable por OWNER/DIRECTOR). */
+  especialidad: EspecialidadSlug;
 }
 
 export interface ServicioRow {
@@ -77,6 +83,8 @@ export interface ConfiguracionData {
   autoConfirmarReservas: boolean;
   /** M43 · minutos de margen entre slots ofrecidos en el booking público. */
   slotMargenMin: number;
+  /** M49 · tipo de organización. Solo lectura en /configuracion (el upgrade llega con billing por seats — Fase E). */
+  tipo: "INDEPENDIENTE" | "CLINICA";
 }
 
 // ─── Fetcher ───────────────────────────────────────────────────────────────
@@ -157,6 +165,7 @@ export async function getConfiguracionData(): Promise<Result<ConfiguracionData>>
     provincia: ctx.data.organization.provincia ?? "",
     instagram: (orgExtra?.instagram_handle as string | null) ?? "",
     timezone: ctx.data.organization.timezone || "America/Argentina/Cordoba",
+    especialidad: ctx.data.organization.especialidad,
   };
 
   const servicios: ServicioRow[] = (serviciosRaw ?? []).map(
@@ -186,6 +195,7 @@ export async function getConfiguracionData(): Promise<Result<ConfiguracionData>>
     autoConfirmarReservas: (orgExtra?.auto_confirmar_reservas as boolean | null) ?? true,
     // M43 · default 0 (sin margen) si la org es anterior a la migración o null.
     slotMargenMin: (orgExtra?.slot_margen_min as number | null) ?? 0,
+    tipo: ctx.data.organization.tipo,
   });
 }
 
@@ -201,6 +211,8 @@ const saveConsultorioSchema = z.object({
   direccion: z.string().max(200).optional(),
   instagram: z.string().max(60).optional(),
   timezone: z.string().min(1).max(60).optional(),
+  /** M50 · validado contra los slugs reales (CHECK organization_especialidad_valida). */
+  especialidad: z.enum(ESPECIALIDAD_SLUGS).optional(),
 });
 
 export type SaveConsultorioInput = z.infer<typeof saveConsultorioSchema>;
@@ -237,6 +249,14 @@ export async function saveConsultorio(input: SaveConsultorioInput): Promise<Resu
   };
   if (d.timezone) {
     orgPatch.timezone = d.timezone;
+  }
+  if (d.especialidad) {
+    // M50 · cambiar la especialidad NO borra datos: las sesiones con tool_id
+    // de otra especialidad se conservan en DB pero la ficha deja de
+    // renderizarlas (el registry solo monta la herramienta de la especialidad
+    // activa). El client muestra la advertencia con el count antes de guardar
+    // (countSesionesOtraEspecialidad).
+    orgPatch.especialidad = d.especialidad;
   }
   const { error: orgErr } = await supabase
     .from("organization")
@@ -523,4 +543,50 @@ export async function saveBookingPrefs(input: SaveBookingPrefsInput): Promise<Re
   }
 
   return ok(undefined);
+}
+
+// ─── Query: sesiones con tool_id de otra especialidad (M50 · Fase C) ────────
+
+/**
+ * Cuenta las sesiones de la org cuyo `tool_id` pertenece a una especialidad
+ * DISTINTA de `nuevaEspecialidad`. /configuracion lo usa para advertir antes
+ * de cambiar la especialidad: esos datos clínicos se conservan en DB pero la
+ * ficha deja de mostrarlos (el registry solo monta la herramienta activa).
+ *
+ * Convención de tool_id (M50): "<especialidad>.<tool>.<versión>"
+ * ("quiropraxia.spine.v1", "cardiologia.placeholder", ...). Filtramos por
+ * prefijo. Filas legacy con tool_id NULL (pre-M50, quiropraxia implícita por
+ * vertebras_json) no se cuentan — el reader las maneja con su propio fallback.
+ *
+ * Usa service client (count-only, sin PHI) con gate de rol app-side, igual
+ * criterio que saveConsultorio: solo OWNER/DIRECTOR puede cambiar la
+ * especialidad, así que solo ellos necesitan este count.
+ */
+export async function countSesionesOtraEspecialidad(
+  nuevaEspecialidad: string,
+): Promise<Result<number>> {
+  const parsed = z.enum(ESPECIALIDAD_SLUGS).safeParse(nuevaEspecialidad);
+  if (!parsed.success) {
+    return err("validation", "Especialidad inválida.");
+  }
+
+  const ctx = await getActiveContext();
+  if (!ctx.ok) return ctx;
+  if (ctx.data.session.role !== "OWNER" && ctx.data.session.role !== "DIRECTOR") {
+    return err("forbidden", "Solo OWNER/DIRECTOR puede cambiar la especialidad.");
+  }
+
+  const service = createSupabaseServiceClient();
+  const { count, error } = await service
+    .from("sesion")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", ctx.data.organization.id)
+    .not("tool_id", "is", null)
+    .not("tool_id", "like", `${parsed.data}.%`);
+
+  if (error) {
+    const mapped = mapSupabaseError(error);
+    return err(mapped.code, mapped.message, error.message);
+  }
+  return ok(count ?? 0);
 }

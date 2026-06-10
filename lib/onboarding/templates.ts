@@ -9,7 +9,13 @@
  * El user puede editar/borrar libremente — los defaults son punto de partida.
  *
  * Para rubros desconocidos (no listados acá), devolvemos defaults vacíos.
+ *
+ * Fase C: además de los rubros (display), las ESPECIALIDADES (M50 —
+ * arquitecturales, deciden la herramienta clínica) tienen su propio set de
+ * servicios template. Step 6 precarga según `organization.especialidad`.
  */
+
+import type { EspecialidadSlug } from "@/lib/especialidades/meta";
 
 export type RubroId =
   | "quiropraxia"
@@ -68,9 +74,9 @@ const TEMPLATES: Record<RubroId, RubroTemplate> = {
   "quiropraxia": {
     label: "Quiropraxia",
     servicios: [
-      { nombre: "Sesión inicial", dur: 60, precioCents: 1500000, tipoCanonico: "consulta" },
-      { nombre: "Ajuste de seguimiento", dur: 30, precioCents: 1000000, tipoCanonico: "consulta" },
-      { nombre: "Plan mensual (4 sesiones)", dur: 30, precioCents: 3500000, tipoCanonico: "paquete" },
+      { nombre: "Sesión inicial", dur: 60, precioCents: 1500000, tipoCanonico: "CONSULTA_INICIAL" },
+      { nombre: "Ajuste de seguimiento", dur: 30, precioCents: 1000000, tipoCanonico: "SEGUIMIENTO_ESTANDAR" },
+      { nombre: "Plan mensual (4 sesiones)", dur: 30, precioCents: 3500000, tipoCanonico: "PACK_SESIONES" },
     ],
     bioTemplate: (ciudad) =>
       `Quiropráctica y bienestar postural en ${ciudad}. Atención personalizada para mejorar tu calidad de vida.`,
@@ -79,9 +85,9 @@ const TEMPLATES: Record<RubroId, RubroTemplate> = {
   "kinesiologia": {
     label: "Kinesiología",
     servicios: [
-      { nombre: "Evaluación kinésica", dur: 45, precioCents: 1200000, tipoCanonico: "consulta" },
-      { nombre: "Sesión de rehabilitación", dur: 45, precioCents: 900000, tipoCanonico: "consulta" },
-      { nombre: "Bono 10 sesiones", dur: 45, precioCents: 7500000, tipoCanonico: "paquete" },
+      { nombre: "Evaluación kinésica", dur: 45, precioCents: 1200000, tipoCanonico: "CONSULTA_INICIAL" },
+      { nombre: "Sesión de rehabilitación", dur: 45, precioCents: 900000, tipoCanonico: "SEGUIMIENTO_ESTANDAR" },
+      { nombre: "Bono 10 sesiones", dur: 45, precioCents: 7500000, tipoCanonico: "PACK_SESIONES" },
     ],
     bioTemplate: (ciudad) =>
       `Kinesiología y rehabilitación física en ${ciudad}. Recuperación y bienestar adaptados a vos.`,
@@ -90,9 +96,9 @@ const TEMPLATES: Record<RubroId, RubroTemplate> = {
   "psicologia": {
     label: "Psicología",
     servicios: [
-      { nombre: "Primera consulta", dur: 60, precioCents: 1800000, tipoCanonico: "consulta" },
-      { nombre: "Sesión de seguimiento", dur: 50, precioCents: 1500000, tipoCanonico: "consulta" },
-      { nombre: "Terapia online", dur: 50, precioCents: 1500000, tipoCanonico: "consulta" },
+      { nombre: "Primera consulta", dur: 60, precioCents: 1800000, tipoCanonico: "CONSULTA_INICIAL" },
+      { nombre: "Sesión de seguimiento", dur: 50, precioCents: 1500000, tipoCanonico: "SEGUIMIENTO_ESTANDAR" },
+      { nombre: "Terapia online", dur: 50, precioCents: 1500000, tipoCanonico: "SEGUIMIENTO_ESTANDAR" },
     ],
     bioTemplate: (ciudad) =>
       `Psicología clínica en ${ciudad}. Espacio terapéutico confidencial, presencial y online.`,
@@ -105,9 +111,9 @@ const TEMPLATES: Record<RubroId, RubroTemplate> = {
   "nutricion": {
     label: "Nutrición",
     servicios: [
-      { nombre: "Primera consulta nutricional", dur: 60, precioCents: 1600000, tipoCanonico: "consulta" },
-      { nombre: "Consulta de seguimiento", dur: 30, precioCents: 900000, tipoCanonico: "consulta" },
-      { nombre: "Plan trimestral", dur: 30, precioCents: 6000000, tipoCanonico: "paquete" },
+      { nombre: "Primera consulta nutricional", dur: 60, precioCents: 1600000, tipoCanonico: "CONSULTA_INICIAL" },
+      { nombre: "Consulta de seguimiento", dur: 30, precioCents: 900000, tipoCanonico: "SEGUIMIENTO_ESTANDAR" },
+      { nombre: "Plan trimestral", dur: 30, precioCents: 6000000, tipoCanonico: "PACK_SESIONES" },
     ],
     bioTemplate: (ciudad) =>
       `Nutrición personalizada en ${ciudad}. Plan alimentario adaptado a tu vida y objetivos.`,
@@ -116,9 +122,9 @@ const TEMPLATES: Record<RubroId, RubroTemplate> = {
   "podologia": {
     label: "Podología",
     servicios: [
-      { nombre: "Consulta podológica", dur: 45, precioCents: 1100000, tipoCanonico: "consulta" },
-      { nombre: "Tratamiento ortopédico", dur: 60, precioCents: 1500000, tipoCanonico: "consulta" },
-      { nombre: "Plantillas a medida", dur: 30, precioCents: 4500000, tipoCanonico: "consulta" },
+      { nombre: "Consulta podológica", dur: 45, precioCents: 1100000, tipoCanonico: "CONSULTA_INICIAL" },
+      { nombre: "Tratamiento ortopédico", dur: 60, precioCents: 1500000, tipoCanonico: "SERVICIO_ESPECIALIZADO" },
+      { nombre: "Plantillas a medida", dur: 30, precioCents: 4500000, tipoCanonico: "SERVICIO_ESPECIALIZADO" },
     ],
     bioTemplate: (ciudad) =>
       `Podología clínica y estética en ${ciudad}. Cuidamos cada paso que das.`,
@@ -127,9 +133,9 @@ const TEMPLATES: Record<RubroId, RubroTemplate> = {
   "fonoaudiologia": {
     label: "Fonoaudiología",
     servicios: [
-      { nombre: "Evaluación fonoaudiológica", dur: 60, precioCents: 1300000, tipoCanonico: "consulta" },
-      { nombre: "Sesión de terapia", dur: 45, precioCents: 1000000, tipoCanonico: "consulta" },
-      { nombre: "Bono 8 sesiones", dur: 45, precioCents: 7000000, tipoCanonico: "paquete" },
+      { nombre: "Evaluación fonoaudiológica", dur: 60, precioCents: 1300000, tipoCanonico: "CONSULTA_INICIAL" },
+      { nombre: "Sesión de terapia", dur: 45, precioCents: 1000000, tipoCanonico: "SEGUIMIENTO_ESTANDAR" },
+      { nombre: "Bono 8 sesiones", dur: 45, precioCents: 7000000, tipoCanonico: "PACK_SESIONES" },
     ],
     bioTemplate: (ciudad) =>
       `Fonoaudiología en ${ciudad}. Acompañamiento profesional en comunicación, lenguaje y audición.`,
@@ -138,9 +144,9 @@ const TEMPLATES: Record<RubroId, RubroTemplate> = {
   "terapia-ocupacional": {
     label: "Terapia ocupacional",
     servicios: [
-      { nombre: "Evaluación inicial", dur: 60, precioCents: 1300000, tipoCanonico: "consulta" },
-      { nombre: "Sesión de terapia", dur: 45, precioCents: 1000000, tipoCanonico: "consulta" },
-      { nombre: "Bono 6 sesiones", dur: 45, precioCents: 5400000, tipoCanonico: "paquete" },
+      { nombre: "Evaluación inicial", dur: 60, precioCents: 1300000, tipoCanonico: "CONSULTA_INICIAL" },
+      { nombre: "Sesión de terapia", dur: 45, precioCents: 1000000, tipoCanonico: "SEGUIMIENTO_ESTANDAR" },
+      { nombre: "Bono 6 sesiones", dur: 45, precioCents: 5400000, tipoCanonico: "PACK_SESIONES" },
     ],
     bioTemplate: (ciudad) =>
       `Terapia ocupacional en ${ciudad}. Acompañamos a recuperar autonomía en cada etapa.`,
@@ -149,9 +155,9 @@ const TEMPLATES: Record<RubroId, RubroTemplate> = {
   "osteopatia": {
     label: "Osteopatía",
     servicios: [
-      { nombre: "Primera consulta osteopática", dur: 75, precioCents: 1800000, tipoCanonico: "consulta" },
-      { nombre: "Sesión de seguimiento", dur: 45, precioCents: 1300000, tipoCanonico: "consulta" },
-      { nombre: "Plan mensual", dur: 45, precioCents: 4500000, tipoCanonico: "paquete" },
+      { nombre: "Primera consulta osteopática", dur: 75, precioCents: 1800000, tipoCanonico: "CONSULTA_INICIAL" },
+      { nombre: "Sesión de seguimiento", dur: 45, precioCents: 1300000, tipoCanonico: "SEGUIMIENTO_ESTANDAR" },
+      { nombre: "Plan mensual", dur: 45, precioCents: 4500000, tipoCanonico: "PACK_SESIONES" },
     ],
     bioTemplate: (ciudad) =>
       `Osteopatía manual en ${ciudad}. Abordaje integral del cuerpo, sin medicación.`,
@@ -160,9 +166,9 @@ const TEMPLATES: Record<RubroId, RubroTemplate> = {
   "masoterapia": {
     label: "Masoterapia",
     servicios: [
-      { nombre: "Masaje descontracturante", dur: 60, precioCents: 1200000, tipoCanonico: "consulta" },
-      { nombre: "Masaje relajante", dur: 60, precioCents: 1000000, tipoCanonico: "consulta" },
-      { nombre: "Bono 5 sesiones", dur: 60, precioCents: 5000000, tipoCanonico: "paquete" },
+      { nombre: "Masaje descontracturante", dur: 60, precioCents: 1200000, tipoCanonico: "SERVICIO_ESPECIALIZADO" },
+      { nombre: "Masaje relajante", dur: 60, precioCents: 1000000, tipoCanonico: "SERVICIO_ESPECIALIZADO" },
+      { nombre: "Bono 5 sesiones", dur: 60, precioCents: 5000000, tipoCanonico: "PACK_SESIONES" },
     ],
     bioTemplate: (ciudad) =>
       `Masoterapia profesional en ${ciudad}. Descontracturas, drenaje y bienestar.`,
@@ -171,9 +177,9 @@ const TEMPLATES: Record<RubroId, RubroTemplate> = {
   "acupuntura": {
     label: "Acupuntura",
     servicios: [
-      { nombre: "Consulta inicial", dur: 75, precioCents: 1600000, tipoCanonico: "consulta" },
-      { nombre: "Sesión de acupuntura", dur: 45, precioCents: 1100000, tipoCanonico: "consulta" },
-      { nombre: "Tratamiento 4 sesiones", dur: 45, precioCents: 4000000, tipoCanonico: "paquete" },
+      { nombre: "Consulta inicial", dur: 75, precioCents: 1600000, tipoCanonico: "CONSULTA_INICIAL" },
+      { nombre: "Sesión de acupuntura", dur: 45, precioCents: 1100000, tipoCanonico: "SEGUIMIENTO_ESTANDAR" },
+      { nombre: "Tratamiento 4 sesiones", dur: 45, precioCents: 4000000, tipoCanonico: "PACK_SESIONES" },
     ],
     bioTemplate: (ciudad) =>
       `Acupuntura terapéutica en ${ciudad}. Medicina tradicional china con visión integrativa.`,
@@ -186,6 +192,68 @@ const TEMPLATES: Record<RubroId, RubroTemplate> = {
     horarios: STANDARD_AM_PM,
   },
 };
+
+// ─── Templates por ESPECIALIDAD (M50 · Fase C) ─────────────────────────────
+//
+// A diferencia del rubro (texto display de la card pública), la especialidad
+// es arquitectural: decide la herramienta clínica de la ficha. Step 6 del
+// onboarding precarga estos servicios según la especialidad elegida en Step 3.
+// Los tipoCanonico van en el enum real de DB (tipo_servicio_canonico, M09).
+
+/** Valores válidos del enum tipo_servicio_canonico (M09). */
+export const TIPOS_CANONICOS_VALIDOS = [
+  "CONSULTA_INICIAL",
+  "SEGUIMIENTO_ESTANDAR",
+  "SEGUIMIENTO_EXTENDIDO",
+  "PACK_SESIONES",
+  "SERVICIO_ESPECIALIZADO",
+] as const;
+
+const ESPECIALIDAD_SERVICIOS: Record<EspecialidadSlug, ServicioTemplate[]> = {
+  // Quiropraxia mantiene el set histórico del rubro homónimo.
+  quiropraxia: TEMPLATES.quiropraxia.servicios,
+  cardiologia: [
+    { nombre: "Consulta cardiológica inicial", dur: 40, precioCents: 1800000, tipoCanonico: "CONSULTA_INICIAL" },
+    { nombre: "Control cardiológico", dur: 30, precioCents: 1200000, tipoCanonico: "SEGUIMIENTO_ESTANDAR" },
+    { nombre: "Electrocardiograma", dur: 20, precioCents: 1000000, tipoCanonico: "SERVICIO_ESPECIALIZADO" },
+    { nombre: "Ergometría", dur: 45, precioCents: 2500000, tipoCanonico: "SERVICIO_ESPECIALIZADO" },
+  ],
+  psicologia: [
+    { nombre: "Primera entrevista", dur: 50, precioCents: 1800000, tipoCanonico: "CONSULTA_INICIAL" },
+    { nombre: "Sesión de psicoterapia", dur: 50, precioCents: 1500000, tipoCanonico: "SEGUIMIENTO_ESTANDAR" },
+    { nombre: "Sesión de pareja", dur: 80, precioCents: 2200000, tipoCanonico: "SEGUIMIENTO_EXTENDIDO" },
+  ],
+};
+
+/**
+ * Servicios template para una especialidad (M50). Fallback a quiropraxia para
+ * slugs desconocidos — mismo criterio que normalizeEspecialidadSlug.
+ */
+export function getEspecialidadServicios(slug: string | null | undefined): ServicioTemplate[] {
+  if (slug && Object.prototype.hasOwnProperty.call(ESPECIALIDAD_SERVICIOS, slug)) {
+    return ESPECIALIDAD_SERVICIOS[slug as EspecialidadSlug];
+  }
+  return ESPECIALIDAD_SERVICIOS.quiropraxia;
+}
+
+/**
+ * Firmas (nombres joineados con "|") de todos los sets de servicios template
+ * conocidos (rubros + especialidades). El wizard las usa para decidir si el
+ * user "no tocó" sus servicios y por lo tanto es seguro pisarlos con un
+ * template nuevo al cambiar de rubro/especialidad.
+ */
+export function getKnownTemplateServiceSignatures(): Set<string> {
+  const sigs = new Set<string>();
+  for (const tpl of Object.values(TEMPLATES)) {
+    if (tpl.servicios.length > 0) {
+      sigs.add(tpl.servicios.map((s) => s.nombre).join("|"));
+    }
+  }
+  for (const servicios of Object.values(ESPECIALIDAD_SERVICIOS)) {
+    sigs.add(servicios.map((s) => s.nombre).join("|"));
+  }
+  return sigs;
+}
 
 // ─── API pública ──────────────────────────────────────────────────────────
 
