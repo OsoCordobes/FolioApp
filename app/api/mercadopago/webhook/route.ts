@@ -84,56 +84,88 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
+  // M6 (docs/AUDIT.md): MP descarta la respuesta a los ~22s y reintenta con
+  // backoff. Si MP API o la DB se cuelgan, cortamos nosotros a los 20s y
+  // devolvemos 503 — el evento llega de nuevo en el retry y el doble
+  // procesamiento es inocuo (UNIQUE mp_payment_id + guard de last_modified).
+  let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
   try {
-    switch (payload.type) {
-      case "subscription_preapproval": {
-        // dataId = preapproval_id. GET para obtener estado actualizado.
-        const preapproval = await getPreapproval(dataId);
-        const res = await applyMpPreapprovalUpdate(preapproval);
-        if (!res.ok) {
-          console.warn(`[mp-webhook] applyMpPreapprovalUpdate falló: ${res.error.message}`);
-        }
-        break;
-      }
-
-      case "subscription_authorized_payment": {
-        // dataId = authorized_payment_id. GET para obtener payment + preapproval_id.
-        const ap = await getAuthorizedPayment(dataId);
-        const res = await recordChargeAttempt({
-          preapprovalId: ap.preapproval_id,
-          authorizedPayment: ap,
-          rawPayload: payload,
-        });
-        if (!res.ok) {
-          // M-BILL-1: si la suscripción todavía no está linkeada (el webhook de
-          // cargo llegó antes que el de preapproval), devolvemos 5xx para que MP
-          // reintente más tarde — si no, el primer cobro se perdería para siempre.
-          if (res.error.code === "not_found") {
-            console.warn(`[mp-webhook] recordChargeAttempt not_found: ${res.error.message}. Devolviendo 503 para retry de MP.`);
-            return new NextResponse("subscription-not-linked-yet", { status: 503 });
-          }
-          console.warn(`[mp-webhook] recordChargeAttempt falló: ${res.error.message}`);
-        }
-        break;
-      }
-
-      case "payment": {
-        // Lo ignoramos — viene también como subscription_authorized_payment.
-        break;
-      }
-
-      default: {
-        console.warn(`[mp-webhook] type desconocido: ${payload.type}`);
-        break;
-      }
+    const outcome = await Promise.race([
+      processEvent(payload, dataId),
+      new Promise<"timeout">((resolve) => {
+        deadlineTimer = setTimeout(() => resolve("timeout"), WEBHOOK_DEADLINE_MS);
+      }),
+    ]);
+    if (outcome === "timeout") {
+      console.error(
+        `[mp-webhook] deadline ${WEBHOOK_DEADLINE_MS}ms excedido type=${payload.type} dataId=${dataId}. 503 para retry de MP.`,
+      );
+      return new NextResponse("processing-timeout", { status: 503 });
     }
+    if (outcome) return outcome;
   } catch (e) {
     // Errores transitorios (MP API down, DB hiccup) → 500 para que MP reintente.
     // Errores de lógica con la fila local los logueamos pero devolvemos 200.
     const msg = e instanceof Error ? e.message : String(e);
     console.error(`[mp-webhook] error procesando type=${payload.type} dataId=${dataId}: ${msg}`);
     return new NextResponse("processing-error", { status: 500 });
+  } finally {
+    if (deadlineTimer) clearTimeout(deadlineTimer);
   }
 
   return NextResponse.json({ ok: true });
+}
+
+const WEBHOOK_DEADLINE_MS = 20_000;
+
+/**
+ * Procesa un evento ya autenticado. Devuelve una NextResponse para cortar con
+ * un status especial (503 retry), o null para el 200 por default del caller.
+ */
+async function processEvent(
+  payload: MpWebhookPayload,
+  dataId: string,
+): Promise<NextResponse | null> {
+  switch (payload.type) {
+    case "subscription_preapproval": {
+      // dataId = preapproval_id. GET para obtener estado actualizado.
+      const preapproval = await getPreapproval(dataId);
+      const res = await applyMpPreapprovalUpdate(preapproval);
+      if (!res.ok) {
+        console.warn(`[mp-webhook] applyMpPreapprovalUpdate falló: ${res.error.message}`);
+      }
+      return null;
+    }
+
+    case "subscription_authorized_payment": {
+      // dataId = authorized_payment_id. GET para obtener payment + preapproval_id.
+      const ap = await getAuthorizedPayment(dataId);
+      const res = await recordChargeAttempt({
+        preapprovalId: ap.preapproval_id,
+        authorizedPayment: ap,
+        rawPayload: payload,
+      });
+      if (!res.ok) {
+        // M-BILL-1: si la suscripción todavía no está linkeada (el webhook de
+        // cargo llegó antes que el de preapproval), devolvemos 5xx para que MP
+        // reintente más tarde — si no, el primer cobro se perdería para siempre.
+        if (res.error.code === "not_found") {
+          console.warn(`[mp-webhook] recordChargeAttempt not_found: ${res.error.message}. Devolviendo 503 para retry de MP.`);
+          return new NextResponse("subscription-not-linked-yet", { status: 503 });
+        }
+        console.warn(`[mp-webhook] recordChargeAttempt falló: ${res.error.message}`);
+      }
+      return null;
+    }
+
+    case "payment": {
+      // Lo ignoramos — viene también como subscription_authorized_payment.
+      return null;
+    }
+
+    default: {
+      console.warn(`[mp-webhook] type desconocido: ${payload.type}`);
+      return null;
+    }
+  }
 }

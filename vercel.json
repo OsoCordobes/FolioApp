@@ -17,6 +17,10 @@
     {
       "path": "/api/cron/maintenance",
       "schedule": "0 3 1 * *"
+    },
+    {
+      "path": "/api/cron/reconcile-suscripciones",
+      "schedule": "30 8 * * *"
     }
   ]
 }

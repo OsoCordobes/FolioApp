@@ -64,6 +64,14 @@ export interface OnboardingBootstrapResult {
   needsConfirmation?: boolean;
 }
 
+// M2 (docs/AUDIT.md · anti-enumeración): mensaje ÚNICO para todo fallo de
+// signup atribuible a "el email quizás ya existe". Condicional ("si ya
+// tenés...") — no confirma ni niega que la cuenta exista. No agregar acá
+// variantes que distingan los casos: esa diferencia es exactamente lo que
+// permite enumerar usuarios registrados.
+const SIGNUP_GENERIC_ERROR =
+  "No pudimos completar el registro con ese email. Si ya tenés una cuenta, iniciá sesión desde /login o usá “Olvidé mi contraseña”.";
+
 /**
  * Premium signup: crea auth.user + organization placeholder + profile vacío + member OWNER.
  *
@@ -156,9 +164,11 @@ export async function signUpAndInitOrganization(
       // a partir del usuario 201). Helper extraído a lib/auth (Sprint 0 T0.2).
       const existing = await findUserByEmail(service, email);
       if (!existing) {
+        // M2 (docs/AUDIT.md): mensaje condicional idéntico al del branch de
+        // signIn fallido — no confirma si la cuenta existe (anti-enumeración).
         return {
           ok: false,
-          error: "Ya existe una cuenta con este email. Iniciá sesión desde /login.",
+          error: SIGNUP_GENERIC_ERROR,
         };
       }
       if (!existing.email_confirmed_at) {
@@ -182,9 +192,10 @@ export async function signUpAndInitOrganization(
     // sin password, o c) password reset pendiente. Mensaje específico para
     // que sepa qué hacer.
     if (wasExisting) {
+      // M2: mismo mensaje que arriba — no revela si el email está registrado.
       return {
         ok: false,
-        error: "Ya existe una cuenta con este email. Iniciá sesión en /login con tu contraseña, o usá 'Olvidé mi contraseña'.",
+        error: SIGNUP_GENERIC_ERROR,
       };
     }
     return { ok: false, error: `Cuenta creada pero no pude entrar: ${signInErr.message}` };

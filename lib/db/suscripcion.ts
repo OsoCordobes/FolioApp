@@ -23,7 +23,7 @@ import {
   type MpPreapproval,
 } from "@/lib/mercadopago/client";
 
-import { err, ok, type Result } from "./errors";
+import { err, isUniqueViolation, ok, type Result } from "./errors";
 
 // ─── Tipos públicos ────────────────────────────────────────────────────────
 
@@ -35,6 +35,19 @@ export type EstadoSuscripcion =
   | "MOROSA";
 
 export type EstadoCargo = "PENDIENTE" | "APROBADO" | "RECHAZADO" | "REFUNDED";
+
+/**
+ * A2 (docs/AUDIT.md): estados que el cron de reconciliación re-chequea contra
+ * MP. Cubre webhook perdido en ambas direcciones (activación que no llegó,
+ * cancelación/pausa que no llegó). CANCELADA es terminal en MP — no se
+ * reconcilia (un preapproval cancelado no revive; reactivar crea uno nuevo).
+ */
+export const RECONCILABLE_ESTADOS: readonly EstadoSuscripcion[] = [
+  "PENDIENTE_ACTIVACION",
+  "ACTIVA",
+  "PAUSADA",
+  "MOROSA",
+];
 
 export interface SuscripcionRow {
   id: string;
@@ -415,7 +428,10 @@ export async function recordChargeAttempt(input: {
     .maybeSingle();
 
   // 23505 = unique_violation → ya lo procesamos antes (idempotencia OK).
-  if (insErr && !insErr.message.includes("duplicate key")) {
+  // M5 (AUDIT.md): detectar el duplicado por SQLSTATE, no por substring del
+  // mensaje — el texto puede cambiar entre versiones/locales de Postgres y un
+  // duplicado legítimo se reportaría como db_error (MP reintentaría de gusto).
+  if (insErr && !isUniqueViolation(insErr)) {
     return err("db_error", "Error registrando cargo.", insErr.message);
   }
 

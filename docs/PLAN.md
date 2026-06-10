@@ -7,8 +7,9 @@
 | Fase | Descripción | Estado |
 |------|-------------|--------|
 | FASE 0 | Auditoría (workflow 27 agentes + verificación adversarial) | ✅ Completa — [AUDIT.md](AUDIT.md) |
-| Paso 0 | docs/AUDIT.md + docs/PLAN.md | ✅ Completa |
-| Fase A | Hardening crítico/alto de auditoría (C1, A1, A2, M1/M2/M5/M6) | ⏳ Pendiente |
+| Paso 0 | docs/AUDIT.md + docs/PLAN.md | ✅ Completa (PR #26) |
+| Fase A.1 | C1: drift de migraciones | ✅ Completa — M44–M48 ya estaban en repo vía PR #25; **M49 pendiente aplicada a prod el 10-jun (resolvió outage 42703 de ~11 h)**; fidelidad verificada por replay+diff; duplicados del ledger documentados (ver Addendum en AUDIT.md) |
+| Fase A (resto) | A1, A2, M1/M2/M5/M6 | ⏳ En curso |
 | Fase B | Specialty registry + slot genérico | ⏳ Pendiente |
 | Fase C | Onboarding con especialidad + tiers Solo/Clinic | ⏳ Pendiente |
 | Fase D | Herramientas clínicas cardiología + psicología | ⏳ Pendiente |
@@ -38,7 +39,7 @@ Transformar Folio en un SaaS médico **multi-especialidad** (quiropraxia, cardio
 - Migraciones aplicadas a prod **antes** de mergear el código que las usa (master auto-deploya; cliente Supabase `<any>` no avisa mismatches). Constraints que validan al instalar → pre-check de datos prod + rollout staged.
 - Commits atómicos por tarea; PRs squash-merged con título conventional-commit.
 - Subagentes/workflows para lo paralelizable; registry/onboarding/RLS/billing secuencial en hilo principal.
-- **Numeración de migraciones nuevas: desde M49** (prod ya tiene M44–M48, ver C1 en AUDIT.md).
+- **Numeración de migraciones nuevas: desde M50** (M49 la tomó `clinic_mode` del PR #25 — ver Addendum en AUDIT.md). Renumeración: especialidad → **M50** (A.2 quedó sin migración), tiers → **M51**.
 
 ## Fases
 
@@ -47,7 +48,7 @@ Transformar Folio en un SaaS médico **multi-especialidad** (quiropraxia, cardio
 **Objetivo**: cerrar C1, A1, A2 + los medios baratos (M1, M2, M5, M6) de [AUDIT.md](AUDIT.md).
 
 - **A.1 (C1)**: recuperar M44–M48 de prod al repo (DDL vía MCP read-only), verificar que aplican en CI pgtap vanilla, documentar las 8 entradas duplicadas del ledger, `scripts/diff-migrations.mjs` en verde. *Solo repo — no toca prod.*
-- **A.2 (A1)**: M49 restringe INSERT `paciente_identidad` a OWNER/DIRECTOR/PROFESIONAL (pre-check prod de inserts históricos); test pgtap dos-tenants + por-rol. Aplicar a prod antes del merge. **Checkpoint RLS.**
+- **A.2 (A1)**: ~~M50 restringe INSERT `paciente_identidad`~~ **RECLASIFICADO**: el INSERT amplio es diseño documentado (M03 + capabilities de PR #25); sin migración. El residuo (identidad huérfana al fallar el INSERT de PHI por RLS) se cierra con el gate de M1 en `createPaciente`. Ver Addendum en AUDIT.md.
 - **A.3 (A2)**: cron `app/api/cron/reconcile-suscripciones` (CRON_SECRET, cada 12 h): suscripciones con `mp_preapproval_id` y estado ≠ ACTIVA → GET preapproval → `applyMpPreapprovalUpdate`. Unit tests (divergencia, MP caído, idempotencia). **Checkpoint billing.**
 - **A.4**: M1 (role check `createPacienteAction`), M2 (mensaje genérico signup), M5 (SQLSTATE 23505), M6 (deadline webhook ~20 s). M3/M4/M8/M9 y bajos: fix barato acá o documentado con plan (no bloquean Fase B).
 
@@ -64,10 +65,12 @@ Transformar Folio en un SaaS médico **multi-especialidad** (quiropraxia, cardio
 
 **Aceptación**: org quiro existente ve exactamente lo mismo que hoy (snapshot visual), datos legacy legibles, suite verde. **CHECKPOINT.**
 
+> **Nota post-PR #25 (Fase C)**: el repo ya trae "clinic mode" — `organization.tipo` (`INDEPENDIENTE|CLINICA`, M49), tabla `member_invitation` + RPCs de invitación, y `lib/auth/capabilities.ts`. Los tiers se anclan en `organization.tipo` (Solo ↔ INDEPENDIENTE, Clinic ↔ CLINICA) en vez de una columna `plan_tier` nueva, y el gate de seats se integra con el flujo de invitaciones existente. Revisar capabilities/invitations antes de diseñar M52.
+
 ### Fase C — Onboarding con especialidad + tiers
 
 - Selector de especialidad en Step 3 (Consultorio) — evita tocar el constraint de pasos (M20); persiste en `organization.especialidad`; templates de servicios del Step 6 ([lib/onboarding/templates.ts](../lib/onboarding/templates.ts)) por especialidad. Editable en /configuracion con advertencia si ya hay sesiones de otra herramienta.
-- **Tiers (M51, aditiva)**: `organization.plan_tier text NOT NULL DEFAULT 'SOLO'` CHECK (`SOLO|CLINIC`); gate de seats: SOLO = 1 member activo (invitar staff exige CLINIC); CLINIC = base ARS 100.000 + 25.000 × seat adicional (display + modelo; el cobro MP variable va en Fase E). Selección de tier en onboarding + /configuracion/billing. `computeAccessGate()` no cambia.
+- **Tiers (M51, aditiva)**: anclados en `organization.tipo` (M49: `INDEPENDIENTE|CLINICA`) — evaluar si hace falta columna extra; gate de seats: SOLO = 1 member activo (invitar staff exige CLINIC); CLINIC = base ARS 100.000 + 25.000 × seat adicional (display + modelo; el cobro MP variable va en Fase E). Selección de tier en onboarding + /configuracion/billing. `computeAccessGate()` no cambia.
 
 **Aceptación**: onboarding nuevo permite elegir especialidad y tier, persiste, servicios default coherentes. **CHECKPOINT humano (confirmar supuesto de seats).**
 
