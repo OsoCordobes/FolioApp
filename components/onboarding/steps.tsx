@@ -167,14 +167,23 @@ function serviciosUntouched(servicios: OnboardingDataState["servicios"]): boolea
 function templateToStateServicios(
   servicios: ServicioTemplate[],
 ): OnboardingDataState["servicios"] {
-  const base = Date.now();
-  return servicios.map((s, i) => ({
-    id: base + i,
+  return servicios.map((s) => ({
+    id: nextServicioId(),
     nombre: s.nombre,
     dur: s.dur,
     precio: s.precioCents / 100,
     tipoCanonico: s.tipoCanonico,
   }));
+}
+
+// IDs sintéticos para las filas de servicios (solo key de React en el wizard).
+// Contador monotónico en vez de Date.now(): dos cargas de template en el mismo
+// milisegundo (efecto de rubro + efecto de especialidad) producían ids
+// colisionados → warning "duplicate key". Arranca alto para no chocar con los
+// ids chicos hardcodeados de ONBOARDING_INITIAL.
+let servicioIdCounter = 1_000_000;
+function nextServicioId(): number {
+  return servicioIdCounter++;
 }
 
 // ─── Step 2 · Profesional (con validación inline) ───────────────────────────
@@ -688,7 +697,7 @@ export function Step6Servicios({ data, set, next, back, skip, orgSlug }: StepPro
   const setServ = (i: number, patch: Partial<OnboardingDataState["servicios"][number]>) =>
     set({ servicios: data.servicios.map((s, k) => (k === i ? { ...s, ...patch } : s)) });
   const addServ = () =>
-    set({ servicios: [...data.servicios, { id: Date.now(), nombre: "", dur: 45, precio: 0 }] });
+    set({ servicios: [...data.servicios, { id: nextServicioId(), nombre: "", dur: 45, precio: 0 }] });
   const removeServ = (i: number) =>
     set({ servicios: data.servicios.filter((_, k) => k !== i) });
 
