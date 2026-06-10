@@ -10,6 +10,17 @@
 - **M8 parcialmente mitigado en prod**: `pg_proc.proacl` de `user_org_ids`/`can_read_clinical`/`can_read_admin`/`user_role_in` ya NO incluye `anon` ni PUBLIC (revocado, presumiblemente por la M45 faltante). `authenticated` conserva EXECUTE — evaluar al recuperar M45.
 - **M9 vigente en prod**: `pg_trgm` y `btree_gist` siguen en schema `public`.
 
+## Addendum 2026-06-10 (post-auditoría) — desenlace de C1 e incidente de producción
+
+La auditoría corrió contra un checkout local de master **desactualizado** (`e2ac2cd`). Al sincronizar con origin apareció el **PR #25** (mergeado 2026-06-09 23:36Z, "pre-demo audit"), que ya había commiteado **M44–M48 al repo** más una **M49_clinic_mode** nueva (organization.tipo INDEPENDIENTE/CLINICA + member_invitation + RPCs de invitación) y código que depende de ella (`lib/auth/capabilities.ts`, `lib/db/active-context.ts` selecciona `organization.tipo`).
+
+- **Incidente detectado y resuelto**: M49 estaba mergeada y auto-deployada pero **no aplicada a prod** → `getActiveContext` fallaba con `42703 column organization.tipo does not exist` para **todo usuario autenticado** desde el deploy del 9-jun ~23:36Z. Se aplicó `M49_clinic_mode` a prod vía `scripts/push-pending-migrations.mjs` (versión canónica `20260609000049` en el ledger) el 10-jun ~10:45Z. Verificado: 39 orgs backfilleadas a `INDEPENDIENTE`, RPCs creadas, health OK.
+- **Fidelidad del repo verificada**: replay completo M01→M49 en Docker (postgres:17, receta CI) + diff de inventario normalizado contra prod (columnas, policies, índices, triggers, funciones): **cero diferencias semánticas** (solo difieren comentarios `--` dentro de cuerpos de funciones, cosmético). El repo es fuente fiel del schema de prod.
+- **C1 queda así**: drift de archivos resuelto (PR #25) + pendiente aplicado (M49). Residual: **8 entradas duplicadas en el ledger** (`20260526124148..124616` re-registros lowercase de m27–m36, y `20260607193806` duplicado de M43) — son inofensivas para `scripts/diff-migrations.mjs` (solo chequea dirección repo→prod) y se conservan como historia; **no borrar sin decisión explícita**. Causa raíz: aplicar migraciones vía MCP `apply_migration` genera versiones con timestamp propio en vez de la canónica del archivo — usar siempre `scripts/push-pending-migrations.mjs`.
+- **Edits a M01/M27 en PR #25**: benignos (`set check_function_bodies = off` en M01; COMMENT ON POLICY best-effort en M27) — compatibilidad de replay, no cambian el schema resultante.
+- **Renumeración**: la próxima migración libre es **M50** (el plan original usaba M49 para el fix RLS de A1).
+- **A1 reclasificado — diseño documentado, NO se aplica migración**: el INSERT amplio de `paciente_identidad` es intencional (comentario en M03:201-203: *"Cualquier rol con rol activo puede crear (ASISTENTE para walk-in, PROFESIONAL para primera consulta)"*) y está ratificado por la matriz de capabilities del PR #25 (`canManagePacienteContact: true` para todos los roles). La separación de privilegios ya existe a nivel RLS: la ficha **clínica** (`paciente`, PHI) solo la insertan OWNER/PROFESIONAL/DIRECTOR. El residuo real era **M1**: `createPaciente()` crea el PAR identidad+PHI sin gate — para un rol no clínico el INSERT de PHI fallaba por RLS DESPUÉS de crear la identidad, y el rollback manual choca con la policy `paciente_identidad_no_delete` → **identidad huérfana**. Fix aplicado: gate por `capabilitiesFor().canCreatePacienteClinical` en `lib/db/pacientes.ts` antes del primer INSERT.
+
 ## Resumen por severidad
 
 | ID | Sev | Hallazgo | Ubicación | knownGap |

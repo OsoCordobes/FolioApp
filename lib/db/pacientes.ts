@@ -9,6 +9,7 @@
 
 import { z } from "zod";
 
+import { capabilitiesFor } from "@/lib/auth/capabilities";
 import { blindIndex, blindIndexPhone, encryptColumn, tryDecrypt } from "@/lib/crypto";
 import { trackEvent } from "@/lib/observability/events";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -186,6 +187,19 @@ export async function createPaciente(input: CreatePacienteInput): Promise<Result
   }
   const session = await getActiveSession();
   if (!session.ok) return session;
+
+  // M1 (docs/AUDIT.md): esta función crea el PAR identidad (PII) + paciente
+  // (PHI). La RLS de `paciente` ya bloquea el INSERT de PHI a roles no
+  // clínicos, pero recién en el paso 2 — dejaría una identidad huérfana
+  // (el rollback manual de abajo choca con paciente_identidad_no_delete).
+  // Cortamos antes, espejando capabilities.canCreatePacienteClinical.
+  const caps = capabilitiesFor(session.data.role, session.data.esColegiado);
+  if (!caps.canCreatePacienteClinical) {
+    return err(
+      "forbidden",
+      "Tu rol no permite crear la ficha clínica de un paciente. Pedile a un profesional o a dirección que lo registre.",
+    );
+  }
 
   const supabase = await createSupabaseServerClient();
   const d = parsed.data;

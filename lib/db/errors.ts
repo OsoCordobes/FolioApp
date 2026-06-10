@@ -33,6 +33,18 @@ export const err = (code: FolioErrorCode, message: string, detail?: string): Res
 });
 
 /**
+ * TRUE si el error es una violación de UNIQUE (SQLSTATE 23505). El código es
+ * lo único estable entre versiones/idiomas de Postgres; el texto "duplicate
+ * key" queda como fallback para drivers que no propagan `code` (M5, AUDIT.md).
+ */
+export function isUniqueViolation(
+  error: { code?: string | null; message?: string | null } | null | undefined,
+): boolean {
+  if (!error) return false;
+  return error.code === "23505" || (error.message ?? "").includes("duplicate key");
+}
+
+/**
  * Mapea un error de Supabase/PostgREST a un FolioError. Detecta códigos
  * conocidos (Postgres SQLSTATE) y los traduce a códigos del dominio.
  */
