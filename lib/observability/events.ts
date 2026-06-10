@@ -188,7 +188,7 @@ export interface LandingCtaClickedProps {
 
 /** `landing.section_viewed` — sección `[data-fl-section]` vista (una vez c/u). */
 export interface LandingSectionViewedProps {
-  /** Valor de `data-fl-section` (hero, producto, features, showcase, …). */
+  /** Valor de `data-fl-section` (hero, day, vault, bento, …). */
   section: string;
 }
 

@@ -58,7 +58,7 @@ export function DayTimeline() {
     <section id="dia" className="fl-day" data-fl-section="day">
       <div className="fl-day-stage">
         <header className="fl-day-head fl-reveal">
-          <p className="fl-day-eyebrow">Un día con Folio</p>
+          <h2 className="fl-day-eyebrow">Un día con Folio</h2>
           <span className="fl-day-rail" aria-hidden="true">
             <span className="fl-day-rail-fill" />
           </span>

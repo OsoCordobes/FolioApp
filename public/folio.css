@@ -15109,8 +15109,9 @@ input:focus { outline: none; }
     }
     .fl-day-stage {
       position: sticky;
-      top: 64px; /* alto del .fl-header */
-      height: calc(100vh - 64px);
+      /* 65px = .fl-header-inner (64px) + border-bottom de .fl-header (1px) */
+      top: 65px;
+      height: calc(100vh - 65px);
       overflow: clip;
       display: grid;
       align-content: center;
@@ -15504,7 +15505,10 @@ input:focus { outline: none; }
   border: 1px solid var(--line-soft);
   border-radius: var(--r-xl);
   box-shadow: var(--shadow-1);
-  overflow: hidden;
+  /* `clip` y no `hidden`: hidden crea un scroll container y las demos con
+     animation-timeline: view() anónimo resolverían contra la celda (que
+     nunca scrollea) en vez del viewport — quedarían congeladas. */
+  overflow: clip;
   transition:
     transform var(--dur-snappy) var(--spring-soft),
     box-shadow var(--dur-snappy) var(--ease-standard-out),
@@ -15891,110 +15895,116 @@ input:focus { outline: none; }
 }
 
 /* ── Animaciones scroll-driven · solo con soporte de view() ───────────────
- * Cada demo usa el timeline view() del propio elemento; ranges dentro de
- * entry 30%…90%. fill both: antes del range se ve el `from` (estado
- * inicial), después queda el `to` (= estado base final). */
+ * Timeline NOMBRADA en la celda (--fl-cell): con view() anónimo en cada
+ * elemento chico el range `entry` duraba ~30px de scroll (flash invisible).
+ * Sobre el `cover` de la celda, cada demo juega durante ~500px de scroll y
+ * termina con la celda a mitad de viewport. fill both: antes del range se
+ * ve el `from` (estado inicial), después queda el `to` (= estado final). */
 @supports (animation-timeline: view()) {
+  .fl-bento-cell {
+    view-timeline: --fl-cell block;
+  }
+
   /* 1 · reservas: slots en secuencia + badge al final */
   .fl-bbook-slot--f1 {
     animation: fl-bbook-fill var(--ease-standard-out) both;
-    animation-timeline: view();
-    animation-range: entry 30% entry 55%;
+    animation-timeline: --fl-cell;
+    animation-range: cover 10% cover 29%;
   }
   .fl-bbook-slot--f2 {
     animation: fl-bbook-fill var(--ease-standard-out) both;
-    animation-timeline: view();
-    animation-range: entry 42% entry 67%;
+    animation-timeline: --fl-cell;
+    animation-range: cover 19% cover 38%;
   }
   .fl-bbook-slot--f3 {
     animation: fl-bbook-fill var(--ease-standard-out) both;
-    animation-timeline: view();
-    animation-range: entry 54% entry 79%;
+    animation-timeline: --fl-cell;
+    animation-range: cover 28% cover 47%;
   }
   .fl-bbook-badge {
     animation: fl-bbook-pop var(--spring-soft) both;
-    animation-timeline: view();
-    animation-range: entry 72% entry 90%;
+    animation-timeline: --fl-cell;
+    animation-range: cover 42% cover 55%;
   }
 
   /* 2 · whatsapp: burbuja entra, ticks pasan a leído */
   .fl-bwa-bubble {
     animation: fl-bwa-in var(--ease-emphasized-out) both;
-    animation-timeline: view();
-    animation-range: entry 30% entry 55%;
+    animation-timeline: --fl-cell;
+    animation-range: cover 10% cover 29%;
   }
   .fl-bwa-ticks {
     animation: fl-bwa-read var(--ease-standard) both;
-    animation-timeline: view();
-    animation-range: entry 55% entry 85%;
+    animation-timeline: --fl-cell;
+    animation-range: cover 29% cover 51%;
   }
 
   /* 3 · números: barras crecen con stagger */
   .fl-bnum-bar--1 {
     animation: fl-bnum-grow var(--ease-emphasized-out) both;
-    animation-timeline: view();
-    animation-range: entry 30% entry 60%;
+    animation-timeline: --fl-cell;
+    animation-range: cover 10% cover 32%;
   }
   .fl-bnum-bar--2 {
     animation: fl-bnum-grow var(--ease-emphasized-out) both;
-    animation-timeline: view();
-    animation-range: entry 38% entry 68%;
+    animation-timeline: --fl-cell;
+    animation-range: cover 16% cover 38%;
   }
   .fl-bnum-bar--3 {
     animation: fl-bnum-grow var(--ease-emphasized-out) both;
-    animation-timeline: view();
-    animation-range: entry 46% entry 76%;
+    animation-timeline: --fl-cell;
+    animation-range: cover 22% cover 44%;
   }
   .fl-bnum-bar--4 {
     animation: fl-bnum-grow var(--ease-emphasized-out) both;
-    animation-timeline: view();
-    animation-range: entry 54% entry 86%;
+    animation-timeline: --fl-cell;
+    animation-range: cover 28% cover 52%;
   }
 
   /* 4 · gcal: dot ida y vuelta una vez, check final */
   .fl-bcal-dot {
     animation: fl-bcal-travel var(--ease-standard) both;
-    animation-timeline: view();
-    animation-range: entry 30% entry 72%;
+    animation-timeline: --fl-cell;
+    animation-range: cover 10% cover 42%;
   }
   .fl-bcal-check {
     animation: fl-bcal-pop var(--spring-soft) both;
-    animation-timeline: view();
-    animation-range: entry 74% entry 90%;
+    animation-timeline: --fl-cell;
+    animation-range: cover 43% cover 55%;
   }
 
   /* 5 · cifrado: crossfade plano → cipher, candado cierra con pop */
   .fl-bcif-plain {
     animation: fl-bcif-fade-out var(--ease-standard) both;
-    animation-timeline: view();
-    animation-range: entry 38% entry 66%;
+    animation-timeline: --fl-cell;
+    animation-range: cover 16% cover 37%;
   }
   .fl-bcif-cipher {
     animation: fl-bcif-fade-in var(--ease-standard) both;
-    animation-timeline: view();
-    animation-range: entry 44% entry 72%;
+    animation-timeline: --fl-cell;
+    animation-range: cover 20% cover 42%;
   }
   .fl-bcif-lock {
     animation: fl-bcif-close var(--spring-soft) both;
-    animation-timeline: view();
-    animation-range: entry 55% entry 85%;
+    animation-timeline: --fl-cell;
+    animation-range: cover 29% cover 51%;
   }
 
   /* 6 · equipo: avatares en cascada */
   .fl-bteam-ava--1 {
     animation: fl-bteam-in var(--spring-soft) both;
-    animation-timeline: view();
-    animation-range: entry 30% entry 58%;
+    animation-timeline: --fl-cell;
+    animation-range: cover 10% cover 31%;
   }
   .fl-bteam-ava--2 {
     animation: fl-bteam-in var(--spring-soft) both;
-    animation-timeline: view();
-    animation-range: entry 42% entry 70%;
+    animation-timeline: --fl-cell;
+    animation-range: cover 19% cover 40%;
   }
   .fl-bteam-ava--3 {
     animation: fl-bteam-in var(--spring-soft) both;
-    animation-timeline: view();
-    animation-range: entry 54% entry 82%;
+    animation-timeline: --fl-cell;
+    animation-range: cover 28% cover 49%;
   }
 }
 

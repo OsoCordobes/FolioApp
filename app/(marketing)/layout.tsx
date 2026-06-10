@@ -15,7 +15,7 @@ import { getBaseUrl } from "@/lib/base-url";
 
 const TITLE = "Folio — Agenda, historia clínica y cobros para profesionales de la salud";
 const DESCRIPTION =
-  "Agenda de turnos con reservas online, historia clínica digital y cobros con Mercado Pago. Tu consultorio en orden, hecho para profesionales de la salud en Argentina.";
+  "El día de tu consultorio, armado solo: turnos, reservas online, recordatorios por WhatsApp y notas clínicas cifradas con AES-256-GCM. Para profesionales de la salud en Argentina.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(getBaseUrl()),

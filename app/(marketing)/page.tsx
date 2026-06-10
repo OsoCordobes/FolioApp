@@ -4,9 +4,10 @@
  * Narrativa: hero (08:00, el día arranca) → timeline del día (#dia) →
  * bóveda de seguridad (#seguridad) → bento de producto (#producto) →
  * precios (#precios) → FAQ (#faq) → CTA de cierre. Server components
- * salvo islands chicas (escenas client de la timeline) y LandingAnalytics
- * (PostHog, no-op sin cookie consent). Anclas estables para el header:
- * #dia, #seguridad, #producto, #precios, #faq.
+ * en su totalidad — la timeline y las demos del bento animan con CSS puro
+ * (animation-timeline: view()); los únicos islands client son el toggle de
+ * nav mobile y LandingAnalytics (PostHog, no-op sin cookie consent).
+ * Anclas estables para el header: #dia, #seguridad, #producto, #precios, #faq.
  *
  * JSON-LD (Fase C · SEO): un solo script con `@graph` —
  * SoftwareApplication (precios derivados de las MISMAS fuentes que la

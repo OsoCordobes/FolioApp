@@ -11,7 +11,7 @@ import { test, expect, type Page } from "@playwright/test";
  *   - Mismo Date mock + clock + settle window que app.spec.ts.
  *   - `reducedMotion: reduce` — el landing tiene entradas scroll-driven
  *     (.fl-reveal con animation-timeline: view()), la entrada cinemática del
- *     hero y las escenas client de la timeline del día; el media query los
+ *     hero y las escenas CSS de la timeline del día; el media query los
  *     apaga todos (folio.css los anula con animation: none y las escenas
  *     degradan al layout apilado estático — determinístico).
  *   - Cookie banner pre-dismisseado vía localStorage `folio.cookieConsent`.
