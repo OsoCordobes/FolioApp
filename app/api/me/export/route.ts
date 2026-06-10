@@ -10,6 +10,7 @@
  *   - memberships (organization_id, rol, scope, equipo, es_colegiado, timestamps)
  *   - subscripciones / planes asociados al profile (si los hay)
  *   - integraciones (proveedor + fecha; tokens NO se exportan por seguridad)
+ *   - invitaciones de equipo que el titular creó o aceptó (sin token_hash)
  *
  * El export NO incluye:
  *   - PHI de pacientes: el profesional la accede vía la UI normal (no es
@@ -23,14 +24,24 @@
  *     atención a la solicitud ARCO.
  */
 
+import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 
+import { buildAuditInsertRow } from "@/lib/db/audit";
 import { decryptColumn } from "@/lib/crypto";
 import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/legal/versions";
+import {
+  buildInvitationOrFilter,
+  sanitizeInvitationsForExport,
+  type RawInvitationRow,
+} from "@/lib/me/export-invitations";
 import { createSupabaseServerClient, createSupabaseServiceClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// Export ARCO: descifra PII app-side + agrega varias tablas. Margen sobre el
+// default por si el profile tiene muchas membresías/invitaciones.
+export const maxDuration = 60;
 
 export async function GET() {
   const supabase = await createSupabaseServerClient();
@@ -87,17 +98,45 @@ export async function GET() {
       (members ?? []).map((m) => m.organization_id),
     );
 
-  // 5. Audit del export (Ley 25.326 art. 14 — evidencia de respuesta).
+  // 5. Invitaciones de equipo vinculadas al titular (Ley 25.326 art. 16 —
+  //    portabilidad): las que CREÓ (invited_by_member_id ∈ sus memberships) y
+  //    las que ACEPTÓ (accepted_by_profile_id = user.id). Columnas
+  //    sanitizadas: NUNCA se exporta token_hash (es el secreto de aceptación).
+  const memberIds = (members ?? []).map((m) => m.id);
+  const { data: invitacionesRaw } = await service
+    .from("member_invitation")
+    .select(
+      "id, organization_id, email, role, estado, expires_at, accepted_at, created_at, invited_by_member_id, accepted_by_profile_id",
+    )
+    .or(buildInvitationOrFilter(user.id, memberIds));
+  const invitaciones = sanitizeInvitationsForExport(
+    (invitacionesRaw ?? []) as RawInvitationRow[],
+    user.id,
+    memberIds,
+  );
+
+  // 6. Audit del export (Ley 25.326 art. 14 — evidencia de respuesta). El
+  //    contexto de red (ip/user_agent) es especialmente relevante acá: deja
+  //    constancia de DESDE DÓNDE se ejerció el derecho de acceso a PII.
   if (members && members.length > 0) {
-    await service.from("audit_log").insert({
-      organization_id: members[0].organization_id,
-      actor_id: user.id,
-      actor_role: members[0].role,
-      action: "profile.export",
-      resource_type: "profile",
-      resource_id: user.id,
-      payload: { reason: "ARCO art. 14 — derecho de acceso del titular" },
-    });
+    const h = await headers();
+    await service.from("audit_log").insert(
+      buildAuditInsertRow(
+        {
+          organizationId: members[0].organization_id,
+          actorId: user.id,
+          actorRole: members[0].role,
+          action: "profile.export",
+          resourceType: "profile",
+          resourceId: user.id,
+          payload: { reason: "ARCO art. 14 — derecho de acceso del titular" },
+        },
+        {
+          ip: h.get("x-forwarded-for") ?? h.get("x-real-ip") ?? null,
+          userAgent: h.get("user-agent") ?? null,
+        },
+      ),
+    );
   }
 
   const payload = {
@@ -128,6 +167,7 @@ export async function GET() {
       // Tokens deliberadamente omitidos.
     })),
     suscripciones: suscripciones ?? [],
+    invitaciones,
     notas: [
       "Este export contiene los datos personales del titular del profile.",
       "Los datos clínicos de pacientes (PHI) NO están incluidos porque el responsable de esos datos es el profesional tratante en su rol de data controller bajo Ley 25.326. Los pacientes pueden ejercer su derecho de acceso solicitándolo al profesional o, subsidiariamente, a privacidad@folio.app.",

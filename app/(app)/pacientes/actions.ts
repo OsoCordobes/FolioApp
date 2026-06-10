@@ -100,6 +100,11 @@ export async function saveSesionFichaAction(
   const ctx = await getActiveContext();
   if (!ctx.ok) return ctx;
 
+  // F-AUTH (IDOR): turnoId/pacienteId vienen del cliente. El guard cross-org
+  // (turno ∈ org activa + turno.paciente_id == pacienteId) vive ahora en
+  // upsertSesion (lib/db/sesiones.ts), así protege a cualquier caller y evita
+  // duplicar el SELECT acá. La RLS + el trigger sesion_same_org_guard son la
+  // última línea en DB.
   const result = await upsertSesion(
     buildUpsertSesionInput({
       turnoId: parsed.data.turnoId,

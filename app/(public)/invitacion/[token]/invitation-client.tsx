@@ -14,13 +14,17 @@
  * Estilos: clases au-* (panel de auth) + tokens de folio.css.
  */
 
+import Script from "next/script";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 import { signInWithPassword } from "@/app/(public)/login/actions";
 import { roleLabel, type Role } from "@/lib/auth/capabilities";
 
 import { acceptInvitationAction, signUpForInvitationAction } from "./actions";
+
+// Window.turnstile global type lives in components/booking/booking-wizard.tsx
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
 
 export interface InvitationPreview {
   organization_id: string;
@@ -97,7 +101,46 @@ export function InvitationAuth({ token }: { token: string }) {
   const [password, setPassword] = useState("");
   const [consent, setConsent] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const captchaContainerRef = useRef<HTMLDivElement | null>(null);
+  const captchaWidgetIdRef = useRef<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  // F-AUTH: Turnstile en el alta del invitado (paridad con el signup de
+  // onboarding). Solo en modo "signup" — el login usa signInWithPassword, que
+  // ya tiene su propia defensa. El widget se monta/desmonta al cambiar de modo;
+  // el Script de Cloudflare puede no haber cargado aún, así que polleamos hasta
+  // que window.turnstile exista (mismo patrón que login-form / booking-wizard).
+  useEffect(() => {
+    if (modo !== "signup") return;
+    if (!TURNSTILE_SITE_KEY) return;
+    if (!captchaContainerRef.current) return;
+    const tryRender = () => {
+      if (!window.turnstile) return false;
+      if (captchaWidgetIdRef.current) return true;
+      captchaWidgetIdRef.current = window.turnstile.render(captchaContainerRef.current!, {
+        sitekey: TURNSTILE_SITE_KEY,
+        theme: "auto",
+        size: "flexible",
+        callback: (t) => setCaptchaToken(t),
+        "expired-callback": () => setCaptchaToken(null),
+        "error-callback": () => setCaptchaToken(null),
+      });
+      return true;
+    };
+    const cleanup = () => {
+      if (captchaWidgetIdRef.current && window.turnstile) {
+        window.turnstile.remove(captchaWidgetIdRef.current);
+        captchaWidgetIdRef.current = null;
+      }
+      setCaptchaToken(null);
+    };
+    if (!tryRender()) {
+      const id = setInterval(() => { if (tryRender()) clearInterval(id); }, 200);
+      return () => { clearInterval(id); cleanup(); };
+    }
+    return cleanup;
+  }, [modo]);
 
   const submit = (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -113,14 +156,27 @@ export function InvitationAuth({ token }: { token: string }) {
       setErr("Tenés que aceptar el aviso de privacidad para continuar.");
       return;
     }
+    if (modo === "signup" && TURNSTILE_SITE_KEY && !captchaToken) {
+      setErr("Esperá unos segundos a que el captcha verifique.");
+      return;
+    }
     setErr(null);
     startTransition(async () => {
       const result =
         modo === "signup"
-          ? await signUpForInvitationAction(email, password, { consent: true })
+          ? await signUpForInvitationAction(email, password, {
+              consent: true,
+              turnstileToken: captchaToken,
+            })
           : await signInWithPassword(email, password);
       if (!result.ok) {
         setErr(result.error ?? "No pudimos autenticarte. Probá de nuevo.");
+        // Turnstile es single-use: tras un fallo, reseteamos para forzar un
+        // token fresco en el próximo intento.
+        if (captchaWidgetIdRef.current && window.turnstile) {
+          window.turnstile.reset(captchaWidgetIdRef.current);
+          setCaptchaToken(null);
+        }
         return;
       }
       // Con sesión, el Server Component ya puede previsualizar la invitación.
@@ -165,12 +221,30 @@ export function InvitationAuth({ token }: { token: string }) {
 
         {modo === "signup" ? <ConsentCheckbox checked={consent} onChange={(v) => { setConsent(v); setErr(null); }} /> : null}
 
+        {/* Cloudflare Turnstile — solo en alta. Si no hay site key (dev /
+            visual regression) no se monta y el verifier server-side devuelve
+            true bajo la misma condición de entorno. */}
+        {modo === "signup" && TURNSTILE_SITE_KEY ? (
+          <>
+            <Script
+              src="https://challenges.cloudflare.com/turnstile/v0/api.js"
+              async
+              defer
+            />
+            <div ref={captchaContainerRef} style={{ marginTop: 4 }} />
+          </>
+        ) : null}
+
         {err ? <p className="au-err">{err}</p> : null}
 
         <button
           type="submit"
           className="fi-btn fi-btn-primary au-submit"
-          disabled={pending || (modo === "signup" && !consent)}
+          disabled={
+            pending ||
+            (modo === "signup" &&
+              (!consent || (Boolean(TURNSTILE_SITE_KEY) && !captchaToken)))
+          }
         >
           {pending
             ? modo === "signup" ? "Creando cuenta…" : "Entrando…"

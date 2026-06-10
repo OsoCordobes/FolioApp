@@ -70,6 +70,17 @@ export async function GET() {
     ),
     sentry: Boolean(process.env.NEXT_PUBLIC_SENTRY_DSN),
     posthog: Boolean(process.env.NEXT_PUBLIC_POSTHOG_KEY),
+    // Secreto que autentica los Vercel Crons (Bearer). Sin él, todo /api/cron/*
+    // responde 401 y los jobs no corren. Informativo: no baja `ok` (los crones
+    // no son dependencia de boot), pero DEBE estar true antes del go-live.
+    cron_secret: Boolean(process.env.CRON_SECRET),
+    // Webhook de MP funcional end-to-end: necesita el secreto de firma HMAC
+    // (MP_WEBHOOK_SECRET) y el token para resolver pagos/preapproval contra MP
+    // (MP_ACCESS_TOKEN). Informativo: no baja `ok`, pero DEBE estar true para
+    // que la suscripción se active automáticamente.
+    mp_webhook_secret: Boolean(
+      process.env.MP_WEBHOOK_SECRET && process.env.MP_ACCESS_TOKEN,
+    ),
   };
 
   const ok = Object.values(checks).every((c) => c.ok);
