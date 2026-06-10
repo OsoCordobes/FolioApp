@@ -13,9 +13,11 @@
  */
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useState, type ReactNode } from "react";
 
 import * as I from "@/components/icons";
+import { saveSesionFichaAction } from "@/app/(app)/pacientes/actions";
 import { TurnoCreateModal } from "@/components/hoy/turno-create-modal";
 import { PacienteFichaProvider, usePacienteFicha } from "@/components/paciente/contexto";
 import { getEspecialidad, type EspecialidadSlug } from "@/lib/especialidades/registry";
@@ -49,21 +51,31 @@ const SOAP_SECTIONS = [
 
 type SoapState = PlanData["soap"];
 
-function SoapStacked({ soap, setSoap }: { soap: SoapState; setSoap: (s: SoapState) => void }) {
-  // Persistencia real del SOAP está pendiente — los textareas son editables
-  // localmente pero los cambios NO viajan al server todavía. Para no engañar
-  // al usuario, no mostramos "Guardado · 11:08" como antes; mostramos una
-  // etiqueta honesta "Borrador local".
+function SoapStacked({
+  soap,
+  setSoap,
+  saveBadge,
+}: {
+  soap: SoapState;
+  setSoap: (s: SoapState) => void;
+  /** Indicador de guardado (lo pasa TabPlan cuando hay turno en curso). */
+  saveBadge?: ReactNode;
+}) {
+  // El borrador se persiste con "Guardar sesión" (TabPlan) cuando el paciente
+  // tiene un turno en curso. Sin turno en curso no hay sesión contra la cual
+  // guardar (sesion.turno_id UNIQUE) — etiqueta honesta "Borrador local".
   return (
     <div className="pc-soap">
       <header className="pc-soap-head">
         <span className="fi-eyebrow">Nota SOAP · sesión de {TURNO_HOY_HORA}</span>
-        <span
-          className="fm-save"
-          title="Persistencia del SOAP en sprint posterior. Por ahora editás localmente."
-        >
-          Borrador local
-        </span>
+        {saveBadge ?? (
+          <span
+            className="fm-save"
+            title="No hay un turno en curso para este paciente — editás localmente. Iniciá la atención desde /hoy para poder guardar la sesión."
+          >
+            Borrador local
+          </span>
+        )}
       </header>
       {SOAP_SECTIONS.map((s) => (
         <div key={s.id} className="pc-soap-section">
@@ -188,12 +200,60 @@ function HistorialReciente() {
 // ─── Sub: Tab Plan ─────────────────────────────────────────────────────────
 
 function TabPlan() {
-  const { plan, especialidad } = usePacienteFicha();
+  const { paciente, plan, especialidad } = usePacienteFicha();
   const def = getEspecialidad(especialidad);
-  // Borrador local del toolData de la herramienta (igual que el SOAP, la
-  // persistencia se cablea con el writer al cerrar turno — sprint posterior).
-  const [toolValue, setToolValue] = useState<unknown>(null);
+  const router = useRouter();
+  const turnoActivo = plan.turnoActivo;
+
+  // Borrador local del toolData de la herramienta. Si el turno en curso ya
+  // tiene sesión guardada, re-hidrata desde ahí: el writer sobreescribe todas
+  // las columnas en cada guardado, así que "guardar solo SOAP" después no
+  // debe pisar la herramienta con null.
+  const [toolValue, setToolValue] = useState<unknown>(turnoActivo?.toolDraft ?? null);
   const [soap, setSoap] = useState<SoapState>(plan.soap);
+  const [saving, setSaving] = useState(false);
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const handleGuardar = async () => {
+    if (!turnoActivo || saving) return;
+    setSaving(true);
+    setSaveError(null);
+    const result = await saveSesionFichaAction({
+      turnoId: turnoActivo.id,
+      pacienteId: paciente.id,
+      toolValue,
+      soap,
+    });
+    setSaving(false);
+    if (result.ok) {
+      const d = new Date();
+      setSavedAt(`${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`);
+      // La vuelta: refresca el Server Component → plan.toolHistorial trae la
+      // sesión recién guardada (el borrador local no se resetea: useState).
+      router.refresh();
+    } else {
+      setSaveError(result.error.message);
+    }
+  };
+
+  const saveBadge: ReactNode = turnoActivo ? (
+    saving ? (
+      <span className="fm-save fm-save--saving">
+        <span className="fm-save-spinner" />
+        Guardando…
+      </span>
+    ) : savedAt ? (
+      <span className="fm-save fm-save--saved">Guardado · {savedAt}</span>
+    ) : (
+      <span
+        className="fm-save"
+        title="El borrador se persiste con «Guardar sesión» mientras el turno está en curso."
+      >
+        Borrador sin guardar
+      </span>
+    )
+  ) : undefined;
 
   return (
     <div className="pc-plan-tab">
@@ -204,8 +264,30 @@ function TabPlan() {
 
       <div className="pc-plan-grid">
         <def.Tool value={toolValue} onChange={setToolValue} historial={plan.toolHistorial} />
-        <SoapStacked soap={soap} setSoap={setSoap} />
+        <SoapStacked soap={soap} setSoap={setSoap} saveBadge={saveBadge} />
       </div>
+
+      {turnoActivo ? (
+        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 12 }}>
+          {saveError ? (
+            <span role="alert" style={{ color: "var(--red)", fontSize: 12.5 }}>
+              No se pudo guardar: {saveError}
+            </span>
+          ) : null}
+          <button
+            type="button"
+            className="fi-btn fi-btn-primary"
+            onClick={() => {
+              void handleGuardar();
+            }}
+            disabled={saving}
+            aria-busy={saving}
+            title="Guarda la herramienta y el SOAP como la sesión de este turno (editable hasta el cierre)"
+          >
+            {saving ? "Guardando…" : "Guardar sesión"}
+          </button>
+        </div>
+      ) : null}
 
       <div className="pc-bottom-grid">
         <PlanTratamiento />

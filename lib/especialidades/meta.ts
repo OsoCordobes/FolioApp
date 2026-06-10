@@ -17,6 +17,14 @@
 import { z } from "zod";
 
 import {
+  cardiologiaToolDataSchema,
+  resumenSesionCardiologia,
+} from "@/lib/especialidades/cardiologia/schema";
+import {
+  psicologiaToolDataSchema,
+  resumenSesionPsicologia,
+} from "@/lib/especialidades/psicologia/schema";
+import {
   quiropraxiaToolDataSchema,
   resumenSesionQuiropraxia,
 } from "@/lib/especialidades/quiropraxia/schema";
@@ -70,19 +78,17 @@ export const ESPECIALIDADES_META: Record<EspecialidadSlug, EspecialidadMeta> = {
     slug: "cardiologia",
     nombre: "Cardiología",
     badgeLabel: "Módulo · Cardiología",
-    toolId: "cardiologia.placeholder",
-    // Placeholder hasta Fase D (Panel CV + estudios): acepta cualquier shape.
-    schema: z.unknown(),
-    resumenSesion: () => "Sesión registrada",
+    toolId: "cardiologia.cv.v1",
+    schema: cardiologiaToolDataSchema,
+    resumenSesion: resumenSesionCardiologia,
   },
   psicologia: {
     slug: "psicologia",
     nombre: "Psicología",
     badgeLabel: "Módulo · Psicología",
-    toolId: "psicologia.placeholder",
-    // Placeholder hasta Fase D (PHQ-9/GAD-7 + registro estructurado).
-    schema: z.unknown(),
-    resumenSesion: () => "Sesión registrada",
+    toolId: "psicologia.escalas.v1",
+    schema: psicologiaToolDataSchema,
+    resumenSesion: resumenSesionPsicologia,
   },
 };
 

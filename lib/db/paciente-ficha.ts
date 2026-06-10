@@ -66,6 +66,20 @@ export interface SesionPlan {
   vertebras: string[];
 }
 
+/** Turno en curso del paciente — ancla del guardado de sesión desde la ficha. */
+export interface TurnoActivoFicha {
+  id: string;
+  estado: "EN_SALA" | "ATENDIENDO";
+  /**
+   * toolData ya guardado para este turno (sesion.tool_data_cifrado
+   * descifrado) o null si todavía no hay sesión / no tiene tool data.
+   * El tab Plan re-hidrata el borrador del slot con esto: el writer
+   * (upsertSesion) sobreescribe todas las columnas en cada guardado, así
+   * que sin re-hidratación un "guardar solo SOAP" pisaría la herramienta.
+   */
+  toolDraft: unknown;
+}
+
 export interface PlanData {
   total: number;
   completadas: number;
@@ -88,6 +102,12 @@ export interface PlanData {
    * legacy mapeando vertebras_json a { v: 1, vertebras } (filas pre-M50).
    */
   toolHistorial: ToolHistorialEntry[];
+  /**
+   * Turno en curso (EN_SALA/ATENDIENDO, el más reciente) o null. Habilita
+   * "Guardar sesión" en el tab Plan: la sesión se upsertea 1:1 contra este
+   * turno (sesion.turno_id UNIQUE, M10) vía saveSesionFichaAction.
+   */
+  turnoActivo: TurnoActivoFicha | null;
 }
 
 export interface PacienteFichaData {
@@ -262,6 +282,26 @@ export async function getPacienteFicha(
     new Date(t.inicio).getTime() > Date.now(),
   );
 
+  // Turno en curso (el más reciente EN_SALA/ATENDIENDO — `turnos` ya viene
+  // DESC por inicio): ancla del guardado de la sesión desde la ficha.
+  // toolDraft = toolData ya persistido para ese turno, para re-hidratar el
+  // borrador del slot (guardados sucesivos no pisan la herramienta).
+  const turnoEnCurso =
+    turnos.find((t) => t.estado === "ATENDIENDO" || t.estado === "EN_SALA") ?? null;
+  const sesionTurnoEnCurso = turnoEnCurso
+    ? sesiones.find((s) => s.turno_id === turnoEnCurso.id) ?? null
+    : null;
+  const turnoActivo: TurnoActivoFicha | null = turnoEnCurso
+    ? {
+        id: turnoEnCurso.id,
+        estado: turnoEnCurso.estado as TurnoActivoFicha["estado"],
+        toolDraft:
+          sesionTurnoEnCurso && sesionTurnoEnCurso.tool_data_cifrado != null
+            ? sesionToolData(sesionTurnoEnCurso)
+            : null,
+      }
+    : null;
+
   const plan: PlanData = {
     total: Math.max(sesionesCompletadas, 1),
     completadas: sesionesCompletadas,
@@ -275,6 +315,7 @@ export async function getPacienteFicha(
     soap,
     sesiones: historial,
     toolHistorial,
+    turnoActivo,
   };
 
   const cumple = row.fecha_nacimiento ? formatCumple(row.fecha_nacimiento) : "—";
@@ -289,8 +330,13 @@ function tryDecrypt(value: string | null | undefined, label: string): string | n
   try {
     return decryptColumn(value);
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.warn(`[paciente-ficha] decrypt falló (${label}): ${msg}`);
+    // PHI: en producción degradamos en silencio (fallback null). Loguear el
+    // fallo atado a un label/ID de sesión crea metadata enlazable a PHI en
+    // los logs del server — solo se loguea en desarrollo.
+    if (process.env.NODE_ENV === "development") {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn(`[paciente-ficha] decrypt falló (${label}): ${msg}`);
+    }
     return null;
   }
 }
@@ -307,8 +353,12 @@ function sesionToolData(s: SesionRow): unknown {
       try {
         return JSON.parse(plain) as unknown;
       } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        console.warn(`[paciente-ficha] tool_data JSON inválido (sesion ${s.id}): ${msg}`);
+        // PHI: no loguear en producción — el UUID de sesión en los logs
+        // crea linkage rastreable hacia datos clínicos. Solo en desarrollo.
+        if (process.env.NODE_ENV === "development") {
+          const msg = e instanceof Error ? e.message : String(e);
+          console.warn(`[paciente-ficha] tool_data JSON inválido (sesion ${s.id}): ${msg}`);
+        }
       }
     }
     // cae al fallback legacy de abajo
