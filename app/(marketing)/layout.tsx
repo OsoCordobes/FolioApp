@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 
+import { LandingFooter } from "@/components/landing/landing-footer";
+import { LandingHeader } from "@/components/landing/landing-header";
+
 /**
  * Folio · Layout del grupo (marketing) — landing pública.
  *
- * Fase A (fundación): estructura mínima. El header de navegación y el
- * footer de marketing llegan en Fase B. El SEO completo (OpenGraph,
- * JSON-LD, canonical) llega en Fase C — acá queda solo el metadata base.
+ * Header sticky + footer envuelven el contenido. El SEO completo
+ * (OpenGraph, JSON-LD, canonical) llega en Fase C — acá queda solo el
+ * metadata base.
  */
 
 export const metadata: Metadata = {
@@ -19,6 +22,11 @@ export default function MarketingLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Header/footer de marketing se agregan en Fase B.
-  return <div className="fl-root">{children}</div>;
+  return (
+    <div className="fl-root">
+      <LandingHeader />
+      {children}
+      <LandingFooter />
+    </div>
+  );
 }

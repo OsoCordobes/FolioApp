@@ -150,3 +150,76 @@ export const EVENT_NAMES = {
   SOAP_AUTOSAVED: "soap.autosaved",
   DOCUMENTO_UPLOADED: "documento.uploaded",
 } as const;
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * Landing pública (/) · funnel de marketing — eventos CLIENT-side.
+ *
+ * A diferencia del catálogo de arriba, estos eventos NO pasan por
+ * `captureServerEvent`: los captura el browser (posthog-js) desde el island
+ * <LandingAnalytics /> (components/landing/landing-analytics.tsx), gated por
+ * cookie consent (ver lib/observability/posthog-client.tsx — sin
+ * consentimiento explícito `posthog.init` nunca corre y toda captura es
+ * no-op silencioso).
+ *
+ * IMPORTANTE: este módulo importa posthog-node (server-only) para los
+ * helpers de arriba. Desde client components importar SOLO tipos
+ * (`import type { ... } from "@/lib/observability/events"`) — un import por
+ * valor arrastraría posthog-node al bundle del browser.
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+/** Sección de origen de un CTA del landing (valor del atributo `data-fl-cta`). */
+export type LandingCtaSection =
+  | "header"
+  | "hero"
+  | "pricing_solo"
+  | "pricing_clinic"
+  | "final";
+
+/** `landing.viewed` — pageview del landing (una vez por visita). Sin props. */
+export type LandingViewedProps = Record<string, never>;
+
+/** `landing.cta_clicked` — click en cualquier elemento `[data-fl-cta]`. */
+export interface LandingCtaClickedProps {
+  /** Valor del atributo `data-fl-cta` del elemento clickeado. */
+  section: LandingCtaSection;
+  /** Destino del CTA — el `href` del anchor (ej. "/onboarding"). */
+  target: string;
+}
+
+/** `landing.section_viewed` — sección `[data-fl-section]` vista (una vez c/u). */
+export interface LandingSectionViewedProps {
+  /** Valor de `data-fl-section` (hero, producto, features, showcase, …). */
+  section: string;
+}
+
+/** `landing.faq_opened` — `<details data-fl-faq={i}>` abierto. */
+export interface LandingFaqOpenedProps {
+  /** Índice del item de FAQ (valor numérico de `data-fl-faq`). */
+  index: number;
+}
+
+/**
+ * Mapa nombre canónico → shape de properties. El island lo consume vía
+ * `import type` para tipar su helper `capture(event, props)` con literales
+ * verificados en compile-time, sin ningún import por valor de este módulo.
+ */
+export interface LandingEventMap {
+  "landing.viewed": LandingViewedProps;
+  "landing.cta_clicked": LandingCtaClickedProps;
+  "landing.section_viewed": LandingSectionViewedProps;
+  "landing.faq_opened": LandingFaqOpenedProps;
+}
+
+export type LandingEventName = keyof LandingEventMap;
+
+/**
+ * Nombres canónicos del funnel de marketing — paridad con EVENT_NAMES para
+ * alinear dashboards/funnels de PostHog. (Server-side puede referenciarlos;
+ * el island del browser usa los literales tipados vía LandingEventMap.)
+ */
+export const LANDING_EVENT_NAMES = {
+  LANDING_VIEWED: "landing.viewed",
+  LANDING_CTA_CLICKED: "landing.cta_clicked",
+  LANDING_SECTION_VIEWED: "landing.section_viewed",
+  LANDING_FAQ_OPENED: "landing.faq_opened",
+} as const satisfies Record<string, LandingEventName>;

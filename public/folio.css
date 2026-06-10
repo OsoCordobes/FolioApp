@@ -13727,3 +13727,1322 @@ input:focus { outline: none; }
   text-wrap: balance;
   margin: 0 0 var(--space-6);
 }
+
+/* ═════════════ LANDING · Fragment B1 — shell + above the fold ═════════════
+ * Header sticky glass · hero + mockup en capas · trust strip · CTA final ·
+ * footer. El orquestador anexa este archivo al final de public/folio.css y
+ * lo borra. Solo tokens existentes via var(); todo scopeado .fl-*. */
+
+/* fl-header */
+.fl-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line-soft);
+}
+.fl-header-inner {
+  max-width: 1120px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  height: 64px;
+  padding: 0 var(--space-6);
+}
+.fl-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  text-decoration: none;
+  color: var(--ink);
+  flex-shrink: 0;
+}
+.fl-wordmark {
+  font-family: var(--font-display);
+  font-size: 21px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+.fl-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+/* Los .fi-btn del design system traen cursor: default (app); en marketing
+   son links de verdad. Scope bajo .fl-header/.fl-main/.fl-footer. */
+.fl-header .fi-btn,
+.fl-main .fi-btn,
+.fl-footer .fi-btn { cursor: pointer; }
+
+/* Skip link — visualmente oculto hasta recibir foco de teclado */
+.fl-skip {
+  position: absolute;
+  left: var(--space-3);
+  top: -100px;
+  z-index: 60;
+  padding: 10px 16px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-2);
+  text-decoration: none;
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+.fl-skip:focus-visible {
+  top: var(--space-3);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Foco visible para los links propios del landing (patrón del DS) */
+.fl-root a:focus-visible,
+.fl-footer a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+/* fl-nav */
+.fl-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0 auto;
+}
+.fl-nav-link {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: var(--r-pill);
+  font-size: var(--fs-body);
+  font-weight: 500;
+  color: var(--ink-2);
+  text-decoration: none;
+  transition: color var(--dur-quick) var(--ease-standard),
+              background var(--dur-quick) var(--ease-standard);
+}
+.fl-nav-link:hover { color: var(--ink); background: var(--surface-2); }
+
+/* Toggle hamburguesa (mobile) — 3 barras que se cruzan en X al abrir */
+.fl-nav-toggle {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-md);
+  color: var(--ink);
+  flex-shrink: 0;
+}
+.fl-nav-toggle:hover { background: var(--surface-2); }
+.fl-nav-toggle-bar {
+  display: block;
+  width: 18px;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+  transition: transform var(--dur-snappy) var(--ease-emphasized),
+              opacity var(--dur-quick) var(--ease-standard);
+}
+.fl-nav-toggle.is-open .fl-nav-toggle-bar:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.fl-nav-toggle.is-open .fl-nav-toggle-bar:nth-child(2) { opacity: 0; }
+.fl-nav-toggle.is-open .fl-nav-toggle-bar:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+/* Panel mobile — colapsado siempre; solo abre dentro del breakpoint mobile */
+.fl-mobile-panel {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-6) var(--space-5);
+  background: color-mix(in srgb, var(--bg) 94%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line-soft);
+  box-shadow: var(--shadow-2);
+}
+.fl-mobile-nav { display: flex; flex-direction: column; }
+.fl-mobile-link {
+  padding: var(--space-3) var(--space-2);
+  border-radius: var(--r-md);
+  font-size: var(--fs-md);
+  font-weight: 500;
+  color: var(--ink-2);
+  text-decoration: none;
+}
+.fl-mobile-link:hover { color: var(--ink); background: var(--surface-2); }
+.fl-mobile-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+.fl-mobile-actions .fi-btn {
+  flex: 1;
+  justify-content: center;
+}
+
+@keyframes fl-panel-in {
+  from { opacity: 0; transform: translateY(calc(-1 * var(--motion-dist-sm))); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@media (max-width: 767px) {
+  .fl-nav { display: none; }
+  .fl-header-actions { display: none; }
+  .fl-nav-toggle { display: inline-flex; margin-left: auto; }
+  .fl-mobile-panel.is-open {
+    display: flex;
+    animation: fl-panel-in var(--dur-snappy) var(--ease-emphasized-out) both;
+  }
+}
+
+/* fl-hero */
+.fl-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  gap: var(--space-16);
+  align-items: center;
+}
+.fl-eyebrow {
+  margin: 0 0 var(--space-4);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-2);
+}
+.fl-hero .fl-hero-title { margin-bottom: var(--space-5); }
+.fl-hero-sub {
+  margin: 0 0 var(--space-8);
+  max-width: 34rem;
+  font-size: clamp(1.05rem, 1.4vw, 1.2rem);
+  line-height: 1.55;
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+.fl-hero-ctas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+.fl-btn-lg {
+  padding: 12px 22px;
+  font-size: var(--fs-md);
+  font-weight: 600;
+  border-radius: var(--r-md);
+}
+.fl-hero-note {
+  margin: var(--space-4) 0 0;
+  font-size: var(--fs-body);
+  color: var(--ink-3);
+  text-wrap: pretty;
+}
+
+/* Entrada inicial del hero — cinematic, decelerada */
+@keyframes fl-rise {
+  from { opacity: 0; transform: translateY(var(--motion-dist-md)); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fl-hero-copy   { animation: fl-rise var(--dur-cinematic) var(--ease-emphasized) both; }
+.fl-hero-visual { animation: fl-rise var(--dur-cinematic) var(--ease-emphasized) 120ms both; }
+
+/* fl-mock · agenda del día en capas (estático; parallax solo con view()) */
+.fl-hero-visual { position: relative; }
+.fl-mock {
+  position: relative;
+  min-height: 400px;
+}
+.fl-mock-card {
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-xl);
+  padding: var(--space-5);
+}
+.fl-mock-front {
+  position: relative;
+  z-index: 2;
+  width: min(420px, 92%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  box-shadow: var(--shadow-hero);
+}
+.fl-mock-back {
+  position: absolute;
+  z-index: 1;
+  right: 0;
+  bottom: 8%;
+  width: min(380px, 86%);
+  box-shadow: var(--shadow-2);
+  filter: blur(2px);
+  opacity: 0.65;
+}
+.fl-mock-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0 var(--space-1) var(--space-1);
+}
+.fl-mock-day {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--ink-2);
+}
+.fl-mock-count {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--ink-3);
+}
+.fl-mock-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-lg);
+  background: var(--bg);
+}
+.fl-mock-row.is-muted { opacity: 0.82; }
+.fl-mock-time {
+  font-family: var(--font-mono);
+  font-size: var(--fs-lg);
+  font-weight: 500;
+  color: var(--ink);
+  flex-shrink: 0;
+}
+.fl-mock-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.fl-mock-name {
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fl-mock-service { font-size: var(--fs-sm); color: var(--ink-3); }
+.fl-mock-badge {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--r-pill);
+  background: var(--green-soft);
+  color: var(--green);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.fl-mock-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.fl-mock-badge.is-amber { background: var(--amber-soft); color: var(--amber); }
+.fl-mock-badge.is-slate { background: var(--slate-soft); color: var(--slate); }
+.fl-mock-chip {
+  position: absolute;
+  z-index: 3;
+  left: 6%;
+  bottom: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 8px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-pill);
+  box-shadow: var(--shadow-2);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  color: var(--ink-2);
+}
+.fl-mock-chip-icon {
+  display: inline-flex;
+  color: var(--green);
+}
+
+/* Parallax sutil scroll-driven de las capas del mock (fallback: estático) */
+@keyframes fl-par-front {
+  from { transform: translateY(14px); }
+  to   { transform: translateY(-14px); }
+}
+@keyframes fl-par-back {
+  from { transform: translateY(28px); }
+  to   { transform: translateY(-30px); }
+}
+@keyframes fl-par-chip {
+  from { transform: translateY(36px); }
+  to   { transform: translateY(-42px); }
+}
+@supports (animation-timeline: view()) {
+  .fl-mock-front {
+    animation: fl-par-front linear both;
+    animation-timeline: view();
+    animation-range: cover 0% cover 100%;
+  }
+  .fl-mock-back {
+    animation: fl-par-back linear both;
+    animation-timeline: view();
+    animation-range: cover 0% cover 100%;
+  }
+  .fl-mock-chip {
+    animation: fl-par-chip linear both;
+    animation-timeline: view();
+    animation-range: cover 0% cover 100%;
+  }
+}
+
+/* fl-reveal · entrada scroll-driven compartida para secciones (B1/B2/B3).
+   Sin soporte de view(): contenido visible, sin animación. */
+@keyframes fl-reveal-in {
+  from { opacity: 0; transform: translateY(var(--motion-dist-lg)); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@supports (animation-timeline: view()) {
+  .fl-reveal {
+    animation: fl-reveal-in var(--ease-emphasized-out) both;
+    animation-timeline: view();
+    animation-range: entry 0% entry 55%;
+  }
+}
+
+/* fl-trust */
+.fl-trust {
+  padding-top: var(--space-12);
+  padding-bottom: var(--space-12);
+}
+.fl-trust-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-6);
+  text-align: center;
+  border-top: 1px solid var(--line-soft);
+  padding-top: var(--space-12);
+}
+.fl-trust-label {
+  margin: 0;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.fl-trust-specialties {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2) var(--space-3);
+}
+.fl-trust-specialty {
+  font-family: var(--font-display);
+  font-size: var(--fs-lg);
+  color: var(--ink-2);
+}
+.fl-trust-specialty + .fl-trust-specialty::before {
+  content: "·";
+  margin-right: var(--space-3);
+  color: var(--ink-4);
+}
+.fl-trust-badges {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-3);
+}
+.fl-trust-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: var(--fs-body);
+  font-weight: 500;
+}
+.fl-trust-badge svg { color: var(--accent); flex-shrink: 0; }
+
+/* fl-cta-final */
+.fl-cta-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-5);
+  padding: clamp(var(--space-10), 6vw, var(--space-16)) var(--space-6);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-soft-2);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-hero);
+  text-align: center;
+}
+.fl-cta-title {
+  margin: 0;
+  max-width: 24ch;
+  font-family: var(--font-display);
+  font-size: clamp(1.7rem, 3.4vw, 2.6rem);
+  font-weight: 500;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+  text-wrap: balance;
+}
+.fl-cta-sub {
+  margin: 0;
+  font-size: var(--fs-md);
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+.fl-cta-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+/* fl-footer */
+.fl-footer {
+  border-top: 1px solid var(--line-soft);
+  background: var(--surface);
+}
+.fl-footer-inner {
+  max-width: 1120px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-8);
+  padding: var(--space-16) var(--space-6) var(--space-10);
+}
+.fl-footer-heading {
+  margin: 0 0 var(--space-3);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.fl-footer-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.fl-footer-link {
+  font-size: var(--fs-body);
+  color: var(--ink-2);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.fl-footer-link:hover { color: var(--ink); text-decoration: underline; }
+.fl-footer-base {
+  max-width: 1120px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-6) var(--space-8);
+  border-top: 1px solid var(--line-soft);
+  font-size: var(--fs-sm);
+  color: var(--ink-3);
+}
+
+/* fl-responsive · mobile */
+@media (max-width: 767px) {
+  .fl-hero {
+    grid-template-columns: 1fr;
+    gap: var(--space-12);
+  }
+  .fl-hero-ctas {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .fl-hero-ctas .fi-btn { justify-content: center; }
+  .fl-mock { min-height: 340px; }
+  .fl-mock-front { width: 100%; }
+  .fl-mock-back { width: 92%; bottom: 4%; }
+  .fl-mock-chip { left: var(--space-2); }
+  .fl-mock-row { gap: var(--space-2); padding: var(--space-2) var(--space-3); }
+  .fl-mock-time { font-size: var(--fs-md); }
+  /* CookieBanner fixed-bottom: aire extra para que no tape los CTAs */
+  .fl-cta-final { padding-bottom: calc(var(--space-20) + var(--space-16)); }
+  .fl-footer-inner {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-8) var(--space-6);
+    padding-top: var(--space-12);
+  }
+  .fl-footer-base {
+    flex-wrap: wrap;
+    text-wrap: pretty;
+  }
+}
+
+/* fl-reduced-motion · anula las animaciones del fragmento B1; el estado
+   base (sin animation-fill) ya es el estado final visible. */
+@media (prefers-reduced-motion: reduce) {
+  .fl-hero-copy,
+  .fl-hero-visual,
+  .fl-reveal,
+  .fl-mock-front,
+  .fl-mock-back,
+  .fl-mock-chip,
+  .fl-mobile-panel.is-open {
+    animation: none !important;
+  }
+  .fl-nav-toggle-bar,
+  .fl-nav-link,
+  .fl-skip {
+    transition: none !important;
+  }
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * LANDING · Fragmento B2 — Features / Seguridad / Precios / FAQ
+ * El orquestador anexa este archivo a public/folio.css y lo borra.
+ * Solo tokens var() existentes; selectores con prefijo .fl-*.
+ * `.fl-reveal` la define B1 — acá solo se consume (--fl-reveal-delay).
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+/* fl-features */
+.fl-features-title,
+.fl-security-title,
+.fl-pricing-title,
+.fl-faq-title {
+  font-family: var(--font-display);
+  font-size: clamp(1.8rem, 3.4vw, 2.6rem);
+  font-weight: 500;
+  line-height: 1.12;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+  text-wrap: balance;
+  margin: 0 0 var(--space-3);
+}
+
+.fl-features-sub,
+.fl-security-sub,
+.fl-pricing-sub {
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--ink-3);
+  text-wrap: pretty;
+  max-width: 56ch;
+  margin: 0 0 var(--space-10);
+}
+
+.fl-features-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: var(--space-4);
+}
+
+.fl-feature-card {
+  grid-column: span 2;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+  transition:
+    transform var(--dur-quick) var(--ease-standard-out),
+    box-shadow var(--dur-quick) var(--ease-standard-out),
+    border-color var(--dur-quick) var(--ease-standard-out);
+}
+
+.fl-feature-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-2);
+  border-color: var(--line);
+}
+
+/* layout asimétrico: las dos primeras cards protagonizan la fila superior */
+.fl-feature-card:nth-child(1) { grid-column: span 4; }
+.fl-feature-card:nth-child(2) { grid-column: span 2; }
+
+.fl-feature-card--featured {
+  background: var(--accent-soft);
+  border-color: var(--accent-soft-2);
+}
+
+.fl-feature-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.fl-feature-card--featured .fl-feature-icon {
+  background: var(--surface);
+  border-color: var(--accent-soft-2);
+}
+
+.fl-feature-name {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--ink);
+  text-wrap: balance;
+  margin: 0;
+}
+
+.fl-feature-body {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  text-wrap: pretty;
+  margin: 0;
+}
+
+/* fl-security */
+.fl-security-panel {
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-xl);
+  padding: var(--space-12) var(--space-10);
+}
+
+.fl-security-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-4);
+}
+
+.fl-security-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-6);
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+}
+
+.fl-security-block-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-1);
+}
+
+.fl-security-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-md);
+  background: var(--accent-soft);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.fl-security-tag {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+}
+
+.fl-security-name {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--ink);
+  text-wrap: balance;
+  margin: 0;
+}
+
+.fl-security-body {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  text-wrap: pretty;
+  margin: 0;
+}
+
+/* fl-pricing */
+.fl-pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5);
+  max-width: 880px;
+}
+
+.fl-price-card {
+  display: flex; /* fallback sin subgrid: columna con lista flexible */
+  flex-direction: column;
+  padding: var(--space-8);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-1);
+  position: relative;
+}
+
+/* subgrid: alinea head / precio / nota / bullets / CTA entre las dos cards */
+@supports (grid-template-rows: subgrid) {
+  .fl-pricing-grid {
+    grid-template-rows: repeat(5, auto);
+  }
+
+  .fl-price-card {
+    display: grid;
+    grid-row: span 5;
+    grid-template-rows: subgrid;
+    row-gap: 0;
+  }
+}
+
+.fl-price-card--featured {
+  border: 2px solid var(--accent);
+  box-shadow: var(--shadow-2);
+}
+
+.fl-price-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.fl-price-plan {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--ink);
+  margin: 0;
+}
+
+.fl-price-badge {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent-2);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-soft-2);
+  border-radius: var(--r-sm);
+  padding: 3px 8px;
+  white-space: nowrap;
+}
+
+.fl-price-amount {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-2);
+}
+
+.fl-price-figure {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 3.4vw, 2.6rem);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.05;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.fl-price-per {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--ink-3);
+}
+
+.fl-price-note {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-3);
+  text-wrap: pretty;
+  margin: 0 0 var(--space-5);
+}
+
+.fl-price-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-6);
+  padding: 0;
+}
+
+.fl-price-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+
+.fl-price-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--green-soft);
+  color: var(--green);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.fl-price-cta {
+  display: flex;
+  margin-top: auto; /* fallback flex: CTA al fondo */
+}
+
+.fl-price-cta .fi-btn {
+  flex: 1;
+  justify-content: center;
+  text-align: center;
+  padding: 11px 18px;
+  font-size: 14px;
+}
+
+.fl-pricing-banner {
+  margin: var(--space-8) 0 0;
+  padding: var(--space-4) var(--space-6);
+  max-width: 880px;
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-lg);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  text-wrap: pretty;
+  text-align: center;
+}
+
+.fl-pricing-banner-days {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--accent);
+  margin-right: var(--space-1);
+  font-variant-numeric: tabular-nums;
+}
+
+/* fl-faq */
+.fl-faq-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: 760px;
+  margin-top: var(--space-8);
+}
+
+.fl-faq-item {
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+  transition: border-color var(--dur-quick) var(--ease-standard-out);
+}
+
+.fl-faq-item[open] {
+  border-color: var(--line);
+}
+
+.fl-faq-q {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--ink);
+  list-style: none;
+  border-radius: var(--r-lg);
+}
+
+.fl-faq-q-text {
+  text-wrap: balance;
+}
+
+.fl-faq-q::-webkit-details-marker {
+  display: none;
+}
+
+.fl-faq-q:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.fl-faq-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-3);
+  flex-shrink: 0;
+  transition: transform var(--dur-snappy) var(--ease-standard-out);
+}
+
+.fl-faq-item[open] .fl-faq-chevron {
+  transform: rotate(180deg);
+  color: var(--accent);
+}
+
+.fl-faq-a {
+  margin: 0;
+  padding: 0 var(--space-5) var(--space-5);
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--ink-2);
+  text-wrap: pretty;
+  max-width: 64ch;
+  animation: fl-faq-open var(--dur-snappy) var(--ease-standard-out);
+}
+
+@keyframes fl-faq-open {
+  from {
+    opacity: 0;
+    transform: translateY(calc(-1 * var(--motion-dist-xs)));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* fl-b2-responsive */
+@media (max-width: 767px) {
+  .fl-features-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .fl-feature-card,
+  .fl-feature-card:nth-child(1),
+  .fl-feature-card:nth-child(2) {
+    grid-column: span 1;
+  }
+
+  .fl-security-panel {
+    padding: var(--space-8) var(--space-5);
+  }
+
+  .fl-security-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .fl-pricing-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* subgrid de filas no aporta en una sola columna */
+  @supports (grid-template-rows: subgrid) {
+    .fl-pricing-grid {
+      grid-template-rows: none;
+    }
+
+    .fl-price-card {
+      display: flex;
+      grid-row: auto;
+    }
+  }
+
+  .fl-price-card {
+    padding: var(--space-6);
+  }
+}
+
+/* fl-b2-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .fl-feature-card,
+  .fl-faq-item,
+  .fl-faq-chevron {
+    transition: none;
+  }
+
+  .fl-feature-card:hover {
+    transform: none;
+  }
+
+  .fl-faq-a {
+    animation: none;
+  }
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * LANDING · Fragmento B3 — Showcase de producto (#showcase) + tabs
+ * El orquestador anexa este archivo a public/folio.css y lo borra.
+ * Solo tokens var() existentes; selectores con prefijo .fl-*.
+ * `.fl-reveal` la define B1 — acá solo se consume.
+ *
+ * Contrato con los slides au2 reutilizados (slide-agenda/calendario/finanzas):
+ *   - .fl-showcase-mock replica a .au2-slide-mockup (position: relative,
+ *     ancho acotado) — los overlays flotantes (banner, toast, WhatsApp card,
+ *     tooltip, badge) se posicionan absolutos contra él.
+ *   - .fl-showcase-stage[data-view] define --slide-tint (misma receta
+ *     color-mix que .au2-art--tint-*) para el backdrop grid + glow.
+ *   - El skeleton del wrapper usa estas MISMAS clases → altura reservada
+ *     idéntica antes/después del mount diferido (CLS ~0).
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+/* fl-showcase · encabezado de sección (espeja .fl-features-title/-sub de B2) */
+.fl-showcase-title {
+  font-family: var(--font-display);
+  font-size: clamp(1.8rem, 3.4vw, 2.6rem);
+  font-weight: 500;
+  line-height: 1.12;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+  text-wrap: balance;
+  margin: 0 0 var(--space-3);
+}
+
+.fl-showcase-sub {
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--ink-3);
+  text-wrap: pretty;
+  max-width: 56ch;
+  margin: 0 0 var(--space-10);
+}
+
+.fl-showcase {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+/* fl-showcase-stage · frame del mockup. Altura FIJA por breakpoint (no
+ * depende del contenido) → el placeholder reserva exactamente lo mismo. */
+.fl-showcase-stage {
+  position: relative;
+  height: 560px;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-hero);
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.fl-showcase-stage:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Tints por vista — misma receta que .au2-art--tint-* (solo tokens). */
+.fl-showcase-stage[data-view="agenda"]     { --slide-tint: var(--accent); }
+.fl-showcase-stage[data-view="calendario"] { --slide-tint: color-mix(in oklab, var(--accent) 70%, var(--green) 30%); }
+.fl-showcase-stage[data-view="finanzas"]   { --slide-tint: color-mix(in oklab, var(--accent) 75%, var(--amber) 25%); }
+
+/* Backdrop: grid + glow reactivos a --slide-tint (port de .au2-art-grid/-glow). */
+.fl-showcase-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.fl-showcase-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, color-mix(in oklab, var(--slide-tint, var(--accent)) 7%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklab, var(--slide-tint, var(--accent)) 7%, transparent) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: radial-gradient(ellipse 70% 62% at 50% 48%, #000 30%, transparent 85%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 62% at 50% 48%, #000 30%, transparent 85%);
+  opacity: 0.7;
+  transition: background-image var(--dur-cinematic) var(--ease-standard-out);
+}
+
+.fl-showcase-glow {
+  position: absolute;
+  left: 50%;
+  top: 44%;
+  transform: translate(-50%, -50%);
+  width: 560px;
+  height: 380px;
+  background: radial-gradient(ellipse, color-mix(in oklab, var(--slide-tint, var(--accent)) 14%, transparent) 0%, transparent 70%);
+  opacity: 0.6;
+  filter: blur(8px);
+  transition: background var(--dur-cinematic) var(--ease-standard-out);
+}
+
+/* Capa del slide activo (FM crossfade+blur la anima; acá solo layout). */
+.fl-showcase-slide {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-12) var(--space-6) var(--space-16);
+}
+
+/* Réplica del contrato de .au2-slide-mockup: ancestro posicionado de los
+ * overlays flotantes de los slides (toast, banner, WhatsApp card, badge). */
+.fl-showcase-mock {
+  position: relative;
+  width: min(100%, 440px);
+}
+
+/* fl-showcase-tabs · tablist debajo del stage */
+.fl-showcase-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-3);
+}
+
+.fl-showcase-tab {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  text-align: left;
+  font: inherit;
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+  cursor: pointer;
+  overflow: hidden;
+  transition:
+    border-color var(--dur-quick) var(--ease-standard-out),
+    background var(--dur-quick) var(--ease-standard-out),
+    box-shadow var(--dur-quick) var(--ease-standard-out),
+    transform var(--dur-quick) var(--ease-standard-out);
+}
+
+.fl-showcase-tab:hover {
+  border-color: var(--line);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-2);
+}
+
+.fl-showcase-tab.is-active {
+  border-color: color-mix(in oklab, var(--accent) 38%, transparent);
+  background: color-mix(in oklab, var(--accent) 6%, var(--surface));
+}
+
+.fl-showcase-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.fl-showcase-tab-label {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.fl-showcase-tab.is-active .fl-showcase-tab-label {
+  color: var(--accent-2);
+}
+
+.fl-showcase-tab-caption {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ink-3);
+  text-wrap: pretty;
+}
+
+/* Progress fill del auto-advance (solo en el tab activo mientras autoplaya;
+ * la duración llega por --fl-adv-ms desde el carousel). */
+.fl-showcase-tab::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  opacity: 0;
+}
+
+.fl-showcase-tab.is-advancing::after {
+  opacity: 1;
+  animation: fl-showcase-adv var(--fl-adv-ms, 6000ms) linear forwards;
+}
+
+@keyframes fl-showcase-adv {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+/* Responsive — alturas fijas por breakpoint (CLS ~0 en cada uno) */
+@media (max-width: 880px) {
+  .fl-showcase-stage { height: 530px; }
+}
+
+@media (max-width: 640px) {
+  .fl-showcase-stage { height: 500px; }
+  .fl-showcase-slide { padding: var(--space-8) var(--space-4) var(--space-12); }
+  .fl-showcase-tabs {
+    grid-template-columns: 1fr;
+    gap: var(--space-2);
+  }
+  .fl-showcase-tab { padding: var(--space-3); }
+}
+
+/* fl-showcase · reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .fl-showcase-tab {
+    transition-duration: var(--dur-quick);
+  }
+  .fl-showcase-tab:hover {
+    transform: none;
+  }
+  /* El carousel ya no autoplaya con reduced motion (guard JS); por las dudas
+   * el progress fill queda apagado también acá. */
+  .fl-showcase-tab.is-advancing::after {
+    animation: none;
+    opacity: 0;
+  }
+  .fl-showcase-grid,
+  .fl-showcase-glow {
+    transition-duration: var(--dur-quick);
+  }
+}
