@@ -4,17 +4,19 @@
 
 ## Estado
 
+> **ESTADO FINAL (2026-06-10): proyecto completo. Todas las fases A–F mergeadas a `master` y deployadas a producción. Listo para el primer cliente del domingo. Go-live: `docs/LAUNCH-RUNBOOK.md`.**
+
 | Fase | Descripción | Estado |
 |------|-------------|--------|
 | FASE 0 | Auditoría (workflow 27 agentes + verificación adversarial) | ✅ Completa — [AUDIT.md](AUDIT.md) |
-| Paso 0 | docs/AUDIT.md + docs/PLAN.md | ✅ Completa (PR #26) |
-| Fase A.1 | C1: drift de migraciones | ✅ Completa — M44–M48 ya estaban en repo vía PR #25; **M49 pendiente aplicada a prod el 10-jun (resolvió outage 42703 de ~11 h)**; fidelidad verificada por replay+diff; duplicados del ledger documentados (ver Addendum en AUDIT.md) |
-| Fase A (resto) | A1, A2, M1/M2/M5/M6 | ⏳ En curso |
-| Fase B | Specialty registry + slot genérico | 🔨 Código + M50 listos en branch `feat/fase-b-especialidades` (sin commitear). ⚠️ **M50 debe aplicarse a prod ANTES de mergear/deployar**: `lib/db/active-context.ts` selecciona `organization.especialidad` explícitamente — sin la columna, 42703 en TODA la app (mismo modo de falla del outage M49) |
-| Fase C | Onboarding con especialidad + tiers Solo/Clinic | 🔨 Código listo en branch `feat/fase-c-onboarding-tiers` (sin commitear): C1 = selector especialidad+tipo en onboarding/configuración; C2 = pricing Clinic (`lib/billing/pricing.ts`), **M51** (gate de seats en RLS), equipo/invitaciones (`lib/db/members.ts` + sección Equipo + email + `/invitacion/[token]`), billing tier-aware. ⚠️ **M51 debe aplicarse a prod ANTES de mergear/deployar** (la UI de invitaciones asume la policy nueva; M51 es solo DROP+CREATE de policy — sin validación de datos, segura de aplicar) |
-| Fase D | Herramientas clínicas cardiología + psicología | 🔨 Código listo en branch `feat/fase-d-herramientas` (sin commitear): D1 = persistencia del borrador del tab Plan; D2 = herramienta de cardiología (`cardiologia.cv.v1`); D3 = herramienta de psicología (`psicologia.escalas.v1`). **Sin migración nueva** — persiste sobre `sesion.tool_id`/`tool_data_cifrado` (M50, ya en prod) |
-| Fase E | Integración E2E + PaymentProvider + cobro Clinic | 🔨 E1+E2 listos en worktree `feat/fase-e-payments` (sin commitear): E1 = abstracción `PaymentProvider` (`lib/payments/`) con implementación MP, callers migrados; E2 = cobro Clinic variable por seats (preapproval tier-aware, `syncSubscriptionAmount` + hooks de seats + cron, validación de cargo per-org, UI con drift). E2E por especialidad pendiente. **Checkpoint billing obligatorio antes de commit/deploy** |
-| Fase F | Hardening final + regresión completa + readiness operacional | 🔨 En curso — compliance/billing/auth-defensa + **F-OPS** (env example, `/api/health`, `maxDuration`, `docs/LAUNCH-RUNBOOK.md`) listos en worktree `fix/fase-f-hardening` (sin commitear). M4/M8/M9 documentados como gaps post-launch (ver Fase F + runbook §5) |
+| Paso 0 | docs/AUDIT.md + docs/PLAN.md | ✅ Mergeada ([#26](https://github.com/OsoCordobes/FolioApp/pull/26)) |
+| Fase A | Hardening crítico/alto (C1, A1, A2, M1/M2/M5/M6) | ✅ Mergeada ([#27](https://github.com/OsoCordobes/FolioApp/pull/27)). C1: M44–M48 recuperadas (PR #25) + M49 aplicada a prod (resolvió outage 42703); A1 reclasificado (diseño) → fix real fue el gate de M1; A2 cron de reconciliación; M2/M5/M6 cerrados |
+| Fase B | Specialty registry + slot genérico | ✅ Mergeada ([#28](https://github.com/OsoCordobes/FolioApp/pull/28)). **M50 en prod** (organization.especialidad + sesion.tool_id/tool_data_cifrado). Spine map → módulo quiropraxia; org quiro existente sin cambios |
+| Fase C | Onboarding con especialidad + tiers Solo/Clinic | ✅ Mergeada ([#29](https://github.com/OsoCordobes/FolioApp/pull/29)). **M51 en prod** (gate de seats en RLS). Selector especialidad+tipo, templates por especialidad, pricing Clinic, equipo/invitaciones |
+| Fase D | Herramientas clínicas cardiología + psicología | ✅ Mergeada ([#30](https://github.com/OsoCordobes/FolioApp/pull/30)). Cardiología (`cardiologia.cv.v1`), Psicología (`psicologia.escalas.v1`). D1: persistencia del slot end-to-end (no existía). Sin migración (usa M50) |
+| Fase E | PaymentProvider + cobro Clinic variable | ✅ Mergeada ([#31](https://github.com/OsoCordobes/FolioApp/pull/31)). Abstracción `lib/payments/` lista para proveedor europeo; cobro Clinic por seats; validación de cargo per-org. Cero cambio para orgs Solo |
+| Onboarding fix | Launch-blocker: pasos no persistían al navegar | ✅ Mergeada ([#32](https://github.com/OsoCordobes/FolioApp/pull/32)). Encontrado en smoke test E2E; verificado E2E tras el fix |
+| Fase F | Hardening final + readiness operacional | ✅ Mergeada ([#33](https://github.com/OsoCordobes/FolioApp/pull/33)). Re-auditoría F1 (15 hallazgos) + smoke test. Compliance (audit-log equipo, export ARCO, account-purge), billing edge (MOROSA, M7), defensa-en-profundidad (Turnstile, IDOR), **`docs/LAUNCH-RUNBOOK.md`**. M4/M8/M9 gaps post-launch documentados |
 
 ## Objetivo
 
