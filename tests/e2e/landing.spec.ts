@@ -11,7 +11,7 @@
 
 import { expect, test } from "@playwright/test";
 
-const HERO_H1 = /tu consultorio, en orden\. vos, atendiendo\./i;
+const HERO_H1 = /el día se arma solo\. la historia, cifrada\./i;
 
 // El cookie banner sale en cada navegación — lo pre-dismisseamos para que
 // las queries de página no choquen con su DOM (mismo approach que el resto

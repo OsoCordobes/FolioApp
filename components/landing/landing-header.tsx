@@ -2,7 +2,8 @@
  * Folio · Landing · LandingHeader (Fase B1 · server component)
  *
  * Header sticky con efecto glass (color-mix sobre --bg + backdrop blur).
- * Izquierda: marca. Centro: anclas (#producto, #seguridad, #precios, #faq).
+ * Izquierda: marca. Centro: anclas (#dia, #producto, #seguridad, #precios,
+ * #faq — #dia lo monta el scroll story "Un día con Folio").
  * Derecha: Ingresar (ghost) + CTA primario. En mobile la navegación colapsa
  * en un panel (#fl-mobile-nav) accionado por <LandingNavToggle/> — único
  * client component del shell.
@@ -14,7 +15,8 @@ import { FolioMark } from "@/components/folio-mark";
 import { LandingNavToggle } from "@/components/landing/landing-nav-toggle";
 
 const NAV_LINKS = [
-  { href: "#producto", label: "Producto" },
+  { href: "#dia", label: "El día" },
+  { href: "#producto", label: "Capacidades" },
   { href: "#seguridad", label: "Seguridad" },
   { href: "#precios", label: "Precios" },
   { href: "#faq", label: "FAQ" },

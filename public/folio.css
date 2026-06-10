@@ -13693,6 +13693,12 @@ input:focus { outline: none; }
   background: var(--bg);
   color: var(--ink);
   color-scheme: light;
+  /* Tokens display del rediseño "Un día con Folio" (E1) — tipografía
+     editorial gigante + ritmo vertical compartido entre secciones. */
+  --fl-display-xl: clamp(2.9rem, 7.2vw, 6.75rem);
+  --fl-display-lg: clamp(2.1rem, 4.2vw, 3.5rem);
+  --fl-mono-giant: clamp(2.75rem, 7vw, 5.5rem);
+  --fl-section-gap: clamp(96px, 14vh, 160px);
 }
 
 [data-theme="dark"] .fl-root {
@@ -13707,14 +13713,8 @@ input:focus { outline: none; }
 .fl-section {
   max-width: 1120px;
   margin: 0 auto;
-  padding: var(--space-20) var(--space-6);
-}
-
-@media (min-width: 1024px) {
-  .fl-section {
-    padding-top: var(--space-24);
-    padding-bottom: var(--space-24);
-  }
+  padding-block: var(--fl-section-gap);
+  padding-inline: var(--space-6);
 }
 
 /* fl-anchors · offset para navegación por ancla (#producto, #precios, …)
@@ -13723,16 +13723,24 @@ input:focus { outline: none; }
   scroll-margin-top: 80px;
 }
 
-/* fl-hero · provisional (Fase B lo reemplaza) */
+/* fl-hero-title · headline display gigante (escena 08:00 del día) */
 .fl-hero-title {
   font-family: var(--font-display);
-  font-size: clamp(2.4rem, 5.2vw, 4.2rem);
+  font-size: var(--fl-display-xl);
   font-weight: 500;
-  line-height: 1.08;
-  letter-spacing: -0.02em;
+  line-height: 1.02;
+  letter-spacing: -0.03em;
   color: var(--ink);
   text-wrap: balance;
-  margin: 0 0 var(--space-6);
+  margin: 0;
+}
+.fl-hero-line { display: block; }
+.fl-hero-accent {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-thickness: 0.035em;
+  text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  text-underline-offset: 0.14em;
 }
 
 /* ═════════════ LANDING · Fragment B1 — shell + above the fold ═════════════
@@ -13912,12 +13920,12 @@ input:focus { outline: none; }
   }
 }
 
-/* fl-hero */
+/* fl-hero · escena 08:00 — headline full-width arriba, grid asimétrico
+   debajo (copy a la izquierda, agenda del día a la derecha). */
 .fl-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
-  gap: var(--space-16);
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
 }
 .fl-eyebrow {
   margin: 0 0 var(--space-4);
@@ -13927,7 +13935,12 @@ input:focus { outline: none; }
   text-transform: uppercase;
   color: var(--accent-2);
 }
-.fl-hero .fl-hero-title { margin-bottom: var(--space-5); }
+.fl-hero-body {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  gap: var(--space-16);
+  align-items: center;
+}
 .fl-hero-sub {
   margin: 0 0 var(--space-8);
   max-width: 34rem;
@@ -13955,19 +13968,67 @@ input:focus { outline: none; }
   text-wrap: pretty;
 }
 
-/* Entrada inicial del hero — cinematic, decelerada */
+/* fl-hero-stats · fila mono con los compromisos verificables (absorbe la
+   ex trust-strip: cifrado, Ley 25.326, trial, hecho en Argentina). */
+.fl-hero-stats {
+  list-style: none;
+  margin: var(--space-6) 0 0;
+  padding: var(--space-4) 0 0;
+  border-top: 1px solid var(--line-soft);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  letter-spacing: 0.01em;
+  color: var(--ink-3);
+}
+.fl-hero-stats li { white-space: nowrap; }
+.fl-hero-stats li + li::before {
+  content: "·";
+  margin-right: var(--space-3);
+  color: var(--ink-4);
+}
+
+/* fl-hero-cue · puente narrativo hacia la escena siguiente (#dia) */
+.fl-hero-cue {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-8);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink-2);
+  text-decoration: none;
+  transition: color var(--dur-quick) var(--ease-standard);
+}
+.fl-hero-cue:hover { color: var(--ink); }
+.fl-hero-cue svg {
+  color: var(--accent);
+  animation: fl-cue-bounce 2.6s var(--spring-soft) infinite;
+}
+@keyframes fl-cue-bounce {
+  0%, 60%, 100% { transform: translateY(0); }
+  30%           { transform: translateY(4px); }
+}
+
+/* Entrada inicial del hero — cinematic, decelerada. El head (h1 = LCP)
+   entra sin delay; copy y visual lo siguen escalonados. */
 @keyframes fl-rise {
   from { opacity: 0; transform: translateY(var(--motion-dist-md)); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.fl-hero-copy   { animation: fl-rise var(--dur-cinematic) var(--ease-emphasized) both; }
-.fl-hero-visual { animation: fl-rise var(--dur-cinematic) var(--ease-emphasized) 120ms both; }
+.fl-hero-head   { animation: fl-rise var(--dur-cinematic) var(--ease-emphasized) both; }
+.fl-hero-copy   { animation: fl-rise var(--dur-cinematic) var(--ease-emphasized) 80ms both; }
+.fl-hero-visual { animation: fl-rise var(--dur-cinematic) var(--ease-emphasized) 160ms both; }
 
 /* fl-mock · agenda del día en capas (estático; parallax solo con view()) */
 .fl-hero-visual { position: relative; }
 .fl-mock {
   position: relative;
-  min-height: 400px;
+  min-height: 440px;
 }
 .fl-mock-card {
   background: var(--surface);
@@ -13978,7 +14039,7 @@ input:focus { outline: none; }
 .fl-mock-front {
   position: relative;
   z-index: 2;
-  width: min(420px, 92%);
+  width: min(480px, 94%);
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
@@ -14006,10 +14067,27 @@ input:focus { outline: none; }
   letter-spacing: 0.01em;
   color: var(--ink-2);
 }
-.fl-mock-count {
+/* fl-mock-lock · chip candado del header de la card — la historia clínica
+   viaja cifrada antes de tocar la base de datos. */
+.fl-mock-lock {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: var(--r-pill);
+  background: var(--accent-soft);
   font-family: var(--font-mono);
-  font-size: var(--fs-xs);
-  color: var(--ink-3);
+  font-size: var(--fs-sm);
+  color: var(--accent);
+  white-space: nowrap;
+}
+.fl-mock-lock svg { flex-shrink: 0; }
+/* fl-mock-caption · leyenda mono debajo del frame */
+.fl-mock-caption {
+  margin: var(--space-8) var(--space-1) 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
 }
 .fl-mock-row {
   display: flex;
@@ -14134,70 +14212,6 @@ input:focus { outline: none; }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* fl-trust */
-.fl-trust {
-  padding-top: var(--space-12);
-  padding-bottom: var(--space-12);
-}
-.fl-trust-inner {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-6);
-  text-align: center;
-  border-top: 1px solid var(--line-soft);
-  padding-top: var(--space-12);
-}
-.fl-trust-label {
-  margin: 0;
-  font-size: var(--fs-sm);
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ink-2);
-}
-.fl-trust-specialties {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: var(--space-2) var(--space-3);
-}
-.fl-trust-specialty {
-  font-family: var(--font-display);
-  font-size: var(--fs-lg);
-  color: var(--ink-2);
-}
-.fl-trust-specialty + .fl-trust-specialty::before {
-  content: "·";
-  margin-right: var(--space-3);
-  color: var(--ink-4);
-}
-.fl-trust-badges {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: var(--space-3);
-}
-.fl-trust-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 8px 16px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-pill);
-  background: var(--surface);
-  color: var(--ink-2);
-  font-size: var(--fs-body);
-  font-weight: 500;
-}
-.fl-trust-badge svg { color: var(--accent); flex-shrink: 0; }
-
 /* fl-cta-final */
 .fl-cta-panel {
   display: flex;
@@ -14286,7 +14300,8 @@ input:focus { outline: none; }
 
 /* fl-responsive · mobile */
 @media (max-width: 767px) {
-  .fl-hero {
+  .fl-hero { gap: var(--space-8); }
+  .fl-hero-body {
     grid-template-columns: 1fr;
     gap: var(--space-12);
   }
@@ -14295,12 +14310,13 @@ input:focus { outline: none; }
     align-items: stretch;
   }
   .fl-hero-ctas .fi-btn { justify-content: center; }
-  .fl-mock { min-height: 340px; }
+  .fl-mock { min-height: 360px; }
   .fl-mock-front { width: 100%; }
   .fl-mock-back { width: 92%; bottom: 4%; }
   .fl-mock-chip { left: var(--space-2); }
   .fl-mock-row { gap: var(--space-2); padding: var(--space-2) var(--space-3); }
   .fl-mock-time { font-size: var(--fs-md); }
+  .fl-mock-head { flex-wrap: wrap; gap: var(--space-2); }
   /* CookieBanner fixed-bottom: aire extra para que no tape los CTAs */
   .fl-cta-final { padding-bottom: calc(var(--space-20) + var(--space-16)); }
   .fl-footer-inner {
@@ -14317,8 +14333,10 @@ input:focus { outline: none; }
 /* fl-reduced-motion · anula las animaciones del fragmento B1; el estado
    base (sin animation-fill) ya es el estado final visible. */
 @media (prefers-reduced-motion: reduce) {
+  .fl-hero-head,
   .fl-hero-copy,
   .fl-hero-visual,
+  .fl-hero-cue svg,
   .fl-reveal,
   .fl-mock-front,
   .fl-mock-back,
@@ -14328,6 +14346,7 @@ input:focus { outline: none; }
   }
   .fl-nav-toggle-bar,
   .fl-nav-link,
+  .fl-hero-cue,
   .fl-skip {
     transition: none !important;
   }
@@ -14346,10 +14365,10 @@ input:focus { outline: none; }
 .fl-pricing-title,
 .fl-faq-title {
   font-family: var(--font-display);
-  font-size: clamp(1.8rem, 3.4vw, 2.6rem);
+  font-size: var(--fl-display-lg);
   font-weight: 500;
-  line-height: 1.12;
-  letter-spacing: -0.015em;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
   color: var(--ink);
   text-wrap: balance;
   margin: 0 0 var(--space-3);
@@ -14835,10 +14854,10 @@ input:focus { outline: none; }
 /* fl-showcase · encabezado de sección (espeja .fl-features-title/-sub de B2) */
 .fl-showcase-title {
   font-family: var(--font-display);
-  font-size: clamp(1.8rem, 3.4vw, 2.6rem);
+  font-size: var(--fl-display-lg);
   font-weight: 500;
-  line-height: 1.12;
-  letter-spacing: -0.015em;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
   color: var(--ink);
   text-wrap: balance;
   margin: 0 0 var(--space-3);
