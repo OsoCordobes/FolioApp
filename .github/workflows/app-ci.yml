@@ -1,0 +1,48 @@
+name: App CI (typecheck + lint + unit)
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+# Cancel in-flight runs of the same ref when a new push lands.
+concurrency:
+  group: app-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app-ci:
+    runs-on: ubuntu-latest
+
+    env:
+      # Claves de cifrado SOLO para tests (lib/crypto exige que existan).
+      # Valores dummy de 32 bytes en base64 — nunca usar en runtime real.
+      FOLIO_ENC_KEY: "Zm9saW8tY2ktZHVtbXktZW5jcnlwdGlvbi1rZXktMzI="
+      FOLIO_ENC_HMAC_KEY: "Zm9saW8tY2ktZHVtbXktaG1hYy1rZXktMzItYnl0ZXM="
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Unit tests
+        run: pnpm test:unit
