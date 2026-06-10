@@ -4,8 +4,9 @@
  * Folio · /pacientes/[id] · ficha completa con tabs.
  *
  * Port de folio/paciente.jsx (líneas 283-648). El tab por defecto es "plan"
- * (módulo Quiropraxia) para que el baseline pixel-perfect matchee. Cada tab
- * tiene su propio sub-componente.
+ * (el slot clínico renderiza la herramienta de la especialidad de la org vía
+ * lib/especialidades/registry — Fase B) para que el baseline pixel-perfect
+ * matchee. Cada tab tiene su propio sub-componente.
  *
  * El auto-save indicator del SOAP usa el clock del browser (mockeado en tests
  * con page.clock.install para determinismo).
@@ -16,9 +17,9 @@ import { useState } from "react";
 
 import * as I from "@/components/icons";
 import { TurnoCreateModal } from "@/components/hoy/turno-create-modal";
-import { SpineMap } from "@/components/paciente/spine-map";
 import { PacienteFichaProvider, usePacienteFicha } from "@/components/paciente/contexto";
-import type { EstadoVertebra, PacienteFichaInfo, PlanData } from "@/lib/db/paciente-ficha";
+import { getEspecialidad, type EspecialidadSlug } from "@/lib/especialidades/registry";
+import type { PacienteFichaInfo, PlanData } from "@/lib/db/paciente-ficha";
 
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
@@ -187,21 +188,22 @@ function HistorialReciente() {
 // ─── Sub: Tab Plan ─────────────────────────────────────────────────────────
 
 function TabPlan() {
-  const { plan } = usePacienteFicha();
-  const [vertStates, setVertStates] = useState<Record<string, EstadoVertebra>>(
-    plan.vertebrasEstado,
-  );
+  const { plan, especialidad } = usePacienteFicha();
+  const def = getEspecialidad(especialidad);
+  // Borrador local del toolData de la herramienta (igual que el SOAP, la
+  // persistencia se cablea con el writer al cerrar turno — sprint posterior).
+  const [toolValue, setToolValue] = useState<unknown>(null);
   const [soap, setSoap] = useState<SoapState>(plan.soap);
 
   return (
     <div className="pc-plan-tab">
       <div className="pc-module-badge">
-        <I.Vertebra size={14} />
-        <span>Módulo · Quiropraxia</span>
+        <def.Icon size={14} />
+        <span>{def.badgeLabel}</span>
       </div>
 
       <div className="pc-plan-grid">
-        <SpineMap states={vertStates} setStates={setVertStates} />
+        <def.Tool value={toolValue} onChange={setToolValue} historial={plan.toolHistorial} />
         <SoapStacked soap={soap} setSoap={setSoap} />
       </div>
 
@@ -448,11 +450,13 @@ interface PacienteDetalleProps {
   paciente: PacienteFichaInfo;
   plan: PlanData;
   cumple: string;
+  /** Especialidad de la org (M50) — el server component la saca del contexto activo. */
+  especialidad: EspecialidadSlug;
 }
 
-export function PacienteDetalle({ paciente, plan, cumple }: PacienteDetalleProps) {
+export function PacienteDetalle({ paciente, plan, cumple, especialidad }: PacienteDetalleProps) {
   return (
-    <PacienteFichaProvider value={{ paciente, plan, cumple }}>
+    <PacienteFichaProvider value={{ paciente, plan, cumple, especialidad }}>
       <PacienteDetalleInner />
     </PacienteFichaProvider>
   );

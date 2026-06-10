@@ -11,7 +11,8 @@
  *   - `turno_extendido` filtrado por paciente: lista de sesiones reales
  *     ordenadas desc por inicio.
  *   - `sesion`: trae SOAP de la sesión más reciente "abierta" o "cerrada".
- *   - `vertebras_json` de la última sesion: mapeo para SpineMap.
+ *   - `tool_data_cifrado` (M50) por sesión → `toolHistorial` para la
+ *     herramienta de la especialidad; fallback legacy a `vertebras_json`.
  *
  * Si el paciente no tiene sesiones todavía, se devuelve un `plan` mínimo
  * (SOAP vacío, 0 sesiones completadas, sin diagnóstico).
@@ -22,13 +23,25 @@
  */
 
 import { decryptColumn } from "@/lib/crypto";
+import {
+  ESPECIALIDADES_META,
+  getEspecialidadMetaByToolId,
+} from "@/lib/especialidades/meta";
+import {
+  deriveSpineState,
+  extractVertebras,
+  type EstadoVertebra,
+} from "@/lib/especialidades/quiropraxia/schema";
+import type { ToolHistorialEntry } from "@/lib/especialidades/types";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import { err, ok, type Result } from "./errors";
 
 // ─── Shapes esperados por el componente (prototipo) ───────────────────────
 
-export type EstadoVertebra = "normal" | "leve" | "moderado" | "severo" | "ajustada";
+// Re-export de compat: el tipo vive en lib/especialidades/quiropraxia desde
+// Fase B (la quiropraxia es una especialidad más del registry).
+export type { EstadoVertebra } from "@/lib/especialidades/quiropraxia/schema";
 
 export interface PacienteFichaInfo {
   id: string;
@@ -61,10 +74,20 @@ export interface PlanData {
   proximoControl: string;
   precio: number;
   diagnostico: string;
+  /**
+   * Compat quiro (Fase B): derivación de toolHistorial vía deriveSpineState.
+   * El Tool de quiropraxia reconstruye lo mismo client-side desde historial.
+   */
   vertebrasEstado: Record<string, EstadoVertebra>;
   ultimoAjuste: Record<string, string>;
   soap: { subjetivo: string; objetivo: string; analisis: string; plan: string };
   sesiones: SesionPlan[];
+  /**
+   * Historial genérico para la herramienta de la especialidad (DESC por
+   * fecha). toolData descifrado de sesion.tool_data_cifrado, o fallback
+   * legacy mapeando vertebras_json a { v: 1, vertebras } (filas pre-M50).
+   */
+  toolHistorial: ToolHistorialEntry[];
 }
 
 export interface PacienteFichaData {
@@ -103,6 +126,8 @@ interface SesionRow {
   soap_a_cifrado: string | null;
   soap_p_cifrado: string | null;
   vertebras_json: Array<{ id: string; estado: string }> | null;
+  tool_id: string | null;
+  tool_data_cifrado: string | null;
   notas_cifrado: string | null;
   created_at: string;
 }
@@ -137,7 +162,7 @@ export async function getPacienteFicha(
       .maybeSingle(),
     supabase
       .from("sesion")
-      .select("id, turno_id, paciente_id, soap_s_cifrado, soap_o_cifrado, soap_a_cifrado, soap_p_cifrado, vertebras_json, notas_cifrado, created_at")
+      .select("id, turno_id, paciente_id, soap_s_cifrado, soap_o_cifrado, soap_a_cifrado, soap_p_cifrado, vertebras_json, tool_id, tool_data_cifrado, notas_cifrado, created_at")
       .eq("paciente_id", pacienteId)
       .eq("organization_id", organizationId)
       .order("created_at", { ascending: false })
@@ -184,30 +209,32 @@ export async function getPacienteFicha(
       }
     : { subjetivo: "", objetivo: "", analisis: "", plan: "" };
 
-  // Vertebras: tomar el estado de la última sesión que las tenga.
-  const vertebrasEstado: Record<string, EstadoVertebra> = {};
-  const ultimoAjuste: Record<string, string> = {};
-  for (const s of sesiones) {
-    const vlist = (s.vertebras_json ?? []) as Array<{ id?: string; estado?: string }>;
-    for (const v of vlist) {
-      if (!v.id) continue;
-      const estado = normalizeEstadoVertebra(v.estado);
-      if (!vertebrasEstado[v.id]) {
-        vertebrasEstado[v.id] = estado;
-        ultimoAjuste[v.id] = s.created_at.slice(0, 10);
-      }
-    }
-  }
+  // Historial genérico de la herramienta (Fase B): toolData por sesión,
+  // descifrado o con fallback legacy a vertebras_json.
+  const toolHistorial: ToolHistorialEntry[] = sesiones.map((s) => ({
+    fecha: s.created_at.slice(0, 10),
+    toolData: sesionToolData(s),
+  }));
 
-  // Historial de sesiones (top 10 cerradas para visual del tab)
+  // Vertebras (compat quiro): estado acumulado derivado del historial —
+  // misma lógica pre-Fase B, ahora compartida con el Tool en el registry.
+  const { vertebrasEstado, ultimoAjuste } = deriveSpineState(toolHistorial);
+
+  // Historial de sesiones (top 10 cerradas para visual del tab). El resumen
+  // lo genera la especialidad dueña del tool_id (fallback quiro para filas
+  // legacy/sin sesión — mismo output que antes de Fase B).
   const historial: SesionPlan[] = cerrados.slice(0, 10).map((t) => {
     const sesion = sesiones.find((s) => s.turno_id === t.id);
-    const vertebras = (sesion?.vertebras_json ?? []).map((v) => v.id);
+    const toolData = sesion ? sesionToolData(sesion) : null;
+    const meta =
+      getEspecialidadMetaByToolId(sesion?.tool_id) ?? ESPECIALIDADES_META.quiropraxia;
+    const vertebras =
+      meta.slug === "quiropraxia" ? extractVertebras(toolData).map((v) => v.id) : [];
     return {
       fecha: t.inicio.slice(0, 10),
       servicio: t.servicio_nombre,
       dur: t.duracion_real_min ?? t.duracion_min,
-      cambio: vertebras.length > 0 ? `${vertebras.join(", ")} ajustadas` : "Sin notas vertebrales",
+      cambio: meta.resumenSesion(toolData),
       vertebras,
     };
   });
@@ -247,6 +274,7 @@ export async function getPacienteFicha(
     ultimoAjuste,
     soap,
     sesiones: historial,
+    toolHistorial,
   };
 
   const cumple = row.fecha_nacimiento ? formatCumple(row.fecha_nacimiento) : "—";
@@ -267,10 +295,28 @@ function tryDecrypt(value: string | null | undefined, label: string): string | n
   }
 }
 
-function normalizeEstadoVertebra(raw: string | undefined): EstadoVertebra {
-  const v = (raw ?? "").toLowerCase();
-  if (v === "leve" || v === "moderado" || v === "severo" || v === "ajustada") return v;
-  return "normal";
+/**
+ * toolData de una sesión: si hay tool_data_cifrado, descifra + JSON.parse
+ * (tolerante: ciphertext corrupto o JSON inválido NO rompe la ficha). Sino,
+ * fallback legacy: vertebras_json (M10) mapeada al shape quiro { v: 1, ... }.
+ */
+function sesionToolData(s: SesionRow): unknown {
+  if (s.tool_data_cifrado != null) {
+    const plain = tryDecrypt(s.tool_data_cifrado, "tool_data");
+    if (plain != null) {
+      try {
+        return JSON.parse(plain) as unknown;
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.warn(`[paciente-ficha] tool_data JSON inválido (sesion ${s.id}): ${msg}`);
+      }
+    }
+    // cae al fallback legacy de abajo
+  }
+  return {
+    v: 1,
+    vertebras: (s.vertebras_json ?? []).map((v) => ({ id: v.id, estado: v.estado })),
+  };
 }
 
 function calcularEdad(fechaNacimiento: string): number {

@@ -1,11 +1,15 @@
 "use client";
 
 /**
- * Folio · Paciente · mapa vertebral (SVG, vista lateral anatómica).
+ * Folio · especialidades · quiropraxia · mapa vertebral (SVG, vista lateral).
  *
  * Port de `SpineMap` en folio/paciente.jsx (líneas 92-281). 24 vértebras
  * en lordosis cervical + cifosis dorsal + lordosis lumbar. Click marca
  * estado (normal/leve/moderado/severo/ajustada), hover muestra tooltip.
+ *
+ * Movido de components/paciente/spine-map.tsx en Fase B. El acceso al
+ * contexto de la ficha se reemplazó por la prop `ultimoAjuste` (la deriva el
+ * Tool quiro desde el historial) — mismo dato, sin acoplar el SVG al slot.
  */
 
 import { useState } from "react";
@@ -14,19 +18,19 @@ import {
   ESTADO_VERT,
   SPINE_VERTEBRAS,
   fmtFecha,
-} from "@/components/paciente/spine-config";
-import { usePacienteFicha } from "@/components/paciente/contexto";
-import type { EstadoVertebra } from "@/lib/db/paciente-ficha";
+} from "@/lib/especialidades/quiropraxia/spine-config";
+import type { EstadoVertebra } from "@/lib/especialidades/quiropraxia/schema";
 
 interface SpineMapProps {
   states: Record<string, EstadoVertebra>;
   setStates: (
     updater: (prev: Record<string, EstadoVertebra>) => Record<string, EstadoVertebra>,
   ) => void;
+  /** Fecha (YYYY-MM-DD) del último ajuste por vértebra — tooltip de hover. */
+  ultimoAjuste: Record<string, string>;
 }
 
-export function SpineMap({ states, setStates }: SpineMapProps) {
-  const { plan } = usePacienteFicha();
+export function SpineMap({ states, setStates, ultimoAjuste }: SpineMapProps) {
   const [selected, setSelected] = useState<string | null>(null);
   const [hover, setHover] = useState<string | null>(null);
 
@@ -195,7 +199,7 @@ export function SpineMap({ states, setStates }: SpineMapProps) {
           ? (() => {
               const est = currentEstado(hoverData.id);
               const cfg = ESTADO_VERT[est];
-              const ultimo = plan.ultimoAjuste[hoverData.id];
+              const ultimo = ultimoAjuste[hoverData.id];
               return (
                 <div
                   className="pc-spine-tip"

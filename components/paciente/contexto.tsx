@@ -15,12 +15,15 @@
 
 import { createContext, useContext, type ReactNode } from "react";
 
+import type { EspecialidadSlug } from "@/lib/especialidades/meta";
 import type { PacienteFichaInfo, PlanData } from "@/lib/db/paciente-ficha";
 
 interface PacienteFichaContextValue {
   paciente: PacienteFichaInfo;
   plan: PlanData;
   cumple: string;
+  /** Especialidad de la org (M50) — decide la herramienta del tab Plan. */
+  especialidad: EspecialidadSlug;
 }
 
 const PacienteFichaContext = createContext<PacienteFichaContextValue | null>(null);

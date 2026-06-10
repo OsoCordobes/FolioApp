@@ -1,10 +1,20 @@
 /**
- * Folio · queries y mutations de Sesion (SOAP + vertebras + lock).
+ * Folio · queries y mutations de Sesion (SOAP + tool de especialidad + lock).
+ *
+ * Writer ÚNICO de sesion.tool_id / tool_data_cifrado (M50). El toolData se
+ * valida contra el schema del registry (lib/especialidades/meta.ts) ANTES de
+ * cifrar. Para quiropraxia, vertebras_json se espeja como hasta ahora (compat
+ * con la vista sesion_con_enmiendas M14 + índice gin — se retira en Fase F).
  */
 
 import { z } from "zod";
 
 import { decryptColumn, encryptColumn } from "@/lib/crypto";
+import {
+  ESPECIALIDADES_META,
+  getEspecialidadMetaByToolId,
+} from "@/lib/especialidades/meta";
+import type { QuiropraxiaToolData } from "@/lib/especialidades/quiropraxia/schema";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import { err, mapSupabaseError, ok, type Result } from "./errors";
@@ -27,6 +37,10 @@ const upsertSesionSchema = z.object({
     id: z.string().regex(/^[CTL][0-9]{1,2}$/),
     estado: vertebraEstadoSchema,
   })).optional(),
+  /** Id de herramienta del registry (sesion.tool_id, M50). */
+  toolId: z.string().min(1).optional(),
+  /** Payload de la herramienta — se valida contra el schema del registry. */
+  toolData: z.unknown().optional(),
   evaAntes: z.number().int().min(0).max(10).nullable().optional(),
   evaDespues: z.number().int().min(0).max(10).nullable().optional(),
   notas: z.string().max(10000).optional(),
@@ -58,6 +72,37 @@ export async function upsertSesion(input: UpsertSesionInput): Promise<Result<{ i
     return err("locked", "La sesión está bloqueada. Creá una enmienda en su lugar.");
   }
 
+  // ── Tool de especialidad (M50) ────────────────────────────────────────
+  // Callers legacy mandan solo `vertebras` → construimos el toolData quiro.
+  let toolId: string | null = d.toolId ?? null;
+  let toolData: unknown = d.toolData ?? null;
+  if (!toolId && d.vertebras) {
+    toolId = ESPECIALIDADES_META.quiropraxia.toolId;
+    toolData = { v: 1, vertebras: d.vertebras } satisfies QuiropraxiaToolData;
+  }
+
+  // Espejo legacy de quiropraxia (vista M14 + índice gin; se retira en Fase F).
+  let vertebrasEspejo: Array<{ id: string; estado: string }> = d.vertebras ?? [];
+
+  if (toolId) {
+    const meta = getEspecialidadMetaByToolId(toolId);
+    if (!meta) {
+      return err("validation", `toolId desconocido para el registry: ${toolId}.`);
+    }
+    const parsedTool = meta.schema.safeParse(toolData);
+    if (!parsedTool.success) {
+      return err(
+        "validation",
+        `toolData inválido para ${meta.nombre}.`,
+        parsedTool.error.message,
+      );
+    }
+    toolData = parsedTool.data;
+    if (meta.slug === "quiropraxia") {
+      vertebrasEspejo = (toolData as QuiropraxiaToolData).vertebras;
+    }
+  }
+
   const payload = {
     organization_id: session.data.organizationId,
     turno_id: d.turnoId,
@@ -67,7 +112,9 @@ export async function upsertSesion(input: UpsertSesionInput): Promise<Result<{ i
     soap_a_cifrado: encryptColumn(d.soap?.a ?? null),
     soap_p_cifrado: encryptColumn(d.soap?.p ?? null),
     notas_cifrado: encryptColumn(d.notas ?? null),
-    vertebras_json: d.vertebras ?? [],
+    vertebras_json: vertebrasEspejo,
+    tool_id: toolId,
+    tool_data_cifrado: toolData == null ? null : encryptColumn(JSON.stringify(toolData)),
     eva_antes: d.evaAntes ?? null,
     eva_despues: d.evaDespues ?? null,
   };

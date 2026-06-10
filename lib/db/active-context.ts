@@ -27,6 +27,7 @@
  */
 
 import { decryptColumn } from "@/lib/crypto";
+import { normalizeEspecialidadSlug, type EspecialidadSlug } from "@/lib/especialidades/meta";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import { err, ok, type Result } from "./errors";
@@ -60,6 +61,14 @@ export interface ActiveOrganization {
    * qué selectores de profesional / pestaña de equipo mostrar según este valor.
    */
   tipo: "INDEPENDIENTE" | "CLINICA";
+  /**
+   * M50 · especialidad del tenant (quiropraxia | cardiologia | psicologia).
+   * Decide qué herramienta clínica renderiza el slot de la ficha del paciente
+   * (registry en lib/especialidades/). Valores desconocidos normalizan a
+   * quiropraxia. ⚠️ La M50 debe estar aplicada en prod ANTES de deployar este
+   * select (incidente 42703 previo por columna inexistente).
+   */
+  especialidad: EspecialidadSlug;
   /**
    * M37 · true = demo/internal/test tenant; (app)/layout.tsx skips the
    * billing gate when set. Set manually via service-role only; audited.
@@ -120,7 +129,7 @@ export async function getActiveContext(): Promise<Result<ActiveContext>> {
     supabase
       .from("organization")
       .select(
-        "id, slug, nombre, rubro, ciudad, provincia, acento_hex, tema, timezone, moneda, cuit, razon_social, condicion_iva, opt_out_analytics, opt_out_public_listing, onboarding_completed, tipo, is_internal_account, created_at",
+        "id, slug, nombre, rubro, ciudad, provincia, acento_hex, tema, timezone, moneda, cuit, razon_social, condicion_iva, opt_out_analytics, opt_out_public_listing, onboarding_completed, tipo, especialidad, is_internal_account, created_at",
       )
       .eq("id", session.organizationId)
       .is("deleted_at", null)
@@ -158,6 +167,7 @@ export async function getActiveContext(): Promise<Result<ActiveContext>> {
     opt_out_public_listing: boolean;
     onboarding_completed: boolean;
     tipo: "INDEPENDIENTE" | "CLINICA";
+    especialidad: string;
     is_internal_account: boolean;
     created_at: string;
   };
@@ -197,6 +207,7 @@ export async function getActiveContext(): Promise<Result<ActiveContext>> {
     optOutPublicListing: orgRow.opt_out_public_listing,
     onboardingCompleted: orgRow.onboarding_completed,
     tipo: orgRow.tipo,
+    especialidad: normalizeEspecialidadSlug(orgRow.especialidad),
     isInternalAccount: orgRow.is_internal_account,
   };
 
