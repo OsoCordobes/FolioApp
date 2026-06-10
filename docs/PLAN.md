@@ -10,7 +10,7 @@
 | Paso 0 | docs/AUDIT.md + docs/PLAN.md | ✅ Completa (PR #26) |
 | Fase A.1 | C1: drift de migraciones | ✅ Completa — M44–M48 ya estaban en repo vía PR #25; **M49 pendiente aplicada a prod el 10-jun (resolvió outage 42703 de ~11 h)**; fidelidad verificada por replay+diff; duplicados del ledger documentados (ver Addendum en AUDIT.md) |
 | Fase A (resto) | A1, A2, M1/M2/M5/M6 | ⏳ En curso |
-| Fase B | Specialty registry + slot genérico | ⏳ Pendiente |
+| Fase B | Specialty registry + slot genérico | 🔨 Código + M50 listos en branch `feat/fase-b-especialidades` (sin commitear). ⚠️ **M50 debe aplicarse a prod ANTES de mergear/deployar**: `lib/db/active-context.ts` selecciona `organization.especialidad` explícitamente — sin la columna, 42703 en TODA la app (mismo modo de falla del outage M49) |
 | Fase C | Onboarding con especialidad + tiers Solo/Clinic | ⏳ Pendiente |
 | Fase D | Herramientas clínicas cardiología + psicología | ⏳ Pendiente |
 | Fase E | Integración E2E + PaymentProvider + cobro Clinic | ⏳ Pendiente |

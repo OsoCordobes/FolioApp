@@ -53,6 +53,7 @@ export default async function PacientePage({ params }: PageProps) {
       paciente={data.data.paciente}
       plan={data.data.plan}
       cumple={data.data.cumple}
+      especialidad={ctx.data.organization.especialidad}
     />
   );
 }

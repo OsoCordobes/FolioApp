@@ -1,11 +1,12 @@
 /**
- * Folio · Paciente · constantes del SpineMap.
+ * Folio · especialidades · quiropraxia · constantes del SpineMap.
  *
  * Estas son configuración visual (posiciones SVG de 24 vértebras + paleta
  * de estados clínicos). NO es data del paciente — vive con el component.
+ * (Movido de components/paciente/spine-config.ts en Fase B.)
  */
 
-import type { EstadoVertebra } from "@/lib/db/paciente-ficha";
+import type { EstadoVertebra } from "@/lib/especialidades/quiropraxia/schema";
 
 export interface SpineVertebra {
   id: string;
