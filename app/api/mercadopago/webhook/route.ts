@@ -28,13 +28,10 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 
-import {
-  getAuthorizedPayment,
-  getPreapproval,
-} from "@/lib/mercadopago/client";
 import { verifyMpSignature } from "@/lib/mercadopago/webhook-security";
+import { getPaymentProvider } from "@/lib/payments";
 import {
-  applyMpPreapprovalUpdate,
+  applySubscriptionUpdate,
   recordChargeAttempt,
 } from "@/lib/db/suscripcion";
 
@@ -126,23 +123,23 @@ async function processEvent(
   payload: MpWebhookPayload,
   dataId: string,
 ): Promise<NextResponse | null> {
+  const provider = getPaymentProvider();
   switch (payload.type) {
     case "subscription_preapproval": {
       // dataId = preapproval_id. GET para obtener estado actualizado.
-      const preapproval = await getPreapproval(dataId);
-      const res = await applyMpPreapprovalUpdate(preapproval);
+      const subscription = await provider.fetchSubscription(dataId);
+      const res = await applySubscriptionUpdate(subscription);
       if (!res.ok) {
-        console.warn(`[mp-webhook] applyMpPreapprovalUpdate falló: ${res.error.message}`);
+        console.warn(`[mp-webhook] applySubscriptionUpdate falló: ${res.error.message}`);
       }
       return null;
     }
 
     case "subscription_authorized_payment": {
       // dataId = authorized_payment_id. GET para obtener payment + preapproval_id.
-      const ap = await getAuthorizedPayment(dataId);
+      const charge = await provider.fetchChargeAttempt(dataId);
       const res = await recordChargeAttempt({
-        preapprovalId: ap.preapproval_id,
-        authorizedPayment: ap,
+        charge,
         rawPayload: payload,
       });
       if (!res.ok) {

@@ -9,9 +9,10 @@
  *     OWNER; cada member activo adicional (cualquier rol, deleted_at IS NULL)
  *     cuenta como 1 seat.
  *
- * ⚠️ Este módulo es SOLO modelo/display (Fase C). El cobro real por seats
- * (PUT del preapproval de MP) es Fase E — acá NO se toca createPreapproval ni
- * el webhook. Hoy MP debita el plan vigente de `MP_PLAN_PRICE_CENTS`.
+ * Desde Fase E (E2) este módulo es la fuente de verdad del COBRO REAL:
+ * `createOrRenewPendingSubscription` crea el preapproval con este monto y
+ * `syncSubscriptionAmount` lo ajusta cuando cambian los seats (solo CLINICA).
+ * La validación de cada cargo compara contra `suscripcion.monto_cents` per-org.
  *
  * Overrides por env (mismo patrón warn-and-fallback que resolvePlanPriceCents
  * en lib/mercadopago/client.ts): CLINIC_BASE_PRICE_CENTS y

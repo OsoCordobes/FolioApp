@@ -20,8 +20,11 @@
 const API_BASE = "https://api.mercadopago.com";
 
 /**
- * Precio del plan Folio en centavos ARS. Source of truth ÚNICO para el cobro
- * (crear preapproval) y para validar el monto de cada cargo.
+ * Precio del plan Solo (INDEPENDIENTE) en centavos ARS. Desde Fase E el monto
+ * del cobro por org sale de `computeMonthlyPriceCents` (lib/billing/pricing.ts)
+ * — para INDEPENDIENTE devuelve exactamente este valor; para CLINICA computa
+ * base + seats. La validación de cada cargo compara contra
+ * `suscripcion.monto_cents` de ESA org, no contra esta constante global.
  *
  * Se lee de la env `MP_PLAN_PRICE_CENTS`; si no está seteada cae al default
  * histórico (3.000.000 = 30.000 ARS). Antes el valor estaba hardcodeado acá y
@@ -31,7 +34,8 @@ const API_BASE = "https://api.mercadopago.com";
  *
  * Si cambia, también hay que actualizar:
  *   - suscripcion.monto_cents default en M19 (cosmético, no afecta runtime)
- *   - preapproval ya existentes en MP via PUT /preapproval/{id} (manual migration)
+ *   - preapproval ya existentes en MP via PUT /preapproval/{id} — la vía es
+ *     `syncSubscriptionAmount` (solo CLINICA) o migración manual para Solo
  */
 const MP_PLAN_PRICE_CENTS_DEFAULT = 3000000;
 
@@ -139,6 +143,11 @@ export interface CreatePreapprovalInput {
   payerEmail: string;
   externalReference: string;
   backUrl: string;
+  /**
+   * Monto recurrente en ARS (unidad de MP, admite decimales). La conversión
+   * centavos→ARS es responsabilidad del caller (PaymentProvider, Fase E · E2).
+   */
+  amountArs: number;
 }
 
 /**
@@ -159,15 +168,16 @@ export async function createPreapproval(
     auto_recurring: {
       frequency: 1,
       frequency_type: "months" as const,
-      transaction_amount: MP_PLAN_PRICE_ARS,
+      transaction_amount: input.amountArs,
       currency_id: MP_PLAN_CURRENCY,
     },
     back_url: input.backUrl,
     status: "pending" as const,
   };
-  // Idempotency key derivado del external_reference: dos calls con misma org
-  // y mismo timestamp de minuto no duplican preapproval ante retry de fetch.
-  const idemKey = `preapproval-${input.externalReference}-${Math.floor(Date.now() / 60000)}`;
+  // Idempotency key derivado del external_reference + monto: dos calls con
+  // misma org, mismo monto y mismo timestamp de minuto no duplican preapproval
+  // ante retry de fetch; un monto distinto (cambió el tier/seats) genera key nueva.
+  const idemKey = `preapproval-${input.externalReference}-${input.amountArs}-${Math.floor(Date.now() / 60000)}`;
   return mpRequest<MpPreapproval>("POST", "/preapproval", body, idemKey);
 }
 
@@ -185,6 +195,32 @@ export async function pausePreapproval(preapprovalId: string): Promise<MpPreappr
   return mpRequest<MpPreapproval>("PUT", `/preapproval/${preapprovalId}`, {
     status: "paused",
   });
+}
+
+/**
+ * Actualiza el monto recurrente de un preapproval existente (Fase E · cobro
+ * variable por seats de Clínica). MP exige mandar `transaction_amount` +
+ * `currency_id` juntos dentro de `auto_recurring`.
+ *
+ * `amountArs` viene en ARS (unidad que espera MP, admite decimales). La
+ * conversión centavos→ARS es responsabilidad del caller (PaymentProvider).
+ *
+ * X-Idempotency-Key derivada de preapproval + monto + ventana de minuto:
+ * un retry de fetch con el mismo monto no duplica el PUT; un cambio de monto
+ * legítimo (otro valor) genera key distinta.
+ */
+export async function updatePreapprovalAmount(
+  preapprovalId: string,
+  amountArs: number,
+): Promise<MpPreapproval> {
+  const body = {
+    auto_recurring: {
+      transaction_amount: amountArs,
+      currency_id: MP_PLAN_CURRENCY,
+    },
+  };
+  const idemKey = `preapproval-amount-${preapprovalId}-${amountArs}-${Math.floor(Date.now() / 60000)}`;
+  return mpRequest<MpPreapproval>("PUT", `/preapproval/${preapprovalId}`, body, idemKey);
 }
 
 // ─── Authorized payment (cobro mensual recurrente) ─────────────────────────
@@ -223,25 +259,6 @@ export async function getAuthorizedPayment(
   );
 }
 
-// ─── Helpers ───────────────────────────────────────────────────────────────
-
-/**
- * Convierte el status de MP preapproval al enum interno de Folio (`estado_suscripcion`).
- * `pending` se mantiene como PENDIENTE_ACTIVACION (no como PENDIENTE) para evitar
- * colisión semántica con un estado de cobro.
- */
-export function mapPreapprovalStatus(
-  mpStatus: MpPreapprovalStatus,
-): "PENDIENTE_ACTIVACION" | "ACTIVA" | "PAUSADA" | "CANCELADA" {
-  switch (mpStatus) {
-    case "pending":
-      return "PENDIENTE_ACTIVACION";
-    case "authorized":
-      return "ACTIVA";
-    case "paused":
-      return "PAUSADA";
-    case "cancelled":
-    case "finished":
-      return "CANCELADA";
-  }
-}
+// El mapeo MP status → dominio Folio vive en lib/payments/mercadopago.ts
+// (mapMpPreapprovalStatus / mapMpPaymentStatus). Este módulo queda como
+// detalle de transporte: solo habla el idioma de la API de MP.

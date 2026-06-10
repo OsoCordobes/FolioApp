@@ -38,6 +38,7 @@ import {
 
 import { getActiveContext, type ActiveContext } from "./active-context";
 import { err, isUniqueViolation, mapSupabaseError, ok, type Result } from "./errors";
+import { syncSubscriptionAmountInBackground } from "./suscripcion";
 
 // ─── Shapes ────────────────────────────────────────────────────────────────
 
@@ -487,5 +488,11 @@ export async function removeMember(memberId: string): Promise<Result<void>> {
   if (!updated || updated.length === 0) {
     return err("forbidden", "No se pudo dar de baja (permisos insuficientes).");
   }
+
+  // Fase E (E2): la baja resta un seat → sincronizamos el monto del débito de
+  // la org CLINICA. Fire-and-forget: jamás rompe la baja del member; si MP
+  // falla, el cron de reconciliación lo reintenta.
+  syncSubscriptionAmountInBackground(ctx.data.organization.id, "remove-member");
+
   return ok(undefined);
 }
