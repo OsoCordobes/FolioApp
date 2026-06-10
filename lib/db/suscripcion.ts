@@ -2,26 +2,29 @@
  * Folio · helpers de datos para la suscripción mensual MP (M19).
  *
  * Capa entre el data layer y los handlers de la API/Server Actions:
- *   - loadSubscriptionForOrg()      · Server Components (RLS-aware, solo OWNER ve)
- *   - createPendingSubscription()   · Server Action al iniciar activación
- *   - markSubscriptionFromMp()      · Webhook handler (service client, bypassa RLS)
- *   - recordChargeAttempt()         · Webhook handler — INSERT idempotente
- *   - markSubscriptionCancelled()   · Cancelación manual + sync con MP
- *   - computeAccessGate()           · Pura: decide si bloquear acceso a la app
+ *   - loadSubscriptionForOrg()             · Server Components (RLS-aware, solo OWNER ve)
+ *   - createOrRenewPendingSubscription()   · Server Action al iniciar activación
+ *   - applySubscriptionUpdate()            · Webhook handler (service client, bypassa RLS)
+ *   - recordChargeAttempt()                · Webhook handler — INSERT idempotente
+ *   - cancelSubscription()                 · Cancelación manual + sync con el proveedor
+ *   - syncSubscriptionAmount()             · Fase E: monto variable Clínica por seats
+ *   - computeAccessGate()                  · Pura: decide si bloquear acceso a la app
  *
- * Source of truth del estado: MP webhook → DB. La UI solo lee.
+ * El proveedor de cobros se consume vía PaymentProvider (lib/payments) — este
+ * módulo solo habla tipos de dominio (SubscriptionInfo / ChargeAttemptInfo).
+ * Source of truth del estado: webhook del proveedor → DB. La UI solo lee.
  */
 
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
 
+import { computeMonthlyPriceCents, type OrganizacionTipo } from "@/lib/billing/pricing";
 import {
-  cancelPreapproval,
-  createPreapproval,
-  mapPreapprovalStatus,
-  MP_PLAN_PRICE_CENTS,
-  type MpAuthorizedPayment,
-  type MpPreapproval,
-} from "@/lib/mercadopago/client";
+  getPaymentProvider,
+  type ChargeAttemptInfo,
+  type CreateSubscriptionOutput,
+  type SubscriptionInfo,
+  type SubscriptionStatus,
+} from "@/lib/payments";
 
 import { err, isUniqueViolation, ok, type Result } from "./errors";
 
@@ -35,6 +38,16 @@ export type EstadoSuscripcion =
   | "MOROSA";
 
 export type EstadoCargo = "PENDIENTE" | "APROBADO" | "RECHAZADO" | "REFUNDED";
+
+/**
+ * Estado canónico de dominio (PaymentProvider) → enum de DB.
+ * `PENDIENTE` del dominio se persiste como `PENDIENTE_ACTIVACION` (el nombre
+ * histórico de M19 evita colisión semántica con el estado de cobro PENDIENTE).
+ * El resto es identidad. Pura, exportada para tests.
+ */
+export function subscriptionStatusToEstado(status: SubscriptionStatus): EstadoSuscripcion {
+  return status === "PENDIENTE" ? "PENDIENTE_ACTIVACION" : status;
+}
 
 /**
  * A2 (docs/AUDIT.md): estados que el cron de reconciliación re-chequea contra
@@ -177,6 +190,55 @@ export async function loadRecentCharges(
   return ok(rows);
 }
 
+// ─── Pricing por org (Fase E · E2) ─────────────────────────────────────────
+
+interface OrgExpectedAmount {
+  tipo: OrganizacionTipo;
+  /** Members activos (deleted_at IS NULL), incluyendo OWNER. 1 para INDEPENDIENTE (no aplica). */
+  seats: number;
+  /** Monto mensual esperado en centavos según tier + seats (computeMonthlyPriceCents). */
+  expectedCents: number;
+}
+
+/**
+ * Resuelve el monto mensual que corresponde cobrarle a la org HOY:
+ * tipo (organization.tipo) + seats activos → computeMonthlyPriceCents.
+ * Para INDEPENDIENTE no cuenta members (el precio no depende de seats) —
+ * cero queries extra y cero cambio de comportamiento para el plan Solo.
+ *
+ * Consistencia: el count de seats NO es transaccional con el alta/baja del
+ * member que disparó el sync (fire-and-forget). Trade-off aceptado: el PUT a
+ * MP es idempotente (X-Idempotency-Key incluye el monto) y el cron
+ * reconcile-suscripciones re-sincroniza cualquier carrera en ≤24 h.
+ */
+async function resolveExpectedAmountForOrg(
+  supabase: ReturnType<typeof createSupabaseServiceClient>,
+  organizationId: string,
+): Promise<Result<OrgExpectedAmount>> {
+  const { data: orgRow, error: orgErr } = await supabase
+    .from("organization")
+    .select("tipo")
+    .eq("id", organizationId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (orgErr) return err("db_error", "Error leyendo organización.", orgErr.message);
+  if (!orgRow) return err("not_found", "Organización no encontrada o eliminada.");
+  const tipo = (orgRow as { tipo: OrganizacionTipo }).tipo;
+
+  let seats = 1;
+  if (tipo === "CLINICA") {
+    const { count, error: cntErr } = await supabase
+      .from("member")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", organizationId)
+      .is("deleted_at", null);
+    if (cntErr) return err("db_error", "Error contando miembros activos.", cntErr.message);
+    seats = count ?? 1;
+  }
+
+  return ok({ tipo, seats, expectedCents: computeMonthlyPriceCents(tipo, seats) });
+}
+
 // ─── Writes (Server Actions) ───────────────────────────────────────────────
 
 export interface CreatePendingInput {
@@ -204,31 +266,42 @@ export async function createOrRenewPendingSubscription(
     return err("conflict", "Ya tenés una suscripción activa.");
   }
 
-  // 1. Crear preapproval en MP.
-  let preapproval: MpPreapproval;
+  // 1. Monto por tier (Fase E · E2): INDEPENDIENTE = plan vigente, idéntico a
+  // siempre; CLINICA = base + seats activos AL MOMENTO de activar. Si los
+  // seats cambian después, syncSubscriptionAmount ajusta el preapproval.
+  const expected = await resolveExpectedAmountForOrg(supabase, input.organizationId);
+  if (!expected.ok) return expected;
+  const montoCents = expected.data.expectedCents;
+
+  // 2. Crear la suscripción en el proveedor de cobros (hoy: MP preapproval).
+  const provider = getPaymentProvider();
+  let created: CreateSubscriptionOutput;
   try {
-    preapproval = await createPreapproval({
+    created = await provider.createSubscription({
       payerEmail: input.payerEmail,
       externalReference: `org_${input.organizationId}`,
       backUrl: `${input.appUrl}/configuracion/billing?activation=ok`,
+      amountCents: montoCents,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return err("network", "No se pudo iniciar el cobro en Mercado Pago.", msg);
   }
 
-  // 2. Upsert local. UNIQUE(organization_id) garantiza una sola fila.
+  // 3. Upsert local. UNIQUE(organization_id) garantiza una sola fila.
+  // monto_cents es el monto que el preapproval va a debitar — la validación
+  // de cada cargo (recordChargeAttempt) compara contra ESTE valor por-org.
   const upsertPayload = {
     organization_id: input.organizationId,
-    mp_preapproval_id: preapproval.id,
+    mp_preapproval_id: created.subscription.providerSubscriptionId,
     payer_email: input.payerEmail,
-    monto_cents: MP_PLAN_PRICE_CENTS,
+    monto_cents: montoCents,
     moneda: "ARS",
-    estado: mapPreapprovalStatus(preapproval.status),
+    estado: subscriptionStatusToEstado(created.subscription.status),
     ultimo_error: null,
     fecha_cancelacion: null,
     // M-E: reseteamos el watermark monotónico (CR-3) al escribir un nuevo
-    // mp_preapproval_id. Si no, applyMpPreapprovalUpdate compararía el
+    // mp_preapproval_id. Si no, applySubscriptionUpdate compararía el
     // last_modified del nuevo preapproval contra el del anterior y podría
     // descartar el evento `authorized` de la re-suscripción como stale.
     mp_last_modified: null,
@@ -243,7 +316,7 @@ export async function createOrRenewPendingSubscription(
 
   return ok({
     subscription: mapSuscripcion(upserted as SuscripcionDbRow),
-    initPoint: preapproval.init_point,
+    initPoint: created.checkoutUrl,
   });
 }
 
@@ -265,7 +338,7 @@ export async function cancelSubscription(
   }
 
   try {
-    await cancelPreapproval(existing.data.mpPreapprovalId);
+    await getPaymentProvider().cancelSubscription(existing.data.mpPreapprovalId);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return err("network", "No se pudo cancelar en Mercado Pago.", msg);
@@ -289,15 +362,16 @@ export async function cancelSubscription(
 // ─── Writes (Webhook) ──────────────────────────────────────────────────────
 
 /**
- * Aplica un update de preapproval que recibimos por webhook (o por lazy reconcile).
+ * Aplica un update de la suscripción que recibimos por webhook (o por lazy
+ * reconcile / cron), ya mapeado a dominio por el PaymentProvider.
  * Idempotente: actualizar dos veces con el mismo payload deja la fila igual.
  */
-export async function applyMpPreapprovalUpdate(
-  preapproval: MpPreapproval,
+export async function applySubscriptionUpdate(
+  info: SubscriptionInfo,
 ): Promise<Result<SuscripcionRow | null>> {
   const supabase = createSupabaseServiceClient();
 
-  const newEstado = mapPreapprovalStatus(preapproval.status);
+  const newEstado = subscriptionStatusToEstado(info.status);
 
   // CR-3 (orden no monotónico): MP no garantiza el orden de entrega de los
   // webhooks. Leemos el estado actual + el último last_modified aplicado y
@@ -306,13 +380,13 @@ export async function applyMpPreapprovalUpdate(
   const { data: current, error: curErr } = await supabase
     .from("suscripcion")
     .select("fecha_activacion, mp_last_modified, estado")
-    .eq("mp_preapproval_id", preapproval.id)
+    .eq("mp_preapproval_id", info.providerSubscriptionId)
     .maybeSingle();
   if (curErr) return err("db_error", "Error leyendo suscripción.", curErr.message);
   if (!current) return ok(null);
 
-  const incomingModified = preapproval.last_modified
-    ? new Date(preapproval.last_modified).getTime()
+  const incomingModified = info.lastModified
+    ? new Date(info.lastModified).getTime()
     : null;
   const storedModified =
     (current as { mp_last_modified?: string | null }).mp_last_modified
@@ -323,7 +397,7 @@ export async function applyMpPreapprovalUpdate(
   // nuevo (o no trae last_modified), descartamos el evento como stale.
   if (storedModified !== null && (incomingModified === null || incomingModified <= storedModified)) {
     console.warn(
-      `[mp] preapproval ${preapproval.id}: evento stale descartado (incoming=${preapproval.last_modified ?? "null"} <= stored).`,
+      `[mp] preapproval ${info.providerSubscriptionId}: evento stale descartado (incoming=${info.lastModified ?? "null"} <= stored).`,
     );
     // No tocamos la fila. Devolvemos null (no es un error; el caller solo loguea).
     return ok(null);
@@ -331,8 +405,8 @@ export async function applyMpPreapprovalUpdate(
 
   const patch: Record<string, unknown> = {
     estado: newEstado,
-    proxima_cobro: preapproval.next_payment_date ?? null,
-    mp_last_modified: preapproval.last_modified ?? null,
+    proxima_cobro: info.nextChargeDate ?? null,
+    mp_last_modified: info.lastModified ?? null,
   };
   if (newEstado === "ACTIVA") {
     // fecha_activacion solo se setea la primera vez (COALESCE en SQL no aplica
@@ -348,7 +422,7 @@ export async function applyMpPreapprovalUpdate(
   const { data, error } = await supabase
     .from("suscripcion")
     .update(patch)
-    .eq("mp_preapproval_id", preapproval.id)
+    .eq("mp_preapproval_id", info.providerSubscriptionId)
     .select("*")
     .maybeSingle();
 
@@ -357,53 +431,83 @@ export async function applyMpPreapprovalUpdate(
 }
 
 /**
+ * M-BILL-2 · Pura: valida moneda y monto de un cargo contra el monto esperado
+ * de la suscripción de esa org (`suscripcion.monto_cents`). Tolerancia de
+ * ±1 centavo (redondeos de MP). Devuelve el texto del warning (sin PII) o
+ * null si el cargo es consistente. Exportada para tests
+ * (tests/unit/suscripcion-sync.test.ts).
+ */
+export function validateChargeAmount(input: {
+  amountCents: number;
+  currency: string;
+  expectedCents: number;
+}): string | null {
+  if (input.currency !== "ARS") {
+    return `Cargo en moneda inesperada (${input.currency}); esperado ARS.`;
+  }
+  if (Math.abs(input.amountCents - input.expectedCents) > 1) {
+    return `Monto inesperado (${input.amountCents / 100} ${input.currency}); esperado ${input.expectedCents / 100} ARS.`;
+  }
+  return null;
+}
+
+/**
  * Registra un intento de cobro recibido por webhook.
  * Idempotente vía UNIQUE(mp_payment_id) — INSERT que choca por conflict
  * se ignora silenciosamente y devolvemos la fila existente.
  */
 export async function recordChargeAttempt(input: {
-  preapprovalId: string;
-  authorizedPayment: MpAuthorizedPayment;
+  charge: ChargeAttemptInfo;
   rawPayload: unknown;
 }): Promise<Result<CargoRow | null>> {
   const supabase = createSupabaseServiceClient();
 
-  // Resolver suscripcion local por preapprovalId.
+  const charge = input.charge;
+
+  // Resolver suscripcion local por el ID de suscripción del proveedor.
+  // monto_cents viene en el mismo SELECT: es el monto esperado de ESA org
+  // (M-BILL-2 per-org, Fase E · E2).
   const { data: sus, error: susErr } = await supabase
     .from("suscripcion")
-    .select("id, estado")
-    .eq("mp_preapproval_id", input.preapprovalId)
+    .select("id, estado, monto_cents")
+    .eq("mp_preapproval_id", charge.providerSubscriptionId)
     .maybeSingle();
   if (susErr) return err("db_error", "Error buscando suscripción.", susErr.message);
   // M-BILL-1: la suscripción puede no estar linkeada aún si el webhook de cargo
   // llega antes que el de preapproval. Devolvemos not_found para que el route
   // responda 5xx y MP reintente (no perdemos el primer cobro).
-  if (!sus) return err("not_found", `Suscripción no existe para preapproval ${input.preapprovalId}.`);
+  if (!sus) return err("not_found", `Suscripción no existe para preapproval ${charge.providerSubscriptionId}.`);
 
   const currentEstado = (sus as { estado: EstadoSuscripcion }).estado;
 
-  const ap = input.authorizedPayment;
   // Solo registramos cargos que ya tienen payment asociado. Los "scheduled" sin payment
   // todavía no son cobros — los ignoramos.
-  if (!ap.payment) {
+  if (!charge.payment) {
     return ok(null);
   }
 
-  const mpPaymentId = String(ap.payment.id);
-  const estado = mapPaymentStatus(ap.payment.status);
+  const mpPaymentId = charge.payment.paymentId;
+  const estado = charge.payment.status;
 
-  // M-BILL-2: validar moneda y monto contra el plan canónico (MP_PLAN_PRICE_CENTS).
+  // M-BILL-2 (per-org desde Fase E · E2): validar moneda y monto contra
+  // `suscripcion.monto_cents` de ESA org — que es lo que su preapproval debita
+  // (plan Solo fijo o Clínica base+seats), no contra una constante global.
   // Un cargo en moneda distinta de ARS, o con un monto que se desvía más de 1
   // centavo del esperado, NO debe activar/recuperar la suscripción: lo
   // registramos pero marcamos warning para revisión manual.
-  const montoCents = Math.round(ap.transaction_amount * 100);
-  const currencyOk = ap.currency_id === "ARS";
-  const amountOk = Math.abs(montoCents - MP_PLAN_PRICE_CENTS) <= 1;
-  const montoWarning = !currencyOk
-    ? `Cargo en moneda inesperada (${ap.currency_id}); esperado ARS.`
-    : !amountOk
-      ? `Monto inesperado (${montoCents / 100} ${ap.currency_id}); esperado ${MP_PLAN_PRICE_CENTS / 100} ARS.`
-      : null;
+  const montoCents = charge.amountCents;
+  // Guard defensivo: una fila legacy con monto_cents NULL (no debería existir —
+  // M19 lo crea NOT NULL y createOrRenewPendingSubscription siempre lo setea)
+  // cae al precio del plan Solo: toda fila legacy es pre-tiers y por lo tanto
+  // INDEPENDIENTE.
+  const expectedMontoCents =
+    (sus as { monto_cents: number | null }).monto_cents ??
+    computeMonthlyPriceCents("INDEPENDIENTE", 1);
+  const montoWarning = validateChargeAmount({
+    amountCents: montoCents,
+    currency: charge.currency,
+    expectedCents: expectedMontoCents,
+  });
 
   // INSERT idempotente. `select` + ausencia de error nos dice si creó fila nueva
   // (data presente) vs duplicado (23505 → data null). En duplicado SALTEAMOS la
@@ -414,13 +518,14 @@ export async function recordChargeAttempt(input: {
     .insert({
       suscripcion_id: sus.id,
       mp_payment_id: mpPaymentId,
-      mp_authorized_payment_id: String(ap.id),
+      mp_authorized_payment_id: charge.providerChargeId,
       monto_cents: montoCents,
       estado,
-      // L-B: fecha_intento es NOT NULL. ap.debit_date puede venir null en
-      // payloads de cobro rechazado → un INSERT con null tiraría 500 y MP
-      // reintentaría infinito. Caemos a date_created y, en última instancia, now.
-      fecha_intento: ap.debit_date ?? ap.date_created ?? new Date().toISOString(),
+      // L-B: fecha_intento es NOT NULL. attemptDate puede venir null en
+      // payloads de cobro rechazado (el provider ya cayó de debit_date a
+      // date_created) → en última instancia, now. Un INSERT con null tiraría
+      // 500 y MP reintentaría infinito.
+      fecha_intento: charge.attemptDate ?? new Date().toISOString(),
       fecha_acreditacion: estado === "APROBADO" ? new Date().toISOString() : null,
       raw_payload: input.rawPayload as object,
     })
@@ -478,7 +583,7 @@ export async function recordChargeAttempt(input: {
       .from("suscripcion")
       .update({
         estado: "MOROSA",
-        ultimo_error: ap.payment.status_detail ?? "Cobro rechazado por Mercado Pago.",
+        ultimo_error: charge.payment.statusDetail ?? "Cobro rechazado por Mercado Pago.",
       })
       .eq("id", sus.id);
   }
@@ -500,17 +605,169 @@ export async function recordChargeAttempt(input: {
   });
 }
 
-function mapPaymentStatus(mpStatus: string): EstadoCargo {
-  switch (mpStatus) {
-    case "approved":
-      return "APROBADO";
-    case "rejected":
-      return "RECHAZADO";
-    case "refunded":
-      return "REFUNDED";
-    default:
-      return "PENDIENTE";
+// ─── Sync de monto por seats (Fase E · E2) ─────────────────────────────────
+
+export type SyncAmountSkipReason =
+  | "org_independiente"
+  | "sin_suscripcion"
+  | "sin_preapproval"
+  | "estado_no_elegible"
+  | "monto_igual";
+
+export type SyncAmountDecision =
+  | { action: "skip"; reason: SyncAmountSkipReason }
+  | { action: "sync"; fromCents: number; toCents: number };
+
+/**
+ * Pura (patrón computeAccessGate): decide si corresponde actualizar el monto
+ * recurrente del proveedor para una org. Exportada para tests.
+ *
+ * Reglas:
+ *   1. INDEPENDIENTE → NUNCA se toca, aunque monto_cents difiera del plan
+ *      vigente (regla dura de Fase E: cero cambio de comportamiento para el
+ *      plan Solo; una migración de precio Solo es un proceso manual aparte).
+ *   2. Sin suscripción, o sin mp_preapproval_id → nada que sincronizar.
+ *   3. Solo estados ACTIVA y MOROSA son elegibles: el preapproval existe y
+ *      sigue debitando. PENDIENTE_ACTIVACION se resuelve re-activando (el
+ *      preapproval se re-crea con el monto del tier actual); CANCELADA es
+ *      terminal; PAUSADA no debita y MP puede rechazar el PUT.
+ *   4. monto_cents ya igual al esperado → idempotente, no hay PUT.
+ */
+export function decideSubscriptionAmountSync(input: {
+  tipo: OrganizacionTipo;
+  /** Monto mensual esperado en centavos (computeMonthlyPriceCents con seats actuales). */
+  expectedCents: number;
+  subscription: Pick<SuscripcionRow, "estado" | "montoCents" | "mpPreapprovalId"> | null;
+}): SyncAmountDecision {
+  if (input.tipo === "INDEPENDIENTE") return { action: "skip", reason: "org_independiente" };
+  if (!input.subscription) return { action: "skip", reason: "sin_suscripcion" };
+  if (!input.subscription.mpPreapprovalId) return { action: "skip", reason: "sin_preapproval" };
+  if (input.subscription.estado !== "ACTIVA" && input.subscription.estado !== "MOROSA") {
+    return { action: "skip", reason: "estado_no_elegible" };
   }
+  if (input.subscription.montoCents === input.expectedCents) {
+    return { action: "skip", reason: "monto_igual" };
+  }
+  return {
+    action: "sync",
+    fromCents: input.subscription.montoCents,
+    toCents: input.expectedCents,
+  };
+}
+
+export interface SyncAmountOutcome {
+  synced: boolean;
+  /** Por qué NO se sincronizó (decisión skip). null si synced=true. */
+  skippedReason: SyncAmountSkipReason | null;
+  fromCents: number | null;
+  toCents: number | null;
+}
+
+/**
+ * Sincroniza el monto recurrente del proveedor con el tier + seats actuales
+ * de la org. Orquestación pura: lee tipo + members activos + suscripción,
+ * decide con `decideSubscriptionAmountSync` y, si corresponde, hace
+ * provider.updateSubscriptionAmount (PUT preapproval) + UPDATE monto_cents.
+ *
+ * Idempotente: si el monto ya coincide no toca MP ni la DB; repetirla con el
+ * mismo estado es no-op.
+ *
+ * Orden de escritura: MP PRIMERO, fila local después. Si el PUT a MP falla,
+ * la fila local queda con el monto viejo (consistente con lo que MP va a
+ * debitar) y devolvemos err — el caller NO debe romper su flujo (los hooks de
+ * seats la llaman fire-and-forget): el cron de reconciliación re-intenta el
+ * sync en la próxima corrida y el OWNER también puede dispararlo desde
+ * /configuracion/billing ("Actualizar monto"). Si en cambio falla el UPDATE
+ * local post-PUT, el próximo sync detecta la diferencia y re-emite el PUT
+ * (mismo valor → idempotente en MP) antes de reparar la fila.
+ */
+export async function syncSubscriptionAmount(
+  organizationId: string,
+): Promise<Result<SyncAmountOutcome>> {
+  const supabase = createSupabaseServiceClient();
+
+  const expected = await resolveExpectedAmountForOrg(supabase, organizationId);
+  if (!expected.ok) return expected;
+
+  const subRes = await loadSubscriptionForOrg(organizationId);
+  if (!subRes.ok) return subRes;
+  const sub = subRes.data;
+
+  const decision = decideSubscriptionAmountSync({
+    tipo: expected.data.tipo,
+    expectedCents: expected.data.expectedCents,
+    subscription: sub
+      ? { estado: sub.estado, montoCents: sub.montoCents, mpPreapprovalId: sub.mpPreapprovalId }
+      : null,
+  });
+
+  if (decision.action === "skip") {
+    return ok({
+      synced: false,
+      skippedReason: decision.reason,
+      fromCents: sub?.montoCents ?? null,
+      toCents: expected.data.expectedCents,
+    });
+  }
+
+  // Guard de narrowing: la decisión "sync" garantiza suscripción + preapproval.
+  if (!sub?.mpPreapprovalId) {
+    return ok({ synced: false, skippedReason: "sin_preapproval", fromCents: null, toCents: decision.toCents });
+  }
+
+  try {
+    await getPaymentProvider().updateSubscriptionAmount(sub.mpPreapprovalId, decision.toCents);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return err("network", "No se pudo actualizar el monto de la suscripción en Mercado Pago.", msg);
+  }
+
+  const { error: updErr } = await supabase
+    .from("suscripcion")
+    .update({ monto_cents: decision.toCents })
+    .eq("id", sub.id);
+  if (updErr) {
+    // MP ya quedó con el monto nuevo; el próximo sync repara la fila (ver doc).
+    return err(
+      "db_error",
+      "El monto se actualizó en Mercado Pago pero no en la base; se repara en el próximo sync.",
+      updErr.message,
+    );
+  }
+
+  // Log estructurado sin PII (ids internos + montos, nunca email/nombres).
+  console.log(
+    `[billing] monto sync org=${organizationId} suscripcion=${sub.id} tipo=${expected.data.tipo} seats=${expected.data.seats} antes=${decision.fromCents} despues=${decision.toCents}`,
+  );
+
+  return ok({
+    synced: true,
+    skippedReason: null,
+    fromCents: decision.fromCents,
+    toCents: decision.toCents,
+  });
+}
+
+/**
+ * Versión fire-and-forget para los hooks de cambio de seats (aceptar/revivir
+ * invitación, baja de member): JAMÁS rompe el flujo del caller — cualquier
+ * error queda logueado y lo recupera el cron de reconciliación (o el botón
+ * "Actualizar monto" de billing). El webhook de MP NO la llama (evita loops
+ * PUT → webhook → PUT).
+ */
+export function syncSubscriptionAmountInBackground(organizationId: string, trigger: string): void {
+  void syncSubscriptionAmount(organizationId)
+    .then((res) => {
+      if (!res.ok) {
+        console.warn(
+          `[billing] sync monto (${trigger}) org=${organizationId} falló: ${res.error.message}`,
+        );
+      }
+    })
+    .catch((e) => {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn(`[billing] sync monto (${trigger}) org=${organizationId} tiró: ${msg}`);
+    });
 }
 
 // ─── Pure: gating decision ─────────────────────────────────────────────────

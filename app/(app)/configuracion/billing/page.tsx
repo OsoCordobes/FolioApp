@@ -16,12 +16,17 @@ import { BillingPage, type ClinicPricingView } from "@/components/billing/billin
 import { computeClinicBreakdownCents } from "@/lib/billing/pricing";
 import { getActiveContext } from "@/lib/db/active-context";
 import {
+  decideSubscriptionAmountSync,
   loadRecentCharges,
   loadSubscriptionForOrg,
   type CargoRow,
 } from "@/lib/db/suscripcion";
-import { MP_PLAN_PRICE_ARS } from "@/lib/mercadopago/client";
+import { computeMonthlyPriceCents } from "@/lib/billing/pricing";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+
+// Precio de display del plan Solo derivado de la capa de pricing (dominio),
+// no del cliente MP (transporte) — la UI no debe importar lib/mercadopago.
+const PLAN_SOLO_PRICE_ARS = computeMonthlyPriceCents("INDEPENDIENTE", 1) / 100;
 
 export const dynamic = "force-dynamic";
 
@@ -52,10 +57,12 @@ export default async function BillingRoutePage({
     if (chargesRes.ok) charges = chargesRes.data;
   }
 
-  // Fase C · tiers: para orgs CLINICA mostramos el desglose base + seats
-  // (SOLO display — el preapproval de MP sigue cobrando el plan vigente;
-  // el débito variable por integrante llega en Fase E). Seats = members
-  // activos de la org (deleted_at IS NULL), incluyendo al OWNER.
+  // Fase C · tiers + Fase E · cobro variable: para orgs CLINICA mostramos el
+  // desglose base + seats Y el monto que MP efectivamente debita
+  // (suscripcion.monto_cents). Si difieren con una suscripción elegible
+  // (ACTIVA/MOROSA con preapproval — misma decisión pura que el sync real),
+  // la UI ofrece "Actualizar monto". Seats = members activos de la org
+  // (deleted_at IS NULL), incluyendo al OWNER.
   let clinicPricing: ClinicPricingView | null = null;
   if (ctx.data.organization.tipo === "CLINICA") {
     const supabase = await createSupabaseServerClient();
@@ -65,12 +72,24 @@ export default async function BillingRoutePage({
       .eq("organization_id", ctx.data.organization.id)
       .is("deleted_at", null);
     const breakdown = computeClinicBreakdownCents(count ?? 1);
+    const sub = subRes.data;
+    const decision = decideSubscriptionAmountSync({
+      tipo: "CLINICA",
+      expectedCents: breakdown.totalCents,
+      subscription: sub
+        ? { estado: sub.estado, montoCents: sub.montoCents, mpPreapprovalId: sub.mpPreapprovalId }
+        : null,
+    });
+    const debitaHoy =
+      sub && (sub.estado === "ACTIVA" || sub.estado === "MOROSA" || sub.estado === "PAUSADA");
     clinicPricing = {
       seats: breakdown.seats,
       extraSeats: breakdown.extraSeats,
       basePriceArs: breakdown.basePriceCents / 100,
       seatPriceArs: breakdown.seatPriceCents / 100,
       totalArs: breakdown.totalCents / 100,
+      montoActualArs: debitaHoy ? sub.montoCents / 100 : null,
+      syncPending: decision.action === "sync",
     };
   }
 
@@ -79,7 +98,7 @@ export default async function BillingRoutePage({
       subscription={subRes.data}
       charges={charges}
       accessGate={ctx.data.accessGate}
-      planPriceArs={MP_PLAN_PRICE_ARS}
+      planPriceArs={PLAN_SOLO_PRICE_ARS}
       payerEmail={ctx.data.profile.email}
       gateBanner={sp.gate ?? null}
       activationOk={sp.activation === "ok"}

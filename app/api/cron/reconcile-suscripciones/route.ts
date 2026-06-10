@@ -9,7 +9,7 @@
  *
  * Este cron es la red de seguridad: para cada suscripción en estado no
  * terminal (RECONCILABLE_ESTADOS) hace GET /preapproval/{id} con nuestro
- * token y aplica el estado real vía `applyMpPreapprovalUpdate`, que ya es
+ * token y aplica el estado real vía `applySubscriptionUpdate`, que ya es
  * idempotente y descarta datos más viejos que `mp_last_modified` (no pisa
  * webhooks que sí llegaron).
  *
@@ -20,12 +20,21 @@
  *
  * Performance: batch de 50 por corrida, ordenado por updated_at ASC (las más
  * "viejas" primero). Una falla con una suscripción no corta el batch.
+ *
+ * Fase E (E2): para cada suscripción del batch también corre
+ * `syncSubscriptionAmount` — si una org CLINICA cambió de seats y el sync
+ * fire-and-forget del hook falló (MP caído, lambda congelada), este cron
+ * repara el monto del preapproval. Para INDEPENDIENTE es un no-op por diseño.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 
-import { applyMpPreapprovalUpdate, RECONCILABLE_ESTADOS } from "@/lib/db/suscripcion";
-import { getPreapproval } from "@/lib/mercadopago/client";
+import {
+  applySubscriptionUpdate,
+  RECONCILABLE_ESTADOS,
+  syncSubscriptionAmount,
+} from "@/lib/db/suscripcion";
+import { getPaymentProvider } from "@/lib/payments";
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -61,11 +70,13 @@ async function runReconcile(): Promise<NextResponse> {
   let updated = 0;
   let unchanged = 0;
   let failed = 0;
+  let montoSynced = 0;
 
+  const provider = getPaymentProvider();
   for (const sus of picked) {
     try {
-      const preapproval = await getPreapproval(sus.mp_preapproval_id);
-      const res = await applyMpPreapprovalUpdate(preapproval);
+      const subscription = await provider.fetchSubscription(sus.mp_preapproval_id);
+      const res = await applySubscriptionUpdate(subscription);
       if (!res.ok) {
         failed++;
         console.warn(
@@ -82,6 +93,24 @@ async function runReconcile(): Promise<NextResponse> {
       } else {
         unchanged++;
       }
+
+      // Fase E (E2): además del estado, reconciliamos el MONTO por seats de
+      // las orgs CLINICA — red de seguridad si el sync fire-and-forget de un
+      // hook de seats falló. La decisión interna saltea INDEPENDIENTE,
+      // estados no elegibles y montos ya iguales sin tocar MP (idempotente).
+      const sync = await syncSubscriptionAmount(sus.organization_id);
+      if (sync.ok && sync.data.synced) {
+        montoSynced++;
+        console.log(
+          `[reconcile-sus] monto sync org=${sus.organization_id}: ${sync.data.fromCents} → ${sync.data.toCents} (drift de seats reconciliado).`,
+        );
+      } else if (!sync.ok) {
+        // No cuenta como `failed` del batch de estados: queda logueado y se
+        // reintenta en la próxima corrida.
+        console.warn(
+          `[reconcile-sus] monto sync falló org=${sus.organization_id}: ${sync.error.message}`,
+        );
+      }
     } catch (e) {
       // MP API caída / 404 de preapproval → no cortamos el batch; queda para
       // la próxima corrida.
@@ -91,7 +120,7 @@ async function runReconcile(): Promise<NextResponse> {
     }
   }
 
-  const summary = { ok: true, picked: picked.length, updated, unchanged, failed };
+  const summary = { ok: true, picked: picked.length, updated, unchanged, failed, montoSynced };
   console.log(`[reconcile-sus] ${JSON.stringify(summary)}`);
   return NextResponse.json(summary);
 }

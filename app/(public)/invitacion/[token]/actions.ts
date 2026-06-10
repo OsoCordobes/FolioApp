@@ -20,6 +20,7 @@ import { headers } from "next/headers";
 import { findUserByEmail } from "@/lib/auth/find-user-by-email";
 import { err, ok, type Result } from "@/lib/db/errors";
 import { setActiveOrg } from "@/lib/db/session";
+import { syncSubscriptionAmountInBackground } from "@/lib/db/suscripcion";
 import { PRIVACY_VERSION } from "@/lib/legal/versions";
 import { signUpSchema } from "@/lib/onboarding/schemas";
 import { formatResetMessage, limitByIp, limitByKey } from "@/lib/security/rate-limit";
@@ -110,6 +111,13 @@ export async function acceptInvitationAction(
   // Dejar la org recién aceptada como activa (cookie). Si falla no es fatal:
   // getActiveSession() igual resuelve una membership válida.
   await setActiveOrg(result.organization_id);
+
+  // Fase E (E2): aceptar la invitación suma (o revive — la RPC hace ON
+  // CONFLICT ... deleted_at = NULL) un seat → sincronizamos el monto del
+  // débito de la org CLINICA. Fire-and-forget: jamás rompe la aceptación;
+  // si MP falla, el cron de reconciliación lo reintenta. Para orgs
+  // INDEPENDIENTE la decisión interna lo saltea sin tocar nada.
+  syncSubscriptionAmountInBackground(result.organization_id, "accept-invitation");
 
   return ok({ organizationId: result.organization_id });
 }

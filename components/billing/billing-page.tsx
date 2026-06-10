@@ -20,6 +20,7 @@ import {
   activateSubscriptionAction,
   cancelSubscriptionAction,
   refreshSubscriptionAction,
+  syncClinicAmountAction,
 } from "@/app/(app)/configuracion/billing/actions";
 
 interface ChargeRow {
@@ -48,14 +49,26 @@ interface AccessGate {
   graceDaysLeft: number | null;
 }
 
-/** Fase C · desglose display del plan Clínica (el cobro real sigue siendo el plan vigente hasta Fase E). */
+/** Fase C/E · desglose del plan Clínica + monto que MP debita hoy. */
 export interface ClinicPricingView {
   /** Members activos (incluye OWNER). */
   seats: number;
   extraSeats: number;
   basePriceArs: number;
   seatPriceArs: number;
+  /** Total según tier + seats actuales (lo que CORRESPONDE cobrar). */
   totalArs: number;
+  /**
+   * Monto que el preapproval de MP debita hoy (suscripcion.monto_cents).
+   * null si no hay suscripción debitando (sin sub, pendiente o cancelada).
+   */
+  montoActualArs: number | null;
+  /**
+   * true si el monto del débito quedó desfasado del equipo actual y la
+   * suscripción es elegible para sync (ACTIVA/MOROSA con preapproval) —
+   * misma decisión pura que usa syncSubscriptionAmount.
+   */
+  syncPending: boolean;
 }
 
 interface Props {
@@ -117,6 +130,27 @@ export function BillingPage({
     });
   };
 
+  const onSyncAmount = () => {
+    setError(null);
+    startTransition(async () => {
+      const res = await syncClinicAmountAction();
+      if (!res.ok) {
+        setError(res.error.message);
+      }
+    });
+  };
+
+  // Fase E: para CLINICA el precio mostrado en la card de suscripción es el
+  // monto real por-org (suscripcion.monto_cents si hay sub; si no, el total
+  // estimado con el que se crearía el preapproval). INDEPENDIENTE sigue
+  // mostrando el plan vigente, idéntico a siempre.
+  const displayPriceArs =
+    orgTipo === "CLINICA"
+      ? subscription && subscription.estado !== "CANCELADA"
+        ? subscription.montoCents / 100
+        : clinicPricing?.totalArs ?? planPriceArs
+      : planPriceArs;
+
   return (
     <div className="cfg">
       <header className="cfg-head">
@@ -141,12 +175,13 @@ export function BillingPage({
 
       <div className="cfg-section-body" style={{ marginTop: 16 }}>
         {orgTipo === "CLINICA" && clinicPricing ? (
-          <ClinicPlanCard pricing={clinicPricing} planPriceArs={planPriceArs} />
+          <ClinicPlanCard pricing={clinicPricing} pending={pending} onSyncAmount={onSyncAmount} />
         ) : null}
 
         <SubscriptionCard
           subscription={subscription}
-          planPriceArs={planPriceArs}
+          planPriceArs={displayPriceArs}
+          planLabel={orgTipo === "CLINICA" ? "Plan Clínica" : "Plan Profesional"}
           payerEmail={payerEmail}
           pending={pending}
           onActivate={onActivate}
@@ -162,16 +197,19 @@ export function BillingPage({
 // ─── Subcomponentes ────────────────────────────────────────────────────────
 
 /**
- * Fase C · plan Clínica: desglose base + integrantes adicionales = total
- * ESTIMADO. Display-only: el preapproval de Mercado Pago NO se modifica acá
- * (el débito variable por seats llega en Fase E) — la nota lo dice honesto.
+ * Fase C/E · plan Clínica: desglose base + integrantes adicionales = total,
+ * más el monto que MP debita HOY (suscripcion.monto_cents). Si el débito
+ * quedó desfasado del equipo actual (syncPending), botón "Actualizar monto"
+ * → syncClinicAmountAction (gate OWNER + CLINICA en el server).
  */
 function ClinicPlanCard({
   pricing,
-  planPriceArs,
+  pending,
+  onSyncAmount,
 }: {
   pricing: ClinicPricingView;
-  planPriceArs: number;
+  pending: boolean;
+  onSyncAmount: () => void;
 }) {
   return (
     <section className="cfg-section">
@@ -209,7 +247,8 @@ function ClinicPlanCard({
         </div>
         <div className="cfg-row">
           <div className="cfg-row-label">
-            <span>Total mensual estimado</span>
+            <span>Total mensual</span>
+            <span className="cfg-row-sub">Según tu equipo actual</span>
           </div>
           <div className="cfg-row-control">
             <span className="fm-mono" style={{ fontWeight: 600 }}>
@@ -217,20 +256,69 @@ function ClinicPlanCard({
             </span>
           </div>
         </div>
-        <p
-          style={{
-            marginTop: 12,
-            padding: "10px 14px",
-            background: "var(--amber-soft)",
-            color: "var(--amber)",
-            borderRadius: "var(--r-md)",
-            fontSize: 13,
-            lineHeight: 1.55,
-          }}
-        >
-          El débito automático por integrante se activa próximamente. Por ahora Mercado Pago te
-          debita el plan vigente de {formatArs(planPriceArs)}/mes.
-        </p>
+        {pricing.montoActualArs != null ? (
+          pricing.syncPending ? (
+            <div
+              style={{
+                marginTop: 12,
+                padding: "10px 14px",
+                background: "var(--amber-soft)",
+                color: "var(--amber)",
+                borderRadius: "var(--r-md)",
+                fontSize: 13,
+                lineHeight: 1.55,
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 12,
+                flexWrap: "wrap",
+              }}
+            >
+              <span>
+                El débito de Mercado Pago sigue en {formatArs(pricing.montoActualArs)}/mes; con tu
+                equipo actual corresponde {formatArs(pricing.totalArs)}/mes.
+              </span>
+              <button
+                type="button"
+                className="fi-btn fi-btn-primary"
+                onClick={onSyncAmount}
+                disabled={pending}
+              >
+                {pending ? "Actualizando…" : "Actualizar monto"}
+              </button>
+            </div>
+          ) : (
+            <p
+              style={{
+                marginTop: 12,
+                padding: "10px 14px",
+                background: "var(--slate-soft)",
+                color: "var(--slate)",
+                borderRadius: "var(--r-md)",
+                fontSize: 13,
+                lineHeight: 1.55,
+              }}
+            >
+              Mercado Pago te debita {formatArs(pricing.montoActualArs)}/mes, en línea con tu
+              equipo actual. Cuando sumás o das de baja integrantes, el monto se ajusta solo.
+            </p>
+          )
+        ) : (
+          <p
+            style={{
+              marginTop: 12,
+              padding: "10px 14px",
+              background: "var(--slate-soft)",
+              color: "var(--slate)",
+              borderRadius: "var(--r-md)",
+              fontSize: 13,
+              lineHeight: 1.55,
+            }}
+          >
+            Al activar la suscripción, Mercado Pago va a debitar {formatArs(pricing.totalArs)}/mes
+            según tu equipo actual.
+          </p>
+        )}
       </div>
     </section>
   );
@@ -239,6 +327,7 @@ function ClinicPlanCard({
 function SubscriptionCard({
   subscription,
   planPriceArs,
+  planLabel,
   payerEmail,
   pending,
   onActivate,
@@ -246,6 +335,7 @@ function SubscriptionCard({
 }: {
   subscription: SubscriptionRow | null;
   planPriceArs: number;
+  planLabel: string;
   payerEmail: string;
   pending: boolean;
   onActivate: () => void;
@@ -260,7 +350,7 @@ function SubscriptionCard({
         <header>
           <div>
             <h2>Activar suscripción</h2>
-            <p>Plan Profesional · {monto}/mes. Cobro automático con Mercado Pago.</p>
+            <p>{planLabel} · {monto}/mes. Cobro automático con Mercado Pago.</p>
           </div>
         </header>
         <div className="cfg-section-body">
@@ -343,7 +433,7 @@ function SubscriptionCard({
       <header>
         <div>
           <h2>Suscripción {statusLabel[subscription.estado].toLowerCase()}</h2>
-          <p>Plan Profesional · {monto}/mes.</p>
+          <p>{planLabel} · {monto}/mes.</p>
         </div>
       </header>
       <div className="cfg-section-body">
