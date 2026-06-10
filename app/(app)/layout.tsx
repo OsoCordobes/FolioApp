@@ -18,9 +18,8 @@ import { redirect } from "next/navigation";
 import { EmailVerifyBanner } from "@/components/auth/email-verify-banner";
 import { Sidebar, type GoogleSyncStatus } from "@/components/sidebar";
 import { getActiveContext } from "@/lib/db/active-context";
+import { BILLING_RECOVERY_PATH, shouldGateToBilling } from "@/lib/db/suscripcion";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-
-const BILLING_PATH = "/configuracion/billing";
 
 export default async function AppShellLayout({
   children,
@@ -47,17 +46,27 @@ export default async function AppShellLayout({
 
   // Gating de suscripción (M19/S0 billing). Si vencido el grace period y la
   // suscripción no está activa, forzamos al usuario a /configuracion/billing.
-  // Excepción: si ya estamos en billing, dejamos pasar — sería loop infinito.
+  //
+  // H-BILLING-1 · billing es la PANTALLA DE RECUPERACIÓN: una org MOROSA con
+  // grace vencido (o CANCELADA / PAUSADA / grace_expired) tiene que poder
+  // llegar acá para refrescar/repagar/cancelar. La decisión vive en
+  // `shouldGateToBilling` (pura, testeable) que garantiza que estando ya bajo
+  // el path de billing no se redirige (sería loop / dead-end de cobro). Las
+  // server actions de billing no pasan por este gate (solo chequean rol).
   //
   // M37 · is_internal_account bypass: demo/internal/test tenants skip the
   // gate entirely. The flag is auditable (tg_audit_organization_internal_flag
   // logs every flip) and surfaced in the sidebar as a "Cuenta interna" badge
   // so it can never silently affect a real customer.
-  if (!organization.isInternalAccount && !accessGate.allowed) {
-    const pathname = (await headers()).get("x-pathname") ?? "";
-    if (!pathname.startsWith(BILLING_PATH)) {
-      redirect(`${BILLING_PATH}?gate=${accessGate.reason ?? "denied"}`);
-    }
+  const pathname = (await headers()).get("x-pathname") ?? "";
+  if (
+    shouldGateToBilling({
+      isInternalAccount: organization.isInternalAccount,
+      accessGate,
+      pathname,
+    })
+  ) {
+    redirect(`${BILLING_RECOVERY_PATH}?gate=${accessGate.reason ?? "denied"}`);
   }
 
   const googleSync = await loadGoogleSyncStatus(session.organizationId, session.memberId);

@@ -11,7 +11,12 @@
  *   1. For every org the profile owns: pseudonymize each paciente via the
  *      existing pseudonimizar_paciente() function (M13).
  *   2. Soft-delete member rows + orgs (deleted_at = now()).
- *   3. Hard-delete the profile (and the auth.users row via service-role
+ *   3. Revoke + unlink member_invitation rows accepted by the profile (the
+ *      ON DELETE SET NULL FK alone would leave them ACEPTADA with a NULL
+ *      acceptor — incoherent; we mark them REVOCADA explicitly first). If this
+ *      step errors, we ABORT the hard-delete for that profile (recorded as an
+ *      error and retried next run) rather than leave the FK incoherent.
+ *   4. Hard-delete the profile (and the auth.users row via service-role
  *      admin.deleteUser).
  *
  * MVP: the cron file ships ready but the actual hard-delete logic is
@@ -23,10 +28,17 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 
+import {
+  invitationRevokeAbortMessage,
+  isSafeToHardDeleteProfile,
+} from "@/lib/me/account-purge";
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+// Purga diaria: itera profiles vencidos y, por cada org, pseudonimiza cada
+// paciente. Damos margen sobre el default por el loop.
+export const maxDuration = 60;
 
 export async function GET(request: NextRequest) {
   const auth = request.headers.get("authorization");
@@ -101,10 +113,44 @@ export async function GET(request: NextRequest) {
           .in("id", orgIds);
       }
 
-      // 5. Delete profile row (cascade ON DELETE handles dependent FKs)
+      // 5. member_invitation aceptadas por este profile (Ley 25.326 art. 16 —
+      //    supresión). La FK accepted_by_profile_id es ON DELETE SET NULL
+      //    (M49), así que el hard-delete de abajo dejaría la fila en estado
+      //    ACEPTADA con accepted_by_profile_id = NULL → estado incoherente
+      //    (figura aceptada por nadie). Lo resolvemos ANTES, explícitamente:
+      //    revocamos la invitación y desvinculamos al titular suprimido,
+      //    documentando el momento en updated_at. Mismo criterio que el
+      //    soft-delete de member/organization: dejamos rastro coherente, no
+      //    una FK colgada. (Las invitaciones que este profile CREÓ se
+      //    desvinculan vía invited_by_member_id ON DELETE SET NULL al
+      //    eventualmente purgarse sus members; no se tocan acá.)
+      const { error: invRevokeErr } = await service
+        .from("member_invitation")
+        .update({
+          estado: "REVOCADA",
+          accepted_by_profile_id: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("accepted_by_profile_id", profileId);
+
+      // Si la revocación falló, ABORTAR el hard-delete de ESTE profile: borrarlo
+      // igual rompería la invariante de coherencia (la FK ON DELETE SET NULL
+      // dejaría invitaciones ACEPTADA con acceptor NULL, sin reintento posible).
+      // Lo dejamos para la próxima corrida del cron con la fila aún presente; el
+      // resto de profiles del batch sigue su curso.
+      if (!isSafeToHardDeleteProfile(invRevokeErr)) {
+        results.push({
+          profile_id: profileId,
+          status: "error",
+          error: invitationRevokeAbortMessage(invRevokeErr),
+        });
+        continue;
+      }
+
+      // 6. Delete profile row (cascade ON DELETE handles dependent FKs)
       await service.from("profile").delete().eq("id", profileId);
 
-      // 6. Delete auth.users row
+      // 7. Delete auth.users row
       await service.auth.admin.deleteUser(profileId);
 
       results.push({ profile_id: profileId, status: "purged" });

@@ -13,6 +13,12 @@ import { encryptColumn } from "@/lib/crypto";
 import { exchangeCodeForTokens } from "@/lib/google/oauth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+// OAuth callback: exchange de código por tokens contra Google + cifrado +
+// sync inicial de 30 días de eventos. Margen sobre el default por la red.
+export const maxDuration = 60;
+
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");

@@ -34,17 +34,18 @@
 
 ## Cambiar el precio del plan
 
-El precio es source of truth en `lib/mercadopago/client.ts`:
-
-```ts
-export const MP_PLAN_PRICE_CENTS = 3000000;  // 30.000 ARS
-```
+El precio del plan INDEPENDIENTE (Solo) es source of truth en la env
+`MP_PLAN_PRICE_CENTS`, que resuelve `lib/mercadopago/client.ts` (default
+3.000.000 = 30.000 ARS). El display deriva del mismo valor — ya no hay un
+`NEXT_PUBLIC_MP_PLAN_PRICE_ARS` separado que pueda driftear.
 
 Para subir a 35.000:
 
-1. Editar la constante en `client.ts` (afecta a preapproval **nuevos**).
-2. Actualizar `NEXT_PUBLIC_MP_PLAN_PRICE_ARS` en Vercel env.
-3. Para los preapproval **existentes**, hacer un script one-shot que itere `suscripcion` con `estado=ACTIVA` y haga `PUT /preapproval/{id}` con `{ auto_recurring: { transaction_amount: 35000 } }`.
+1. Setear `MP_PLAN_PRICE_CENTS=3500000` en el env de Vercel (afecta a
+   preapproval **nuevos** y al display).
+2. Para los preapproval **existentes**, hacer un script one-shot que itere
+   `suscripcion` con `estado=ACTIVA` y haga `PUT /preapproval/{id}` con
+   `{ auto_recurring: { transaction_amount: 35000 } }`.
 
 ## Flujo end-to-end (manual smoke test)
 

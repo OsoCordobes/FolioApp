@@ -14,7 +14,7 @@
 | Fase C | Onboarding con especialidad + tiers Solo/Clinic | 🔨 Código listo en branch `feat/fase-c-onboarding-tiers` (sin commitear): C1 = selector especialidad+tipo en onboarding/configuración; C2 = pricing Clinic (`lib/billing/pricing.ts`), **M51** (gate de seats en RLS), equipo/invitaciones (`lib/db/members.ts` + sección Equipo + email + `/invitacion/[token]`), billing tier-aware. ⚠️ **M51 debe aplicarse a prod ANTES de mergear/deployar** (la UI de invitaciones asume la policy nueva; M51 es solo DROP+CREATE de policy — sin validación de datos, segura de aplicar) |
 | Fase D | Herramientas clínicas cardiología + psicología | 🔨 Código listo en branch `feat/fase-d-herramientas` (sin commitear): D1 = persistencia del borrador del tab Plan; D2 = herramienta de cardiología (`cardiologia.cv.v1`); D3 = herramienta de psicología (`psicologia.escalas.v1`). **Sin migración nueva** — persiste sobre `sesion.tool_id`/`tool_data_cifrado` (M50, ya en prod) |
 | Fase E | Integración E2E + PaymentProvider + cobro Clinic | 🔨 E1+E2 listos en worktree `feat/fase-e-payments` (sin commitear): E1 = abstracción `PaymentProvider` (`lib/payments/`) con implementación MP, callers migrados; E2 = cobro Clinic variable por seats (preapproval tier-aware, `syncSubscriptionAmount` + hooks de seats + cron, validación de cargo per-org, UI con drift). E2E por especialidad pendiente. **Checkpoint billing obligatorio antes de commit/deploy** |
-| Fase F | Hardening final + regresión completa | ⏳ Pendiente |
+| Fase F | Hardening final + regresión completa + readiness operacional | 🔨 En curso — compliance/billing/auth-defensa + **F-OPS** (env example, `/api/health`, `maxDuration`, `docs/LAUNCH-RUNBOOK.md`) listos en worktree `fix/fase-f-hardening` (sin commitear). M4/M8/M9 documentados como gaps post-launch (ver Fase F + runbook §5) |
 
 ## Objetivo
 
@@ -120,6 +120,19 @@ Con la interfaz congelada en Fase B, generación en paralelo con subagentes (un 
 ### Fase F — Hardening final
 
 Bajos restantes de auditoría (B1–B8 no resueltos en A), accesibilidad/estados de carga y error, snapshots visuales parametrizados por especialidad, regresión total (`typecheck + lint + test:unit + build + pgtap CI + e2e`), actualización de docs/PLAN.md y CLAUDE.md. **CHECKPOINT final.**
+
+**Estado F-OPS (2026-06-10, worktree `fix/fase-f-hardening`) — readiness operacional + runbook de lanzamiento (sin commitear, sin migración nueva):**
+
+- **`.env.local.example`**: agregado `PAYMENT_PROVIDER=mercadopago` (selector de `lib/payments`, default seguro); **eliminado `NEXT_PUBLIC_MP_PLAN_PRICE_ARS`** (sin uso real — el display deriva de `MP_PLAN_PRICE_CENTS`; verificado por grep, cero `process.env` de esa var; corregida también la referencia stale en `docs/architecture/mp-subscription.md`); documentados `MP_PLAN_PRICE_CENTS` (3000000) y los tiers Clínica `CLINIC_BASE_PRICE_CENTS`/`CLINIC_SEAT_PRICE_CENTS` (10000000 / 2500000); agregado `META_APP_SECRET` (firma HMAC de webhooks WhatsApp, usado en `lib/whatsapp/webhook-security.ts`); aclarado Sentry — `NEXT_PUBLIC_SENTRY_DSN` es el único requerido, `SENTRY_DSN` es fallback server/edge **realmente leído** (no se borró, solo se demotó a opcional), `SENTRY_AUTH_TOKEN` es build-only (source maps), el runtime no lo lee.
+- **`/api/health`**: agregados a `integrations` los flags informativos `cron_secret = Boolean(CRON_SECRET)` y `mp_webhook_secret = Boolean(MP_WEBHOOK_SECRET && MP_ACCESS_TOKEN)`. No bajan `ok` (los crones/webhook no son dependencia de boot), pero deben estar `true` antes del go-live (documentado en runbook §2).
+- **`maxDuration = 60`** agregado a los route handlers pesados que faltaban y hacen MP o cifrado pesado: `mercadopago/webhook` (GETs a MP + writes), `me/export` (descifra PII + agrega tablas), `cron/account-purge` (loop de pseudonimización), `google/callback` (OAuth exchange + cifrado + sync). Las server actions de billing (`activateSubscriptionAction`/`syncClinicAmountAction`) llaman a MP pero **no tienen route propio** — en Next 15 `maxDuration` no aplica a módulos `'use server'` sueltos, así que **no** se puso un export no-op engañoso; heredan la duración de la page POST y queda documentado en runbook §2.3.
+- **`docs/LAUNCH-RUNBOOK.md`** (NUEVO): pre-vuelo de envs prod (críticas vs opcionales, con modo de falla verificado por grep de `process.env.`), verificación go-live (curl `/api/health` + smoke manual), recomendaciones fuertes (Upstash+`UPSTASH_FAIL_CLOSED=true` por M3, `RESEND_API_KEY`), rollback (revert + redeploy; migraciones aditivas sin down), gaps aceptados (M3/M4/M8/M9 con riesgo/mitigación/cierre) y tabla de crones de `vercel.json` con horarios UTC.
+
+**Gaps post-launch documentados** (mitigación vigente + plan de cierre en `docs/LAUNCH-RUNBOOK.md` §5):
+
+- **M4** — `signOut()` no revoca el access token JWT ya emitido. *Mitigación*: scope global revoca refresh tokens de todos los devices + JWT de vida corta (1h) + RLS bloquea sin JWT válido. *Cierre*: tabla de revocación / `session_version` en `profile` validado en `getActiveSession()`, post-launch si se requiere revocación inmediata.
+- **M8** — helpers `SECURITY DEFINER` (`user_org_ids`, `can_read_clinical`, `can_read_admin`, `user_role_in`, `user_member_id_in`) ejecutables por `authenticated` vía RPC. *Mitigación*: filtran por `auth.uid()` (solo scope propio, sin filas), la app no los invoca por RPC, `anon`/PUBLIC ya revocados en prod. *Cierre*: migración post-launch `REVOKE EXECUTE ... FROM authenticated, public` (sin uso RPC → segura).
+- **M9** — `pg_trgm`/`btree_gist` en schema `public`. *Mitigación*: extensiones no sensibles, tablas que las usan exigen `auth.uid() IS NOT NULL`. *Cierre*: migración post-launch que las mueve a schema `extensions`.
 
 ## Verificación end-to-end
 
