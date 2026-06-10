@@ -25,6 +25,10 @@ export interface GoogleEvent {
   end: string;
   status?: "confirmed" | "tentative" | "cancelled";
   attendees?: { email: string; responseStatus?: string }[];
+  /** 'transparent' = el evento NO bloquea agenda ("Libre" en GCal). */
+  transparency?: "opaque" | "transparent" | null;
+  /** true si es evento de día completo (start.date sin dateTime). */
+  allDay: boolean;
 }
 
 function clientFor(refreshToken: string) {
@@ -57,6 +61,8 @@ export async function listEvents(
     end: e.end?.dateTime ?? e.end?.date ?? "",
     status: e.status as GoogleEvent["status"],
     attendees: e.attendees as GoogleEvent["attendees"],
+    transparency: (e.transparency ?? null) as GoogleEvent["transparency"],
+    allDay: !e.start?.dateTime,
   }));
 }
 
