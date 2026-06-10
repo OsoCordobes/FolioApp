@@ -11,7 +11,7 @@
 | Fase A.1 | C1: drift de migraciones | ✅ Completa — M44–M48 ya estaban en repo vía PR #25; **M49 pendiente aplicada a prod el 10-jun (resolvió outage 42703 de ~11 h)**; fidelidad verificada por replay+diff; duplicados del ledger documentados (ver Addendum en AUDIT.md) |
 | Fase A (resto) | A1, A2, M1/M2/M5/M6 | ⏳ En curso |
 | Fase B | Specialty registry + slot genérico | 🔨 Código + M50 listos en branch `feat/fase-b-especialidades` (sin commitear). ⚠️ **M50 debe aplicarse a prod ANTES de mergear/deployar**: `lib/db/active-context.ts` selecciona `organization.especialidad` explícitamente — sin la columna, 42703 en TODA la app (mismo modo de falla del outage M49) |
-| Fase C | Onboarding con especialidad + tiers Solo/Clinic | ⏳ Pendiente |
+| Fase C | Onboarding con especialidad + tiers Solo/Clinic | 🔨 Código listo en branch `feat/fase-c-onboarding-tiers` (sin commitear): C1 = selector especialidad+tipo en onboarding/configuración; C2 = pricing Clinic (`lib/billing/pricing.ts`), **M51** (gate de seats en RLS), equipo/invitaciones (`lib/db/members.ts` + sección Equipo + email + `/invitacion/[token]`), billing tier-aware. ⚠️ **M51 debe aplicarse a prod ANTES de mergear/deployar** (la UI de invitaciones asume la policy nueva; M51 es solo DROP+CREATE de policy — sin validación de datos, segura de aplicar) |
 | Fase D | Herramientas clínicas cardiología + psicología | ⏳ Pendiente |
 | Fase E | Integración E2E + PaymentProvider + cobro Clinic | ⏳ Pendiente |
 | Fase F | Hardening final + regresión completa | ⏳ Pendiente |
@@ -70,7 +70,13 @@ Transformar Folio en un SaaS médico **multi-especialidad** (quiropraxia, cardio
 ### Fase C — Onboarding con especialidad + tiers
 
 - Selector de especialidad en Step 3 (Consultorio) — evita tocar el constraint de pasos (M20); persiste en `organization.especialidad`; templates de servicios del Step 6 ([lib/onboarding/templates.ts](../lib/onboarding/templates.ts)) por especialidad. Editable en /configuracion con advertencia si ya hay sesiones de otra herramienta.
-- **Tiers (M51, aditiva)**: anclados en `organization.tipo` (M49: `INDEPENDIENTE|CLINICA`) — evaluar si hace falta columna extra; gate de seats: SOLO = 1 member activo (invitar staff exige CLINIC); CLINIC = base ARS 100.000 + 25.000 × seat adicional (display + modelo; el cobro MP variable va en Fase E). Selección de tier en onboarding + /configuracion/billing. `computeAccessGate()` no cambia.
+- **Tiers (M51, aditiva)**: anclados en `organization.tipo` (M49: `INDEPENDIENTE|CLINICA`) — sin columna extra; gate de seats: SOLO = 1 member activo (invitar staff exige CLINIC); CLINIC = base ARS 100.000 + 25.000 × seat adicional (display + modelo; el cobro MP variable va en Fase E). Selección de tier en onboarding + /configuracion/billing. `computeAccessGate()` no cambia.
+
+**Estado C2 (2026-06-10, branch `feat/fase-c-onboarding-tiers`)**:
+- `lib/billing/pricing.ts`: `computeMonthlyPriceCents(tipo, seatsActivos)` — INDEPENDIENTE = `MP_PLAN_PRICE_CENTS`; CLINICA = 10.000.000 + 2.500.000 × max(0, seats−1) centavos, overrides `CLINIC_BASE_PRICE_CENTS`/`CLINIC_SEAT_PRICE_CENTS`. **SUPUESTO (a confirmar en checkpoint)**: la base cubre al OWNER; cada member activo adicional (cualquier rol, `deleted_at IS NULL`) = 1 seat. Tests en `tests/unit/clinic-pricing.test.ts`.
+- **M51** (`20260610000051`): re-crea `member_invitation_insert_admin` exigiendo además `organization.tipo = 'CLINICA'` — el gate de tier vive en RLS, no solo en UI. Spec RLS de dos tenants en `tests/sql/M51_tier_seat_gate.spec.sql` (corre como rol `authenticated`).
+- Equipo: `lib/db/members.ts` (list/create/revoke/remove, token sha256 espejo de M49, límite 20 pendientes), sección "Equipo" en /configuracion (upsell honesto en INDEPENDIENTE), email `member-invitation` fail-safe con link copiable, página pública `/invitacion/[token]` (signup mínimo sin org + accept RPC con consentimiento + rate limit), billing con desglose Clinic (display-only; preapproval intacto).
+- ⚠️ **Deploy: aplicar M51 a prod (y registrarla canónica en `schema_migrations`) ANTES de mergear** — la policy es DROP+CREATE sin validación de datos (segura), pero el flujo de invitaciones de la app asume su semántica.
 
 **Aceptación**: onboarding nuevo permite elegir especialidad y tier, persiste, servicios default coherentes. **CHECKPOINT humano (confirmar supuesto de seats).**
 

@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { buildBookingConfirmadaEmail } from "../../lib/email/templates/booking-confirmada";
 import { buildBookingRecibidaEmail } from "../../lib/email/templates/booking-recibida";
+import { buildMemberInvitationEmail } from "../../lib/email/templates/member-invitation";
 
 const base = {
   pacienteNombre: "Carlos Vega",
@@ -51,4 +52,36 @@ test("booking-recibida: no lanza con direccion null/undefined", () => {
     buildBookingRecibidaEmail({ ...base, direccion: null });
     buildBookingRecibidaEmail({ ...base, direccion: undefined });
   });
+});
+
+const invitacionBase = {
+  organizationNombre: "Clínica Brass & Co",
+  rolLabel: "Médico/a",
+  invitadoPorNombre: "Lorenzo Martínez",
+  acceptUrl: "https://folio.app/invitacion/abc_DEF-123",
+  expiraLabel: "17 de junio de 2026",
+};
+
+test("member-invitation: subject y html contienen org, rol, link y vencimiento", () => {
+  const { subject, html } = buildMemberInvitationEmail(invitacionBase);
+  assert.ok(subject.includes("Clínica Brass"));
+  assert.ok(html.includes(invitacionBase.rolLabel));
+  assert.ok(html.includes(invitacionBase.acceptUrl));
+  assert.ok(html.includes(invitacionBase.expiraLabel));
+  assert.ok(html.includes(invitacionBase.invitadoPorNombre));
+});
+
+test("member-invitation: sin nombre de quien invita usa la variante impersonal", () => {
+  const { html } = buildMemberInvitationEmail({ ...invitacionBase, invitadoPorNombre: null });
+  assert.ok(html.includes("Te invitaron a sumarte"));
+  assert.ok(!html.includes("Lorenzo"));
+});
+
+test("member-invitation: escapa HTML en el nombre de la organización", () => {
+  const { html } = buildMemberInvitationEmail({
+    ...invitacionBase,
+    organizationNombre: 'Clínica <script>alert("x")</script>',
+  });
+  assert.ok(!html.includes("<script>"));
+  assert.ok(html.includes("&lt;script&gt;"));
 });

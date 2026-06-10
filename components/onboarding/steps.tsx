@@ -22,7 +22,14 @@ import { type PublicCardData } from "@/components/public-card/public-card";
 import { LogoUpload } from "@/components/public-card/logo-upload";
 import { MoodPicker } from "@/components/public-card/mood-picker";
 import { type CardMood } from "@/components/public-card/public-card";
-import { getRubroTemplate, listRubros } from "@/lib/onboarding/templates";
+import { ESPECIALIDADES_META, ESPECIALIDAD_SLUGS } from "@/lib/especialidades/meta";
+import {
+  getEspecialidadServicios,
+  getKnownTemplateServiceSignatures,
+  getRubroTemplate,
+  listRubros,
+  type ServicioTemplate,
+} from "@/lib/onboarding/templates";
 
 // ─── Data shape compartido ──────────────────────────────────────────────────
 
@@ -35,6 +42,10 @@ export interface OnboardingDataState {
   tel: string;
   consultorioNombre: string;
   rubro: string;
+  /** M50 · especialidad arquitectural (quiropraxia | cardiologia | psicologia). Decide la herramienta clínica de la ficha. */
+  especialidad: string;
+  /** M49 · INDEPENDIENTE = consultorio de un profesional; CLINICA = org con equipo (invita después). */
+  tipo: "INDEPENDIENTE" | "CLINICA";
   direccion: string;
   ciudad: string;
   provincia: string;
@@ -58,6 +69,8 @@ export interface OnboardingDataState {
     precio: number;
     soloNuevos?: boolean;
     paquete?: boolean;
+    /** tipo_servicio_canonico (M09) cuando viene de un template; si falta, el persist lo infiere por nombre. */
+    tipoCanonico?: string;
   }>;
 }
 
@@ -70,6 +83,8 @@ export const ONBOARDING_INITIAL: OnboardingDataState = {
   tel: "",
   consultorioNombre: "",
   rubro: "quiropraxia",
+  especialidad: "quiropraxia",
+  tipo: "INDEPENDIENTE",
   direccion: "",
   ciudad: "",
   provincia: "Córdoba",
@@ -133,6 +148,33 @@ function rubroLabel(id: string | undefined): string | undefined {
   if (!id) return undefined;
   const found = listRubros().find((r) => r.id === id);
   return found?.label;
+}
+
+// ─── Helpers de templates de servicios (rubro + especialidad) ──────────────
+
+const INITIAL_SERVICIOS_SIG = ONBOARDING_INITIAL.servicios.map((s) => s.nombre).join("|");
+
+/**
+ * true si el user todavía NO editó sus servicios a mano: siguen siendo los
+ * defaults iniciales o un template conocido (rubro o especialidad). Solo en
+ * ese caso es seguro pisarlos con otro template.
+ */
+function serviciosUntouched(servicios: OnboardingDataState["servicios"]): boolean {
+  const sig = servicios.map((s) => s.nombre).join("|");
+  return sig === INITIAL_SERVICIOS_SIG || getKnownTemplateServiceSignatures().has(sig);
+}
+
+function templateToStateServicios(
+  servicios: ServicioTemplate[],
+): OnboardingDataState["servicios"] {
+  const base = Date.now();
+  return servicios.map((s, i) => ({
+    id: base + i,
+    nombre: s.nombre,
+    dur: s.dur,
+    precio: s.precioCents / 100,
+    tipoCanonico: s.tipoCanonico,
+  }));
 }
 
 // ─── Step 2 · Profesional (con validación inline) ───────────────────────────
@@ -233,16 +275,10 @@ export function Step3Consultorio({ data, set, next, back, skip, orgId, orgSlug }
     if (!data.bio.trim() && data.ciudad.trim()) {
       patch.bio = tpl.bioTemplate(data.ciudad);
     }
-    // Solo aplicamos defaults de servicios/horarios si user no los modificó (compare con initial)
-    const isDefaultServicios = data.servicios.length === 3 &&
-      data.servicios[0]?.nombre === "Consulta inicial";
-    if (isDefaultServicios && tpl.servicios.length > 0) {
-      patch.servicios = tpl.servicios.map((s, i) => ({
-        id: Date.now() + i,
-        nombre: s.nombre,
-        dur: s.dur,
-        precio: s.precioCents / 100,
-      }));
+    // Solo aplicamos defaults de servicios/horarios si user no los modificó
+    // (defaults iniciales o template conocido — ver serviciosUntouched).
+    if (serviciosUntouched(data.servicios) && tpl.servicios.length > 0) {
+      patch.servicios = templateToStateServicios(tpl.servicios);
     }
     const isDefaultHorarios =
       data.diasActivos.length === 5 &&
@@ -258,6 +294,19 @@ export function Step3Consultorio({ data, set, next, back, skip, orgId, orgSlug }
     if (Object.keys(patch).length > 0) set(patch);
   };
 
+  /**
+   * Cambio de especialidad (M50): además del slug, precarga los servicios
+   * template de la especialidad si el user no los editó a mano. Step 6
+   * repite el check al montar (cubre el caso resume).
+   */
+  const onEspecialidadChange = (slug: string) => {
+    const patch: Partial<OnboardingDataState> = { especialidad: slug };
+    if (serviciosUntouched(data.servicios)) {
+      patch.servicios = templateToStateServicios(getEspecialidadServicios(slug));
+    }
+    set(patch);
+  };
+
   const onSlugChange = useCallback((slug: string) => {
     setDraftSlug(slug);
   }, []);
@@ -269,6 +318,8 @@ export function Step3Consultorio({ data, set, next, back, skip, orgId, orgSlug }
         const res = await updateOnboardingStep(3, {
           consultorioNombre: data.consultorioNombre,
           rubro: data.rubro,
+          especialidad: data.especialidad,
+          tipo: data.tipo,
           ciudad: data.ciudad,
           provincia: data.provincia,
           direccion: data.direccion,
@@ -322,6 +373,61 @@ export function Step3Consultorio({ data, set, next, back, skip, orgId, orgSlug }
             ))}
           </select>
         </Field>
+
+        <div className="onb-field">
+          <span>Especialidad</span>
+          <div className="onb-dias" role="radiogroup" aria-label="Especialidad del consultorio">
+            {ESPECIALIDAD_SLUGS.map((slug) => {
+              const isOn = data.especialidad === slug;
+              return (
+                <button
+                  key={slug}
+                  type="button"
+                  role="radio"
+                  aria-checked={isOn}
+                  className={"onb-dia " + (isOn ? "is-on" : "")}
+                  style={{ width: "auto", padding: "0 14px" }}
+                  onClick={() => onEspecialidadChange(slug)}
+                >
+                  {ESPECIALIDADES_META[slug].nombre}
+                </button>
+              );
+            })}
+          </div>
+          <span className="onb-hint">
+            Define la herramienta clínica de la ficha del paciente y los servicios sugeridos. La podés cambiar después desde Configuración.
+          </span>
+        </div>
+
+        <div className="onb-field">
+          <span>Tipo de organización</span>
+          <div className="onb-dias" role="radiogroup" aria-label="Tipo de organización">
+            {([
+              { id: "INDEPENDIENTE", label: "Consultorio independiente" },
+              { id: "CLINICA", label: "Clínica" },
+            ] as const).map((opt) => {
+              const isOn = data.tipo === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={isOn}
+                  className={"onb-dia " + (isOn ? "is-on" : "")}
+                  style={{ width: "auto", padding: "0 14px" }}
+                  onClick={() => set({ tipo: opt.id })}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+          <span className="onb-hint">
+            {data.tipo === "CLINICA"
+              ? "La clínica suma equipo: después del onboarding vas a poder invitar profesionales y secretaría desde Configuración."
+              : "Atendés y gestionás la agenda vos. Si más adelante sumás equipo, pasás a Clínica."}
+          </span>
+        </div>
 
         <Field label="Tu link público">
           <SlugEditor
@@ -564,6 +670,21 @@ export function Step5Horarios({ data, set, next, back, skip, orgSlug }: StepProp
 // ─── Step 6 · Servicios ─────────────────────────────────────────────────────
 
 export function Step6Servicios({ data, set, next, back, skip, orgSlug }: StepProps) {
+  // Precarga del template por especialidad (M50 · Fase C): si el user no editó
+  // sus servicios a mano (defaults iniciales o template conocido), al entrar al
+  // step los reemplazamos por el set de su especialidad. Cubre el caso en que
+  // eligió especialidad en Step 3 sin tocar servicios, y el resume desde DB.
+  useEffect(() => {
+    const tplServicios = getEspecialidadServicios(data.especialidad);
+    const tplSig = tplServicios.map((s) => s.nombre).join("|");
+    const curSig = data.servicios.map((s) => s.nombre).join("|");
+    if (curSig === tplSig) return; // ya está el template correcto — no re-disparar autosave
+    if (!serviciosUntouched(data.servicios)) return;
+    set({ servicios: templateToStateServicios(tplServicios) });
+    // Solo al montar: las ediciones posteriores del user no deben pisarse.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const setServ = (i: number, patch: Partial<OnboardingDataState["servicios"][number]>) =>
     set({ servicios: data.servicios.map((s, k) => (k === i ? { ...s, ...patch } : s)) });
   const addServ = () =>

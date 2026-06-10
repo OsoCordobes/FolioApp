@@ -36,6 +36,7 @@ const PUBLIC_PATHS = [
 
 const PUBLIC_PREFIXES = [
   "/book/",              // booking público F7
+  "/invitacion/",        // aceptación de invitación de equipo (M49/M51) — la página maneja ambos estados (con y sin sesión)
   "/api/auth/",          // OAuth callbacks Supabase
   "/api/cron/",          // Vercel Cron (validado por CRON_SECRET bearer)
   "/api/admin/",         // admin one-shot ops (migrate, etc; validado por CRON_SECRET bearer)

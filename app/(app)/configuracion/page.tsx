@@ -12,8 +12,15 @@
  */
 
 import { Configuracion } from "@/components/configuracion/configuracion";
+import { capabilitiesFor } from "@/lib/auth/capabilities";
 import { getActiveContext } from "@/lib/db/active-context";
 import { getConfiguracionData } from "@/lib/db/configuracion";
+import {
+  listInvitations,
+  listMembers,
+  type TeamInvitationRow,
+  type TeamMemberRow,
+} from "@/lib/db/members";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +37,18 @@ export default async function ConfiguracionPage() {
 
   const canEdit = ctx.data.session.role === "OWNER" || ctx.data.session.role === "DIRECTOR";
 
+  // Equipo (M49/M51 · Fase C): la sección solo existe para quien puede
+  // gestionarlo. Los datos solo se cargan en orgs CLINICA — en INDEPENDIENTE
+  // la sección muestra el upsell del plan Clínica sin tocar la DB.
+  const caps = capabilitiesFor(ctx.data.session.role, ctx.data.session.esColegiado);
+  let equipoMembers: TeamMemberRow[] = [];
+  let equipoInvitations: TeamInvitationRow[] = [];
+  if (caps.canManageTeam && data.data.tipo === "CLINICA") {
+    const [membersRes, invitationsRes] = await Promise.all([listMembers(), listInvitations()]);
+    if (membersRes.ok) equipoMembers = membersRes.data;
+    if (invitationsRes.ok) equipoInvitations = invitationsRes.data;
+  }
+
   return (
     <Configuracion
       initialConsultorio={data.data.consultorio}
@@ -39,7 +58,12 @@ export default async function ConfiguracionPage() {
       initialAutoConfirmar={data.data.autoConfirmarReservas}
       initialSlotMargenMin={data.data.slotMargenMin}
       googleCalendar={data.data.googleCalendar}
+      orgTipo={data.data.tipo}
       canEdit={canEdit}
+      canManageTeam={caps.canManageTeam}
+      isOwner={ctx.data.session.role === "OWNER"}
+      equipoMembers={equipoMembers}
+      equipoInvitations={equipoInvitations}
     />
   );
 }
