@@ -554,7 +554,7 @@ export async function saveBookingPrefs(input: SaveBookingPrefsInput): Promise<Re
  * ficha deja de mostrarlos (el registry solo monta la herramienta activa).
  *
  * Convención de tool_id (M50): "<especialidad>.<tool>.<versión>"
- * ("quiropraxia.spine.v1", "cardiologia.placeholder", ...). Filtramos por
+ * ("quiropraxia.spine.v1", "cardiologia.cv.v1", ...). Filtramos por
  * prefijo. Filas legacy con tool_id NULL (pre-M50, quiropraxia implícita por
  * vertebras_json) no se cuentan — el reader las maneja con su propio fallback.
  *
