@@ -1,7 +1,9 @@
 /**
  * Folio · /api/cron/dispatch-recordatorios
  *
- * Disparado por Vercel Cron cada 15min (ver vercel.json). Procesa la cola
+ * Disparado cada 15min por GitHub Actions (.github/workflows/
+ * dispatch-recordatorios.yml — Vercel Hobby solo permite crons diarios) con
+ * el cron diario de vercel.json como backstop. Procesa la cola
  * `recordatorio_job`:
  *
  *   - Filtra: enviado_ts IS NULL AND scheduled_ts <= now() AND intentos < 5

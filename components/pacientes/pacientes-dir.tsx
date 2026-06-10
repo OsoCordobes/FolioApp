@@ -326,7 +326,11 @@ function ReactivarWidget({ pacientes }: { pacientes: PacienteDir[] }) {
           </span>
           <h3>Hace más de 60 días sin contacto.</h3>
         </div>
-        <button type="button" className="fi-btn fi-btn-secondary">
+        <button
+          type="button"
+          className="fi-btn fi-btn-secondary"
+          onClick={() => handleBulkWhatsApp(new Set(pacientes.map((p) => p.id)), pacientes)}
+        >
           Enviar a todos →
         </button>
       </header>
@@ -343,7 +347,14 @@ function ReactivarWidget({ pacientes }: { pacientes: PacienteDir[] }) {
               <span className="pd-reactivar-meta fm-mono">
                 última {fmtFechaCorta(p.ultima)} · hace {Math.floor(dias / 30)} meses
               </span>
-              <button type="button" className="fi-btn fi-btn-secondary">
+              <button
+                type="button"
+                className="fi-btn fi-btn-secondary"
+                onClick={() => handleBulkWhatsApp(new Set([p.id]), pacientes)}
+                disabled={!p.tel}
+                title={p.tel ? "Abrir WhatsApp" : "Sin teléfono cargado"}
+                aria-disabled={!p.tel}
+              >
                 <I.Phone size={11} /> Mensaje
               </button>
             </div>
