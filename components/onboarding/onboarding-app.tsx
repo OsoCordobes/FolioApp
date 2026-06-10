@@ -155,6 +155,15 @@ export function OnboardingApp({
   // recién leídos de la DB. Marcamos el snapshot inicial como "ya guardado".
   const hydratedRef = useRef(false);
   useEffect(() => {
+    // Hidratar SOLO una vez al montar. Tener `stepIdx` en las deps hacía que
+    // este effect corriera en CADA navegación de paso, re-mergeando data stale
+    // (localStorage/initialData) y —sobre todo— reseteando
+    // `lastSavedSnapshotRef` al snapshot del paso recién abierto. Eso hacía que
+    // el auto-save lo dedupeara y NO persistiera ese paso cuando los datos se
+    // cargan SIN que el user tipee. Síntoma: el Paso 6 (servicios precargados
+    // por template de especialidad) nunca guardaba → 0 servicios y onboarding
+    // sin finalizar. La hidratación es un evento de arranque, no de navegación.
+    if (hydratedRef.current) return;
     let restored: Partial<OnboardingDataState> = {};
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -183,7 +192,8 @@ export function OnboardingApp({
       hydratedRef.current = true;
       return next;
     });
-  }, [searchParams, initialData, stepIdx]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Persistir cada cambio en localStorage (backup). Excluimos `password`: es
   // un secreto que no debe quedar en disco, y si dos usuarios distintos usan
