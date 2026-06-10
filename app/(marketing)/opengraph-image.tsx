@@ -98,7 +98,7 @@ export default async function OpengraphImage() {
               maxWidth: 980,
             }}
           >
-            Tu consultorio, en orden. Vos, atendiendo.
+            El día se arma solo. La historia, cifrada.
           </div>
           <div
             style={{

@@ -13,7 +13,7 @@ export function FinalCta() {
   return (
     <section id="cta-final" data-fl-section="cta-final" className="fl-section fl-cta-final">
       <div className="fl-cta-panel fl-reveal">
-        <h2 className="fl-cta-title">Tu próximo turno podría estar agendándose solo, ahora.</h2>
+        <h2 className="fl-cta-title">Mañana a las 8:00, tu agenda ya está armada.</h2>
         <p className="fl-cta-sub">
           Activá tu agenda en minutos. Sin tarjeta de crédito, sin permanencia.
         </p>

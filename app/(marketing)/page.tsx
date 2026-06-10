@@ -1,11 +1,12 @@
 /**
  * Folio · Landing de marketing — página raíz pública (/).
  *
- * Narrativa: hero → confianza → features → showcase → seguridad legal →
- * precios → FAQ → CTA final. Server components salvo dos islands:
- * ProductShowcase (framer-motion, mount diferido) y LandingAnalytics
+ * Narrativa: hero (08:00, el día arranca) → timeline del día (#dia) →
+ * bóveda de seguridad (#seguridad) → bento de producto (#producto) →
+ * precios (#precios) → FAQ (#faq) → CTA de cierre. Server components
+ * salvo islands chicas (escenas client de la timeline) y LandingAnalytics
  * (PostHog, no-op sin cookie consent). Anclas estables para el header:
- * #producto, #seguridad, #precios, #faq.
+ * #dia, #seguridad, #producto, #precios, #faq.
  *
  * JSON-LD (Fase C · SEO): un solo script con `@graph` —
  * SoftwareApplication (precios derivados de las MISMAS fuentes que la
@@ -15,13 +16,13 @@
 
 import { FAQ_ITEMS } from "@/components/landing/faq-data";
 import { LandingAnalytics } from "@/components/landing/landing-analytics";
-import { ProductShowcase } from "@/components/landing/product-showcase";
+import { Bento } from "@/components/landing/sections/bento";
+import { DayTimeline } from "@/components/landing/sections/day-timeline";
 import { Faq } from "@/components/landing/sections/faq";
-import { Features } from "@/components/landing/sections/features";
 import { FinalCta } from "@/components/landing/sections/final-cta";
 import { Hero } from "@/components/landing/sections/hero";
 import { Pricing } from "@/components/landing/sections/pricing";
-import { Security } from "@/components/landing/sections/security";
+import { Vault } from "@/components/landing/sections/vault";
 import { getBaseUrl } from "@/lib/base-url";
 import { resolveClinicBasePriceCents } from "@/lib/billing/pricing";
 import { MP_PLAN_PRICE_CENTS } from "@/lib/mercadopago/client";
@@ -40,7 +41,7 @@ function buildJsonLd(): string {
         inLanguage: "es-AR",
         url: BASE_URL,
         description:
-          "Agenda de turnos con reservas online, historia clínica digital y cobros con Mercado Pago para profesionales de la salud en Argentina.",
+          "El día de tu consultorio, armado solo: turnos, reservas online, recordatorios por WhatsApp y notas clínicas cifradas con AES-256-GCM. Para profesionales de la salud en Argentina.",
         offers: [
           {
             "@type": "Offer",
@@ -78,9 +79,9 @@ export default function LandingPage() {
         dangerouslySetInnerHTML={{ __html: buildJsonLd() }}
       />
       <Hero />
-      <Features />
-      <ProductShowcase />
-      <Security />
+      <DayTimeline />
+      <Vault />
+      <Bento />
       <Pricing />
       <Faq />
       <FinalCta />

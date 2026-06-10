@@ -11,14 +11,9 @@ import { test, expect, type Page } from "@playwright/test";
  *   - Mismo Date mock + clock + settle window que app.spec.ts.
  *   - `reducedMotion: reduce` — el landing tiene entradas scroll-driven
  *     (.fl-reveal con animation-timeline: view()), la entrada cinemática del
- *     hero y un carousel framer-motion con auto-advance; el media query los
- *     apaga todos (folio.css los anula con animation: none y MotionConfig
- *     reducedMotion="user" hace lo propio en framer-motion).
- *   - El carousel del showcase monta vía next/dynamic({ssr:false}) +
- *     IntersectionObserver: para el full-page screenshot lo scrolleamos al
- *     viewport y esperamos el tabpanel real antes de capturar (si no, el
- *     fullPage de Chromium — captureBeyondViewport, sin scroll — congelaría
- *     el skeleton vacío).
+ *     hero y las escenas client de la timeline del día; el media query los
+ *     apaga todos (folio.css los anula con animation: none y las escenas
+ *     degradan al layout apilado estático — determinístico).
  *   - Cookie banner pre-dismisseado vía localStorage `folio.cookieConsent`.
  */
 
@@ -70,14 +65,8 @@ async function loadLanding(page: Page, theme: Theme) {
 
   await page.evaluate(() => document.fonts.ready);
 
-  // Montar el carousel real del showcase: el IO con rootMargin 600px dispara
-  // al scrollear la sección al viewport; el chunk dynamic reemplaza el
-  // skeleton por el tablist/tabpanel (misma geometría → cero shift).
-  await page.locator("#showcase").scrollIntoViewIfNeeded();
-  await expect(page.locator('#showcase [role="tabpanel"]')).toBeVisible({ timeout: 20_000 });
-
-  // Avanzar los timers mockeados (phase machines de los slides au2) hasta el
-  // estado determinístico. 2500ms < auto-advance (~6s) → queda el slide 0.
+  // Avanzar los timers mockeados hasta el estado determinístico (con
+  // reducedMotion las escenas de la timeline quedan en su layout estático).
   await page.clock.runFor(SETTLE_MS);
 
   await page.evaluate(() => window.scrollTo(0, 0));
@@ -117,5 +106,15 @@ for (const theme of ["light", "dark"] as const) {
     await expect(page).toHaveScreenshot(`landing-full-${theme}.png`, {
       fullPage: true,
     });
+  });
+
+  test(`landing · timeline del día (#dia) · ${theme}`, async ({ page }) => {
+    await loadLanding(page, theme);
+    await expect(page.locator("#dia")).toHaveScreenshot(`landing-day-${theme}.png`);
+  });
+
+  test(`landing · bóveda (#seguridad) · ${theme}`, async ({ page }) => {
+    await loadLanding(page, theme);
+    await expect(page.locator("#seguridad")).toHaveScreenshot(`landing-vault-${theme}.png`);
   });
 }

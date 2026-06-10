@@ -106,6 +106,39 @@ test.describe("Landing · interacciones", () => {
     await expect(page).toHaveURL(/#precios$/);
     await expect(page.locator("#precios")).toBeInViewport();
   });
+
+  test("las anclas del header navegan: Seguridad → #seguridad en viewport", async ({ page }) => {
+    await page.goto("/");
+    await page.locator(".fl-nav").getByRole("link", { name: "Seguridad" }).click();
+    await expect(page).toHaveURL(/#seguridad$/);
+    await expect(page.locator("#seguridad")).toBeInViewport();
+  });
+});
+
+test.describe("Landing · contenido server-rendered", () => {
+  test("timeline (#dia) y bóveda (#seguridad) llegan con su contenido en el HTML inicial", async ({
+    page,
+    request,
+  }) => {
+    // El HTML inicial (sin ejecutar JS) ya trae las escenas del día y las
+    // cifras de la bóveda — nada depende de un mount client-side diferido.
+    const res = await request.get("/");
+    const html = await res.text();
+    for (const needle of ["10:30", "14:00", "20:00", "25.326", "AES-256-GCM"]) {
+      expect(html, `el HTML server-rendered debe contener «${needle}»`).toContain(needle);
+    }
+
+    // Y en el DOM, cada dato vive dentro de su sección/ancla.
+    await page.goto("/");
+    const dia = page.locator("#dia");
+    await expect(dia).toContainText("10:30");
+    await expect(dia).toContainText("14:00");
+    await expect(dia).toContainText("20:00");
+
+    const vault = page.locator("#seguridad");
+    await expect(vault).toContainText("25.326");
+    await expect(vault).toContainText("AES-256-GCM");
+  });
 });
 
 test.describe("Landing · mobile (375px)", () => {

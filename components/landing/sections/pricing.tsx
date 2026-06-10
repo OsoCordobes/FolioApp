@@ -41,8 +41,8 @@ export function Pricing() {
 
   return (
     <section id="precios" className="fl-section fl-pricing" data-fl-section="pricing">
-      <h2 className="fl-pricing-title fl-reveal">Un precio claro, en pesos</h2>
-      <p className="fl-pricing-sub fl-reveal">Empezá gratis. Pagá solo si te convence.</p>
+      <h2 className="fl-pricing-title fl-reveal">Un precio. En pesos.</h2>
+      <p className="fl-pricing-sub fl-reveal">7 días gratis. Sin tarjeta.</p>
 
       <div className="fl-pricing-grid">
         <article className="fl-price-card fl-price-card--featured fl-reveal" style={revealRange(0)}>
