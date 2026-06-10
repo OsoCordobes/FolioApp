@@ -4,7 +4,9 @@
  * Server component. Grid asimétrico 2+3: dos cards protagonistas arriba
  * (la vista Hoy, destacada, y la historia clínica) y tres de soporte abajo.
  * Reveals scroll-driven vía `.fl-reveal` (la define B1); acá solo se setea
- * el delay por card con la custom property `--fl-reveal-delay`.
+ * el stagger por card con la custom property `--fl-reveal-range` (desplaza
+ * el inicio del animation-range — delays temporales no aplican con
+ * animation-timeline: view()).
  */
 
 import type { CSSProperties, ReactNode } from "react";
@@ -68,8 +70,8 @@ const FEATURES: Feature[] = [
   },
 ];
 
-function revealDelay(index: number): CSSProperties {
-  return { "--fl-reveal-delay": `${index * 70}ms` } as CSSProperties;
+function revealRange(index: number): CSSProperties {
+  return { "--fl-reveal-range": `${Math.min(index * 5, 25)}%` } as CSSProperties;
 }
 
 export function Features() {
@@ -84,7 +86,7 @@ export function Features() {
           <article
             key={f.title}
             className={`fl-feature-card fl-reveal${f.featured ? " fl-feature-card--featured" : ""}`}
-            style={revealDelay(i)}
+            style={revealRange(i)}
           >
             <span className="fl-feature-icon" aria-hidden="true">
               {f.icon}

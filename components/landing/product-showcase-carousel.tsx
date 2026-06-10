@@ -26,6 +26,9 @@
  * A11y: tablist/tab/tabpanel con roving tabindex + flechas/Home/End.
  * Auto-advance cada ~6s, pausado en hover/focus-within/tab oculta; una
  * interacción manual (click/teclado en un tab) lo apaga definitivamente.
+ * Botón visible Pausar/Reanudar (.fl-showcase-pause, WCAG 2.2.2): pausa
+ * explícita con aria-pressed; "Reanudar" rehabilita el autoplay aunque
+ * hubiera habido interacción manual previa.
  * MotionConfig reducedMotion="user" llega vía MotionProvider.
  */
 
@@ -68,6 +71,7 @@ export function ProductShowcaseCarousel() {
   const [focused, setFocused] = useState(false);
   const [hidden, setHidden] = useState(false);
   const [interacted, setInteracted] = useState(false);
+  const [manuallyPaused, setManuallyPaused] = useState(false);
   const reduced = useReducedMotion();
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
@@ -80,7 +84,8 @@ export function ProductShowcaseCarousel() {
     return () => document.removeEventListener("visibilitychange", onVis);
   }, []);
 
-  const autoplaying = !hovered && !focused && !hidden && !interacted && !reduced;
+  const autoplaying =
+    !hovered && !focused && !hidden && !interacted && !manuallyPaused && !reduced;
 
   // Auto-advance suave cada ~6s. El timer se reinicia completo al despausar,
   // consistente con el progress fill CSS (que también arranca de 0).
@@ -124,6 +129,15 @@ export function ProductShowcaseCarousel() {
     }
     e.preventDefault();
     select(target, true);
+  };
+
+  // Pausa/reanuda explícita (WCAG 2.2.2). "Reanudar" también limpia el
+  // apagado por interacción manual: el control del user manda.
+  const togglePaused = () => {
+    setManuallyPaused((paused) => {
+      if (paused) setInteracted(false);
+      return !paused;
+    });
   };
 
   const view = SHOWCASE_VIEWS[idx];
@@ -218,6 +232,17 @@ export function ProductShowcaseCarousel() {
               </button>
             );
           })}
+        </div>
+
+        <div className="fl-showcase-controls">
+          <button
+            type="button"
+            className="fl-showcase-pause"
+            aria-pressed={manuallyPaused}
+            onClick={togglePaused}
+          >
+            {manuallyPaused ? "Reanudar" : "Pausar"}
+          </button>
         </div>
       </div>
     </MotionProvider>

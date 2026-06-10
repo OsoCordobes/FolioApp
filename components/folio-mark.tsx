@@ -4,7 +4,13 @@
  * Logo "stack of papers + F" — la marca oficial. Inline SVG porque el
  * sidebar tiene que resolverse sin depender del archivo de brand exploration.
  * Port directo del prototipo (sidebar.jsx · FolioMark).
+ *
+ * El id del clipPath usa useId() (SSR-safe, soportado en server components
+ * en React 19): dos marks del mismo `size` en la misma página ya no
+ * colisionan ids. role="img" + aria-label: el SVG se anuncia como imagen.
  */
+
+import { useId } from "react";
 
 interface FolioMarkProps {
   size?: number;
@@ -21,9 +27,9 @@ export function FolioMark({
 }: FolioMarkProps) {
   const c = color ?? "var(--accent)";
   const fs = foldShade ?? "var(--accent-2)";
-  const cid = `fmark-${size}`;
+  const cid = useId();
   return (
-    <svg width={size} height={size} viewBox="0 0 100 100" aria-label="Folio">
+    <svg width={size} height={size} viewBox="0 0 100 100" role="img" aria-label="Folio">
       <defs>
         <clipPath id={cid}>
           <path d="M 6 22 L 64 22 L 84 42 L 84 96 L 6 96 Z" />

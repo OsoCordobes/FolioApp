@@ -45,6 +45,10 @@ function ShowcaseSkeleton() {
           </div>
         ))}
       </div>
+      {/* Reserva la geometría del botón Pausar/Reanudar del carousel real. */}
+      <div className="fl-showcase-controls">
+        <div className="fl-showcase-pause">Pausar</div>
+      </div>
     </div>
   );
 }

@@ -43,8 +43,8 @@ const CLINIC_BULLETS = [
   "Permisos por rol sobre pacientes e historias",
 ];
 
-function revealDelay(index: number): CSSProperties {
-  return { "--fl-reveal-delay": `${index * 90}ms` } as CSSProperties;
+function revealRange(index: number): CSSProperties {
+  return { "--fl-reveal-range": `${Math.min(index * 5, 25)}%` } as CSSProperties;
 }
 
 export function Pricing() {
@@ -58,7 +58,7 @@ export function Pricing() {
       <p className="fl-pricing-sub fl-reveal">Empezá gratis. Pagá solo si te convence.</p>
 
       <div className="fl-pricing-grid">
-        <article className="fl-price-card fl-price-card--featured fl-reveal" style={revealDelay(0)}>
+        <article className="fl-price-card fl-price-card--featured fl-reveal" style={revealRange(0)}>
           <header className="fl-price-head">
             <h3 className="fl-price-plan">Solo</h3>
             <span className="fl-price-badge">Para empezar</span>
@@ -80,12 +80,12 @@ export function Pricing() {
           </ul>
           <div className="fl-price-cta">
             <a className="fi-btn fi-btn-primary" href="/onboarding" data-fl-cta="pricing_solo">
-              Empezar gratis
+              Empezá gratis
             </a>
           </div>
         </article>
 
-        <article className="fl-price-card fl-reveal" style={revealDelay(1)}>
+        <article className="fl-price-card fl-reveal" style={revealRange(1)}>
           <header className="fl-price-head">
             <h3 className="fl-price-plan">Clínica</h3>
           </header>
@@ -106,7 +106,7 @@ export function Pricing() {
           </ul>
           <div className="fl-price-cta">
             <a className="fi-btn fi-btn-secondary" href="/onboarding" data-fl-cta="pricing_clinic">
-              Empezar gratis
+              Empezá gratis
             </a>
           </div>
         </article>
@@ -114,7 +114,7 @@ export function Pricing() {
 
       <p className="fl-pricing-banner fl-reveal">
         <span className="fl-pricing-banner-days">7 días</span> de prueba, sin tarjeta. Pagás con
-        MercadoPago, en pesos.
+        Mercado Pago, en pesos.
       </p>
     </section>
   );

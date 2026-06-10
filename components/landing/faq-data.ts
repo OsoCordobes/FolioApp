@@ -14,7 +14,7 @@ export interface FaqItem {
 export const FAQ_ITEMS: { q: string; a: string }[] = [
   {
     q: "¿Necesito tarjeta para probar Folio?",
-    a: "No. Tenés 7 días de prueba completa sin cargar ninguna tarjeta. Si te convence, recién ahí activás la suscripción con MercadoPago.",
+    a: "No. Tenés 7 días de prueba completa sin cargar ninguna tarjeta. Si te convence, recién ahí activás la suscripción con Mercado Pago.",
   },
   {
     q: "¿Qué pasa con mis datos si me voy?",
@@ -38,6 +38,6 @@ export const FAQ_ITEMS: { q: string; a: string }[] = [
   },
   {
     q: "¿Cómo pago?",
-    a: "Con MercadoPago: un débito mensual en pesos, sin contratos ni permanencia. Cancelás cuando quieras desde la misma app.",
+    a: "Con Mercado Pago: un débito mensual en pesos, sin contratos ni permanencia. Cancelás cuando quieras desde la misma app.",
   },
 ];

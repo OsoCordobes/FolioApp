@@ -46,7 +46,7 @@ export function LandingHeader() {
             Ingresar
           </Link>
           <Link className="fi-btn fi-btn-primary" href="/onboarding" data-fl-cta="header">
-            Empezar gratis
+            Empezá gratis
           </Link>
         </div>
 
@@ -67,7 +67,7 @@ export function LandingHeader() {
             Ingresar
           </Link>
           <Link className="fi-btn fi-btn-primary fl-btn-lg" href="/onboarding" data-fl-cta="header">
-            Empezar gratis
+            Empezá gratis
           </Link>
         </div>
       </div>

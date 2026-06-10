@@ -22,7 +22,7 @@ export function TrustStrip() {
   return (
     <section data-fl-section="trust" className="fl-section fl-trust">
       <div className="fl-trust-inner fl-reveal">
-        <p className="fl-trust-label">Pensado para la consulta real</p>
+        <h2 className="fl-trust-label">Pensado para la consulta real</h2>
         <ul className="fl-trust-specialties" aria-label="Especialidades para las que está pensado Folio">
           {ESPECIALIDADES.map((esp) => (
             <li key={esp} className="fl-trust-specialty">

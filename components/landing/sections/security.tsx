@@ -81,8 +81,8 @@ const BLOCKS: SecurityBlock[] = [
   },
 ];
 
-function revealDelay(index: number): CSSProperties {
-  return { "--fl-reveal-delay": `${index * 70}ms` } as CSSProperties;
+function revealRange(index: number): CSSProperties {
+  return { "--fl-reveal-range": `${Math.min(index * 5, 25)}%` } as CSSProperties;
 }
 
 export function Security() {
@@ -97,7 +97,7 @@ export function Security() {
         </p>
         <div className="fl-security-grid">
           {BLOCKS.map((b, i) => (
-            <article key={b.tag} className="fl-security-block fl-reveal" style={revealDelay(i)}>
+            <article key={b.tag} className="fl-security-block fl-reveal" style={revealRange(i)}>
               <div className="fl-security-block-head">
                 <span className="fl-security-icon" aria-hidden="true">
                   {b.icon}

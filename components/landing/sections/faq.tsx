@@ -11,8 +11,8 @@ import type { CSSProperties } from "react";
 import { ChevronDown } from "@/components/icons";
 import { FAQ_ITEMS } from "../faq-data";
 
-function revealDelay(index: number): CSSProperties {
-  return { "--fl-reveal-delay": `${index * 50}ms` } as CSSProperties;
+function revealRange(index: number): CSSProperties {
+  return { "--fl-reveal-range": `${Math.min(index * 5, 25)}%` } as CSSProperties;
 }
 
 export function Faq() {
@@ -25,7 +25,7 @@ export function Faq() {
             key={item.q}
             className="fl-faq-item fl-reveal"
             data-fl-faq={i}
-            style={revealDelay(i)}
+            style={revealRange(i)}
           >
             <summary className="fl-faq-q">
               <span className="fl-faq-q-text">{item.q}</span>
