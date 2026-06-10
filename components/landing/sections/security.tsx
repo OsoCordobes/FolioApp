@@ -7,8 +7,9 @@
  * color --accent (.fl-security-tag).
  */
 
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { History, Lock } from "@/components/icons";
+import { revealRange } from "../reveal";
 
 /** Escudo — no existe en components/icons.tsx; inline, trazo consistente. */
 const Shield = ({ size = 16 }: { size?: number }) => (
@@ -80,10 +81,6 @@ const BLOCKS: SecurityBlock[] = [
     body: "Los datos de tu consultorio solo los ve tu consultorio — el aislamiento se aplica a nivel de base de datos, no solo en la aplicación.",
   },
 ];
-
-function revealRange(index: number): CSSProperties {
-  return { "--fl-reveal-range": `${Math.min(index * 5, 25)}%` } as CSSProperties;
-}
 
 export function Security() {
   return (

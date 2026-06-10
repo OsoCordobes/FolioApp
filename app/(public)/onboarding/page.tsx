@@ -19,6 +19,10 @@ import { Suspense } from "react";
 import { OnboardingApp } from "@/components/onboarding/onboarding-app";
 import { MotionProvider } from "@/components/motion/motion-provider";
 import { getOnboardingResumeState } from "@/lib/db/onboarding-resume";
+// Server-only (resuelve MP_PLAN_PRICE_CENTS de env). Se baja como prop para
+// que el wizard (client) muestre el MISMO precio que el cobro real — antes
+// estaba hardcodeado en Step 1/8 y podía driftear del env de prod.
+import { MP_PLAN_PRICE_CENTS } from "@/lib/mercadopago/client";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -70,6 +74,7 @@ export default async function OnboardingPage() {
           organizationId={organizationId}
           initialSlug={initialSlug}
           authedEmail={authedEmail}
+          planPriceCents={MP_PLAN_PRICE_CENTS}
         />
       </Suspense>
     </MotionProvider>

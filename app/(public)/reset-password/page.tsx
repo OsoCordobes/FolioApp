@@ -21,7 +21,7 @@ import { ResetPasswordForm } from "./reset-password-form";
  */
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Folio · Cambiar contraseña" };
+export const metadata = { title: "Cambiar contraseña" };
 
 export default function ResetPasswordPage() {
   return (

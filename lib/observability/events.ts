@@ -211,15 +211,3 @@ export interface LandingEventMap {
 }
 
 export type LandingEventName = keyof LandingEventMap;
-
-/**
- * Nombres canónicos del funnel de marketing — paridad con EVENT_NAMES para
- * alinear dashboards/funnels de PostHog. (Server-side puede referenciarlos;
- * el island del browser usa los literales tipados vía LandingEventMap.)
- */
-export const LANDING_EVENT_NAMES = {
-  LANDING_VIEWED: "landing.viewed",
-  LANDING_CTA_CLICKED: "landing.cta_clicked",
-  LANDING_SECTION_VIEWED: "landing.section_viewed",
-  LANDING_FAQ_OPENED: "landing.faq_opened",
-} as const satisfies Record<string, LandingEventName>;

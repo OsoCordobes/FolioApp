@@ -12,7 +12,7 @@ import Link from "next/link";
  */
 
 export const metadata = {
-  title: "Página no encontrada · Folio",
+  title: "Página no encontrada",
 };
 
 export default function NotFound() {

@@ -34,6 +34,8 @@ const PUBLIC_PATHS = [
   "/cookies",               // Política de cookies — bugfix: la página es pública (app/(public)/cookies) pero anónimos eran redirigidos a /login
   "/api/health",            // healthcheck (load balancer, uptime monitoring)
   "/api/analytics/refresh", // cron diario (validado por CRON_SECRET bearer)
+  "/sitemap.xml",           // SEO — generado por app/sitemap.ts; los crawlers no tienen sesión
+  "/robots.txt",            // SEO — generado por app/robots.ts; ídem
 ];
 
 const PUBLIC_PREFIXES = [
@@ -46,6 +48,7 @@ const PUBLIC_PREFIXES = [
   "/api/google/",        // OAuth callback Google + watch renew
   "/api/mercadopago/",   // webhook Mercado Pago (validado por x-signature HMAC)
   "/dev/",               // dev-only preview routes (decoration, card-moods, etc.) — pages themselves 404 in NODE_ENV=production
+  "/opengraph-image",    // imagen OG del landing — Next sirve la ruta con sufijo hash (p.ej. /opengraph-image-pwu6ef), por eso prefix
 ];
 
 function isPublicPath(pathname: string): boolean {

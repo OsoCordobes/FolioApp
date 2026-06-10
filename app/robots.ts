@@ -8,7 +8,9 @@ import type { MetadataRoute } from "next";
  * y `/book/` también (páginas públicas de reserva de cada profesional).
  */
 
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://folio-app-ten.vercel.app";
+import { getBaseUrl } from "@/lib/base-url";
+
+const BASE_URL = getBaseUrl();
 
 export default function robots(): MetadataRoute.Robots {
   return {

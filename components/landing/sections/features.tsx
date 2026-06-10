@@ -9,8 +9,9 @@
  * animation-timeline: view()).
  */
 
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { CalendarDay, Lock, Wallet, WhatsApp } from "@/components/icons";
+import { revealRange } from "../reveal";
 
 /** Calendario con flechas de ida y vuelta (sync bidireccional con Google).
  *  No existe en components/icons.tsx — inline, trazo consistente (stroke 1.5,
@@ -69,10 +70,6 @@ const FEATURES: Feature[] = [
     body: "Lo que agendás en Folio aparece en Google Calendar, y tus eventos personales bloquean la disponibilidad. Nada se pisa.",
   },
 ];
-
-function revealRange(index: number): CSSProperties {
-  return { "--fl-reveal-range": `${Math.min(index * 5, 25)}%` } as CSSProperties;
-}
 
 export function Features() {
   return (

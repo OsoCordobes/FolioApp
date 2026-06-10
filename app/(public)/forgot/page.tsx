@@ -11,7 +11,7 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "Recuperar contraseña · Folio",
+  title: "Recuperar contraseña",
   description: "Cómo restablecer tu contraseña de Folio.",
 };
 

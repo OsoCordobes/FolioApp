@@ -7,7 +7,9 @@ import type { MetadataRoute } from "next";
  * son dinámicas por profesional y no se enumeran acá; robots.ts las permite.
  */
 
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://folio-app-ten.vercel.app";
+import { getBaseUrl } from "@/lib/base-url";
+
+const BASE_URL = getBaseUrl();
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const lastModified = new Date();

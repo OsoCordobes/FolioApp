@@ -72,14 +72,16 @@ test.describe("Landing · SEO (JSON-LD + sitemap + robots)", () => {
     expect(joined).toContain("FAQPage");
   });
 
-  test("/sitemap.xml responde 200", async ({ request }) => {
-    const res = await request.get("/sitemap.xml");
+  test("/sitemap.xml responde 200 con XML (sin redirect al login)", async ({ request }) => {
+    const res = await request.get("/sitemap.xml", { maxRedirects: 0 });
     expect(res.status()).toBe(200);
+    expect(res.headers()["content-type"] ?? "").toContain("xml");
   });
 
-  test("/robots.txt responde 200", async ({ request }) => {
-    const res = await request.get("/robots.txt");
+  test("/robots.txt responde 200 con text/plain (sin redirect al login)", async ({ request }) => {
+    const res = await request.get("/robots.txt", { maxRedirects: 0 });
     expect(res.status()).toBe(200);
+    expect(res.headers()["content-type"] ?? "").toContain("text/plain");
   });
 });
 

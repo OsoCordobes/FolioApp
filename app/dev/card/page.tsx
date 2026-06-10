@@ -14,7 +14,7 @@ import {
  */
 
 export const dynamic = "force-static";
-export const metadata = { title: "Folio · PublicCard (dev)" };
+export const metadata = { title: "PublicCard (dev)" };
 
 const SAMPLE: PublicCardData = {
   nombre: "Lorenzo Martínez",

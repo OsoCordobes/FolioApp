@@ -9,7 +9,7 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "Política de Privacidad · Folio",
+  title: "Política de Privacidad",
   description: "Cómo Folio trata datos personales y de salud.",
 };
 

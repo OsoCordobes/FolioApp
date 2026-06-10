@@ -7,13 +7,9 @@
  * Datos en components/landing/faq-data.ts (compartidos con el JSON-LD, Fase C).
  */
 
-import type { CSSProperties } from "react";
 import { ChevronDown } from "@/components/icons";
 import { FAQ_ITEMS } from "../faq-data";
-
-function revealRange(index: number): CSSProperties {
-  return { "--fl-reveal-range": `${Math.min(index * 5, 25)}%` } as CSSProperties;
-}
+import { revealRange } from "../reveal";
 
 export function Faq() {
   return (

@@ -100,13 +100,13 @@ export function LandingAnalytics() {
           const section = (entry.target as HTMLElement).dataset.flSection;
           if (!section || seenSections.current.has(section)) continue;
 
-          // Secciones más altas que el viewport nunca alcanzan ratio 0.4 de
-          // sí mismas → para ellas cuenta cubrir ~40% del viewport.
+          // Vista = 40% de la sección visible O 40% del viewport cubierto.
+          // La segunda condición cubre secciones más altas que el viewport,
+          // que nunca alcanzan ratio 0.4 de sí mismas.
           const viewportH = window.innerHeight || 1;
-          const tall = entry.boundingClientRect.height > viewportH;
-          const visibleEnough = tall
-            ? entry.intersectionRect.height >= viewportH * SECTION_VIEW_RATIO
-            : entry.intersectionRatio >= SECTION_VIEW_RATIO;
+          const visibleEnough =
+            entry.intersectionRatio >= SECTION_VIEW_RATIO ||
+            entry.intersectionRect.height >= viewportH * SECTION_VIEW_RATIO;
           if (!visibleEnough) continue;
 
           // Solo dedupear si la captura realmente salió (con consent): si fue
@@ -117,8 +117,11 @@ export function LandingAnalytics() {
           }
         }
       },
-      // 0.05 dispara el callback también en secciones altas (que nunca cruzan 0.4).
-      { threshold: [0.05, SECTION_VIEW_RATIO] },
+      // Escalera granular: con solo [0.05, 0.4], una sección de altura entre
+      // ~1× y ~2.5× viewport podía quedar en zona muerta (cruza 0.05 antes de
+      // cubrir 40% del viewport y nunca llega a ratio 0.4 → el callback no
+      // vuelve a disparar). Cada peldaño re-evalúa la condición de "vista".
+      { threshold: [0.05, 0.15, 0.25, 0.35, 0.45] },
     );
 
     sections.forEach((s) => io.observe(s));

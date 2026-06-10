@@ -23,10 +23,11 @@ import { Hero } from "@/components/landing/sections/hero";
 import { Pricing } from "@/components/landing/sections/pricing";
 import { Security } from "@/components/landing/sections/security";
 import { TrustStrip } from "@/components/landing/sections/trust-strip";
+import { getBaseUrl } from "@/lib/base-url";
 import { resolveClinicBasePriceCents } from "@/lib/billing/pricing";
 import { MP_PLAN_PRICE_CENTS } from "@/lib/mercadopago/client";
 
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://folio-app-ten.vercel.app";
+const BASE_URL = getBaseUrl();
 
 function buildJsonLd(): string {
   const graph = {

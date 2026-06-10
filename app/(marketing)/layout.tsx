@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { LandingFooter } from "@/components/landing/landing-footer";
 import { LandingHeader } from "@/components/landing/landing-header";
+import { getBaseUrl } from "@/lib/base-url";
 
 /**
  * Folio · Layout del grupo (marketing) — landing pública.
@@ -17,8 +18,10 @@ const DESCRIPTION =
   "Agenda de turnos con reservas online, historia clínica digital y cobros con Mercado Pago. Tu consultorio en orden, hecho para profesionales de la salud en Argentina.";
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "https://folio-app-ten.vercel.app"),
-  title: TITLE,
+  metadataBase: new URL(getBaseUrl()),
+  // `absolute` opta fuera del template "%s · Folio" del root layout — el
+  // título del landing ya lleva la marca adelante.
+  title: { absolute: TITLE },
   description: DESCRIPTION,
   alternates: { canonical: "/" },
   keywords: [

@@ -23,20 +23,29 @@ const FRAUNCES_CSS_URL =
  * Resuelve el TTF de Fraunces 600 vía el endpoint css2 (sin UA moderno,
  * Google sirve TTF — formato que ImageResponse/satori acepta). Devuelve
  * null ante cualquier falla para que el caller degrade a serif del sistema.
+ *
+ * Memoizado a nivel módulo (se guarda la Promise) + `force-cache` en ambos
+ * fetch: la fuente no cambia entre requests, no hay razón para volver a la
+ * red en cada render de la imagen.
  */
-async function loadFraunces(): Promise<ArrayBuffer | null> {
-  try {
-    const cssRes = await fetch(FRAUNCES_CSS_URL);
-    if (!cssRes.ok) return null;
-    const css = await cssRes.text();
-    const match = css.match(/src:\s*url\((https:[^)]+\.ttf)\)/);
-    if (!match) return null;
-    const fontRes = await fetch(match[1]);
-    if (!fontRes.ok) return null;
-    return await fontRes.arrayBuffer();
-  } catch {
-    return null;
-  }
+let frauncesPromise: Promise<ArrayBuffer | null> | null = null;
+
+function loadFraunces(): Promise<ArrayBuffer | null> {
+  frauncesPromise ??= (async () => {
+    try {
+      const cssRes = await fetch(FRAUNCES_CSS_URL, { cache: "force-cache" });
+      if (!cssRes.ok) return null;
+      const css = await cssRes.text();
+      const match = css.match(/src:\s*url\((https:[^)]+\.ttf)\)/);
+      if (!match) return null;
+      const fontRes = await fetch(match[1], { cache: "force-cache" });
+      if (!fontRes.ok) return null;
+      return await fontRes.arrayBuffer();
+    } catch {
+      return null;
+    }
+  })();
+  return frauncesPromise;
 }
 
 export default async function OpengraphImage() {

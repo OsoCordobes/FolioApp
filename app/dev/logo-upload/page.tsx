@@ -17,7 +17,7 @@ import { LogoUploadHarness } from "./harness";
  */
 
 export const dynamic = "force-static";
-export const metadata = { title: "Folio · LogoUpload (dev)" };
+export const metadata = { title: "LogoUpload (dev)" };
 
 export default function LogoUploadDevPage() {
   if (process.env.NODE_ENV === "production") {

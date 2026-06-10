@@ -23,6 +23,7 @@ import { LogoUpload } from "@/components/public-card/logo-upload";
 import { MoodPicker } from "@/components/public-card/mood-picker";
 import { type CardMood } from "@/components/public-card/public-card";
 import { ESPECIALIDADES_META, ESPECIALIDAD_SLUGS } from "@/lib/especialidades/meta";
+import { formatArsFromCents } from "@/lib/format/currency";
 import {
   getEspecialidadServicios,
   getKnownTemplateServiceSignatures,
@@ -113,6 +114,12 @@ interface StepProps {
   orgId?: string;
   orgSlug?: string;
   direction?: "forward" | "back";
+  /**
+   * Precio del plan en centavos ARS. Derivado server-side de
+   * MP_PLAN_PRICE_CENTS (app/(public)/onboarding/page.tsx) y bajado por
+   * OnboardingApp — Step 8 lo muestra; el resto lo ignora.
+   */
+  planPriceCents: number;
 }
 
 // ─── Helpers de validación ──────────────────────────────────────────────────
@@ -812,7 +819,7 @@ export function Step7Google({ data, next, back, skip, orgSlug }: StepProps) {
 
 // ─── Step 8 · Mercado Pago ──────────────────────────────────────────────────
 
-export function Step8MercadoPago({ data, next, back, skip, orgSlug }: StepProps) {
+export function Step8MercadoPago({ data, next, back, skip, orgSlug, planPriceCents }: StepProps) {
   return (
     <StepShell stepIdx={8} back={back} next={next} skip={skip}
       headline="Activá tu prueba"
@@ -842,10 +849,10 @@ export function Step8MercadoPago({ data, next, back, skip, orgSlug }: StepProps)
               </svg>
             </div>
             <div>
-              {/* Precio: fuente canónica MP_PLAN_PRICE_CENTS (lib/mercadopago/client.ts,
-                  default 3.000.000 centavos = ARS 30.000). No se importa acá: componente
-                  client y la constante resuelve de env server-side (no NEXT_PUBLIC). */}
-              <b>Cuando quieras, ARS 30.000 / mes</b>
+              {/* Precio: fuente canónica MP_PLAN_PRICE_CENTS (lib/mercadopago/client.ts).
+                  Llega como prop desde el server component de /onboarding — mismo
+                  valor que el cobro real, sin hardcode que pueda driftear del env. */}
+              <b>Cuando quieras, {formatArsFromCents(planPriceCents)} / mes</b>
               <p>Suscripción mensual via Mercado Pago. Cancelás cuando quieras desde Configuración.</p>
             </div>
           </div>

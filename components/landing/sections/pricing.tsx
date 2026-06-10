@@ -10,23 +10,14 @@
  * Si cambia el precio por env, el landing acompaña solo.
  */
 
-import type { CSSProperties } from "react";
 import { MP_PLAN_PRICE_CENTS } from "@/lib/mercadopago/client";
 import {
   resolveClinicBasePriceCents,
   resolveClinicSeatPriceCents,
 } from "@/lib/billing/pricing";
+import { formatArsFromCents } from "@/lib/format/currency";
 import { Check } from "@/components/icons";
-
-const arsFormatter = new Intl.NumberFormat("es-AR", {
-  style: "currency",
-  currency: "ARS",
-  maximumFractionDigits: 0,
-});
-
-function formatArsFromCents(cents: number): string {
-  return arsFormatter.format(cents / 100);
-}
+import { revealRange } from "../reveal";
 
 const SOLO_BULLETS = [
   "Agenda y turnos ilimitados",
@@ -42,10 +33,6 @@ const CLINIC_BULLETS = [
   "Agenda compartida del consultorio",
   "Permisos por rol sobre pacientes e historias",
 ];
-
-function revealRange(index: number): CSSProperties {
-  return { "--fl-reveal-range": `${Math.min(index * 5, 25)}%` } as CSSProperties;
-}
 
 export function Pricing() {
   const soloPrice = formatArsFromCents(MP_PLAN_PRICE_CENTS);

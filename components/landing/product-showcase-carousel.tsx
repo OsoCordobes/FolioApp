@@ -24,11 +24,11 @@
  *   - blur 6px/4px    = --motion-blur-base / --motion-blur-soft
  *
  * A11y: tablist/tab/tabpanel con roving tabindex + flechas/Home/End.
- * Auto-advance cada ~6s, pausado en hover/focus-within/tab oculta; una
- * interacción manual (click/teclado en un tab) lo apaga definitivamente.
- * Botón visible Pausar/Reanudar (.fl-showcase-pause, WCAG 2.2.2): pausa
- * explícita con aria-pressed; "Reanudar" rehabilita el autoplay aunque
- * hubiera habido interacción manual previa.
+ * Auto-advance cada ~6s, pausado en hover/focus-within/tab oculta. Un único
+ * estado `autoplayStopped` agrupa el apagado explícito: lo setean tanto la
+ * interacción manual (click/teclado en un tab) como el botón Pausar
+ * (.fl-showcase-pause, WCAG 2.2.2), y "Reanudar" lo limpia. El label y el
+ * aria-pressed del botón reflejan ese mismo estado.
  * MotionConfig reducedMotion="user" llega vía MotionProvider.
  */
 
@@ -70,8 +70,11 @@ export function ProductShowcaseCarousel() {
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
   const [hidden, setHidden] = useState(false);
-  const [interacted, setInteracted] = useState(false);
-  const [manuallyPaused, setManuallyPaused] = useState(false);
+  // Único estado de apagado explícito del autoplay: lo setean tanto la
+  // interacción manual con un tab como el botón Pausar; lo limpia Reanudar.
+  // El botón Pausar/Reanudar refleja SIEMPRE este estado (antes, un click en
+  // un tab mataba el autoplay pero el botón seguía diciendo "Pausar").
+  const [autoplayStopped, setAutoplayStopped] = useState(false);
   const reduced = useReducedMotion();
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
@@ -84,8 +87,7 @@ export function ProductShowcaseCarousel() {
     return () => document.removeEventListener("visibilitychange", onVis);
   }, []);
 
-  const autoplaying =
-    !hovered && !focused && !hidden && !interacted && !manuallyPaused && !reduced;
+  const autoplaying = !hovered && !focused && !hidden && !autoplayStopped && !reduced;
 
   // Auto-advance suave cada ~6s. El timer se reinicia completo al despausar,
   // consistente con el progress fill CSS (que también arranca de 0).
@@ -101,7 +103,7 @@ export function ProductShowcaseCarousel() {
   const select = (target: number, focusTab: boolean) => {
     const n = SHOWCASE_VIEWS.length;
     const next = ((target % n) + n) % n;
-    setInteracted(true);
+    setAutoplayStopped(true);
     setIdx(next);
     if (focusTab) tabRefs.current[next]?.focus();
   };
@@ -131,14 +133,9 @@ export function ProductShowcaseCarousel() {
     select(target, true);
   };
 
-  // Pausa/reanuda explícita (WCAG 2.2.2). "Reanudar" también limpia el
-  // apagado por interacción manual: el control del user manda.
-  const togglePaused = () => {
-    setManuallyPaused((paused) => {
-      if (paused) setInteracted(false);
-      return !paused;
-    });
-  };
+  // Pausa/reanuda explícita (WCAG 2.2.2). "Reanudar" rehabilita el autoplay
+  // aunque el apagado hubiera venido de una interacción manual con un tab.
+  const togglePaused = () => setAutoplayStopped((stopped) => !stopped);
 
   const view = SHOWCASE_VIEWS[idx];
   const ActiveSlide = SLIDE_BY_ID[view.id];
@@ -238,10 +235,10 @@ export function ProductShowcaseCarousel() {
           <button
             type="button"
             className="fl-showcase-pause"
-            aria-pressed={manuallyPaused}
+            aria-pressed={autoplayStopped}
             onClick={togglePaused}
           >
-            {manuallyPaused ? "Reanudar" : "Pausar"}
+            {autoplayStopped ? "Reanudar" : "Pausar"}
           </button>
         </div>
       </div>
