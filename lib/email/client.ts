@@ -14,6 +14,12 @@ interface SendEmailInput {
   to: string;
   subject: string;
   html: string;
+  /**
+   * Reply-To opcional. Usarlo solo cuando la respuesta debe ir a Folio
+   * (ej. emails a profesionales). Los emails a pacientes NO lo setean:
+   * su interlocutor es el consultorio, no el soporte de Folio.
+   */
+  replyTo?: string;
 }
 
 export async function sendEmail(input: SendEmailInput): Promise<void> {
@@ -36,6 +42,7 @@ export async function sendEmail(input: SendEmailInput): Promise<void> {
       to: input.to,
       subject: input.subject,
       html: input.html,
+      ...(input.replyTo ? { replyTo: input.replyTo } : {}),
     });
   } catch (e) {
     const { captureException } = await import("@sentry/nextjs");

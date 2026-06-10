@@ -36,6 +36,7 @@ import {
   type RawInvitationRow,
 } from "@/lib/me/export-invitations";
 import { createSupabaseServerClient, createSupabaseServiceClient } from "@/lib/supabase/server";
+import { SUPPORT_EMAIL } from "@/lib/support";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -170,7 +171,7 @@ export async function GET() {
     invitaciones,
     notas: [
       "Este export contiene los datos personales del titular del profile.",
-      "Los datos clínicos de pacientes (PHI) NO están incluidos porque el responsable de esos datos es el profesional tratante en su rol de data controller bajo Ley 25.326. Los pacientes pueden ejercer su derecho de acceso solicitándolo al profesional o, subsidiariamente, a privacidad@folio.app.",
+      `Los datos clínicos de pacientes (PHI) NO están incluidos porque el responsable de esos datos es el profesional tratante en su rol de data controller bajo Ley 25.326. Los pacientes pueden ejercer su derecho de acceso solicitándolo al profesional o, subsidiariamente, a ${SUPPORT_EMAIL}.`,
       "Tokens OAuth, certificados AFIP y secretos se omiten por seguridad.",
       "Para ejercer derecho de rectificación: Configuración → Cuenta. Para supresión: Configuración → Eliminar cuenta.",
     ],

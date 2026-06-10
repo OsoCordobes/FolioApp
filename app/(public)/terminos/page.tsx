@@ -8,6 +8,8 @@
 
 import Link from "next/link";
 
+import { SUPPORT_EMAIL } from "@/lib/support";
+
 export const metadata = {
   title: "Términos y Condiciones · Folio",
   description: "Términos de uso del servicio Folio para profesionales de la salud.",
@@ -113,7 +115,7 @@ export default function TerminosPage() {
       <section style={{ marginBottom: 32 }}>
         <h2>8. Contacto</h2>
         <p>
-          Consultas: <a href="mailto:hola@folio.app">hola@folio.app</a>
+          Consultas: <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
         </p>
       </section>
 

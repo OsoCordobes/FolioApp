@@ -11,6 +11,7 @@
  */
 
 import type { createSupabaseServerClient } from "@/lib/supabase/server";
+import { SUPPORT_EMAIL } from "@/lib/support";
 
 import { sendEmail } from "./client";
 import { buildBookingConfirmadaEmail } from "./templates/booking-confirmada";
@@ -120,7 +121,9 @@ export async function notifyMemberInvitation(input: {
       expiraLabel,
     });
 
-    await sendEmail({ to: input.to, subject, html });
+    // Reply-To soporte: el email lo recibe un profesional; si responde con
+    // dudas, debe llegar a Folio (los emails a pacientes no llevan replyTo).
+    await sendEmail({ to: input.to, subject, html, replyTo: SUPPORT_EMAIL });
   } catch (e) {
     const { captureException } = await import("@sentry/nextjs");
     captureException(e, {

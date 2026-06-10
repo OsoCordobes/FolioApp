@@ -16,6 +16,8 @@
 import { captureException } from "@sentry/nextjs";
 import { useEffect } from "react";
 
+import { SUPPORT_EMAIL } from "@/lib/support";
+
 interface GlobalErrorProps {
   error: Error & { digest?: string };
   reset: () => void;
@@ -50,7 +52,7 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
           <h1 style={{ margin: 0, fontSize: 28 }}>Algo se rompió</h1>
           <p style={{ margin: 0, lineHeight: 1.6 }}>
             La app no pudo iniciar correctamente. Reintentá; si sigue fallando,
-            escribinos a <a href="mailto:soporte@folio.app">soporte@folio.app</a>.
+            escribinos a <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>.
           </p>
           {error.digest ? (
             <p style={{ margin: 0, fontSize: 12, fontFamily: "monospace", opacity: 0.6 }}>
