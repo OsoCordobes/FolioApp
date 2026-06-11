@@ -32,6 +32,7 @@ import {
   invitationRevokeAbortMessage,
   isSafeToHardDeleteProfile,
 } from "@/lib/me/account-purge";
+import { verifyBearer } from "@/lib/security/verify-bearer";
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -42,8 +43,7 @@ export const maxDuration = 60;
 
 export async function GET(request: NextRequest) {
   const auth = request.headers.get("authorization");
-  const expected = `Bearer ${process.env.CRON_SECRET ?? ""}`;
-  if (!process.env.CRON_SECRET || auth !== expected) {
+  if (!verifyBearer(auth, process.env.CRON_SECRET)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

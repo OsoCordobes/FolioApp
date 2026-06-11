@@ -27,7 +27,12 @@ export async function emitirFacturaAction(input: z.infer<typeof emitirInput>): P
     return err("forbidden", "Solo OWNER o DIRECTOR puede facturar.");
   }
 
-  const result = await emitirFacturaParaPago({ pagoId: parsed.data.pagoId });
+  // IDOR guard: la emisión corre con service_role; el scope de organización
+  // viene de la sesión activa, NUNCA del cliente.
+  const result = await emitirFacturaParaPago({
+    pagoId: parsed.data.pagoId,
+    organizationId: session.data.organizationId,
+  });
   if (!result.ok) return result;
 
   return ok({ numero: result.data.cae });

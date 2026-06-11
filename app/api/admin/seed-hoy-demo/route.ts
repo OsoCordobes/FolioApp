@@ -27,6 +27,7 @@ import { NextResponse } from "next/server";
 
 import { blindIndex, encryptColumn } from "@/lib/crypto";
 import { checkAdminGate } from "@/lib/security/admin-gate";
+import { verifyBearer } from "@/lib/security/verify-bearer";
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -92,8 +93,7 @@ function isoDayWallClockInTz(timezone: string, hourMinute: string): string {
 
 export async function POST(req: Request) {
   const authHeader = req.headers.get("authorization");
-  const expected = `Bearer ${process.env.CRON_SECRET}`;
-  if (!authHeader || authHeader !== expected) {
+  if (!verifyBearer(authHeader, process.env.CRON_SECRET)) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 

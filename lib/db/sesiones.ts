@@ -9,7 +9,7 @@
 
 import { z } from "zod";
 
-import { decryptColumn, encryptColumn } from "@/lib/crypto";
+import { encryptColumn, tryDecrypt } from "@/lib/crypto";
 import {
   ESPECIALIDADES_META,
   getEspecialidadMetaByToolId,
@@ -265,14 +265,17 @@ export async function getSesionCompleta(sesionId: string): Promise<Result<Record
   if (!data) return err("not_found", "Sesión no encontrada.");
 
   const row = data as Record<string, unknown>;
+  // tryDecrypt (no decryptColumn crudo): un campo corrupto no debe tirar una
+  // excepción que escape el contrato Result y tumbe la vista de la sesión —
+  // degrada ese campo a null y reporta a Sentry.
   return ok({
     ...row,
     soap: {
-      s: decryptColumn(row.soap_s_cifrado as Buffer | null),
-      o: decryptColumn(row.soap_o_cifrado as Buffer | null),
-      a: decryptColumn(row.soap_a_cifrado as Buffer | null),
-      p: decryptColumn(row.soap_p_cifrado as Buffer | null),
+      s: tryDecrypt(row.soap_s_cifrado as Buffer | null, "sesion.soap_s"),
+      o: tryDecrypt(row.soap_o_cifrado as Buffer | null, "sesion.soap_o"),
+      a: tryDecrypt(row.soap_a_cifrado as Buffer | null, "sesion.soap_a"),
+      p: tryDecrypt(row.soap_p_cifrado as Buffer | null, "sesion.soap_p"),
     },
-    notas: decryptColumn(row.notas_cifrado as Buffer | null),
+    notas: tryDecrypt(row.notas_cifrado as Buffer | null, "sesion.notas"),
   });
 }
