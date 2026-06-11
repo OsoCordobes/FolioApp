@@ -17,7 +17,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { decryptColumn } from "@/lib/crypto";
+import { tryDecrypt } from "@/lib/crypto";
 import {
   createSupabaseServerClient,
   createSupabaseServiceClient,
@@ -153,12 +153,16 @@ export async function cancelAccountDeletionAction(): Promise<Result<void>> {
 }
 
 // ─── helpers ────────────────────────────────────────────────────────────
+//
+// tryDecrypt en vez de decryptColumn crudo: este export itera TODAS las filas
+// de las orgs del titular; un solo ciphertext corrupto no debe abortar el
+// export Habeas Data completo — degrada ese campo a null (queda en Sentry).
 
 function decryptProfileRow(row: Record<string, unknown>): Record<string, unknown> {
   return {
     ...row,
-    nombre: decryptColumn(row.nombre_cifrado as Buffer | string | null),
-    apellido: decryptColumn(row.apellido_cifrado as Buffer | string | null),
+    nombre: tryDecrypt(row.nombre_cifrado as Buffer | string | null, "export.profile.nombre"),
+    apellido: tryDecrypt(row.apellido_cifrado as Buffer | string | null, "export.profile.apellido"),
     nombre_cifrado: undefined,
     apellido_cifrado: undefined,
   };
@@ -167,13 +171,13 @@ function decryptProfileRow(row: Record<string, unknown>): Record<string, unknown
 function decryptPacienteRows(rows: Record<string, unknown>[]): Record<string, unknown>[] {
   return rows.map((row) => ({
     ...row,
-    nombre: decryptColumn(row.nombre_cifrado as Buffer | string | null),
-    apellido: decryptColumn(row.apellido_cifrado as Buffer | string | null),
-    numero_doc: decryptColumn(row.numero_doc_cifrado as Buffer | string | null),
-    email: decryptColumn(row.email_cifrado as Buffer | string | null),
-    telefono: decryptColumn(row.telefono_cifrado as Buffer | string | null),
-    domicilio_calle: decryptColumn(row.domicilio_calle_cifrado as Buffer | string | null),
-    domicilio_numero: decryptColumn(row.domicilio_numero_cifrado as Buffer | string | null),
+    nombre: tryDecrypt(row.nombre_cifrado as Buffer | string | null, "export.paciente.nombre"),
+    apellido: tryDecrypt(row.apellido_cifrado as Buffer | string | null, "export.paciente.apellido"),
+    numero_doc: tryDecrypt(row.numero_doc_cifrado as Buffer | string | null, "export.paciente.numero_doc"),
+    email: tryDecrypt(row.email_cifrado as Buffer | string | null, "export.paciente.email"),
+    telefono: tryDecrypt(row.telefono_cifrado as Buffer | string | null, "export.paciente.telefono"),
+    domicilio_calle: tryDecrypt(row.domicilio_calle_cifrado as Buffer | string | null, "export.paciente.domicilio_calle"),
+    domicilio_numero: tryDecrypt(row.domicilio_numero_cifrado as Buffer | string | null, "export.paciente.domicilio_numero"),
     nombre_cifrado: undefined,
     apellido_cifrado: undefined,
     numero_doc_cifrado: undefined,
@@ -187,11 +191,11 @@ function decryptPacienteRows(rows: Record<string, unknown>[]): Record<string, un
 function decryptSesionRows(rows: Record<string, unknown>[]): Record<string, unknown>[] {
   return rows.map((row) => ({
     ...row,
-    soap_s: decryptColumn(row.soap_s_cifrado as Buffer | string | null),
-    soap_o: decryptColumn(row.soap_o_cifrado as Buffer | string | null),
-    soap_a: decryptColumn(row.soap_a_cifrado as Buffer | string | null),
-    soap_p: decryptColumn(row.soap_p_cifrado as Buffer | string | null),
-    notas: decryptColumn(row.notas_cifrado as Buffer | string | null),
+    soap_s: tryDecrypt(row.soap_s_cifrado as Buffer | string | null, "export.sesion.soap_s"),
+    soap_o: tryDecrypt(row.soap_o_cifrado as Buffer | string | null, "export.sesion.soap_o"),
+    soap_a: tryDecrypt(row.soap_a_cifrado as Buffer | string | null, "export.sesion.soap_a"),
+    soap_p: tryDecrypt(row.soap_p_cifrado as Buffer | string | null, "export.sesion.soap_p"),
+    notas: tryDecrypt(row.notas_cifrado as Buffer | string | null, "export.sesion.notas"),
     soap_s_cifrado: undefined,
     soap_o_cifrado: undefined,
     soap_a_cifrado: undefined,

@@ -28,7 +28,7 @@ import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 
 import { buildAuditInsertRow } from "@/lib/db/audit";
-import { decryptColumn } from "@/lib/crypto";
+import { tryDecrypt } from "@/lib/crypto";
 import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/legal/versions";
 import {
   buildInvitationOrFilter,
@@ -149,8 +149,10 @@ export async function GET() {
     profile: {
       id: profileRow.id,
       email: profileRow.email,
-      nombre: decryptColumn(profileRow.nombre_cifrado as unknown as Buffer),
-      apellido: decryptColumn(profileRow.apellido_cifrado as unknown as Buffer),
+      // tryDecrypt: un ciphertext corrupto degrada el campo a null en vez de
+      // tirar un 500 que bloquee TODO el export ARCO del titular.
+      nombre: tryDecrypt(profileRow.nombre_cifrado as unknown as Buffer, "export.profile.nombre"),
+      apellido: tryDecrypt(profileRow.apellido_cifrado as unknown as Buffer, "export.profile.apellido"),
       matricula: profileRow.matricula,
       avatar_url: profileRow.avatar_url,
       two_factor_enabled: profileRow.two_factor_enabled,

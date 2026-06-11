@@ -4,7 +4,7 @@
 
 import { z } from "zod";
 
-import { blindIndex, blindIndexPhone, decryptColumn, encryptColumn } from "@/lib/crypto";
+import { blindIndex, blindIndexPhone, decryptColumn, encryptColumn, tryDecrypt } from "@/lib/crypto";
 import { notifyBookingConfirmada } from "@/lib/email/notify";
 import { pushTurnoToGoogle } from "@/lib/google/sync";
 import { trackEvent } from "@/lib/observability/events";
@@ -128,13 +128,15 @@ export async function listPedidos(estado?: string): Promise<Result<Record<string
   const { data, error } = await query;
   if (error) return err("db_error", "Error listando pedidos.", error.message);
 
-  // Decode los cifrados
+  // Decode los cifrados. tryDecrypt (no decryptColumn crudo): una fila con
+  // ciphertext corrupto no debe tirar una excepción que tumbe el listado
+  // entero ni escape el contrato Result — degrada ese campo a null.
   const decoded = (data ?? []).map((row: Record<string, unknown>) => ({
     ...row,
-    nombre: decryptColumn(row.nombre_cifrado as Buffer | null),
-    telefono: decryptColumn(row.telefono_cifrado as Buffer | null),
-    email: decryptColumn(row.email_cifrado as Buffer | null),
-    motivo: decryptColumn(row.motivo_cifrado as Buffer | null),
+    nombre: tryDecrypt(row.nombre_cifrado as Buffer | null, "pedido.nombre"),
+    telefono: tryDecrypt(row.telefono_cifrado as Buffer | null, "pedido.telefono"),
+    email: tryDecrypt(row.email_cifrado as Buffer | null, "pedido.email"),
+    motivo: tryDecrypt(row.motivo_cifrado as Buffer | null, "pedido.motivo"),
   }));
   return ok(decoded);
 }

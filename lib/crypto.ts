@@ -20,6 +20,13 @@
  *   - Mover FOLIO_ENC_KEY_NEXT → FOLIO_ENC_KEY.
  */
 
+// Frontera server/client enforced por bundler: si un Client Component importa
+// este módulo (directa o transitivamente), `next build` falla en compile-time.
+// Sin esto, la frontera de FOLIO_ENC_KEY era solo convención. Los unit tests
+// (node:test) corren con `--conditions react-server` para resolver el stub
+// vacío del package (ver package.json `test:unit`).
+import "server-only";
+
 import {
   createCipheriv,
   createDecipheriv,
@@ -215,9 +222,14 @@ export function blindIndexPhone(
 
 /**
  * Try-decrypt: igual que decryptColumn pero captura excepciones y devuelve
- * null en su lugar (loggeando warning con un label opcional). Útil cuando un
- * solo ciphertext corrupto no debe romper toda la pantalla — defensa
- * operativa post key-rotation o restore parcial.
+ * null en su lugar (loggeando warning con un label opcional + Sentry con tag).
+ * Útil cuando un solo ciphertext corrupto no debe romper toda la pantalla —
+ * defensa operativa post key-rotation o restore parcial.
+ *
+ * Usar en paths de LISTADO / EXPORT (un .map() de filas no debe morir por una
+ * fila corrupta). NO usar donde el fallo debe ser fatal o cambiar semántica
+ * (ej. refresh token de Google: null ya significa "reconectar"; doc fiscal
+ * de una factura AFIP: mejor abortar que emitir como Consumidor Final).
  */
 export function tryDecrypt(
   value: string | Buffer | Uint8Array | null | undefined,
@@ -229,6 +241,17 @@ export function tryDecrypt(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.warn(`[crypto] decrypt failed on ${label}:`, msg);
+    // Observabilidad: un ciphertext corrupto es señal de corrupción de datos /
+    // key drift, no un caso esperado — que quede en Sentry con tag, no solo en
+    // stdout. Fire-and-forget + .catch: el capture nunca rompe al caller (y en
+    // unit tests sin Sentry inicializado es un no-op silencioso).
+    void import("@sentry/nextjs")
+      .then(({ captureException }) =>
+        captureException(err, {
+          tags: { component: "crypto", op: "tryDecrypt", field: label },
+        }),
+      )
+      .catch(() => {});
     return null;
   }
 }

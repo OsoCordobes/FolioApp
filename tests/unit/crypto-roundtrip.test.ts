@@ -29,6 +29,7 @@ import {
   blindIndex,
   encryptFields,
   generateKeyBase64,
+  tryDecrypt,
 } from "../../lib/crypto";
 
 test("encryptColumn → decryptColumn round-trip preserves content", () => {
@@ -78,6 +79,25 @@ test("decryptColumn accepts multiple wire formats", () => {
 
 test("decryptColumn rejects short / corrupt ciphertext", () => {
   assert.throws(() => decryptColumn("\\x00112233"), /ciphertext demasiado corto/);
+});
+
+test("tryDecrypt: ciphertext válido → plaintext (mismo resultado que decryptColumn)", () => {
+  const cipher = encryptColumn("Lorenzo Martínez")!;
+  assert.equal(tryDecrypt(cipher, "test.nombre"), "Lorenzo Martínez");
+});
+
+test("tryDecrypt: ciphertext corrupto → null SIN throw (una fila corrupta no tumba el listado)", () => {
+  assert.equal(tryDecrypt("\\x00112233", "test.corrupto"), null);
+  // GCM auth tag inválido (ciphertext largo pero adulterado)
+  const cipher = encryptColumn("dato sano")!;
+  const tampered = cipher.slice(0, -8) + "00000000";
+  assert.equal(tryDecrypt(tampered, "test.adulterado"), null);
+});
+
+test("tryDecrypt: null/undefined/vacío pasan a null como decryptColumn", () => {
+  assert.equal(tryDecrypt(null, "test.null"), null);
+  assert.equal(tryDecrypt(undefined, "test.undefined"), null);
+  assert.equal(tryDecrypt("", "test.vacio"), null);
 });
 
 test("blindIndex is deterministic for the same input (case + space normalized)", () => {
