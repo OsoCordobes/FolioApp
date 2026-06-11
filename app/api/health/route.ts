@@ -81,6 +81,14 @@ export async function GET() {
     mp_webhook_secret: Boolean(
       process.env.MP_WEBHOOK_SECRET && process.env.MP_ACCESS_TOKEN,
     ),
+    // Email transaccional (confirmación de booking, invitaciones de equipo).
+    // Sin esto sendEmail loguea en vez de enviar (fail-safe) — el estado era
+    // invisible en el health y costó diagnosticarlo (auditoría 2026-06-11).
+    email: Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM),
+    // Clave HMAC de los blind indexes (búsqueda/dedup por nombre/teléfono/DNI).
+    enc_hmac_key: Boolean(process.env.FOLIO_ENC_HMAC_KEY),
+    // Base URL pública (links en emails, OAuth redirects, metadata OG).
+    app_url: Boolean(process.env.NEXT_PUBLIC_APP_URL),
   };
 
   const ok = Object.values(checks).every((c) => c.ok);
