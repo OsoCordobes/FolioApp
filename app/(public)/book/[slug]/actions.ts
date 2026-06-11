@@ -19,7 +19,12 @@ import { encryptColumn } from "@/lib/crypto";
 import { err, ok, type Result } from "@/lib/db/errors";
 import { buildAutoConfirmDecision, promotePedidoToTurno } from "@/lib/db/pedidos";
 import { notifyBookingRecibida } from "@/lib/email/notify";
-import { AvailabilityDbError, getSlotsDisponibles, type Slot } from "@/lib/booking/availability";
+import {
+  AvailabilityDbError,
+  getSlotsDisponibles,
+  slotEstaOfrecido,
+  type Slot,
+} from "@/lib/booking/availability";
 import { trackEvent } from "@/lib/observability/events";
 import { limitByIp } from "@/lib/security/rate-limit";
 import { verifyTurnstile } from "@/lib/security/turnstile";
@@ -59,6 +64,7 @@ export async function fetchSlotsPublico(
     .from("organization")
     .select("id, opt_out_public_listing, slot_margen_min")
     .eq("slug", parsed.data.orgSlug)
+    .is("deleted_at", null)
     .maybeSingle();
 
   if (!org || org.opt_out_public_listing) {
@@ -171,18 +177,26 @@ export async function createPedidoPublico(
   }
 
   const service = createSupabaseServiceClient();
+  // Mismos filtros que fetchSlotsPublico y que la page pública: org viva y
+  // listada, servicio activo y no borrado. Sin esto, un POST directo al action
+  // podía reservar contra orgs deslistadas/borradas o servicios inactivos.
   const { data: org } = await service
     .from("organization")
-    .select("id, auto_confirmar_reservas")
+    .select("id, auto_confirmar_reservas, opt_out_public_listing, slot_margen_min")
     .eq("slug", parsed.data.orgSlug)
+    .is("deleted_at", null)
     .maybeSingle();
-  if (!org) return err("not_found", "Consultorio no encontrado.");
+  if (!org || org.opt_out_public_listing) {
+    return err("not_found", "Consultorio no encontrado.");
+  }
 
   const { data: servicio } = await service
     .from("servicio")
     .select("id, organization_id, duracion_min, precio_cents, nombre")
     .eq("id", parsed.data.servicioId)
     .eq("organization_id", org.id)
+    .eq("activo", true)
+    .is("deleted_at", null)
     .maybeSingle();
   if (!servicio) return err("not_found", "Servicio no disponible.");
 
@@ -199,10 +213,47 @@ export async function createPedidoPublico(
     .limit(1)
     .maybeSingle();
 
+  // Validación dura del horario pedido: tiene que ser FUTURO, dentro de la
+  // ventana de booking, y coincidir EXACTAMENTE con un slot que la grilla
+  // ofrece (disponibilidad del profesional + duración + margen M43). Sin esto,
+  // un POST directo al action (es un endpoint HTTP público) podía crear
+  // pedidos —y con auto-confirm, turnos CONFIRMADOS— a cualquier hora,
+  // incluso en el pasado.
+  const inicioDate = new Date(parsed.data.inicio);
+  const ahora = new Date();
+  const ventanaMax = new Date(ahora.getTime() + 60 * 24 * 60 * 60_000);
+  if (!(inicioDate > ahora) || inicioDate > ventanaMax) {
+    return err("validation", "Ese horario no es válido. Elegí un horario de la agenda.");
+  }
+  if (!profesional) {
+    return err("not_found", "Sin profesional disponible.");
+  }
+
+  let slotsValidos: Slot[];
+  try {
+    slotsValidos = await getSlotsDisponibles({
+      organizationId: org.id,
+      profesionalId: profesional.id,
+      duracionMin: servicio.duracion_min,
+      // Ventana mínima que contiene el horario pedido (la grilla se deriva
+      // igual que en fetchSlotsPublico, así la comparación es exacta).
+      rangeStart: ahora,
+      rangeEnd: new Date(inicioDate.getTime() + servicio.duracion_min * 60_000 + 60_000),
+      margenMin: (org.slot_margen_min as number | null) ?? 0,
+    });
+  } catch (e) {
+    if (e instanceof AvailabilityDbError) {
+      return err("db_error", e.message, typeof e.cause === "string" ? e.cause : undefined);
+    }
+    throw e;
+  }
+  if (!slotEstaOfrecido(slotsValidos, parsed.data.inicio)) {
+    return err("conflict", "Ese horario ya no está disponible. Por favor elegí otro.");
+  }
+
   // Re-chequear que el slot siga libre. Race window mínimo: alguien podría haber
   // tomado el mismo horario entre que el wizard cargó la lista y este submit.
-  // F11 podría usar un advisory_lock o constraint exclusivo en SQL para garantía dura.
-  const inicioDate = new Date(parsed.data.inicio);
+  // El backstop transaccional duro es el EXCLUDE de M40 (23P01 → conflict).
   const finDate = new Date(inicioDate.getTime() + servicio.duracion_min * 60_000);
 
   const overlap = await service.rpc("slot_ocupado", {

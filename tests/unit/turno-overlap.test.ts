@@ -82,3 +82,66 @@ test("decideSlotOcupado: candidatos no solapados → libre", () => {
   });
   assert.equal(ocupado, false);
 });
+
+// ─── Exclusión de pedido (M53 — fix del auto-conflicto del booking) ──────
+//
+// Al promover un pedido a turno, el pedido sigue PENDIENTE con su
+// fecha_propuesta solapando el slot por definición. Sin exclusión, TODA
+// promoción se auto-conflictuaba y el booking público fallaba siempre.
+
+const PEDIDO_PROPIO = "11111111-1111-1111-1111-111111111111";
+const PEDIDO_AJENO = "22222222-2222-2222-2222-222222222222";
+
+test("decideSlotOcupado: el pedido excluido no cuenta como conflicto (auto-conflicto M53)", () => {
+  const ocupado = decideSlotOcupado(
+    slotInicio,
+    slotFin,
+    {
+      turnos: null,
+      pedidos: [{ id: PEDIDO_PROPIO, fecha_propuesta: new Date(baseMs).toISOString(), duracion_min: 45 }],
+      bloqueos: null,
+    },
+    PEDIDO_PROPIO,
+  );
+  assert.equal(ocupado, false);
+});
+
+test("decideSlotOcupado: otro pedido solapado sigue contando aunque haya exclusión", () => {
+  const ocupado = decideSlotOcupado(
+    slotInicio,
+    slotFin,
+    {
+      turnos: null,
+      pedidos: [
+        { id: PEDIDO_PROPIO, fecha_propuesta: new Date(baseMs).toISOString(), duracion_min: 45 },
+        { id: PEDIDO_AJENO, fecha_propuesta: new Date(baseMs + 10 * 60_000).toISOString(), duracion_min: 45 },
+      ],
+      bloqueos: null,
+    },
+    PEDIDO_PROPIO,
+  );
+  assert.equal(ocupado, true);
+});
+
+test("decideSlotOcupado: la exclusión no afecta turnos ni bloqueos", () => {
+  const ocupado = decideSlotOcupado(
+    slotInicio,
+    slotFin,
+    {
+      turnos: [{ inicio: new Date(baseMs).toISOString(), duracion_min: 30 }],
+      pedidos: [{ id: PEDIDO_PROPIO, fecha_propuesta: new Date(baseMs).toISOString(), duracion_min: 45 }],
+      bloqueos: null,
+    },
+    PEDIDO_PROPIO,
+  );
+  assert.equal(ocupado, true);
+});
+
+test("decideSlotOcupado: sin excludePedidoId la semántica original no cambia", () => {
+  const ocupado = decideSlotOcupado(slotInicio, slotFin, {
+    turnos: null,
+    pedidos: [{ id: PEDIDO_PROPIO, fecha_propuesta: new Date(baseMs).toISOString(), duracion_min: 45 }],
+    bloqueos: null,
+  });
+  assert.equal(ocupado, true);
+});

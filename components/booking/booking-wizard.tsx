@@ -439,6 +439,14 @@ export function BookingWizard({
                     consentVersion: PRIVACY_VERSION,
                   });
                   if (!result.ok) {
+                    // Los tokens de Turnstile son de un solo uso: el server ya
+                    // lo consumió en siteverify aunque el action falle. Sin
+                    // este reset, el retry reenvía el token muerto y muere con
+                    // "Captcha inválido" — dead-end doble para el paciente.
+                    if (captchaWidgetIdRef.current && window.turnstile) {
+                      window.turnstile.reset(captchaWidgetIdRef.current);
+                    }
+                    setCaptchaToken(null);
                     setErr(result.error.message);
                     return;
                   }
