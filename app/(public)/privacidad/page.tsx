@@ -8,6 +8,8 @@
 
 import Link from "next/link";
 
+import { SUPPORT_EMAIL } from "@/lib/support";
+
 export const metadata = {
   title: "Política de Privacidad",
   description: "Cómo Folio trata datos personales y de salud.",
@@ -139,7 +141,7 @@ export default function PrivacidadPage() {
         </ul>
         <p>
           Para ejercer estos derechos:{" "}
-          <a href="mailto:privacidad@folio.app">privacidad@folio.app</a>.
+          <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>.
           Respondemos dentro de 10 días hábiles.
         </p>
       </section>
@@ -175,7 +177,7 @@ export default function PrivacidadPage() {
         <h2>9. Contacto</h2>
         <p>
           Consultas de privacidad:{" "}
-          <a href="mailto:privacidad@folio.app">privacidad@folio.app</a>
+          <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
         </p>
         <p>
           Autoridad de control:{" "}

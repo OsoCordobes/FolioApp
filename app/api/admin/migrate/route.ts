@@ -51,6 +51,7 @@ import { NextResponse } from "next/server";
 import { Client } from "pg";
 
 import { checkAdminGate } from "@/lib/security/admin-gate";
+import { verifyBearer } from "@/lib/security/verify-bearer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -100,9 +101,8 @@ class MigrationError extends Error {
 }
 
 export async function POST(req: Request) {
-  const auth = req.headers.get("authorization") ?? "";
-  const secret = process.env.CRON_SECRET;
-  if (!secret || auth !== `Bearer ${secret}`) {
+  const auth = req.headers.get("authorization");
+  if (!verifyBearer(auth, process.env.CRON_SECRET)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 

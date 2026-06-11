@@ -82,6 +82,7 @@ export default async function CalendarioPage({ searchParams }: PageProps) {
       pedidos={data.data.pedidos}
       pacientes={data.data.pacientes}
       weekDates={data.data.weekDates}
+      diasCerrados={data.data.diasCerrados}
       weekRangeLabel={data.data.weekRangeLabel}
       hoyIso={data.data.hoyIso}
       nowHHMM={data.data.nowHHMM}
@@ -90,6 +91,7 @@ export default async function CalendarioPage({ searchParams }: PageProps) {
       nextWeekIso={nextWeekIso}
       hoyWeekStartIso={hoyWeekStartIso}
       initialVista={initialVista}
+      organizationId={ctx.data.organization.id}
       mesGrid={mesData.data.grid}
       mesTurnos={mesData.data.turnos}
       mesPacientes={mesData.data.pacientes}

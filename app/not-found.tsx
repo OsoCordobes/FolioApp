@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { supportMailto } from "@/lib/support";
+
 /**
  * Folio · 404 global.
  *
@@ -71,7 +73,7 @@ export default function NotFound() {
             Volver al inicio
           </Link>
           <a
-            href="mailto:soporte@folio.app?subject=Folio%20%E2%80%94%20p%C3%A1gina%20no%20encontrada"
+            href={supportMailto("Folio — página no encontrada")}
             className="fi-btn fi-btn-ghost"
           >
             Escribir a soporte

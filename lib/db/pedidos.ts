@@ -4,7 +4,7 @@
 
 import { z } from "zod";
 
-import { blindIndex, blindIndexPhone, decryptColumn, encryptColumn } from "@/lib/crypto";
+import { blindIndex, blindIndexPhone, decryptColumn, encryptColumn, tryDecrypt } from "@/lib/crypto";
 import { notifyBookingConfirmada } from "@/lib/email/notify";
 import { pushTurnoToGoogle } from "@/lib/google/sync";
 import { trackEvent } from "@/lib/observability/events";
@@ -128,13 +128,15 @@ export async function listPedidos(estado?: string): Promise<Result<Record<string
   const { data, error } = await query;
   if (error) return err("db_error", "Error listando pedidos.", error.message);
 
-  // Decode los cifrados
+  // Decode los cifrados. tryDecrypt (no decryptColumn crudo): una fila con
+  // ciphertext corrupto no debe tirar una excepción que tumbe el listado
+  // entero ni escape el contrato Result — degrada ese campo a null.
   const decoded = (data ?? []).map((row: Record<string, unknown>) => ({
     ...row,
-    nombre: decryptColumn(row.nombre_cifrado as Buffer | null),
-    telefono: decryptColumn(row.telefono_cifrado as Buffer | null),
-    email: decryptColumn(row.email_cifrado as Buffer | null),
-    motivo: decryptColumn(row.motivo_cifrado as Buffer | null),
+    nombre: tryDecrypt(row.nombre_cifrado as Buffer | null, "pedido.nombre"),
+    telefono: tryDecrypt(row.telefono_cifrado as Buffer | null, "pedido.telefono"),
+    email: tryDecrypt(row.email_cifrado as Buffer | null, "pedido.email"),
+    motivo: tryDecrypt(row.motivo_cifrado as Buffer | null, "pedido.motivo"),
   }));
   return ok(decoded);
 }
@@ -187,13 +189,17 @@ export async function promotePedidoToTurno(
   } = input;
 
   // a. Re-chequeo de solapamiento ANTES de cualquier mutación. Si el slot está
-  //    ocupado abortamos limpio: el pedido sigue PENDIENTE.
+  //    ocupado abortamos limpio: el pedido sigue PENDIENTE. El propio pedido
+  //    (aún PENDIENTE con fecha_propuesta solapada por definición) se excluye
+  //    del chequeo (M53) — sin esto se auto-conflictuaba y NINGUNA reserva
+  //    pública ni acepte de bandeja podía completarse.
   const ocupado = await checkSlotOcupado(
     client,
     organizationId,
     fechaPropuesta,
     duracionMin,
     profesionalId,
+    pedidoId,
   );
   if (ocupado) {
     return err("conflict", "Ese horario ya no está disponible.");
@@ -450,13 +456,16 @@ export async function confirmarPedido(
 
   // ── CR-5: chequeo de solapamiento ANTES de tocar el estado del pedido.
   //    Si el slot está ocupado abortamos sin haber modificado nada → el
-  //    pedido queda PENDIENTE (no se stranda en CONFIRMADO).
+  //    pedido queda PENDIENTE (no se stranda en CONFIRMADO). Excluimos el
+  //    propio pedido del chequeo (M53): si inicio == fecha_propuesta se
+  //    auto-conflictuaba siempre.
   const ocupado = await checkSlotOcupado(
     supabase,
     session.data.organizationId,
     inicio,
     pedido.duracion_min,
     profesionalId,
+    pedidoId,
   );
   if (ocupado) {
     return err(

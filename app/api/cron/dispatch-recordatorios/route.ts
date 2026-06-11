@@ -1,7 +1,9 @@
 /**
  * Folio · /api/cron/dispatch-recordatorios
  *
- * Disparado por Vercel Cron cada 15min (ver vercel.json). Procesa la cola
+ * Disparado cada 15min por GitHub Actions (.github/workflows/
+ * dispatch-recordatorios.yml — Vercel Hobby solo permite crons diarios) con
+ * el cron diario de vercel.json como backstop. Procesa la cola
  * `recordatorio_job`:
  *
  *   - Filtra: enviado_ts IS NULL AND scheduled_ts <= now() AND intentos < 5
@@ -27,6 +29,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { decryptColumn } from "@/lib/crypto";
+import { verifyBearer } from "@/lib/security/verify-bearer";
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
 import {
   sendConfirmacion24h,
@@ -105,7 +108,7 @@ function authorize(req: NextRequest): NextResponse | null {
   if (!secret) {
     return NextResponse.json({ ok: false, error: "CRON_SECRET no configurado" }, { status: 500 });
   }
-  if (req.headers.get("authorization") !== `Bearer ${secret}`) {
+  if (!verifyBearer(req.headers.get("authorization"), secret)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   return null;

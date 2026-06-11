@@ -11,7 +11,7 @@
  */
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 
 import * as I from "@/components/icons";
 import { KpiStrip } from "@/components/hoy/kpi-strip";
@@ -19,6 +19,7 @@ import { PageHeader } from "@/components/hoy/page-header";
 import { TurnoList } from "@/components/hoy/turno-list";
 import { TurnoCreateModal } from "@/components/hoy/turno-create-modal";
 import { applyTransition } from "@/lib/turno-states";
+import { useAgendaAutoRefresh } from "@/lib/use-agenda-refresh";
 import { useNow } from "@/lib/use-now";
 import type { EstadoTurno, PacientesById, Turno } from "@/lib/types";
 
@@ -33,15 +34,29 @@ interface DashboardProps {
   nowIso: string; // ISO del SSR, hydration-safe
   /** IANA timezone de la org — los labels "próximo en X min" se calculan acá. */
   timezone: string;
+  /** Org activa — habilita el live update (polling / realtime tras flag). */
+  organizationId?: string;
 }
 
-export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fechaAnio, nowIso, timezone }: DashboardProps) {
+export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fechaAnio, nowIso, timezone, organizationId }: DashboardProps) {
   const router = useRouter();
   const [turnos, setTurnos] = useState<Turno[]>(initialTurnos);
   const [walkInOpen, setWalkInOpen] = useState(false);
   const [transitionError, setTransitionError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const now = useNow(nowIso, 60_000);
+
+  // Resincronizar el estado local cuando el Server Component re-renderiza
+  // (revalidatePath tras crear/transicionar un turno, router.refresh del
+  // polling). Sin esto, `turnos` quedaba congelado en el primer render y un
+  // turno nuevo no aparecía hasta F5. `initialTurnos` es una referencia nueva
+  // en cada pasada RSC, así que el efecto corre exactamente en cada refresh.
+  useEffect(() => {
+    setTurnos(initialTurnos);
+  }, [initialTurnos]);
+
+  // Live update: polling 25s con pestaña visible (+ realtime detrás de flag).
+  useAgendaAutoRefresh(organizationId ?? null);
 
   /**
    * Optimistic transition + persistencia via Server Action.
@@ -139,6 +154,8 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
             turnos={turnos}
             pacientes={pacientes}
             nextId={nextId}
+            now={now}
+            timezone={timezone}
             onTransition={handleTransition}
             onOpenFicha={(turnoId) => {
               // Side panel-style ficha planeado para sprint posterior. Mientras
@@ -180,8 +197,9 @@ function EmptyState({ fechaLarga }: { fechaLarga: string }) {
       <div className="fi-empty-inner">
         <h2 className="fi-empty-title">Sin turnos para hoy</h2>
         <p className="fi-empty-sub">
-          No tenés turnos agendados para el {fechaLarga.toLowerCase()}. Podés crear uno desde
-          Calendario o cargar un walk-in.
+          No tenés turnos agendados para el {fechaLarga.toLowerCase()}. Creá uno con el botón
+          «Turno walk-in» o compartí tu link de reservas online (lo encontrás en Configuración)
+          para que tus pacientes pidan turno solos.
         </p>
       </div>
     </section>

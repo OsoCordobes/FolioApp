@@ -12,6 +12,7 @@ import Link from "next/link";
 
 export { COOKIES_VERSION } from "@/lib/legal/versions";
 import { COOKIES_VERSION } from "@/lib/legal/versions";
+import { SUPPORT_EMAIL } from "@/lib/support";
 
 export const metadata = {
   title: "Política de Cookies",
@@ -152,7 +153,7 @@ export default function CookiesPage() {
         <h2>6. Contacto</h2>
         <p>
           Consultas:{" "}
-          <a href="mailto:privacidad@folio.app">privacidad@folio.app</a>
+          <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
         </p>
         <p>
           Ver también la{" "}

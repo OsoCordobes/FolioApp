@@ -829,5 +829,56 @@ export function computeAccessGate(
   return { allowed: false, reason: "grace_expired", graceDaysLeft: 0 };
 }
 
+/**
+ * Path canónico de la pantalla de recuperación de cobro. Cualquier ruta bajo
+ * este prefijo (la página + sus server actions) DEBE seguir siendo alcanzable
+ * aunque el access gate bloquee el resto de la app — es donde el OWNER
+ * refresca / repaga / cancela. Vive acá (no en el layout) para que la decisión
+ * de gating sea pura y testeable.
+ */
+export const BILLING_RECOVERY_PATH = "/configuracion/billing";
+
+/**
+ * H-BILLING-1 · decide si el layout debe redirigir al usuario a la pantalla de
+ * recuperación de cobro. Pura y testeable (la decisión NO puede vivir solo
+ * inline en el layout: un dead-end de cobro deja al cliente pagando sin acceso
+ * y sin forma de llegar a billing).
+ *
+ * Invariantes que garantiza:
+ *   - `is_internal_account` (demo/comp/internal) nunca se gatea.
+ *   - Si el gate permite el acceso, no se redirige.
+ *   - **Billing es SIEMPRE alcanzable**: estando ya bajo el path de recuperación
+ *     no se redirige (evita loop), incluso con el gate bloqueado por MOROSA con
+ *     grace vencido, CANCELADA, PAUSADA o grace_expired. Es la pantalla donde el
+ *     OWNER repaga/refresca/cancela; bloquearla sería un callejón sin salida.
+ *
+ * El match del path es robusto: normaliza trailing slash y query string, y
+ * compara contra el prefijo canónico — así una `x-pathname` con cola
+ * (`/configuracion/billing?gate=...`) o con barra final no rompe la excepción.
+ * Si el pathname no se pudo determinar (header ausente), se trata como "no es
+ * billing": el redirect manda a billing igual, que es el destino correcto y no
+ * un loop (Next no re-redirige cuando origen y destino coinciden tras resolver).
+ */
+export function shouldGateToBilling(args: {
+  isInternalAccount: boolean;
+  accessGate: Pick<AccessGate, "allowed">;
+  /** `x-pathname` del request (o "" si no se pudo leer). */
+  pathname: string;
+}): boolean {
+  if (args.isInternalAccount) return false;
+  if (args.accessGate.allowed) return false;
+  return !isBillingRecoveryPath(args.pathname);
+}
+
+/**
+ * true si `pathname` apunta a la pantalla de recuperación de cobro (o a una
+ * ruta bajo ella). Tolera query string y trailing slash. Exportada para tests.
+ */
+export function isBillingRecoveryPath(pathname: string): boolean {
+  // Descartar query/hash y normalizar trailing slash antes de comparar prefijo.
+  const path = (pathname.split(/[?#]/)[0] ?? "").replace(/\/+$/, "");
+  return path === BILLING_RECOVERY_PATH || path.startsWith(`${BILLING_RECOVERY_PATH}/`);
+}
+
 // Expose constants for tests.
 export const __testing = { GRACE_PERIOD_DAYS };

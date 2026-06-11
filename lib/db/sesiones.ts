@@ -9,7 +9,7 @@
 
 import { z } from "zod";
 
-import { decryptColumn, encryptColumn } from "@/lib/crypto";
+import { encryptColumn, tryDecrypt } from "@/lib/crypto";
 import {
   ESPECIALIDADES_META,
   getEspecialidadMetaByToolId,
@@ -48,6 +48,39 @@ const upsertSesionSchema = z.object({
 
 export type UpsertSesionInput = z.infer<typeof upsertSesionSchema>;
 
+// ─── IDOR guard (puro, testeable) ──────────────────────────────────────
+//
+// F-AUTH: decide si un turno (leído de DB) habilita escribir la sesión que el
+// cliente pidió. Pura a propósito — sin I/O — para fijar las invariantes en un
+// test unitario sin mockear Supabase. La lectura del turno la hace el caller
+// (upsertSesion) bajo RLS; acá solo se evalúa el resultado.
+//
+//   - turno inexistente o de otra org           → forbidden (IDOR cross-tenant)
+//   - turno.paciente_id != pacienteId del input → forbidden (turno↔paciente)
+//   - coincide todo                              → ok
+export type TurnoOwnershipRow = {
+  organization_id: string;
+  paciente_id: string;
+} | null;
+
+export type TurnoOwnershipVerdict =
+  | { ok: true }
+  | { ok: false; code: "forbidden"; message: string };
+
+export function checkTurnoOwnership(
+  turno: TurnoOwnershipRow,
+  activeOrgId: string,
+  pacienteId: string,
+): TurnoOwnershipVerdict {
+  if (!turno || turno.organization_id !== activeOrgId) {
+    return { ok: false, code: "forbidden", message: "Ese turno no pertenece a tu organización." };
+  }
+  if (turno.paciente_id !== pacienteId) {
+    return { ok: false, code: "forbidden", message: "El turno no corresponde a ese paciente." };
+  }
+  return { ok: true };
+}
+
 // ─── Upsert (crear o actualizar pre-lock) ──────────────────────────────
 
 export async function upsertSesion(input: UpsertSesionInput): Promise<Result<{ id: string }>> {
@@ -60,6 +93,30 @@ export async function upsertSesion(input: UpsertSesionInput): Promise<Result<{ i
 
   const supabase = await createSupabaseServerClient();
   const d = parsed.data;
+
+  // F-AUTH (IDOR / defensa en profundidad): turnoId y pacienteId vienen del
+  // caller (cliente). El INSERT/UPDATE estampa session.organizationId y la RLS
+  // + el trigger sesion_same_org_guard rechazan en DB un turno/paciente ajeno,
+  // pero validamos app-side ANTES de cifrar/escribir para no confiar en IDs del
+  // cliente y para que cualquier futuro caller de upsertSesion herede el guard.
+  // Una sola lectura confirma (1) turno ∈ org activa y (2) turno.paciente_id ==
+  // pacienteId (el trigger M09 garantiza turno.paciente_id en la misma org).
+  const { data: turnoRow, error: turnoErr } = await supabase
+    .from("turno")
+    .select("organization_id, paciente_id")
+    .eq("id", d.turnoId)
+    .maybeSingle();
+  if (turnoErr) {
+    return err("db_error", "No pudimos validar el turno.", turnoErr.message);
+  }
+  const ownership = checkTurnoOwnership(
+    turnoRow as TurnoOwnershipRow,
+    session.data.organizationId,
+    d.pacienteId,
+  );
+  if (!ownership.ok) {
+    return err(ownership.code, ownership.message);
+  }
 
   // ¿Ya existe sesion para este turno?
   const { data: existing } = await supabase
@@ -208,14 +265,17 @@ export async function getSesionCompleta(sesionId: string): Promise<Result<Record
   if (!data) return err("not_found", "Sesión no encontrada.");
 
   const row = data as Record<string, unknown>;
+  // tryDecrypt (no decryptColumn crudo): un campo corrupto no debe tirar una
+  // excepción que escape el contrato Result y tumbe la vista de la sesión —
+  // degrada ese campo a null y reporta a Sentry.
   return ok({
     ...row,
     soap: {
-      s: decryptColumn(row.soap_s_cifrado as Buffer | null),
-      o: decryptColumn(row.soap_o_cifrado as Buffer | null),
-      a: decryptColumn(row.soap_a_cifrado as Buffer | null),
-      p: decryptColumn(row.soap_p_cifrado as Buffer | null),
+      s: tryDecrypt(row.soap_s_cifrado as Buffer | null, "sesion.soap_s"),
+      o: tryDecrypt(row.soap_o_cifrado as Buffer | null, "sesion.soap_o"),
+      a: tryDecrypt(row.soap_a_cifrado as Buffer | null, "sesion.soap_a"),
+      p: tryDecrypt(row.soap_p_cifrado as Buffer | null, "sesion.soap_p"),
     },
-    notas: decryptColumn(row.notas_cifrado as Buffer | null),
+    notas: tryDecrypt(row.notas_cifrado as Buffer | null, "sesion.notas"),
   });
 }

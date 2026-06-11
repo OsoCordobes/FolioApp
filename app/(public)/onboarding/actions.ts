@@ -24,7 +24,6 @@ import { verifyTurnstile } from "@/lib/security/turnstile";
  * se crea su membership).
  */
 
-import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { findUserByEmail } from "@/lib/auth/find-user-by-email";
@@ -38,15 +37,12 @@ import {
   createSupabaseServiceClient,
 } from "@/lib/supabase/server";
 
-// ─── Legacy cleanup (auditoría LOW): las funciones `signUpEmail` y
-// `completeOnboarding` fueron eliminadas en Phase 10. No tenían callers
-// (grep confirmado) y representaban un attack surface no auditado — sin
-// rate-limit, sin Turnstile, sin consent gate. Toda creación de cuenta
-// ahora pasa por `signUpAndInitOrganization` (premium architecture).
-
-export async function finishOnboardingAndGoToApp(): Promise<void> {
-  redirect("/hoy");
-}
+// ─── Legacy cleanup (auditoría LOW): las funciones `signUpEmail`,
+// `completeOnboarding` y `finishOnboardingAndGoToApp` fueron eliminadas
+// (Phase 10 / auditoría E2E). No tenían callers (grep confirmado) y
+// representaban un attack surface no auditado — sin rate-limit, sin
+// Turnstile, sin consent gate. Toda creación de cuenta ahora pasa por
+// `signUpAndInitOrganization` y la finalización por `finalizeOnboarding`.
 
 // ════════════════════════════════════════════════════════════════════════════
 // PREMIUM ONBOARDING ARCHITECTURE (M20+)

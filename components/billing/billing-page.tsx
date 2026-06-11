@@ -13,7 +13,7 @@
  * Pixel-perfect respetando el lenguaje visual de /configuracion.
  */
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 
 import {
@@ -121,16 +121,6 @@ export function BillingPage({
     });
   };
 
-  const onRefresh = () => {
-    setError(null);
-    startTransition(async () => {
-      const res = await refreshSubscriptionAction();
-      if (!res.ok) {
-        setError(res.error.message);
-      }
-    });
-  };
-
   const onSyncAmount = () => {
     setError(null);
     startTransition(async () => {
@@ -168,7 +158,7 @@ export function BillingPage({
       </header>
 
       {gateBanner ? <GraceBanner reason={gateBanner} /> : null}
-      {activationOk && subscription?.estado !== "ACTIVA" ? <ActivationPendingBanner onRefresh={onRefresh} /> : null}
+      {activationOk && subscription?.estado !== "ACTIVA" ? <ActivationPendingBanner /> : null}
       {!accessGate.allowed && !gateBanner ? <GraceBanner reason={accessGate.reason ?? "denied"} /> : null}
       {accessGate.allowed && accessGate.graceDaysLeft != null ? (
         <GraceCountdownBanner days={accessGate.graceDaysLeft} />
@@ -680,7 +670,58 @@ function GraceCountdownBanner({ days }: { days: number }) {
   );
 }
 
-function ActivationPendingBanner({ onRefresh }: { onRefresh: () => void }) {
+// M7 · cuántas veces auto-refrescamos el estado tras volver de MP, y cada cuánto.
+// ~30s en total (10 × 3s) — ventana razonable para que llegue el webhook
+// subscription_preapproval. El webhook sigue siendo la fuente de verdad: esto
+// solo "espera y vuelve a leer", no inventa una activación.
+const ACTIVATION_POLL_INTERVAL_MS = 3000;
+const ACTIVATION_POLL_MAX_ATTEMPTS = 10;
+
+/**
+ * M7 (docs/AUDIT.md) · el banner se mostraba SOLO por el query param
+ * `?activation=ok`, que lo setea el back_url de MP — está presente aunque el
+ * pago haya fallado o el webhook nunca llegue. Mostrar "va a aparecer activo en
+ * unos segundos" en ese caso es una promesa que el sistema no puede cumplir.
+ *
+ * Fix honesto: al volver de MP auto-refrescamos el estado real
+ * (`refreshSubscriptionAction` → GET al proveedor → UPDATE local) cada 3s hasta
+ * ~30s. Si la suscripción se activa, el `revalidatePath` del action re-renderiza
+ * el server component y este banner desaparece (la condición de montaje es
+ * `estado !== "ACTIVA"`). Si tras agotar los intentos sigue sin activarse,
+ * cambiamos el copy a algo honesto en vez de seguir prometiendo. El webhook
+ * sigue siendo la fuente de verdad: nunca marcamos ACTIVA desde el cliente.
+ */
+function ActivationPendingBanner() {
+  const [pending, startTransition] = useTransition();
+  const [exhausted, setExhausted] = useState(false);
+  const attemptsRef = useRef(0);
+
+  const refresh = () => {
+    startTransition(async () => {
+      await refreshSubscriptionAction();
+      // No leemos el resultado para decidir: si se activó, el revalidatePath
+      // del action desmonta este banner; si no, seguimos en pending/pendiente.
+    });
+  };
+
+  // Auto-poll silencioso hasta ACTIVA o hasta agotar los intentos. Cada tick
+  // dispara un refresh; si el estado pasa a ACTIVA el server desmonta el banner
+  // y el cleanup del effect frena el timer.
+  useEffect(() => {
+    if (exhausted) return;
+    const id = setInterval(() => {
+      attemptsRef.current += 1;
+      if (attemptsRef.current >= ACTIVATION_POLL_MAX_ATTEMPTS) {
+        setExhausted(true);
+        clearInterval(id);
+      }
+      startTransition(async () => {
+        await refreshSubscriptionAction();
+      });
+    }, ACTIVATION_POLL_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [exhausted]);
+
   return (
     <div
       style={{
@@ -697,11 +738,12 @@ function ActivationPendingBanner({ onRefresh }: { onRefresh: () => void }) {
       }}
     >
       <span>
-        Volviste de Mercado Pago. Si tu pago se procesó, el estado va a aparecer activo en unos
-        segundos.
+        {exhausted
+          ? "Volviste de Mercado Pago. Si ya autorizaste el pago y no ves los cambios en unos segundos, presioná Refrescar estado. Si recién lo autorizaste, puede tardar un momento."
+          : "Volviste de Mercado Pago. Estamos verificando el estado de tu pago…"}
       </span>
-      <button type="button" className="fi-btn fi-btn-ghost" onClick={onRefresh}>
-        Refrescar estado
+      <button type="button" className="fi-btn fi-btn-ghost" onClick={refresh} disabled={pending}>
+        {pending ? "Verificando…" : "Refrescar estado"}
       </button>
     </div>
   );

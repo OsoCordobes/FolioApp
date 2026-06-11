@@ -18,12 +18,14 @@
 import { headers } from "next/headers";
 
 import { findUserByEmail } from "@/lib/auth/find-user-by-email";
+import { writeAuditEntry } from "@/lib/db/audit";
 import { err, ok, type Result } from "@/lib/db/errors";
 import { setActiveOrg } from "@/lib/db/session";
 import { syncSubscriptionAmountInBackground } from "@/lib/db/suscripcion";
 import { PRIVACY_VERSION } from "@/lib/legal/versions";
 import { signUpSchema } from "@/lib/onboarding/schemas";
 import { formatResetMessage, limitByIp, limitByKey } from "@/lib/security/rate-limit";
+import { verifyTurnstile } from "@/lib/security/turnstile";
 import {
   createSupabaseServerClient,
   createSupabaseServiceClient,
@@ -103,10 +105,31 @@ export async function acceptInvitationAction(
     return err("db_error", "No pudimos aceptar la invitación. Probá de nuevo.", msg);
   }
 
-  const result = data as { organization_id: string; member_id: string } | null;
+  const result = data as
+    | { organization_id: string; member_id: string; role?: string }
+    | null;
   if (!result?.organization_id) {
     return err("db_error", "No pudimos aceptar la invitación. Probá de nuevo.");
   }
+
+  // Audit (Ley 26.529 art. 18): registrar la aceptación app-side. Preferimos
+  // esto a tocar la RPC SECURITY DEFINER (menos riesgo). El INSERT lo hace el
+  // service client de writeAuditEntry (la RLS de audit_log bloquea INSERT
+  // directo). El actor es el propio invitado; el email es PII y va en el
+  // payload (ver writeAuditEntry). resource_id = el member materializado.
+  await writeAuditEntry({
+    organizationId: result.organization_id,
+    actorId: user.id,
+    actorRole: result.role ?? null,
+    action: "member_invitation.accept",
+    resourceType: "member",
+    resourceId: result.member_id,
+    payload: { email: user.email ?? null, role: result.role ?? null },
+    // Contexto de red ya computado para rate-limit/consentimiento (Ley 26.529
+    // art. 18): el mismo IP/UA que firma el consentimiento ARCO de la RPC.
+    ip,
+    userAgent: reqHeaders.get("user-agent"),
+  });
 
   // Dejar la org recién aceptada como activa (cookie). Si falla no es fatal:
   // getActiveSession() igual resuelve una membership válida.
@@ -132,7 +155,7 @@ export interface InviteeSignUpResult {
 export async function signUpForInvitationAction(
   email: string,
   password: string,
-  options: { consent?: boolean } = {},
+  options: { consent?: boolean; turnstileToken?: string | null } = {},
 ): Promise<InviteeSignUpResult> {
   const parsed = signUpSchema.safeParse({ email, password });
   if (!parsed.success) {
@@ -144,9 +167,13 @@ export async function signUpForInvitationAction(
     return { ok: false, error: "Tenés que aceptar el aviso de privacidad para continuar." };
   }
 
-  // Rate limits (sin Turnstile: a esta pantalla se llega con un token de
-  // invitación no adivinable, y el accept posterior valida email + token en
-  // la RPC; los límites cubren el abuso del endpoint en sí).
+  // F-AUTH (defensa en profundidad): este endpoint crea una auth.user real
+  // (PII médica). El rate-limit solo, sin captcha, deja la puerta abierta a
+  // alta automatizada de cuentas para sondear emails / inflar auth.users. Se
+  // exige Turnstile igual que el signup de onboarding (mismo helper, mismo
+  // flujo: el cliente emite el token y el server lo verifica ANTES de crear
+  // la cuenta). El argumento token de invitación no es un control de abuso:
+  // un atacante con UN token válido podría reusar esta pantalla N veces.
   const ip = await callerIp();
   const ipLimit = await limitByIp("invitation-signup", ip, 30);
   if (!ipLimit.ok) {
@@ -160,6 +187,16 @@ export async function signUpForInvitationAction(
     return {
       ok: false,
       error: `Demasiados intentos para este email. ${formatResetMessage(emailLimit.resetIn)}`,
+    };
+  }
+  // Turnstile obligatorio en producción. En dev (sin TURNSTILE_SECRET_KEY) el
+  // verifier es no-op (true) para no romper el dev loop — mismo criterio que
+  // signUpAndInitOrganization.
+  const captchaOk = await verifyTurnstile(options.turnstileToken, ip);
+  if (!captchaOk) {
+    return {
+      ok: false,
+      error: "No pude verificar el captcha. Recargá la página y probá de nuevo.",
     };
   }
 

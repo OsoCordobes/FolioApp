@@ -37,6 +37,10 @@ import {
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// El handler hace GETs a la API de MP (preapproval / authorized payment) +
+// writes a la DB. Damos margen sobre el default de Vercel para no cortar a
+// mitad de un evento de cobro; aun así MP corta su lado a ~22s y reintenta.
+export const maxDuration = 60;
 
 interface MpWebhookPayload {
   id?: number | string;

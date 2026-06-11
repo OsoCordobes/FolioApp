@@ -21,6 +21,8 @@ import { captureException } from "@sentry/nextjs";
 import Link from "next/link";
 import { useEffect } from "react";
 
+import { SUPPORT_EMAIL } from "@/lib/support";
+
 interface ErrorBoundaryProps {
   error: Error & { digest?: string };
   reset: () => void;
@@ -74,7 +76,11 @@ export default function ErrorBoundary({ error, reset }: ErrorBoundaryProps) {
         </h1>
         <p style={{ margin: 0, color: "var(--ink-2)", lineHeight: 1.6 }}>
           Ya estamos avisados — Sentry capturó el error y lo estamos viendo.
-          Podés reintentar o volver al inicio.
+          Podés reintentar o volver al inicio. Si sigue fallando, escribinos a{" "}
+          <a href={`mailto:${SUPPORT_EMAIL}`} style={{ color: "var(--accent)" }}>
+            {SUPPORT_EMAIL}
+          </a>
+          .
         </p>
         {error.digest ? (
           <p

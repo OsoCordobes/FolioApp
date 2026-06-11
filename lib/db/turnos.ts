@@ -62,6 +62,7 @@ export function slotRangesOverlap(
 }
 
 interface SlotConflictRow {
+  id?: string;
   inicio?: string;
   fecha_propuesta?: string;
   duracion_min: number;
@@ -71,6 +72,11 @@ interface SlotConflictRow {
  * `decideSlotOcupado` — función pura que decide si un slot está ocupado a
  * partir de las filas candidatas (turnos, pedidos y bloqueos) que se
  * solapan con el rango [inicio, fin). Aislada para poder testearla sin DB.
+ *
+ * `excludePedidoId` (M53): el pedido que se está promoviendo a turno no debe
+ * contarse como conflicto contra sí mismo — sin esto, TODA promoción de un
+ * pedido con fecha_propuesta se auto-conflictuaba y el booking público
+ * fallaba siempre.
  */
 export function decideSlotOcupado(
   inicioMs: number,
@@ -80,6 +86,7 @@ export function decideSlotOcupado(
     pedidos: SlotConflictRow[] | null;
     bloqueos: SlotConflictRow[] | null;
   },
+  excludePedidoId?: string | null,
 ): boolean {
   const overlapsWith = (rows: SlotConflictRow[] | null, field: "inicio" | "fecha_propuesta") =>
     (rows ?? []).some((r) => {
@@ -88,9 +95,13 @@ export function decideSlotOcupado(
       return slotRangesOverlap(inicioMs, finMs, startMs, endMs);
     });
 
+  const pedidos = excludePedidoId
+    ? (candidatos.pedidos ?? []).filter((p) => p.id !== excludePedidoId)
+    : candidatos.pedidos;
+
   return (
     overlapsWith(candidatos.turnos, "inicio") ||
-    overlapsWith(candidatos.pedidos, "fecha_propuesta") ||
+    overlapsWith(pedidos, "fecha_propuesta") ||
     overlapsWith(candidatos.bloqueos, "inicio")
   );
 }
@@ -98,12 +109,13 @@ export function decideSlotOcupado(
 /**
  * Chequea si un slot [inicio, inicio+duracionMin) ya está ocupado para la
  * org. Mismo enfoque que el booking público: intenta el RPC `slot_ocupado`
- * y, si no existe / falla, cae al chequeo manual contra turno + pedido +
- * bloqueo. Excluye opcionalmente un turno (para reagendas, no usado todavía).
+ * (M44, firma extendida en M53) y, si falla, cae al chequeo manual contra
+ * turno + pedido + bloqueo.
  *
- * NB: el RPC `slot_ocupado` no está definido en migraciones todavía, así que
- * en la práctica corre siempre el fallback manual (igual que en el booking
- * público). Lo dejamos primero para cuando exista una garantía dura en SQL.
+ * `excludePedidoId` (M53): al promover un pedido a turno, ese pedido sigue
+ * PENDIENTE durante el chequeo y se contaría a sí mismo como conflicto. El
+ * caller (promotePedidoToTurno / confirmarPedido) pasa su id para excluirlo
+ * tanto en el RPC como en el fallback.
  */
 export async function checkSlotOcupado(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
@@ -111,6 +123,7 @@ export async function checkSlotOcupado(
   inicioIso: string,
   duracionMin: number,
   profesionalId: string,
+  excludePedidoId?: string | null,
 ): Promise<boolean> {
   const inicioDate = new Date(inicioIso);
   const finDate = new Date(inicioDate.getTime() + duracionMin * 60_000);
@@ -119,6 +132,7 @@ export async function checkSlotOcupado(
     p_org: organizationId,
     p_inicio: inicioDate.toISOString(),
     p_fin: finDate.toISOString(),
+    p_exclude_pedido: excludePedidoId ?? null,
   });
 
   if (!(overlap.error || overlap.data === null)) {
@@ -130,6 +144,18 @@ export async function checkSlotOcupado(
   // (la duración máxima de un turno es 480min = 8h).
   const finIso = finDate.toISOString();
   const lookbackIso = new Date(inicioDate.getTime() - 8 * 60 * 60_000).toISOString();
+
+  let pedidoQuery = supabase
+    .from("pedido")
+    .select("id, fecha_propuesta, duracion_min")
+    .eq("organization_id", organizationId)
+    .eq("estado", "PENDIENTE")
+    .not("fecha_propuesta", "is", null)
+    .gte("fecha_propuesta", lookbackIso)
+    .lt("fecha_propuesta", finIso)
+    .limit(20);
+  // M53: excluir el pedido en promoción (ver doc de la función).
+  if (excludePedidoId) pedidoQuery = pedidoQuery.neq("id", excludePedidoId);
 
   const [{ data: turnoConflict }, { data: pedidoConflict }, { data: bloqueoConflict }] =
     await Promise.all([
@@ -147,15 +173,7 @@ export async function checkSlotOcupado(
         .limit(20),
       // Los chequeos de pedido/bloqueo siguen org-scoped: son pre-checks
       // app-only (no los respalda el EXCLUDE de M40, que solo cubre `turno`).
-      supabase
-        .from("pedido")
-        .select("id, fecha_propuesta, duracion_min")
-        .eq("organization_id", organizationId)
-        .eq("estado", "PENDIENTE")
-        .not("fecha_propuesta", "is", null)
-        .gte("fecha_propuesta", lookbackIso)
-        .lt("fecha_propuesta", finIso)
-        .limit(20),
+      pedidoQuery,
       supabase
         .from("bloqueo")
         .select("id, inicio, duracion_min")
@@ -165,11 +183,16 @@ export async function checkSlotOcupado(
         .limit(20),
     ]);
 
-  return decideSlotOcupado(inicioDate.getTime(), finDate.getTime(), {
-    turnos: turnoConflict as SlotConflictRow[] | null,
-    pedidos: pedidoConflict as SlotConflictRow[] | null,
-    bloqueos: bloqueoConflict as SlotConflictRow[] | null,
-  });
+  return decideSlotOcupado(
+    inicioDate.getTime(),
+    finDate.getTime(),
+    {
+      turnos: turnoConflict as SlotConflictRow[] | null,
+      pedidos: pedidoConflict as SlotConflictRow[] | null,
+      bloqueos: bloqueoConflict as SlotConflictRow[] | null,
+    },
+    excludePedidoId,
+  );
 }
 
 // ─── Listar turnos del día / rango ──────────────────────────────────────
@@ -323,6 +346,13 @@ export async function transitionTurno(input: z.infer<typeof transitionSchema>): 
   if (error) {
     const mapped = mapSupabaseError(error);
     return err(mapped.code, mapped.message, error.message);
+  }
+
+  // UPDATE sin filas afectadas (id inexistente, soft-deleted u otra org vía
+  // RLS): PostgREST NO lo reporta como error — devolvía ok() y la UI
+  // optimista quedaba mintiendo un estado que nunca se persistió.
+  if (!updatedRows || updatedRows.length === 0) {
+    return err("not_found", "El turno no existe o no es de tu organización.");
   }
 
   const profesionalMemberId = (updatedRows?.[0]?.profesional_id as string | undefined) ?? null;

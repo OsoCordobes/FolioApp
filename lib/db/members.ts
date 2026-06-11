@@ -37,6 +37,7 @@ import {
 } from "@/lib/supabase/server";
 
 import { getActiveContext, type ActiveContext } from "./active-context";
+import { writeAuditEntry } from "./audit";
 import { err, isUniqueViolation, mapSupabaseError, ok, type Result } from "./errors";
 import { syncSubscriptionAmountInBackground } from "./suscripcion";
 
@@ -386,6 +387,19 @@ export async function createInvitation(
   const invitedByNombre =
     [ctx.data.profile.nombre, ctx.data.profile.apellido].filter(Boolean).join(" ").trim() || null;
 
+  // Audit (Ley 26.529 art. 18): registrar la creación de la invitación. El
+  // email del invitado es PII y se guarda en el payload — ver writeAuditEntry.
+  // NUNCA el token ni token_hash.
+  await writeAuditEntry({
+    organizationId: ctx.data.organization.id,
+    actorId: ctx.data.session.userId,
+    actorRole: ctx.data.session.role,
+    action: "member_invitation.create",
+    resourceType: "member_invitation",
+    resourceId: row.id,
+    payload: { email: row.email, role: row.role, es_colegiado: row.es_colegiado },
+  });
+
   return ok({
     invitation: {
       id: row.id,
@@ -420,7 +434,7 @@ export async function revokeInvitation(invitationId: string): Promise<Result<voi
     .eq("id", parsed.data)
     .eq("organization_id", ctx.data.organization.id)
     .eq("estado", "PENDIENTE")
-    .select("id");
+    .select("id, email, role");
 
   if (error) {
     const mapped = mapSupabaseError(error);
@@ -429,6 +443,19 @@ export async function revokeInvitation(invitationId: string): Promise<Result<voi
   if (!data || data.length === 0) {
     return err("not_found", "La invitación ya no está pendiente.");
   }
+
+  // Audit (Ley 26.529 art. 18): registrar la revocación.
+  const revoked = data[0] as { id: string; email: string; role: string };
+  await writeAuditEntry({
+    organizationId: ctx.data.organization.id,
+    actorId: ctx.data.session.userId,
+    actorRole: ctx.data.session.role,
+    action: "member_invitation.revoke",
+    resourceType: "member_invitation",
+    resourceId: revoked.id,
+    payload: { email: revoked.email, role: revoked.role },
+  });
+
   return ok(undefined);
 }
 
@@ -459,7 +486,7 @@ export async function removeMember(memberId: string): Promise<Result<void>> {
 
   const { data: target, error: tErr } = await supabase
     .from("member")
-    .select("id, role")
+    .select("id, role, profile_id")
     .eq("id", parsed.data)
     .eq("organization_id", ctx.data.organization.id)
     .is("deleted_at", null)
@@ -469,7 +496,8 @@ export async function removeMember(memberId: string): Promise<Result<void>> {
     return err(mapped.code, mapped.message, tErr.message);
   }
   if (!target) return err("not_found", "Ese miembro no existe o ya fue dado de baja.");
-  if ((target as { role: Role }).role === "OWNER") {
+  const targetRow = target as { id: string; role: Role; profile_id: string };
+  if (targetRow.role === "OWNER") {
     return err("forbidden", "No se puede dar de baja a la cuenta dueña de la organización.");
   }
 
@@ -488,6 +516,18 @@ export async function removeMember(memberId: string): Promise<Result<void>> {
   if (!updated || updated.length === 0) {
     return err("forbidden", "No se pudo dar de baja (permisos insuficientes).");
   }
+
+  // Audit (Ley 26.529 art. 18): registrar la baja del member. resource_id = el
+  // member dado de baja; el payload vincula al profile suprimido y su rol.
+  await writeAuditEntry({
+    organizationId: ctx.data.organization.id,
+    actorId: ctx.data.session.userId,
+    actorRole: ctx.data.session.role,
+    action: "member.remove",
+    resourceType: "member",
+    resourceId: targetRow.id,
+    payload: { profile_id: targetRow.profile_id, role: targetRow.role },
+  });
 
   // Fase E (E2): la baja resta un seat → sincronizamos el monto del débito de
   // la org CLINICA. Fire-and-forget: jamás rompe la baja del member; si MP

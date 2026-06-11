@@ -10,6 +10,8 @@
 
 import Link from "next/link";
 
+import { SUPPORT_EMAIL } from "@/lib/support";
+
 export const metadata = {
   title: "Recuperar contraseña",
   description: "Cómo restablecer tu contraseña de Folio.",
@@ -56,7 +58,7 @@ export default function ForgotPage() {
 
       <p style={{ marginTop: 24, color: "var(--ink-3)", fontSize: 13 }}>
         ¿No te llega el email? Revisá la carpeta de spam o escribinos a{" "}
-        <a href="mailto:soporte@folio.app">soporte@folio.app</a>.
+        <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>.
       </p>
     </main>
   );
