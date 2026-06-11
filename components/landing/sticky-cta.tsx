@@ -15,8 +15,8 @@
  *
  * CookieBanner (fixed-bottom, z-index 60): mientras el consent NO está
  * resuelto —primera visita, banner visible— la barra NO aparece. Un poll
- * liviano (500 ms) sobre localStorage espera el `granted` (que además
- * recarga la página) o el `denied` (sin reload, por eso el poll). Así nunca
+ * liviano (500 ms) sobre localStorage espera el `granted` o el `denied`
+ * (ninguno recarga la página — el banner resuelve in-place). Así nunca
  * conviven dos fixed-bottom y el diálogo legal conserva prioridad. Defensa
  * extra: la barra queda en z-index 40 (< 60 del banner, < 50 del header).
  *

@@ -14,9 +14,15 @@ import { useEffect, useState } from "react";
  * Persists choice to localStorage as 'folio.cookieConsent' = 'granted' |
  * 'denied'. PostHog provider gates init on the granted value (see
  * lib/observability/posthog-client.tsx).
+ *
+ * Sin reload: aceptar dispara el evento `folio:cookie-consent` y el provider
+ * inicializa PostHog in-place. Antes hacíamos window.location.reload() — un
+ * paciente a mitad del wizard de /book/[slug] perdía todo su progreso.
  */
 
 const STORAGE_KEY = "folio.cookieConsent";
+/** Evento que escucha FolioPostHogProvider para (re)evaluar el consent. */
+export const CONSENT_EVENT = "folio:cookie-consent";
 type Consent = "granted" | "denied" | null;
 
 export function CookieBanner() {
@@ -37,8 +43,9 @@ export function CookieBanner() {
       window.localStorage.setItem(STORAGE_KEY, "granted");
     } catch { /* private mode */ }
     setConsent("granted");
-    // Reload so the PostHog provider initializes immediately.
-    window.location.reload();
+    // Avisar al FolioPostHogProvider para que inicialice PostHog SIN recargar
+    // (el reload anterior tiraba el progreso del wizard de booking).
+    window.dispatchEvent(new CustomEvent(CONSENT_EVENT, { detail: "granted" }));
   };
 
   const reject = () => {
@@ -46,6 +53,7 @@ export function CookieBanner() {
       window.localStorage.setItem(STORAGE_KEY, "denied");
     } catch { /* private mode */ }
     setConsent("denied");
+    window.dispatchEvent(new CustomEvent(CONSENT_EVENT, { detail: "denied" }));
   };
 
   if (consent === "granted" || consent === "denied") return null;

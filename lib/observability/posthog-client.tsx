@@ -24,6 +24,8 @@
 import { PostHogContext } from "posthog-js/react/slim";
 import { useEffect, useMemo, useState } from "react";
 
+import { CONSENT_EVENT } from "@/components/cookie-banner";
+
 import type { PostHog } from "posthog-js";
 
 const KEY = process.env.NEXT_PUBLIC_POSTHOG_KEY;
@@ -36,41 +38,53 @@ export function FolioPostHogProvider({ children }: { children: React.ReactNode }
 
   useEffect(() => {
     if (!KEY) return;
-    if (initialized) return;
-    if (typeof window !== "undefined" && (navigator.doNotTrack === "1" || navigator.doNotTrack === "yes")) {
-      return;
-    }
+    let cancelled = false;
+
     // Audit-prep Phase 6b: gate PostHog init on explicit cookie consent.
     // Banner stored in localStorage as 'folio.cookieConsent' = 'granted'|'denied'.
-    // If neither was selected yet, PostHog stays uninitialized; the
-    // CookieBanner re-renders the provider after the user accepts.
-    if (typeof window !== "undefined" && window.localStorage.getItem("folio.cookieConsent") !== "granted") {
-      return;
-    }
-    initialized = true;
-    let cancelled = false;
-    // Dynamic import: el SDK entra en un chunk async que solo se descarga
-    // acá (post-consent). Si falla (offline/adblock), queda todo no-op.
-    void import("posthog-js")
-      .then(({ default: posthog }) => {
-        posthog.init(KEY, {
-          api_host: HOST,
-          capture_pageview: true,
-          capture_pageleave: true,
-          autocapture: false,                               // explicit captures only
-          persistence: "localStorage+cookie",
-          mask_all_text: false,                             // permitimos texto general pero...
-          mask_personal_data_properties: true,
-          session_recording: { maskAllInputs: true, maskTextSelector: "[data-sensitive]" },
-          disable_session_recording: true,                  // OFF por default; toggleable luego
+    // Si todavía no hay consent, PostHog queda sin inicializar y esperamos el
+    // evento `folio:cookie-consent` del CookieBanner (aceptar ya NO recarga la
+    // página — un paciente a mitad del wizard de booking perdía su progreso).
+    const tryInit = () => {
+      if (initialized) return;
+      if (navigator.doNotTrack === "1" || navigator.doNotTrack === "yes") return;
+      let granted = false;
+      try {
+        granted = window.localStorage.getItem("folio.cookieConsent") === "granted";
+      } catch { /* private mode: sin storage no hay consent persistido */ }
+      if (!granted) return;
+      initialized = true;
+      // Dynamic import: el SDK entra en un chunk async que solo se descarga
+      // acá (post-consent). Si falla (offline/adblock), queda todo no-op.
+      void import("posthog-js")
+        .then(({ default: posthog }) => {
+          posthog.init(KEY, {
+            api_host: HOST,
+            capture_pageview: true,
+            capture_pageleave: true,
+            autocapture: false,                               // explicit captures only
+            persistence: "localStorage+cookie",
+            mask_all_text: false,                             // permitimos texto general pero...
+            mask_personal_data_properties: true,
+            session_recording: { maskAllInputs: true, maskTextSelector: "[data-sensitive]" },
+            disable_session_recording: true,                  // OFF por default; toggleable luego
+          });
+          if (!cancelled) setClient(posthog);
+        })
+        .catch(() => {
+          initialized = false; // permite reintentar en un próximo mount/consent
         });
-        if (!cancelled) setClient(posthog);
-      })
-      .catch(() => {
-        initialized = false; // permite reintentar en un próximo mount
-      });
+    };
+
+    tryInit();
+    // El banner dispara este evento al aceptar/rechazar; "storage" cubre el
+    // caso de otro tab del mismo origen resolviendo el consent.
+    window.addEventListener(CONSENT_EVENT, tryInit);
+    window.addEventListener("storage", tryInit);
     return () => {
       cancelled = true;
+      window.removeEventListener(CONSENT_EVENT, tryInit);
+      window.removeEventListener("storage", tryInit);
     };
   }, []);
 

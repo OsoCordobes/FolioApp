@@ -227,6 +227,13 @@ export function BookingWizard({
           <PublicCard
             variant="full"
             appUrl={appHost}
+            onCta={() => {
+              // Scroll suave al wizard sin resetear el paso actual (si el
+              // paciente ya está cargando datos, no le pisamos el progreso).
+              document
+                .getElementById("bk-flow")
+                ?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }}
             data={{
               nombre: org.nombre,
               rubro: org.rubro,
@@ -336,13 +343,76 @@ export function BookingWizard({
               ← Cambiar servicio
             </button>
             <h2 style={{ fontSize: 16, marginBottom: 16 }}>Elegí un horario</h2>
-            {pending ? <p>Cargando slots…</p> : null}
+            {pending ? (
+              // Placeholder de carga: misma grilla que los horarios reales,
+              // con shimmer sobre tokens (.bk-skel en folio.css).
+              <div role="status" aria-live="polite">
+                <p style={{ color: "var(--ink-3)", fontSize: 13, margin: "0 0 12px" }}>
+                  Buscando horarios libres…
+                </p>
+                {[0, 1].map((g) => (
+                  <div key={g} style={{ marginBottom: 20 }}>
+                    <div className="bk-skel bk-skel-label" />
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))",
+                        gap: 8,
+                      }}
+                    >
+                      {Array.from({ length: g === 0 ? 6 : 4 }).map((_, i) => (
+                        <div key={i} className="bk-skel bk-skel-slot" />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
             {err ? <p className="au-err">{err}</p> : null}
-            {slots.length === 0 && !pending ? (
-              <p>No hay slots disponibles en los próximos 14 días.</p>
+            {slots.length === 0 && !pending && !err ? (
+              <div
+                style={{
+                  padding: 24,
+                  background: "var(--surface)",
+                  border: "1px dashed var(--line)",
+                  borderRadius: "var(--r-md)",
+                  textAlign: "center",
+                  color: "var(--ink-3)",
+                }}
+              >
+                <p style={{ margin: 0, fontSize: 14, color: "var(--ink-2)" }}>
+                  No encontramos horarios libres en los próximos 14 días.
+                </p>
+                <p style={{ margin: "8px 0 0", fontSize: 13 }}>
+                  {org.telefonoPublico ? (
+                    <>
+                      Escribile al consultorio por{" "}
+                      <a
+                        href={`https://wa.me/${org.telefonoPublico.replace(/\D/g, "")}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: "var(--accent-2)" }}
+                      >
+                        WhatsApp
+                      </a>{" "}
+                      para coordinar un turno, o probá con otro servicio.
+                    </>
+                  ) : (
+                    <>Contactá al consultorio para coordinar un turno, o probá con otro servicio.</>
+                  )}
+                </p>
+                <button
+                  type="button"
+                  className="fi-btn fi-btn-ghost"
+                  style={{ marginTop: 16 }}
+                  onClick={() => setVista("servicio")}
+                >
+                  Elegir otro servicio
+                </button>
+              </div>
             ) : null}
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-              {agruparPorDia(slots).map(({ dia, items }) => (
+              {(pending ? [] : agruparPorDia(slots)).map(({ dia, items }) => (
                 <div key={dia}>
                   <h3
                     style={{

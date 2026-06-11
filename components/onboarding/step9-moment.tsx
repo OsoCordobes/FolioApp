@@ -120,7 +120,10 @@ export function Step9Moment({
       </p>
 
       <div className="onb-moment-card onb-anim-card">
-        <PublicCard data={cardData} variant="full" appUrl={APP_URL} />
+        {/* onCta = mismo handler que "Ver mi página": abre /book/<slug> en
+            nueva tab. Solo handler — el layout del Step 9 tiene baseline
+            visual (tests/snapshots/onboarding-*.png) y no se toca. */}
+        <PublicCard data={cardData} variant="full" appUrl={APP_URL} onCta={onSeePage} />
       </div>
 
       {publicUrl ? (

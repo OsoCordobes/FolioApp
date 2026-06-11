@@ -32,12 +32,38 @@ import { err, type Result } from "@/lib/db/errors";
 import { roleLabel } from "@/lib/auth/capabilities";
 import { notifyMemberInvitation } from "@/lib/email/notify";
 import { getAuthUrl as getGoogleAuthUrl } from "@/lib/google/oauth";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+
+/**
+ * Revalida la página pública /book/<slug> de la org activa (ISR de 5 min en
+ * app/(public)/book/[slug]/page.tsx). Path CONCRETO del slug — no el patrón
+ * "/book/[slug]" — para no purgar el caché de todas las orgs en cada save.
+ * Best-effort: si no podemos resolver el slug, el TTL de 300s igual refresca.
+ */
+async function revalidateBookPublico(): Promise<void> {
+  try {
+    const session = await getActiveSession();
+    if (!session.ok) return;
+    const supabase = await createSupabaseServerClient();
+    const { data } = await supabase
+      .from("organization")
+      .select("slug")
+      .eq("id", session.data.organizationId)
+      .maybeSingle();
+    if (data?.slug) revalidatePath(`/book/${data.slug}`);
+  } catch {
+    // best-effort — la página se regenera sola al expirar el revalidate.
+  }
+}
 
 export async function saveConsultorioAction(input: SaveConsultorioInput): Promise<Result<void>> {
   const result = await saveConsultorio(input);
   if (result.ok) {
     revalidatePath("/configuracion");
     revalidatePath("/", "layout");
+    // Campos públicos (nombre, ciudad, tel, dirección, Instagram) viven en la
+    // página estática /book/<slug> — refrescarla on-demand.
+    await revalidateBookPublico();
   }
   return result;
 }
@@ -46,7 +72,7 @@ export async function saveHorariosAction(input: SaveHorariosInput): Promise<Resu
   const result = await saveHorarios(input);
   if (result.ok) {
     revalidatePath("/configuracion");
-    revalidatePath("/book/[slug]", "page");
+    await revalidateBookPublico();
   }
   return result;
 }
@@ -55,8 +81,10 @@ export async function saveServiciosAction(input: SaveServiciosInput): Promise<Re
   const result = await saveServicios(input);
   if (result.ok) {
     revalidatePath("/configuracion");
-    revalidatePath("/book/[slug]", "page");
     revalidatePath("/hoy");
+    // Los servicios (nombre, duración, precio) se renderizan en la página
+    // estática /book/<slug> — refrescarla on-demand.
+    await revalidateBookPublico();
   }
   return result;
 }
