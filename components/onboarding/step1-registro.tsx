@@ -14,6 +14,7 @@ import Script from "next/script";
 import { useEffect, useRef, useState } from "react";
 
 import { StepShell } from "@/components/onboarding/step-shell";
+import { formatArsFromCents } from "@/lib/format/currency";
 
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
 
@@ -28,9 +29,18 @@ interface Step1RegistroProps {
   onSubmit: (options: { turnstileToken: string | null; consent: boolean }) => void;
   loading?: boolean;
   error?: string | null;
+  /** Precio del plan en centavos ARS — derivado server-side de MP_PLAN_PRICE_CENTS. */
+  planPriceCents: number;
 }
 
-export function Step1Registro({ data, set, onSubmit, loading, error }: Step1RegistroProps) {
+export function Step1Registro({
+  data,
+  set,
+  onSubmit,
+  loading,
+  error,
+  planPriceCents,
+}: Step1RegistroProps) {
   const [emailErr, setEmailErr] = useState("");
   const [pwErr, setPwErr] = useState("");
   const [consent, setConsent] = useState(false);
@@ -105,7 +115,10 @@ export function Step1Registro({ data, set, onSubmit, loading, error }: Step1Regi
     <StepShell
       stepIdx={1}
       headline="Empezá creando tu cuenta."
-      sub="7 días de prueba sin tarjeta. Después, ARS 35.000 / mes."
+      // Precio: fuente canónica MP_PLAN_PRICE_CENTS (lib/mercadopago/client.ts).
+      // Llega como prop desde el server component de /onboarding — mismo valor
+      // que el cobro real, sin hardcode que pueda driftear del env.
+      sub={`7 días de prueba sin tarjeta. Después, ${formatArsFromCents(planPriceCents)} / mes.`}
       next={validateAndNext}
       canSkip={false}
       nextLabel={loading ? "Creando cuenta…" : "Continuar"}

@@ -10,7 +10,7 @@
  */
 
 export const metadata = {
-  title: "Consultorio no disponible · Folio",
+  title: "Consultorio no disponible",
 };
 
 export default function BookSlugNotFound() {

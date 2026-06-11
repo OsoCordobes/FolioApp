@@ -21,7 +21,7 @@ import {
  */
 
 export const dynamic = "force-static";
-export const metadata = { title: "Folio · decoration primitives (dev)" };
+export const metadata = { title: "decoration primitives (dev)" };
 
 export default function DecorationDevPage() {
   if (process.env.NODE_ENV === "production") {

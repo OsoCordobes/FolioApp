@@ -28,6 +28,7 @@
 import type { ReactNode } from "react";
 
 import { AvatarIniciales } from "@/components/avatar-iniciales";
+import { formatArs } from "@/lib/format/currency";
 import { adjustHexLightness } from "@/lib/format/initials";
 
 import { BrassCornerMark, DateBadge, EditorialRule } from "./decoration";
@@ -278,14 +279,6 @@ function IconInstagram() {
       <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
     </svg>
   );
-}
-
-function formatArs(ars: number): string {
-  return new Intl.NumberFormat("es-AR", {
-    style: "currency",
-    currency: "ARS",
-    maximumFractionDigits: 0,
-  }).format(ars);
 }
 
 function isValidHex(s: string | undefined | null): s is string {

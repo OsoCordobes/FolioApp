@@ -14,7 +14,7 @@ import { supportMailto } from "@/lib/support";
  */
 
 export const metadata = {
-  title: "Página no encontrada · Folio",
+  title: "Página no encontrada",
 };
 
 export default function NotFound() {
