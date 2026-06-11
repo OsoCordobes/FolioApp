@@ -99,6 +99,58 @@ const CANAL_DB_TO_UI: Record<PedidoRow["canal"], CanalPedido> = {
   TELEFONO: "telefono",
 };
 
+// ─── Días cerrados (vista semanal) ─────────────────────────────────────────
+
+/** Franja de disponibilidad_profesional relevante para decidir días cerrados. */
+export interface DisponibilidadVigencia {
+  /** 0=domingo … 6=sábado (convención DB de disponibilidad_profesional, M02). */
+  diaSemana: number;
+  /** "YYYY-MM-DD". */
+  vigenciaDesde: string;
+  /** "YYYY-MM-DD" o null (sin fin). */
+  vigenciaHasta: string | null;
+}
+
+/**
+ * `deriveDiasCerrados` — función pura (testeable sin DB) que decide qué
+ * columnas de la vista semanal se pintan "Cerrado".
+ *
+ * Reglas (alineadas al baseline visual, que pinta SOLO sáb/dom en gris):
+ *   - Lun–vie NUNCA se marcan cerrados (idéntico al render histórico).
+ *   - Sáb/dom se marcan cerrados SALVO que:
+ *       a) exista una franja activa de disponibilidad_profesional para ese
+ *          día de semana, vigente en esa fecha (vigencia_desde/hasta), o
+ *       b) haya eventos ese día (turnos/bloqueos/pedidos) — un día con
+ *          agenda nunca se esconde detrás del overlay gris.
+ *
+ * Si la org no tiene disponibilidad de finde y no hay eventos, el resultado
+ * es [false ×5, true, true] — exactamente el hardcode anterior (i===5||i===6).
+ *
+ * @param weekDates 7 fechas ISO lun..dom (índice 0=LUN … 6=DOM).
+ * @param disponibilidad franjas activas de la org (cualquier profesional).
+ * @param fechasConEventos fechas "YYYY-MM-DD" con turnos/bloqueos/pedidos.
+ */
+export function deriveDiasCerrados(
+  weekDates: string[],
+  disponibilidad: DisponibilidadVigencia[],
+  fechasConEventos: ReadonlySet<string>,
+): boolean[] {
+  return weekDates.map((iso, i) => {
+    const esFinde = i === 5 || i === 6;
+    if (!esFinde) return false;
+    if (fechasConEventos.has(iso)) return false;
+    // Índice UI (0=lun..6=dom) → convención DB (0=dom..6=sáb).
+    const dowDb = (i + 1) % 7;
+    const tieneFranja = disponibilidad.some(
+      (f) =>
+        f.diaSemana === dowDb &&
+        f.vigenciaDesde <= iso &&
+        (f.vigenciaHasta == null || f.vigenciaHasta >= iso),
+    );
+    return !tieneFranja;
+  });
+}
+
 // ─── Output shape ──────────────────────────────────────────────────────────
 
 export interface CalendarioSemanaData {
@@ -112,6 +164,8 @@ export interface CalendarioSemanaData {
   bloqueos: Bloqueo[];
   pedidos: Pedido[];               // solo pendientes + reagendados
   pacientes: PacientesById;
+  /** Por índice de weekDates (0=LUN..6=DOM): true = columna "Cerrado". */
+  diasCerrados: boolean[];
 }
 
 interface FetcherInput {
@@ -130,8 +184,8 @@ export async function getCalendarioSemana(input: FetcherInput): Promise<Result<C
 
   const { startUtc, endUtc } = computeWeekRangeUtc(weekStartIso, tz);
 
-  // 3 queries en paralelo: turnos, bloqueos, pedidos.
-  const [turnosRes, bloqueosRes, pedidosRes] = await Promise.all([
+  // 4 queries en paralelo: turnos, bloqueos, pedidos, disponibilidad.
+  const [turnosRes, bloqueosRes, pedidosRes, dispRes] = await Promise.all([
     (async () => {
       let q = supabase
         .from("turno_extendido")
@@ -167,6 +221,14 @@ export async function getCalendarioSemana(input: FetcherInput): Promise<Result<C
       .eq("organization_id", organizationId)
       .in("estado", ["PENDIENTE", "REAGENDADO"])
       .order("recibido_ts", { ascending: false }),
+    // Disponibilidad activa de la org (cualquier profesional) — decide qué
+    // días de finde se pintan "Cerrado" en la vista semanal. Org-scoped: la
+    // RLS disp_select_org (M02) limita a miembros de la org.
+    supabase
+      .from("disponibilidad_profesional")
+      .select("dia_semana, vigencia_desde, vigencia_hasta")
+      .eq("organization_id", organizationId)
+      .eq("activa", true),
   ]);
 
   if (turnosRes.error) return err("db_error", "Error leyendo turnos.", turnosRes.error.message);
@@ -235,6 +297,30 @@ export async function getCalendarioSemana(input: FetcherInput): Promise<Result<C
   const weekDates = enumerateWeekDates(weekStartIso);
   const weekRangeLabel = formatWeekRangeLabel(weekStartIso, weekDates[6]);
 
+  // Días cerrados de la semana. Si la lectura de disponibilidad falla, NO
+  // tumbamos la página por algo cosmético: caemos al comportamiento histórico
+  // (finde cerrado salvo eventos) con un warn para diagnóstico.
+  if (dispRes.error) {
+    console.warn(`[calendario] disponibilidad_profesional falló: ${dispRes.error.message}`);
+  }
+  const disponibilidad: DisponibilidadVigencia[] = (
+    (dispRes.data ?? []) as unknown as Array<{
+      dia_semana: number;
+      vigencia_desde: string;
+      vigencia_hasta: string | null;
+    }>
+  ).map((r) => ({
+    diaSemana: r.dia_semana,
+    vigenciaDesde: r.vigencia_desde,
+    vigenciaHasta: r.vigencia_hasta,
+  }));
+  const fechasConEventos = new Set<string>([
+    ...turnos.map((t) => t.fecha),
+    ...bloqueos.map((b) => b.fecha),
+    ...pedidos.filter((p) => p.estado === "pendiente" && p.fecha).map((p) => p.fecha as string),
+  ]);
+  const diasCerrados = deriveDiasCerrados(weekDates, dispRes.error ? [] : disponibilidad, fechasConEventos);
+
   const nowDate = new Date();
   const hoyIso = ymdInTz(nowDate.toISOString(), tz);
   const nowHHMM = hhmmInTz(nowDate.toISOString(), tz);
@@ -250,6 +336,7 @@ export async function getCalendarioSemana(input: FetcherInput): Promise<Result<C
     bloqueos,
     pedidos,
     pacientes: Object.fromEntries(pacientesAcum.entries()),
+    diasCerrados,
   });
 }
 

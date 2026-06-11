@@ -15,7 +15,7 @@
 import type { ReactNode } from "react";
 
 import * as I from "@/components/icons";
-import { STATE_CONF } from "@/lib/dashboard-helpers";
+import { minutesTo, STATE_CONF } from "@/lib/dashboard-helpers";
 import { useLiveTimer } from "@/lib/use-live-timer";
 import type { EstadoTurno, Paciente, Turno } from "@/lib/types";
 
@@ -32,11 +32,15 @@ interface TurnoRowProps {
   turno: Turno;
   paciente: Paciente;
   isNext: boolean;
+  /** "Ahora" — gating de "No asistió" (solo turnos con la hora ya pasada). */
+  now?: Date;
+  /** IANA timezone de la org. */
+  timezone?: string;
   onTransition: (id: string, to: EstadoTurno, extra?: Partial<Turno>) => void;
   onOpenFicha: (id: string) => void;
 }
 
-export function TurnoRow({ turno, paciente, isNext, onTransition, onOpenFicha }: TurnoRowProps) {
+export function TurnoRow({ turno, paciente, isNext, now, timezone, onTransition, onOpenFicha }: TurnoRowProps) {
   const conf = STATE_CONF[turno.estado as keyof typeof STATE_CONF] ?? STATE_CONF.agendado;
   const isAtendiendo = turno.estado === "atendiendo";
   const isEnSala = turno.estado === "en_sala";
@@ -88,6 +92,14 @@ export function TurnoRow({ turno, paciente, isNext, onTransition, onOpenFicha }:
 
   const time = useLiveTimer(isAtendiendo ? turno.atendiendoDesde : null);
   const hasImportante = (paciente.notasImportantes ?? "").trim().length > 0;
+
+  // "No asistió": solo tiene sentido clínico cuando el turno está AGENDADO o
+  // CONFIRMADO y la hora ya pasó (la state machine no lo permite desde
+  // EN_SALA/ATENDIENDO — si llegó, no es un no-show). El gating por hora
+  // además preserva el baseline visual: a las 08:30 (snapshot) ningún turno
+  // activo tiene la hora vencida, así que el botón no aparece.
+  const horaPasada = now != null && minutesTo(turno.hora, now, timezone) < 0;
+  const showNoAsistio = (isAgendado || isConfirmado) && horaPasada;
 
   return (
     <div
@@ -152,6 +164,24 @@ export function TurnoRow({ turno, paciente, isNext, onTransition, onOpenFicha }:
           >
             {cta.label}
             {cta.icon}
+          </button>
+        ) : null}
+        {/* "No asistió": ghost (mismo patrón que cancelar), solo con la hora
+            ya vencida. Confirm previo porque en la UI es terminal. */}
+        {showNoAsistio ? (
+          <button
+            type="button"
+            className="fi-btn fi-btn-ghost"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (typeof window === "undefined") return;
+              if (!window.confirm(`¿Marcar que ${paciente.nombre} no asistió? El turno queda registrado como "No asistió".`)) return;
+              onTransition(turno.id, "no_asistio");
+            }}
+            title="El paciente no se presentó"
+            aria-label={`Marcar que ${paciente.nombre} no asistió`}
+          >
+            No asistió
           </button>
         ) : null}
         {/* Audit-prep Phase 5: explicit cancel button on every non-terminal state.

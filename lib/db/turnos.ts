@@ -348,6 +348,13 @@ export async function transitionTurno(input: z.infer<typeof transitionSchema>): 
     return err(mapped.code, mapped.message, error.message);
   }
 
+  // UPDATE sin filas afectadas (id inexistente, soft-deleted u otra org vía
+  // RLS): PostgREST NO lo reporta como error — devolvía ok() y la UI
+  // optimista quedaba mintiendo un estado que nunca se persistió.
+  if (!updatedRows || updatedRows.length === 0) {
+    return err("not_found", "El turno no existe o no es de tu organización.");
+  }
+
   const profesionalMemberId = (updatedRows?.[0]?.profesional_id as string | undefined) ?? null;
   const precioCents = (updatedRows?.[0]?.precio_cents as number | undefined) ?? 0;
 

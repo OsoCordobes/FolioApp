@@ -20,6 +20,10 @@ interface TurnoListProps {
   turnos: Turno[];
   pacientes: PacientesById;
   nextId: string | undefined;
+  /** "Ahora" (hydration-safe) — habilita acciones dependientes de la hora ("No asistió"). */
+  now?: Date;
+  /** IANA timezone de la org, para comparar `turno.hora` contra `now`. */
+  timezone?: string;
   onTransition: (id: string, to: EstadoTurno, extra?: Partial<Turno>) => void;
   onOpenFicha: (id: string) => void;
   dense?: boolean;
@@ -34,7 +38,7 @@ interface Group {
 
 const CANCELADOS_ESTADOS: EstadoTurno[] = ["cancelado", "no_asistio", "reagendado"];
 
-export function TurnoList({ turnos, pacientes, nextId, onTransition, onOpenFicha, dense }: TurnoListProps) {
+export function TurnoList({ turnos, pacientes, nextId, now, timezone, onTransition, onOpenFicha, dense }: TurnoListProps) {
   const [showCerrados, setShowCerrados] = useState(true);
   const [showCancelados, setShowCancelados] = useState(false);
 
@@ -83,6 +87,8 @@ export function TurnoList({ turnos, pacientes, nextId, onTransition, onOpenFicha
                   turno={t}
                   paciente={pacientes[t.pacienteId]}
                   isNext={t.id === nextId}
+                  now={now}
+                  timezone={timezone}
                   onTransition={onTransition}
                   onOpenFicha={onOpenFicha}
                 />
