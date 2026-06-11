@@ -24,14 +24,18 @@ import { NextResponse, type NextRequest } from "next/server";
 import { updateSupabaseSession } from "@/lib/supabase/middleware";
 
 const PUBLIC_PATHS = [
+  "/",                      // landing de marketing
   "/login",
   "/onboarding",
   "/forgot",
   "/reset-password",        // Supabase password-recovery email landing (Phase 4)
   "/privacidad",            // Aviso de privacidad (Ley 25.326) — linkeado desde consent del signup
   "/terminos",              // Términos del servicio — linkeado desde consent del signup
+  "/cookies",               // Política de cookies — bugfix: la página es pública (app/(public)/cookies) pero anónimos eran redirigidos a /login
   "/api/health",            // healthcheck (load balancer, uptime monitoring)
   "/api/analytics/refresh", // cron diario (validado por CRON_SECRET bearer)
+  "/sitemap.xml",           // SEO — generado por app/sitemap.ts; los crawlers no tienen sesión
+  "/robots.txt",            // SEO — generado por app/robots.ts; ídem
 ];
 
 const PUBLIC_PREFIXES = [
@@ -44,6 +48,7 @@ const PUBLIC_PREFIXES = [
   "/api/google/",        // OAuth callback Google + watch renew
   "/api/mercadopago/",   // webhook Mercado Pago (validado por x-signature HMAC)
   "/dev/",               // dev-only preview routes (decoration, card-moods, etc.) — pages themselves 404 in NODE_ENV=production
+  "/opengraph-image",    // imagen OG del landing — Next sirve la ruta con sufijo hash (p.ej. /opengraph-image-pwu6ef), por eso prefix
 ];
 
 function isPublicPath(pathname: string): boolean {
@@ -66,7 +71,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Si no hay user y la ruta NO es pública → redirect a login
-  if (!user && !isPublicPath(pathname) && pathname !== "/") {
+  if (!user && !isPublicPath(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("redirect", pathname);

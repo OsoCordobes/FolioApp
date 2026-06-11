@@ -58,7 +58,7 @@ export default defineConfig({
     },
     {
       name: "app",
-      testMatch: /visual\/app\.spec\.ts/,
+      testMatch: /visual\/(app|landing)\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         baseURL: `http://localhost:${APP_PORT}`,

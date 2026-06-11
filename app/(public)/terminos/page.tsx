@@ -11,7 +11,7 @@ import Link from "next/link";
 import { SUPPORT_EMAIL } from "@/lib/support";
 
 export const metadata = {
-  title: "Términos y Condiciones · Folio",
+  title: "Términos y Condiciones",
   description: "Términos de uso del servicio Folio para profesionales de la salud.",
 };
 

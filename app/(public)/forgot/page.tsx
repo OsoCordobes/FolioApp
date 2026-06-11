@@ -13,7 +13,7 @@ import Link from "next/link";
 import { SUPPORT_EMAIL } from "@/lib/support";
 
 export const metadata = {
-  title: "Recuperar contraseña · Folio",
+  title: "Recuperar contraseña",
   description: "Cómo restablecer tu contraseña de Folio.",
 };
 

@@ -11,7 +11,7 @@ import Link from "next/link";
 import { SUPPORT_EMAIL } from "@/lib/support";
 
 export const metadata = {
-  title: "Política de Privacidad · Folio",
+  title: "Política de Privacidad",
   description: "Cómo Folio trata datos personales y de salud.",
 };
 

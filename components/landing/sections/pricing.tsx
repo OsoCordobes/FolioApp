@@ -1,0 +1,108 @@
+/**
+ * Folio · Landing — sección Precios (#precios) (Fase B · B2).
+ *
+ * Server component. Los montos NO están hardcodeados: derivan de la misma
+ * fuente que el cobro real —
+ *   - Solo:    `MP_PLAN_PRICE_CENTS` (lib/mercadopago/client.ts; importable
+ *     server-side sin side effects: solo resuelve env con default).
+ *   - Clínica: `resolveClinicBasePriceCents()` / `resolveClinicSeatPriceCents()`
+ *     (lib/billing/pricing.ts).
+ * Si cambia el precio por env, el landing acompaña solo.
+ */
+
+import { MP_PLAN_PRICE_CENTS } from "@/lib/mercadopago/client";
+import {
+  resolveClinicBasePriceCents,
+  resolveClinicSeatPriceCents,
+} from "@/lib/billing/pricing";
+import { formatArsFromCents } from "@/lib/format/currency";
+import { Check } from "@/components/icons";
+import { revealRange } from "../reveal";
+
+const SOLO_BULLETS = [
+  "Turnos ilimitados",
+  "Historia clínica cifrada",
+  "Reservas + WhatsApp",
+  "Finanzas del consultorio",
+  "Google Calendar espejado",
+];
+
+const CLINIC_BULLETS = [
+  "Todo el plan Solo",
+  "Equipo con roles",
+  "Agenda compartida",
+  "Permisos clínicos por rol",
+];
+
+export function Pricing() {
+  const soloPrice = formatArsFromCents(MP_PLAN_PRICE_CENTS);
+  const clinicBase = formatArsFromCents(resolveClinicBasePriceCents());
+  const clinicSeat = formatArsFromCents(resolveClinicSeatPriceCents());
+
+  return (
+    <section id="precios" className="fl-section fl-pricing" data-fl-section="pricing">
+      <h2 className="fl-pricing-title fl-reveal">Un precio. En pesos.</h2>
+      <p className="fl-pricing-sub fl-reveal">7 días gratis. Sin tarjeta.</p>
+
+      <div className="fl-pricing-grid">
+        <article className="fl-price-card fl-price-card--featured fl-reveal" style={revealRange(0)}>
+          <header className="fl-price-head">
+            <h3 className="fl-price-plan">Solo</h3>
+            <span className="fl-price-badge">Para empezar</span>
+          </header>
+          <p className="fl-price-amount">
+            <span className="fl-price-figure">{soloPrice}</span>
+            <span className="fl-price-per">/mes</span>
+          </p>
+          <p className="fl-price-note">Un profesional, el consultorio completo.</p>
+          <ul className="fl-price-list">
+            {SOLO_BULLETS.map((b) => (
+              <li key={b} className="fl-price-item">
+                <span className="fl-price-check" aria-hidden="true">
+                  <Check size={14} />
+                </span>
+                {b}
+              </li>
+            ))}
+          </ul>
+          <div className="fl-price-cta">
+            <a className="fi-btn fi-btn-primary" href="/onboarding" data-fl-cta="pricing_solo">
+              Empezá gratis
+            </a>
+          </div>
+        </article>
+
+        <article className="fl-price-card fl-reveal" style={revealRange(1)}>
+          <header className="fl-price-head">
+            <h3 className="fl-price-plan">Clínica</h3>
+          </header>
+          <p className="fl-price-amount">
+            <span className="fl-price-figure">{clinicBase}</span>
+            <span className="fl-price-per">/mes</span>
+          </p>
+          <p className="fl-price-note">+ {clinicSeat} por profesional adicional.</p>
+          <ul className="fl-price-list">
+            {CLINIC_BULLETS.map((b) => (
+              <li key={b} className="fl-price-item">
+                <span className="fl-price-check" aria-hidden="true">
+                  <Check size={14} />
+                </span>
+                {b}
+              </li>
+            ))}
+          </ul>
+          <div className="fl-price-cta">
+            <a className="fi-btn fi-btn-secondary" href="/onboarding" data-fl-cta="pricing_clinic">
+              Empezá gratis
+            </a>
+          </div>
+        </article>
+      </div>
+
+      <p className="fl-pricing-banner fl-reveal">
+        <span className="fl-pricing-banner-days">7 días</span> con todo habilitado. Pagás recién
+        si te quedás — en pesos, con Mercado Pago.
+      </p>
+    </section>
+  );
+}

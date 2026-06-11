@@ -22,6 +22,7 @@ import {
   refreshSubscriptionAction,
   syncClinicAmountAction,
 } from "@/app/(app)/configuracion/billing/actions";
+import { formatArs } from "@/lib/format/currency";
 
 interface ChargeRow {
   id: string;
@@ -749,14 +750,7 @@ function ActivationPendingBanner() {
 }
 
 // ─── Format helpers ────────────────────────────────────────────────────────
-
-function formatArs(ars: number): string {
-  return new Intl.NumberFormat("es-AR", {
-    style: "currency",
-    currency: "ARS",
-    maximumFractionDigits: 0,
-  }).format(ars);
-}
+// formatArs vive en lib/format/currency.ts (compartido con landing y card).
 
 function formatDate(iso: string): string {
   return new Intl.DateTimeFormat("es-AR", {

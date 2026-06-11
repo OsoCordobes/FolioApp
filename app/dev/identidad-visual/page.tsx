@@ -17,7 +17,7 @@ import { IdentidadHarness } from "./harness";
  */
 
 export const dynamic = "force-static";
-export const metadata = { title: "Folio · Identidad visual (dev)" };
+export const metadata = { title: "Identidad visual (dev)" };
 
 export default function IdentidadVisualDevPage() {
   if (process.env.NODE_ENV === "production") {

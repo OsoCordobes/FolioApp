@@ -110,6 +110,13 @@ interface OnboardingAppProps {
    * password de Supabase). En su lugar, Step 1 pide solo consent y captcha.
    */
   authedEmail?: string;
+  /**
+   * Precio del plan Solo en centavos ARS. Lo lee el server component
+   * (app/(public)/onboarding/page.tsx) de MP_PLAN_PRICE_CENTS — fuente
+   * canónica del cobro real — y lo baja acá para que Step 1 y Step 8 muestren
+   * el mismo monto que se va a debitar (nunca un hardcode que driftee).
+   */
+  planPriceCents: number;
 }
 
 interface SaveState {
@@ -124,7 +131,8 @@ export function OnboardingApp({
   organizationId,
   initialSlug,
   authedEmail,
-}: OnboardingAppProps = {}) {
+  planPriceCents,
+}: OnboardingAppProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [stepIdx, setStepIdx] = useState(initialStep ?? 1);
@@ -429,6 +437,7 @@ export function OnboardingApp({
     orgId,
     orgSlug,
     direction,
+    planPriceCents,
   };
 
   // ─── Step 1: layout split con SideArt (mismo del /login) ──────────────────
@@ -459,6 +468,7 @@ export function OnboardingApp({
                   onSubmit={handleStep1Submit}
                   loading={signingUp}
                   error={error}
+                  planPriceCents={planPriceCents}
                 />
               )}
             </div>

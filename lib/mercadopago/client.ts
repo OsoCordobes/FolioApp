@@ -17,6 +17,15 @@
  *   - https://www.mercadopago.com.ar/developers/es/reference/subscriptions/_preapproval/post
  */
 
+// Guard server-only (el paquete `server-only` no está instalado): este módulo
+// maneja MP_ACCESS_TOKEN y jamás debe entrar al bundle del browser. El guard
+// es runtime — falla fuerte y temprano si un client component lo importa por
+// valor. Los tests de node:test y los scripts standalone no tienen `window`,
+// así que no los afecta.
+if (typeof window !== "undefined") {
+  throw new Error("lib/mercadopago/client es server-only");
+}
+
 const API_BASE = "https://api.mercadopago.com";
 
 /**

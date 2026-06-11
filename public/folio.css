@@ -9053,6 +9053,9 @@ input:focus { outline: none; }
 .au2-card-1 .au2-slot {
   transition: padding 320ms var(--ease-emphasized);
 }
+/* Drawer del slide agenda (au2). El selector base se había perdido — quedaba
+ * una llave de cierre huérfana y las declaraciones sueltas (descartadas). */
+.au2-ag-drawer {
   position: absolute;
   right: 10px;
   top: 100px;
@@ -12796,8 +12799,8 @@ input:focus { outline: none; }
    This block is APPENDED, never replacing existing :root values, so the
    brass-aged identity of /hoy + onboarding + login surfaces is untouched
    until consuming components opt in via the new --accent-ink / --fpc-*
-   tokens. Defensive `}` above this comment terminates any pre-existing
-   open rule (cascade-recovers if already closed upstream).
+   tokens. The defensive close brace above this comment terminates any
+   pre-existing open rule (cascade-recovers if already closed upstream).
    ════════════════════════════════════════════════════════════════════════ */
 
 :root {
@@ -13676,6 +13679,3288 @@ input:focus { outline: none; }
   .bk-mini {
     transition-duration: var(--dur-quick);
     transform: none;
+  }
+}
+
+/* ═════════════ LANDING · marketing público (.fl-*) ═════════════
+ * Esqueleto Fase A — los agentes de Fase B agregan los estilos de cada
+ * sección debajo de este bloque. Solo tokens existentes; ningún selector
+ * de elemento global (el archivo lo comparte el prototipo con visual
+ * regression a 0.001). */
+
+/* fl-base · color-scheme scopeado al landing (inputs/scrollbars nativos
+   coherentes con el tema) — NO global, para no mover los snapshots del
+   prototipo (visual regression a 0.001). */
+.fl-root {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--ink);
+  color-scheme: light;
+  /* Tokens display del rediseño "Un día con Folio" (E1) — tipografía
+     editorial gigante + ritmo vertical compartido entre secciones. */
+  --fl-display-xl: clamp(2.9rem, 7.2vw, 6.75rem);
+  --fl-display-lg: clamp(2.1rem, 4.2vw, 3.5rem);
+  --fl-mono-giant: clamp(2.75rem, 7vw, 5.5rem);
+  --fl-section-gap: clamp(96px, 14vh, 160px);
+}
+
+[data-theme="dark"] .fl-root {
+  color-scheme: dark;
+}
+
+.fl-main {
+  display: block;
+}
+
+/* fl-section · contenedor vertical estándar de cada bloque del landing */
+.fl-section {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding-block: var(--fl-section-gap);
+  padding-inline: var(--space-6);
+}
+
+/* fl-anchors · offset para navegación por ancla (#producto, #precios, …)
+ * bajo el header sticky que llega en Fase B */
+.fl-main [id] {
+  scroll-margin-top: 80px;
+}
+
+/* fl-hero-title · headline display gigante (escena 08:00 del día) */
+.fl-hero-title {
+  font-family: var(--font-display);
+  font-size: var(--fl-display-xl);
+  font-weight: 500;
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+  text-wrap: balance;
+  margin: 0;
+}
+.fl-hero-line { display: block; }
+.fl-hero-accent {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-thickness: 0.035em;
+  text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  text-underline-offset: 0.14em;
+}
+
+/* ═════════════ LANDING · Fragment B1 — shell + above the fold ═════════════
+ * Header sticky glass · hero + mockup en capas · trust strip · CTA final ·
+ * footer. El orquestador anexa este archivo al final de public/folio.css y
+ * lo borra. Solo tokens existentes via var(); todo scopeado .fl-*. */
+
+/* fl-header */
+.fl-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line-soft);
+}
+.fl-header-inner {
+  max-width: 1120px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  height: 64px;
+  padding: 0 var(--space-6);
+}
+.fl-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  text-decoration: none;
+  color: var(--ink);
+  flex-shrink: 0;
+}
+.fl-wordmark {
+  font-family: var(--font-display);
+  font-size: 21px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+.fl-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+/* Los .fi-btn del design system traen cursor: default (app); en marketing
+   son links de verdad. Scope bajo .fl-header/.fl-main/.fl-footer. */
+.fl-header .fi-btn,
+.fl-main .fi-btn,
+.fl-footer .fi-btn { cursor: pointer; }
+
+/* Skip link — visualmente oculto hasta recibir foco de teclado */
+.fl-skip {
+  position: absolute;
+  left: var(--space-3);
+  top: -100px;
+  z-index: 60;
+  padding: 10px 16px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-2);
+  text-decoration: none;
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+.fl-skip:focus-visible {
+  top: var(--space-3);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Foco visible para los links propios del landing (patrón del DS) */
+.fl-root a:focus-visible,
+.fl-footer a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+/* fl-nav */
+.fl-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0 auto;
+}
+.fl-nav-link {
+  display: inline-block;
+  padding: 8px 12px;
+  border-radius: var(--r-pill);
+  font-size: var(--fs-body);
+  font-weight: 500;
+  color: var(--ink-2);
+  text-decoration: none;
+  transition: color var(--dur-quick) var(--ease-standard),
+              background var(--dur-quick) var(--ease-standard);
+}
+.fl-nav-link:hover { color: var(--ink); background: var(--surface-2); }
+
+/* Toggle hamburguesa (mobile) — 3 barras que se cruzan en X al abrir */
+.fl-nav-toggle {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-md);
+  color: var(--ink);
+  flex-shrink: 0;
+}
+.fl-nav-toggle:hover { background: var(--surface-2); }
+.fl-nav-toggle-bar {
+  display: block;
+  width: 18px;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+  transition: transform var(--dur-snappy) var(--ease-emphasized),
+              opacity var(--dur-quick) var(--ease-standard);
+}
+.fl-nav-toggle.is-open .fl-nav-toggle-bar:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.fl-nav-toggle.is-open .fl-nav-toggle-bar:nth-child(2) { opacity: 0; }
+.fl-nav-toggle.is-open .fl-nav-toggle-bar:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+/* Panel mobile — colapsado siempre; solo abre dentro del breakpoint mobile */
+.fl-mobile-panel {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-6) var(--space-5);
+  background: color-mix(in srgb, var(--bg) 94%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line-soft);
+  box-shadow: var(--shadow-2);
+}
+.fl-mobile-nav { display: flex; flex-direction: column; }
+.fl-mobile-link {
+  padding: var(--space-3) var(--space-2);
+  border-radius: var(--r-md);
+  font-size: var(--fs-md);
+  font-weight: 500;
+  color: var(--ink-2);
+  text-decoration: none;
+}
+.fl-mobile-link:hover { color: var(--ink); background: var(--surface-2); }
+.fl-mobile-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+.fl-mobile-actions .fi-btn {
+  flex: 1;
+  justify-content: center;
+}
+
+@keyframes fl-panel-in {
+  from { opacity: 0; transform: translateY(calc(-1 * var(--motion-dist-sm))); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@media (max-width: 767px) {
+  .fl-nav { display: none; }
+  .fl-header-actions { display: none; }
+  .fl-nav-toggle { display: inline-flex; margin-left: auto; }
+  .fl-mobile-panel.is-open {
+    display: flex;
+    animation: fl-panel-in var(--dur-snappy) var(--ease-emphasized-out) both;
+  }
+}
+
+/* fl-hero · escena 08:00 — headline full-width arriba, grid asimétrico
+   debajo (copy a la izquierda, agenda del día a la derecha). */
+.fl-hero {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+.fl-eyebrow {
+  margin: 0 0 var(--space-4);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-2);
+}
+.fl-hero-body {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  gap: var(--space-16);
+  align-items: center;
+}
+.fl-hero-sub {
+  margin: 0 0 var(--space-8);
+  max-width: 34rem;
+  font-size: clamp(1.05rem, 1.4vw, 1.2rem);
+  line-height: 1.55;
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+.fl-hero-ctas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+.fl-btn-lg {
+  padding: 12px 24px;
+  font-size: var(--fs-md);
+  font-weight: 600;
+  border-radius: var(--r-md);
+}
+.fl-hero-note {
+  margin: var(--space-4) 0 0;
+  font-size: var(--fs-body);
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+
+/* fl-hero-stats · fila mono con los compromisos verificables (absorbe la
+   ex trust-strip: cifrado, Ley 25.326, trial, hecho en Argentina). */
+.fl-hero-stats {
+  list-style: none;
+  margin: var(--space-6) 0 0;
+  padding: var(--space-4) 0 0;
+  border-top: 1px solid var(--line-soft);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  letter-spacing: 0.01em;
+  color: var(--ink-3);
+}
+.fl-hero-stats li { white-space: nowrap; }
+.fl-hero-stats li + li::before {
+  content: "·";
+  margin-right: var(--space-3);
+  color: var(--ink-4);
+}
+
+/* fl-hero-cue · puente narrativo hacia la escena siguiente (#dia) */
+.fl-hero-cue {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-8);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink-2);
+  text-decoration: none;
+  transition: color var(--dur-quick) var(--ease-standard);
+}
+.fl-hero-cue:hover { color: var(--ink); }
+.fl-hero-cue svg {
+  color: var(--accent);
+  animation: fl-cue-bounce 2.6s var(--spring-soft) infinite;
+}
+@keyframes fl-cue-bounce {
+  0%, 60%, 100% { transform: translateY(0); }
+  30%           { transform: translateY(4px); }
+}
+
+/* Entrada inicial del hero — cinematic, decelerada. El head (h1 = LCP)
+   entra sin delay; copy y visual lo siguen escalonados.
+   ⚠ El head usa fl-rise-pos (solo transform, SIN opacity): un h1 que arranca
+   en opacity:0 nunca califica como candidato LCP y el LCP "real" termina
+   siendo el cookie banner post-hidratación. */
+@keyframes fl-rise {
+  from { opacity: 0; transform: translateY(var(--motion-dist-md)); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fl-rise-pos {
+  from { transform: translateY(var(--motion-dist-md)); }
+  to   { transform: translateY(0); }
+}
+.fl-hero-head   { animation: fl-rise-pos var(--dur-cinematic) var(--ease-emphasized) both; }
+.fl-hero-copy   { animation: fl-rise var(--dur-cinematic) var(--ease-emphasized) 80ms both; }
+.fl-hero-visual { animation: fl-rise var(--dur-cinematic) var(--ease-emphasized) 160ms both; }
+
+/* fl-mock · agenda del día en capas (estático; parallax solo con view()) */
+.fl-hero-visual { position: relative; }
+.fl-mock {
+  position: relative;
+  min-height: 440px;
+}
+.fl-mock-card {
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-xl);
+  padding: var(--space-5);
+}
+.fl-mock-front {
+  position: relative;
+  z-index: 2;
+  width: min(480px, 94%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  box-shadow: var(--shadow-hero);
+}
+.fl-mock-back {
+  position: absolute;
+  z-index: 1;
+  right: 0;
+  bottom: 8%;
+  width: min(380px, 86%);
+  box-shadow: var(--shadow-2);
+  filter: blur(2px);
+  opacity: 0.65;
+}
+.fl-mock-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0 var(--space-1) var(--space-1);
+}
+.fl-mock-day {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--ink-2);
+}
+/* fl-mock-lock · chip candado del header de la card — la historia clínica
+   viaja cifrada antes de tocar la base de datos. */
+.fl-mock-lock {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: var(--r-pill);
+  background: var(--accent-soft);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--accent);
+  white-space: nowrap;
+}
+.fl-mock-lock svg { flex-shrink: 0; }
+/* fl-mock-caption · leyenda mono debajo del frame */
+.fl-mock-caption {
+  margin: var(--space-8) var(--space-1) 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
+}
+.fl-mock-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-lg);
+  background: var(--bg);
+}
+.fl-mock-row.is-muted { opacity: 0.82; }
+.fl-mock-time {
+  font-family: var(--font-mono);
+  font-size: var(--fs-lg);
+  font-weight: 500;
+  color: var(--ink);
+  flex-shrink: 0;
+}
+.fl-mock-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.fl-mock-name {
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fl-mock-service { font-size: var(--fs-sm); color: var(--ink-3); }
+.fl-mock-badge {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--r-pill);
+  background: var(--green-soft);
+  color: var(--green);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.fl-mock-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.fl-mock-badge.is-amber { background: var(--amber-soft); color: var(--amber); }
+.fl-mock-badge.is-slate { background: var(--slate-soft); color: var(--slate); }
+.fl-mock-chip {
+  position: absolute;
+  z-index: 3;
+  left: 6%;
+  bottom: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 8px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-pill);
+  box-shadow: var(--shadow-2);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  color: var(--ink-2);
+}
+.fl-mock-chip-icon {
+  display: inline-flex;
+  color: var(--green);
+}
+
+/* Parallax sutil scroll-driven de las capas del mock (fallback: estático) */
+@keyframes fl-par-front {
+  from { transform: translateY(14px); }
+  to   { transform: translateY(-14px); }
+}
+@keyframes fl-par-back {
+  from { transform: translateY(28px); }
+  to   { transform: translateY(-30px); }
+}
+@keyframes fl-par-chip {
+  from { transform: translateY(36px); }
+  to   { transform: translateY(-42px); }
+}
+@supports (animation-timeline: view()) {
+  .fl-mock-front {
+    animation: fl-par-front linear both;
+    animation-timeline: view();
+    animation-range: cover 0% cover 100%;
+  }
+  .fl-mock-back {
+    animation: fl-par-back linear both;
+    animation-timeline: view();
+    animation-range: cover 0% cover 100%;
+  }
+  .fl-mock-chip {
+    animation: fl-par-chip linear both;
+    animation-timeline: view();
+    animation-range: cover 0% cover 100%;
+  }
+}
+
+/* fl-reveal · entrada scroll-driven compartida para secciones (B1/B2/B3).
+   Sin soporte de view(): contenido visible, sin animación.
+   Stagger: cada item desplaza el INICIO del range con --fl-reveal-range
+   (delays temporales no aplican con animation-timeline: view()). */
+@supports (animation-timeline: view()) {
+  .fl-reveal {
+    animation: fl-reveal-in var(--ease-emphasized-out) both;
+    animation-timeline: view();
+    animation-range: entry var(--fl-reveal-range, 0%) entry 55%;
+  }
+}
+@keyframes fl-reveal-in {
+  from { opacity: 0; transform: translateY(var(--motion-dist-lg)); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* fl-cta-final */
+.fl-cta-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-5);
+  padding: clamp(var(--space-10), 6vw, var(--space-16)) var(--space-6);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-soft-2);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-hero);
+  text-align: center;
+}
+.fl-cta-title {
+  margin: 0;
+  max-width: 24ch;
+  font-family: var(--font-display);
+  font-size: clamp(1.7rem, 3.4vw, 2.6rem);
+  font-weight: 500;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+  text-wrap: balance;
+}
+.fl-cta-sub {
+  margin: 0;
+  font-size: var(--fs-md);
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+.fl-cta-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+/* fl-footer */
+.fl-footer {
+  border-top: 1px solid var(--line-soft);
+  background: var(--surface);
+}
+.fl-footer-inner {
+  max-width: 1120px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-8);
+  padding: var(--space-16) var(--space-6) var(--space-10);
+}
+.fl-footer-heading {
+  margin: 0 0 var(--space-3);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.fl-footer-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.fl-footer-link {
+  font-size: var(--fs-body);
+  color: var(--ink-2);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.fl-footer-link:hover { color: var(--ink); text-decoration: underline; }
+.fl-footer-base {
+  max-width: 1120px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-6) var(--space-8);
+  border-top: 1px solid var(--line-soft);
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
+}
+
+/* fl-responsive · mobile */
+@media (max-width: 767px) {
+  .fl-hero { gap: var(--space-8); }
+  .fl-hero-body {
+    /* minmax(0): `1fr` a secas tiene piso min-content y los rows del mock
+       (hora + nombre + badge nowrap) lo empujan a ~362px → ~11px de scroll
+       horizontal en 375. Con piso 0 la columna respeta el viewport y el
+       contenido degrada con sus propios ellipsis/wrap. */
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-12);
+  }
+  .fl-hero-ctas {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .fl-hero-ctas .fi-btn { justify-content: center; }
+  .fl-mock { min-height: 360px; }
+  .fl-mock-front { width: 100%; }
+  .fl-mock-back { width: 92%; bottom: 4%; }
+  .fl-mock-chip { left: var(--space-2); }
+  .fl-mock-row { gap: var(--space-2); padding: var(--space-2) var(--space-3); }
+  .fl-mock-time { font-size: var(--fs-md); }
+  .fl-mock-head { flex-wrap: wrap; gap: var(--space-2); }
+  /* CookieBanner fixed-bottom: aire extra para que no tape los CTAs */
+  .fl-cta-final { padding-bottom: calc(var(--space-20) + var(--space-16)); }
+  .fl-footer-inner {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-8) var(--space-6);
+    padding-top: var(--space-12);
+  }
+  .fl-footer-base {
+    flex-wrap: wrap;
+    text-wrap: pretty;
+  }
+}
+
+/* fl-reduced-motion · anula las animaciones del fragmento B1; el estado
+   base (sin animation-fill) ya es el estado final visible. */
+@media (prefers-reduced-motion: reduce) {
+  .fl-hero-head,
+  .fl-hero-copy,
+  .fl-hero-visual,
+  .fl-hero-cue svg,
+  .fl-reveal,
+  .fl-mock-front,
+  .fl-mock-back,
+  .fl-mock-chip,
+  .fl-mobile-panel.is-open {
+    animation: none !important;
+  }
+  .fl-nav-toggle-bar,
+  .fl-nav-link,
+  .fl-hero-cue,
+  .fl-skip {
+    transition: none !important;
+  }
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * LANDING · Fragmento B2 — Precios / FAQ
+ * El orquestador anexa este archivo a public/folio.css y lo borra.
+ * Solo tokens var() existentes; selectores con prefijo .fl-*.
+ * `.fl-reveal` la define B1 — acá solo se consume (--fl-reveal-range).
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+/* fl-section · encabezados compartidos (pricing/faq) */
+.fl-pricing-title,
+.fl-faq-title {
+  font-family: var(--font-display);
+  font-size: var(--fl-display-lg);
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  text-wrap: balance;
+  margin: 0 0 var(--space-3);
+}
+
+.fl-pricing-sub {
+  font-size: var(--fs-md);
+  line-height: 1.55;
+  color: var(--ink-2);
+  text-wrap: pretty;
+  max-width: 56ch;
+  margin: 0 0 var(--space-10);
+}
+
+/* fl-pricing */
+.fl-pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5);
+  max-width: 880px;
+}
+
+.fl-price-card {
+  display: flex; /* fallback sin subgrid: columna con lista flexible */
+  flex-direction: column;
+  padding: var(--space-8);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-1);
+  position: relative;
+}
+
+/* subgrid: alinea head / precio / nota / bullets / CTA entre las dos cards */
+@supports (grid-template-rows: subgrid) {
+  .fl-pricing-grid {
+    grid-template-rows: repeat(5, auto);
+  }
+
+  .fl-price-card {
+    display: grid;
+    grid-row: span 5;
+    grid-template-rows: subgrid;
+    row-gap: 0;
+  }
+}
+
+.fl-price-card--featured {
+  border: 2px solid var(--accent);
+  box-shadow: var(--shadow-2);
+}
+
+.fl-price-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.fl-price-plan {
+  font-family: var(--font-display);
+  font-size: var(--fs-xl);
+  font-weight: 500;
+  color: var(--ink);
+  margin: 0;
+}
+
+.fl-price-badge {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent-2);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-soft-2);
+  border-radius: var(--r-sm);
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+
+.fl-price-amount {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-2);
+}
+
+.fl-price-figure {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 3.4vw, 2.6rem);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.05;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.fl-price-per {
+  font-family: var(--font-mono);
+  font-size: var(--fs-body);
+  color: var(--ink-2);
+}
+
+.fl-price-note {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  color: var(--ink-2);
+  text-wrap: pretty;
+  margin: 0 0 var(--space-5);
+}
+
+.fl-price-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-6);
+  padding: 0;
+}
+
+.fl-price-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  font-size: var(--fs-body);
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+
+.fl-price-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--green-soft);
+  color: var(--green);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.fl-price-cta {
+  display: flex;
+  margin-top: auto; /* fallback flex: CTA al fondo */
+}
+
+.fl-price-cta .fi-btn {
+  flex: 1;
+  justify-content: center;
+  text-align: center;
+  padding: 12px 20px;
+  font-size: var(--fs-body);
+}
+
+.fl-pricing-banner {
+  margin: var(--space-8) 0 0;
+  padding: var(--space-4) var(--space-6);
+  max-width: 880px;
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-lg);
+  font-size: var(--fs-body);
+  line-height: 1.6;
+  color: var(--ink-2);
+  text-wrap: pretty;
+  text-align: center;
+}
+
+.fl-pricing-banner-days {
+  font-family: var(--font-display);
+  font-size: var(--fs-xl);
+  font-weight: 500;
+  color: var(--accent);
+  margin-right: var(--space-1);
+  font-variant-numeric: tabular-nums;
+}
+
+/* fl-faq */
+.fl-faq-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: 760px;
+  margin-top: var(--space-8);
+}
+
+.fl-faq-item {
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+  transition: border-color var(--dur-quick) var(--ease-standard-out);
+}
+
+.fl-faq-item[open] {
+  border-color: var(--line);
+}
+
+.fl-faq-q {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  cursor: pointer;
+  font-size: var(--fs-md);
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--ink);
+  list-style: none;
+  border-radius: var(--r-lg);
+}
+
+.fl-faq-q-text {
+  text-wrap: balance;
+}
+
+.fl-faq-q::-webkit-details-marker {
+  display: none;
+}
+
+.fl-faq-q:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.fl-faq-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-3);
+  flex-shrink: 0;
+  transition: transform var(--dur-snappy) var(--ease-standard-out);
+}
+
+.fl-faq-item[open] .fl-faq-chevron {
+  transform: rotate(180deg);
+  color: var(--accent);
+}
+
+.fl-faq-a {
+  margin: 0;
+  padding: 0 var(--space-5) var(--space-5);
+  font-size: var(--fs-body);
+  line-height: 1.65;
+  color: var(--ink-2);
+  text-wrap: pretty;
+  max-width: 64ch;
+  animation: fl-faq-open var(--dur-snappy) var(--ease-standard-out);
+}
+
+@keyframes fl-faq-open {
+  from {
+    opacity: 0;
+    transform: translateY(calc(-1 * var(--motion-dist-xs)));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* fl-b2-responsive */
+@media (max-width: 767px) {
+  .fl-pricing-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* subgrid de filas no aporta en una sola columna */
+  @supports (grid-template-rows: subgrid) {
+    .fl-pricing-grid {
+      grid-template-rows: none;
+    }
+
+    .fl-price-card {
+      display: flex;
+      grid-row: auto;
+    }
+  }
+
+  .fl-price-card {
+    padding: var(--space-6);
+  }
+}
+
+/* fl-b2-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .fl-faq-item,
+  .fl-faq-chevron {
+    transition: none;
+  }
+
+  .fl-faq-a {
+    animation: none;
+  }
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * LANDING · Fragmento E2 — "Un día con Folio" (#dia) · 10:30 → 14:00 → 20:00
+ * El orquestador anexa este archivo al final de public/folio.css y lo borra.
+ * Solo tokens var() existentes; todo scopeado .fl-day-* / .fl-scene-* /
+ * .fl-rsv-* / .fl-cipher-* / .fl-close-*.
+ *
+ * Mecánica:
+ *  — BASE (mobile / sin animation-timeline / reduced-motion): escenas
+ *    apiladas en flujo normal con gap generoso, mockups en estado FINAL
+ *    (nota ya cifrada, candado y burbuja visibles, barras completas).
+ *    `.fl-reveal` (definida por B1) da la entrada suave.
+ *  — ENHANCED (≥768px + prefers-reduced-motion: no-preference + @supports
+ *    animation-timeline: view()): .fl-day mide 320vh y nombra la
+ *    view-timeline --fl-day; .fl-day-stage queda sticky bajo el header
+ *    (64px) y las 3 escenas se scrubean en crossfade (contain 0%→100% ≈
+ *    220vh de pin). Ventanas: a visible 0–30 / sale 38 · b entra 30–38,
+ *    hold 38–62, sale 62–70 · c entra 62–70, hold a 100. El sweep de
+ *    cifrado corre contain 44%→58% (dentro del hold de b) y el candado
+ *    popea 56%→61% con --spring-soft. El rail scrubea scaleX 0→1 en todo
+ *    el pin.
+ * ─────────────────────────────────────────────────────────────────────── */
+
+/* fl-day · layout base (flujo normal; el sticky vive solo en enhanced) */
+.fl-day {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding-block: var(--fl-section-gap);
+  padding-inline: var(--space-6);
+}
+.fl-day-stage {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(var(--space-10), 6vh, var(--space-16));
+}
+
+/* fl-day-head · eyebrow mono + rail de progreso */
+.fl-day-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+.fl-day-eyebrow {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent-2);
+  white-space: nowrap;
+}
+.fl-day-rail {
+  flex: 1;
+  height: 2px;
+  border-radius: var(--r-pill);
+  background: var(--line-soft);
+  overflow: hidden;
+}
+.fl-day-rail-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transform-origin: left center;
+  /* base: rail completo (decorativo); enhanced lo scrubea 0 → 1 */
+  transform: scaleX(1);
+}
+
+/* fl-day-scenes · base: 3 escenas apiladas en flujo */
+.fl-day-scenes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--fl-section-gap);
+}
+.fl-scene {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-8);
+  align-items: center;
+}
+.fl-scene-copy { min-width: 0; }
+.fl-scene-hour {
+  display: block;
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--fl-mono-giant);
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.fl-scene-text {
+  margin: 0;
+  max-width: 24ch;
+  font-family: var(--font-display);
+  font-size: clamp(1.45rem, 2.6vw, 2.2rem);
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+  text-wrap: balance;
+}
+.fl-scene-visual {
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+}
+@media (min-width: 768px) {
+  .fl-scene {
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+    gap: var(--space-16);
+  }
+}
+
+/* fl-rsv · escena 10:30 — página pública de reservas + burbuja WhatsApp */
+.fl-rsv {
+  position: relative;
+  width: min(440px, 100%);
+  /* aire para la burbuja que cuelga del borde inferior */
+  padding-bottom: var(--space-10);
+}
+.fl-rsv-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-hero);
+}
+.fl-rsv-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 var(--space-1);
+}
+.fl-rsv-url {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--ink-3);
+}
+.fl-rsv-title {
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--ink);
+}
+.fl-rsv-slots {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+}
+.fl-rsv-slot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 0;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-md);
+  background: var(--bg);
+  font-family: var(--font-mono);
+  font-size: var(--fs-body);
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+.fl-rsv-slot.is-off {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+.fl-rsv-slot.is-picked {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-2);
+  font-weight: 600;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.fl-rsv-slot.is-picked svg {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.fl-rsv-wa {
+  position: absolute;
+  z-index: 2;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  max-width: min(320px, 94%);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-lg);
+  border-bottom-right-radius: var(--r-sm);
+  box-shadow: var(--shadow-2);
+}
+.fl-rsv-wa-icon {
+  display: inline-flex;
+  margin-top: 2px;
+  color: var(--green);
+  flex-shrink: 0;
+}
+.fl-rsv-wa-text {
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+.fl-rsv-wa-meta {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--green);
+}
+
+/* fl-cipher · escena 14:00 — nota SOAP de dos capas (plano → ciphertext).
+   Estado base: la capa cifrada se muestra completa (clip-path final) y el
+   candado visible — el mensaje funciona sin motion. */
+.fl-cipher { width: min(480px, 100%); }
+.fl-cipher-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-hero);
+}
+.fl-cipher-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.fl-cipher-title {
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--ink);
+}
+.fl-cipher-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: var(--r-pill);
+  background: var(--accent-soft);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--accent);
+  white-space: nowrap;
+}
+.fl-cipher-tag svg { flex-shrink: 0; }
+.fl-cipher-body {
+  position: relative;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-lg);
+  background: var(--bg);
+  overflow: hidden;
+  /* contenedor de la línea de barrido: permite animarla con
+     transform: translateX(100cqw) en vez de `left` (cero layout/reflow) */
+  container-type: inline-size;
+}
+.fl-cipher-pt {
+  margin: 0;
+  padding: var(--space-4);
+  font-size: var(--fs-body);
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+.fl-cipher-pt span { display: block; }
+.fl-cipher-pt b {
+  font-weight: 600;
+  color: var(--ink);
+}
+.fl-cipher-ct {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: var(--space-4);
+  background: var(--bg);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+  letter-spacing: 0.02em;
+  color: var(--ink-3);
+  word-break: break-all;
+  overflow: hidden;
+  /* base: YA cifrada; enhanced arranca en inset(0 100% 0 0) y sweepea */
+  clip-path: inset(0 0 0 0);
+}
+.fl-cipher-ct-meta {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--ink-4);
+}
+.fl-cipher-scan {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  background: linear-gradient(180deg, transparent, var(--accent) 30% 70%, transparent);
+  opacity: 0;
+  pointer-events: none;
+}
+.fl-cipher-lock {
+  position: absolute;
+  z-index: 2;
+  right: var(--space-3);
+  bottom: var(--space-3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--accent-soft-2);
+  color: var(--accent);
+  box-shadow: var(--shadow-2);
+}
+.fl-cipher-foot {
+  padding: 0 var(--space-1);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--ink-3);
+}
+
+/* fl-close · escena 20:00 — cierre del día: stats mono + mini-barras */
+.fl-close {
+  width: min(460px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding: var(--space-5);
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-hero);
+}
+.fl-close-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.fl-close-day {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.fl-close-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--r-pill);
+  background: var(--green-soft);
+  color: var(--green);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.fl-close-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.fl-close-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-4);
+}
+.fl-close-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.fl-close-num {
+  font-family: var(--font-mono);
+  font-size: clamp(1.35rem, 2.4vw, 1.85rem);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.fl-close-label {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.fl-close-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  height: 52px;
+  padding-top: var(--space-3);
+  border-top: 1px dashed var(--line);
+}
+.fl-close-bar {
+  flex: 1;
+  border-radius: 3px 3px 0 0;
+  background: var(--accent-soft-2);
+  transform-origin: bottom center;
+}
+.fl-close-bar:nth-child(1) { height: 38%; }
+.fl-close-bar:nth-child(2) { height: 62%; }
+.fl-close-bar:nth-child(3) { height: 84%; }
+.fl-close-bar:nth-child(4) { height: 48%; }
+.fl-close-bar:nth-child(5) { height: 100%; background: var(--accent); }
+.fl-close-bar:nth-child(6) { height: 70%; }
+.fl-close-bar:nth-child(7) { height: 30%; }
+
+/* ── ENHANCED · sticky scrubbing (≥768px + motion ok + scroll-driven) ──
+ * Las escenas pasan a absolute dentro del stage sticky y se scrubean por
+ * la view-timeline --fl-day (declarada en .fl-day; visible a descendientes).
+ * Los selectores van prefijados .fl-day para ganarle a la shorthand de
+ * `.fl-reveal` (B1) que las li también llevan para el modo base. */
+@media (min-width: 768px) and (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .fl-day {
+      height: 320vh;
+      max-width: none;
+      padding: 0;
+      view-timeline: --fl-day block;
+    }
+    .fl-day-stage {
+      position: sticky;
+      /* 65px = .fl-header-inner (64px) + border-bottom de .fl-header (1px) */
+      top: 65px;
+      height: calc(100vh - 65px);
+      overflow: clip;
+      display: grid;
+      align-content: center;
+      gap: clamp(var(--space-4), 4vh, var(--space-10));
+      width: 100%;
+      max-width: 1120px;
+      margin: 0 auto;
+      padding-inline: var(--space-6);
+    }
+    .fl-day-scenes {
+      position: relative;
+      height: clamp(340px, 62vh, 600px);
+      gap: 0;
+    }
+    .fl-day .fl-scene {
+      position: absolute;
+      inset: 0;
+      margin: 0;
+      opacity: 0;
+      animation-timing-function: linear;
+      animation-fill-mode: both;
+      animation-timeline: --fl-day;
+      animation-range: contain 0% contain 100%;
+    }
+    .fl-day .fl-scene--a { animation-name: fl-scene-a; }
+    .fl-day .fl-scene--b { animation-name: fl-scene-b; }
+    .fl-day .fl-scene--c { animation-name: fl-scene-c; }
+
+    /* legibilidad a cualquier altura de viewport ≥768px: la escena activa
+       entra entera en el stage — tipografía y visuales con techo en vh */
+    .fl-day .fl-scene-hour { font-size: min(var(--fl-mono-giant), 12vh); }
+    .fl-day .fl-scene-text { font-size: clamp(1.2rem, 4.2vh, 2.2rem); }
+    .fl-day .fl-scene-visual { max-height: 100%; }
+    .fl-day .fl-rsv-card,
+    .fl-day .fl-cipher-card,
+    .fl-day .fl-close {
+      max-height: calc(100vh - 240px);
+      overflow: clip;
+    }
+
+    /* rail de progreso · scrubeado por la misma timeline, 0 → 1 en el pin */
+    .fl-day-rail-fill {
+      transform: scaleX(0);
+      animation-name: fl-rail-fill;
+      animation-timing-function: linear;
+      animation-fill-mode: both;
+      animation-timeline: --fl-day;
+      animation-range: contain 0% contain 100%;
+    }
+
+    /* escena a · la burbuja de WhatsApp "llega" apenas arranca el pin */
+    .fl-rsv-wa {
+      animation-name: fl-rsv-wa-in;
+      animation-timing-function: var(--ease-emphasized-out);
+      animation-fill-mode: both;
+      animation-timeline: --fl-day;
+      animation-range: contain 6% contain 16%;
+    }
+
+    /* escena b · sweep de cifrado: el ciphertext tapa el texto plano con
+       clip-path (izq → der), la línea de barrido lo acompaña en lockstep
+       (ambas linear sobre el mismo range) y el candado popea al final.
+       Ventana alineada al hold de fl-scene-b (38%–62%). */
+    .fl-cipher-ct {
+      clip-path: inset(0 100% 0 0);
+      animation-name: fl-cipher-sweep;
+      animation-timing-function: linear;
+      animation-fill-mode: both;
+      animation-timeline: --fl-day;
+      animation-range: contain 44% contain 58%;
+    }
+    .fl-cipher-scan {
+      animation-name: fl-cipher-scan-x;
+      animation-timing-function: linear;
+      animation-fill-mode: both;
+      animation-timeline: --fl-day;
+      animation-range: contain 44% contain 58%;
+    }
+    .fl-cipher-lock {
+      opacity: 0;
+      transform: scale(0.4);
+      animation-name: fl-cipher-lock-pop;
+      animation-timing-function: var(--spring-soft);
+      animation-fill-mode: both;
+      animation-timeline: --fl-day;
+      animation-range: contain 56% contain 61%;
+    }
+
+    /* escena c · las barras del cierre crecen al entrar la escena */
+    .fl-close-bar {
+      transform: scaleY(0.25);
+      animation-name: fl-close-bar-up;
+      animation-timing-function: var(--spring-soft);
+      animation-fill-mode: both;
+      animation-timeline: --fl-day;
+      animation-range: contain 70% contain 86%;
+    }
+  }
+}
+
+/* viewports bajos (landscape tablet / notebooks chicas): compactar para que
+   la escena activa siga entrando entera en el stage sticky */
+@media (min-width: 768px) and (max-height: 640px) and (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .fl-day-stage { gap: var(--space-3); }
+    .fl-day-scenes { height: min(68vh, 420px); }
+    .fl-day .fl-scene-hour { margin-bottom: var(--space-2); }
+    .fl-day .fl-cipher-pt,
+    .fl-day .fl-cipher-ct {
+      font-size: var(--fs-sm);
+      line-height: 1.5;
+    }
+    .fl-day .fl-rsv-card,
+    .fl-day .fl-close { gap: var(--space-3); }
+  }
+}
+
+/* keyframes de las escenas — scrubbed por --fl-day; fill both deja el primer/
+   último keyframe aplicado fuera del range (la sección entra con la escena a
+   ya visible y sale con la c). Custom props de motion del :root. */
+@keyframes fl-scene-a {
+  0%, 30% {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+  38%, 100% {
+    opacity: 0;
+    transform: translateY(calc(var(--motion-dist-md) * -1));
+    filter: blur(var(--motion-blur-soft));
+  }
+}
+@keyframes fl-scene-b {
+  0%, 30% {
+    opacity: 0;
+    transform: translateY(var(--motion-dist-md));
+    filter: blur(var(--motion-blur-soft));
+  }
+  38%, 62% {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+  70%, 100% {
+    opacity: 0;
+    transform: translateY(calc(var(--motion-dist-md) * -1));
+    filter: blur(var(--motion-blur-soft));
+  }
+}
+@keyframes fl-scene-c {
+  0%, 62% {
+    opacity: 0;
+    transform: translateY(var(--motion-dist-md));
+    filter: blur(var(--motion-blur-soft));
+  }
+  70%, 100% {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+@keyframes fl-rail-fill {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+@keyframes fl-rsv-wa-in {
+  from { opacity: 0; transform: translateY(var(--motion-dist-sm)) scale(0.96); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes fl-cipher-sweep {
+  from { clip-path: inset(0 100% 0 0); }
+  to   { clip-path: inset(0 0 0 0); }
+}
+/* translateX solo en 0%/100% → un único segmento lineal, en sync exacto con
+   el borde del clip; la opacity prende/apaga en los extremos. 100cqw = ancho
+   de .fl-cipher-body (container-type: inline-size) — compositor-only, sin
+   layout (antes animaba `left`). */
+@keyframes fl-cipher-scan-x {
+  0%   { transform: translateX(0); opacity: 0; }
+  6%   { opacity: 1; }
+  94%  { opacity: 1; }
+  100% { transform: translateX(100cqw); opacity: 0; }
+}
+@keyframes fl-cipher-lock-pop {
+  from { opacity: 0; transform: scale(0.4); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes fl-close-bar-up {
+  from { transform: scaleY(0.25); }
+  to   { transform: scaleY(1); }
+}
+
+/* fl-day · reduced-motion: anula toda animación propia del fragmento. El
+   gate de media query ya excluye el modo sticky (las escenas quedan en flujo
+   apiladas, NO absolute), así que acá solo reforzamos que los mockups queden
+   en su estado base final: nota cifrada, candado y burbuja visibles, rail
+   completo, barras crecidas. (.fl-reveal ya la anula el bloque de B1.) */
+@media (prefers-reduced-motion: reduce) {
+  .fl-scene,
+  .fl-day-rail-fill,
+  .fl-rsv-wa,
+  .fl-cipher-ct,
+  .fl-cipher-scan,
+  .fl-cipher-lock,
+  .fl-close-bar {
+    animation: none !important;
+  }
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * LANDING · Fragmento E3 — La bóveda (#seguridad, panel dark premium)
+ * El orquestador anexa este archivo al final de public/folio.css y lo borra.
+ * Solo tokens var() existentes; selectores con prefijo .fl-vault*.
+ * `.fl-reveal` la define B1 — acá solo se consume (--fl-reveal-range), así
+ * la política global de prefers-reduced-motion ya cubre la entrada; este
+ * fragmento no declara animaciones propias.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+/* fl-vault · sección full-bleed, dark incluso en light mode (estilo Mercury).
+   Redeclara localmente las custom properties con LOS MISMOS VALORES del
+   bloque [data-theme="dark"] de folio.css (TOKENS · DARK, ~líneas 195-226):
+   todo lo interior hereda el sistema dark completo, y en dark mode real la
+   sección queda idéntica sin reglas extra. Cero hex inventado. */
+.fl-vault {
+  /* superficies — copia exacta de [data-theme="dark"] */
+  --bg:        #14130F;
+  --surface:   #1B1A14;
+  --surface-2: #232017;
+  --line:      #2F2B1F;
+  --line-soft: #252118;
+  /* tinta — copia exacta de [data-theme="dark"] */
+  --ink:       #E8E2D2;
+  --ink-2:     #B5AE99;
+  --ink-3:     #847E69;
+  /* acento — copia exacta de [data-theme="dark"] */
+  --accent:    #C29553;
+  --accent-soft: rgba(194,149,83,.14);
+  /* sombras — copia exacta de [data-theme="dark"] */
+  --shadow-1:  0 1px 2px rgba(0,0,0,.4), 0 1px 1px rgba(0,0,0,.3);
+  --shadow-2:  0 8px 24px rgba(0,0,0,.4), 0 2px 6px rgba(0,0,0,.25);
+
+  background: var(--bg);
+  color: var(--ink);
+  color-scheme: dark;
+  border-block: 1px solid var(--line);
+  padding-block: clamp(96px, 14vh, 160px);
+}
+
+/* Contenido centrado al ancho estándar del landing (la sección en sí es
+   full-bleed: no usa .fl-section en el wrapper exterior). */
+.fl-vault-inner {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding-inline: var(--space-6);
+}
+
+/* Eyebrow mono — --accent dark sobre --bg dark: 6.83:1 (AA texto normal). */
+.fl-vault-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-4);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.fl-vault-eyebrow-icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.fl-vault-title {
+  margin: 0 0 var(--space-12);
+  max-width: 16ch;
+  font-family: var(--font-display);
+  font-size: var(--fl-display-lg);
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  text-wrap: balance;
+}
+
+/* Grid 2×2 con separadores finos (--line-soft) entre items. */
+.fl-vault-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.fl-vault-item {
+  padding: var(--space-8) var(--space-8) var(--space-8) 0;
+  border-top: 1px solid var(--line-soft);
+}
+.fl-vault-item:nth-child(even) {
+  padding-left: var(--space-8);
+  border-left: 1px solid var(--line-soft);
+}
+
+/* Número display — Geist Mono gigante, --accent dark (#C29553 sobre #14130F:
+   6.83:1 — AA Large sobrado). --fl-mono-giant = clamp(2.75rem, 7vw, 5.5rem). */
+.fl-vault-num {
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--fl-mono-giant, clamp(2.75rem, 7vw, 5.5rem));
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: var(--track-tight-2);
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+/* Identificadores largos (AES-256-GCM): clamp menor para no desbordar. */
+.fl-vault-num--code {
+  font-size: clamp(1.55rem, 3.6vw, 2.75rem);
+  letter-spacing: var(--track-tight-0);
+}
+
+.fl-vault-desc {
+  margin: 0;
+  max-width: 36ch;
+  font-size: var(--fs-md);
+  line-height: 1.55;
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+
+/* Pie mono — --ink-3 dark sobre --bg dark: 4.58:1, pasa AA texto normal
+   (par ya validado por la app en dark mode). */
+.fl-vault-foot {
+  margin: var(--space-10) 0 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+}
+
+@media (max-width: 720px) {
+  .fl-vault-grid {
+    grid-template-columns: 1fr;
+  }
+  .fl-vault-item,
+  .fl-vault-item:nth-child(even) {
+    padding-inline: 0;
+    border-left: 0;
+  }
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * LANDING · Fragmento E4 — Bento grid (#producto, «Todo lo demás»)
+ * El orquestador anexa este archivo a public/folio.css y lo borra.
+ * Solo tokens var() existentes; selectores con prefijo .fl-*.
+ * `.fl-reveal` la define B1 — acá solo se consume (--fl-reveal-range).
+ *
+ * Patrón de las mini-demos: el CSS BASE de cada pieza es el estado FINAL
+ * (demo terminada). Las animaciones —keyframes que arrancan en el estado
+ * inicial y terminan en el final— solo se aplican dentro de
+ * @supports (animation-timeline: view()), con timeline view() propio del
+ * elemento y ranges dentro de entry 30%…90%. Fallback sin view() y
+ * reduced-motion = estado final visible, sin animación.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+/* fl-bento · encabezado (mismo patrón de títulos del landing) + grid */
+.fl-bento-title {
+  font-family: var(--font-display);
+  font-size: var(--fl-display-lg);
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  text-wrap: balance;
+  margin: 0 0 var(--space-10);
+}
+
+.fl-bento-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  grid-auto-rows: 156px;
+  gap: var(--space-4);
+}
+
+/* fl-bento-cell · card base (estado final visible sin view()) */
+.fl-bento-cell {
+  grid-column: span 2;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-5) var(--space-6);
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-1);
+  /* `clip` y no `hidden`: hidden crea un scroll container y las demos con
+     animation-timeline: view() anónimo resolverían contra la celda (que
+     nunca scrollea) en vez del viewport — quedarían congeladas. */
+  overflow: clip;
+  transition:
+    transform var(--dur-snappy) var(--spring-soft),
+    box-shadow var(--dur-snappy) var(--ease-standard-out),
+    border-color var(--dur-snappy) var(--ease-standard-out);
+}
+.fl-bento-cell:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-2);
+  border-color: var(--line);
+}
+.fl-bento-cell--lg {
+  grid-column: span 4;
+  grid-row: span 2;
+}
+
+.fl-bento-demo {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  margin-bottom: var(--space-2);
+}
+
+.fl-bento-label {
+  margin: 0;
+  font-size: var(--fs-md);
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--ink);
+}
+.fl-bento-sub {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Demo 1 · fl-bbook · mini página de reservas ───────────────────────────
+ * 3 slots se "llenan" en secuencia; el badge Confirmado aparece al final. */
+.fl-bbook {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: var(--space-3);
+}
+.fl-bbook-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.fl-bbook-day {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
+}
+.fl-bbook-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: var(--r-pill);
+  background: var(--green-soft);
+  color: var(--green);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.fl-bbook-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.fl-bbook-slots {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-2);
+}
+.fl-bbook-slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2) 0;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-md);
+  background: var(--bg);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--ink-3);
+}
+/* estado final: slot reservado */
+.fl-bbook-slot.is-fill {
+  background: var(--accent-soft);
+  border-color: var(--accent-soft-2);
+  color: var(--accent-2);
+  font-weight: 500;
+}
+
+@keyframes fl-bbook-fill {
+  from {
+    background: var(--bg);
+    border-color: var(--line-soft);
+    color: var(--ink-3);
+  }
+  to {
+    background: var(--accent-soft);
+    border-color: var(--accent-soft-2);
+    color: var(--accent-2);
+  }
+}
+@keyframes fl-bbook-pop {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ── Demo 2 · fl-bwa · burbuja WhatsApp ────────────────────────────────────
+ * El doble check pasa de --ink-3 a --green (entregado → leído). */
+.fl-bwa {
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+.fl-bwa-app {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--green-soft);
+  color: var(--green);
+  flex-shrink: 0;
+}
+.fl-bwa-bubble {
+  position: relative;
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  background: var(--green-soft);
+  border-radius: var(--r-lg);
+  border-bottom-left-radius: var(--r-sm);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+  color: var(--ink);
+}
+.fl-bwa-bubble::after {
+  content: "";
+  position: absolute;
+  left: -3px;
+  bottom: 5px;
+  width: 9px;
+  height: 9px;
+  background: var(--green-soft);
+  border-radius: 2px;
+  transform: rotate(45deg);
+}
+.fl-bwa-meta {
+  display: block;
+  margin-top: 2px;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--ink-3);
+}
+/* estado final: leído */
+.fl-bwa-ticks {
+  font-weight: 600;
+  letter-spacing: -0.14em;
+  color: var(--green);
+}
+
+@keyframes fl-bwa-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes fl-bwa-read {
+  from {
+    color: var(--ink-3);
+  }
+  to {
+    color: var(--green);
+  }
+}
+
+/* ── Demo 3 · fl-bnum · mini-barras + cifra mono (estática) ──────────────── */
+.fl-bnum {
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+.fl-bnum-figure {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xl);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.fl-bnum-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 52px;
+  flex-shrink: 0;
+}
+.fl-bnum-bar {
+  width: 13px;
+  border-radius: var(--r-sm) var(--r-sm) 2px 2px;
+  background: var(--accent-soft-2);
+  transform-origin: bottom;
+}
+.fl-bnum-bar--1 { height: 38%; }
+.fl-bnum-bar--2 { height: 62%; }
+.fl-bnum-bar--3 { height: 48%; }
+.fl-bnum-bar--4 {
+  height: 100%;
+  background: var(--accent);
+}
+
+@keyframes fl-bnum-grow {
+  from { transform: scaleY(0); }
+  to   { transform: none; }
+}
+
+/* ── Demo 4 · fl-bcal · Folio ↔ Google (dot viaja, check final) ──────────── */
+.fl-bcal {
+  width: 100%;
+  gap: var(--space-2);
+}
+.fl-bcal-card {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: var(--space-3) 0;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-md);
+  background: var(--bg);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.fl-bcal-track {
+  position: relative;
+  width: 44px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--line-soft);
+  flex-shrink: 0;
+}
+.fl-bcal-dot {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+/* estado final: sincronizado */
+.fl-bcal-check {
+  display: inline-flex;
+  color: var(--green);
+}
+
+@keyframes fl-bcal-travel {
+  0%   { transform: translateX(0); }
+  50%  { transform: translateX(36px); }
+  100% { transform: translateX(0); }
+}
+@keyframes fl-bcal-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ── Demo 5 · fl-bcif · candado + crossfade texto → ciphertext ────────────
+ * Dos capas superpuestas (grid-area 1/1); final = solo cipher visible. */
+.fl-bcif {
+  gap: var(--space-3);
+}
+.fl-bcif-lock {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-md);
+  background: var(--accent-soft);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.fl-bcif-lines {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.fl-bcif-plain,
+.fl-bcif-cipher {
+  grid-area: 1 / 1;
+  font-size: var(--fs-xs);
+  line-height: 1.6;
+  white-space: nowrap;
+  overflow: hidden;
+}
+/* estado final: texto plano oculto, cipher visible */
+.fl-bcif-plain {
+  color: var(--ink-2);
+  opacity: 0;
+}
+.fl-bcif-cipher {
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+  color: var(--ink-3);
+  opacity: 1;
+}
+
+@keyframes fl-bcif-fade-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+@keyframes fl-bcif-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes fl-bcif-close {
+  from { transform: translateY(-4px); }
+  to   { transform: none; }
+}
+
+/* ── Demo 6 · fl-bteam · avatares en cascada ─────────────────────────────── */
+.fl-bteam {
+  align-items: center;
+}
+.fl-bteam-ava {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid var(--surface);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+.fl-bteam-ava + .fl-bteam-ava {
+  margin-left: -10px;
+}
+.fl-bteam-ava--1 { background: var(--accent-soft); color: var(--accent-2); }
+.fl-bteam-ava--2 { background: var(--amber-soft);  color: var(--amber); }
+.fl-bteam-ava--3 { background: var(--green-soft);  color: var(--green); }
+
+@keyframes fl-bteam-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ── Animaciones scroll-driven · solo con soporte de view() ───────────────
+ * Timeline NOMBRADA en la celda (--fl-cell): con view() anónimo en cada
+ * elemento chico el range `entry` duraba ~30px de scroll (flash invisible).
+ * Sobre el `cover` de la celda, cada demo juega durante ~500px de scroll y
+ * termina con la celda a mitad de viewport. fill both: antes del range se
+ * ve el `from` (estado inicial), después queda el `to` (= estado final). */
+@supports (animation-timeline: view()) {
+  .fl-bento-cell {
+    view-timeline: --fl-cell block;
+  }
+
+  /* 1 · reservas: slots en secuencia + badge al final */
+  .fl-bbook-slot--f1 {
+    animation: fl-bbook-fill var(--ease-standard-out) both;
+    animation-timeline: --fl-cell;
+    animation-range: cover 10% cover 29%;
+  }
+  .fl-bbook-slot--f2 {
+    animation: fl-bbook-fill var(--ease-standard-out) both;
+    animation-timeline: --fl-cell;
+    animation-range: cover 19% cover 38%;
+  }
+  .fl-bbook-slot--f3 {
+    animation: fl-bbook-fill var(--ease-standard-out) both;
+    animation-timeline: --fl-cell;
+    animation-range: cover 28% cover 47%;
+  }
+  .fl-bbook-badge {
+    animation: fl-bbook-pop var(--spring-soft) both;
+    animation-timeline: --fl-cell;
+    animation-range: cover 42% cover 55%;
+  }
+
+  /* 2 · whatsapp: burbuja entra, ticks pasan a leído */
+  .fl-bwa-bubble {
+    animation: fl-bwa-in var(--ease-emphasized-out) both;
+    animation-timeline: --fl-cell;
+    animation-range: cover 10% cover 29%;
+  }
+  .fl-bwa-ticks {
+    animation: fl-bwa-read var(--ease-standard) both;
+    animation-timeline: --fl-cell;
+    animation-range: cover 29% cover 51%;
+  }
+
+  /* 3 · números: barras crecen con stagger */
+  .fl-bnum-bar--1 {
+    animation: fl-bnum-grow var(--ease-emphasized-out) both;
+    animation-timeline: --fl-cell;
+    animation-range: cover 10% cover 32%;
+  }
+  .fl-bnum-bar--2 {
+    animation: fl-bnum-grow var(--ease-emphasized-out) both;
+    animation-timeline: --fl-cell;
+    animation-range: cover 16% cover 38%;
+  }
+  .fl-bnum-bar--3 {
+    animation: fl-bnum-grow var(--ease-emphasized-out) both;
+    animation-timeline: --fl-cell;
+    animation-range: cover 22% cover 44%;
+  }
+  .fl-bnum-bar--4 {
+    animation: fl-bnum-grow var(--ease-emphasized-out) both;
+    animation-timeline: --fl-cell;
+    animation-range: cover 28% cover 52%;
+  }
+
+  /* 4 · gcal: dot ida y vuelta una vez, check final */
+  .fl-bcal-dot {
+    animation: fl-bcal-travel var(--ease-standard) both;
+    animation-timeline: --fl-cell;
+    animation-range: cover 10% cover 42%;
+  }
+  .fl-bcal-check {
+    animation: fl-bcal-pop var(--spring-soft) both;
+    animation-timeline: --fl-cell;
+    animation-range: cover 43% cover 55%;
+  }
+
+  /* 5 · cifrado: crossfade plano → cipher, candado cierra con pop */
+  .fl-bcif-plain {
+    animation: fl-bcif-fade-out var(--ease-standard) both;
+    animation-timeline: --fl-cell;
+    animation-range: cover 16% cover 37%;
+  }
+  .fl-bcif-cipher {
+    animation: fl-bcif-fade-in var(--ease-standard) both;
+    animation-timeline: --fl-cell;
+    animation-range: cover 20% cover 42%;
+  }
+  .fl-bcif-lock {
+    animation: fl-bcif-close var(--spring-soft) both;
+    animation-timeline: --fl-cell;
+    animation-range: cover 29% cover 51%;
+  }
+
+  /* 6 · equipo: avatares en cascada */
+  .fl-bteam-ava--1 {
+    animation: fl-bteam-in var(--spring-soft) both;
+    animation-timeline: --fl-cell;
+    animation-range: cover 10% cover 31%;
+  }
+  .fl-bteam-ava--2 {
+    animation: fl-bteam-in var(--spring-soft) both;
+    animation-timeline: --fl-cell;
+    animation-range: cover 19% cover 40%;
+  }
+  .fl-bteam-ava--3 {
+    animation: fl-bteam-in var(--spring-soft) both;
+    animation-timeline: --fl-cell;
+    animation-range: cover 28% cover 49%;
+  }
+}
+
+/* fl-bento · mobile: todo a una columna, celdas más bajas */
+@media (max-width: 767px) {
+  .fl-bento-grid {
+    grid-auto-rows: minmax(132px, auto);
+  }
+  .fl-bento-cell,
+  .fl-bento-cell--lg {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+  .fl-bento-cell--lg {
+    min-height: 264px;
+  }
+  .fl-bento-cell {
+    padding: var(--space-5);
+  }
+}
+
+/* fl-bento · reduced-motion: demos en estado final (el CSS base), sin
+ * animación. `.fl-reveal` ya lo anula el bloque de B1. */
+@media (prefers-reduced-motion: reduce) {
+  .fl-bbook-slot--f1,
+  .fl-bbook-slot--f2,
+  .fl-bbook-slot--f3,
+  .fl-bbook-badge,
+  .fl-bwa-bubble,
+  .fl-bwa-ticks,
+  .fl-bnum-bar,
+  .fl-bcal-dot,
+  .fl-bcal-check,
+  .fl-bcif-plain,
+  .fl-bcif-cipher,
+  .fl-bcif-lock,
+  .fl-bteam-ava {
+    animation: none !important;
+  }
+  .fl-bento-cell {
+    transition: none;
+  }
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * LANDING · Fragmento R2 — refinamiento de los mockups de "Un día con Folio"
+ * (#dia): página pública real en miniatura (10:30), ficha SOAP completa con
+ * capa trasera (14:00) y dashboard de cierre (20:00).
+ * El orquestador anexa este archivo al final de public/folio.css y lo borra
+ * (a igual especificidad, estas reglas ganan la cascada sobre el frag. E2).
+ * Solo tokens var()/color-mix; scopeado .fl-rsv-* / .fl-cipher-* /
+ * .fl-close-* / .fl-sc-*.
+ *
+ * ⚠ Animaciones scrubeadas por --fl-day: los ranges del fragmento E2 quedan
+ * EXACTOS — wa 6%–16% · sweep/scan 44%–58% · lock 56%–61% · barras 70%–86%.
+ * Acá solo se SUMA un detalle (.fl-close-pay, fade-up de los cobros) DENTRO
+ * del range 70%–86% ya existente, con su anulación en reduced-motion.
+ * ─────────────────────────────────────────────────────────────────────── */
+
+/* ── fl-rsv · 10:30 — página pública en miniatura, composición en capas ── */
+.fl-rsv {
+  width: min(460px, 100%);
+  /* aire arriba para la capa trasera que asoma; abajo cuelga la notificación
+     (espacio suficiente para que solo pise el borde de la card, no el botón) */
+  padding-top: var(--space-4);
+  padding-bottom: var(--space-20);
+}
+.fl-rsv-front {
+  position: relative;
+  z-index: 1;
+}
+.fl-rsv-back {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  right: calc(var(--space-3) * -1);
+  width: 82%;
+  gap: var(--space-3);
+  box-shadow: var(--shadow-2);
+  filter: blur(2px);
+  opacity: 0.55;
+}
+.fl-rsv-back-lines {
+  display: grid;
+  gap: var(--space-2);
+}
+.fl-rsv-back-lines span {
+  height: 12px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+.fl-rsv-back-lines span:last-child { width: 68%; }
+
+/* header del consultorio: avatar con iniciales + nombre + URL mono */
+.fl-rsv-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0 var(--space-1);
+}
+.fl-rsv-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: var(--r-md);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-soft-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--accent-2);
+}
+.fl-rsv-org {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.fl-rsv-name {
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fl-rsv-url {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fl-rsv-open {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: var(--r-pill);
+  background: var(--green-soft);
+  color: var(--green);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.fl-rsv-open-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* campos de la página: label mono + selector de servicio / grilla */
+.fl-rsv-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.fl-rsv-field-label {
+  padding: 0 var(--space-1);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+.fl-rsv-services {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.fl-rsv-service {
+  padding: 6px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-pill);
+  background: var(--bg);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.fl-rsv-service.is-on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-2);
+  font-weight: 600;
+}
+
+/* confirmación: botón primario + nota mono */
+.fl-rsv-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.fl-rsv-confirm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 10px var(--space-4);
+  border-radius: var(--r-md);
+  background: var(--accent);
+  color: var(--bg);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  box-shadow: var(--shadow-1);
+  white-space: nowrap;
+}
+.fl-rsv-confirm-note {
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--ink-4);
+}
+
+/* el ciphertext corta en los guiones de los bloques, no a mitad de bloque */
+.fl-cipher-ct {
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+
+/* notificación de WhatsApp — superpuesta en la esquina, como capa del hero
+   (la animación fl-rsv-wa-in del E2 sigue intacta: range contain 6%–16%) */
+.fl-rsv-wa {
+  right: calc(var(--space-2) * -1);
+  max-width: min(300px, 92%);
+  border-color: color-mix(in srgb, var(--green) 18%, var(--line-soft));
+  box-shadow: var(--shadow-hero);
+}
+.fl-rsv-wa-text {
+  display: block;
+  flex: 1;
+  min-width: 0;
+}
+.fl-rsv-wa-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-bottom: 2px;
+  font-size: var(--fs-xs);
+  color: var(--ink);
+}
+.fl-rsv-wa-head b { font-weight: 600; }
+.fl-rsv-wa-time {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  color: var(--ink-4);
+}
+.fl-rsv-wa-meta {
+  margin-top: 3px;
+  letter-spacing: 0.02em;
+}
+
+/* ── fl-cipher · 14:00 — ficha SOAP completa + capa trasera desenfocada ── */
+.fl-cipher {
+  position: relative;
+  width: min(480px, 100%);
+  padding-top: var(--space-4);
+}
+.fl-cipher-front {
+  position: relative;
+  z-index: 1;
+}
+.fl-cipher-back {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  right: calc(var(--space-3) * -1);
+  width: 78%;
+  gap: var(--space-3);
+  box-shadow: var(--shadow-2);
+  filter: blur(2px);
+  opacity: 0.55;
+}
+.fl-cipher-back-lines {
+  display: grid;
+  gap: var(--space-2);
+}
+.fl-cipher-back-lines span {
+  height: 11px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+.fl-cipher-back-lines span:nth-child(2) { width: 84%; }
+.fl-cipher-back-lines span:nth-child(3) { width: 56%; }
+
+/* header de ficha: avatar + paciente + tag de sesión + hora */
+.fl-cipher-who {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.fl-cipher-ava {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-soft-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--accent-2);
+}
+.fl-cipher-id {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.fl-cipher-sub {
+  font-size: var(--fs-xs);
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fl-cipher-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+.fl-cipher-time {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* secciones S/O/A/P: label mono chiquito + 1-2 líneas de texto clínico */
+.fl-cipher-pt {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.fl-cipher-sec { display: block; }
+.fl-cipher-sec-label {
+  display: block;
+  margin-bottom: 1px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+.fl-cipher-sec-label b {
+  font-family: inherit;
+  font-weight: 600;
+  color: var(--accent);
+}
+.fl-cipher-sec-text {
+  display: block;
+  font-size: var(--fs-body);
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+
+/* candado + AES-256-GCM al final del sweep, más prominente (pill).
+   La animación fl-cipher-lock-pop del E2 sigue intacta: contain 56%–61%. */
+.fl-cipher-lock {
+  width: auto;
+  height: auto;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line-soft));
+  color: var(--accent-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.fl-cipher-lock svg { flex-shrink: 0; }
+
+/* ── fl-close · 20:00 — dashboard de cierre ── */
+.fl-close {
+  width: min(480px, 100%);
+  gap: var(--space-4);
+}
+.fl-close-sub {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--ink-4);
+}
+
+/* barras de la semana: columnas con label de día, hoy en --accent.
+   La animación fl-close-bar-up del E2 sigue intacta: contain 70%–86%. */
+.fl-close-week {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px dashed var(--line);
+}
+.fl-close-week-label,
+.fl-close-pays-label {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+.fl-close-bars {
+  height: auto;
+  padding-top: 0;
+  border-top: 0;
+  align-items: flex-end;
+}
+.fl-close-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+}
+.fl-close-col .fl-close-bar {
+  flex: none;
+  width: 100%;
+  border-radius: 3px 3px 0 0;
+  background: var(--accent-soft-2);
+  transform-origin: bottom center;
+}
+/* alturas por día (reemplazan los nth-child del E2, que ya no matchean) */
+.fl-close-bars .fl-close-col:nth-child(1) .fl-close-bar { height: 30px; }
+.fl-close-bars .fl-close-col:nth-child(2) .fl-close-bar { height: 42px; }
+.fl-close-bars .fl-close-col:nth-child(3) .fl-close-bar { height: 34px; }
+.fl-close-bars .fl-close-col:nth-child(4) .fl-close-bar { height: 18px; }
+.fl-close-bars .fl-close-col:nth-child(5) .fl-close-bar { height: 8px; }
+.fl-close-bars .fl-close-col:nth-child(6) .fl-close-bar { height: 24px; }
+.fl-close-bars .fl-close-col:nth-child(7) .fl-close-bar { height: 52px; }
+.fl-close-bars .fl-close-col .fl-close-bar.is-today { background: var(--accent); }
+.fl-close-bar-day {
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--ink-4);
+}
+.fl-close-bar-day.is-today {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* últimos cobros — fila de detalle en mono con check verde */
+.fl-close-pays {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px dashed var(--line);
+}
+.fl-close-pay {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-md);
+  background: var(--bg);
+}
+.fl-close-pay-time {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.fl-close-pay-name {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.fl-close-pay-amt {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.fl-close-pay-ok {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  background: var(--green-soft);
+  color: var(--green);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.fl-close-pay-ok svg { flex-shrink: 0; }
+
+/* etiquetas largo/corto — el corto solo aparece en pantallas angostas */
+.fl-sc-short { display: none; }
+
+/* mobile angosto: que el header del consultorio y los cobros respiren */
+@media (max-width: 480px) {
+  .fl-rsv-open { display: none; }
+  .fl-sc-long { display: none; }
+  .fl-sc-short { display: inline; }
+  .fl-close-pay {
+    gap: var(--space-2);
+    padding-inline: var(--space-2);
+  }
+}
+
+/* ── ENHANCED · detalle animado DENTRO de ranges existentes ──
+ * Mismo gate que el E2. Los cobros del cierre hacen fade-up en la MISMA
+ * ventana de las barras (contain 70%–86%) — cero ranges nuevos. */
+@media (min-width: 768px) and (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .fl-close-pay {
+      animation-name: fl-sc-fade-up;
+      animation-timing-function: var(--ease-emphasized-out);
+      animation-fill-mode: both;
+      animation-timeline: --fl-day;
+      animation-range: contain 70% contain 86%;
+    }
+  }
+}
+
+/* viewports bajos: compactar igual que el E2 para que la escena entre entera */
+@media (min-width: 768px) and (max-height: 640px) and (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .fl-day .fl-cipher-card { gap: var(--space-2); }
+    .fl-day .fl-cipher-sec-text {
+      font-size: var(--fs-sm);
+      line-height: 1.45;
+    }
+    .fl-day .fl-cipher-pt { gap: var(--space-1); }
+    .fl-day .fl-close { gap: var(--space-3); }
+    .fl-day .fl-close-week,
+    .fl-day .fl-close-pays { padding-top: var(--space-2); }
+    .fl-day .fl-rsv { padding-top: var(--space-3); }
+    .fl-day .fl-rsv-card { gap: var(--space-3); }
+  }
+}
+
+@keyframes fl-sc-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(var(--motion-dist-sm));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* reduced-motion: el detalle nuevo también queda en su estado final */
+@media (prefers-reduced-motion: reduce) {
+  .fl-close-pay {
+    animation: none !important;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Folio · Landing — fragmento R3 del CTA sticky mobile.
+   El orquestador anexa este archivo al final de public/folio.css y lo borra
+   (lo consume components/landing/sticky-cta.tsx; clases fl-sticky-* propias,
+   cero colisiones).
+
+   Barra fixed-bottom SOLO <768px, glass como .fl-header (color-mix sobre
+   --bg + blur 12px), borde superior --line-soft y padding inferior con
+   env(safe-area-inset-bottom). Oculta vía visibility:hidden (sale del tab
+   order y del árbol de accesibilidad); .is-show la sube con una transición
+   corta — bajo prefers-reduced-motion aparece sin animación.
+   z-index 40: debajo del header (50) y del CookieBanner (60) — además el
+   island no la muestra hasta que el consent de cookies está resuelto.
+   ════════════════════════════════════════════════════════════════════════ */
+
+.fl-sticky-cta {
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--line-soft);
+  transform: translateY(100%);
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    transform var(--dur-moderate) ease,
+    opacity var(--dur-moderate) ease,
+    visibility 0s linear var(--dur-moderate);
+}
+.fl-sticky-cta.is-show {
+  transform: translateY(0);
+  opacity: 1;
+  visibility: visible;
+  transition:
+    transform var(--dur-moderate) ease,
+    opacity var(--dur-moderate) ease,
+    visibility 0s;
+}
+
+.fl-sticky-cta-btn {
+  flex: 1;
+  justify-content: center;
+  font-size: var(--fs-body);
+  padding: 10px 16px;
+}
+
+.fl-sticky-cta-note {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fl-sticky-cta,
+  .fl-sticky-cta.is-show {
+    transition: none;
+  }
+}
+
+/* Tablet/desktop: la barra no existe. */
+@media (min-width: 768px) {
+  .fl-sticky-cta {
+    display: none;
+  }
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * LANDING · Fragmento R1 — Craft visual (atmósfera, transiciones, micro-UX)
+ * El orquestador anexa este archivo AL FINAL de public/folio.css y lo borra.
+ * Solo tokens var() / color-mix sobre tokens; cero hex nuevo; todo .fl-*.
+ *
+ * Bloques:
+ *   1. Atmósfera del hero — glow radial accent detrás del mockup + trama de
+ *      puntos finísima que se desvanece (mask radial). CSS puro, ambos temas.
+ *   2. Transición a la bóveda — fog gradient de 112px en la entrada Y la
+ *      salida de .fl-vault. La bóveda redeclara los tokens dark adentro, así
+ *      que el --bg claro de la página entra vía la custom property puente
+ *      --fl-page-bg (se computa en .fl-root, donde --bg aún es el de la
+ *      página, y se hereda ya resuelta). En dark real los pseudos se apagan
+ *      (content: none) y se restaura el borde fino original.
+ *   3. Microinteracciones — header que se eleva al scrollear (scroll()),
+ *      subrayado animado del nav, CTA primario con lift + sombra cálida,
+ *      borde que se enciende en el bento, hover del FAQ.
+ *   4. Scroll cue del hero — pill con borde + fade out scroll-driven.
+ *   5. Ritmo vertical — hero más alto en el viewport (el cue entra en el
+ *      fold) y FAQ pegado a su zona (pricing).
+ *   6. Reduced motion — anula TODO lo nuevo.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+/* ── 1 · Atmósfera del hero ────────────────────────────────────────────── */
+
+/* Puente: --bg de la PÁGINA, resuelto fuera de .fl-vault (ver bloque 2). */
+.fl-root {
+  --fl-page-bg: var(--bg);
+}
+
+/* Trama de puntos 1px sobre la cabecera del hero — se desvanece hacia abajo
+   y hacia los lados con una mask radial (sin costura en los bordes de la
+   caja). Color derivado de --ink-3: se adapta solo a ambos temas y queda
+   muy por debajo del umbral de contraste del texto. */
+.fl-hero {
+  position: relative;
+  isolation: isolate;
+}
+.fl-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: radial-gradient(
+    color-mix(in srgb, var(--ink-3) 24%, transparent) 1px,
+    transparent 1.4px
+  );
+  background-size: 26px 26px;
+  -webkit-mask-image: radial-gradient(120% 56% at 50% 0%, #000 0%, transparent 100%);
+  mask-image: radial-gradient(120% 56% at 50% 0%, #000 0%, transparent 100%);
+  pointer-events: none;
+}
+
+/* Glow radial desaturado detrás del mockup. Derecha en 0 para no generar
+   scroll horizontal (overflow a la izquierda/abajo no crea scrollbar).
+   closest-side: el gradiente muere dentro de la caja, sin corte visible. */
+.fl-hero-visual::before {
+  content: "";
+  position: absolute;
+  inset: -16% 0 -12% -10%;
+  z-index: -1;
+  background: radial-gradient(
+    closest-side at 55% 42%,
+    color-mix(in srgb, var(--accent) 9%, transparent),
+    transparent 100%
+  );
+  pointer-events: none;
+}
+/* En dark el mismo 9% casi no se lee sobre #14130F — un paso más cálido. */
+[data-theme="dark"] .fl-hero-visual::before {
+  background: radial-gradient(
+    closest-side at 55% 42%,
+    color-mix(in srgb, var(--accent) 14%, transparent),
+    transparent 100%
+  );
+}
+
+/* ── 2 · Transición cinematográfica hacia/desde la bóveda ─────────────────
+   Fog de 112px con stops "easeados" (un linear-gradient de 2 stops deja un
+   borde duro perceptible). En light: la página funde al dark de la bóveda;
+   el borde fino original se vuelve transparente para no cortar el fog.
+   En dark real: pseudos apagados + borde restaurado → idéntico a hoy. */
+.fl-vault {
+  position: relative;
+  border-top-color: transparent;
+  border-bottom-color: transparent;
+}
+.fl-vault::before,
+.fl-vault::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 112px;
+  pointer-events: none;
+}
+.fl-vault::before {
+  top: -1px; /* cubre el área del borde (background-clip: border-box) */
+  background: linear-gradient(
+    to bottom,
+    var(--fl-page-bg) 0%,
+    color-mix(in srgb, var(--fl-page-bg) 70%, transparent) 32%,
+    color-mix(in srgb, var(--fl-page-bg) 32%, transparent) 64%,
+    transparent 100%
+  );
+}
+.fl-vault::after {
+  bottom: -1px;
+  background: linear-gradient(
+    to top,
+    var(--fl-page-bg) 0%,
+    color-mix(in srgb, var(--fl-page-bg) 70%, transparent) 32%,
+    color-mix(in srgb, var(--fl-page-bg) 32%, transparent) 64%,
+    transparent 100%
+  );
+}
+[data-theme="dark"] .fl-vault {
+  /* var(--line) acá resuelve al --line redeclarado dentro de .fl-vault —
+     el mismo separador fino que hoy distingue bóveda y página en dark. */
+  border-top-color: var(--line);
+  border-bottom-color: var(--line);
+}
+[data-theme="dark"] .fl-vault::before,
+[data-theme="dark"] .fl-vault::after {
+  content: none;
+}
+
+/* ── 3 · Microinteracciones ───────────────────────────────────────────── */
+
+/* Header: al despegar del top gana fondo más sólido, sombra y borde --line.
+   scroll-driven puro (sin JS); fallback = estado actual, intacto. */
+@supports (animation-timeline: scroll()) {
+  .fl-header {
+    animation: fl-header-elevate linear both;
+    animation-timeline: scroll(root);
+    animation-range: 0 96px;
+  }
+}
+@keyframes fl-header-elevate {
+  to {
+    background: color-mix(in srgb, var(--bg) 94%, transparent);
+    border-bottom-color: var(--line);
+    box-shadow: var(--shadow-1);
+  }
+}
+
+/* Nav: subrayado accent que entra desde la izquierda (spring suave) y sale
+   barriendo hacia la derecha — el clásico "wipe-through". */
+.fl-nav-link {
+  position: relative;
+}
+.fl-nav-link::after {
+  content: "";
+  position: absolute;
+  left: 12px;  /* alineado al padding-inline del link */
+  right: 12px;
+  bottom: 5px;
+  height: 2px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: 100% 50%; /* exit: se repliega hacia la derecha */
+  transition: transform var(--dur-quick) var(--ease-standard);
+}
+.fl-nav-link:hover::after,
+.fl-nav-link:focus-visible::after {
+  transform: scaleX(1);
+  transform-origin: 0 50%; /* enter: crece desde la izquierda */
+  transition: transform var(--dur-snappy) var(--spring-soft);
+}
+/* El outline genérico de .fl-root a:focus-visible fuerza --r-sm; estos dos
+   son pills — que el anillo siga la forma real. */
+.fl-nav-link:focus-visible,
+.fl-hero-cue:focus-visible {
+  border-radius: var(--r-pill);
+}
+
+/* CTA primario (header, hero, cierre): lift + sombra cálida tintada con
+   accent (geometría de --shadow-2, color via color-mix), active 0.98
+   instantáneo. Scope .fl-root: no toca los .fi-btn de la app. */
+.fl-root .fi-btn-primary {
+  transition:
+    background var(--dur-quick) var(--ease-standard),
+    color var(--dur-quick) var(--ease-standard),
+    border-color var(--dur-quick) var(--ease-standard),
+    transform var(--dur-quick) var(--ease-standard-out),
+    box-shadow var(--dur-quick) var(--ease-standard-out);
+}
+.fl-root .fi-btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 8px 24px color-mix(in srgb, var(--accent) 26%, transparent),
+    0 2px 6px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+.fl-root .fi-btn-primary:active {
+  transform: translateY(0) scale(0.98);
+  transition-duration: var(--dur-instant);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+/* Bento: el lift existente se mantiene; el borde se "enciende" con accent
+   y el label responde con un paso cálido. */
+.fl-bento-cell:hover {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
+}
+.fl-bento-label {
+  transition: color var(--dur-snappy) var(--ease-standard);
+}
+.fl-bento-cell:hover .fl-bento-label {
+  color: var(--accent-2);
+}
+
+/* FAQ: hover del summary con fondo suave; abierto, el summary cuadra sus
+   esquinas inferiores para integrarse con la respuesta. */
+.fl-faq-q {
+  transition: background var(--dur-quick) var(--ease-standard);
+}
+.fl-faq-q:hover {
+  background: var(--surface-2);
+}
+.fl-faq-item[open] .fl-faq-q {
+  border-end-start-radius: 0;
+  border-end-end-radius: 0;
+}
+
+/* ── 4 · Scroll cue del hero ──────────────────────────────────────────────
+   De link suelto a pill con borde — y se desvanece al scrollear (timeline
+   scroll() del root, primeros ~360px). Fallback sin scroll(): pill estática
+   (el chevron ya rebota). El hover empuja 1px hacia ABAJO: insinúa la
+   dirección del scroll. */
+.fl-hero-cue {
+  padding: 8px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--surface) 55%, transparent);
+  transition:
+    color var(--dur-quick) var(--ease-standard),
+    border-color var(--dur-quick) var(--ease-standard),
+    background var(--dur-quick) var(--ease-standard),
+    transform var(--dur-quick) var(--ease-standard-out);
+}
+.fl-hero-cue:hover {
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  background: var(--surface);
+  transform: translateY(1px);
+}
+@supports (animation-timeline: scroll()) {
+  .fl-hero-cue {
+    animation: fl-cue-fade linear both;
+    animation-timeline: scroll(root);
+    animation-range: 40px 360px;
+  }
+}
+@keyframes fl-cue-fade {
+  to {
+    opacity: 0;
+    visibility: hidden; /* invisible ⇒ tampoco clickeable */
+  }
+}
+
+/* ── 5 · Ritmo vertical ───────────────────────────────────────────────────
+   El hero pierde aire arriba (el headline sube y el scroll cue entra en el
+   fold a 1440×900); pricing y FAQ son la misma zona transaccional — el FAQ
+   se acerca. La bóveda conserva su runway: el pin del día ya respira. */
+.fl-hero {
+  padding-block: clamp(56px, 9vh, 112px) var(--fl-section-gap);
+}
+#faq.fl-section {
+  padding-block-start: calc(var(--fl-section-gap) * 0.45);
+}
+
+/* ── 6 · Reduced motion — anula TODO lo nuevo de este fragmento ────────── */
+@media (prefers-reduced-motion: reduce) {
+  .fl-header,
+  .fl-hero-cue {
+    animation: none !important;
+  }
+  .fl-nav-link::after,
+  .fl-hero-cue,
+  .fl-bento-label,
+  .fl-faq-q,
+  .fl-root .fi-btn-primary {
+    transition: none !important;
+  }
+  .fl-root .fi-btn-primary:hover,
+  .fl-root .fi-btn-primary:active,
+  .fl-hero-cue:hover {
+    transform: none;
+    box-shadow: none;
   }
 }
 

@@ -15,7 +15,7 @@ import { COOKIES_VERSION } from "@/lib/legal/versions";
 import { SUPPORT_EMAIL } from "@/lib/support";
 
 export const metadata = {
-  title: "Política de Cookies · Folio",
+  title: "Política de Cookies",
   description: "Qué cookies usa Folio, para qué, y cómo desactivarlas.",
 };
 

@@ -15,7 +15,7 @@ import { CardMoodsHarness } from "./harness";
  */
 
 export const dynamic = "force-static";
-export const metadata = { title: "Folio · 4 moods (dev)" };
+export const metadata = { title: "4 moods (dev)" };
 
 export default function CardMoodsDevPage() {
   if (process.env.NODE_ENV === "production") {

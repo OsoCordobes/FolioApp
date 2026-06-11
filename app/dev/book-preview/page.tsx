@@ -14,7 +14,7 @@ import { BookingWizard } from "@/components/booking/booking-wizard";
  */
 
 export const dynamic = "force-static";
-export const metadata = { title: "Folio · /book preview (dev)" };
+export const metadata = { title: "/book preview (dev)" };
 
 export default function BookPreviewDevPage() {
   if (process.env.NODE_ENV === "production") {
