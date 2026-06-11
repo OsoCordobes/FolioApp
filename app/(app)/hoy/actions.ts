@@ -22,7 +22,7 @@ import { blindIndex, blindIndexPhone, encryptColumn } from "@/lib/crypto";
 import { err, mapSupabaseError, ok, type Result } from "@/lib/db/errors";
 import { getActiveSession } from "@/lib/db/session";
 import { listPacientesDirectorio } from "@/lib/db/pacientes";
-import { createTurno, transitionTurno } from "@/lib/db/turnos";
+import { createTurno, reagendarTurno, transitionTurno } from "@/lib/db/turnos";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { EstadoTurno } from "@/lib/types";
 
@@ -57,6 +57,39 @@ export async function transitionTurnoAction(
 
   if (result.ok) {
     revalidatePath("/hoy");
+  }
+  return result;
+}
+
+// ─── Reagendar turno ─────────────────────────────────────────────────────────
+
+const reagendarTurnoActionSchema = z.object({
+  turnoId: z.string().uuid(),
+  nuevoInicio: z.string().datetime({ offset: true }),
+  nuevaDuracionMin: z.number().int().min(5).max(480).optional(),
+});
+
+export type ReagendarTurnoActionInput = z.infer<typeof reagendarTurnoActionSchema>;
+
+/**
+ * Reagenda un turno desde el modal de /hoy: el original queda REAGENDADO y se
+ * crea uno nuevo con el mismo paciente/servicio/profesional/precio en el
+ * horario elegido. La sesión activa la valida `reagendarTurno` (lib/db) como
+ * primer paso — igual que transitionTurnoAction delega en transitionTurno.
+ */
+export async function reagendarTurnoAction(
+  input: ReagendarTurnoActionInput,
+): Promise<Result<{ nuevoTurnoId: string }>> {
+  const parsed = reagendarTurnoActionSchema.safeParse(input);
+  if (!parsed.success) {
+    return err("validation", "Datos del reagendado inválidos.", parsed.error.message);
+  }
+
+  const result = await reagendarTurno(parsed.data);
+
+  if (result.ok) {
+    revalidatePath("/hoy");
+    revalidatePath("/calendario");
   }
   return result;
 }
