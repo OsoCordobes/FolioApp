@@ -14,6 +14,14 @@ import { configFromOrg, solicitarCAE, type ComprobanteRequest, type ComprobanteR
 
 export interface EmitirInput {
   pagoId: string;
+  /**
+   * Org activa de la sesión que pide facturar (getActiveSession() en el
+   * caller). El SELECT del pago corre con service_role (BYPASSRLS), así que
+   * SIN este scope un `pagoId` ajeno adivinado/filtrado emitiría una factura
+   * real contra el CUIT de OTRA organización (IDOR cross-tenant — hallazgo
+   * high de auditoría). Nunca derivar este valor de input del cliente.
+   */
+  organizationId: string;
 }
 
 /**
@@ -26,12 +34,32 @@ export interface EmitirInput {
 export async function emitirFacturaParaPago(input: EmitirInput): Promise<Result<ComprobanteResponse>> {
   const service = createSupabaseServiceClient();
 
-  const { data: pago } = await service
+  // OJO schema: `pago` NO tiene organization_id propio — su tenant es el del
+  // turno (pago.turno_id → turno.organization_id; así están escritas sus
+  // policies RLS en M09). No seleccionar/filtrar pago.organization_id acá:
+  // PostgREST devuelve 42703 y el path muere en "no encontrado".
+  const { data: pago, error: pagoError } = await service
     .from("pago")
-    .select("id, organization_id, turno_id, monto_cents, estado, pagado_ts, factura_afip_numero")
+    .select("id, turno_id, monto_cents, estado, pagado_ts, factura_afip_numero")
     .eq("id", input.pagoId)
     .maybeSingle();
+  if (pagoError) return err("db_error", "Error consultando el pago.", pagoError.message);
   if (!pago) return err("not_found", "Pago no encontrado.");
+
+  // Scope de organización obligatorio ANTES de cualquier check de estado: el
+  // client es service_role (BYPASSRLS), este `.eq("organization_id", ...)`
+  // sobre el turno reemplaza a la RLS acá. Un pagoId de otra org devuelve el
+  // MISMO not_found que un id inexistente — no se filtra ni la existencia ni
+  // el estado del pago de otro tenant.
+  const { data: turno, error: turnoError } = await service
+    .from("turno")
+    .select("paciente_id, organization_id")
+    .eq("id", pago.turno_id)
+    .eq("organization_id", input.organizationId)
+    .maybeSingle();
+  if (turnoError) return err("db_error", "Error consultando el turno.", turnoError.message);
+  if (!turno) return err("not_found", "Pago no encontrado.");
+
   if (pago.estado !== "PAGADO") return err("validation", "Solo se factura pagos en estado PAGADO.");
   if (pago.factura_afip_numero) {
     return err("conflict", `Ya tiene factura emitida: ${pago.factura_afip_numero}.`);
@@ -40,7 +68,7 @@ export async function emitirFacturaParaPago(input: EmitirInput): Promise<Result<
   const { data: org } = await service
     .from("organization")
     .select("id, cuit, punto_venta_afip, condicion_iva, certificado_arca_cifrado, razon_social")
-    .eq("id", pago.organization_id)
+    .eq("id", input.organizationId)
     .maybeSingle();
   if (!org) return err("not_found", "Organization no encontrada.");
   if (!org.cuit) return err("validation", "Falta CUIT en organization.");
@@ -49,31 +77,46 @@ export async function emitirFacturaParaPago(input: EmitirInput): Promise<Result<
   const config = configFromOrg(org);
   if (!config) return err("validation", "Falta certificado AFIP o config incompleta.");
 
-  // Levantar paciente para DocTipo/DocNro
-  const { data: turno } = await service
-    .from("turno")
-    .select("paciente_id")
-    .eq("id", pago.turno_id)
+  // Levantar identidad del paciente para DocTipo/DocNro.
+  // OJO schema: paciente_identidad NO tiene paciente_id ni dni/cuit_cifrado —
+  // se llega vía paciente.identidad_id, y el documento vive en tipo_doc
+  // (enum DNI/LE/LC/CI/PASAPORTE, sin CUIT) + numero_doc_cifrado. Solo DNI
+  // mapea a un DocTipo AFIP que manejamos (96); el resto factura como
+  // Consumidor Final (99). Ambos fetches con scope de organización.
+  const { data: paciente } = await service
+    .from("paciente")
+    .select("identidad_id")
+    .eq("id", turno.paciente_id)
+    .eq("organization_id", input.organizationId)
     .maybeSingle();
-  if (!turno) return err("not_found", "Turno asociado al pago no encontrado.");
 
-  const { data: ident } = await service
-    .from("paciente_identidad")
-    .select("dni_cifrado, cuit_cifrado")
-    .eq("paciente_id", turno.paciente_id)
-    .maybeSingle();
-
-  let docTipo: 80 | 96 | 99 = 99;                 // 99 = Consumidor Final
+  let docTipo: 96 | 99 = 99;                      // 99 = Consumidor Final
   let docNumero = "0";
-  if (ident) {
-    const cuit = decryptColumn(ident.cuit_cifrado);
-    const dni = decryptColumn(ident.dni_cifrado);
-    if (cuit) {
-      docTipo = 80;
-      docNumero = cuit;
-    } else if (dni) {
-      docTipo = 96;
-      docNumero = dni;
+  if (paciente?.identidad_id) {
+    const { data: ident } = await service
+      .from("paciente_identidad")
+      .select("tipo_doc, numero_doc_cifrado")
+      .eq("id", paciente.identidad_id)
+      .eq("organization_id", input.organizationId)
+      .maybeSingle();
+    if (ident?.tipo_doc === "DNI" && ident.numero_doc_cifrado) {
+      // Fallo de descifrado fatal a propósito (NO tryDecrypt → null): ante un
+      // ciphertext corrupto preferimos abortar la emisión antes que facturar
+      // con una identidad fiscal incorrecta (Consumidor Final silencioso).
+      // Abortamos con err() para no tirar una excepción fuera del Result.
+      let dni: string | null;
+      try {
+        dni = decryptColumn(ident.numero_doc_cifrado);
+      } catch {
+        return err(
+          "db_error",
+          "No se pudo descifrar el documento del paciente; se aborta la emisión para no facturar con datos incorrectos.",
+        );
+      }
+      if (dni) {
+        docTipo = 96;
+        docNumero = dni;
+      }
     }
   }
 
