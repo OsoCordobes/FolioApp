@@ -27,7 +27,11 @@ const RUBRO_LABELS: Record<string, string> = {
 
 export function formatRubro(rubro: string | null | undefined): string | null {
   if (!rubro) return null;
-  const key = rubro.toLowerCase().trim();
+  // Las keys del map usan underscore, pero los RubroId del onboarding
+  // (lib/onboarding/templates.ts) usan guion ("terapia-ocupacional") — la DB
+  // puede traer cualquiera de los dos. Normalizamos guiones a underscore para
+  // el lookup; el fallback capitaliza y convierte ambos separadores a espacio.
+  const key = rubro.toLowerCase().trim().replace(/-/g, "_");
   return RUBRO_LABELS[key] ?? capitalize(key.replace(/_/g, " "));
 }
 

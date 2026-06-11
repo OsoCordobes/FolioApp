@@ -28,6 +28,7 @@
 import type { ReactNode } from "react";
 
 import { AvatarIniciales } from "@/components/avatar-iniciales";
+import { formatRubro } from "@/lib/format/identity";
 import { adjustHexLightness } from "@/lib/format/initials";
 
 import { BrassCornerMark, DateBadge, EditorialRule } from "./decoration";
@@ -70,6 +71,12 @@ export interface PublicCardProps {
   /** Base URL (no trailing slash) used to render the link footer text. */
   appUrl?: string;
   className?: string;
+  /**
+   * Handler del CTA "Reservar turno" (variant full). En /book/[slug] scrollea
+   * al wizard; en Step 9 del onboarding abre la página pública. Si no se pasa,
+   * el botón queda decorativo (previews de /dev/card*).
+   */
+  onCta?: () => void;
 }
 
 const DEFAULT_ACENTO = "#8A6722";
@@ -79,6 +86,7 @@ export function PublicCard({
   variant = "preview",
   appUrl = "",
   className = "",
+  onCta,
 }: PublicCardProps) {
   const rawAcento = isValidHex(data.acentoHex) ? data.acentoHex : DEFAULT_ACENTO;
   const mood: CardMood = data.cardMood ?? "editorial";
@@ -90,6 +98,13 @@ export function PublicCard({
   const fullName =
     data.nombre?.trim() || data.consultorioNombre?.trim() || "Tu nombre";
   const consultorio = data.consultorioNombre?.trim() || "Tu consultorio";
+  // El rubro llega como slug crudo desde la DB ("terapia-ocupacional") en
+  // /book/[slug]; formatRubro lo humaniza y es idempotente para valores ya
+  // labelizados ("Quiropraxia" en los previews del onboarding).
+  const rubroDisplay = formatRubro(data.rubro);
+  // Badge boutique: ciudad real de la org en vez del "EST. 2026 · CÓRDOBA"
+  // hardcodeado. Sin ciudad no hay badge (no inventamos data).
+  const badgeLabel = data.ciudad?.trim() ? data.ciudad.trim().toUpperCase() : null;
   const showLink = !!data.slug && !!appUrl;
   const linkText = showLink ? `${stripScheme(appUrl)}/book/${data.slug}` : null;
 
@@ -132,7 +147,7 @@ export function PublicCard({
         <div className="fpc-hero-text">
           <h2 className="fpc-name">{fullName}</h2>
           <p className="fpc-meta">
-            {data.rubro || consultorio}
+            {rubroDisplay || consultorio}
             {data.ciudad ? <span> · {data.ciudad}</span> : null}
           </p>
         </div>
@@ -142,9 +157,9 @@ export function PublicCard({
             <BrassCornerMark />
           </span>
         ) : null}
-        {mood === "boutique" ? (
+        {mood === "boutique" && badgeLabel ? (
           <span className="fpc-date-slot">
-            <DateBadge label="EST. 2026 · CÓRDOBA" />
+            <DateBadge label={badgeLabel} />
           </span>
         ) : null}
       </header>
@@ -203,7 +218,7 @@ export function PublicCard({
 
       {isFull && data.slug ? (
         <footer className="fpc-footer">
-          <button type="button" className="fpc-cta">
+          <button type="button" className="fpc-cta" onClick={onCta}>
             Reservar turno
           </button>
         </footer>

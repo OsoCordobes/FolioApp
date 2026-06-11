@@ -13678,3 +13678,43 @@ input:focus { outline: none; }
     transform: none;
   }
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   FOLIO ATELIER · /book/[slug] · skeleton de carga de horarios
+   Placeholder shimmer del paso "Elegí un horario" del BookingWizard.
+   Mismos tokens de superficie/línea; reduce-motion congela el shimmer.
+   ════════════════════════════════════════════════════════════════════════ */
+
+.bk-skel {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface-2);
+  border-radius: var(--r-sm);
+}
+.bk-skel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--surface) 65%, transparent) 50%,
+    transparent 100%
+  );
+  animation: bk-skel-shimmer 1.4s var(--ease-emphasized-out) infinite;
+}
+.bk-skel-label {
+  width: 140px;
+  height: 13px;
+  margin-bottom: 10px;
+}
+.bk-skel-slot {
+  height: 38px;
+}
+@keyframes bk-skel-shimmer {
+  100% { transform: translateX(100%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bk-skel::after { animation: none; }
+}
