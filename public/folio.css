@@ -2378,6 +2378,8 @@ input:focus { outline: none; }
   gap: 16px;
 }
 .cal-nav-l { display: inline-flex; align-items: center; gap: 8px; }
+/* Lado derecho del nav: filtros + entry point "Agendar" (cluster agenda). */
+.cal-nav-r { display: inline-flex; align-items: center; gap: 12px; }
 .cal-nav-btn, .cal-nav-today {
   display: inline-flex; align-items: center; justify-content: center;
   height: 30px; padding: 0 10px; border-radius: var(--r-sm);

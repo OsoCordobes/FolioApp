@@ -42,6 +42,7 @@ export default async function HoyPage() {
       fechaAnio={data.data.fechaAnio}
       nowIso={new Date().toISOString()}
       timezone={timezone}
+      organizationId={ctx.data.organization.id}
     />
   );
 }

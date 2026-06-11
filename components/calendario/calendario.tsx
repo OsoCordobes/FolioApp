@@ -17,10 +17,13 @@
  */
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import * as I from "@/components/icons";
 import { PedidoModal } from "@/components/calendario/pedido-modal";
+import { TurnoCreateModal } from "@/components/hoy/turno-create-modal";
+import { useAgendaAutoRefresh } from "@/lib/use-agenda-refresh";
 import type { MonthGridCell } from "@/lib/db/calendario";
 import type {
   Bloqueo,
@@ -389,6 +392,7 @@ function CalHeader({
   prevMonthIso,
   nextMonthIso,
   hoyMonthIso,
+  onAgendar,
 }: {
   vista: Vista;
   setVista: (v: Vista) => void;
@@ -405,6 +409,7 @@ function CalHeader({
   prevMonthIso: string;
   nextMonthIso: string;
   hoyMonthIso: string;
+  onAgendar: () => void;
 }) {
   return (
     <header className="cal-head">
@@ -471,6 +476,9 @@ function CalHeader({
         </div>
         <div className="cal-nav-r">
           <CalFilters estados={estados} setEstados={setEstados} pedidosPendientesCount={pedidosPendientesCount} mostrarPedidos={mostrarPedidos} setMostrarPedidos={setMostrarPedidos} />
+          <button type="button" className="fi-btn fi-btn-primary" onClick={onAgendar}>
+            <I.Plus size={12} /> Agendar
+          </button>
         </div>
       </div>
     </header>
@@ -543,6 +551,7 @@ function VistaSemana({
   pedidos,
   pacientes,
   weekDates,
+  diasCerrados,
   hoyIso,
   nowHHMM,
   onOpenBandeja,
@@ -553,6 +562,8 @@ function VistaSemana({
   pedidos: Pedido[];
   pacientes: PacientesById;
   weekDates: string[];
+  /** Por índice (0=LUN..6=DOM): derivado de disponibilidad_profesional + eventos. */
+  diasCerrados: boolean[];
   hoyIso: string;
   nowHHMM: string;
   onOpenBandeja: () => void;
@@ -584,7 +595,9 @@ function VistaSemana({
         <div className="cal-time-spacer" />
         {weekDates.map((iso, i) => {
           const isHoy = iso === hoyIso;
-          const cerrado = i === 5 || i === 6;
+          // Data-driven (antes hardcodeado i===5||i===6): un finde con
+          // disponibilidad cargada o con turnos se muestra como día normal.
+          const cerrado = diasCerrados[i] ?? (i === 5 || i === 6);
           const numero = Number(iso.slice(-2));
           const dayTs = turnos.filter((t) => t.fecha === iso);
           const dayBls = bloqueos.filter((b) => b.fecha === iso);
@@ -621,7 +634,7 @@ function VistaSemana({
 
         {weekDates.map((iso, i) => {
           const isHoy = iso === hoyIso;
-          const cerrado = i === 5 || i === 6;
+          const cerrado = diasCerrados[i] ?? (i === 5 || i === 6);
           const dayTurnos = turnos.filter((t) => t.fecha === iso);
           const dayBloqueos = bloqueos.filter((b) => b.fecha === iso);
           const dayPedidos = pedidos.filter((p) => p.fecha === iso && p.estado === "pendiente");
@@ -803,6 +816,8 @@ interface CalendarioProps {
   pedidos: Pedido[];
   pacientes: PacientesById;
   weekDates: string[];
+  /** Por índice de weekDates (0=LUN..6=DOM); ver deriveDiasCerrados. */
+  diasCerrados?: boolean[];
   weekRangeLabel: string;
   hoyIso: string;
   nowHHMM: string;
@@ -811,6 +826,8 @@ interface CalendarioProps {
   nextWeekIso: string;
   hoyWeekStartIso: string;
   initialVista?: Vista;
+  /** Org activa — habilita el live update (polling / realtime tras flag). */
+  organizationId?: string;
   // Vista mensual (PR E)
   mesGrid: MonthGridCell[];
   mesTurnos: TurnoSemana[];
@@ -828,6 +845,7 @@ export function Calendario({
   pedidos,
   pacientes,
   weekDates,
+  diasCerrados,
   weekRangeLabel,
   hoyIso,
   nowHHMM,
@@ -835,6 +853,7 @@ export function Calendario({
   nextWeekIso,
   hoyWeekStartIso,
   initialVista = "semana",
+  organizationId,
   mesGrid,
   mesTurnos,
   mesPacientes,
@@ -844,10 +863,19 @@ export function Calendario({
   nextMonthIso,
   hoyMonthIso,
 }: CalendarioProps) {
+  const router = useRouter();
   const [vista, setVista] = useState<Vista>(initialVista);
   const [estados, setEstados] = useState<Set<string>>(new Set());
   const [mostrarPedidos, setMostrarPedidos] = useState(true);
   const [selectedPedido, setSelectedPedido] = useState<Pedido | null>(null);
+  const [agendarOpen, setAgendarOpen] = useState(false);
+
+  // Live update: los turnos llegan por props (sin useState espejo), así que
+  // un router.refresh() alcanza para que la vista se actualice sola.
+  useAgendaAutoRefresh(organizationId ?? null);
+
+  // Fallback defensivo si el SC todavía no manda la prop (mismo hardcode previo).
+  const cerradosSemana = diasCerrados ?? weekDates.map((_, i) => i === 5 || i === 6);
 
   const pedidosPendientes = useMemo(() => pedidos.filter((p) => p.estado === "pendiente"), [pedidos]);
   const pedidosVisibles = mostrarPedidos ? pedidosPendientes : [];
@@ -875,6 +903,7 @@ export function Calendario({
         prevMonthIso={prevMonthIso}
         nextMonthIso={nextMonthIso}
         hoyMonthIso={hoyMonthIso}
+        onAgendar={() => setAgendarOpen(true)}
       />
 
       {vista === "semana" ? (
@@ -884,6 +913,7 @@ export function Calendario({
           pedidos={pedidosVisibles}
           pacientes={pacientes}
           weekDates={weekDates}
+          diasCerrados={cerradosSemana}
           hoyIso={hoyIso}
           nowHHMM={nowHHMM}
           onOpenBandeja={() => setVista("bandeja")}
@@ -908,6 +938,20 @@ export function Calendario({
           pedido={selectedPedido}
           onClose={() => setSelectedPedido(null)}
           onResolved={() => setSelectedPedido(null)}
+        />
+      ) : null}
+
+      {/* Entry point "Agendar": reusa el modal de /hoy tal cual (origen MANUAL).
+          createTurnoAction ya revalida /calendario; el refresh fuerza el
+          re-render inmediato del SC para que el turno aparezca sin F5. */}
+      {agendarOpen ? (
+        <TurnoCreateModal
+          origen="MANUAL"
+          onClose={() => setAgendarOpen(false)}
+          onCreated={() => {
+            setAgendarOpen(false);
+            router.refresh();
+          }}
         />
       ) : null}
     </div>
