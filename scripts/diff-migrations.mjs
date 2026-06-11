@@ -48,9 +48,10 @@ await client.query(`
 `);
 
 const { rows } = await client.query(
-  "SELECT version FROM supabase_migrations.schema_migrations ORDER BY version",
+  "SELECT version, name FROM supabase_migrations.schema_migrations ORDER BY version",
 );
 const applied = new Set(rows.map((r) => r.version));
+const repoVersions = new Set(files.map((f) => f.split("_")[0]));
 
 console.log(`Applied: ${rows.length} migrations`);
 console.log(`Repo:    ${files.length} migrations\n`);
@@ -62,14 +63,30 @@ for (const file of files) {
   if (!applied.has(version)) pending.push({ version, name, file });
 }
 
+// Drift inverso: aplicada en la DB pero sin archivo en el repo. Así se
+// escaparon M44–M48 y M52 — el chequeo repo→DB solo no alcanza. Si aparece
+// acá, hay que recuperar el DDL del ledger (columna `statements`) al repo.
+const missingInRepo = rows.filter((r) => !repoVersions.has(r.version));
+
 if (pending.length === 0) {
-  console.log("All migrations applied. Nothing to do.");
+  console.log("All repo migrations applied.");
 } else {
   console.log(`Pending (${pending.length}):`);
   for (const p of pending) console.log(`  ${p.version}  ${p.name}`);
   console.log(
     `\nTo apply: node --env-file=.env.local scripts/push-pending-migrations.mjs`,
   );
+}
+
+if (missingInRepo.length > 0) {
+  console.log(`\n⚠ DRIFT: applied in DB but MISSING from repo (${missingInRepo.length}):`);
+  for (const m of missingInRepo) console.log(`  ${m.version}  ${m.name ?? "(sin nombre)"}`);
+  console.log(
+    "  Recover the canonical DDL from supabase_migrations.schema_migrations.statements into supabase/migrations/.",
+  );
+  process.exitCode = 1;
+} else if (pending.length === 0) {
+  console.log("Repo and DB ledgers match. Nothing to do.");
 }
 
 await client.end();

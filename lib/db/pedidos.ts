@@ -187,13 +187,17 @@ export async function promotePedidoToTurno(
   } = input;
 
   // a. Re-chequeo de solapamiento ANTES de cualquier mutación. Si el slot está
-  //    ocupado abortamos limpio: el pedido sigue PENDIENTE.
+  //    ocupado abortamos limpio: el pedido sigue PENDIENTE. El propio pedido
+  //    (aún PENDIENTE con fecha_propuesta solapada por definición) se excluye
+  //    del chequeo (M53) — sin esto se auto-conflictuaba y NINGUNA reserva
+  //    pública ni acepte de bandeja podía completarse.
   const ocupado = await checkSlotOcupado(
     client,
     organizationId,
     fechaPropuesta,
     duracionMin,
     profesionalId,
+    pedidoId,
   );
   if (ocupado) {
     return err("conflict", "Ese horario ya no está disponible.");
@@ -450,13 +454,16 @@ export async function confirmarPedido(
 
   // ── CR-5: chequeo de solapamiento ANTES de tocar el estado del pedido.
   //    Si el slot está ocupado abortamos sin haber modificado nada → el
-  //    pedido queda PENDIENTE (no se stranda en CONFIRMADO).
+  //    pedido queda PENDIENTE (no se stranda en CONFIRMADO). Excluimos el
+  //    propio pedido del chequeo (M53): si inicio == fecha_propuesta se
+  //    auto-conflictuaba siempre.
   const ocupado = await checkSlotOcupado(
     supabase,
     session.data.organizationId,
     inicio,
     pedido.duracion_min,
     profesionalId,
+    pedidoId,
   );
   if (ocupado) {
     return err(

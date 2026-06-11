@@ -103,6 +103,21 @@ export function generateSlotsForFranja(
 }
 
 /**
+ * ¿`inicioIso` coincide exactamente con el inicio de algún slot ofrecido?
+ * (pura, testeable). Compara por instante (getTime) para tolerar distintas
+ * representaciones ISO del mismo momento (Z vs -03:00).
+ *
+ * Defensa server-side del submit público: el cliente solo puede reservar
+ * horarios que la grilla realmente ofrece — no timestamps arbitrarios
+ * (madrugada, pasado, fuera de la disponibilidad del profesional).
+ */
+export function slotEstaOfrecido(slots: Slot[], inicioIso: string): boolean {
+  const inicioMs = new Date(inicioIso).getTime();
+  if (!Number.isFinite(inicioMs)) return false;
+  return slots.some((s) => new Date(s.inicio).getTime() === inicioMs);
+}
+
+/**
  * Devuelve slots disponibles en un rango para un profesional, dada la
  * duración requerida por el servicio.
  */
