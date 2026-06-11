@@ -19,6 +19,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { encryptColumn } from "@/lib/crypto";
+import { timingSafeEqualStrings } from "@/lib/security/verify-bearer";
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
 import { resolveOrgByPhoneNumberId } from "@/lib/whatsapp/resolve-org";
 import { verifyMetaSignature } from "@/lib/whatsapp/webhook-security";
@@ -33,7 +34,8 @@ export async function GET(request: NextRequest) {
   const challenge = searchParams.get("hub.challenge");
 
   const expected = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
-  if (mode === "subscribe" && token && expected && token === expected) {
+  // Comparación timing-safe (misma clase de bug que el Bearer de los crons).
+  if (mode === "subscribe" && token && expected && timingSafeEqualStrings(token, expected)) {
     return new NextResponse(challenge ?? "", { status: 200 });
   }
   return new NextResponse("forbidden", { status: 403 });

@@ -29,6 +29,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { decryptColumn } from "@/lib/crypto";
+import { verifyBearer } from "@/lib/security/verify-bearer";
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
 import {
   sendConfirmacion24h,
@@ -107,7 +108,7 @@ function authorize(req: NextRequest): NextResponse | null {
   if (!secret) {
     return NextResponse.json({ ok: false, error: "CRON_SECRET no configurado" }, { status: 500 });
   }
-  if (req.headers.get("authorization") !== `Bearer ${secret}`) {
+  if (!verifyBearer(req.headers.get("authorization"), secret)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   return null;
