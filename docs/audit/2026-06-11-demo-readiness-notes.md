@@ -100,6 +100,22 @@ de producto de alto impacto se escalan al founder en vez de decidirse acá.
   El turno de prueba (2026-06-11 15:00 AR, "Test Auditoria Booking") queda
   en esa org de test como evidencia.
 
+### D6 — Runbook de datos prod ejecutado (2026-06-11)
+
+- **Backup previo**: `scripts/backup-logical.mjs` (nuevo) — 54 tablas / 692
+  filas → `~\folio-backups\2026-06-11T17-21-17-068Z` (fuera del repo; el plan
+  Supabase FREE no tiene backups automáticos — ver pendiente del founder).
+- **UPDATEs auditables** (vía MCP, solo DML):
+  1. Org del founder (`lautaro-amiune`): `is_internal_account=true` (estaba
+     bloqueada por el gate de billing — grace vencida, 0 suscripciones) y
+     rename `puticlub` → `Consultorio Lautaro Amiune` (reversible en
+     /configuracion).
+  2. `opt_out_public_listing=true` para 34 orgs de prueba (30 × `e2e-test-*`,
+     `guestuserome{,-2,-3}` —incluida "QuiroAnal"—, `joejoedoedoe9`).
+     Se conservan bookables: `lautaro-folio` (org de pruebas E2E),
+     `lautaro-amiune`, `lorenzomj925` (usuario real Lorenzo) y `anyburghini`
+     (CEM — parece usuario real; no se toca).
+
 ## Pendientes de decisión del founder
 
 1. **Renombrar tu org real**: tu organización (slug `lautaro-amiune`) se llama
