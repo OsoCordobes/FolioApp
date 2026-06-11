@@ -14018,12 +14018,19 @@ input:focus { outline: none; }
 }
 
 /* Entrada inicial del hero — cinematic, decelerada. El head (h1 = LCP)
-   entra sin delay; copy y visual lo siguen escalonados. */
+   entra sin delay; copy y visual lo siguen escalonados.
+   ⚠ El head usa fl-rise-pos (solo transform, SIN opacity): un h1 que arranca
+   en opacity:0 nunca califica como candidato LCP y el LCP "real" termina
+   siendo el cookie banner post-hidratación. */
 @keyframes fl-rise {
   from { opacity: 0; transform: translateY(var(--motion-dist-md)); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.fl-hero-head   { animation: fl-rise var(--dur-cinematic) var(--ease-emphasized) both; }
+@keyframes fl-rise-pos {
+  from { transform: translateY(var(--motion-dist-md)); }
+  to   { transform: translateY(0); }
+}
+.fl-hero-head   { animation: fl-rise-pos var(--dur-cinematic) var(--ease-emphasized) both; }
 .fl-hero-copy   { animation: fl-rise var(--dur-cinematic) var(--ease-emphasized) 80ms both; }
 .fl-hero-visual { animation: fl-rise var(--dur-cinematic) var(--ease-emphasized) 160ms both; }
 
@@ -14305,7 +14312,11 @@ input:focus { outline: none; }
 @media (max-width: 767px) {
   .fl-hero { gap: var(--space-8); }
   .fl-hero-body {
-    grid-template-columns: 1fr;
+    /* minmax(0): `1fr` a secas tiene piso min-content y los rows del mock
+       (hora + nombre + badge nowrap) lo empujan a ~362px → ~11px de scroll
+       horizontal en 375. Con piso 0 la columna respeta el viewport y el
+       contenido degrada con sus propios ellipsis/wrap. */
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--space-12);
   }
   .fl-hero-ctas {
@@ -14936,6 +14947,9 @@ input:focus { outline: none; }
   border-radius: var(--r-lg);
   background: var(--bg);
   overflow: hidden;
+  /* contenedor de la línea de barrido: permite animarla con
+     transform: translateX(100cqw) en vez de `left` (cero layout/reflow) */
+  container-type: inline-size;
 }
 .fl-cipher-pt {
   margin: 0;
@@ -14974,7 +14988,7 @@ input:focus { outline: none; }
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 100%;
+  left: 0;
   width: 2px;
   background: linear-gradient(180deg, transparent, var(--accent) 30% 70%, transparent);
   opacity: 0;
@@ -15285,13 +15299,15 @@ input:focus { outline: none; }
   from { clip-path: inset(0 100% 0 0); }
   to   { clip-path: inset(0 0 0 0); }
 }
-/* `left` solo en 0%/100% → un único segmento lineal, en sync exacto con el
-   borde del clip; la opacity prende/apaga en los extremos. */
+/* translateX solo en 0%/100% → un único segmento lineal, en sync exacto con
+   el borde del clip; la opacity prende/apaga en los extremos. 100cqw = ancho
+   de .fl-cipher-body (container-type: inline-size) — compositor-only, sin
+   layout (antes animaba `left`). */
 @keyframes fl-cipher-scan-x {
-  0%   { left: 0%; opacity: 0; }
+  0%   { transform: translateX(0); opacity: 0; }
   6%   { opacity: 1; }
   94%  { opacity: 1; }
-  100% { left: 100%; opacity: 0; }
+  100% { transform: translateX(100cqw); opacity: 0; }
 }
 @keyframes fl-cipher-lock-pop {
   from { opacity: 0; transform: scale(0.4); }
@@ -16046,5 +16062,904 @@ input:focus { outline: none; }
   }
   .fl-bento-cell {
     transition: none;
+  }
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * LANDING · Fragmento R2 — refinamiento de los mockups de "Un día con Folio"
+ * (#dia): página pública real en miniatura (10:30), ficha SOAP completa con
+ * capa trasera (14:00) y dashboard de cierre (20:00).
+ * El orquestador anexa este archivo al final de public/folio.css y lo borra
+ * (a igual especificidad, estas reglas ganan la cascada sobre el frag. E2).
+ * Solo tokens var()/color-mix; scopeado .fl-rsv-* / .fl-cipher-* /
+ * .fl-close-* / .fl-sc-*.
+ *
+ * ⚠ Animaciones scrubeadas por --fl-day: los ranges del fragmento E2 quedan
+ * EXACTOS — wa 6%–16% · sweep/scan 44%–58% · lock 56%–61% · barras 70%–86%.
+ * Acá solo se SUMA un detalle (.fl-close-pay, fade-up de los cobros) DENTRO
+ * del range 70%–86% ya existente, con su anulación en reduced-motion.
+ * ─────────────────────────────────────────────────────────────────────── */
+
+/* ── fl-rsv · 10:30 — página pública en miniatura, composición en capas ── */
+.fl-rsv {
+  width: min(460px, 100%);
+  /* aire arriba para la capa trasera que asoma; abajo cuelga la notificación
+     (espacio suficiente para que solo pise el borde de la card, no el botón) */
+  padding-top: var(--space-4);
+  padding-bottom: var(--space-20);
+}
+.fl-rsv-front {
+  position: relative;
+  z-index: 1;
+}
+.fl-rsv-back {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  right: calc(var(--space-3) * -1);
+  width: 82%;
+  gap: var(--space-3);
+  box-shadow: var(--shadow-2);
+  filter: blur(2px);
+  opacity: 0.55;
+}
+.fl-rsv-back-lines {
+  display: grid;
+  gap: var(--space-2);
+}
+.fl-rsv-back-lines span {
+  height: 12px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+.fl-rsv-back-lines span:last-child { width: 68%; }
+
+/* header del consultorio: avatar con iniciales + nombre + URL mono */
+.fl-rsv-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0 var(--space-1);
+}
+.fl-rsv-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: var(--r-md);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-soft-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--accent-2);
+}
+.fl-rsv-org {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.fl-rsv-name {
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fl-rsv-url {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fl-rsv-open {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: var(--r-pill);
+  background: var(--green-soft);
+  color: var(--green);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.fl-rsv-open-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* campos de la página: label mono + selector de servicio / grilla */
+.fl-rsv-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.fl-rsv-field-label {
+  padding: 0 var(--space-1);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+.fl-rsv-services {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.fl-rsv-service {
+  padding: 6px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-pill);
+  background: var(--bg);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.fl-rsv-service.is-on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-2);
+  font-weight: 600;
+}
+
+/* confirmación: botón primario + nota mono */
+.fl-rsv-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.fl-rsv-confirm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 10px var(--space-4);
+  border-radius: var(--r-md);
+  background: var(--accent);
+  color: var(--bg);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  box-shadow: var(--shadow-1);
+  white-space: nowrap;
+}
+.fl-rsv-confirm-note {
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--ink-4);
+}
+
+/* el ciphertext corta en los guiones de los bloques, no a mitad de bloque */
+.fl-cipher-ct {
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+
+/* notificación de WhatsApp — superpuesta en la esquina, como capa del hero
+   (la animación fl-rsv-wa-in del E2 sigue intacta: range contain 6%–16%) */
+.fl-rsv-wa {
+  right: calc(var(--space-2) * -1);
+  max-width: min(300px, 92%);
+  border-color: color-mix(in srgb, var(--green) 18%, var(--line-soft));
+  box-shadow: var(--shadow-hero);
+}
+.fl-rsv-wa-text {
+  display: block;
+  flex: 1;
+  min-width: 0;
+}
+.fl-rsv-wa-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-bottom: 2px;
+  font-size: var(--fs-xs);
+  color: var(--ink);
+}
+.fl-rsv-wa-head b { font-weight: 600; }
+.fl-rsv-wa-time {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  color: var(--ink-4);
+}
+.fl-rsv-wa-meta {
+  margin-top: 3px;
+  letter-spacing: 0.02em;
+}
+
+/* ── fl-cipher · 14:00 — ficha SOAP completa + capa trasera desenfocada ── */
+.fl-cipher {
+  position: relative;
+  width: min(480px, 100%);
+  padding-top: var(--space-4);
+}
+.fl-cipher-front {
+  position: relative;
+  z-index: 1;
+}
+.fl-cipher-back {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  right: calc(var(--space-3) * -1);
+  width: 78%;
+  gap: var(--space-3);
+  box-shadow: var(--shadow-2);
+  filter: blur(2px);
+  opacity: 0.55;
+}
+.fl-cipher-back-lines {
+  display: grid;
+  gap: var(--space-2);
+}
+.fl-cipher-back-lines span {
+  height: 11px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+.fl-cipher-back-lines span:nth-child(2) { width: 84%; }
+.fl-cipher-back-lines span:nth-child(3) { width: 56%; }
+
+/* header de ficha: avatar + paciente + tag de sesión + hora */
+.fl-cipher-who {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.fl-cipher-ava {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-soft-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--accent-2);
+}
+.fl-cipher-id {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.fl-cipher-sub {
+  font-size: var(--fs-xs);
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fl-cipher-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+.fl-cipher-time {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* secciones S/O/A/P: label mono chiquito + 1-2 líneas de texto clínico */
+.fl-cipher-pt {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.fl-cipher-sec { display: block; }
+.fl-cipher-sec-label {
+  display: block;
+  margin-bottom: 1px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+.fl-cipher-sec-label b {
+  font-family: inherit;
+  font-weight: 600;
+  color: var(--accent);
+}
+.fl-cipher-sec-text {
+  display: block;
+  font-size: var(--fs-body);
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+
+/* candado + AES-256-GCM al final del sweep, más prominente (pill).
+   La animación fl-cipher-lock-pop del E2 sigue intacta: contain 56%–61%. */
+.fl-cipher-lock {
+  width: auto;
+  height: auto;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line-soft));
+  color: var(--accent-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.fl-cipher-lock svg { flex-shrink: 0; }
+
+/* ── fl-close · 20:00 — dashboard de cierre ── */
+.fl-close {
+  width: min(480px, 100%);
+  gap: var(--space-4);
+}
+.fl-close-sub {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--ink-4);
+}
+
+/* barras de la semana: columnas con label de día, hoy en --accent.
+   La animación fl-close-bar-up del E2 sigue intacta: contain 70%–86%. */
+.fl-close-week {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px dashed var(--line);
+}
+.fl-close-week-label,
+.fl-close-pays-label {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+.fl-close-bars {
+  height: auto;
+  padding-top: 0;
+  border-top: 0;
+  align-items: flex-end;
+}
+.fl-close-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+}
+.fl-close-col .fl-close-bar {
+  flex: none;
+  width: 100%;
+  border-radius: 3px 3px 0 0;
+  background: var(--accent-soft-2);
+  transform-origin: bottom center;
+}
+/* alturas por día (reemplazan los nth-child del E2, que ya no matchean) */
+.fl-close-bars .fl-close-col:nth-child(1) .fl-close-bar { height: 30px; }
+.fl-close-bars .fl-close-col:nth-child(2) .fl-close-bar { height: 42px; }
+.fl-close-bars .fl-close-col:nth-child(3) .fl-close-bar { height: 34px; }
+.fl-close-bars .fl-close-col:nth-child(4) .fl-close-bar { height: 18px; }
+.fl-close-bars .fl-close-col:nth-child(5) .fl-close-bar { height: 8px; }
+.fl-close-bars .fl-close-col:nth-child(6) .fl-close-bar { height: 24px; }
+.fl-close-bars .fl-close-col:nth-child(7) .fl-close-bar { height: 52px; }
+.fl-close-bars .fl-close-col .fl-close-bar.is-today { background: var(--accent); }
+.fl-close-bar-day {
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--ink-4);
+}
+.fl-close-bar-day.is-today {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* últimos cobros — fila de detalle en mono con check verde */
+.fl-close-pays {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px dashed var(--line);
+}
+.fl-close-pay {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-md);
+  background: var(--bg);
+}
+.fl-close-pay-time {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.fl-close-pay-name {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.fl-close-pay-amt {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.fl-close-pay-ok {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  background: var(--green-soft);
+  color: var(--green);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.fl-close-pay-ok svg { flex-shrink: 0; }
+
+/* etiquetas largo/corto — el corto solo aparece en pantallas angostas */
+.fl-sc-short { display: none; }
+
+/* mobile angosto: que el header del consultorio y los cobros respiren */
+@media (max-width: 480px) {
+  .fl-rsv-open { display: none; }
+  .fl-sc-long { display: none; }
+  .fl-sc-short { display: inline; }
+  .fl-close-pay {
+    gap: var(--space-2);
+    padding-inline: var(--space-2);
+  }
+}
+
+/* ── ENHANCED · detalle animado DENTRO de ranges existentes ──
+ * Mismo gate que el E2. Los cobros del cierre hacen fade-up en la MISMA
+ * ventana de las barras (contain 70%–86%) — cero ranges nuevos. */
+@media (min-width: 768px) and (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .fl-close-pay {
+      animation-name: fl-sc-fade-up;
+      animation-timing-function: var(--ease-emphasized-out);
+      animation-fill-mode: both;
+      animation-timeline: --fl-day;
+      animation-range: contain 70% contain 86%;
+    }
+  }
+}
+
+/* viewports bajos: compactar igual que el E2 para que la escena entre entera */
+@media (min-width: 768px) and (max-height: 640px) and (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .fl-day .fl-cipher-card { gap: var(--space-2); }
+    .fl-day .fl-cipher-sec-text {
+      font-size: var(--fs-sm);
+      line-height: 1.45;
+    }
+    .fl-day .fl-cipher-pt { gap: var(--space-1); }
+    .fl-day .fl-close { gap: var(--space-3); }
+    .fl-day .fl-close-week,
+    .fl-day .fl-close-pays { padding-top: var(--space-2); }
+    .fl-day .fl-rsv { padding-top: var(--space-3); }
+    .fl-day .fl-rsv-card { gap: var(--space-3); }
+  }
+}
+
+@keyframes fl-sc-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(var(--motion-dist-sm));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* reduced-motion: el detalle nuevo también queda en su estado final */
+@media (prefers-reduced-motion: reduce) {
+  .fl-close-pay {
+    animation: none !important;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Folio · Landing — fragmento R3 del CTA sticky mobile.
+   El orquestador anexa este archivo al final de public/folio.css y lo borra
+   (lo consume components/landing/sticky-cta.tsx; clases fl-sticky-* propias,
+   cero colisiones).
+
+   Barra fixed-bottom SOLO <768px, glass como .fl-header (color-mix sobre
+   --bg + blur 12px), borde superior --line-soft y padding inferior con
+   env(safe-area-inset-bottom). Oculta vía visibility:hidden (sale del tab
+   order y del árbol de accesibilidad); .is-show la sube con una transición
+   corta — bajo prefers-reduced-motion aparece sin animación.
+   z-index 40: debajo del header (50) y del CookieBanner (60) — además el
+   island no la muestra hasta que el consent de cookies está resuelto.
+   ════════════════════════════════════════════════════════════════════════ */
+
+.fl-sticky-cta {
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--line-soft);
+  transform: translateY(100%);
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    transform var(--dur-moderate) ease,
+    opacity var(--dur-moderate) ease,
+    visibility 0s linear var(--dur-moderate);
+}
+.fl-sticky-cta.is-show {
+  transform: translateY(0);
+  opacity: 1;
+  visibility: visible;
+  transition:
+    transform var(--dur-moderate) ease,
+    opacity var(--dur-moderate) ease,
+    visibility 0s;
+}
+
+.fl-sticky-cta-btn {
+  flex: 1;
+  justify-content: center;
+  font-size: var(--fs-body);
+  padding: 10px 16px;
+}
+
+.fl-sticky-cta-note {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fl-sticky-cta,
+  .fl-sticky-cta.is-show {
+    transition: none;
+  }
+}
+
+/* Tablet/desktop: la barra no existe. */
+@media (min-width: 768px) {
+  .fl-sticky-cta {
+    display: none;
+  }
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * LANDING · Fragmento R1 — Craft visual (atmósfera, transiciones, micro-UX)
+ * El orquestador anexa este archivo AL FINAL de public/folio.css y lo borra.
+ * Solo tokens var() / color-mix sobre tokens; cero hex nuevo; todo .fl-*.
+ *
+ * Bloques:
+ *   1. Atmósfera del hero — glow radial accent detrás del mockup + trama de
+ *      puntos finísima que se desvanece (mask radial). CSS puro, ambos temas.
+ *   2. Transición a la bóveda — fog gradient de 112px en la entrada Y la
+ *      salida de .fl-vault. La bóveda redeclara los tokens dark adentro, así
+ *      que el --bg claro de la página entra vía la custom property puente
+ *      --fl-page-bg (se computa en .fl-root, donde --bg aún es el de la
+ *      página, y se hereda ya resuelta). En dark real los pseudos se apagan
+ *      (content: none) y se restaura el borde fino original.
+ *   3. Microinteracciones — header que se eleva al scrollear (scroll()),
+ *      subrayado animado del nav, CTA primario con lift + sombra cálida,
+ *      borde que se enciende en el bento, hover del FAQ.
+ *   4. Scroll cue del hero — pill con borde + fade out scroll-driven.
+ *   5. Ritmo vertical — hero más alto en el viewport (el cue entra en el
+ *      fold) y FAQ pegado a su zona (pricing).
+ *   6. Reduced motion — anula TODO lo nuevo.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+/* ── 1 · Atmósfera del hero ────────────────────────────────────────────── */
+
+/* Puente: --bg de la PÁGINA, resuelto fuera de .fl-vault (ver bloque 2). */
+.fl-root {
+  --fl-page-bg: var(--bg);
+}
+
+/* Trama de puntos 1px sobre la cabecera del hero — se desvanece hacia abajo
+   y hacia los lados con una mask radial (sin costura en los bordes de la
+   caja). Color derivado de --ink-3: se adapta solo a ambos temas y queda
+   muy por debajo del umbral de contraste del texto. */
+.fl-hero {
+  position: relative;
+  isolation: isolate;
+}
+.fl-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: radial-gradient(
+    color-mix(in srgb, var(--ink-3) 24%, transparent) 1px,
+    transparent 1.4px
+  );
+  background-size: 26px 26px;
+  -webkit-mask-image: radial-gradient(120% 56% at 50% 0%, #000 0%, transparent 100%);
+  mask-image: radial-gradient(120% 56% at 50% 0%, #000 0%, transparent 100%);
+  pointer-events: none;
+}
+
+/* Glow radial desaturado detrás del mockup. Derecha en 0 para no generar
+   scroll horizontal (overflow a la izquierda/abajo no crea scrollbar).
+   closest-side: el gradiente muere dentro de la caja, sin corte visible. */
+.fl-hero-visual::before {
+  content: "";
+  position: absolute;
+  inset: -16% 0 -12% -10%;
+  z-index: -1;
+  background: radial-gradient(
+    closest-side at 55% 42%,
+    color-mix(in srgb, var(--accent) 9%, transparent),
+    transparent 100%
+  );
+  pointer-events: none;
+}
+/* En dark el mismo 9% casi no se lee sobre #14130F — un paso más cálido. */
+[data-theme="dark"] .fl-hero-visual::before {
+  background: radial-gradient(
+    closest-side at 55% 42%,
+    color-mix(in srgb, var(--accent) 14%, transparent),
+    transparent 100%
+  );
+}
+
+/* ── 2 · Transición cinematográfica hacia/desde la bóveda ─────────────────
+   Fog de 112px con stops "easeados" (un linear-gradient de 2 stops deja un
+   borde duro perceptible). En light: la página funde al dark de la bóveda;
+   el borde fino original se vuelve transparente para no cortar el fog.
+   En dark real: pseudos apagados + borde restaurado → idéntico a hoy. */
+.fl-vault {
+  position: relative;
+  border-top-color: transparent;
+  border-bottom-color: transparent;
+}
+.fl-vault::before,
+.fl-vault::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 112px;
+  pointer-events: none;
+}
+.fl-vault::before {
+  top: -1px; /* cubre el área del borde (background-clip: border-box) */
+  background: linear-gradient(
+    to bottom,
+    var(--fl-page-bg) 0%,
+    color-mix(in srgb, var(--fl-page-bg) 70%, transparent) 32%,
+    color-mix(in srgb, var(--fl-page-bg) 32%, transparent) 64%,
+    transparent 100%
+  );
+}
+.fl-vault::after {
+  bottom: -1px;
+  background: linear-gradient(
+    to top,
+    var(--fl-page-bg) 0%,
+    color-mix(in srgb, var(--fl-page-bg) 70%, transparent) 32%,
+    color-mix(in srgb, var(--fl-page-bg) 32%, transparent) 64%,
+    transparent 100%
+  );
+}
+[data-theme="dark"] .fl-vault {
+  /* var(--line) acá resuelve al --line redeclarado dentro de .fl-vault —
+     el mismo separador fino que hoy distingue bóveda y página en dark. */
+  border-top-color: var(--line);
+  border-bottom-color: var(--line);
+}
+[data-theme="dark"] .fl-vault::before,
+[data-theme="dark"] .fl-vault::after {
+  content: none;
+}
+
+/* ── 3 · Microinteracciones ───────────────────────────────────────────── */
+
+/* Header: al despegar del top gana fondo más sólido, sombra y borde --line.
+   scroll-driven puro (sin JS); fallback = estado actual, intacto. */
+@supports (animation-timeline: scroll()) {
+  .fl-header {
+    animation: fl-header-elevate linear both;
+    animation-timeline: scroll(root);
+    animation-range: 0 96px;
+  }
+}
+@keyframes fl-header-elevate {
+  to {
+    background: color-mix(in srgb, var(--bg) 94%, transparent);
+    border-bottom-color: var(--line);
+    box-shadow: var(--shadow-1);
+  }
+}
+
+/* Nav: subrayado accent que entra desde la izquierda (spring suave) y sale
+   barriendo hacia la derecha — el clásico "wipe-through". */
+.fl-nav-link {
+  position: relative;
+}
+.fl-nav-link::after {
+  content: "";
+  position: absolute;
+  left: 12px;  /* alineado al padding-inline del link */
+  right: 12px;
+  bottom: 5px;
+  height: 2px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: 100% 50%; /* exit: se repliega hacia la derecha */
+  transition: transform var(--dur-quick) var(--ease-standard);
+}
+.fl-nav-link:hover::after,
+.fl-nav-link:focus-visible::after {
+  transform: scaleX(1);
+  transform-origin: 0 50%; /* enter: crece desde la izquierda */
+  transition: transform var(--dur-snappy) var(--spring-soft);
+}
+/* El outline genérico de .fl-root a:focus-visible fuerza --r-sm; estos dos
+   son pills — que el anillo siga la forma real. */
+.fl-nav-link:focus-visible,
+.fl-hero-cue:focus-visible {
+  border-radius: var(--r-pill);
+}
+
+/* CTA primario (header, hero, cierre): lift + sombra cálida tintada con
+   accent (geometría de --shadow-2, color via color-mix), active 0.98
+   instantáneo. Scope .fl-root: no toca los .fi-btn de la app. */
+.fl-root .fi-btn-primary {
+  transition:
+    background var(--dur-quick) var(--ease-standard),
+    color var(--dur-quick) var(--ease-standard),
+    border-color var(--dur-quick) var(--ease-standard),
+    transform var(--dur-quick) var(--ease-standard-out),
+    box-shadow var(--dur-quick) var(--ease-standard-out);
+}
+.fl-root .fi-btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 8px 24px color-mix(in srgb, var(--accent) 26%, transparent),
+    0 2px 6px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+.fl-root .fi-btn-primary:active {
+  transform: translateY(0) scale(0.98);
+  transition-duration: var(--dur-instant);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+/* Bento: el lift existente se mantiene; el borde se "enciende" con accent
+   y el label responde con un paso cálido. */
+.fl-bento-cell:hover {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
+}
+.fl-bento-label {
+  transition: color var(--dur-snappy) var(--ease-standard);
+}
+.fl-bento-cell:hover .fl-bento-label {
+  color: var(--accent-2);
+}
+
+/* FAQ: hover del summary con fondo suave; abierto, el summary cuadra sus
+   esquinas inferiores para integrarse con la respuesta. */
+.fl-faq-q {
+  transition: background var(--dur-quick) var(--ease-standard);
+}
+.fl-faq-q:hover {
+  background: var(--surface-2);
+}
+.fl-faq-item[open] .fl-faq-q {
+  border-end-start-radius: 0;
+  border-end-end-radius: 0;
+}
+
+/* ── 4 · Scroll cue del hero ──────────────────────────────────────────────
+   De link suelto a pill con borde — y se desvanece al scrollear (timeline
+   scroll() del root, primeros ~360px). Fallback sin scroll(): pill estática
+   (el chevron ya rebota). El hover empuja 1px hacia ABAJO: insinúa la
+   dirección del scroll. */
+.fl-hero-cue {
+  padding: 8px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--surface) 55%, transparent);
+  transition:
+    color var(--dur-quick) var(--ease-standard),
+    border-color var(--dur-quick) var(--ease-standard),
+    background var(--dur-quick) var(--ease-standard),
+    transform var(--dur-quick) var(--ease-standard-out);
+}
+.fl-hero-cue:hover {
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  background: var(--surface);
+  transform: translateY(1px);
+}
+@supports (animation-timeline: scroll()) {
+  .fl-hero-cue {
+    animation: fl-cue-fade linear both;
+    animation-timeline: scroll(root);
+    animation-range: 40px 360px;
+  }
+}
+@keyframes fl-cue-fade {
+  to {
+    opacity: 0;
+    visibility: hidden; /* invisible ⇒ tampoco clickeable */
+  }
+}
+
+/* ── 5 · Ritmo vertical ───────────────────────────────────────────────────
+   El hero pierde aire arriba (el headline sube y el scroll cue entra en el
+   fold a 1440×900); pricing y FAQ son la misma zona transaccional — el FAQ
+   se acerca. La bóveda conserva su runway: el pin del día ya respira. */
+.fl-hero {
+  padding-block: clamp(56px, 9vh, 112px) var(--fl-section-gap);
+}
+#faq.fl-section {
+  padding-block-start: calc(var(--fl-section-gap) * 0.45);
+}
+
+/* ── 6 · Reduced motion — anula TODO lo nuevo de este fragmento ────────── */
+@media (prefers-reduced-motion: reduce) {
+  .fl-header,
+  .fl-hero-cue {
+    animation: none !important;
+  }
+  .fl-nav-link::after,
+  .fl-hero-cue,
+  .fl-bento-label,
+  .fl-faq-q,
+  .fl-root .fi-btn-primary {
+    transition: none !important;
+  }
+  .fl-root .fi-btn-primary:hover,
+  .fl-root .fi-btn-primary:active,
+  .fl-hero-cue:hover {
+    transform: none;
+    box-shadow: none;
   }
 }

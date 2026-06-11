@@ -20,18 +20,18 @@ import { Check } from "@/components/icons";
 import { revealRange } from "../reveal";
 
 const SOLO_BULLETS = [
-  "Agenda y turnos ilimitados",
+  "Turnos ilimitados",
   "Historia clínica cifrada",
-  "Página pública de reservas + recordatorios por WhatsApp",
+  "Reservas + WhatsApp",
   "Finanzas del consultorio",
-  "Sincronización con Google Calendar",
+  "Google Calendar espejado",
 ];
 
 const CLINIC_BULLETS = [
-  "Todo lo del plan Solo",
-  "Equipo con roles: profesionales, asistentes y coordinación",
-  "Agenda compartida del consultorio",
-  "Permisos por rol sobre pacientes e historias",
+  "Todo el plan Solo",
+  "Equipo con roles",
+  "Agenda compartida",
+  "Permisos clínicos por rol",
 ];
 
 export function Pricing() {
@@ -100,8 +100,8 @@ export function Pricing() {
       </div>
 
       <p className="fl-pricing-banner fl-reveal">
-        <span className="fl-pricing-banner-days">7 días</span> de prueba, sin tarjeta. Pagás con
-        Mercado Pago, en pesos.
+        <span className="fl-pricing-banner-days">7 días</span> con todo habilitado. Pagás recién
+        si te quedás — en pesos, con Mercado Pago.
       </p>
     </section>
   );

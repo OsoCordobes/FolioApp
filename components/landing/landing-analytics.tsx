@@ -28,7 +28,10 @@
  * (server-only) y no debe entrar al bundle del browser por valor.
  */
 
-import { usePostHog } from "posthog-js/react";
+// `react/slim`: misma API de hook pero sin importar posthog-js por valor —
+// el SDK llega por dynamic import post-consent (lib/observability/
+// posthog-client.tsx) y este island no debe arrastrarlo al bundle inicial.
+import { usePostHog } from "posthog-js/react/slim";
 import { useCallback, useEffect, useRef } from "react";
 
 import type {

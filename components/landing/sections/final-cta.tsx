@@ -15,11 +15,11 @@ export function FinalCta() {
       <div className="fl-cta-panel fl-reveal">
         <h2 className="fl-cta-title">Mañana a las 8:00, tu agenda ya está armada.</h2>
         <p className="fl-cta-sub">
-          Activá tu agenda en minutos. Sin tarjeta de crédito, sin permanencia.
+          Configurarla hoy te lleva 10 minutos. Sin tarjeta, sin permanencia.
         </p>
         <div className="fl-cta-actions">
           <Link className="fi-btn fi-btn-primary fl-btn-lg" href="/onboarding" data-fl-cta="final">
-            Empezá gratis · 7 días sin tarjeta
+            Empezá gratis · 7 días
           </Link>
           <Link className="fi-btn fi-btn-secondary fl-btn-lg" href="/login">
             Ingresar

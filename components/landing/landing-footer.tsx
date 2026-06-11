@@ -2,9 +2,9 @@
  * Folio · Landing · LandingFooter (Fase B1 · server component)
  *
  * Footer de marketing: 4 columnas (Producto · Legal · Cuenta · Contacto)
- * sobre --surface con borde superior, y línea final de marca. Las anclas
- * de Producto apuntan a las secciones del landing (#producto, #seguridad,
- * #precios, #faq).
+ * sobre --surface con borde superior, y línea final de marca + tagline.
+ * Las anclas de Producto espejan la nav del header (#dia, #producto,
+ * #seguridad, #precios, #faq).
  */
 
 import Link from "next/link";
@@ -15,7 +15,8 @@ const COLUMNAS = [
   {
     titulo: "Producto",
     links: [
-      { href: "#producto", label: "Producto" },
+      { href: "#dia", label: "El día" },
+      { href: "#producto", label: "Capacidades" },
       { href: "#seguridad", label: "Seguridad" },
       { href: "#precios", label: "Precios" },
       { href: "#faq", label: "Preguntas frecuentes" },
@@ -70,7 +71,9 @@ export function LandingFooter() {
       </div>
       <div className="fl-footer-base">
         <FolioMark size={18} />
-        <span>Folio · Hecho para profesionales de la salud en Argentina · © 2026</span>
+        <span>
+          Folio · El día se arma solo · Hecho para profesionales de la salud en Argentina · © 2026
+        </span>
       </div>
     </footer>
   );

@@ -173,6 +173,7 @@ export type LandingCtaSection =
   | "hero"
   | "pricing_solo"
   | "pricing_clinic"
+  | "sticky"
   | "final";
 
 /** `landing.viewed` — pageview del landing (una vez por visita). Sin props. */

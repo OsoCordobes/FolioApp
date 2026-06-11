@@ -14,30 +14,34 @@ export interface FaqItem {
 export const FAQ_ITEMS: { q: string; a: string }[] = [
   {
     q: "¿Necesito tarjeta para probar Folio?",
-    a: "No. Tenés 7 días de prueba completa sin cargar ninguna tarjeta. Si te convence, recién ahí activás la suscripción con Mercado Pago.",
+    a: "No. Tenés 7 días con todo habilitado, y recién si te convence activás la suscripción con Mercado Pago.",
+  },
+  {
+    q: "¿Cuánto tardo en dejar todo configurado?",
+    a: "Unos 10 minutos. El onboarding te guía en 9 pasos y terminás con la agenda, tu página de reservas y los recordatorios andando.",
   },
   {
     q: "¿Qué pasa con mis datos si me voy?",
-    a: "Tus datos son tuyos: podés exportarlos cuando quieras. Las historias clínicas se conservan el plazo legal de 10 años que establece la Ley 26.529, como corresponde a cualquier registro clínico.",
+    a: "Te los llevás: podés exportarlos desde la app cuando quieras. Las historias clínicas se conservan los 10 años que exige la Ley 26.529, como cualquier registro clínico.",
   },
   {
     q: "¿Sirve para clínicas con varios profesionales?",
-    a: "Sí. El plan Clínica suma equipo con roles —profesionales, asistentes y coordinación— sobre una agenda compartida, cada uno con los permisos que le corresponden.",
+    a: "Sí. El plan Clínica suma profesionales, asistentes y coordinación sobre una agenda compartida, cada rol con sus permisos.",
   },
   {
     q: "¿Cómo reciben los recordatorios mis pacientes?",
-    a: "Por WhatsApp. Cuando reservan les llega la confirmación del turno, y antes de la fecha reciben un recordatorio automático que ayuda a reducir ausencias.",
+    a: "Por WhatsApp, sin que hagas nada. Al reservar les llega la confirmación, y 24 horas antes del turno, el recordatorio — menos ausencias, cero llamadas.",
   },
   {
     q: "¿Se integra con mi Google Calendar?",
-    a: "Sí, en ambos sentidos: lo que agendás en Folio aparece en tu Google Calendar, y tus eventos de Google bloquean la disponibilidad para nuevas reservas.",
+    a: "Sí, en los dos sentidos. Lo que agendás en Folio aparece en Google, y tus eventos de Google bloquean esos horarios para nuevas reservas.",
   },
   {
     q: "¿Quién puede ver las historias clínicas?",
-    a: "Solo los profesionales habilitados de tu consultorio. Las notas se cifran antes de llegar a la base de datos, y cada consultorio está aislado del resto a nivel de base de datos.",
+    a: "Solo los profesionales habilitados de tu consultorio. Cada nota se cifra con AES-256-GCM antes de tocar la base de datos, y cada consultorio queda aislado del resto.",
   },
   {
     q: "¿Cómo pago?",
-    a: "Con Mercado Pago: un débito mensual en pesos, sin contratos ni permanencia. Cancelás cuando quieras desde la misma app.",
+    a: "Con Mercado Pago, en pesos, mes a mes. Sin contratos ni permanencia: cancelás cuando quieras desde la misma app.",
   },
 ];

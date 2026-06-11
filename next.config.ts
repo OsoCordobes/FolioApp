@@ -48,7 +48,10 @@ const SUPABASE_HOST = process.env.NEXT_PUBLIC_SUPABASE_URL
 
 const CSP_DIRECTIVES = [
   `default-src 'self'`,
-  `script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://*.posthog.com https://app.posthog.com https://*.sentry.io https://*.ingest.sentry.io https://sdk.mercadopago.com`,
+  // browser.sentry-cdn.com: Session Replay se carga lazy vía
+  // Sentry.lazyLoadIntegration (sentry.client.config.ts) — el chunk viene
+  // de ese CDN con <script>, así que necesita script-src.
+  `script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://*.posthog.com https://app.posthog.com https://*.sentry.io https://*.ingest.sentry.io https://browser.sentry-cdn.com https://sdk.mercadopago.com`,
   `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`,
   `font-src 'self' https://fonts.gstatic.com data:`,
   `img-src 'self' data: blob: https://${SUPABASE_HOST} https://www.mercadopago.com https://*.posthog.com`,

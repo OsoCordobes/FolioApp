@@ -6,7 +6,8 @@
  * precios (#precios) → FAQ (#faq) → CTA de cierre. Server components
  * en su totalidad — la timeline y las demos del bento animan con CSS puro
  * (animation-timeline: view()); los únicos islands client son el toggle de
- * nav mobile y LandingAnalytics (PostHog, no-op sin cookie consent).
+ * nav mobile, LandingAnalytics (PostHog, no-op sin cookie consent) y
+ * StickyCta (barra CTA mobile fixed-bottom, post-hero).
  * Anclas estables para el header: #dia, #seguridad, #producto, #precios, #faq.
  *
  * JSON-LD (Fase C · SEO): un solo script con `@graph` —
@@ -24,6 +25,7 @@ import { FinalCta } from "@/components/landing/sections/final-cta";
 import { Hero } from "@/components/landing/sections/hero";
 import { Pricing } from "@/components/landing/sections/pricing";
 import { Vault } from "@/components/landing/sections/vault";
+import { StickyCta } from "@/components/landing/sticky-cta";
 import { getBaseUrl } from "@/lib/base-url";
 import { resolveClinicBasePriceCents } from "@/lib/billing/pricing";
 import { MP_PLAN_PRICE_CENTS } from "@/lib/mercadopago/client";
@@ -87,6 +89,7 @@ export default function LandingPage() {
       <Faq />
       <FinalCta />
       <LandingAnalytics />
+      <StickyCta />
     </main>
   );
 }
