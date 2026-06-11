@@ -9,6 +9,7 @@
 
 import { z } from "zod";
 
+import { runAfterResponse } from "@/lib/after-response";
 import { cancelTurnoEnGoogle, pushTurnoToGoogle } from "@/lib/google/sync";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -279,33 +280,38 @@ export async function createTurno(
   // Programar recordatorios 24h y 2h (idempotente vía UNIQUE turno_id,tipo).
   // Si el insert de recordatorios falla no rollbackeamos el turno — el dispatcher
   // reintentará via /api/cron y/o el user puede re-programarlos desde la UI.
-  // Fire-and-forget pero capturando errores en Sentry (auditoría MEDIUM-
-  // observabilidad: el patrón `void promise` silenciaba fallos previamente).
-  scheduleRecordatoriosForTurno({
-    organizationId: session.data.organizationId,
-    turnoId: data.id,
-    inicio: new Date(parsed.data.inicio),
-  }).catch(async (err) => {
-    const { captureException } = await import("@sentry/nextjs");
-    captureException(err, {
-      tags: { component: "turno-create", op: "scheduleRecordatorios" },
-      extra: { turnoId: data.id, organizationId: session.data.organizationId },
-    });
-  });
+  // Corre post-respuesta vía after() (runAfterResponse) capturando errores en
+  // Sentry DENTRO del callback (auditoría MEDIUM-observabilidad: el patrón
+  // `void promise` silenciaba fallos previamente).
+  runAfterResponse(() =>
+    scheduleRecordatoriosForTurno({
+      organizationId: session.data.organizationId,
+      turnoId: data.id,
+      inicio: new Date(parsed.data.inicio),
+    }).catch(async (err) => {
+      const { captureException } = await import("@sentry/nextjs");
+      captureException(err, {
+        tags: { component: "turno-create", op: "scheduleRecordatorios" },
+        extra: { turnoId: data.id, organizationId: session.data.organizationId },
+      });
+    }),
+  );
 
-  // Push a Google Calendar (fire-and-forget, fail-safe — nunca cambia el Result).
-  pushTurnoToGoogle({
-    client: supabase,
-    turnoId: data.id,
-    organizationId: session.data.organizationId,
-    profesionalMemberId: parsed.data.profesional_id,
-  }).catch(async (err) => {
-    const { captureException } = await import("@sentry/nextjs");
-    captureException(err, {
-      tags: { component: "turno-create", op: "pushTurnoToGoogle" },
-      extra: { turnoId: data.id, organizationId: session.data.organizationId },
-    });
-  });
+  // Push a Google Calendar (post-respuesta, fail-safe — nunca cambia el Result).
+  runAfterResponse(() =>
+    pushTurnoToGoogle({
+      client: supabase,
+      turnoId: data.id,
+      organizationId: session.data.organizationId,
+      profesionalMemberId: parsed.data.profesional_id,
+    }).catch(async (err) => {
+      const { captureException } = await import("@sentry/nextjs");
+      captureException(err, {
+        tags: { component: "turno-create", op: "pushTurnoToGoogle" },
+        extra: { turnoId: data.id, organizationId: session.data.organizationId },
+      });
+    }),
+  );
 
   return ok({ id: data.id });
 }
@@ -378,43 +384,50 @@ export async function transitionTurno(input: z.infer<typeof transitionSchema>): 
   }
 
   // Hooks de transición de estado para la cola de recordatorios.
-  // Fire-and-forget con captura Sentry (mismo razonamiento que createTurno).
+  // Post-respuesta vía after() con captura Sentry DENTRO del callback
+  // (mismo razonamiento que createTurno).
   if (parsed.data.to === "CERRADO") {
-    schedulePostVisitaForTurno({
-      organizationId: session.data.organizationId,
-      turnoId: parsed.data.turnoId,
-      closedAt: new Date(),
-    }).catch(async (err) => {
-      const { captureException } = await import("@sentry/nextjs");
-      captureException(err, {
-        tags: { component: "turno-transition", op: "schedulePostVisita" },
-        extra: { turnoId: parsed.data.turnoId },
-      });
-    });
-  }
-  if (parsed.data.to === "CANCELADO" || parsed.data.to === "REAGENDADO") {
-    cancelRecordatoriosForTurno(parsed.data.turnoId).catch(async (err) => {
-      const { captureException } = await import("@sentry/nextjs");
-      captureException(err, {
-        tags: { component: "turno-transition", op: "cancelRecordatorios" },
-        extra: { turnoId: parsed.data.turnoId, newEstado: parsed.data.to },
-      });
-    });
-
-    // Cancelar el evento en Google Calendar (fire-and-forget, fail-safe).
-    if (profesionalMemberId) {
-      cancelTurnoEnGoogle({
-        client: supabase,
-        turnoId: parsed.data.turnoId,
+    runAfterResponse(() =>
+      schedulePostVisitaForTurno({
         organizationId: session.data.organizationId,
-        profesionalMemberId,
+        turnoId: parsed.data.turnoId,
+        closedAt: new Date(),
       }).catch(async (err) => {
         const { captureException } = await import("@sentry/nextjs");
         captureException(err, {
-          tags: { component: "turno-transition", op: "cancelTurnoEnGoogle" },
+          tags: { component: "turno-transition", op: "schedulePostVisita" },
+          extra: { turnoId: parsed.data.turnoId },
+        });
+      }),
+    );
+  }
+  if (parsed.data.to === "CANCELADO" || parsed.data.to === "REAGENDADO") {
+    runAfterResponse(() =>
+      cancelRecordatoriosForTurno(parsed.data.turnoId).catch(async (err) => {
+        const { captureException } = await import("@sentry/nextjs");
+        captureException(err, {
+          tags: { component: "turno-transition", op: "cancelRecordatorios" },
           extra: { turnoId: parsed.data.turnoId, newEstado: parsed.data.to },
         });
-      });
+      }),
+    );
+
+    // Cancelar el evento en Google Calendar (post-respuesta, fail-safe).
+    if (profesionalMemberId) {
+      runAfterResponse(() =>
+        cancelTurnoEnGoogle({
+          client: supabase,
+          turnoId: parsed.data.turnoId,
+          organizationId: session.data.organizationId,
+          profesionalMemberId,
+        }).catch(async (err) => {
+          const { captureException } = await import("@sentry/nextjs");
+          captureException(err, {
+            tags: { component: "turno-transition", op: "cancelTurnoEnGoogle" },
+            extra: { turnoId: parsed.data.turnoId, newEstado: parsed.data.to },
+          });
+        }),
+      );
     }
   }
 

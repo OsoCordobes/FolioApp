@@ -4,6 +4,7 @@
 
 import { z } from "zod";
 
+import { runAfterResponse } from "@/lib/after-response";
 import { blindIndex, blindIndexPhone, decryptColumn, encryptColumn } from "@/lib/crypto";
 import { notifyBookingConfirmada } from "@/lib/email/notify";
 import { pushTurnoToGoogle } from "@/lib/google/sync";
@@ -37,25 +38,28 @@ export function decidePedidoCas(
 
 /**
  * Helper compartido: programa los recordatorios 24h/2h de un turno recién
- * creado desde un pedido aceptado/confirmado (H-APP-1). Fire-and-forget con
- * captura en Sentry, mismo patrón que createTurno (turnos.ts:116).
+ * creado desde un pedido aceptado/confirmado (H-APP-1). Corre post-respuesta
+ * vía after() (runAfterResponse) — el caller no espera el round-trip — con
+ * captura en Sentry DENTRO del callback, mismo patrón que createTurno.
  */
 function scheduleRecordatoriosFireAndForget(
   organizationId: string,
   turnoId: string,
   inicioIso: string,
 ): void {
-  scheduleRecordatoriosForTurno({
-    organizationId,
-    turnoId,
-    inicio: new Date(inicioIso),
-  }).catch(async (e) => {
-    const { captureException } = await import("@sentry/nextjs");
-    captureException(e, {
-      tags: { component: "pedido-accept", op: "scheduleRecordatorios" },
-      extra: { turnoId, organizationId },
-    });
-  });
+  runAfterResponse(() =>
+    scheduleRecordatoriosForTurno({
+      organizationId,
+      turnoId,
+      inicio: new Date(inicioIso),
+    }).catch(async (e) => {
+      const { captureException } = await import("@sentry/nextjs");
+      captureException(e, {
+        tags: { component: "pedido-accept", op: "scheduleRecordatorios" },
+        extra: { turnoId, organizationId },
+      });
+    }),
+  );
 }
 
 /**
@@ -351,40 +355,44 @@ export async function promotePedidoToTurno(
     // e. Programar recordatorios 24h/2h (fire-and-forget).
     scheduleRecordatoriosFireAndForget(organizationId, turno.id, fechaPropuesta);
 
-    // e.2 Push a Google Calendar (fire-and-forget, fail-safe). Cubre tanto el
-    //     booking público auto-confirmado como `aceptarPedido` (ambos pasan por
-    //     este core). pushTurnoToGoogle ya es no-throw, pero encadenamos un
-    //     .catch defensivo por consistencia con el patrón Sentry del repo.
-    pushTurnoToGoogle({
-      client,
-      turnoId: turno.id,
-      organizationId,
-      profesionalMemberId: profesionalId,
-    }).catch(async (e) => {
-      const { captureException } = await import("@sentry/nextjs");
-      captureException(e, {
-        tags: { component: "pedido-accept", op: "pushTurnoToGoogle" },
-        extra: { turnoId: turno.id, organizationId },
-      });
-    });
+    // e.2 Push a Google Calendar (post-respuesta vía after(), fail-safe).
+    //     Cubre tanto el booking público auto-confirmado como `aceptarPedido`
+    //     (ambos pasan por este core). pushTurnoToGoogle ya es no-throw, pero
+    //     encadenamos un .catch defensivo (Sentry DENTRO del after).
+    runAfterResponse(() =>
+      pushTurnoToGoogle({
+        client,
+        turnoId: turno.id,
+        organizationId,
+        profesionalMemberId: profesionalId,
+      }).catch(async (e) => {
+        const { captureException } = await import("@sentry/nextjs");
+        captureException(e, {
+          tags: { component: "pedido-accept", op: "pushTurnoToGoogle" },
+          extra: { turnoId: turno.id, organizationId },
+        });
+      }),
+    );
 
-    // e.3 Email de confirmación al paciente (fire-and-forget, fail-safe). Cubre
-    //     tanto el booking público auto-confirmado como `aceptarPedido` (ambos
-    //     pasan por este core). notifyBookingConfirmada ya es no-throw; el
-    //     .catch defensivo replica el patrón Sentry del repo.
-    notifyBookingConfirmada({
-      client,
-      turnoId: turno.id,
-      organizationId,
-      pacienteEmail: input.email,
-      pacienteNombre: input.nombre,
-    }).catch(async (e) => {
-      const { captureException } = await import("@sentry/nextjs");
-      captureException(e, {
-        tags: { component: "pedido-accept", op: "notifyBookingConfirmada" },
-        extra: { turnoId: turno.id, organizationId },
-      });
-    });
+    // e.3 Email de confirmación al paciente (post-respuesta vía after(),
+    //     fail-safe). Cubre tanto el booking público auto-confirmado como
+    //     `aceptarPedido` (ambos pasan por este core). notifyBookingConfirmada
+    //     ya es no-throw; el .catch defensivo replica el patrón Sentry.
+    runAfterResponse(() =>
+      notifyBookingConfirmada({
+        client,
+        turnoId: turno.id,
+        organizationId,
+        pacienteEmail: input.email,
+        pacienteNombre: input.nombre,
+      }).catch(async (e) => {
+        const { captureException } = await import("@sentry/nextjs");
+        captureException(e, {
+          tags: { component: "pedido-accept", op: "notifyBookingConfirmada" },
+          extra: { turnoId: turno.id, organizationId },
+        });
+      }),
+    );
 
     // f. Listo.
     return ok({ turnoId: turno.id, pacienteId });

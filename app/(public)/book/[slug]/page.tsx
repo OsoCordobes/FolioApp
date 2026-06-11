@@ -27,6 +27,20 @@ interface PageProps {
   params: Promise<{ slug: string }>;
 }
 
+/**
+ * ISR: la cara pública se sirve estática y se regenera cada 5 minutos (o
+ * on-demand vía revalidatePath desde los saves de /configuracion que tocan
+ * campos públicos). La página NO usa headers()/cookies() — solo el service
+ * client (sin sesión) — así que es cacheable. Los slots NO viven acá: los
+ * carga el wizard vía Server Action (fetchSlotsPublico), siempre frescos.
+ */
+export const revalidate = 300;
+
+/** Sin paths en build: cada /book/<slug> se genera on-demand y queda cacheado. */
+export async function generateStaticParams(): Promise<Array<{ slug: string }>> {
+  return [];
+}
+
 interface OrgPublicRow {
   id: string;
   slug: string;
