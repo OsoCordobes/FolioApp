@@ -24,7 +24,10 @@ export function CerradoRow({ turno, paciente, onOpenFicha }: CerradoRowProps) {
         <b>{turno.hora}</b>
       </div>
       <span className="fi-t-dot-wrap">
-        <span className="fi-t-dot" style={{ background: "var(--green)" }} />
+        <span className="fi-t-dot" style={{ background: "var(--green)" }} aria-hidden />
+        {/* A11y: el estado se comunicaba solo con el dot verde (WCAG 1.4.1).
+            .sr-only es position:absolute — cero impacto visual. */}
+        <span className="sr-only">Turno cerrado</span>
       </span>
       <div className="fi-t-who">
         <div className="fi-t-name-row">

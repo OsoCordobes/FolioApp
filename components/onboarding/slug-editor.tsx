@@ -196,7 +196,12 @@ export function SlugEditor({
         <StatusIndicator state={check} />
       </div>
 
-      <StatusLine state={check} onPickSuggestion={applySuggestion} />
+      {/* Live region estable: el wrapper existe desde el primer render con
+          aria-live, así los cambios de estado (verificando → disponible /
+          tomado) se anuncian aunque React recree el <p>/<div> interno. */}
+      <div aria-live="polite">
+        <StatusLine state={check} onPickSuggestion={applySuggestion} />
+      </div>
     </div>
   );
 }
