@@ -15,13 +15,14 @@
  * sugiere crear turno manual desde el calendario (post P0 #4).
  */
 
-import { useEffect, useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 
 import {
   aceptarPedidoAction,
   rechazarPedidoAction,
 } from "@/app/(app)/calendario/actions";
 import type { Pedido } from "@/lib/types";
+import { useModalA11y } from "@/lib/use-modal-a11y";
 
 interface PedidoModalProps {
   pedido: Pedido;
@@ -35,18 +36,10 @@ export function PedidoModal({ pedido, onClose, onResolved }: PedidoModalProps) {
   const [mode, setMode] = useState<"view" | "reject">("view");
   const [motivo, setMotivo] = useState("");
 
-  // Escape cierra el modal (UX estándar). Solo cuando no estamos en medio
-  // de un submit — para no interrumpir una operación en vuelo.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !pending) {
-        e.preventDefault();
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, pending]);
+  // A11y de modal compartida: focus trap + Escape (deshabilitado en submit) +
+  // foco inicial + restore focus al cerrar. Ver lib/use-modal-a11y.ts.
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  useModalA11y(dialogRef, { onClose, closeDisabled: pending });
 
   const handleAccept = () => {
     setError(null);
@@ -78,10 +71,12 @@ export function PedidoModal({ pedido, onClose, onResolved }: PedidoModalProps) {
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="cal-pedido-modal-title"
-      className="cal-pedido-modal-backdrop"
+      tabIndex={-1}
+      className="cal-pedido-modal-backdrop a11y-modal-root"
       style={{
         position: "fixed",
         inset: 0,
