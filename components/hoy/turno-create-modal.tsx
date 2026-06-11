@@ -29,6 +29,7 @@ import {
   type PacientePickerRow,
   type ServicioPickerRow,
 } from "@/app/(app)/hoy/actions";
+import { isoToLocalDatetime, localDatetimeToIso } from "@/lib/datetime-local";
 
 interface TurnoCreateModalProps {
   defaultInicio?: string; // ISO with offset
@@ -440,28 +441,5 @@ const inputStyle: React.CSSProperties = {
   font: "inherit",
 };
 
-// ─── Datetime helpers ──────────────────────────────────────────────────────
-//
-// HTML <input type="datetime-local"> uses "YYYY-MM-DDTHH:mm" without TZ.
-// We treat that value as local-time in the user's browser TZ and serialize
-// to ISO-with-offset for the server action. Browser handles the local
-// timezone for us when constructing the Date.
-
-function isoToLocalDatetime(iso?: string): string {
-  const base = iso ? new Date(iso) : new Date();
-  // Round to next 5 min for nicer default.
-  const next = new Date(base.getTime() + 5 * 60 * 1000);
-  next.setSeconds(0, 0);
-  const yyyy = next.getFullYear();
-  const mm = String(next.getMonth() + 1).padStart(2, "0");
-  const dd = String(next.getDate()).padStart(2, "0");
-  const hh = String(next.getHours()).padStart(2, "0");
-  const mi = String(Math.round(next.getMinutes() / 5) * 5).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
-}
-
-function localDatetimeToIso(local: string): string {
-  // Date constructor treats "YYYY-MM-DDTHH:mm" as local time; toISOString()
-  // produces UTC with Z suffix which is a valid ISO 8601 with offset.
-  return new Date(local).toISOString();
-}
+// Datetime helpers (isoToLocalDatetime / localDatetimeToIso) viven en
+// lib/datetime-local.ts — compartidos con TurnoReagendarModal.
