@@ -164,12 +164,16 @@ export async function getSlotsDisponibles(input: {
       .in("estado", ["AGENDADO", "CONFIRMADO", "EN_SALA", "ATENDIENDO"])
       .gte("inicio", input.rangeStart.toISOString())
       .lt("inicio", input.rangeEnd.toISOString()),
-    // 4. Pedidos pendientes con fecha en el rango (reservados tentativamente)
+    // 4. Pedidos pendientes con fecha en el rango (reservados tentativamente).
+    //    M54: per-profesional como turnos/bloqueos — los del profesional MÁS
+    //    los sin asignar (legacy/WhatsApp), que bloquean conservadoramente
+    //    hasta asignarse. Misma semántica que el RPC slot_ocupado.
     supabase
       .from("pedido")
       .select("fecha_propuesta, duracion_min")
       .eq("organization_id", input.organizationId)
       .eq("estado", "PENDIENTE")
+      .or(`profesional_id.eq.${input.profesionalId},profesional_id.is.null`)
       .not("fecha_propuesta", "is", null)
       .gte("fecha_propuesta", input.rangeStart.toISOString())
       .lt("fecha_propuesta", input.rangeEnd.toISOString()),
