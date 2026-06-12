@@ -76,6 +76,13 @@ export type ReagendarTurnoActionInput = z.infer<typeof reagendarTurnoActionSchem
  * crea uno nuevo con el mismo paciente/servicio/profesional/precio en el
  * horario elegido. La sesión activa la valida `reagendarTurno` (lib/db) como
  * primer paso — igual que transitionTurnoAction delega en transitionTurno.
+ *
+ * Revalidación (review PR #44, I2): va atada a la MUTACIÓN, no al éxito.
+ * `onTransitioned` dispara apenas el original queda REAGENDADO — si el create
+ * posterior falla (orphan path), /hoy y /calendario igual se refrescan para
+ * no seguir mostrando el turno viejo como agendado hasta el polling. Si el
+ * flujo corta antes (validación, conflicto del pre-check), no hubo mutación
+ * y no se revalida nada.
  */
 export async function reagendarTurnoAction(
   input: ReagendarTurnoActionInput,
@@ -85,13 +92,12 @@ export async function reagendarTurnoAction(
     return err("validation", "Datos del reagendado inválidos.", parsed.error.message);
   }
 
-  const result = await reagendarTurno(parsed.data);
-
-  if (result.ok) {
-    revalidatePath("/hoy");
-    revalidatePath("/calendario");
-  }
-  return result;
+  return reagendarTurno(parsed.data, {
+    onTransitioned: () => {
+      revalidatePath("/hoy");
+      revalidatePath("/calendario");
+    },
+  });
 }
 
 // ─── Create turno (modal walk-in / agendar manual) ──────────────────────────

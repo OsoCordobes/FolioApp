@@ -118,22 +118,29 @@ export function decideSlotOcupado(
 }
 
 /**
- * Chequea si un slot [inicio, inicio+duracionMin) ya está ocupado para la
- * org. Mismo enfoque que el booking público: intenta el RPC `slot_ocupado`
- * (M44, firma extendida en M53) y, si falla, cae al chequeo manual contra
- * turno + pedido + bloqueo.
+ * Chequea si un slot [inicio, inicio+duracionMin) ya está ocupado para el
+ * PROFESIONAL (M54: per-profesional, no org-wide — en una clínica el turno
+ * del cardiólogo no bloquea a la psicóloga; el EXCLUDE de M40, que keyea por
+ * profesional_id, sigue siendo el backstop transaccional). Mismo enfoque que
+ * el booking público: intenta el RPC `slot_ocupado` (M44 → M53 → M54) y, si
+ * falla, cae al chequeo manual contra turno + pedido + bloqueo con la MISMA
+ * semántica:
+ *   · turno   — solo los del profesional.
+ *   · bloqueo — solo los del profesional (agenda personal, NOT NULL desde M09).
+ *   · pedido  — los del profesional MÁS los sin profesional asignado
+ *               (legacy/WhatsApp): bloquean conservadoramente hasta asignarse.
  *
  * `excludePedidoId` (M53): al promover un pedido a turno, ese pedido sigue
  * PENDIENTE durante el chequeo y se contaría a sí mismo como conflicto. El
  * caller (promotePedidoToTurno / confirmarPedido) pasa su id para excluirlo
  * tanto en el RPC como en el fallback.
  *
- * `excludeTurnoId` (reagendar): el turno que se está moviendo se excluye del
- * chequeo del horario nuevo (auto-conflicto si los rangos solapan). OJO: el
- * RPC `slot_ocupado` (M44/M53) NO acepta exclusión de turno — agregarle
- * `p_exclude_turno` es follow-up (M54). Hasta entonces, cuando hay exclusión
- * de turno SALTEAMOS el RPC y vamos directo al fallback manual, que sí
- * soporta `.neq("id", excludeTurnoId)`.
+ * `excludeTurnoId` (M54, reagendar): el turno que se está moviendo se excluye
+ * del chequeo del horario nuevo (auto-conflicto si los rangos solapan). El RPC
+ * lo recibe como `p_exclude_turno`, así el pre-check del reagendado y el
+ * chequeo interno de createTurno comparten el MISMO camino y semántica
+ * (review PR #44, B1: la divergencia pre-check manual vs create RPC producía
+ * huérfanos determinísticos en clínicas multi-profesional).
  */
 export async function checkSlotOcupado(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
@@ -147,22 +154,20 @@ export async function checkSlotOcupado(
   const inicioDate = new Date(inicioIso);
   const finDate = new Date(inicioDate.getTime() + duracionMin * 60_000);
 
-  // El RPC solo corre cuando NO hay exclusión de turno (firma M53: org,
-  // inicio, fin, exclude_pedido). Si la hubiera y igual lo llamáramos, el
-  // turno a mover contaría como conflicto y todo reagendado con solapamiento
-  // viejo↔nuevo fallaría siempre — mismo auto-conflicto que M53 arregló para
-  // pedidos. Follow-up M54: p_exclude_turno en el RPC y volver al camino rápido.
-  if (!excludeTurnoId) {
-    const overlap = await supabase.rpc("slot_ocupado", {
-      p_org: organizationId,
-      p_inicio: inicioDate.toISOString(),
-      p_fin: finDate.toISOString(),
-      p_exclude_pedido: excludePedidoId ?? null,
-    });
+  // RPC M54: per-profesional + exclusión de pedido Y de turno. Corre SIEMPRE
+  // (el skip-RPC pre-M54 quedó obsoleto: `p_exclude_turno` cubre el
+  // auto-conflicto del reagendado dentro del propio RPC).
+  const overlap = await supabase.rpc("slot_ocupado", {
+    p_org: organizationId,
+    p_inicio: inicioDate.toISOString(),
+    p_fin: finDate.toISOString(),
+    p_exclude_pedido: excludePedidoId ?? null,
+    p_profesional: profesionalId,
+    p_exclude_turno: excludeTurnoId ?? null,
+  });
 
-    if (!(overlap.error || overlap.data === null)) {
-      return overlap.data === true;
-    }
+  if (!(overlap.error || overlap.data === null)) {
+    return overlap.data === true;
   }
 
   // Fallback manual (mismo patrón que createPedidoPublico). Ventana de -8h
@@ -176,6 +181,9 @@ export async function checkSlotOcupado(
     .select("id, fecha_propuesta, duracion_min")
     .eq("organization_id", organizationId)
     .eq("estado", "PENDIENTE")
+    // M54: pedidos del profesional + los sin asignar (bloqueo conservador,
+    // misma semántica que el RPC).
+    .or(`profesional_id.eq.${profesionalId},profesional_id.is.null`)
     .not("fecha_propuesta", "is", null)
     .gte("fecha_propuesta", lookbackIso)
     .lt("fecha_propuesta", finIso)
@@ -201,13 +209,14 @@ export async function checkSlotOcupado(
   const [{ data: turnoConflict }, { data: pedidoConflict }, { data: bloqueoConflict }] =
     await Promise.all([
       turnoQuery,
-      // Los chequeos de pedido/bloqueo siguen org-scoped: son pre-checks
-      // app-only (no los respalda el EXCLUDE de M40, que solo cubre `turno`).
       pedidoQuery,
       supabase
         .from("bloqueo")
         .select("id, inicio, duracion_min")
         .eq("organization_id", organizationId)
+        // M54: el bloqueo es agenda personal (profesional_id NOT NULL desde
+        // M09) — la ausencia del cardiólogo no bloquea a la psicóloga.
+        .eq("profesional_id", profesionalId)
         .gte("inicio", lookbackIso)
         .lt("inicio", finIso)
         .limit(20),
@@ -513,9 +522,14 @@ export type ReagendarTurnoInput = z.infer<typeof reagendarSchema>;
  * Orden deliberado:
  *   1. SELECT org-scoped + validación de estado (puedeReagendarEstado).
  *   2. checkSlotOcupado del horario nuevo con excludeTurnoId → err("conflict")
- *      temprano, sin tocar nada.
+ *      temprano, sin tocar nada. Desde M54 este pre-check va por el MISMO RPC
+ *      per-profesional que usa createTurno en (4) — semánticas idénticas, la
+ *      divergencia B1 del review de PR #44 (pre-check manual pasaba, create
+ *      org-wide fallaba post-transición) ya no puede ocurrir.
  *   3. transitionTurno(→REAGENDADO) PRIMERO — sus hooks existentes cancelan
- *      recordatorios + evento de Google Calendar del turno viejo.
+ *      recordatorios + evento de Google Calendar del turno viejo. Acá se
+ *      dispara `hooks.onTransitioned` (si vino): hubo mutación real, el
+ *      caller debe revalidar SUS rutas aunque (4) falle después (I2).
  *   4. createTurno — programa recordatorios + push a Google Calendar nuevos.
  *
  * Riesgo residual (documentado, follow-up RPC transaccional):
@@ -529,6 +543,15 @@ export type ReagendarTurnoInput = z.infer<typeof reagendarSchema>;
  */
 export async function reagendarTurno(
   input: ReagendarTurnoInput,
+  hooks?: {
+    /**
+     * Se invoca apenas el turno original queda REAGENDADO (mutación
+     * irreversible) — ANTES del createTurno. El caller (server action) lo usa
+     * para revalidatePath: si el create falla después, la UI igual tiene que
+     * dejar de mostrar el turno viejo como agendado (review PR #44, I2).
+     */
+    onTransitioned?: () => void;
+  },
 ): Promise<Result<{ nuevoTurnoId: string }>> {
   const parsed = reagendarSchema.safeParse(input);
   if (!parsed.success) {
@@ -587,6 +610,10 @@ export async function reagendarTurno(
     to: "REAGENDADO",
   });
   if (!transitioned.ok) return transitioned;
+
+  // Mutación irreversible consumada: avisar al caller (revalidatePath) ANTES
+  // de intentar el create — si falla, la UI igual debe refrescarse (I2).
+  hooks?.onTransitioned?.();
 
   // 4. Crear el turno nuevo (programa recordatorios + push gcal nuevos).
   const created = await createTurno({
