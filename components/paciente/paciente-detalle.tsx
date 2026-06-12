@@ -20,7 +20,11 @@ import * as I from "@/components/icons";
 import { saveSesionFichaAction } from "@/app/(app)/pacientes/actions";
 import { TurnoCreateModal } from "@/components/hoy/turno-create-modal";
 import { PacienteFichaProvider, usePacienteFicha } from "@/components/paciente/contexto";
-import { getEspecialidad, type EspecialidadSlug } from "@/lib/especialidades/registry";
+import {
+  filtrarToolHistorial,
+  getEspecialidad,
+  type EspecialidadSlug,
+} from "@/lib/especialidades/registry";
 import type { PacienteFichaInfo, PlanData } from "@/lib/db/paciente-ficha";
 
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
@@ -264,7 +268,15 @@ function TabPlan() {
       </div>
 
       <div className="pc-plan-grid">
-        <def.Tool value={toolValue} onChange={setToolValue} historial={plan.toolHistorial} />
+        {/* M55 · la Tool recibe SOLO el historial de SU tool_id (legacy NULL
+            cuenta como quiropraxia): en fichas mixtas (cardio + psico) cada
+            herramienta ve sus propias sesiones. El resumen por sesión de
+            HistorialReciente/TabSesiones sigue siendo por tool_id persistido. */}
+        <def.Tool
+          value={toolValue}
+          onChange={setToolValue}
+          historial={filtrarToolHistorial(plan.toolHistorial, especialidad)}
+        />
         <SoapStacked soap={soap} setSoap={setSoap} saveBadge={saveBadge} />
       </div>
 

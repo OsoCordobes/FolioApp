@@ -9,23 +9,24 @@
  *
  * Reglas:
  *   - Campos SOAP: trim; vacíos → undefined (el writer persiste NULL).
- *   - toolValue == null → SIN toolId/toolData. Ojo: el writer igualmente
+ *   - toolValue == null → SIN toolData. Ojo: el writer igualmente
  *     sobreescribe tool_id/tool_data_cifrado con NULL en el upsert (semántica
  *     "el borrador es la verdad completa de la sesión"), por eso el caller
  *     re-hidrata el borrador con el toolData ya guardado del turno activo
  *     (PlanData.turnoActivo.toolDraft) — un guardado posterior que solo toque
  *     el SOAP no pierde lo cargado en la herramienta.
- *   - toolValue != null → toolId de la especialidad de la org (fallback
- *     quiropraxia para slugs desconocidos, mismo criterio que el registry).
- *     El toolData viaja puro; para quiropraxia el writer espeja
- *     vertebras_json por su cuenta (compat M14, se retira en Fase F).
+ *   - toolValue != null → viaja como toolData OPACO, sin toolId. El toolId lo
+ *     deriva el WRITER server-side de la especialidad efectiva del PROFESIONAL
+ *     del turno (M55: member.especialidad ?? organization.especialidad) — ni
+ *     el cliente ni este módulo deciden la herramienta. El toolData se valida
+ *     contra el schema zod de esa especialidad antes de cifrar; para
+ *     quiropraxia el writer espeja vertebras_json por su cuenta (compat M14,
+ *     se retira en Fase F).
  *
  * PHI: este módulo no loguea nada — el contenido clínico pasa opaco.
  */
 
 import type { UpsertSesionInput } from "@/lib/db/sesiones";
-
-import { getEspecialidadMeta } from "./meta";
 
 /** SOAP como lo edita la ficha (mismo shape que PlanData["soap"]). */
 export interface FichaSoapDraft {
@@ -38,8 +39,6 @@ export interface FichaSoapDraft {
 export interface SesionFichaDraft {
   turnoId: string;
   pacienteId: string;
-  /** Slug de organization.especialidad (desconocido → quiropraxia). */
-  especialidad: string | null | undefined;
   /** Borrador del Tool del slot, o null si no se tocó la herramienta. */
   toolValue: unknown;
   soap: FichaSoapDraft;
@@ -63,6 +62,5 @@ export function buildUpsertSesionInput(draft: SesionFichaDraft): UpsertSesionInp
   };
   if (draft.toolValue == null) return input;
 
-  const meta = getEspecialidadMeta(draft.especialidad);
-  return { ...input, toolId: meta.toolId, toolData: draft.toolValue };
+  return { ...input, toolData: draft.toolValue };
 }

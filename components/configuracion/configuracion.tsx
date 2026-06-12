@@ -16,6 +16,7 @@ import * as I from "@/components/icons";
 import {
   connectGoogleCalendar,
   countSesionesOtraEspecialidadAction,
+  countSesionesOtraEspecialidadMemberAction,
   disconnectGoogleCalendar,
   inviteMemberAction,
   removeMemberAction,
@@ -24,6 +25,7 @@ import {
   saveConsultorioAction,
   saveHorariosAction,
   saveServiciosAction,
+  updateMemberEspecialidadAction,
 } from "@/app/(app)/configuracion/actions";
 import { roleLabel } from "@/lib/auth/capabilities";
 import type {
@@ -48,6 +50,16 @@ import type {
 
 // Re-export tipos para mantener compat con sub-componentes locales.
 export type { ConsultorioData };
+
+/**
+ * M55 · datos mínimos del member de la sesión para el camino "self" de la
+ * sección Equipo: un profesional colegiado sin gestión de equipo edita SOLO
+ * su propia especialidad (null = hereda la de la clínica).
+ */
+export interface EquipoSelf {
+  memberId: string;
+  especialidad: EspecialidadSlug | null;
+}
 
 type DiaId = "lun" | "mar" | "mie" | "jue" | "vie" | "sab" | "dom";
 type Dia = { on: boolean; franjas: [string, string][] };
@@ -913,14 +925,125 @@ function EstadoInvitacionBadge({ estado }: { estado: TeamInvitationRow["estado"]
   );
 }
 
+/**
+ * M55 · select de especialidad de un member colegiado: label del registry,
+ * "— (de la clínica)" para NULL (hereda organization.especialidad).
+ */
+function EspecialidadMemberSelect({
+  value,
+  disabled,
+  onChange,
+  ariaLabel,
+}: {
+  value: EspecialidadSlug | null;
+  disabled: boolean;
+  onChange: (next: EspecialidadSlug | null) => void;
+  ariaLabel: string;
+}) {
+  return (
+    <select
+      className="cfg-input"
+      style={{ minWidth: 168 }}
+      value={value ?? ""}
+      disabled={disabled}
+      aria-label={ariaLabel}
+      onChange={(e) => onChange(e.target.value === "" ? null : (e.target.value as EspecialidadSlug))}
+    >
+      <option value="">— (de la clínica)</option>
+      {ESPECIALIDAD_SLUGS.map((slug) => (
+        <option key={slug} value={slug}>{ESPECIALIDADES_META[slug].nombre}</option>
+      ))}
+    </select>
+  );
+}
+
+/**
+ * M55 · cambio de especialidad de un member con la advertencia espejo de la
+ * org (countSesionesOtraEspecialidad): si el profesional ya tiene sesiones
+ * cargadas con OTRA herramienta, se confirma antes — los datos se conservan
+ * en DB pero el slot clínico de la ficha deja de mostrarlos.
+ *
+ * `sujeto`: "Tenés" (camino self) o "{nombre} tiene" (dirección).
+ */
+async function cambiarEspecialidadConAviso(
+  memberId: string,
+  nueva: EspecialidadSlug | null,
+  sujeto: string,
+): Promise<{ ok: true } | { ok: false; message: string | null }> {
+  // Best-effort: si el count falla, no bloqueamos el cambio (el gate real y
+  // la validación del slug viven server-side en updateMemberEspecialidad).
+  const count = await countSesionesOtraEspecialidadMemberAction(memberId, nueva);
+  const n = count.ok ? count.data : 0;
+  if (n > 0) {
+    const destino = nueva ? ESPECIALIDADES_META[nueva].nombre : "la especialidad de la clínica";
+    const confirmado = window.confirm(
+      `${sujeto} ${n} ${n === 1 ? "sesión cargada" : "sesiones cargadas"} con otra herramienta. ` +
+      `Esos datos clínicos se conservan, pero la ficha pasa a usar ${destino} y deja de mostrarlos. ¿Cambiar igual?`,
+    );
+    if (!confirmado) return { ok: false, message: null };
+  }
+  const result = await updateMemberEspecialidadAction(memberId, nueva);
+  if (!result.ok) return { ok: false, message: result.error.message };
+  return { ok: true };
+}
+
+/**
+ * M55 · camino "self" de la sección Equipo: un profesional colegiado sin
+ * gestión de equipo edita SOLO su propia especialidad. La gestión completa
+ * (members, invitaciones) queda reservada a dirección.
+ */
+function SecEquipoSelf({ self }: { self: EquipoSelf }) {
+  const [especialidad, setEspecialidad] = useState<EspecialidadSlug | null>(self.especialidad);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const onChange = (nueva: EspecialidadSlug | null) => {
+    if (nueva === especialidad) return;
+    setError(null);
+    startTransition(async () => {
+      const result = await cambiarEspecialidadConAviso(self.memberId, nueva, "Tenés");
+      if (!result.ok) {
+        if (result.message) setError(result.message);
+        return;
+      }
+      setEspecialidad(nueva);
+    });
+  };
+
+  return (
+    <Section
+      title="Tu especialidad"
+      sub="Define la herramienta clínica con la que registrás tus sesiones. Con — (de la clínica) heredás la especialidad principal de la organización."
+    >
+      <Row label="Especialidad" sub="Dirección también puede cambiarla.">
+        <EspecialidadMemberSelect
+          value={especialidad}
+          disabled={pending}
+          onChange={onChange}
+          ariaLabel="Tu especialidad"
+        />
+        {error ? (
+          <p role="alert" style={{ color: "var(--red)", fontSize: 12.5, marginTop: 6 }}>{error}</p>
+        ) : null}
+      </Row>
+    </Section>
+  );
+}
+
 function SecEquipo({
   orgTipo,
   isOwner,
+  canManageTeam,
+  equipoSelf,
   initialMembers,
   initialInvitations,
 }: {
   orgTipo: "INDEPENDIENTE" | "CLINICA";
   isOwner: boolean;
+  /** M55 · dirección ve la gestión completa; sin esto, solo el camino self. */
+  canManageTeam: boolean;
+  /** M55 · member propio para el camino self (colegiado sin gestión). */
+  equipoSelf: EquipoSelf | null;
   initialMembers: TeamMemberRow[];
   initialInvitations: TeamInvitationRow[];
 }) {
@@ -961,6 +1084,11 @@ function SecEquipo({
         </div>
       </Section>
     );
+  }
+
+  // M55 · profesional colegiado sin gestión de equipo: solo su especialidad.
+  if (!canManageTeam) {
+    return equipoSelf ? <SecEquipoSelf self={equipoSelf} /> : null;
   }
 
   const submitInvite = (e?: React.FormEvent) => {
@@ -1023,6 +1151,27 @@ function SecEquipo({
     });
   };
 
+  // M55 · cambio de especialidad de un member (dirección; incluye la propia).
+  const onEspecialidad = (m: TeamMemberRow, nueva: EspecialidadSlug | null) => {
+    if (nueva === m.especialidad) return;
+    setError(null);
+    startTransition(async () => {
+      const nombre = [m.nombre, m.apellido].filter(Boolean).join(" ") || m.email || "Este miembro";
+      const result = await cambiarEspecialidadConAviso(
+        m.memberId,
+        nueva,
+        m.esVos ? "Tenés" : `${nombre} tiene`,
+      );
+      if (!result.ok) {
+        if (result.message) setError(result.message);
+        return;
+      }
+      setMembers((prev) =>
+        prev.map((x) => (x.memberId === m.memberId ? { ...x, especialidad: nueva } : x)),
+      );
+    });
+  };
+
   const onRemove = (m: TeamMemberRow) => {
     const nombre = [m.nombre, m.apellido].filter(Boolean).join(" ") || m.email || "este miembro";
     if (!window.confirm(`¿Dar de baja a ${nombre}? Pierde el acceso a la organización (sus datos clínicos cargados se conservan).`)) return;
@@ -1053,6 +1202,7 @@ function SecEquipo({
             <tr>
               <th>Persona</th>
               <th>Rol</th>
+              <th>Especialidad</th>
               <th>Alta</th>
               <th />
             </tr>
@@ -1074,6 +1224,20 @@ function SecEquipo({
                     </div>
                   </td>
                   <td>{roleLabel(m.role, m.esColegiado)}</td>
+                  <td>
+                    {/* M55 · solo colegiados tienen herramienta clínica. NULL
+                        hereda la especialidad principal de la organización. */}
+                    {m.esColegiado ? (
+                      <EspecialidadMemberSelect
+                        value={m.especialidad}
+                        disabled={pending}
+                        onChange={(nueva) => onEspecialidad(m, nueva)}
+                        ariaLabel={`Especialidad de ${nombre || m.email || "miembro"}`}
+                      />
+                    ) : (
+                      <span className="muted">—</span>
+                    )}
+                  </td>
                   <td className="muted" style={{ fontSize: 12.5 }}>
                     {m.acceptedAt ? fechaCorta(m.acceptedAt) : fechaCorta(m.createdAt)}
                   </td>
@@ -1310,6 +1474,11 @@ interface ConfiguracionProps {
   isOwner: boolean;
   equipoMembers: TeamMemberRow[];
   equipoInvitations: TeamInvitationRow[];
+  /**
+   * M55 · member propio para el camino "self" de Equipo: un colegiado sin
+   * canManageTeam ve la sección reducida a su propia especialidad.
+   */
+  equipoSelf: EquipoSelf | null;
 }
 
 interface DirtyState {
@@ -1335,6 +1504,7 @@ export function Configuracion({
   isOwner,
   equipoMembers,
   equipoInvitations,
+  equipoSelf,
 }: ConfiguracionProps) {
   const [seccion, setSeccion] = useState<SeccionId>("consultorio");
   const [consultorio, setConsultorio] = useState<ConsultorioData>(initialConsultorio);
@@ -1446,7 +1616,7 @@ export function Configuracion({
       />
 
       <div className="cfg-grid">
-        <SideNav active={seccion} setActive={setSeccion} showEquipo={canManageTeam} />
+        <SideNav active={seccion} setActive={setSeccion} showEquipo={canManageTeam || equipoSelf != null} />
         <div className="cfg-pane">
           {seccion === "cuenta"        ? <SecCuenta c={consultorio} set={setC} /> : null}
           {seccion === "consultorio"   ? (
@@ -1459,10 +1629,12 @@ export function Configuracion({
               orgSlug={orgSlug}
             />
           ) : null}
-          {seccion === "equipo" && canManageTeam ? (
+          {seccion === "equipo" && (canManageTeam || equipoSelf != null) ? (
             <SecEquipo
               orgTipo={orgTipo}
               isOwner={isOwner}
+              canManageTeam={canManageTeam}
+              equipoSelf={equipoSelf}
               initialMembers={equipoMembers}
               initialInvitations={equipoInvitations}
             />

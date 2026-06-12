@@ -26,6 +26,9 @@ import { decryptColumn } from "@/lib/crypto";
 import {
   ESPECIALIDADES_META,
   getEspecialidadMetaByToolId,
+  resolveEspecialidadEfectiva,
+  toolPerteneceAEspecialidad,
+  type EspecialidadSlug,
 } from "@/lib/especialidades/meta";
 import {
   deriveSpineState,
@@ -71,11 +74,22 @@ export interface TurnoActivoFicha {
   id: string;
   estado: "EN_SALA" | "ATENDIENDO";
   /**
+   * M55 · especialidad EFECTIVA del profesional del turno
+   * (member.especialidad ?? organization.especialidad). Es la herramienta que
+   * el tab Plan renderiza y la misma que el writer (upsertSesion) deriva
+   * server-side al guardar — render y persistencia quedan alineados.
+   */
+  especialidad: EspecialidadSlug;
+  /**
    * toolData ya guardado para este turno (sesion.tool_data_cifrado
    * descifrado) o null si todavía no hay sesión / no tiene tool data.
    * El tab Plan re-hidrata el borrador del slot con esto: el writer
    * (upsertSesion) sobreescribe todas las columnas en cada guardado, así
    * que sin re-hidratación un "guardar solo SOAP" pisaría la herramienta.
+   * M55: solo se re-hidrata si el tool_id persistido pertenece a la
+   * especialidad activa — un draft de OTRA herramienta (cobertura cruzada /
+   * cambio de especialidad con turno en curso) haría fallar el zod del writer
+   * y bloquearía también el guardado del SOAP.
    */
   toolDraft: unknown;
 }
@@ -159,6 +173,8 @@ interface TurnoExtRow {
   duracion_real_min: number | null;
   estado: string;
   servicio_nombre: string;
+  /** M55 · profesional asignado — decide la especialidad efectiva del slot. */
+  profesional_id: string | null;
 }
 
 // ─── Fetcher principal ─────────────────────────────────────────────────────
@@ -166,6 +182,11 @@ interface TurnoExtRow {
 export async function getPacienteFicha(
   pacienteId: string,
   organizationId: string,
+  /**
+   * M55 · especialidad de la org (fallback de la derivación efectiva). El
+   * caller ya la tiene en el ActiveContext — se pasa para no re-leerla acá.
+   */
+  orgEspecialidad: EspecialidadSlug,
 ): Promise<Result<PacienteFichaData>> {
   if (!/^[0-9a-f-]{36}$/i.test(pacienteId)) {
     return err("validation", "ID de paciente inválido.");
@@ -189,7 +210,7 @@ export async function getPacienteFicha(
       .limit(10),
     supabase
       .from("turno_extendido")
-      .select("id, inicio, duracion_min, duracion_real_min, estado, servicio_nombre")
+      .select("id, inicio, duracion_min, duracion_real_min, estado, servicio_nombre, profesional_id")
       .eq("paciente_id", pacienteId)
       .eq("organization_id", organizationId)
       .order("inicio", { ascending: false })
@@ -230,10 +251,14 @@ export async function getPacienteFicha(
     : { subjetivo: "", objetivo: "", analisis: "", plan: "" };
 
   // Historial genérico de la herramienta (Fase B): toolData por sesión,
-  // descifrado o con fallback legacy a vertebras_json.
+  // descifrado o con fallback legacy a vertebras_json. Cada entrada lleva su
+  // tool_id persistido (M55): el tab Plan filtra por la especialidad activa
+  // antes de pasárselo a la Tool (filtrarToolHistorial) — en fichas mixtas
+  // cada herramienta ve solo SUS sesiones.
   const toolHistorial: ToolHistorialEntry[] = sesiones.map((s) => ({
     fecha: s.created_at.slice(0, 10),
     toolData: sesionToolData(s),
+    toolId: s.tool_id,
   }));
 
   // Vertebras (compat quiro): estado acumulado derivado del historial —
@@ -291,12 +316,38 @@ export async function getPacienteFicha(
   const sesionTurnoEnCurso = turnoEnCurso
     ? sesiones.find((s) => s.turno_id === turnoEnCurso.id) ?? null
     : null;
+
+  // M55 · especialidad EFECTIVA del slot: la del PROFESIONAL del turno activo
+  // (member.especialidad ?? org), espejo exacto de la derivación server-side
+  // del writer (upsertSesion). Sin turno activo no hay guardado posible y la
+  // ficha rinde la herramienta de la org, como siempre. Si la lectura del
+  // member falla, degradamos a la org (display-only: ante un mismatch el zod
+  // del writer rechaza el guardado con error visible, sin corrupción).
+  let especialidadActiva: EspecialidadSlug = orgEspecialidad;
+  if (turnoEnCurso?.profesional_id) {
+    const { data: profRow } = await supabase
+      .from("member")
+      .select("especialidad")
+      .eq("id", turnoEnCurso.profesional_id)
+      .maybeSingle();
+    especialidadActiva = resolveEspecialidadEfectiva(
+      (profRow as { especialidad: string | null } | null)?.especialidad ?? null,
+      orgEspecialidad,
+    );
+  }
+
   const turnoActivo: TurnoActivoFicha | null = turnoEnCurso
     ? {
         id: turnoEnCurso.id,
         estado: turnoEnCurso.estado as TurnoActivoFicha["estado"],
+        especialidad: especialidadActiva,
         toolDraft:
-          sesionTurnoEnCurso && sesionTurnoEnCurso.tool_data_cifrado != null
+          // M55 · re-hidratar SOLO si el tool_id persistido es el de la
+          // especialidad activa: un draft cross-tool re-enviado al writer
+          // fallaría la validación zod y bloquearía también el SOAP.
+          sesionTurnoEnCurso &&
+          sesionTurnoEnCurso.tool_data_cifrado != null &&
+          toolPerteneceAEspecialidad(sesionTurnoEnCurso.tool_id, especialidadActiva)
             ? sesionToolData(sesionTurnoEnCurso)
             : null,
       }

@@ -1,10 +1,15 @@
 /**
  * Folio · queries y mutations de Sesion (SOAP + tool de especialidad + lock).
  *
- * Writer ÚNICO de sesion.tool_id / tool_data_cifrado (M50). El toolData se
- * valida contra el schema del registry (lib/especialidades/meta.ts) ANTES de
- * cifrar. Para quiropraxia, vertebras_json se espeja como hasta ahora (compat
- * con la vista sesion_con_enmiendas M14 + índice gin — se retira en Fase F).
+ * Writer ÚNICO de sesion.tool_id / tool_data_cifrado (M50). El toolId NO viaja
+ * del cliente: se deriva acá, server-side, de la especialidad EFECTIVA del
+ * PROFESIONAL del turno (M55: member.especialidad ?? organization.especialidad
+ * — la herramienta es la del profesional que atiende, no la del usuario que
+ * guarda: un director colegiado puede escribir sobre un turno ajeno y la
+ * sesión queda con la tool del profesional del turno). El toolData se valida
+ * contra el schema del registry (lib/especialidades/meta.ts) ANTES de cifrar.
+ * Para quiropraxia, vertebras_json se espeja como hasta ahora (compat con la
+ * vista sesion_con_enmiendas M14 + índice gin — se retira en Fase F).
  */
 
 import { z } from "zod";
@@ -12,7 +17,8 @@ import { z } from "zod";
 import { encryptColumn, tryDecrypt } from "@/lib/crypto";
 import {
   ESPECIALIDADES_META,
-  getEspecialidadMetaByToolId,
+  resolveEspecialidadEfectiva,
+  type EspecialidadMeta,
 } from "@/lib/especialidades/meta";
 import type { QuiropraxiaToolData } from "@/lib/especialidades/quiropraxia/schema";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -37,9 +43,11 @@ const upsertSesionSchema = z.object({
     id: z.string().regex(/^[CTL][0-9]{1,2}$/),
     estado: vertebraEstadoSchema,
   })).optional(),
-  /** Id de herramienta del registry (sesion.tool_id, M50). */
-  toolId: z.string().min(1).optional(),
-  /** Payload de la herramienta — se valida contra el schema del registry. */
+  /**
+   * Payload de la herramienta — OPACO para el caller. El toolId se deriva
+   * server-side (especialidad efectiva del profesional del turno, M55) y el
+   * payload se valida contra el schema zod de esa especialidad antes de cifrar.
+   */
   toolData: z.unknown().optional(),
   evaAntes: z.number().int().min(0).max(10).nullable().optional(),
   evaDespues: z.number().int().min(0).max(10).nullable().optional(),
@@ -61,6 +69,12 @@ export type UpsertSesionInput = z.infer<typeof upsertSesionSchema>;
 export type TurnoOwnershipRow = {
   organization_id: string;
   paciente_id: string;
+  /**
+   * Profesional asignado al turno (M55: decide la especialidad efectiva de la
+   * sesión). Opcional para el guard puro — la verificación de ownership no lo
+   * usa; el writer sí, después de que el guard aprueba.
+   */
+  profesional_id?: string | null;
 } | null;
 
 export type TurnoOwnershipVerdict =
@@ -103,14 +117,15 @@ export async function upsertSesion(input: UpsertSesionInput): Promise<Result<{ i
   // pacienteId (el trigger M09 garantiza turno.paciente_id en la misma org).
   const { data: turnoRow, error: turnoErr } = await supabase
     .from("turno")
-    .select("organization_id, paciente_id")
+    .select("organization_id, paciente_id, profesional_id")
     .eq("id", d.turnoId)
     .maybeSingle();
   if (turnoErr) {
     return err("db_error", "No pudimos validar el turno.", turnoErr.message);
   }
+  const turno = turnoRow as TurnoOwnershipRow;
   const ownership = checkTurnoOwnership(
-    turnoRow as TurnoOwnershipRow,
+    turno,
     session.data.organizationId,
     d.pacienteId,
   );
@@ -129,33 +144,64 @@ export async function upsertSesion(input: UpsertSesionInput): Promise<Result<{ i
     return err("locked", "La sesión está bloqueada. Creá una enmienda en su lugar.");
   }
 
-  // ── Tool de especialidad (M50) ────────────────────────────────────────
-  // Callers legacy mandan solo `vertebras` → construimos el toolData quiro.
-  let toolId: string | null = d.toolId ?? null;
+  // ── Tool de especialidad (M50/M55) ────────────────────────────────────
   let toolData: unknown = d.toolData ?? null;
-  if (!toolId && d.vertebras) {
-    toolId = ESPECIALIDADES_META.quiropraxia.toolId;
+  let toolMeta: EspecialidadMeta | null = null;
+
+  if (toolData == null && d.vertebras) {
+    // Callers legacy mandan solo `vertebras` → toolData quiro implícito (sin
+    // lookup de especialidad: vertebras ES la herramienta de quiropraxia).
+    toolMeta = ESPECIALIDADES_META.quiropraxia;
     toolData = { v: 1, vertebras: d.vertebras } satisfies QuiropraxiaToolData;
+  } else if (toolData != null) {
+    // M55 · derivación SERVER-SIDE del toolId: especialidad efectiva del
+    // PROFESIONAL del turno (member.especialidad ?? organization.especialidad,
+    // fallback a la org si el turno no tuviera profesional — imposible
+    // post-CLINICA-3, defensivo). Nunca se confía en un toolId del cliente:
+    // si el toolValue que llegó es de OTRA herramienta (UI desactualizada /
+    // turno reasignado entre render y save), el zod del registry lo rechaza
+    // con un error de validación visible — no hay corrupción silenciosa.
+    const profesionalId = turno?.profesional_id ?? null;
+    const [memberRes, orgRes] = await Promise.all([
+      profesionalId
+        ? supabase.from("member").select("especialidad").eq("id", profesionalId).maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+      supabase
+        .from("organization")
+        .select("especialidad")
+        .eq("id", session.data.organizationId)
+        .maybeSingle(),
+    ]);
+    if (memberRes.error || orgRes.error) {
+      return err(
+        "db_error",
+        "No pudimos resolver la especialidad del profesional del turno.",
+        memberRes.error?.message ?? orgRes.error?.message,
+      );
+    }
+    const efectiva = resolveEspecialidadEfectiva(
+      (memberRes.data as { especialidad: string | null } | null)?.especialidad ?? null,
+      (orgRes.data as { especialidad: string | null } | null)?.especialidad ?? null,
+    );
+    toolMeta = ESPECIALIDADES_META[efectiva];
   }
 
   // Espejo legacy de quiropraxia (vista M14 + índice gin; se retira en Fase F).
   let vertebrasEspejo: Array<{ id: string; estado: string }> = d.vertebras ?? [];
+  let toolId: string | null = null;
 
-  if (toolId) {
-    const meta = getEspecialidadMetaByToolId(toolId);
-    if (!meta) {
-      return err("validation", `toolId desconocido para el registry: ${toolId}.`);
-    }
-    const parsedTool = meta.schema.safeParse(toolData);
+  if (toolMeta) {
+    const parsedTool = toolMeta.schema.safeParse(toolData);
     if (!parsedTool.success) {
       return err(
         "validation",
-        `toolData inválido para ${meta.nombre}.`,
+        `toolData inválido para ${toolMeta.nombre}.`,
         parsedTool.error.message,
       );
     }
     toolData = parsedTool.data;
-    if (meta.slug === "quiropraxia") {
+    toolId = toolMeta.toolId;
+    if (toolMeta.slug === "quiropraxia") {
       vertebrasEspejo = (toolData as QuiropraxiaToolData).vertebras;
     }
   }

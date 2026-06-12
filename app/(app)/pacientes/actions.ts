@@ -83,9 +83,10 @@ export type SaveSesionFichaActionInput = z.infer<typeof saveSesionFichaSchema>;
  * como la sesión del turno en curso del paciente (upsert 1:1 por turno_id,
  * editable hasta el lock — Ley 26.529).
  *
- * El toolId NO viaja del cliente: se deriva server-side de la especialidad
- * de la org activa (registry) y upsertSesion valida el toolData contra el
- * schema zod antes de cifrar. RLS (sesion_insert/update_clinical, M10) y el
+ * El toolId NO viaja del cliente: lo deriva el writer (upsertSesion) de la
+ * especialidad EFECTIVA del PROFESIONAL del turno (M55: member.especialidad
+ * ?? organization.especialidad) y valida el toolData contra el schema zod del
+ * registry antes de cifrar. RLS (sesion_insert/update_clinical, M10) y el
  * trigger sesion_same_org_guard cubren tenancy y coherencia turno↔paciente.
  * PHI: nunca se loguea el contenido del borrador.
  */
@@ -109,7 +110,6 @@ export async function saveSesionFichaAction(
     buildUpsertSesionInput({
       turnoId: parsed.data.turnoId,
       pacienteId: parsed.data.pacienteId,
-      especialidad: ctx.data.organization.especialidad,
       toolValue: parsed.data.toolValue ?? null,
       soap: parsed.data.soap,
     }),

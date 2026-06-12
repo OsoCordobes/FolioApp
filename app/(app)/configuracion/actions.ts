@@ -21,12 +21,15 @@ import {
   type SaveServiciosInput,
 } from "@/lib/db/configuracion";
 import {
+  countSesionesOtraEspecialidadMember,
   createInvitation,
   removeMember,
   revokeInvitation,
+  updateMemberEspecialidad,
   type CreateInvitationInput,
   type CreatedInvitation,
 } from "@/lib/db/members";
+import type { EspecialidadSlug } from "@/lib/especialidades/meta";
 import { getActiveSession } from "@/lib/db/session";
 import { err, type Result } from "@/lib/db/errors";
 import { roleLabel } from "@/lib/auth/capabilities";
@@ -158,6 +161,37 @@ export async function removeMemberAction(memberId: string): Promise<Result<void>
   const result = await removeMember(memberId);
   if (result.ok) revalidatePath("/configuracion");
   return result;
+}
+
+/**
+ * M55 · setea/borra la especialidad propia de un member colegiado
+ * (null = vuelve a heredar organization.especialidad). El gate real es
+ * server-side en lib/db/members.ts: canManageTeam O el propio member, slug
+ * validado contra el registry, audit log del cambio.
+ */
+export async function updateMemberEspecialidadAction(
+  memberId: string,
+  especialidad: EspecialidadSlug | null,
+): Promise<Result<void>> {
+  const result = await updateMemberEspecialidad(memberId, especialidad);
+  if (result.ok) {
+    revalidatePath("/configuracion");
+    // La ficha deriva la herramienta del profesional del turno activo.
+    revalidatePath("/pacientes", "layout");
+  }
+  return result;
+}
+
+/**
+ * M55 · espejo per-member de countSesionesOtraEspecialidadAction: cuántas
+ * sesiones de turnos de este profesional quedaron con OTRA herramienta. La UI
+ * lo consulta antes de confirmar el cambio de especialidad del member.
+ */
+export async function countSesionesOtraEspecialidadMemberAction(
+  memberId: string,
+  nuevaEspecialidad: EspecialidadSlug | null,
+): Promise<Result<number>> {
+  return countSesionesOtraEspecialidadMember(memberId, nuevaEspecialidad);
 }
 
 export async function connectGoogleCalendar(): Promise<Result<void>> {

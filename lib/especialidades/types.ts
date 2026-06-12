@@ -17,6 +17,12 @@ export interface ToolHistorialEntry {
   fecha: string;
   /** Payload de la herramienta de esa sesión (descifrado o fallback legacy). */
   toolData: unknown;
+  /**
+   * `sesion.tool_id` persistido (M50) — permite filtrar el historial por la
+   * herramienta activa en fichas mixtas (M55, filtrarToolHistorial). Opcional
+   * por compat: ausente/null = fila legacy pre-M50 (quiropraxia implícita).
+   */
+  toolId?: string | null;
 }
 
 /** Props que el slot clínico le pasa a la Tool de la especialidad activa. */
