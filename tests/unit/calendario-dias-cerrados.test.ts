@@ -86,3 +86,35 @@ test("eventos en días de semana no cambian nada (nunca van grises)", () => {
     false, false, false, false, false, true, true,
   ]);
 });
+
+// ─── Multi-profesional (modo clínica) ───────────────────────────────────────
+// En vista "Todos" el fetcher pasa las franjas de TODA la org (unión): un día
+// queda cerrado solo si NINGÚN colegiado tiene franja. Con filtro activo pasa
+// solo las del profesional filtrado (la query agrega .eq member_id).
+
+test("unión multi-prof: sábado del quiropráctico + domingo de la psicóloga abren AMBOS días", () => {
+  // Prof A (quiro) atiende sábado (DB 6); Prof B (psico) atiende domingo (DB 0).
+  const franjasOrg = [franja(6), franja(0)];
+  const out = deriveDiasCerrados(WEEK, franjasOrg, SIN_EVENTOS);
+  assert.equal(out[5], false); // SÁB abierto (lo abre A)
+  assert.equal(out[6], false); // DOM abierto (lo abre B)
+});
+
+test("unión multi-prof: si ningún colegiado tiene franja de finde, el finde queda cerrado", () => {
+  // Tres profesionales, todos lun-vie.
+  const franjasOrg = [1, 2, 3, 4, 5].flatMap((d) => [franja(d), franja(d), franja(d)]);
+  assert.deepEqual(deriveDiasCerrados(WEEK, franjasOrg, SIN_EVENTOS), [
+    false, false, false, false, false, true, true,
+  ]);
+});
+
+test("filtro activo: con SOLO las franjas del profesional filtrado, deriva de SU agenda", () => {
+  // La org completa abre sábado y domingo (unión)…
+  const franjasOrg = [franja(6), franja(0)];
+  assert.deepEqual(deriveDiasCerrados(WEEK, franjasOrg, SIN_EVENTOS).slice(5), [false, false]);
+  // …pero filtrado al prof que solo atiende sábado, el domingo vuelve a cerrarse.
+  const franjasProfA = [franja(6)];
+  const out = deriveDiasCerrados(WEEK, franjasProfA, SIN_EVENTOS);
+  assert.equal(out[5], false);
+  assert.equal(out[6], true);
+});
