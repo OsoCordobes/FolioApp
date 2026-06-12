@@ -58,22 +58,24 @@ export default async function HoyPage({ searchParams }: PageProps) {
   // Nudge de Google Calendar: solo profesionales colegiados sin integración
   // (modo "conectar") o con integración muerta por invalid_grant (modo
   // "reconectar"). La decisión es pura (lib/google/health.ts); la lectura es
-  // fail-safe — ante cualquier error, no molestar.
-  const gcalNudgeModo = await loadGcalNudgeModo(
-    ctx.data.organization.id,
-    ctx.data.session.memberId,
-    ctx.data.session.esColegiado,
-  );
-
-  const data = await getDashboardHoy({
-    organizationId: ctx.data.organization.id,
-    fechaIso,
-    timezone,
-    profesionalId: profesionalIdEfectivo,
-    profesionalesNombreById: mostrarAtribucion
-      ? Object.fromEntries(profesionales.map((p) => [p.id, p.displayName]))
-      : undefined,
-  });
+  // fail-safe — ante cualquier error, no molestar. En paralelo con la agenda:
+  // son independientes y /hoy es la página más caliente (review PR #51).
+  const [gcalNudgeModo, data] = await Promise.all([
+    loadGcalNudgeModo(
+      ctx.data.organization.id,
+      ctx.data.session.memberId,
+      ctx.data.session.esColegiado,
+    ),
+    getDashboardHoy({
+      organizationId: ctx.data.organization.id,
+      fechaIso,
+      timezone,
+      profesionalId: profesionalIdEfectivo,
+      profesionalesNombreById: mostrarAtribucion
+        ? Object.fromEntries(profesionales.map((p) => [p.id, p.displayName]))
+        : undefined,
+    }),
+  ]);
 
   if (!data.ok) {
     throw new Error(`Error cargando agenda: ${data.error.message}`);
