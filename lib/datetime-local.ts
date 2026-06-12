@@ -26,11 +26,28 @@ export function isoToLocalDatetime(iso?: string): string {
   const next = new Date(base.getTime() + 5 * 60 * 1000);
   next.setSeconds(0, 0);
   next.setMinutes(Math.round(next.getMinutes() / 5) * 5);
-  const yyyy = next.getFullYear();
-  const mm = String(next.getMonth() + 1).padStart(2, "0");
-  const dd = String(next.getDate()).padStart(2, "0");
-  const hh = String(next.getHours()).padStart(2, "0");
-  const mi = String(next.getMinutes()).padStart(2, "0");
+  return formatLocalDatetime(next);
+}
+
+/**
+ * ISO → "YYYY-MM-DDTHH:mm" local EXACTO (sin +5' ni redondeo; segundos
+ * truncados — el input no los representa).
+ *
+ * Para pickers cuyo default es un horario que YA existe, no uno por elegir:
+ * el modal de reagendar abre en la hora actual del turno (review PR #44, M1 —
+ * con isoToLocalDatetime un turno de 10:00 abría el picker en 10:05). El
+ * create modal sigue usando isoToLocalDatetime ("próximo slot prolijo").
+ */
+export function isoToLocalDatetimeExact(iso: string): string {
+  return formatLocalDatetime(new Date(iso));
+}
+
+function formatLocalDatetime(d: Date): string {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mi = String(d.getMinutes()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
 }
 

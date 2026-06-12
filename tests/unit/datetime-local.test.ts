@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { isoToLocalDatetime, localDatetimeToIso } from "../../lib/datetime-local";
+import {
+  isoToLocalDatetime,
+  isoToLocalDatetimeExact,
+  localDatetimeToIso,
+} from "../../lib/datetime-local";
 
 // ─── Helpers de <input type="datetime-local"> (lib/datetime-local.ts) ─────
 //
@@ -46,4 +50,33 @@ test("isoToLocalDatetime: overflow de minuto 60 normaliza a la hora siguiente (b
 
 test("isoToLocalDatetime: overflow cruza medianoche con cambio de fecha", () => {
   assert.equal(isoToLocalDatetime(localDatetimeToIso("2026-06-14T23:54")), "2026-06-15T00:00");
+});
+
+// ─── isoToLocalDatetimeExact (review PR #44, M1) ───────────────────────────
+//
+// El modal de reagendar abre el picker en la hora EXACTA del turno actual —
+// sin el "+5' redondeado" de isoToLocalDatetime (pensado para defaults de
+// turnos NUEVOS), que corría un turno de 10:00 a 10:05.
+
+test("isoToLocalDatetimeExact: roundtrip exacto, sin +5 ni redondeo", () => {
+  assert.equal(isoToLocalDatetimeExact(localDatetimeToIso("2026-06-14T10:30")), "2026-06-14T10:30");
+});
+
+test("isoToLocalDatetimeExact: preserva minutos no múltiplos de 5", () => {
+  assert.equal(isoToLocalDatetimeExact(localDatetimeToIso("2026-06-14T10:07")), "2026-06-14T10:07");
+  assert.equal(isoToLocalDatetimeExact(localDatetimeToIso("2026-06-14T23:59")), "2026-06-14T23:59");
+});
+
+test("isoToLocalDatetimeExact: trunca segundos (el input no los representa)", () => {
+  const conSegundos = new Date(
+    new Date(localDatetimeToIso("2026-06-14T10:30")).getTime() + 42_000,
+  ).toISOString();
+  assert.equal(isoToLocalDatetimeExact(conSegundos), "2026-06-14T10:30");
+});
+
+test("isoToLocalDatetimeExact: formato YYYY-MM-DDTHH:mm válido para el input", () => {
+  assert.match(
+    isoToLocalDatetimeExact(localDatetimeToIso("2026-06-14T10:07")),
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/,
+  );
 });
