@@ -45,6 +45,7 @@ interface TurnoExtendidoRow {
   servicio_nombre: string;
   servicio_tipo_canonico: string;
   pago_id: string | null;
+  profesional_id: string;
 }
 
 // ─── Mapeos enum DB → UI ───────────────────────────────────────────────────
@@ -105,10 +106,16 @@ interface FetcherInput {
   timezone: string;
   /** Si está seteado, filtra turnos solo del profesional indicado. */
   profesionalId?: string | null;
+  /**
+   * member.id → display name. Si viene, cada Turno sale con
+   * `profesionalNombre` (atribución visual en vista "Todos" multi-colegiado).
+   * Ausente → profesionalNombre null y el render histórico no cambia.
+   */
+  profesionalesNombreById?: Record<string, string>;
 }
 
 export async function getDashboardHoy(input: FetcherInput): Promise<Result<DashboardHoyData>> {
-  const { organizationId, fechaIso, timezone, profesionalId } = input;
+  const { organizationId, fechaIso, timezone, profesionalId, profesionalesNombreById } = input;
   const supabase = await createSupabaseServerClient();
 
   // Rango UTC equivalente a [00:00, 24:00) en la zona horaria de la org.
@@ -123,7 +130,7 @@ export async function getDashboardHoy(input: FetcherInput): Promise<Result<Dashb
         "gcal_event_id, atendiendo_desde, duracion_real_min, " +
         "paciente_id, paciente_nombre_cifrado, paciente_apellido_cifrado, paciente_telefono_cifrado, " +
         "paciente_tipo, paciente_tags, paciente_alerta_alergia, " +
-        "servicio_nombre, servicio_tipo_canonico, pago_id",
+        "servicio_nombre, servicio_tipo_canonico, pago_id, profesional_id",
     )
     .eq("organization_id", organizationId)
     .gte("inicio", startUtc)
@@ -151,7 +158,7 @@ export async function getDashboardHoy(input: FetcherInput): Promise<Result<Dashb
     if (!pacientesAcum.has(row.paciente_id)) {
       pacientesAcum.set(row.paciente_id, rowToPaciente(row));
     }
-    return rowToTurno(row, postVisitaByTurno.get(row.id) ?? null, timezone);
+    return rowToTurno(row, postVisitaByTurno.get(row.id) ?? null, timezone, profesionalesNombreById);
   });
 
   const pacientes: PacientesById = Object.fromEntries(pacientesAcum.entries());
@@ -216,6 +223,7 @@ function rowToTurno(
   row: TurnoExtendidoRow,
   postVisitaFlag: { guardada: boolean } | null,
   timezone: string,
+  profesionalesNombreById?: Record<string, string>,
 ): Turno {
   const estado = ESTADO_DB_TO_UI[row.estado];
   const origen = ORIGEN_DB_TO_UI[row.origen];
@@ -237,6 +245,8 @@ function rowToTurno(
     gcal: !!row.gcal_event_id,
     origen,
     cobro: row.pago_id ? { estado: "pagado", ts: null } : { estado: "pendiente", ts: null },
+    profesionalId: row.profesional_id ?? null,
+    profesionalNombre: profesionalesNombreById?.[row.profesional_id] ?? null,
   };
 }
 

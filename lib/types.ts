@@ -63,6 +63,14 @@ export interface Turno {
   origen?: OrigenTurno;
   transiciones?: TransicionTurno[];
   cobro?: Cobro;
+  /** member.id del profesional asignado (turno.profesional_id, vista M14). */
+  profesionalId?: string | null;
+  /**
+   * Display name del profesional — solo viene seteado cuando la vista activa
+   * es "Todos" en una org con >1 colegiado (atribución visual). En orgs Solo
+   * o con filtro de profesional activo queda null y la card no cambia.
+   */
+  profesionalNombre?: string | null;
 }
 
 /** Turno de la semana / mes (compacto, para grilla de calendario) */
@@ -75,6 +83,10 @@ export interface TurnoSemana {
   servicio: string;
   estado: EstadoTurno;
   origen?: OrigenTurno;
+  /** member.id del profesional asignado (turno.profesional_id, vista M14). */
+  profesionalId?: string | null;
+  /** Display name — solo seteado en vista "Todos" con >1 colegiado (ver Turno). */
+  profesionalNombre?: string | null;
 }
 
 // ─── Pacientes ──────────────────────────────────────────────────────────────

@@ -29,6 +29,7 @@ import { createHash, randomBytes } from "node:crypto";
 
 import { z } from "zod";
 
+import type { ProfesionalLite } from "@/lib/agenda/profesional";
 import { capabilitiesFor, type Role } from "@/lib/auth/capabilities";
 import { decryptColumn } from "@/lib/crypto";
 import {
@@ -198,6 +199,73 @@ export async function listMembers(): Promise<Result<TeamMemberRow[]>> {
         createdAt: m.created_at,
       };
     }),
+  );
+}
+
+// ─── listProfesionalesLite ─────────────────────────────────────────────────
+
+/**
+ * Colegiados activos de la org de la sesión, reducidos a {id, displayName}
+ * para el selector de profesional de /hoy y /calendario y la atribución de
+ * turnos. Disponible para TODOS los roles autenticados (es solo display name,
+ * sin PHI clínica): la agenda compartida ya muestra estos turnos y la RLS
+ * `member_select_same_org` (M02) permite a cualquier member leer los members
+ * de su propia org — acá NO se gatea con canManageTeam a propósito.
+ *
+ * Display name: profile.nombre/apellido (decrypt server-side, mismo patrón
+ * de lectura ANGOSTA con service client que listMembers — los profile_ids ya
+ * vienen del query RLS-scoped de member) con fallback al email.
+ */
+export async function listProfesionalesLite(): Promise<Result<ProfesionalLite[]>> {
+  const ctx = await getActiveContext();
+  if (!ctx.ok) return ctx;
+
+  const supabase = await createSupabaseServerClient();
+
+  const { data, error } = await supabase
+    .from("member")
+    .select("id, profile_id")
+    .eq("organization_id", ctx.data.organization.id)
+    .eq("es_colegiado", true)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    const mapped = mapSupabaseError(error);
+    return err(mapped.code, mapped.message, error.message);
+  }
+
+  const rows = (data ?? []) as Array<{ id: string; profile_id: string }>;
+  if (rows.length === 0) return ok([]);
+
+  // PII de display vía service client ANGOSTO (ver header del módulo).
+  const profilesById = new Map<string, string>();
+  const service = createSupabaseServiceClient();
+  const { data: profiles, error: profErr } = await service
+    .from("profile")
+    .select("id, email, nombre_cifrado, apellido_cifrado")
+    .in("id", rows.map((m) => m.profile_id));
+  if (profErr) {
+    return err("db_error", "Error leyendo los profesionales.", profErr.message);
+  }
+  for (const p of (profiles ?? []) as Array<{
+    id: string;
+    email: string | null;
+    nombre_cifrado: string | null;
+    apellido_cifrado: string | null;
+  }>) {
+    const nombre = tryDecrypt(p.nombre_cifrado, "profile.nombre_cifrado");
+    const apellido = tryDecrypt(p.apellido_cifrado, "profile.apellido_cifrado");
+    const display =
+      [nombre, apellido].filter(Boolean).join(" ").trim() || p.email || "Profesional";
+    profilesById.set(p.id, display);
+  }
+
+  return ok(
+    rows.map((m) => ({
+      id: m.id,
+      displayName: profilesById.get(m.profile_id) ?? "Profesional",
+    })),
   );
 }
 

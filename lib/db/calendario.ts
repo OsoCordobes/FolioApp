@@ -44,6 +44,7 @@ interface TurnoExtendidoRow {
   paciente_tags: string[] | null;
   paciente_alerta_alergia: boolean;
   servicio_nombre: string;
+  profesional_id: string;
 }
 
 interface BloqueoRow {
@@ -151,6 +152,56 @@ export function deriveDiasCerrados(
   });
 }
 
+// ─── Capacidad del día (vista semanal) ─────────────────────────────────────
+
+/** Franja con horario, para computar minutos de capacidad del día. */
+export interface FranjaDisponibilidad extends DisponibilidadVigencia {
+  /** "HH:MM" 24h (CHECK disp_hora_format, M02). */
+  horaInicio: string;
+  /** "HH:MM" 24h, > horaInicio (CHECK disp_orden, M02). */
+  horaFin: string;
+}
+
+function franjaMinutos(horaInicio: string, horaFin: string): number {
+  const [hi, mi] = horaInicio.split(":").map(Number);
+  const [hf, mf] = horaFin.split(":").map(Number);
+  return Math.max(0, hf * 60 + mf - (hi * 60 + mi));
+}
+
+/**
+ * `deriveCapacidadSemana` — función pura: minutos de disponibilidad real por
+ * día de la semana (índice 0=LUN..6=DOM), sumando TODAS las franjas vigentes
+ * recibidas. El caller decide el universo de franjas:
+ *   - filtro de profesional activo → solo SUS franjas (capacidad personal);
+ *   - vista "Todos" → franjas de toda la org (suma de los colegiados — 3
+ *     médicos en paralelo NO saturan el 100% con la agenda de uno).
+ *
+ * Devuelve `null` para un día SIN franja vigente: el caller cae al
+ * denominador histórico (600 min) y el render no cambia para orgs sin
+ * disponibilidad cargada.
+ *
+ * @param weekDates 7 fechas ISO lun..dom (índice 0=LUN … 6=DOM).
+ * @param franjas franjas activas con horario y vigencia.
+ */
+export function deriveCapacidadSemana(
+  weekDates: string[],
+  franjas: FranjaDisponibilidad[],
+): Array<number | null> {
+  return weekDates.map((iso, i) => {
+    // Índice UI (0=lun..6=dom) → convención DB (0=dom..6=sáb).
+    const dowDb = (i + 1) % 7;
+    const vigentes = franjas.filter(
+      (f) =>
+        f.diaSemana === dowDb &&
+        f.vigenciaDesde <= iso &&
+        (f.vigenciaHasta == null || f.vigenciaHasta >= iso),
+    );
+    if (vigentes.length === 0) return null;
+    const total = vigentes.reduce((acc, f) => acc + franjaMinutos(f.horaInicio, f.horaFin), 0);
+    return total > 0 ? total : null;
+  });
+}
+
 // ─── Output shape ──────────────────────────────────────────────────────────
 
 export interface CalendarioSemanaData {
@@ -166,6 +217,12 @@ export interface CalendarioSemanaData {
   pacientes: PacientesById;
   /** Por índice de weekDates (0=LUN..6=DOM): true = columna "Cerrado". */
   diasCerrados: boolean[];
+  /**
+   * Minutos de disponibilidad real por día (0=LUN..6=DOM); null = sin franja
+   * vigente ese día → la UI cae al denominador histórico (600 min).
+   * Con filtro de profesional: SU capacidad; en "Todos": suma org-wide.
+   */
+  capacidadDiaMin: Array<number | null>;
 }
 
 interface FetcherInput {
@@ -173,12 +230,17 @@ interface FetcherInput {
   weekStartIso: string;            // lunes "YYYY-MM-DD"
   timezone: string;
   profesionalId?: string | null;
+  /**
+   * member.id → display name. Si viene, cada TurnoSemana sale con
+   * `profesionalNombre` (atribución en vista "Todos" multi-colegiado).
+   */
+  profesionalesNombreById?: Record<string, string>;
 }
 
 // ─── Fetcher ───────────────────────────────────────────────────────────────
 
 export async function getCalendarioSemana(input: FetcherInput): Promise<Result<CalendarioSemanaData>> {
-  const { organizationId, weekStartIso, timezone, profesionalId } = input;
+  const { organizationId, weekStartIso, timezone, profesionalId, profesionalesNombreById } = input;
   const tz = timezone || "America/Argentina/Cordoba";
   const supabase = await createSupabaseServerClient();
 
@@ -192,7 +254,7 @@ export async function getCalendarioSemana(input: FetcherInput): Promise<Result<C
         .select(
           "id, organization_id, inicio, duracion_min, estado, origen, " +
             "paciente_id, paciente_nombre_cifrado, paciente_apellido_cifrado, paciente_telefono_cifrado, " +
-            "paciente_tipo, paciente_tags, paciente_alerta_alergia, servicio_nombre",
+            "paciente_tipo, paciente_tags, paciente_alerta_alergia, servicio_nombre, profesional_id",
         )
         .eq("organization_id", organizationId)
         .gte("inicio", startUtc)
@@ -221,14 +283,21 @@ export async function getCalendarioSemana(input: FetcherInput): Promise<Result<C
       .eq("organization_id", organizationId)
       .in("estado", ["PENDIENTE", "REAGENDADO"])
       .order("recibido_ts", { ascending: false }),
-    // Disponibilidad activa de la org (cualquier profesional) — decide qué
-    // días de finde se pintan "Cerrado" en la vista semanal. Org-scoped: la
-    // RLS disp_select_org (M02) limita a miembros de la org.
-    supabase
-      .from("disponibilidad_profesional")
-      .select("dia_semana, vigencia_desde, vigencia_hasta")
-      .eq("organization_id", organizationId)
-      .eq("activa", true),
+    // Disponibilidad activa — decide qué días de finde se pintan "Cerrado" y
+    // el denominador del % de capacidad por día. Con filtro de profesional
+    // activo se acota a SUS franjas (su agenda, su capacidad); en "Todos" es
+    // org-wide: un día queda cerrado solo si NINGÚN profesional tiene franja
+    // (unión) y la capacidad suma a todos los colegiados. Org-scoped: la RLS
+    // disp_select_org (M02) limita a miembros de la org.
+    (async () => {
+      let q = supabase
+        .from("disponibilidad_profesional")
+        .select("dia_semana, hora_inicio, hora_fin, vigencia_desde, vigencia_hasta")
+        .eq("organization_id", organizationId)
+        .eq("activa", true);
+      if (profesionalId) q = q.eq("member_id", profesionalId);
+      return q;
+    })(),
   ]);
 
   if (turnosRes.error) return err("db_error", "Error leyendo turnos.", turnosRes.error.message);
@@ -254,6 +323,8 @@ export async function getCalendarioSemana(input: FetcherInput): Promise<Result<C
       servicio: row.servicio_nombre,
       estado: ESTADO_DB_TO_UI[row.estado],
       origen: ORIGEN_DB_TO_UI[row.origen],
+      profesionalId: row.profesional_id ?? null,
+      profesionalNombre: profesionalesNombreById?.[row.profesional_id] ?? null,
     };
   });
 
@@ -303,14 +374,18 @@ export async function getCalendarioSemana(input: FetcherInput): Promise<Result<C
   if (dispRes.error) {
     console.warn(`[calendario] disponibilidad_profesional falló: ${dispRes.error.message}`);
   }
-  const disponibilidad: DisponibilidadVigencia[] = (
+  const disponibilidad: FranjaDisponibilidad[] = (
     (dispRes.data ?? []) as unknown as Array<{
       dia_semana: number;
+      hora_inicio: string;
+      hora_fin: string;
       vigencia_desde: string;
       vigencia_hasta: string | null;
     }>
   ).map((r) => ({
     diaSemana: r.dia_semana,
+    horaInicio: r.hora_inicio,
+    horaFin: r.hora_fin,
     vigenciaDesde: r.vigencia_desde,
     vigenciaHasta: r.vigencia_hasta,
   }));
@@ -320,6 +395,10 @@ export async function getCalendarioSemana(input: FetcherInput): Promise<Result<C
     ...pedidos.filter((p) => p.estado === "pendiente" && p.fecha).map((p) => p.fecha as string),
   ]);
   const diasCerrados = deriveDiasCerrados(weekDates, dispRes.error ? [] : disponibilidad, fechasConEventos);
+  // Capacidad por día: con filtro de profesional la query ya vino acotada a
+  // sus franjas; en "Todos" suma las de toda la org. Sin franjas → null →
+  // fallback histórico (600 min) en la UI.
+  const capacidadDiaMin = deriveCapacidadSemana(weekDates, dispRes.error ? [] : disponibilidad);
 
   const nowDate = new Date();
   const hoyIso = ymdInTz(nowDate.toISOString(), tz);
@@ -337,6 +416,7 @@ export async function getCalendarioSemana(input: FetcherInput): Promise<Result<C
     pedidos,
     pacientes: Object.fromEntries(pacientesAcum.entries()),
     diasCerrados,
+    capacidadDiaMin,
   });
 }
 
@@ -603,6 +683,8 @@ interface MesFetcherInput {
   monthIso: string;                // "YYYY-MM"
   timezone: string;
   profesionalId?: string | null;
+  /** Ver FetcherInput.profesionalesNombreById. */
+  profesionalesNombreById?: Record<string, string>;
 }
 
 /**
@@ -612,7 +694,7 @@ interface MesFetcherInput {
  * cancelados/no-asistió/reagendados) para los conteos/preview por día.
  */
 export async function getCalendarioMes(input: MesFetcherInput): Promise<Result<CalendarioMesData>> {
-  const { organizationId, monthIso, timezone, profesionalId } = input;
+  const { organizationId, monthIso, timezone, profesionalId, profesionalesNombreById } = input;
   const tz = timezone || "America/Argentina/Cordoba";
   const supabase = await createSupabaseServerClient();
 
@@ -632,7 +714,7 @@ export async function getCalendarioMes(input: MesFetcherInput): Promise<Result<C
     .select(
       "id, organization_id, inicio, duracion_min, estado, origen, " +
         "paciente_id, paciente_nombre_cifrado, paciente_apellido_cifrado, paciente_telefono_cifrado, " +
-        "paciente_tipo, paciente_tags, paciente_alerta_alergia, servicio_nombre",
+        "paciente_tipo, paciente_tags, paciente_alerta_alergia, servicio_nombre, profesional_id",
     )
     .eq("organization_id", organizationId)
     .in("estado", ["AGENDADO", "CONFIRMADO", "EN_SALA", "ATENDIENDO", "CERRADO"])
@@ -659,6 +741,8 @@ export async function getCalendarioMes(input: MesFetcherInput): Promise<Result<C
       servicio: row.servicio_nombre,
       estado: ESTADO_DB_TO_UI[row.estado],
       origen: ORIGEN_DB_TO_UI[row.origen],
+      profesionalId: row.profesional_id ?? null,
+      profesionalNombre: profesionalesNombreById?.[row.profesional_id] ?? null,
     };
   });
 
