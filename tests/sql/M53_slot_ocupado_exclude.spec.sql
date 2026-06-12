@@ -26,19 +26,15 @@ BEGIN
   v_fin := v_inicio + interval '30 minutes';
 
   -- ── 1. una sola firma de slot_ocupado ─────────────────────────────────────
+  -- (la ARIDAD exacta la asserta el spec de la última migración que la cambió
+  --  — hoy M54 con 6 args; este spec solo exige que no haya overloads, que es
+  --  lo que ambiguaría la resolución de PostgREST)
   SELECT count(*) INTO v_count
     FROM pg_proc p
     JOIN pg_namespace n ON n.oid = p.pronamespace
    WHERE n.nspname = 'public' AND p.proname = 'slot_ocupado';
   IF v_count <> 1 THEN
     RAISE EXCEPTION 'M53 spec FAIL: % versiones de slot_ocupado (esperada 1 — overloads ambiguan PostgREST)', v_count;
-  END IF;
-  SELECT count(*) INTO v_count
-    FROM pg_proc p
-    JOIN pg_namespace n ON n.oid = p.pronamespace
-   WHERE n.nspname = 'public' AND p.proname = 'slot_ocupado' AND p.pronargs = 4;
-  IF v_count <> 1 THEN
-    RAISE EXCEPTION 'M53 spec FAIL: slot_ocupado no tiene la firma de 4 args';
   END IF;
 
   -- ── fixtures ──────────────────────────────────────────────────────────────
