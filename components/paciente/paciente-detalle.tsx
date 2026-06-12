@@ -211,9 +211,11 @@ function TabPlan() {
   const turnoActivo = plan.turnoActivo;
 
   // Borrador local del toolData de la herramienta. Si el turno en curso ya
-  // tiene sesión guardada, re-hidrata desde ahí: el writer sobreescribe todas
-  // las columnas en cada guardado, así que "guardar solo SOAP" después no
-  // debe pisar la herramienta con null.
+  // tiene sesión guardada, re-hidrata desde ahí: el writer sobreescribe las
+  // columnas tool en cada guardado re-hidratable, así que "guardar solo SOAP"
+  // después no debe pisar la herramienta con null. Si toolDraft vino null por
+  // un tool_id de OTRA especialidad, el writer preserva esas columnas en los
+  // guardados solo-SOAP (debePreservarToolData, lib/db/sesiones.ts).
   const [toolValue, setToolValue] = useState<unknown>(turnoActivo?.toolDraft ?? null);
   const [soap, setSoap] = useState<SoapState>(plan.soap);
   const [saving, setSaving] = useState(false);

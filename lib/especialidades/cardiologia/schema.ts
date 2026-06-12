@@ -109,11 +109,17 @@ const estudioSchema = z.object({
   conclusion: z.enum(CONCLUSIONES_ESTUDIO),
 });
 
+// .strict(): claves desconocidas RECHAZAN en vez de stripearse. Como todos
+// los campos de contenido son .optional(), sin strict un payload de OTRA
+// herramienta (quiro/psico) parsearía OK reducido a `{ v: 1 }` y se
+// persistiría con tool_id cardio — corrupción silenciosa de PHI. El writer
+// (lib/db/sesiones.ts) depende de este rechazo cross-tool; invariante
+// cubierta en tests/unit/especialidades-meta.test.ts.
 export const cardiologiaToolDataSchema = z.object({
   v: z.literal(1),
   panel: panelSchema.optional(),
   estudios: z.array(estudioSchema).max(30).optional(),
-});
+}).strict();
 
 export type CardiologiaToolData = z.infer<typeof cardiologiaToolDataSchema>;
 export type PanelCV = z.infer<typeof panelSchema>;

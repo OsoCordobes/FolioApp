@@ -963,6 +963,12 @@ function EspecialidadMemberSelect({
  * cargadas con OTRA herramienta, se confirma antes — los datos se conservan
  * en DB pero el slot clínico de la ficha deja de mostrarlos.
  *
+ * "Se conservan" lo garantiza el writer incluso para la sesión del turno EN
+ * CURSO: un guardado solo-SOAP posterior al cambio PRESERVA las columnas tool
+ * que la ficha ya no re-hidrata (debePreservarToolData, lib/db/sesiones.ts),
+ * y un borrador de la herramienta vieja re-enviado rechaza por el zod
+ * .strict() del registry — en ningún caso se pisan en silencio.
+ *
  * `sujeto`: "Tenés" (camino self) o "{nombre} tiene" (dirección).
  */
 async function cambiarEspecialidadConAviso(

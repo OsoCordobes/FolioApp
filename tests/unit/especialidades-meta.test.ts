@@ -65,6 +65,69 @@ test("getEspecialidadMetaByToolId: resuelve por toolId, null para desconocidos",
   assert.equal(getEspecialidadMetaByToolId(null), null);
 });
 
+// ─── Rechazo cross-tool (F-PHI, review PR #56) ───────────────────────────────
+//
+// Los schemas de tool son .strict(): un payload de OTRA herramienta debe
+// RECHAZAR, no parsear "OK" reducido a `{ v: 1 }` por stripping de claves
+// desconocidas. De esto depende el writer (lib/db/sesiones.ts): si el turno
+// se reasigna o member.especialidad cambia entre render y save, el borrador
+// de la herramienta vieja rebota con error visible en vez de persistirse
+// vacío con el tool_id equivocado (corrupción silenciosa de PHI).
+
+const PAYLOADS_VALIDOS = {
+  quiropraxia: { v: 1, vertebras: [{ id: "C4", estado: "ajustada" }] },
+  cardiologia: {
+    v: 1,
+    panel: { taSistolica: 130, taDiastolica: 85, fc: 72, factores: { hta: true } },
+    estudios: [{ tipo: "ECG", fecha: "2026-06-01", hallazgos: "RS.", conclusion: "normal" }],
+  },
+  psicologia: {
+    v: 1,
+    phq9: [0, 1, 2, 3, 0, 1, 2, 3, 0],
+    gad7: [0, 1, 2, 3, 0, 1, 2],
+    registro: { animo: "ansioso", riesgo: "sin_riesgo" },
+    objetivos: [{ texto: "Reducir evitación social", estado: "en_curso" }],
+  },
+} as const;
+
+test("cross-tool: cada payload RECHAZA contra los schemas de las otras dos especialidades (6 direcciones)", () => {
+  for (const origen of ESPECIALIDAD_SLUGS) {
+    for (const destino of ESPECIALIDAD_SLUGS) {
+      const parsed = ESPECIALIDADES_META[destino].schema.safeParse(PAYLOADS_VALIDOS[origen]);
+      if (origen === destino) {
+        assert.equal(parsed.success, true, `${origen} contra su propio schema debería parsear`);
+      } else {
+        assert.equal(parsed.success, false, `payload ${origen} contra schema ${destino} debería rechazar`);
+      }
+    }
+  }
+});
+
+test("cross-tool: el rechazo es por .strict(), no por casualidad — sin claves ajenas {v:1} sigue siendo válido donde corresponde", () => {
+  // Documenta el mecanismo: cardio/psico aceptan {v:1} pelado (campos de
+  // contenido opcionales) — el peligro era exactamente que un payload ajeno
+  // degradara a eso. Quiro exige `vertebras`, así que ni {v:1} le parsea.
+  assert.equal(ESPECIALIDADES_META.cardiologia.schema.safeParse({ v: 1 }).success, true);
+  assert.equal(ESPECIALIDADES_META.psicologia.schema.safeParse({ v: 1 }).success, true);
+  assert.equal(ESPECIALIDADES_META.quiropraxia.schema.safeParse({ v: 1 }).success, false);
+});
+
+test("re-hidratación: lo que el writer persistió (schema.parse(...).data) re-parsea idéntico con .strict()", () => {
+  // El toolDraft de la ficha es JSON.parse(descifrado(tool_data_cifrado)) y el
+  // writer lo re-valida en el siguiente guardado: el output del propio schema
+  // tiene que seguir parseando (sin claves extra tipo timestamps — el schema
+  // stripea/define el shape persistido).
+  for (const slug of ESPECIALIDAD_SLUGS) {
+    const primera = ESPECIALIDADES_META[slug].schema.safeParse(PAYLOADS_VALIDOS[slug]);
+    assert.equal(primera.success, true, `${slug}: primera pasada`);
+    if (!primera.success) continue;
+    const persistido = JSON.parse(JSON.stringify(primera.data)) as unknown;
+    const segunda = ESPECIALIDADES_META[slug].schema.safeParse(persistido);
+    assert.equal(segunda.success, true, `${slug}: draft re-hidratado`);
+    if (segunda.success) assert.deepEqual(segunda.data, primera.data);
+  }
+});
+
 test("schemas: las tres especialidades validan estricto (v literal, shape propio)", () => {
   assert.equal(
     ESPECIALIDADES_META.quiropraxia.schema.safeParse({ v: 1, vertebras: [] }).success,

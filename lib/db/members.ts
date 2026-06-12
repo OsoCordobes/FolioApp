@@ -634,6 +634,11 @@ export async function removeMember(memberId: string): Promise<Result<void>> {
 /**
  * Gate puro del cambio de especialidad de un member (testeable sin Supabase,
  * patrón checkTurnoOwnership):
+ *   - la ORG debe ser CLINICA (la especialidad por profesional es una función
+ *     de clínicas — en un consultorio INDEPENDIENTE la especialidad vive a
+ *     nivel organización y se edita en /configuracion → Consultorio; sin este
+ *     gate, un caller directo de la action podía setear member.especialidad
+ *     en una org Solo, donde la UI nunca lo ofrece),
  *   - el TARGET debe ser colegiado (la especialidad decide su herramienta
  *     clínica; para roles administrativos no significa nada),
  *   - el ACTOR debe poder gestionar el equipo (OWNER/DIRECTOR) O ser el
@@ -644,12 +649,21 @@ export type EspecialidadUpdateVerdict =
   | { ok: false; code: "forbidden" | "validation"; message: string };
 
 export function checkEspecialidadUpdateAllowed(input: {
+  orgTipo: "INDEPENDIENTE" | "CLINICA";
   actorRole: Role;
   actorEsColegiado: boolean;
   actorMemberId: string;
   targetMemberId: string;
   targetEsColegiado: boolean;
 }): EspecialidadUpdateVerdict {
+  if (input.orgTipo !== "CLINICA") {
+    return {
+      ok: false,
+      code: "validation",
+      message:
+        "La especialidad por profesional es una función de clínicas. En un consultorio independiente se cambia desde Configuración → Consultorio.",
+    };
+  }
   if (!input.targetEsColegiado) {
     return {
       ok: false,
@@ -716,6 +730,7 @@ export async function updateMemberEspecialidad(
   };
 
   const verdict = checkEspecialidadUpdateAllowed({
+    orgTipo: ctx.data.organization.tipo,
     actorRole: ctx.data.session.role,
     actorEsColegiado: ctx.data.session.esColegiado,
     actorMemberId: ctx.data.session.memberId,
@@ -790,7 +805,11 @@ export async function getOwnEspecialidad(): Promise<Result<EspecialidadSlug | nu
  * usa para advertir ANTES de cambiar la especialidad: esos datos se conservan
  * en DB pero el slot clínico de la ficha deja de mostrarlos.
  *
- * Mismo criterio que el count org-level: filas legacy con tool_id NULL
+ * Criterio UNIFICADO con el count org-level (countSesionesOtraEspecialidad,
+ * lib/db/configuracion.ts): "otra herramienta" = tool_id que NO empieza con
+ * el PREFIJO de la especialidad ("<especialidad>.<tool>.<versión>", M50) —
+ * no `neq` contra el toolId exacto, para que una futura tool v2 de la MISMA
+ * especialidad no cuente como ajena. Filas legacy con tool_id NULL
  * (quiropraxia implícita) no se cuentan — el reader las maneja con fallback.
  * Service client count-only (sin PHI), gateado igual que el update.
  */
@@ -812,7 +831,7 @@ export async function countSesionesOtraEspecialidadMember(
 
   // Especialidad que el member pasaría a tener efectiva (null → hereda org).
   const efectiva = parsedEsp.data ?? ctx.data.organization.especialidad;
-  const toolIdNuevo = getEspecialidadMeta(efectiva).toolId;
+  const slugNuevo = getEspecialidadMeta(efectiva).slug;
 
   const service = createSupabaseServiceClient();
   const { count, error } = await service
@@ -821,7 +840,7 @@ export async function countSesionesOtraEspecialidadMember(
     .eq("organization_id", ctx.data.organization.id)
     .eq("turno.profesional_id", parsedId.data)
     .not("tool_id", "is", null)
-    .neq("tool_id", toolIdNuevo);
+    .not("tool_id", "like", `${slugNuevo}.%`);
 
   if (error) {
     const mapped = mapSupabaseError(error);

@@ -166,8 +166,9 @@ export async function removeMemberAction(memberId: string): Promise<Result<void>
 /**
  * M55 · setea/borra la especialidad propia de un member colegiado
  * (null = vuelve a heredar organization.especialidad). El gate real es
- * server-side en lib/db/members.ts: canManageTeam O el propio member, slug
- * validado contra el registry, audit log del cambio.
+ * server-side en lib/db/members.ts: solo orgs CLINICA (en INDEPENDIENTE la
+ * especialidad vive a nivel organización), canManageTeam O el propio member,
+ * slug validado contra el registry, audit log del cambio.
  */
 export async function updateMemberEspecialidadAction(
   memberId: string,

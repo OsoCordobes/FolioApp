@@ -30,6 +30,11 @@ export function normalizeEstadoVertebra(raw: string | undefined): EstadoVertebra
 
 // ─── toolData (sesion.tool_data_cifrado, tool_id = quiropraxia.spine.v1) ───
 
+// .strict(): claves desconocidas RECHAZAN en vez de stripearse. Sin esto, un
+// payload de OTRA herramienta podría "parsear OK" reducido a un objeto casi
+// vacío y persistirse con el tool_id equivocado (corrupción silenciosa de
+// PHI). El writer (lib/db/sesiones.ts) depende de este rechazo cross-tool;
+// invariante cubierta en tests/unit/especialidades-meta.test.ts.
 export const quiropraxiaToolDataSchema = z.object({
   v: z.literal(1),
   vertebras: z.array(
@@ -38,7 +43,7 @@ export const quiropraxiaToolDataSchema = z.object({
       estado: z.enum(ESTADOS_VERTEBRA),
     }),
   ),
-});
+}).strict();
 
 export type QuiropraxiaToolData = z.infer<typeof quiropraxiaToolDataSchema>;
 

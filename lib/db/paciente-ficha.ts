@@ -322,7 +322,10 @@ export async function getPacienteFicha(
   // del writer (upsertSesion). Sin turno activo no hay guardado posible y la
   // ficha rinde la herramienta de la org, como siempre. Si la lectura del
   // member falla, degradamos a la org (display-only: ante un mismatch el zod
-  // del writer rechaza el guardado con error visible, sin corrupción).
+  // .strict() del writer rechaza el guardado con error visible, sin
+  // corrupción). El lookup NO filtra deleted_at a propósito: el turno sigue
+  // siendo de ese profesional aunque esté de baja — su especialidad sigue
+  // decidiendo la herramienta (mismo criterio que el writer).
   let especialidadActiva: EspecialidadSlug = orgEspecialidad;
   if (turnoEnCurso?.profesional_id) {
     const { data: profRow } = await supabase
@@ -344,7 +347,11 @@ export async function getPacienteFicha(
         toolDraft:
           // M55 · re-hidratar SOLO si el tool_id persistido es el de la
           // especialidad activa: un draft cross-tool re-enviado al writer
-          // fallaría la validación zod y bloquearía también el SOAP.
+          // fallaría la validación zod (.strict()) y bloquearía también el
+          // SOAP. El toolDraft null resultante NO pone en riesgo los datos de
+          // la otra herramienta: el writer detecta el guardado solo-SOAP
+          // sobre una fila no re-hidratable y PRESERVA las columnas tool
+          // (debePreservarToolData, lib/db/sesiones.ts).
           sesionTurnoEnCurso &&
           sesionTurnoEnCurso.tool_data_cifrado != null &&
           toolPerteneceAEspecialidad(sesionTurnoEnCurso.tool_id, especialidadActiva)

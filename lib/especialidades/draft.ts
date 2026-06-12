@@ -9,12 +9,13 @@
  *
  * Reglas:
  *   - Campos SOAP: trim; vacíos → undefined (el writer persiste NULL).
- *   - toolValue == null → SIN toolData. Ojo: el writer igualmente
- *     sobreescribe tool_id/tool_data_cifrado con NULL en el upsert (semántica
- *     "el borrador es la verdad completa de la sesión"), por eso el caller
- *     re-hidrata el borrador con el toolData ya guardado del turno activo
- *     (PlanData.turnoActivo.toolDraft) — un guardado posterior que solo toque
- *     el SOAP no pierde lo cargado en la herramienta.
+ *   - toolValue == null → SIN toolData. El writer decide qué hacer con las
+ *     columnas tool existentes: si la ficha pudo re-hidratar el borrador
+ *     (PlanData.turnoActivo.toolDraft — tool_id de la especialidad efectiva),
+ *     el null es un vaciado deliberado y las columnas van a NULL; si NO pudo
+ *     (tool_id de otra especialidad / fila legacy), las PRESERVA
+ *     (debePreservarToolData, lib/db/sesiones.ts) — un guardado solo-SOAP
+ *     nunca pisa datos de herramienta que la UI no mostró.
  *   - toolValue != null → viaja como toolData OPACO, sin toolId. El toolId lo
  *     deriva el WRITER server-side de la especialidad efectiva del PROFESIONAL
  *     del turno (M55: member.especialidad ?? organization.especialidad) — ni

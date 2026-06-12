@@ -7,7 +7,13 @@
  * — la herramienta es la del profesional que atiende, no la del usuario que
  * guarda: un director colegiado puede escribir sobre un turno ajeno y la
  * sesión queda con la tool del profesional del turno). El toolData se valida
- * contra el schema del registry (lib/especialidades/meta.ts) ANTES de cifrar.
+ * contra el schema del registry (lib/especialidades/meta.ts) ANTES de cifrar;
+ * los schemas son .strict(), así que un payload de OTRA herramienta RECHAZA
+ * con error visible en vez de stripearse a `{ v: 1 }` (sin corrupción
+ * silenciosa). Un guardado solo-SOAP sobre una sesión cuyos datos de
+ * herramienta la ficha NO pudo re-hidratar (tool_id de otra especialidad /
+ * fila legacy) PRESERVA esas columnas en vez de nullearlas
+ * (debePreservarToolData) — conservador con PHI.
  * Para quiropraxia, vertebras_json se espeja como hasta ahora (compat con la
  * vista sesion_con_enmiendas M14 + índice gin — se retira en Fase F).
  */
@@ -18,7 +24,9 @@ import { encryptColumn, tryDecrypt } from "@/lib/crypto";
 import {
   ESPECIALIDADES_META,
   resolveEspecialidadEfectiva,
+  toolPerteneceAEspecialidad,
   type EspecialidadMeta,
+  type EspecialidadSlug,
 } from "@/lib/especialidades/meta";
 import type { QuiropraxiaToolData } from "@/lib/especialidades/quiropraxia/schema";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -95,6 +103,105 @@ export function checkTurnoOwnership(
   return { ok: true };
 }
 
+// ─── Preservación de tool data en guardados solo-SOAP (puro, testeable) ─
+
+/**
+ * Columnas de herramienta de la fila `sesion` existente, tal como las lee el
+ * writer. De `tool_data_cifrado` solo importa la NULIDAD — acá nunca se
+ * descifra nada.
+ */
+export type SesionToolColumnsRow = {
+  tool_id: string | null;
+  tool_data_cifrado: unknown | null;
+  vertebras_json: unknown;
+};
+
+/** ¿La fila existente tiene ALGÚN dato de herramienta que un UPDATE podría pisar? */
+export function sesionTieneToolData(row: SesionToolColumnsRow): boolean {
+  return (
+    row.tool_data_cifrado != null ||
+    row.tool_id != null ||
+    (Array.isArray(row.vertebras_json) && row.vertebras_json.length > 0)
+  );
+}
+
+/**
+ * F-PHI (review PR #56): ¿un guardado SIN toolData (solo SOAP) debe PRESERVAR
+ * las columnas tool existentes en vez de nullearlas?
+ *
+ * La regla espeja el criterio de re-hidratación del reader
+ * (lib/db/paciente-ficha.ts → turnoActivo.toolDraft): la ficha solo re-hidrata
+ * el borrador si `tool_data_cifrado != null` Y el `tool_id` pertenece a la
+ * especialidad efectiva. Entonces:
+ *
+ *   - Fila RE-HIDRATABLE (el usuario VIO sus datos en la herramienta y aun así
+ *     mandó toolValue null) → es un vaciado deliberado (los Tools de
+ *     cardio/psico emiten null cuando se borra todo el contenido) → NO
+ *     preservar: se honra el vaciado y las columnas van a NULL.
+ *   - Fila NO re-hidratable con datos (tool_id de OTRA especialidad — turno
+ *     reasignado / member.especialidad cambiada —, tool_id desconocido para
+ *     este deploy, o fila legacy quiro con solo vertebras_json) → la UI NUNCA
+ *     mostró esos datos, el null no puede ser una decisión del usuario →
+ *     PRESERVAR: el UPDATE no toca tool_id / tool_data_cifrado /
+ *     vertebras_json y el SOAP se guarda igual.
+ *
+ * Semántica deliberadamente conservadora con PHI: ante la duda, no se borra.
+ * Pura a propósito (sin I/O) — invariantes en tests/unit/sesion-tool-preserve.test.ts.
+ */
+export function debePreservarToolData(
+  existing: SesionToolColumnsRow | null,
+  especialidadEfectiva: EspecialidadSlug,
+): boolean {
+  if (!existing || !sesionTieneToolData(existing)) return false; // nada que pisar
+  const rehidratable =
+    existing.tool_data_cifrado != null &&
+    toolPerteneceAEspecialidad(existing.tool_id, especialidadEfectiva);
+  return !rehidratable;
+}
+
+// ─── Especialidad efectiva del turno (M55) ─────────────────────────────
+
+/**
+ * Deriva SERVER-SIDE la especialidad efectiva del PROFESIONAL del turno
+ * (member.especialidad ?? organization.especialidad; fallback a la org si el
+ * turno no tuviera profesional — imposible post-CLINICA-3, defensivo).
+ *
+ * El lookup del member NO filtra `deleted_at` a propósito: el turno sigue
+ * siendo de ese profesional aunque después lo hayan dado de baja — su
+ * especialidad sigue decidiendo la herramienta de la sesión. Filtrar la baja
+ * degradaría la sesión a la especialidad de la org y cambiaría de herramienta
+ * en silencio.
+ */
+async function especialidadEfectivaDelTurno(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  profesionalId: string | null,
+  organizationId: string,
+): Promise<Result<EspecialidadSlug>> {
+  const [memberRes, orgRes] = await Promise.all([
+    profesionalId
+      ? supabase.from("member").select("especialidad").eq("id", profesionalId).maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+    supabase
+      .from("organization")
+      .select("especialidad")
+      .eq("id", organizationId)
+      .maybeSingle(),
+  ]);
+  if (memberRes.error || orgRes.error) {
+    return err(
+      "db_error",
+      "No pudimos resolver la especialidad del profesional del turno.",
+      memberRes.error?.message ?? orgRes.error?.message,
+    );
+  }
+  return ok(
+    resolveEspecialidadEfectiva(
+      (memberRes.data as { especialidad: string | null } | null)?.especialidad ?? null,
+      (orgRes.data as { especialidad: string | null } | null)?.especialidad ?? null,
+    ),
+  );
+}
+
 // ─── Upsert (crear o actualizar pre-lock) ──────────────────────────────
 
 export async function upsertSesion(input: UpsertSesionInput): Promise<Result<{ id: string }>> {
@@ -133,12 +240,16 @@ export async function upsertSesion(input: UpsertSesionInput): Promise<Result<{ i
     return err(ownership.code, ownership.message);
   }
 
-  // ¿Ya existe sesion para este turno?
-  const { data: existing } = await supabase
+  // ¿Ya existe sesion para este turno? (las columnas tool se leen solo para
+  // decidir preservación — tool_data_cifrado viaja opaco, nunca se descifra acá)
+  const { data: existingRow } = await supabase
     .from("sesion")
-    .select("id, locked_at")
+    .select("id, locked_at, tool_id, tool_data_cifrado, vertebras_json")
     .eq("turno_id", d.turnoId)
     .maybeSingle();
+  const existing = existingRow as
+    | ({ id: string; locked_at: string | null } & SesionToolColumnsRow)
+    | null;
 
   if (existing && existing.locked_at) {
     return err("locked", "La sesión está bloqueada. Creá una enmienda en su lugar.");
@@ -147,6 +258,10 @@ export async function upsertSesion(input: UpsertSesionInput): Promise<Result<{ i
   // ── Tool de especialidad (M50/M55) ────────────────────────────────────
   let toolData: unknown = d.toolData ?? null;
   let toolMeta: EspecialidadMeta | null = null;
+  // F-PHI: si el guardado viene SIN toolData pero la sesión existente tiene
+  // datos de una herramienta que la ficha NO pudo re-hidratar (tool_id de otra
+  // especialidad / fila legacy), el UPDATE no debe tocar las columnas tool.
+  let preservarToolColumns = false;
 
   if (toolData == null && d.vertebras) {
     // Callers legacy mandan solo `vertebras` → toolData quiro implícito (sin
@@ -155,35 +270,32 @@ export async function upsertSesion(input: UpsertSesionInput): Promise<Result<{ i
     toolData = { v: 1, vertebras: d.vertebras } satisfies QuiropraxiaToolData;
   } else if (toolData != null) {
     // M55 · derivación SERVER-SIDE del toolId: especialidad efectiva del
-    // PROFESIONAL del turno (member.especialidad ?? organization.especialidad,
-    // fallback a la org si el turno no tuviera profesional — imposible
-    // post-CLINICA-3, defensivo). Nunca se confía en un toolId del cliente:
-    // si el toolValue que llegó es de OTRA herramienta (UI desactualizada /
-    // turno reasignado entre render y save), el zod del registry lo rechaza
-    // con un error de validación visible — no hay corrupción silenciosa.
-    const profesionalId = turno?.profesional_id ?? null;
-    const [memberRes, orgRes] = await Promise.all([
-      profesionalId
-        ? supabase.from("member").select("especialidad").eq("id", profesionalId).maybeSingle()
-        : Promise.resolve({ data: null, error: null }),
-      supabase
-        .from("organization")
-        .select("especialidad")
-        .eq("id", session.data.organizationId)
-        .maybeSingle(),
-    ]);
-    if (memberRes.error || orgRes.error) {
-      return err(
-        "db_error",
-        "No pudimos resolver la especialidad del profesional del turno.",
-        memberRes.error?.message ?? orgRes.error?.message,
-      );
-    }
-    const efectiva = resolveEspecialidadEfectiva(
-      (memberRes.data as { especialidad: string | null } | null)?.especialidad ?? null,
-      (orgRes.data as { especialidad: string | null } | null)?.especialidad ?? null,
+    // PROFESIONAL del turno (especialidadEfectivaDelTurno). Nunca se confía en
+    // un toolId del cliente: si el toolValue que llegó es de OTRA herramienta
+    // (UI desactualizada / turno reasignado o member.especialidad cambiada
+    // entre render y save), el zod .strict() del registry lo RECHAZA con un
+    // error de validación visible — las claves desconocidas no se stripean,
+    // así que un payload ajeno no puede degradar a `{ v: 1 }` y persistirse
+    // con el tool_id equivocado.
+    const efectivaRes = await especialidadEfectivaDelTurno(
+      supabase,
+      turno?.profesional_id ?? null,
+      session.data.organizationId,
     );
-    toolMeta = ESPECIALIDADES_META[efectiva];
+    if (!efectivaRes.ok) return efectivaRes;
+    toolMeta = ESPECIALIDADES_META[efectivaRes.data];
+  } else if (existing && sesionTieneToolData(existing)) {
+    // Guardado solo-SOAP sobre una sesión que YA tiene datos de herramienta:
+    // decidir si el null es un vaciado deliberado (la ficha re-hidrató el
+    // borrador y el usuario lo dejó vacío) o datos que la UI nunca mostró
+    // (cambio de especialidad entre medio) — en ese caso se preservan.
+    const efectivaRes = await especialidadEfectivaDelTurno(
+      supabase,
+      turno?.profesional_id ?? null,
+      session.data.organizationId,
+    );
+    if (!efectivaRes.ok) return efectivaRes;
+    preservarToolColumns = debePreservarToolData(existing, efectivaRes.data);
   }
 
   // Espejo legacy de quiropraxia (vista M14 + índice gin; se retira en Fase F).
@@ -206,7 +318,7 @@ export async function upsertSesion(input: UpsertSesionInput): Promise<Result<{ i
     }
   }
 
-  const payload = {
+  const basePayload = {
     organization_id: session.data.organizationId,
     turno_id: d.turnoId,
     paciente_id: d.pacienteId,
@@ -215,14 +327,20 @@ export async function upsertSesion(input: UpsertSesionInput): Promise<Result<{ i
     soap_a_cifrado: encryptColumn(d.soap?.a ?? null),
     soap_p_cifrado: encryptColumn(d.soap?.p ?? null),
     notas_cifrado: encryptColumn(d.notas ?? null),
-    vertebras_json: vertebrasEspejo,
-    tool_id: toolId,
-    tool_data_cifrado: toolData == null ? null : encryptColumn(JSON.stringify(toolData)),
     eva_antes: d.evaAntes ?? null,
     eva_despues: d.evaDespues ?? null,
   };
+  // F-PHI: en el caso preservación las columnas tool se OMITEN del UPDATE (el
+  // SOAP se guarda igual); en el resto, "el borrador es la verdad completa":
+  // toolData null = vaciado deliberado → columnas a NULL / espejo vacío.
+  const toolColumns = {
+    vertebras_json: vertebrasEspejo,
+    tool_id: toolId,
+    tool_data_cifrado: toolData == null ? null : encryptColumn(JSON.stringify(toolData)),
+  };
 
   if (existing) {
+    const payload = preservarToolColumns ? basePayload : { ...basePayload, ...toolColumns };
     const { error } = await supabase.from("sesion").update(payload).eq("id", existing.id);
     if (error) return err(mapSupabaseError(error).code, mapSupabaseError(error).message, error.message);
     return ok({ id: existing.id });
@@ -230,7 +348,7 @@ export async function upsertSesion(input: UpsertSesionInput): Promise<Result<{ i
 
   const { data, error } = await supabase
     .from("sesion")
-    .insert(payload)
+    .insert({ ...basePayload, ...toolColumns })
     .select("id")
     .single();
 

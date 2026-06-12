@@ -4,8 +4,10 @@
  *
  * Regla de producto (CLINICA-5): la especialidad de un member la setea
  * dirección (canManageTeam: OWNER/DIRECTOR) O el propio profesional. Solo
- * los colegiados tienen especialidad clínica. El slug se valida contra el
- * registry (null = vuelve a heredar organization.especialidad).
+ * los colegiados tienen especialidad clínica, y SOLO en orgs CLINICA (en un
+ * consultorio INDEPENDIENTE la especialidad vive a nivel organización — el
+ * gate corta a cualquier caller directo de la action). El slug se valida
+ * contra el registry (null = vuelve a heredar organization.especialidad).
  */
 
 import assert from "node:assert/strict";
@@ -19,11 +21,44 @@ import {
 const SELF = "11111111-1111-4111-8111-111111111111";
 const OTRO = "22222222-2222-4222-8222-222222222222";
 
+// ─── Gate de organización (m3 · review PR #56) ───────────────────────────────
+
+test("org INDEPENDIENTE → validation siempre, aun para OWNER o self colegiado", () => {
+  // OWNER de consultorio solo, sobre sí mismo (el caso del hallazgo: action
+  // directa sin UI).
+  const porOwner = checkEspecialidadUpdateAllowed({
+    orgTipo: "INDEPENDIENTE",
+    actorRole: "OWNER",
+    actorEsColegiado: true,
+    actorMemberId: SELF,
+    targetMemberId: SELF,
+    targetEsColegiado: true,
+  });
+  assert.equal(porOwner.ok, false);
+  if (!porOwner.ok) {
+    assert.equal(porOwner.code, "validation");
+    assert.match(porOwner.message, /clínicas/i);
+  }
+
+  // PROFESIONAL colegiado seteándose especialidad en una org Solo.
+  const porProfesional = checkEspecialidadUpdateAllowed({
+    orgTipo: "INDEPENDIENTE",
+    actorRole: "PROFESIONAL",
+    actorEsColegiado: true,
+    actorMemberId: SELF,
+    targetMemberId: SELF,
+    targetEsColegiado: true,
+  });
+  assert.equal(porProfesional.ok, false);
+  if (!porProfesional.ok) assert.equal(porProfesional.code, "validation");
+});
+
 // ─── Gates de actor ──────────────────────────────────────────────────────────
 
 test("OWNER y DIRECTOR (canManageTeam) cambian la especialidad de cualquier colegiado", () => {
   for (const role of ["OWNER", "DIRECTOR"] as const) {
     const verdict = checkEspecialidadUpdateAllowed({
+      orgTipo: "CLINICA",
       actorRole: role,
       actorEsColegiado: false, // DIRECTOR administrativo también gestiona equipo
       actorMemberId: SELF,
@@ -36,6 +71,7 @@ test("OWNER y DIRECTOR (canManageTeam) cambian la especialidad de cualquier cole
 
 test("PROFESIONAL cambia la PROPIA especialidad (self)", () => {
   const verdict = checkEspecialidadUpdateAllowed({
+    orgTipo: "CLINICA",
     actorRole: "PROFESIONAL",
     actorEsColegiado: true,
     actorMemberId: SELF,
@@ -47,6 +83,7 @@ test("PROFESIONAL cambia la PROPIA especialidad (self)", () => {
 
 test("PROFESIONAL NO cambia la especialidad de otro member → forbidden", () => {
   const verdict = checkEspecialidadUpdateAllowed({
+    orgTipo: "CLINICA",
     actorRole: "PROFESIONAL",
     actorEsColegiado: true,
     actorMemberId: SELF,
@@ -60,6 +97,7 @@ test("PROFESIONAL NO cambia la especialidad de otro member → forbidden", () =>
 test("ASISTENTE/COORDINADOR no cambian especialidades ajenas → forbidden", () => {
   for (const role of ["ASISTENTE", "COORDINADOR"] as const) {
     const verdict = checkEspecialidadUpdateAllowed({
+      orgTipo: "CLINICA",
       actorRole: role,
       actorEsColegiado: false,
       actorMemberId: SELF,
@@ -76,6 +114,7 @@ test("ASISTENTE/COORDINADOR no cambian especialidades ajenas → forbidden", () 
 test("target NO colegiado → validation (la especialidad es clínica), aun para OWNER o self", () => {
   // OWNER sobre una secretaria.
   const porOwner = checkEspecialidadUpdateAllowed({
+    orgTipo: "CLINICA",
     actorRole: "OWNER",
     actorEsColegiado: true,
     actorMemberId: SELF,
@@ -87,6 +126,7 @@ test("target NO colegiado → validation (la especialidad es clínica), aun para
 
   // La propia asistente sobre sí misma.
   const porSelf = checkEspecialidadUpdateAllowed({
+    orgTipo: "CLINICA",
     actorRole: "ASISTENTE",
     actorEsColegiado: false,
     actorMemberId: SELF,
