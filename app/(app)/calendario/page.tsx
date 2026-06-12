@@ -135,6 +135,8 @@ export default async function CalendarioPage({ searchParams }: PageProps) {
       hoyMonthIso={hoyMonthIso}
       profesionales={selectorVisible ? profesionales : []}
       profActivo={selectorVisible ? profesionalIdEfectivo : null}
+      colegiados={profesionales}
+      sessionMemberId={ctx.data.session.memberId}
     />
   );
 }

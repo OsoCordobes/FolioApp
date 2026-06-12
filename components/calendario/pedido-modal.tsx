@@ -13,6 +13,13 @@
  *
  * Si el pedido no tiene fecha_propuesta, el accept devuelve error y la UI
  * sugiere crear turno manual desde el calendario (post P0 #4).
+ *
+ * CLINICA-3: si el pedido NO trae profesional asignado (booking sin
+ * preferencia / WhatsApp), con >1 colegiado se muestra el picker de
+ * profesional (mismo patrón que TurnoCreateModal); con 1 solo colegiado se
+ * manda ese sin picker. El server (aceptarPedido) valida el destino como
+ * colegiado activo — se eliminó el fallback silencioso a la sesión, que
+ * convertía a la secretaria en "profesional" del turno.
  */
 
 import { useRef, useState, useTransition } from "react";
@@ -21,20 +28,53 @@ import {
   aceptarPedidoAction,
   rechazarPedidoAction,
 } from "@/app/(app)/calendario/actions";
+import { resolvePickerProfesional, type ProfesionalLite } from "@/lib/agenda/profesional";
 import type { Pedido } from "@/lib/types";
 import { useModalA11y } from "@/lib/use-modal-a11y";
 
 interface PedidoModalProps {
   pedido: Pedido;
+  /**
+   * Colegiados activos de la org (lista COMPLETA, independiente del selector
+   * de agenda) — alimenta el picker cuando el pedido no trae profesional.
+   */
+  colegiados?: ProfesionalLite[];
+  /** member.id de la sesión — default del picker si es colegiado. */
+  sessionMemberId?: string | null;
+  /** Filtro `?prof=` activo en la agenda — preferencia del default. */
+  profActivo?: string | null;
   onClose: () => void;
   onResolved: () => void;
 }
 
-export function PedidoModal({ pedido, onClose, onResolved }: PedidoModalProps) {
+export function PedidoModal({
+  pedido,
+  colegiados = [],
+  sessionMemberId = null,
+  profActivo = null,
+  onClose,
+  onResolved,
+}: PedidoModalProps) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<"view" | "reject">("view");
   const [motivo, setMotivo] = useState("");
+
+  // Picker de profesional: solo cuando el pedido no trae uno asignado. El
+  // default (decisión pura) prioriza filtro activo > sesión colegiada >
+  // primer colegiado; el <select> aparece únicamente con >1 colegiado.
+  const necesitaProfesional = pedido.profesionalId == null;
+  const picker = resolvePickerProfesional({
+    profesionales: colegiados,
+    sessionMemberId: sessionMemberId ?? "",
+    preferidoId: profActivo,
+  });
+  const [profesionalSel, setProfesionalSel] = useState<string | null>(
+    picker.defaultProfesionalId,
+  );
+  const profesionalAsignadoNombre = pedido.profesionalId
+    ? colegiados.find((c) => c.id === pedido.profesionalId)?.displayName ?? null
+    : null;
 
   // A11y de modal compartida: focus trap + Escape (deshabilitado en submit) +
   // foco inicial + restore focus al cerrar. Ver lib/use-modal-a11y.ts.
@@ -44,7 +84,12 @@ export function PedidoModal({ pedido, onClose, onResolved }: PedidoModalProps) {
   const handleAccept = () => {
     setError(null);
     startTransition(async () => {
-      const result = await aceptarPedidoAction(pedido.id);
+      const result = await aceptarPedidoAction(
+        pedido.id,
+        // El profesional elegido solo viaja cuando el pedido no trae uno
+        // propio; el server lo valida como colegiado activo de la org.
+        necesitaProfesional ? profesionalSel ?? undefined : undefined,
+      );
       if (!result.ok) {
         setError(result.error.message);
         return;
@@ -169,7 +214,45 @@ export function PedidoModal({ pedido, onClose, onResolved }: PedidoModalProps) {
               <dd style={{ margin: 0 }}>Nuevo — se va a crear al aceptar</dd>
             </>
           ) : null}
+          {profesionalAsignadoNombre ? (
+            <>
+              <dt style={{ color: "var(--ink-3)" }}>Profesional</dt>
+              <dd style={{ margin: 0 }}>{profesionalAsignadoNombre}</dd>
+            </>
+          ) : null}
         </dl>
+
+        {/* Picker de profesional (CLINICA-3): el pedido vino sin preferencia
+            y la org tiene >1 colegiado — hay que decidir QUIÉN lo atiende. */}
+        {mode === "view" && necesitaProfesional && picker.pickerVisible ? (
+          <label style={{ display: "block", marginBottom: 14 }}>
+            <span
+              style={{ display: "block", fontSize: 13, color: "var(--ink-3)", marginBottom: 4 }}
+            >
+              Profesional que lo atiende
+            </span>
+            <select
+              value={profesionalSel ?? ""}
+              onChange={(e) => setProfesionalSel(e.target.value || null)}
+              disabled={pending}
+              style={{
+                width: "100%",
+                padding: "8px 10px",
+                fontSize: 14,
+                border: "1px solid var(--line)",
+                borderRadius: 6,
+                background: "var(--surface)",
+                font: "inherit",
+              }}
+            >
+              {colegiados.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.displayName}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
 
         {pedido.motivo ? (
           <p
@@ -222,7 +305,11 @@ export function PedidoModal({ pedido, onClose, onResolved }: PedidoModalProps) {
               type="button"
               className="fi-btn fi-btn-primary"
               onClick={handleAccept}
-              disabled={pending || !pedido.fecha}
+              disabled={
+                pending ||
+                !pedido.fecha ||
+                (necesitaProfesional && picker.pickerVisible && !profesionalSel)
+              }
               title={
                 !pedido.fecha
                   ? "Sin fecha propuesta — el aceptar necesita fecha y hora"

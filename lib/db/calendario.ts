@@ -63,6 +63,7 @@ interface PedidoRow {
   telefono_cifrado: string | null;
   email_cifrado: string | null;
   paciente_id: string | null;
+  profesional_id: string | null;
   fecha_propuesta: string | null;
   duracion_min: number;
   servicio_id: string | null;
@@ -277,7 +278,7 @@ export async function getCalendarioSemana(input: FetcherInput): Promise<Result<C
     supabase
       .from("pedido")
       .select(
-        "id, canal, estado, nombre_cifrado, telefono_cifrado, email_cifrado, paciente_id, " +
+        "id, canal, estado, nombre_cifrado, telefono_cifrado, email_cifrado, paciente_id, profesional_id, " +
           "fecha_propuesta, duracion_min, servicio_id, motivo_cifrado, precio_cents, recibido_ts, confirmado_ts",
       )
       .eq("organization_id", organizationId)
@@ -354,6 +355,7 @@ export async function getCalendarioSemana(input: FetcherInput): Promise<Result<C
       email: email ?? undefined,
       nuevo: row.paciente_id == null,
       pacienteId: row.paciente_id ?? undefined,
+      profesionalId: row.profesional_id ?? null,
       fecha: row.fecha_propuesta ? ymdInTz(row.fecha_propuesta, tz) : null,
       hora: row.fecha_propuesta ? hhmmInTz(row.fecha_propuesta, tz) : null,
       dur: row.duracion_min,

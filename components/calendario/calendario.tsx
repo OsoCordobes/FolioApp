@@ -883,6 +883,15 @@ interface CalendarioProps {
   profesionales?: ProfesionalLite[];
   /** member.id activo en el filtro `?prof=`; null = "Todos". */
   profActivo?: string | null;
+  /**
+   * Colegiados activos (lista COMPLETA, a diferencia de `profesionales` que
+   * llega vacía cuando el selector de agenda no aplica). Alimenta el picker
+   * de profesional del PedidoModal (CLINICA-3) — un pedido sin profesional
+   * necesita destino aunque el rol no tenga selector de agenda.
+   */
+  colegiados?: ProfesionalLite[];
+  /** member.id de la sesión — default del picker del PedidoModal. */
+  sessionMemberId?: string | null;
 }
 
 export function Calendario({
@@ -913,6 +922,8 @@ export function Calendario({
   hoyMonthIso,
   profesionales = [],
   profActivo = null,
+  colegiados = [],
+  sessionMemberId = null,
 }: CalendarioProps) {
   const router = useRouter();
   const [vista, setVista] = useState<Vista>(initialVista);
@@ -999,6 +1010,9 @@ export function Calendario({
       {selectedPedido ? (
         <PedidoModal
           pedido={selectedPedido}
+          colegiados={colegiados}
+          sessionMemberId={sessionMemberId}
+          profActivo={profActivo}
           onClose={() => setSelectedPedido(null)}
           onResolved={() => setSelectedPedido(null)}
         />
@@ -1006,10 +1020,13 @@ export function Calendario({
 
       {/* Entry point "Agendar": reusa el modal de /hoy tal cual (origen MANUAL).
           createTurnoAction ya revalida /calendario; el refresh fuerza el
-          re-render inmediato del SC para que el turno aparezca sin F5. */}
+          re-render inmediato del SC para que el turno aparezca sin F5.
+          defaultProfesionalId: con filtro de profesional activo, el turno cae
+          en ESA agenda y no en la del usuario de sesión (CLINICA-3, F). */}
       {agendarOpen ? (
         <TurnoCreateModal
           origen="MANUAL"
+          defaultProfesionalId={profActivo}
           onClose={() => setAgendarOpen(false)}
           onCreated={() => {
             setAgendarOpen(false);

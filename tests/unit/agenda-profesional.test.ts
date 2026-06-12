@@ -5,6 +5,7 @@ import {
   inicialesProfesional,
   nombreCortoProfesional,
   resolveAgendaProfesional,
+  resolvePickerProfesional,
   type ProfesionalLite,
 } from "../../lib/agenda/profesional";
 
@@ -118,6 +119,62 @@ test("clínica: ?prof= inválido (uuid ajeno / basura) cae a 'Todos'", () => {
     assert.equal(out.selectorVisible, true);
     assert.equal(out.mostrarAtribucion, true);
   }
+});
+
+// ─── resolvePickerProfesional (CLINICA-3: default del picker en modales) ────
+
+test("picker: org sin colegiados → oculto y sin default (decide el server)", () => {
+  const out = resolvePickerProfesional({
+    profesionales: [],
+    sessionMemberId: SESSION_MEMBER,
+    preferidoId: null,
+  });
+  assert.deepEqual(out, { pickerVisible: false, defaultProfesionalId: null });
+});
+
+test("picker: org Solo (1 colegiado) → sin picker, va ese colegiado", () => {
+  const out = resolvePickerProfesional({
+    profesionales: [DRA_A],
+    sessionMemberId: SESSION_MEMBER, // sesión NO colegiada (no está en la lista)
+    preferidoId: null,
+  });
+  assert.deepEqual(out, { pickerVisible: false, defaultProfesionalId: DRA_A.id });
+});
+
+test("picker: >1 colegiado → visible; default = sesión cuando es colegiada", () => {
+  const out = resolvePickerProfesional({
+    profesionales: [DRA_A, DR_B],
+    sessionMemberId: DR_B.id,
+    preferidoId: null,
+  });
+  assert.deepEqual(out, { pickerVisible: true, defaultProfesionalId: DR_B.id });
+});
+
+test("picker: el filtro activo (preferido válido) le gana a la sesión colegiada", () => {
+  const out = resolvePickerProfesional({
+    profesionales: [DRA_A, DR_B],
+    sessionMemberId: DR_B.id,
+    preferidoId: DRA_A.id,
+  });
+  assert.deepEqual(out, { pickerVisible: true, defaultProfesionalId: DRA_A.id });
+});
+
+test("picker: preferido inválido (no colegiado de la org) se ignora", () => {
+  const out = resolvePickerProfesional({
+    profesionales: [DRA_A, DR_B],
+    sessionMemberId: DR_B.id,
+    preferidoId: "dddddddd-0000-0000-0000-000000000009",
+  });
+  assert.equal(out.defaultProfesionalId, DR_B.id);
+});
+
+test("picker: sesión NO colegiada y sin preferido → primer colegiado", () => {
+  const out = resolvePickerProfesional({
+    profesionales: [DRA_A, DR_B],
+    sessionMemberId: SESSION_MEMBER,
+    preferidoId: null,
+  });
+  assert.deepEqual(out, { pickerVisible: true, defaultProfesionalId: DRA_A.id });
 });
 
 // ─── iniciales / nombre corto ───────────────────────────────────────────────
