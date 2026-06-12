@@ -52,7 +52,12 @@ async function loadAppScreen(page: Page, route: string, theme: Theme) {
   // producción el indicator no existe.
   await page.addInitScript(() => {
     const css =
-      "nextjs-portal,[data-nextjs-toast],[data-next-mark],[data-nextjs-dev-tools-button]{display:none !important}";
+      "nextjs-portal,[data-nextjs-toast],[data-next-mark],[data-nextjs-dev-tools-button]{display:none !important}" +
+      // El nudge de GCal (CLINICA-7) depende del estado de integración de la
+      // org y del dismiss per-member en localStorage (clave con memberId, no
+      // pre-seedeable) — se oculta por CSS para que el baseline no dependa de
+      // si la org de captura tiene Google conectado.
+      ".fi-gcal-nudge-banner{display:none !important}";
     const inject = () => {
       if (document.getElementById("__folio-hide-devtools")) return;
       const style = document.createElement("style");
