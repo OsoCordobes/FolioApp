@@ -162,6 +162,13 @@ const objetivoSchema = z.object({
  * respondidos) — el scoring estándar de PHQ-9/GAD-7 exige el instrumento
  * entero. El borrador del Tool puede tener respuestas parciales en memoria;
  * la UI avisa que una escala incompleta no se puede guardar.
+ *
+ * .strict(): claves desconocidas RECHAZAN en vez de stripearse. Como todos
+ * los campos de contenido son .optional(), sin strict un payload de OTRA
+ * herramienta (quiro/cardio) parsearía OK reducido a `{ v: 1 }` y se
+ * persistiría con tool_id psico — corrupción silenciosa de PHI. El writer
+ * (lib/db/sesiones.ts) depende de este rechazo cross-tool; invariante
+ * cubierta en tests/unit/especialidades-meta.test.ts.
  */
 export const psicologiaToolDataSchema = z.object({
   v: z.literal(1),
@@ -169,7 +176,7 @@ export const psicologiaToolDataSchema = z.object({
   gad7: z.array(itemEscalaSchema).length(GAD7_LEN).optional(),
   registro: registroSchema.optional(),
   objetivos: z.array(objetivoSchema).max(20).optional(),
-});
+}).strict();
 
 export type PsicologiaToolData = z.infer<typeof psicologiaToolDataSchema>;
 export type RegistroSesion = z.infer<typeof registroSchema>;

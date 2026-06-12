@@ -16,11 +16,13 @@ import { capabilitiesFor } from "@/lib/auth/capabilities";
 import { getActiveContext } from "@/lib/db/active-context";
 import { getConfiguracionData } from "@/lib/db/configuracion";
 import {
+  getOwnEspecialidad,
   listInvitations,
   listMembers,
   type TeamInvitationRow,
   type TeamMemberRow,
 } from "@/lib/db/members";
+import type { EquipoSelf } from "@/components/configuracion/configuracion";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +51,18 @@ export default async function ConfiguracionPage() {
     if (invitationsRes.ok) equipoInvitations = invitationsRes.data;
   }
 
+  // M55 · camino "self": un profesional colegiado SIN gestión de equipo
+  // igual ve la sección Equipo, reducida a su propia especialidad (la que
+  // decide su herramienta clínica). listMembers queda gateado a dirección —
+  // acá solo se lee la PROPIA fila (getOwnEspecialidad, RLS-aware, sin PII).
+  let equipoSelf: EquipoSelf | null = null;
+  if (!caps.canManageTeam && ctx.data.session.esColegiado && data.data.tipo === "CLINICA") {
+    const own = await getOwnEspecialidad();
+    if (own.ok) {
+      equipoSelf = { memberId: ctx.data.session.memberId, especialidad: own.data };
+    }
+  }
+
   return (
     <Configuracion
       orgSlug={ctx.data.organization.slug}
@@ -65,6 +79,7 @@ export default async function ConfiguracionPage() {
       isOwner={ctx.data.session.role === "OWNER"}
       equipoMembers={equipoMembers}
       equipoInvitations={equipoInvitations}
+      equipoSelf={equipoSelf}
     />
   );
 }

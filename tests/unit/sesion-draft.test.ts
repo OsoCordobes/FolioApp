@@ -1,13 +1,18 @@
 /**
  * Folio · tests · transformación borrador de ficha → UpsertSesionInput
  * (lib/especialidades/draft.ts — Fase D1, persistencia del slot clínico).
+ *
+ * M55: el borrador ya NO deriva ni transporta toolId — el toolValue viaja
+ * como toolData OPACO y el WRITER (upsertSesion) deriva la herramienta de la
+ * especialidad efectiva del PROFESIONAL del turno (member.especialidad ??
+ * organization.especialidad). Acá se fija ese contrato: ningún campo de
+ * especialidad entra ni sale de buildUpsertSesionInput.
  */
 
 import assert from "node:assert/strict";
 import test from "node:test";
 
 import { buildUpsertSesionInput } from "../../lib/especialidades/draft";
-import { ESPECIALIDADES_META } from "../../lib/especialidades/meta";
 
 const BASE = {
   turnoId: "11111111-1111-4111-8111-111111111111",
@@ -19,7 +24,6 @@ const SOAP_VACIO = { subjetivo: "", objetivo: "", analisis: "", plan: "" };
 test("soap: mapea subjetivo/objetivo/analisis/plan → s/o/a/p con trim", () => {
   const input = buildUpsertSesionInput({
     ...BASE,
-    especialidad: "quiropraxia",
     toolValue: null,
     soap: {
       subjetivo: "  Dolor lumbar EVA 6/10 ",
@@ -38,72 +42,35 @@ test("soap: mapea subjetivo/objetivo/analisis/plan → s/o/a/p con trim", () => 
   });
 });
 
-test("toolValue null/undefined → sin toolId ni toolData", () => {
+test("toolValue null/undefined → sin toolData (y nunca un toolId)", () => {
   // El caller debe re-hidratar el borrador con el toolData ya guardado
   // (turnoActivo.toolDraft) — el writer sobreescribe columnas en el upsert.
-  const conNull = buildUpsertSesionInput({
-    ...BASE,
-    especialidad: "cardiologia",
-    toolValue: null,
-    soap: SOAP_VACIO,
-  });
-  assert.ok(!("toolId" in conNull));
+  const conNull = buildUpsertSesionInput({ ...BASE, toolValue: null, soap: SOAP_VACIO });
   assert.ok(!("toolData" in conNull));
+  assert.ok(!("toolId" in conNull));
 
-  const conUndefined = buildUpsertSesionInput({
-    ...BASE,
-    especialidad: "psicologia",
-    toolValue: undefined,
-    soap: SOAP_VACIO,
-  });
-  assert.ok(!("toolId" in conUndefined));
+  const conUndefined = buildUpsertSesionInput({ ...BASE, toolValue: undefined, soap: SOAP_VACIO });
   assert.ok(!("toolData" in conUndefined));
+  assert.ok(!("toolId" in conUndefined));
 });
 
-test("quiropraxia: toolId del registry y toolData opaco (el espejo vertebras_json es del writer)", () => {
-  const toolData = { v: 1, vertebras: [{ id: "L4", estado: "severo" }] };
-  const input = buildUpsertSesionInput({
-    ...BASE,
-    especialidad: "quiropraxia",
-    toolValue: toolData,
-    soap: SOAP_VACIO,
-  });
-  assert.equal(input.toolId, ESPECIALIDADES_META.quiropraxia.toolId);
-  assert.deepEqual(input.toolData, toolData);
-  // El borrador NO arma `vertebras` legacy: el writer espeja desde toolData.
-  assert.ok(!("vertebras" in input));
-});
+test("toolValue != null → toolData OPACO, sin toolId ni vertebras legacy (M55)", () => {
+  const quiro = { v: 1, vertebras: [{ id: "L4", estado: "severo" }] };
+  const inputQuiro = buildUpsertSesionInput({ ...BASE, toolValue: quiro, soap: SOAP_VACIO });
+  assert.deepEqual(inputQuiro.toolData, quiro);
+  // M55: la derivación del toolId es exclusiva del writer (profesional del
+  // turno) — el borrador no opina sobre la especialidad.
+  assert.ok(!("toolId" in inputQuiro));
+  // El borrador tampoco arma `vertebras` legacy: el writer espeja desde toolData.
+  assert.ok(!("vertebras" in inputQuiro));
 
-test("especialidades no-quiro: toolData puro con el toolId de la especialidad de la org", () => {
   const cardio = { v: 1, ta: { sistolica: 120, diastolica: 80 } };
-  const inputCardio = buildUpsertSesionInput({
-    ...BASE,
-    especialidad: "cardiologia",
-    toolValue: cardio,
-    soap: SOAP_VACIO,
-  });
-  assert.equal(inputCardio.toolId, ESPECIALIDADES_META.cardiologia.toolId);
+  const inputCardio = buildUpsertSesionInput({ ...BASE, toolValue: cardio, soap: SOAP_VACIO });
   assert.deepEqual(inputCardio.toolData, cardio);
+  assert.ok(!("toolId" in inputCardio));
 
   const psico = { v: 1, phq9: { items: [0, 1, 0, 0, 0, 0, 0, 0, 0] } };
-  const inputPsico = buildUpsertSesionInput({
-    ...BASE,
-    especialidad: "psicologia",
-    toolValue: psico,
-    soap: SOAP_VACIO,
-  });
-  assert.equal(inputPsico.toolId, ESPECIALIDADES_META.psicologia.toolId);
+  const inputPsico = buildUpsertSesionInput({ ...BASE, toolValue: psico, soap: SOAP_VACIO });
   assert.deepEqual(inputPsico.toolData, psico);
-});
-
-test("slug desconocido o null → fallback quiropraxia (mismo criterio que el registry)", () => {
-  const toolData = { v: 1, vertebras: [] };
-  assert.equal(
-    buildUpsertSesionInput({ ...BASE, especialidad: "odontologia", toolValue: toolData, soap: SOAP_VACIO }).toolId,
-    ESPECIALIDADES_META.quiropraxia.toolId,
-  );
-  assert.equal(
-    buildUpsertSesionInput({ ...BASE, especialidad: null, toolValue: toolData, soap: SOAP_VACIO }).toolId,
-    ESPECIALIDADES_META.quiropraxia.toolId,
-  );
+  assert.ok(!("toolId" in inputPsico));
 });

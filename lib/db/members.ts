@@ -33,6 +33,12 @@ import type { ProfesionalLite } from "@/lib/agenda/profesional";
 import { capabilitiesFor, type Role } from "@/lib/auth/capabilities";
 import { decryptColumn } from "@/lib/crypto";
 import {
+  ESPECIALIDAD_SLUGS,
+  getEspecialidadMeta,
+  isEspecialidadSlug,
+  type EspecialidadSlug,
+} from "@/lib/especialidades/meta";
+import {
   createSupabaseServerClient,
   createSupabaseServiceClient,
 } from "@/lib/supabase/server";
@@ -51,6 +57,11 @@ export interface TeamMemberRow {
   profileId: string;
   role: Role;
   esColegiado: boolean;
+  /**
+   * M55 · especialidad propia del profesional, o null = hereda la de la org.
+   * Solo significativa para colegiados (decide su herramienta clínica).
+   */
+  especialidad: EspecialidadSlug | null;
   /** PII de profile desencriptada server-side (tryDecrypt — null si falla). */
   nombre: string | null;
   apellido: string | null;
@@ -133,7 +144,7 @@ export async function listMembers(): Promise<Result<TeamMemberRow[]>> {
   // 1. Members activos vía RLS (member_select_same_org — scoping real de tenant).
   const { data: members, error } = await supabase
     .from("member")
-    .select("id, profile_id, role, es_colegiado, accepted_at, created_at")
+    .select("id, profile_id, role, es_colegiado, especialidad, accepted_at, created_at")
     .eq("organization_id", ctx.data.organization.id)
     .is("deleted_at", null)
     .order("created_at", { ascending: true });
@@ -148,6 +159,7 @@ export async function listMembers(): Promise<Result<TeamMemberRow[]>> {
     profile_id: string;
     role: Role;
     es_colegiado: boolean;
+    especialidad: EspecialidadSlug | null;
     accepted_at: string | null;
     created_at: string;
   }>;
@@ -191,6 +203,7 @@ export async function listMembers(): Promise<Result<TeamMemberRow[]>> {
         profileId: m.profile_id,
         role: m.role,
         esColegiado: m.es_colegiado,
+        especialidad: m.especialidad,
         nombre: p?.nombre ?? null,
         apellido: p?.apellido ?? null,
         email: p?.email ?? null,
@@ -653,4 +666,224 @@ export async function removeMember(memberId: string): Promise<Result<void>> {
   syncSubscriptionAmountInBackground(ctx.data.organization.id, "remove-member");
 
   return ok(undefined);
+}
+
+// ─── updateMemberEspecialidad (M55) ────────────────────────────────────────
+
+/**
+ * Gate puro del cambio de especialidad de un member (testeable sin Supabase,
+ * patrón checkTurnoOwnership):
+ *   - la ORG debe ser CLINICA (la especialidad por profesional es una función
+ *     de clínicas — en un consultorio INDEPENDIENTE la especialidad vive a
+ *     nivel organización y se edita en /configuracion → Consultorio; sin este
+ *     gate, un caller directo de la action podía setear member.especialidad
+ *     en una org Solo, donde la UI nunca lo ofrece),
+ *   - el TARGET debe ser colegiado (la especialidad decide su herramienta
+ *     clínica; para roles administrativos no significa nada),
+ *   - el ACTOR debe poder gestionar el equipo (OWNER/DIRECTOR) O ser el
+ *     propio member (un profesional define su propia especialidad).
+ */
+export type EspecialidadUpdateVerdict =
+  | { ok: true }
+  | { ok: false; code: "forbidden" | "validation"; message: string };
+
+export function checkEspecialidadUpdateAllowed(input: {
+  orgTipo: "INDEPENDIENTE" | "CLINICA";
+  actorRole: Role;
+  actorEsColegiado: boolean;
+  actorMemberId: string;
+  targetMemberId: string;
+  targetEsColegiado: boolean;
+}): EspecialidadUpdateVerdict {
+  if (input.orgTipo !== "CLINICA") {
+    return {
+      ok: false,
+      code: "validation",
+      message:
+        "La especialidad por profesional es una función de clínicas. En un consultorio independiente se cambia desde Configuración → Consultorio.",
+    };
+  }
+  if (!input.targetEsColegiado) {
+    return {
+      ok: false,
+      code: "validation",
+      message: "Solo el personal colegiado tiene especialidad clínica.",
+    };
+  }
+  const caps = capabilitiesFor(input.actorRole, input.actorEsColegiado);
+  if (!caps.canManageTeam && input.actorMemberId !== input.targetMemberId) {
+    return {
+      ok: false,
+      code: "forbidden",
+      message: "Solo dirección (o la propia persona) puede cambiar la especialidad.",
+    };
+  }
+  return { ok: true };
+}
+
+/** Slugs válidos del registry, o null = heredar organization.especialidad. */
+export const memberEspecialidadSchema = z.enum(ESPECIALIDAD_SLUGS).nullable();
+
+/**
+ * M55 · setea/borra la especialidad propia de un member colegiado.
+ * null = vuelve a heredar organization.especialidad.
+ *
+ * Gate app-side: canManageTeam O self (checkEspecialidadUpdateAllowed). El
+ * UPDATE va con service client ACOTADO a la columna `especialidad` + scoping
+ * explícito por org: la policy member_update_owner (M02) solo cubre OWNER y
+ * RLS no es column-level — una policy "self/director" permitiría escalar
+ * role/alcance. El target se valida primero con una lectura RLS-aware
+ * (member_select_same_org hace el scoping real de tenant) y el cambio queda
+ * en audit_log (Ley 26.529 art. 18). Sin PHI.
+ */
+export async function updateMemberEspecialidad(
+  memberId: string,
+  especialidad: EspecialidadSlug | null,
+): Promise<Result<void>> {
+  const parsedId = z.string().uuid().safeParse(memberId);
+  if (!parsedId.success) return err("validation", "Identificador de miembro inválido.");
+  const parsedEsp = memberEspecialidadSchema.safeParse(especialidad);
+  if (!parsedEsp.success) return err("validation", "Especialidad inválida.");
+
+  const ctx = await getActiveContext();
+  if (!ctx.ok) return ctx;
+
+  const supabase = await createSupabaseServerClient();
+  const { data: target, error: tErr } = await supabase
+    .from("member")
+    .select("id, role, es_colegiado, especialidad")
+    .eq("id", parsedId.data)
+    .eq("organization_id", ctx.data.organization.id)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (tErr) {
+    const mapped = mapSupabaseError(tErr);
+    return err(mapped.code, mapped.message, tErr.message);
+  }
+  if (!target) return err("not_found", "Ese miembro no existe o fue dado de baja.");
+  const targetRow = target as {
+    id: string;
+    role: Role;
+    es_colegiado: boolean;
+    especialidad: string | null;
+  };
+
+  const verdict = checkEspecialidadUpdateAllowed({
+    orgTipo: ctx.data.organization.tipo,
+    actorRole: ctx.data.session.role,
+    actorEsColegiado: ctx.data.session.esColegiado,
+    actorMemberId: ctx.data.session.memberId,
+    targetMemberId: targetRow.id,
+    targetEsColegiado: targetRow.es_colegiado,
+  });
+  if (!verdict.ok) return err(verdict.code, verdict.message);
+
+  if (targetRow.especialidad === parsedEsp.data) return ok(undefined); // no-op
+
+  const service = createSupabaseServiceClient();
+  const { error: upErr } = await service
+    .from("member")
+    .update({ especialidad: parsedEsp.data })
+    .eq("id", targetRow.id)
+    .eq("organization_id", ctx.data.organization.id);
+  if (upErr) {
+    const mapped = mapSupabaseError(upErr);
+    return err(mapped.code, mapped.message, upErr.message);
+  }
+
+  // Audit (Ley 26.529 art. 18): el cambio de especialidad altera qué
+  // herramienta clínica registra las sesiones futuras de este profesional.
+  await writeAuditEntry({
+    organizationId: ctx.data.organization.id,
+    actorId: ctx.data.session.userId,
+    actorRole: ctx.data.session.role,
+    action: "member.especialidad_update",
+    resourceType: "member",
+    resourceId: targetRow.id,
+    payload: {
+      especialidad: parsedEsp.data,
+      especialidad_anterior: targetRow.especialidad,
+    },
+  });
+
+  return ok(undefined);
+}
+
+/**
+ * M55 · especialidad propia del member de la sesión activa (null = hereda la
+ * de la org). Lectura RLS-aware de la PROPIA fila, sin gate canManageTeam a
+ * propósito: alimenta el panel "Tu especialidad" de /configuracion → Equipo
+ * para profesionales colegiados que no gestionan el equipo (el flujo M55:
+ * invitar → aceptar → dirección O el propio profesional la setea). Sin PII.
+ */
+export async function getOwnEspecialidad(): Promise<Result<EspecialidadSlug | null>> {
+  const ctx = await getActiveContext();
+  if (!ctx.ok) return ctx;
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("member")
+    .select("especialidad")
+    .eq("id", ctx.data.session.memberId)
+    .maybeSingle();
+  if (error) {
+    const mapped = mapSupabaseError(error);
+    return err(mapped.code, mapped.message, error.message);
+  }
+
+  const esp = (data as { especialidad: string | null } | null)?.especialidad ?? null;
+  // Slug fuera del registry de este deploy (CHECK futuro más amplio) → null:
+  // la UI muestra "hereda de la clínica", igual que resolveEspecialidadEfectiva.
+  return ok(esp !== null && isEspecialidadSlug(esp) ? esp : null);
+}
+
+/**
+ * M55 · espejo per-member de countSesionesOtraEspecialidad (/configuracion):
+ * cuántas sesiones de TURNOS de este profesional tienen un tool_id que NO es
+ * el de `nuevaEspecialidad` (null = la que heredaría: la de la org). La UI lo
+ * usa para advertir ANTES de cambiar la especialidad: esos datos se conservan
+ * en DB pero el slot clínico de la ficha deja de mostrarlos.
+ *
+ * Criterio UNIFICADO con el count org-level (countSesionesOtraEspecialidad,
+ * lib/db/configuracion.ts): "otra herramienta" = tool_id que NO empieza con
+ * el PREFIJO de la especialidad ("<especialidad>.<tool>.<versión>", M50) —
+ * no `neq` contra el toolId exacto, para que una futura tool v2 de la MISMA
+ * especialidad no cuente como ajena. Filas legacy con tool_id NULL
+ * (quiropraxia implícita) no se cuentan — el reader las maneja con fallback.
+ * Service client count-only (sin PHI), gateado igual que el update.
+ */
+export async function countSesionesOtraEspecialidadMember(
+  memberId: string,
+  nuevaEspecialidad: EspecialidadSlug | null,
+): Promise<Result<number>> {
+  const parsedId = z.string().uuid().safeParse(memberId);
+  if (!parsedId.success) return err("validation", "Identificador de miembro inválido.");
+  const parsedEsp = memberEspecialidadSchema.safeParse(nuevaEspecialidad);
+  if (!parsedEsp.success) return err("validation", "Especialidad inválida.");
+
+  const ctx = await getActiveContext();
+  if (!ctx.ok) return ctx;
+  const caps = capabilitiesFor(ctx.data.session.role, ctx.data.session.esColegiado);
+  if (!caps.canManageTeam && ctx.data.session.memberId !== parsedId.data) {
+    return err("forbidden", "Solo dirección (o la propia persona) puede ver este dato.");
+  }
+
+  // Especialidad que el member pasaría a tener efectiva (null → hereda org).
+  const efectiva = parsedEsp.data ?? ctx.data.organization.especialidad;
+  const slugNuevo = getEspecialidadMeta(efectiva).slug;
+
+  const service = createSupabaseServiceClient();
+  const { count, error } = await service
+    .from("sesion")
+    .select("id, turno!inner(profesional_id)", { count: "exact", head: true })
+    .eq("organization_id", ctx.data.organization.id)
+    .eq("turno.profesional_id", parsedId.data)
+    .not("tool_id", "is", null)
+    .not("tool_id", "like", `${slugNuevo}.%`);
+
+  if (error) {
+    const mapped = mapSupabaseError(error);
+    return err(mapped.code, mapped.message, error.message);
+  }
+  return ok(count ?? 0);
 }

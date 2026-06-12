@@ -20,7 +20,11 @@ import * as I from "@/components/icons";
 import { saveSesionFichaAction } from "@/app/(app)/pacientes/actions";
 import { TurnoCreateModal } from "@/components/hoy/turno-create-modal";
 import { PacienteFichaProvider, usePacienteFicha } from "@/components/paciente/contexto";
-import { getEspecialidad, type EspecialidadSlug } from "@/lib/especialidades/registry";
+import {
+  filtrarToolHistorial,
+  getEspecialidad,
+  type EspecialidadSlug,
+} from "@/lib/especialidades/registry";
 import type { PacienteFichaInfo, PlanData } from "@/lib/db/paciente-ficha";
 
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
@@ -207,9 +211,11 @@ function TabPlan() {
   const turnoActivo = plan.turnoActivo;
 
   // Borrador local del toolData de la herramienta. Si el turno en curso ya
-  // tiene sesión guardada, re-hidrata desde ahí: el writer sobreescribe todas
-  // las columnas en cada guardado, así que "guardar solo SOAP" después no
-  // debe pisar la herramienta con null.
+  // tiene sesión guardada, re-hidrata desde ahí: el writer sobreescribe las
+  // columnas tool en cada guardado re-hidratable, así que "guardar solo SOAP"
+  // después no debe pisar la herramienta con null. Si toolDraft vino null por
+  // un tool_id de OTRA especialidad, el writer preserva esas columnas en los
+  // guardados solo-SOAP (debePreservarToolData, lib/db/sesiones.ts).
   const [toolValue, setToolValue] = useState<unknown>(turnoActivo?.toolDraft ?? null);
   const [soap, setSoap] = useState<SoapState>(plan.soap);
   const [saving, setSaving] = useState(false);
@@ -264,7 +270,15 @@ function TabPlan() {
       </div>
 
       <div className="pc-plan-grid">
-        <def.Tool value={toolValue} onChange={setToolValue} historial={plan.toolHistorial} />
+        {/* M55 · la Tool recibe SOLO el historial de SU tool_id (legacy NULL
+            cuenta como quiropraxia): en fichas mixtas (cardio + psico) cada
+            herramienta ve sus propias sesiones. El resumen por sesión de
+            HistorialReciente/TabSesiones sigue siendo por tool_id persistido. */}
+        <def.Tool
+          value={toolValue}
+          onChange={setToolValue}
+          historial={filtrarToolHistorial(plan.toolHistorial, especialidad)}
+        />
         <SoapStacked soap={soap} setSoap={setSoap} saveBadge={saveBadge} />
       </div>
 

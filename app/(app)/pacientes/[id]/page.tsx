@@ -41,19 +41,29 @@ export default async function PacientePage({ params }: PageProps) {
   }
 
   const { id } = await params;
-  const data = await getPacienteFicha(id, ctx.data.organization.id);
+  const data = await getPacienteFicha(
+    id,
+    ctx.data.organization.id,
+    ctx.data.organization.especialidad,
+  );
 
   if (!data.ok) {
     if (data.error.code === "not_found") notFound();
     throw new Error(`Error cargando ficha: ${data.error.message}`);
   }
 
+  // M55 · especialidad ACTIVA del slot clínico: la EFECTIVA del profesional
+  // del turno en curso (member.especialidad ?? org) — espejo de lo que el
+  // writer deriva al guardar. Sin turno en curso, la de la org (histórico).
+  const especialidad =
+    data.data.plan.turnoActivo?.especialidad ?? ctx.data.organization.especialidad;
+
   return (
     <PacienteDetalle
       paciente={data.data.paciente}
       plan={data.data.plan}
       cumple={data.data.cumple}
-      especialidad={ctx.data.organization.especialidad}
+      especialidad={especialidad}
     />
   );
 }

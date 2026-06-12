@@ -49,6 +49,56 @@ export function normalizeEspecialidadSlug(value: string | null | undefined): Esp
   return value && isEspecialidadSlug(value) ? value : "quiropraxia";
 }
 
+/**
+ * Especialidad EFECTIVA de un profesional (M55): la propia del member si la
+ * tiene y el registry la conoce; si no, la de la organización (normalizada).
+ *
+ *   - member.especialidad NULL  → hereda organization.especialidad (caso de
+ *     todas las orgs Solo: comportamiento idéntico al pre-M55).
+ *   - slug de member desconocido para este deploy (CHECK futuro más amplio
+ *     que el registry) → cae a la org, NO a quiropraxia directo: degrada al
+ *     comportamiento org-level histórico en vez de cambiar de herramienta.
+ *
+ * Pura y testeable (tests/unit/especialidad-efectiva.test.ts). La usan el
+ * writer único de sesiones (lib/db/sesiones.ts) y el reader de la ficha
+ * (lib/db/paciente-ficha.ts) — derivación server-side, nunca del cliente.
+ */
+export function resolveEspecialidadEfectiva(
+  memberEspecialidad: string | null | undefined,
+  orgEspecialidad: string | null | undefined,
+): EspecialidadSlug {
+  if (memberEspecialidad && isEspecialidadSlug(memberEspecialidad)) return memberEspecialidad;
+  return normalizeEspecialidadSlug(orgEspecialidad);
+}
+
+/**
+ * ¿Un `sesion.tool_id` persistido pertenece a la herramienta de esta
+ * especialidad? `null` = fila legacy pre-M50 (quiropraxia implícita por
+ * vertebras_json) → solo matchea quiropraxia. tool_id desconocido para el
+ * registry → no matchea ninguna (no se mezcla con la tool activa).
+ */
+export function toolPerteneceAEspecialidad(
+  toolId: string | null | undefined,
+  especialidad: EspecialidadSlug,
+): boolean {
+  if (toolId == null) return especialidad === "quiropraxia";
+  return getEspecialidadMetaByToolId(toolId)?.slug === especialidad;
+}
+
+/**
+ * Filtra un historial de tool por la especialidad activa: la Tool del slot
+ * clínico recibe SOLO las entradas de SU tool_id (+ legacy NULL si la activa
+ * es quiropraxia). En una ficha mixta (cardio + psico del mismo paciente)
+ * cada profesional ve su propio historial; el resumen por sesión de
+ * TabSesiones/HistorialReciente sigue siendo por tool_id persistido.
+ */
+export function filtrarToolHistorial<T extends { toolId?: string | null }>(
+  historial: readonly T[],
+  especialidad: EspecialidadSlug,
+): T[] {
+  return historial.filter((entry) => toolPerteneceAEspecialidad(entry.toolId ?? null, especialidad));
+}
+
 // ─── Metadata por especialidad ──────────────────────────────────────────────
 
 export interface EspecialidadMeta {

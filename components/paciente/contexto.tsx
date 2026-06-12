@@ -22,7 +22,11 @@ interface PacienteFichaContextValue {
   paciente: PacienteFichaInfo;
   plan: PlanData;
   cumple: string;
-  /** Especialidad de la org (M50) — decide la herramienta del tab Plan. */
+  /**
+   * Especialidad ACTIVA del slot clínico (M55): la EFECTIVA del profesional
+   * del turno en curso (member.especialidad ?? organization.especialidad) o,
+   * sin turno en curso, la de la org. Decide la herramienta del tab Plan.
+   */
   especialidad: EspecialidadSlug;
 }
 

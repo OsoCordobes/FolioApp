@@ -61,10 +61,13 @@ export function getEspecialidad(slug: string | null | undefined): EspecialidadDe
 export {
   ESPECIALIDAD_SLUGS,
   ESPECIALIDADES_META,
+  filtrarToolHistorial,
   getEspecialidadMeta,
   getEspecialidadMetaByToolId,
   isEspecialidadSlug,
   normalizeEspecialidadSlug,
+  resolveEspecialidadEfectiva,
+  toolPerteneceAEspecialidad,
 } from "@/lib/especialidades/meta";
 export type { EspecialidadMeta, EspecialidadSlug } from "@/lib/especialidades/meta";
 export type { SpecialtyToolProps, ToolHistorialEntry } from "@/lib/especialidades/types";

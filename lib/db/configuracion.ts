@@ -576,8 +576,11 @@ export async function saveBookingPrefs(input: SaveBookingPrefsInput): Promise<Re
  *
  * Convención de tool_id (M50): "<especialidad>.<tool>.<versión>"
  * ("quiropraxia.spine.v1", "cardiologia.cv.v1", ...). Filtramos por
- * prefijo. Filas legacy con tool_id NULL (pre-M50, quiropraxia implícita por
- * vertebras_json) no se cuentan — el reader las maneja con su propio fallback.
+ * prefijo — criterio CANÓNICO: una futura tool v2 de la misma especialidad no
+ * cuenta como ajena; el espejo per-member (countSesionesOtraEspecialidadMember,
+ * lib/db/members.ts) usa exactamente el mismo filtro. Filas legacy con tool_id
+ * NULL (pre-M50, quiropraxia implícita por vertebras_json) no se cuentan — el
+ * reader las maneja con su propio fallback.
  *
  * Usa service client (count-only, sin PHI) con gate de rol app-side, igual
  * criterio que saveConsultorio: solo OWNER/DIRECTOR puede cambiar la
