@@ -15,6 +15,7 @@ import { trackEvent } from "@/lib/observability/events";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import { err, mapSupabaseError, ok, type Result } from "./errors";
+import { resolveProfesionalDestino } from "./profesional-destino";
 import { getActiveSession } from "./session";
 
 // ─── Schemas Zod ────────────────────────────────────────────────────────
@@ -204,6 +205,22 @@ export async function createPaciente(input: CreatePacienteInput): Promise<Result
   const supabase = await createSupabaseServerClient();
   const d = parsed.data;
 
+  // Profesional principal (CLINICA-4, review #52 — misma medicina que
+  // CLINICA-3 aplicó en turnos): el fallback ciego a session.memberId
+  // asignaba como "profesional principal" a un OWNER/DIRECTOR no colegiado.
+  // resolveProfesionalDestino valida el param explícito como colegiado
+  // activo de la org, usa la sesión solo si ES colegiada, y si no → err
+  // accionable. Va ANTES del insert de identidad para no dejar una
+  // identidad huérfana ante un destino inválido.
+  const profRes = await resolveProfesionalDestino(supabase, {
+    organizationId: session.data.organizationId,
+    profesionalId: d.profesionalPrincipalId ?? null,
+    sessionMemberId: session.data.memberId,
+    sessionEsColegiado: session.data.esColegiado,
+  });
+  if (!profRes.ok) return profRes;
+  const profesionalPrincipalId = profRes.data;
+
   // 1. Insert paciente_identidad (PII cifrada)
   const nombreFull = `${d.nombre} ${d.apellido}`;
   const { data: identidad, error: idErr } = await supabase
@@ -246,7 +263,7 @@ export async function createPaciente(input: CreatePacienteInput): Promise<Result
       motivo_consulta_cifrado: encryptColumn(d.motivoConsulta ?? null),
       notas_importantes_cifrado: encryptColumn(d.notasImportantes ?? null),
       tags: d.tags,
-      profesional_principal_id: d.profesionalPrincipalId ?? session.data.memberId,
+      profesional_principal_id: profesionalPrincipalId,
     })
     .select("id")
     .single();

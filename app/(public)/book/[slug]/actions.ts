@@ -19,6 +19,7 @@ import { runAfterResponse } from "@/lib/after-response";
 import { encryptColumn } from "@/lib/crypto";
 import { err, ok, type Result } from "@/lib/db/errors";
 import { buildAutoConfirmDecision, promotePedidoToTurno } from "@/lib/db/pedidos";
+import { resolveProfesionalPublico } from "@/lib/db/profesional-destino";
 import { notifyBookingRecibida } from "@/lib/email/notify";
 import {
   AvailabilityDbError,
@@ -44,6 +45,12 @@ async function clientUserAgent(): Promise<string | null> {
 const slotsInput = z.object({
   orgSlug: z.string().regex(/^[a-z0-9-]+$/),
   servicioId: z.string().uuid(),
+  /**
+   * CLINICA-4 · elegido en el paso "Elegí profesional" del wizard (solo
+   * orgs con >1 colegiado). Opcional: el flujo Solo no lo manda y el server
+   * resuelve el único colegiado — firma aditiva, back-compat total.
+   */
+  profesionalId: z.string().uuid().optional(),
   diasAdelante: z.number().int().min(1).max(60).default(14),
 });
 
@@ -74,7 +81,12 @@ export async function fetchSlotsPublico(
 
   // Servicio + profesional en paralelo: ambas queries dependen solo de org.id
   // (perf: un round-trip a Supabase en vez de dos secuenciales).
-  const [{ data: servicio }, { data: profesional }] = await Promise.all([
+  // CLINICA-4: el profesional ya NO es "el primer es_colegiado sin ORDER BY"
+  // (no determinístico — con 3 médicos todos los bookings caían en uno
+  // arbitrario, que además podía CAMBIAR entre fetchSlots y submit).
+  // resolveProfesionalPublico valida el elegido del wizard o resuelve el
+  // único colegiado; con >1 sin elección → err de validación.
+  const [{ data: servicio }, profesionalRes] = await Promise.all([
     service
       .from("servicio")
       .select("id, organization_id, duracion_min, activo")
@@ -82,25 +94,18 @@ export async function fetchSlotsPublico(
       .eq("organization_id", org.id)
       .eq("activo", true)
       .maybeSingle(),
-    // Buscar OWNER o primer PROFESIONAL es_colegiado como profesional default
-    // (en MVP solo hay 1; F12 multi-profesional permite elegir)
-    service
-      .from("member")
-      .select("id")
-      .eq("organization_id", org.id)
-      .eq("es_colegiado", true)
-      .is("deleted_at", null)
-      .limit(1)
-      .maybeSingle(),
+    resolveProfesionalPublico(service, {
+      organizationId: org.id,
+      profesionalId: parsed.data.profesionalId ?? null,
+    }),
   ]);
 
   if (!servicio) {
     return err("not_found", "Servicio no disponible.");
   }
 
-  if (!profesional) {
-    return err("not_found", "Sin profesional disponible.");
-  }
+  if (!profesionalRes.ok) return profesionalRes;
+  const profesionalId = profesionalRes.data;
 
   const rangeStart = new Date();
   const rangeEnd = new Date();
@@ -113,7 +118,7 @@ export async function fetchSlotsPublico(
   try {
     slots = await getSlotsDisponibles({
       organizationId: org.id,
-      profesionalId: profesional.id,
+      profesionalId,
       duracionMin: servicio.duracion_min,
       rangeStart,
       rangeEnd,
@@ -132,6 +137,8 @@ export async function fetchSlotsPublico(
 const createPedidoInput = z.object({
   orgSlug: z.string().regex(/^[a-z0-9-]+$/),
   servicioId: z.string().uuid(),
+  /** CLINICA-4 · mismo contrato que fetchSlotsPublico (ver slotsInput). */
+  profesionalId: z.string().uuid().optional(),
   inicio: z.string().datetime({ offset: true }),
   nombre: z.string().min(2).max(80),
   telefono: z.string().min(6).max(30),
@@ -204,18 +211,17 @@ export async function createPedidoPublico(
     .maybeSingle();
   if (!servicio) return err("not_found", "Servicio no disponible.");
 
-  // Resolver el profesional destino (mismo criterio que fetchSlotsPublico:
-  // primer member es_colegiado). Necesario para persistir pedido.profesional_id
-  // y para poder auto-confirmar contra el profesional correcto (M40 keyea por
-  // profesional_id).
-  const { data: profesional } = await service
-    .from("member")
-    .select("id")
-    .eq("organization_id", org.id)
-    .eq("es_colegiado", true)
-    .is("deleted_at", null)
-    .limit(1)
-    .maybeSingle();
+  // Resolver el profesional destino — MISMO contrato que fetchSlotsPublico
+  // (CLINICA-4): el elegido del wizard (validado como colegiado activo) o el
+  // único colegiado, determinístico. Se usa ESE id —sin re-resolver— para
+  // persistir pedido.profesional_id, validar el slot ofrecido y auto-confirmar
+  // (M40 keyea por profesional_id). Antes había una SEGUNDA resolución
+  // independiente sin ORDER BY: un alta/baja de member entre fetch y submit
+  // podía ofrecer slots del profesional A y validar/persistir contra B.
+  const profesionalRes = await resolveProfesionalPublico(service, {
+    organizationId: org.id,
+    profesionalId: parsed.data.profesionalId ?? null,
+  });
 
   // Validación dura del horario pedido: tiene que ser FUTURO, dentro de la
   // ventana de booking, y coincidir EXACTAMENTE con un slot que la grilla
@@ -229,15 +235,14 @@ export async function createPedidoPublico(
   if (!(inicioDate > ahora) || inicioDate > ventanaMax) {
     return err("validation", "Ese horario no es válido. Elegí un horario de la agenda.");
   }
-  if (!profesional) {
-    return err("not_found", "Sin profesional disponible.");
-  }
+  if (!profesionalRes.ok) return profesionalRes;
+  const profesionalId = profesionalRes.data;
 
   let slotsValidos: Slot[];
   try {
     slotsValidos = await getSlotsDisponibles({
       organizationId: org.id,
-      profesionalId: profesional.id,
+      profesionalId,
       duracionMin: servicio.duracion_min,
       // Ventana mínima que contiene el horario pedido (la grilla se deriva
       // igual que en fetchSlotsPublico, así la comparación es exacta).
@@ -266,7 +271,7 @@ export async function createPedidoPublico(
     p_fin: finDate.toISOString(),
     // M54: chequeo per-profesional (org-wide sobre-bloqueaba en clínicas:
     // el turno del cardiólogo rechazaba la reserva con la psicóloga).
-    p_profesional: profesional.id,
+    p_profesional: profesionalId,
   });
 
   // Fallback en caso de que el RPC no exista todavía: chequear manualmente.
@@ -290,7 +295,7 @@ export async function createPedidoPublico(
           .from("turno")
           .select("id, inicio, duracion_min")
           .eq("organization_id", org.id)
-          .eq("profesional_id", profesional.id)
+          .eq("profesional_id", profesionalId)
           .in("estado", ["AGENDADO", "CONFIRMADO", "EN_SALA", "ATENDIENDO"])
           .is("deleted_at", null)
           .lt("inicio", finIso)
@@ -301,7 +306,7 @@ export async function createPedidoPublico(
           .select("id, fecha_propuesta, duracion_min")
           .eq("organization_id", org.id)
           .eq("estado", "PENDIENTE")
-          .or(`profesional_id.eq.${profesional.id},profesional_id.is.null`)
+          .or(`profesional_id.eq.${profesionalId},profesional_id.is.null`)
           .not("fecha_propuesta", "is", null)
           .gte("fecha_propuesta", lookbackIso)
           .lt("fecha_propuesta", finIso)
@@ -310,7 +315,7 @@ export async function createPedidoPublico(
           .from("bloqueo")
           .select("id, inicio, duracion_min")
           .eq("organization_id", org.id)
-          .eq("profesional_id", profesional.id)
+          .eq("profesional_id", profesionalId)
           .gte("inicio", lookbackIso)
           .lt("inicio", finIso)
           .limit(20),
@@ -355,7 +360,9 @@ export async function createPedidoPublico(
       fecha_propuesta: parsed.data.inicio,
       duracion_min: servicio.duracion_min,
       servicio_id: servicio.id,
-      profesional_id: profesional?.id ?? null,
+      // El ELEGIDO/resuelto arriba — la bandeja y promotePedidoToTurno
+      // trabajan con este id, nunca re-resuelven (CLINICA-4).
+      profesional_id: profesionalId,
       motivo_cifrado: encryptColumn(parsed.data.motivo ?? null),
       precio_cents: servicio.precio_cents,
       // Evidencia legal del consentimiento (Ley 25.326 art. 5 + M39 columnas).
@@ -384,7 +391,7 @@ export async function createPedidoPublico(
   // usando los plaintext ya validados (no hace falta descifrar).
   const decision = buildAutoConfirmDecision(
     { auto_confirmar_reservas: Boolean(org.auto_confirmar_reservas) },
-    { profesional_id: profesional?.id ?? null },
+    { profesional_id: profesionalId },
   );
 
   // Email "solicitud recibida" (post-respuesta vía after(), fail-safe). Solo

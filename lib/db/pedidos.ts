@@ -599,7 +599,36 @@ export async function aceptarPedido(
   // eliminó el fallback silencioso a session.memberId, que asignaba el turno
   // a la secretaria: invisible para el médico (RLS), fuera de su EXCLUDE M40
   // y con push de gcal al calendar equivocado.
-  let profesionalId = pedidoRaw.profesional_id;
+  //
+  // CLINICA-4 (review #52): el profesional PRE-SETEADO también se re-valida —
+  // entre el booking y el acepte pudo haberse dado de baja (soft-delete) o
+  // des-colegiado. Si quedó inválido: con elección explícita del picker se
+  // reasigna (validada abajo); sin elección, err accionable en vez de crear
+  // un turno cuya agenda/gcal/finanzas apuntan a un member muerto.
+  let profesionalId: string | null = null;
+  if (pedidoRaw.profesional_id) {
+    const preset = await resolveProfesionalDestino(supabase, {
+      organizationId: session.data.organizationId,
+      profesionalId: pedidoRaw.profesional_id,
+      sessionMemberId: session.data.memberId,
+      sessionEsColegiado: session.data.esColegiado,
+    });
+    if (preset.ok) {
+      profesionalId = preset.data;
+    } else if (preset.error.code !== "validation") {
+      // Error de infraestructura (DB caída, RLS, etc.): propagarlo tal cual —
+      // disfrazarlo de "profesional dado de baja" mandaría a reasignar un
+      // turno por un fallo transitorio.
+      return preset;
+    } else if (!opts?.profesionalId) {
+      return err(
+        "validation",
+        "El profesional asignado a este pedido ya no está activo. Elegí qué profesional va a atender el turno (o creá el turno manual desde «Agendar»).",
+      );
+    }
+    // preset inválido + picker → cae a la resolución de abajo (reasignación
+    // explícita, misma validación de colegiado activo).
+  }
   if (!profesionalId) {
     const profRes = await resolveProfesionalDestino(supabase, {
       organizationId: session.data.organizationId,

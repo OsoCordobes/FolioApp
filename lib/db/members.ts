@@ -232,8 +232,45 @@ export async function listProfesionalesLite(
   }
 
   const supabase = await createSupabaseServerClient();
+  return listProfesionalesLiteCore(supabase, orgId, { emailFallback: true });
+}
 
-  const { data, error } = await supabase
+/**
+ * Variante PÚBLICA (CLINICA-4): colegiados activos para el wizard de
+ * /book/[slug] — paso "Elegí profesional" y lista bajo la card. NO hay
+ * sesión, así que la query de `member` también va por el SERVICE client
+ * (con el server client RLS-aware devolvería 0 filas y el booking
+ * multi-profesional moriría silenciosamente).
+ *
+ * Seguridad/privacidad:
+ *   - El caller DEBE haber validado la org antes (slug → org viva, no
+ *     deslistada) — mismo contrato que fetchSlotsPublico.
+ *   - Expone SOLO {id, displayName}: el member.id es un uuid opaco que el
+ *     wizard necesita como value del selector; el nombre es la cara del
+ *     consultorio ("Dra. López"), igual que en la card pública.
+ *   - SIN fallback a email (acá emailFallback=false): el email del
+ *     profesional no es público — si el nombre no descifra, "Profesional".
+ */
+export async function listProfesionalesLitePublico(
+  organizationId: string,
+): Promise<Result<ProfesionalLite[]>> {
+  const service = createSupabaseServiceClient();
+  return listProfesionalesLiteCore(service, organizationId, { emailFallback: false });
+}
+
+/**
+ * Core compartido. `memberClient` es el client que lee `member`: el server
+ * client RLS-aware en el flujo autenticado, el service client en el público.
+ * El predicado (es_colegiado + deleted_at IS NULL, ORDER BY created_at ASC)
+ * es EL MISMO que resolveProfesionalPublico (lib/db/profesional-destino.ts):
+ * si divergen, el wizard ofrece profesionales que el server rechaza.
+ */
+async function listProfesionalesLiteCore(
+  memberClient: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  orgId: string,
+  opts: { emailFallback: boolean },
+): Promise<Result<ProfesionalLite[]>> {
+  const { data, error } = await memberClient
     .from("member")
     .select("id, profile_id")
     .eq("organization_id", orgId)
@@ -268,7 +305,9 @@ export async function listProfesionalesLite(
     const nombre = tryDecrypt(p.nombre_cifrado, "profile.nombre_cifrado");
     const apellido = tryDecrypt(p.apellido_cifrado, "profile.apellido_cifrado");
     const display =
-      [nombre, apellido].filter(Boolean).join(" ").trim() || p.email || "Profesional";
+      [nombre, apellido].filter(Boolean).join(" ").trim() ||
+      (opts.emailFallback ? p.email : null) ||
+      "Profesional";
     profilesById.set(p.id, display);
   }
 

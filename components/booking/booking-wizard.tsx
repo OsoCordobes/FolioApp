@@ -16,6 +16,15 @@ import {
   fetchSlotsPublico,
 } from "@/app/(public)/book/[slug]/actions";
 import { PublicCard } from "@/components/public-card/public-card";
+import {
+  esMultiProfesional,
+  nombreProfesionalSeleccionado,
+  pasoPrevioASlot,
+  pasoTrasServicio,
+  profesionalIdParaActions,
+  type BookingVista,
+  type ProfesionalPublico,
+} from "@/lib/booking/wizard-profesional";
 import { PRIVACY_VERSION } from "@/lib/legal/versions";
 
 import { StickyMiniHeader } from "./sticky-mini-header";
@@ -73,7 +82,8 @@ interface Slot {
   fin: string;
 }
 
-type Vista = "servicio" | "slot" | "datos" | "ok";
+/** "profesional" solo se alcanza con >1 colegiado (lib/booking/wizard-profesional). */
+type Vista = BookingVista;
 
 const TZ_AR = "America/Argentina/Cordoba";
 
@@ -116,12 +126,22 @@ function agruparPorDia(slots: Slot[]): Array<{ dia: string; items: Slot[] }> {
 export function BookingWizard({
   org,
   servicios,
+  profesionales = [],
 }: {
   org: OrgPublic;
   servicios: ServicioPublic[];
+  /** Colegiados reservables (CLINICA-4). Con 0–1, el wizard es el histórico. */
+  profesionales?: ProfesionalPublico[];
 }) {
   const [vista, setVista] = useState<Vista>("servicio");
   const [servicioId, setServicioId] = useState<string>(servicios[0]?.id ?? "");
+  // CLINICA-4 · paso "Elegí profesional": solo existe con >1 colegiado. En
+  // ese caso el id elegido viaja a fetchSlotsPublico/createPedidoPublico;
+  // con 0–1 NO se manda nada y el server resuelve el default (flujo Solo
+  // idéntico al histórico, ni un paso ni un byte extra).
+  const multiProf = esMultiProfesional(profesionales);
+  const [profesionalSelId, setProfesionalSelId] = useState<string | null>(null);
+  const profesionalSelNombre = nombreProfesionalSeleccionado(profesionales, profesionalSelId);
   const [slots, setSlots] = useState<Slot[]>([]);
   const [slotPicked, setSlotPicked] = useState<Slot | null>(null);
   const [nombre, setNombre] = useState("");
@@ -200,14 +220,18 @@ export function BookingWizard({
     };
   }, [vista]);
 
-  // Cargar slots cuando se elija servicio
+  // Cargar slots cuando se elija servicio (y, en multi-prof, profesional).
   useEffect(() => {
     if (vista !== "slot" || !servicioId) return;
+    // Multi-prof sin elección no debería ocurrir (el paso fuerza el click),
+    // pero si pasa NO consultamos: el server devolvería err de validación.
+    if (multiProf && !profesionalSelId) return;
     startTransition(async () => {
       setErr(null);
       const result = await fetchSlotsPublico({
         orgSlug: org.slug,
         servicioId,
+        profesionalId: profesionalIdParaActions(multiProf, profesionalSelId),
         diasAdelante: 14,
       });
       if (!result.ok) {
@@ -217,7 +241,7 @@ export function BookingWizard({
       }
       setSlots(result.data);
     });
-  }, [vista, servicioId, org.slug]);
+  }, [vista, servicioId, org.slug, multiProf, profesionalSelId]);
 
   const initials = (org.nombre || "F")
     .split(/\s+/)
@@ -289,6 +313,52 @@ export function BookingWizard({
           style={{ height: 1, width: "100%" }}
         />
 
+        {/* CLINICA-4 · franja "Atienden acá" bajo la card, solo multi-prof
+            (en Solo no se monta: cero cambios). MINIMAL a propósito: nombres
+            que ya vienen descifrados del server — especialidad/matrícula por
+            profesional es fase 2 (requiere member.especialidad, migración). */}
+        {multiProf ? (
+          <section
+            aria-label="Profesionales que atienden en este consultorio"
+            style={{
+              margin: "0 0 32px",
+              padding: "16px 20px",
+              background: "var(--surface)",
+              border: "1px solid var(--line-soft)",
+              borderRadius: "var(--r-md)",
+            }}
+          >
+            <h2
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: "var(--ink-2)",
+                textTransform: "uppercase",
+                letterSpacing: 0.4,
+                margin: "0 0 8px",
+              }}
+            >
+              Atienden acá
+            </h2>
+            <ul
+              style={{
+                listStyle: "none",
+                margin: 0,
+                padding: 0,
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "4px 16px",
+              }}
+            >
+              {profesionales.map((p) => (
+                <li key={p.id} style={{ fontSize: 14, color: "var(--ink)" }}>
+                  {p.displayName}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
         <div id="bk-flow">
         {vista === "servicio" ? (
           <section>
@@ -326,7 +396,7 @@ export function BookingWizard({
                   type="button"
                   onClick={() => {
                     setServicioId(s.id);
-                    setVista("slot");
+                    setVista(pasoTrasServicio(multiProf));
                   }}
                   className="bk-servicio"
                   style={{
@@ -356,7 +426,11 @@ export function BookingWizard({
           </section>
         ) : null}
 
-        {vista === "slot" ? (
+        {/* CLINICA-4 · paso "Elegí profesional": solo se monta con >1
+            colegiado (multiProf). Mismo patrón de cards que el paso de
+            servicio y mismo contrato a11y (#45): heading focuseable que
+            recibe el foco al entrar al paso. */}
+        {vista === "profesional" ? (
           <section>
             <button
               type="button"
@@ -377,7 +451,69 @@ export function BookingWizard({
               className="a11y-focus-heading"
               style={{ fontSize: 16, marginBottom: 16 }}
             >
+              Elegí profesional
+            </h2>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {profesionales.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => {
+                    setProfesionalSelId(p.id);
+                    setSlots([]);
+                    setVista("slot");
+                  }}
+                  className="bk-servicio"
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    padding: "16px 20px",
+                    background: "var(--surface)",
+                    border: "1px solid var(--line-soft)",
+                    borderRadius: "var(--r-md)",
+                    cursor: "pointer",
+                    color: "var(--ink)",
+                    textAlign: "left",
+                  }}
+                >
+                  <b>{p.displayName}</b>
+                  <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M5 12h14M12 5l7 7-7 7" />
+                  </svg>
+                </button>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {vista === "slot" ? (
+          <section>
+            <button
+              type="button"
+              onClick={() => setVista(pasoPrevioASlot(multiProf))}
+              style={{
+                background: "transparent",
+                border: 0,
+                color: "var(--ink-3)",
+                cursor: "pointer",
+                marginBottom: 12,
+              }}
+            >
+              {multiProf ? "← Cambiar profesional" : "← Cambiar servicio"}
+            </button>
+            <h2
+              ref={stepHeadingRef}
+              tabIndex={-1}
+              className="a11y-focus-heading"
+              style={{ fontSize: 16, marginBottom: 16 }}
+            >
               Elegí un horario
+              {multiProf && profesionalSelNombre ? (
+                <span style={{ display: "block", fontSize: 13, fontWeight: 400, color: "var(--ink-3)", marginTop: 4 }}>
+                  con {profesionalSelNombre}
+                </span>
+              ) : null}
             </h2>
             {pending ? (
               // Placeholder de carga: misma grilla que los horarios reales,
@@ -521,6 +657,11 @@ export function BookingWizard({
               style={{ fontSize: 16, marginBottom: 16 }}
             >
               Tus datos
+              {multiProf && profesionalSelNombre ? (
+                <span style={{ display: "block", fontSize: 13, fontWeight: 400, color: "var(--ink-3)", marginTop: 4 }}>
+                  {fmtDia(slotPicked.inicio)} · {fmtHora(slotPicked.inicio)} hs con {profesionalSelNombre}
+                </span>
+              ) : null}
             </h2>
             <form
               onSubmit={(e) => {
@@ -549,6 +690,7 @@ export function BookingWizard({
                   const result = await createPedidoPublico({
                     orgSlug: org.slug,
                     servicioId,
+                    profesionalId: profesionalIdParaActions(multiProf, profesionalSelId),
                     inicio: slotPicked.inicio,
                     nombre,
                     telefono,
@@ -716,6 +858,7 @@ export function BookingWizard({
             </h2>
             <p style={{ color: "var(--ink-2)", marginTop: 12 }}>
               {fmtDia(slotPicked.inicio)} · {fmtHora(slotPicked.inicio)} hs
+              {multiProf && profesionalSelNombre ? <> · con {profesionalSelNombre}</> : null}
             </p>
             {autoConfirmado ? (
               <p style={{ color: "var(--ink-3)", marginTop: 8, fontSize: 13, lineHeight: 1.6 }}>
@@ -744,6 +887,7 @@ export function BookingWizard({
                 onClick={() => {
                   // Reset y volver al inicio del wizard para reservar otro turno
                   setVista("servicio");
+                  setProfesionalSelId(null);
                   setSlotPicked(null);
                   setNombre("");
                   setTelefono("");
