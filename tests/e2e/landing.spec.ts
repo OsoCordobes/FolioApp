@@ -124,6 +124,8 @@ test.describe("Landing · contenido server-rendered", () => {
     // cifras de la bóveda — nada depende de un mount client-side diferido.
     const res = await request.get("/");
     const html = await res.text();
+    // AES-256-GCM vive en la escena de cifrado (14:00); la bóveda habla en
+    // lenguaje humano (AES-256 / 10 años) para la audiencia médica.
     for (const needle of ["10:30", "14:00", "20:00", "25.326", "AES-256-GCM"]) {
       expect(html, `el HTML server-rendered debe contener «${needle}»`).toContain(needle);
     }
@@ -137,7 +139,8 @@ test.describe("Landing · contenido server-rendered", () => {
 
     const vault = page.locator("#seguridad");
     await expect(vault).toContainText("25.326");
-    await expect(vault).toContainText("AES-256-GCM");
+    await expect(vault).toContainText("AES-256");
+    await expect(vault).toContainText("10 años");
   });
 });
 

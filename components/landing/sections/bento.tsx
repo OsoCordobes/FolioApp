@@ -126,8 +126,8 @@ export function Bento() {
               </span>
             </span>
           </div>
-          <h3 className="fl-bento-label">Cifrado AES-256</h3>
-          <p className="fl-bento-sub">antes de tocar la base</p>
+          <h3 className="fl-bento-label">Bajo llave</h3>
+          <p className="fl-bento-sub">cifrado AES-256</p>
         </article>
 
         {/* 6 · Equipo */}

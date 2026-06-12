@@ -14,31 +14,31 @@ import { Lock } from "@/components/icons";
 import { revealRange } from "../reveal";
 
 interface VaultItem {
-  /** Identificador display (n° de ley / sigla técnica) — Geist Mono gigante. */
+  /** Display (n° de ley / cifra / frase corta) — Geist Mono gigante. */
   num: string;
-  /** Una línea de descripción. */
+  /** Una línea de descripción, en lenguaje humano (la audiencia es médica). */
   desc: string;
-  /** Identificadores largos (AES-256-GCM) bajan de cuerpo vía modificador. */
+  /** Displays largos bajan de cuerpo vía modificador. */
   code?: boolean;
 }
 
 const ITEMS: VaultItem[] = [
   {
+    num: "10 años",
+    desc: "Cada historia clínica, conservada el tiempo que exige la Ley 26.529. Ni un día menos.",
+  },
+  {
     num: "25.326",
-    desc: "Protección de datos personales, desde el diseño.",
+    desc: "La ley argentina de protección de datos personales, cumplida desde el diseño.",
   },
   {
-    num: "26.529",
-    desc: "Tu historia clínica, conservada 10 años como exige la ley.",
+    num: "AES-256",
+    desc: "El mismo cifrado que usan los bancos: en la base de datos, cada nota es ilegible. Solo tu equipo la ve en pantalla.",
   },
   {
-    num: "AES-256-GCM",
-    desc: "Cada nota se cifra antes de tocar la base de datos.",
+    num: "Solo tu equipo",
+    desc: "Cada consultorio vive aislado del resto. Nadie de afuera puede ver tus pacientes ni tu agenda.",
     code: true,
-  },
-  {
-    num: "RLS",
-    desc: "Aislamiento por consultorio, a nivel de base de datos.",
   },
 ];
 
@@ -53,6 +53,9 @@ export function Vault() {
           La bóveda
         </p>
         <h2 className="fl-vault-title fl-reveal">Diseñado para la ley argentina.</h2>
+        <p className="fl-vault-sub fl-reveal">
+          La parte técnica corre por nuestra cuenta. Esto es lo único que tenés que saber:
+        </p>
         <dl className="fl-vault-grid">
           {ITEMS.map((item, i) => (
             <div key={item.num} className="fl-vault-item fl-reveal" style={revealRange(i)}>
@@ -64,7 +67,7 @@ export function Vault() {
           ))}
         </dl>
         <p className="fl-vault-foot fl-reveal">
-          Tus datos viven en Sudamérica · región sa-east-1
+          Tus datos viven en servidores de Sudamérica, y son tuyos: te los llevás cuando quieras.
         </p>
       </div>
     </section>
