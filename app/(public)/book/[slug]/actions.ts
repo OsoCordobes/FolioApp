@@ -15,6 +15,7 @@
 import { headers } from "next/headers";
 import { z } from "zod";
 
+import { runAfterResponse } from "@/lib/after-response";
 import { encryptColumn } from "@/lib/crypto";
 import { err, ok, type Result } from "@/lib/db/errors";
 import { buildAutoConfirmDecision, promotePedidoToTurno } from "@/lib/db/pedidos";
@@ -71,28 +72,31 @@ export async function fetchSlotsPublico(
     return err("not_found", "Consultorio no disponible.");
   }
 
-  const { data: servicio } = await service
-    .from("servicio")
-    .select("id, organization_id, duracion_min, activo")
-    .eq("id", parsed.data.servicioId)
-    .eq("organization_id", org.id)
-    .eq("activo", true)
-    .maybeSingle();
+  // Servicio + profesional en paralelo: ambas queries dependen solo de org.id
+  // (perf: un round-trip a Supabase en vez de dos secuenciales).
+  const [{ data: servicio }, { data: profesional }] = await Promise.all([
+    service
+      .from("servicio")
+      .select("id, organization_id, duracion_min, activo")
+      .eq("id", parsed.data.servicioId)
+      .eq("organization_id", org.id)
+      .eq("activo", true)
+      .maybeSingle(),
+    // Buscar OWNER o primer PROFESIONAL es_colegiado como profesional default
+    // (en MVP solo hay 1; F12 multi-profesional permite elegir)
+    service
+      .from("member")
+      .select("id")
+      .eq("organization_id", org.id)
+      .eq("es_colegiado", true)
+      .is("deleted_at", null)
+      .limit(1)
+      .maybeSingle(),
+  ]);
 
   if (!servicio) {
     return err("not_found", "Servicio no disponible.");
   }
-
-  // Buscar OWNER o primer PROFESIONAL es_colegiado como profesional default
-  // (en MVP solo hay 1; F12 multi-profesional permite elegir)
-  const { data: profesional } = await service
-    .from("member")
-    .select("id")
-    .eq("organization_id", org.id)
-    .eq("es_colegiado", true)
-    .is("deleted_at", null)
-    .limit(1)
-    .maybeSingle();
 
   if (!profesional) {
     return err("not_found", "Sin profesional disponible.");
@@ -370,25 +374,28 @@ export async function createPedidoPublico(
     { profesional_id: profesional?.id ?? null },
   );
 
-  // Email "solicitud recibida" (fire-and-forget, fail-safe). Solo cuando el
-  // pedido queda PENDIENTE: auto-confirm apagado/sin profesional, o falló por
-  // un error que no es conflicto. notifyBookingRecibida ya es no-throw.
+  // Email "solicitud recibida" (post-respuesta vía after(), fail-safe). Solo
+  // cuando el pedido queda PENDIENTE: auto-confirm apagado/sin profesional, o
+  // falló por un error que no es conflicto. notifyBookingRecibida ya es
+  // no-throw; el captureException queda DENTRO del after.
   const notifyBookingRecibidaFireAndForget = (): void => {
     if (!parsed.data.email) return;
-    notifyBookingRecibida({
-      client: service,
-      organizationId: org.id,
-      pacienteEmail: parsed.data.email ?? null,
-      pacienteNombre: parsed.data.nombre,
-      servicioNombre: servicio.nombre,
-      inicioIso: parsed.data.inicio,
-    }).catch(async (e) => {
-      const { captureException } = await import("@sentry/nextjs");
-      captureException(e, {
-        tags: { component: "book-public", op: "notifyBookingRecibida" },
-        extra: { pedidoId: pedido.id, organizationId: org.id },
-      });
-    });
+    runAfterResponse(() =>
+      notifyBookingRecibida({
+        client: service,
+        organizationId: org.id,
+        pacienteEmail: parsed.data.email ?? null,
+        pacienteNombre: parsed.data.nombre,
+        servicioNombre: servicio.nombre,
+        inicioIso: parsed.data.inicio,
+      }).catch(async (e) => {
+        const { captureException } = await import("@sentry/nextjs");
+        captureException(e, {
+          tags: { component: "book-public", op: "notifyBookingRecibida" },
+          extra: { pedidoId: pedido.id, organizationId: org.id },
+        });
+      }),
+    );
   };
 
   if (decision.shouldAutoConfirm && decision.profesionalId) {

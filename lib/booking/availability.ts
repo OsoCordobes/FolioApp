@@ -132,55 +132,59 @@ export async function getSlotsDisponibles(input: {
 }): Promise<Slot[]> {
   const supabase = createSupabaseServiceClient();
 
-  // 1. Disponibilidad del profesional (vigente y activa)
-  const { data: disps, error: dispsErr } = await supabase
-    .from("disponibilidad_profesional")
-    .select("dia_semana, hora_inicio, hora_fin, vigencia_desde, vigencia_hasta")
-    .eq("organization_id", input.organizationId)
-    .eq("member_id", input.profesionalId)
-    .eq("activa", true);
+  // Las 4 queries son independientes entre sí (solo dependen del input):
+  // se despachan en paralelo (perf: 1 round-trip de latencia en vez de 4).
+  const [
+    { data: disps, error: dispsErr },
+    { data: bloqueos, error: bloqueosErr },
+    { data: turnos, error: turnosErr },
+    { data: pedidos, error: pedidosErr },
+  ] = await Promise.all([
+    // 1. Disponibilidad del profesional (vigente y activa)
+    supabase
+      .from("disponibilidad_profesional")
+      .select("dia_semana, hora_inicio, hora_fin, vigencia_desde, vigencia_hasta")
+      .eq("organization_id", input.organizationId)
+      .eq("member_id", input.profesionalId)
+      .eq("activa", true),
+    // 2. Bloqueos del rango
+    supabase
+      .from("bloqueo")
+      .select("inicio, duracion_min")
+      .eq("organization_id", input.organizationId)
+      .eq("profesional_id", input.profesionalId)
+      .gte("inicio", input.rangeStart.toISOString())
+      .lt("inicio", input.rangeEnd.toISOString()),
+    // 3. Turnos del rango (no cerrados/cancelados)
+    supabase
+      .from("turno")
+      .select("inicio, duracion_min")
+      .eq("organization_id", input.organizationId)
+      .eq("profesional_id", input.profesionalId)
+      .in("estado", ["AGENDADO", "CONFIRMADO", "EN_SALA", "ATENDIENDO"])
+      .gte("inicio", input.rangeStart.toISOString())
+      .lt("inicio", input.rangeEnd.toISOString()),
+    // 4. Pedidos pendientes con fecha en el rango (reservados tentativamente)
+    supabase
+      .from("pedido")
+      .select("fecha_propuesta, duracion_min")
+      .eq("organization_id", input.organizationId)
+      .eq("estado", "PENDIENTE")
+      .not("fecha_propuesta", "is", null)
+      .gte("fecha_propuesta", input.rangeStart.toISOString())
+      .lt("fecha_propuesta", input.rangeEnd.toISOString()),
+  ]);
 
   // Un error de DB debe propagarse como falla (no como "sin slots"): de lo
   // contrario el booking público mostraría agenda vacía y rechazaría pacientes
-  // reales ante un error transitorio. Una agenda sin disponibilidad configurada
-  // SÍ es un resultado legítimo de cero slots ([]).
+  // reales ante un error transitorio. Se preserva el AvailabilityDbError POR
+  // QUERY (mismo orden determinístico que la versión secuencial). Una agenda
+  // sin disponibilidad configurada SÍ es un resultado legítimo de cero slots.
   if (dispsErr) throw new AvailabilityDbError(dispsErr.message);
-  if (!disps || disps.length === 0) return [];
-
-  // 2. Bloqueos del rango
-  const { data: bloqueos, error: bloqueosErr } = await supabase
-    .from("bloqueo")
-    .select("inicio, duracion_min")
-    .eq("organization_id", input.organizationId)
-    .eq("profesional_id", input.profesionalId)
-    .gte("inicio", input.rangeStart.toISOString())
-    .lt("inicio", input.rangeEnd.toISOString());
-
   if (bloqueosErr) throw new AvailabilityDbError(bloqueosErr.message);
-
-  // 3. Turnos del rango (no cerrados/cancelados)
-  const { data: turnos, error: turnosErr } = await supabase
-    .from("turno")
-    .select("inicio, duracion_min")
-    .eq("organization_id", input.organizationId)
-    .eq("profesional_id", input.profesionalId)
-    .in("estado", ["AGENDADO", "CONFIRMADO", "EN_SALA", "ATENDIENDO"])
-    .gte("inicio", input.rangeStart.toISOString())
-    .lt("inicio", input.rangeEnd.toISOString());
-
   if (turnosErr) throw new AvailabilityDbError(turnosErr.message);
-
-  // 4. Pedidos pendientes con fecha en el rango (reservados tentativamente)
-  const { data: pedidos, error: pedidosErr } = await supabase
-    .from("pedido")
-    .select("fecha_propuesta, duracion_min")
-    .eq("organization_id", input.organizationId)
-    .eq("estado", "PENDIENTE")
-    .not("fecha_propuesta", "is", null)
-    .gte("fecha_propuesta", input.rangeStart.toISOString())
-    .lt("fecha_propuesta", input.rangeEnd.toISOString());
-
   if (pedidosErr) throw new AvailabilityDbError(pedidosErr.message);
+  if (!disps || disps.length === 0) return [];
 
   // Intervalos ocupados [startUtcMs, endUtcMs)
   type DispRow = {

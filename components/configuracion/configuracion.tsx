@@ -291,6 +291,7 @@ function SecConsultorio({
   savedEspecialidad,
   orgTipo,
   canEdit,
+  orgSlug,
 }: {
   c: ConsultorioData;
   set: (patch: Partial<ConsultorioData>) => void;
@@ -298,6 +299,8 @@ function SecConsultorio({
   savedEspecialidad: EspecialidadSlug;
   orgTipo: "INDEPENDIENTE" | "CLINICA";
   canEdit: boolean;
+  /** Slug real de la org (organization.slug) para el link público copiable. */
+  orgSlug: string;
 }) {
   // M50 · count de sesiones cargadas con la herramienta de OTRA especialidad.
   // Se consulta server-side al cambiar el selector; si hay, mostramos la
@@ -416,8 +419,8 @@ function SecConsultorio({
       </Section>
 
       <Section title="Presencia online" sub="Para mostrar en tu link público y compartir reservas.">
-        <Row label="Link público de reservas">
-          <PublicLinkRow nombreConsultorio={c.nombre} />
+        <Row label="Link público de reservas" sub="Compartilo con tus pacientes — abre tu página de reservas">
+          <PublicLinkRow slug={orgSlug} />
         </Row>
         <Row label="Instagram">
           <TextInput prefix="@" value={c.instagram} onChange={(v) => set({ instagram: v })} />
@@ -427,11 +430,10 @@ function SecConsultorio({
   );
 }
 
-function PublicLinkRow({ nombreConsultorio }: { nombreConsultorio: string }) {
+function PublicLinkRow({ slug }: { slug: string }) {
   const [copied, setCopied] = useState(false);
-  // Slug derivado provisionalmente del nombre (el slug real persiste en DB,
-  // este es solo para preview). Cuando el SC pase el slug real reemplazamos.
-  const slug = nombreConsultorio.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 50) || "tu-consultorio";
+  // Slug REAL de la org (organization.slug, pasado por el Server Component).
+  // Antes se derivaba del nombre del consultorio y el link copiado era un 404.
   const origin = typeof window !== "undefined" ? window.location.origin : "https://folio-app-ten.vercel.app";
   const url = `${origin}/book/${slug}`;
   const display = url.replace(/^https?:\/\//, "");
@@ -1264,6 +1266,8 @@ function PageHeader({ dirty, onSave, onDiscard, isSaving, saveError, canEdit }: 
 // ─── Root ──────────────────────────────────────────────────────────────────
 
 interface ConfiguracionProps {
+  /** Slug real de la org (organization.slug) — fuente del link público copiable. */
+  orgSlug: string;
   initialConsultorio: ConsultorioData;
   initialServicios: ServicioCfg[];
   initialDias: Record<DiaSemanaId, DiaHorarios>;
@@ -1291,6 +1295,7 @@ interface DirtyState {
 const NO_DIRTY: DirtyState = { consultorio: false, horarios: false, servicios: false };
 
 export function Configuracion({
+  orgSlug,
   initialConsultorio,
   initialServicios,
   initialDias,
@@ -1425,6 +1430,7 @@ export function Configuracion({
               savedEspecialidad={consultorioSnap.especialidad}
               orgTipo={orgTipo}
               canEdit={canEdit}
+              orgSlug={orgSlug}
             />
           ) : null}
           {seccion === "equipo" && canManageTeam ? (

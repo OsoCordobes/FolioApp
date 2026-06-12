@@ -131,6 +131,12 @@ export function BookingWizard({
   const [consentAccepted, setConsentAccepted] = useState(false);
   const [autoConfirmado, setAutoConfirmado] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // A11y: flags por campo para aria-invalid/aria-describedby (paso "datos").
+  const [fieldErrs, setFieldErrs] = useState<{
+    nombre?: boolean;
+    telefono?: boolean;
+    consent?: boolean;
+  }>({});
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const captchaContainerRef = useRef<HTMLDivElement | null>(null);
   const captchaWidgetIdRef = useRef<string | null>(null);
@@ -138,6 +144,22 @@ export function BookingWizard({
   // Sentinel used by <StickyMiniHeader>'s IntersectionObserver to detect
   // when the hero card scrolls out of view on mobile.
   const cardSentinelRef = useRef<HTMLDivElement | null>(null);
+
+  // A11y · anuncio de pasos: al cambiar de vista movemos el foco al heading
+  // del paso (tabIndex={-1}). El lector de pantalla anuncia el nuevo contexto
+  // ("Elegí un horario", "Tus datos", "¡Turno confirmado!") sin que el
+  // usuario de teclado quede perdido en un botón que ya no existe.
+  // preventScroll: el scroll lo maneja el flujo visual existente (no
+  // peleamos con el scrollIntoView suave del CTA).
+  const stepHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const skipInitialFocusRef = useRef(true);
+  useEffect(() => {
+    if (skipInitialFocusRef.current) {
+      skipInitialFocusRef.current = false;
+      return;
+    }
+    stepHeadingRef.current?.focus({ preventScroll: true });
+  }, [vista]);
 
   // Renderizar Turnstile cuando entramos al paso "datos" (no antes para no
   // levantar challenge si el visitante solo revisa horarios). El Script de
@@ -227,6 +249,13 @@ export function BookingWizard({
           <PublicCard
             variant="full"
             appUrl={appHost}
+            onCta={() => {
+              // Scroll suave al wizard sin resetear el paso actual (si el
+              // paciente ya está cargando datos, no le pisamos el progreso).
+              document
+                .getElementById("bk-flow")
+                ?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }}
             data={{
               nombre: org.nombre,
               rubro: org.rubro,
@@ -263,7 +292,14 @@ export function BookingWizard({
         <div id="bk-flow">
         {vista === "servicio" ? (
           <section>
-            <h2 style={{ fontSize: 16, marginBottom: 16 }}>Elegí el servicio</h2>
+            <h2
+              ref={stepHeadingRef}
+              tabIndex={-1}
+              className="a11y-focus-heading"
+              style={{ fontSize: 16, marginBottom: 16 }}
+            >
+              Elegí el servicio
+            </h2>
             {servicios.length === 0 ? (
               <div
                 style={{
@@ -311,7 +347,7 @@ export function BookingWizard({
                       {s.duracion_min} min · ${(s.precio_cents / 100).toLocaleString("es-AR")}
                     </div>
                   </div>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                     <path d="M5 12h14M12 5l7 7-7 7" />
                   </svg>
                 </button>
@@ -335,14 +371,84 @@ export function BookingWizard({
             >
               ← Cambiar servicio
             </button>
-            <h2 style={{ fontSize: 16, marginBottom: 16 }}>Elegí un horario</h2>
-            {pending ? <p>Cargando slots…</p> : null}
-            {err ? <p className="au-err">{err}</p> : null}
-            {slots.length === 0 && !pending ? (
-              <p>No hay slots disponibles en los próximos 14 días.</p>
+            <h2
+              ref={stepHeadingRef}
+              tabIndex={-1}
+              className="a11y-focus-heading"
+              style={{ fontSize: 16, marginBottom: 16 }}
+            >
+              Elegí un horario
+            </h2>
+            {pending ? (
+              // Placeholder de carga: misma grilla que los horarios reales,
+              // con shimmer sobre tokens (.bk-skel en folio.css).
+              <div role="status" aria-live="polite">
+                <p style={{ color: "var(--ink-3)", fontSize: 13, margin: "0 0 12px" }}>
+                  Buscando horarios libres…
+                </p>
+                {[0, 1].map((g) => (
+                  <div key={g} style={{ marginBottom: 20 }}>
+                    <div className="bk-skel bk-skel-label" />
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))",
+                        gap: 8,
+                      }}
+                    >
+                      {Array.from({ length: g === 0 ? 6 : 4 }).map((_, i) => (
+                        <div key={i} className="bk-skel bk-skel-slot" />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {err ? <p className="au-err" role="alert">{err}</p> : null}
+            {slots.length === 0 && !pending && !err ? (
+              <div
+                style={{
+                  padding: 24,
+                  background: "var(--surface)",
+                  border: "1px dashed var(--line)",
+                  borderRadius: "var(--r-md)",
+                  textAlign: "center",
+                  color: "var(--ink-3)",
+                }}
+              >
+                <p style={{ margin: 0, fontSize: 14, color: "var(--ink-2)" }}>
+                  No encontramos horarios libres en los próximos 14 días.
+                </p>
+                <p style={{ margin: "8px 0 0", fontSize: 13 }}>
+                  {org.telefonoPublico ? (
+                    <>
+                      Escribile al consultorio por{" "}
+                      <a
+                        href={`https://wa.me/${org.telefonoPublico.replace(/\D/g, "")}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: "var(--accent-2)" }}
+                      >
+                        WhatsApp
+                      </a>{" "}
+                      para coordinar un turno, o probá con otro servicio.
+                    </>
+                  ) : (
+                    <>Contactá al consultorio para coordinar un turno, o probá con otro servicio.</>
+                  )}
+                </p>
+                <button
+                  type="button"
+                  className="fi-btn fi-btn-ghost"
+                  style={{ marginTop: 16 }}
+                  onClick={() => setVista("servicio")}
+                >
+                  Elegir otro servicio
+                </button>
+              </div>
             ) : null}
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-              {agruparPorDia(slots).map(({ dia, items }) => (
+              {(pending ? [] : agruparPorDia(slots)).map(({ dia, items }) => (
                 <div key={dia}>
                   <h3
                     style={{
@@ -367,8 +473,10 @@ export function BookingWizard({
                       <button
                         key={s.inicio}
                         type="button"
+                        aria-label={`${dia}, ${fmtHora(s.inicio)} hs`}
                         onClick={() => {
                           setSlotPicked(s);
+                          setFieldErrs({});
                           setVista("datos");
                         }}
                         style={{
@@ -406,20 +514,32 @@ export function BookingWizard({
             >
               ← Cambiar horario
             </button>
-            <h2 style={{ fontSize: 16, marginBottom: 16 }}>Tus datos</h2>
+            <h2
+              ref={stepHeadingRef}
+              tabIndex={-1}
+              className="a11y-focus-heading"
+              style={{ fontSize: 16, marginBottom: 16 }}
+            >
+              Tus datos
+            </h2>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                if (nombre.length < 2 || telefono.length < 6) {
+                const invalidNombre = nombre.length < 2;
+                const invalidTelefono = telefono.length < 6;
+                if (invalidNombre || invalidTelefono) {
+                  setFieldErrs({ nombre: invalidNombre, telefono: invalidTelefono });
                   setErr("Nombre y teléfono son obligatorios.");
                   return;
                 }
                 if (!consentAccepted) {
+                  setFieldErrs({ consent: true });
                   setErr(
                     "Tenés que aceptar la Política de Privacidad para solicitar el turno.",
                   );
                   return;
                 }
+                setFieldErrs({});
                 setErr(null);
                 if (TURNSTILE_SITE_KEY && !captchaToken) {
                   setErr("Esperá unos segundos a que el captcha verifique.");
@@ -458,15 +578,42 @@ export function BookingWizard({
             >
               <label className="au-field">
                 <span>Nombre y apellido</span>
-                <input value={nombre} onChange={(e) => setNombre(e.target.value)} required />
+                <input
+                  value={nombre}
+                  onChange={(e) => {
+                    setNombre(e.target.value);
+                    if (fieldErrs.nombre) setFieldErrs((f) => ({ ...f, nombre: false }));
+                  }}
+                  required
+                  autoComplete="name"
+                  aria-invalid={fieldErrs.nombre || undefined}
+                  aria-describedby={fieldErrs.nombre ? "bk-datos-err" : undefined}
+                />
               </label>
               <label className="au-field">
                 <span>Teléfono (WhatsApp)</span>
-                <input value={telefono} onChange={(e) => setTelefono(e.target.value)} required placeholder="+54 9 351 ..." />
+                <input
+                  type="tel"
+                  value={telefono}
+                  onChange={(e) => {
+                    setTelefono(e.target.value);
+                    if (fieldErrs.telefono) setFieldErrs((f) => ({ ...f, telefono: false }));
+                  }}
+                  required
+                  placeholder="+54 9 351 ..."
+                  autoComplete="tel"
+                  aria-invalid={fieldErrs.telefono || undefined}
+                  aria-describedby={fieldErrs.telefono ? "bk-datos-err" : undefined}
+                />
               </label>
               <label className="au-field">
                 <span>Email <small>opcional</small></span>
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="email"
+                />
               </label>
               <label className="au-field">
                 <span>Motivo <small>opcional</small></span>
@@ -499,10 +646,16 @@ export function BookingWizard({
                   checked={consentAccepted}
                   onChange={(e) => {
                     setConsentAccepted(e.target.checked);
-                    if (e.target.checked) setErr(null);
+                    if (e.target.checked) {
+                      setErr(null);
+                      setFieldErrs((f) => ({ ...f, consent: false }));
+                    }
                   }}
                   style={{ marginTop: 3 }}
-                  aria-describedby="bk-consent-text"
+                  aria-invalid={fieldErrs.consent || undefined}
+                  aria-describedby={
+                    fieldErrs.consent ? "bk-consent-text bk-datos-err" : "bk-consent-text"
+                  }
                 />
                 <span id="bk-consent-text">
                   Acepto la{" "}
@@ -516,7 +669,11 @@ export function BookingWizard({
                   y consiento el tratamiento de mis datos para gestionar este turno.
                 </span>
               </label>
-              {err ? <p className="au-err">{err}</p> : null}
+              {err ? (
+                <p className="au-err" id="bk-datos-err" role="alert">
+                  {err}
+                </p>
+              ) : null}
               <button
                 type="submit"
                 className="fi-btn fi-btn-primary"
@@ -549,7 +706,12 @@ export function BookingWizard({
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             </div>
-            <h2 style={{ fontSize: 24 }}>
+            <h2
+              ref={stepHeadingRef}
+              tabIndex={-1}
+              className="a11y-focus-heading"
+              style={{ fontSize: 24 }}
+            >
               {autoConfirmado ? "¡Turno confirmado!" : "¡Solicitud enviada!"}
             </h2>
             <p style={{ color: "var(--ink-2)", marginTop: 12 }}>
@@ -589,6 +751,7 @@ export function BookingWizard({
                   setMotivo("");
                   setCaptchaToken(null);
                   setAutoConfirmado(false);
+                  setFieldErrs({});
                 }}
               >
                 Reservar otro turno

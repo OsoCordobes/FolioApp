@@ -551,6 +551,7 @@ export function Step4Personalizacion({ data, set, next, back, skip, orgSlug }: S
               const isActive = data.acento === a.id;
               return (
                 <button key={a.id} type="button"
+                  aria-pressed={isActive}
                   className={"onb-acento " + (isActive ? "is-active" : "")}
                   onClick={() => set({ acento: a.id })}>
                   <div className="onb-acento-preview">
@@ -642,6 +643,7 @@ export function Step5Horarios({ data, set, next, back, skip, orgSlug }: StepProp
               const isOn = data.diasActivos.includes(d.id);
               return (
                 <button key={d.id} type="button"
+                  aria-pressed={isOn}
                   className={"onb-dia " + (isOn ? "is-on" : "")}
                   onClick={() => toggleDia(d.id)}>{d.lbl}</button>
               );
