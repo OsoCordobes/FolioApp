@@ -750,9 +750,14 @@ function SecIntegraciones({ googleCalendar }: { googleCalendar: IntegrationStatu
     });
   };
 
-  const googleStatus = googleCalendar.conectado
-    ? { label: googleStatusLabel(googleCalendar), kind: "ok" as const }
-    : { label: "Sin conectar", kind: "warn" as const };
+  // Tres estados: sin conectar / muerta (invalid_grant → solo re-OAuth la
+  // arregla) / conectada (sana o con error transitorio que webhook/cron
+  // reintentan solos).
+  const googleStatus = !googleCalendar.conectado
+    ? { label: "Sin conectar", kind: "warn" as const }
+    : googleCalendar.muerta
+      ? { label: "Reconectar", kind: "warn" as const }
+      : { label: googleStatusLabel(googleCalendar), kind: "ok" as const };
 
   return (
     <Section
@@ -780,7 +785,28 @@ function SecIntegraciones({ googleCalendar }: { googleCalendar: IntegrationStatu
         status={googleStatus.label}
         statusKind={googleStatus.kind}
         action={
-          googleCalendar.conectado ? (
+          googleCalendar.conectado && googleCalendar.muerta ? (
+            // Integración muerta: Google revocó el acceso — re-correr el
+            // OAuth es el único arreglo. Reusa la misma action de conectar.
+            <>
+              <button
+                type="button"
+                className="fi-btn fi-btn-primary"
+                onClick={onConnectGoogle}
+                disabled={pending}
+              >
+                {pending ? "Abriendo Google…" : "Reconectar"}
+              </button>
+              <button
+                type="button"
+                className="fi-btn fi-btn-ghost"
+                onClick={onDisconnectGoogle}
+                disabled={pending}
+              >
+                Desconectar
+              </button>
+            </>
+          ) : googleCalendar.conectado ? (
             <button
               type="button"
               className="fi-btn fi-btn-ghost"

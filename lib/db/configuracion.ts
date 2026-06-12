@@ -19,6 +19,7 @@ import { z } from "zod";
 
 import { encryptColumn } from "@/lib/crypto";
 import { ESPECIALIDAD_SLUGS, type EspecialidadSlug } from "@/lib/especialidades/meta";
+import { esIntegracionMuerta } from "@/lib/google/health";
 import {
   createSupabaseServerClient,
   createSupabaseServiceClient,
@@ -63,6 +64,14 @@ export interface IntegrationStatus {
   ultimoUsoTs: string | null;
   /** ISO timestamp of last error (token refresh failure, webhook reject, etc.). */
   ultimoErrorTs: string | null;
+  /**
+   * true si la integración está MUERTA (refresh token revocado →
+   * invalid_grant persistido, o fila sin token): el único arreglo es
+   * re-correr el OAuth ("Reconectar"). Computado server-side con
+   * esIntegracionMuerta (lib/google/health.ts) — el ciphertext no viaja
+   * al cliente.
+   */
+  muerta: boolean;
 }
 
 export type DiaSemanaId = "lun" | "mar" | "mie" | "jue" | "vie" | "sab" | "dom";
@@ -118,10 +127,11 @@ export async function getConfiguracionData(): Promise<Result<ConfiguracionData>>
 
   if (servErr) return err("db_error", "Error leyendo servicios.", servErr.message);
 
-  // 2. Google integration status.
+  // 2. Google integration status. refresh_token_cifrado y ultimo_error se
+  // leen SOLO para computar `muerta` server-side — no se serializan al cliente.
   const { data: googleIntegration } = await supabase
     .from("integration")
-    .select("id, expira_ts, ultimo_error_ts, ultimo_uso_ts")
+    .select("id, expira_ts, ultimo_error, ultimo_error_ts, ultimo_uso_ts, refresh_token_cifrado")
     .eq("organization_id", ctx.data.organization.id)
     .eq("proveedor", "GOOGLE_CALENDAR")
     .maybeSingle();
@@ -187,6 +197,13 @@ export async function getConfiguracionData(): Promise<Result<ConfiguracionData>>
       expiraTs: googleIntegration?.expira_ts ?? null,
       ultimoUsoTs: googleIntegration?.ultimo_uso_ts ?? null,
       ultimoErrorTs: googleIntegration?.ultimo_error_ts ?? null,
+      muerta:
+        googleIntegration != null &&
+        esIntegracionMuerta({
+          sinToken: !googleIntegration.refresh_token_cifrado,
+          ultimoError: googleIntegration.ultimo_error ?? null,
+          ultimoErrorTs: googleIntegration.ultimo_error_ts ?? null,
+        }),
     },
     dias,
     slotMin: 45,
