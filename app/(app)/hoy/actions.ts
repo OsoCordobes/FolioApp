@@ -22,7 +22,7 @@ import { blindIndex, blindIndexPhone, encryptColumn } from "@/lib/crypto";
 import { err, mapSupabaseError, ok, type Result } from "@/lib/db/errors";
 import { getActiveSession } from "@/lib/db/session";
 import { listPacientesDirectorio } from "@/lib/db/pacientes";
-import { createTurno, transitionTurno } from "@/lib/db/turnos";
+import { createTurno, reagendarTurno, transitionTurno } from "@/lib/db/turnos";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { EstadoTurno } from "@/lib/types";
 
@@ -59,6 +59,45 @@ export async function transitionTurnoAction(
     revalidatePath("/hoy");
   }
   return result;
+}
+
+// ─── Reagendar turno ─────────────────────────────────────────────────────────
+
+const reagendarTurnoActionSchema = z.object({
+  turnoId: z.string().uuid(),
+  nuevoInicio: z.string().datetime({ offset: true }),
+  nuevaDuracionMin: z.number().int().min(5).max(480).optional(),
+});
+
+export type ReagendarTurnoActionInput = z.infer<typeof reagendarTurnoActionSchema>;
+
+/**
+ * Reagenda un turno desde el modal de /hoy: el original queda REAGENDADO y se
+ * crea uno nuevo con el mismo paciente/servicio/profesional/precio en el
+ * horario elegido. La sesión activa la valida `reagendarTurno` (lib/db) como
+ * primer paso — igual que transitionTurnoAction delega en transitionTurno.
+ *
+ * Revalidación (review PR #44, I2): va atada a la MUTACIÓN, no al éxito.
+ * `onTransitioned` dispara apenas el original queda REAGENDADO — si el create
+ * posterior falla (orphan path), /hoy y /calendario igual se refrescan para
+ * no seguir mostrando el turno viejo como agendado hasta el polling. Si el
+ * flujo corta antes (validación, conflicto del pre-check), no hubo mutación
+ * y no se revalida nada.
+ */
+export async function reagendarTurnoAction(
+  input: ReagendarTurnoActionInput,
+): Promise<Result<{ nuevoTurnoId: string }>> {
+  const parsed = reagendarTurnoActionSchema.safeParse(input);
+  if (!parsed.success) {
+    return err("validation", "Datos del reagendado inválidos.", parsed.error.message);
+  }
+
+  return reagendarTurno(parsed.data, {
+    onTransitioned: () => {
+      revalidatePath("/hoy");
+      revalidatePath("/calendario");
+    },
+  });
 }
 
 // ─── Create turno (modal walk-in / agendar manual) ──────────────────────────
