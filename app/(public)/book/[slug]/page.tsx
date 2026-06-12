@@ -20,6 +20,7 @@ import { notFound } from "next/navigation";
 import { cache } from "react";
 
 import { BookingWizard } from "@/components/booking/booking-wizard";
+import { listProfesionalesLitePublico } from "@/lib/db/members";
 import { formatRubro } from "@/lib/format/identity";
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
 
@@ -130,13 +131,22 @@ export default async function BookPage({ params }: PageProps) {
   }
 
   const service = createSupabaseServiceClient();
-  const { data: servicios } = await service
-    .from("servicio")
-    .select("id, nombre, duracion_min, precio_cents, tipo_canonico, color")
-    .eq("organization_id", org.id)
-    .eq("activo", true)
-    .is("deleted_at", null)
-    .order("tipo_canonico");
+  // Servicios + profesionales reservables en paralelo (CLINICA-4). La lista
+  // de colegiados alimenta el paso "Elegí profesional" del wizard (solo se
+  // muestra con >1) y la franja bajo la card. ISR (revalidate=300): el
+  // decrypt de nombres corre 1 vez cada 5 min, no por visita. Si la lectura
+  // falla, degradamos a [] — el wizard cae al flujo histórico y el server
+  // resuelve el default (nunca rompemos el booking por la lista de display).
+  const [{ data: servicios }, profesionalesRes] = await Promise.all([
+    service
+      .from("servicio")
+      .select("id, nombre, duracion_min, precio_cents, tipo_canonico, color")
+      .eq("organization_id", org.id)
+      .eq("activo", true)
+      .is("deleted_at", null)
+      .order("tipo_canonico"),
+    listProfesionalesLitePublico(org.id),
+  ]);
 
   return (
     <BookingWizard
@@ -159,6 +169,7 @@ export default async function BookPage({ params }: PageProps) {
         instagramHandle: org.instagram_handle,
       }}
       servicios={servicios ?? []}
+      profesionales={profesionalesRes.ok ? profesionalesRes.data : []}
     />
   );
 }

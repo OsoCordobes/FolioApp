@@ -87,6 +87,11 @@ function escapeRe(s: string): string {
 /**
  * /book/<slug> → click en el segundo servicio de la lista (o el primero si
  * hay uno solo) → espera la grilla de slots (server action contra la DB).
+ *
+ * CLINICA-4: si la org tiene >1 colegiado, entre servicio y horario aparece
+ * el paso "Elegí profesional" — este helper lo tolera eligiendo el PRIMER
+ * profesional. Con 1 colegiado (la org de prueba lautaro-folio) el paso NO
+ * se monta y el flujo es byte a byte el histórico: el spec pasa tal cual.
  */
 async function irHastaSlots(page: Page): Promise<void> {
   await page.goto(`/book/${SLUG}`);
@@ -101,9 +106,20 @@ async function irHastaSlots(page: Page): Promise<void> {
   expect(count, `la org "${SLUG}" no publica servicios activos`).toBeGreaterThan(0);
   await servicios.nth(Math.min(1, count - 1)).click();
 
-  await expect(
-    page.getByRole("heading", { name: /elegí un horario/i }),
-  ).toBeVisible();
+  // Paso siguiente: "Elegí un horario" (org Solo) o "Elegí profesional"
+  // (multi-prof). `.or()` espera al primero que aparezca.
+  const headingHorario = page.getByRole("heading", { name: /elegí un horario/i });
+  const headingProfesional = page.getByRole("heading", { name: /elegí profesional/i });
+  await expect(headingHorario.or(headingProfesional)).toBeVisible({ timeout: 30_000 });
+
+  if (await headingProfesional.isVisible()) {
+    // Los botones del paso comparten la clase de card del paso de servicio
+    // (.bk-servicio); el único otro botón es "← Cambiar servicio", sin esa
+    // clase. Elegimos el primer profesional (orden estable: created_at ASC).
+    await page.locator("#bk-flow button.bk-servicio").first().click();
+    await expect(headingHorario).toBeVisible();
+  }
+
   await expect(
     slotButtons(page).first(),
     `la org "${SLUG}" no ofrece slots en los próximos 14 días`,
@@ -208,5 +224,60 @@ test.describe("/book/[slug] · submit real", () => {
       `[E2E booking] creados: "${nombre} A" tel ${telefonoA} (${horaElegida}) · ` +
         `"${nombre} B" tel ${telefonoB} (retry ${horaRetry})`,
     );
+  });
+
+  /**
+   * CLINICA-4 · paso "Elegí profesional" (solo orgs con >1 colegiado).
+   *
+   * Skip-eado por default: la org de prueba estándar (lautaro-folio) tiene
+   * UN solo colegiado, así que el paso no se monta — eso lo cubren los dos
+   * tests de arriba (flujo Solo intacto). Para ejercitar el camino
+   * multi-prof, apuntá E2E_BOOKING_SLUG a una org de prueba con 2+
+   * colegiados (con disponibilidad cargada) y seteá E2E_BOOKING_MULTIPROF=1.
+   */
+  test("multi-prof: el paso 'Elegí profesional' aparece y la reserva sale con el elegido", async ({ page }) => {
+    test.skip(
+      process.env.E2E_BOOKING_MULTIPROF !== "1",
+      "set E2E_BOOKING_MULTIPROF=1 + un E2E_BOOKING_SLUG con 2+ colegiados",
+    );
+    test.setTimeout(180_000);
+    const nombre = nombreDePrueba();
+    const telefono = telefonoUnico(13);
+
+    await page.goto(`/book/${SLUG}`);
+    await expect(
+      page.getByRole("heading", { name: /elegí el servicio/i }),
+    ).toBeVisible({ timeout: 30_000 });
+
+    // La franja pública "Atienden acá" lista los colegiados (multi-prof only).
+    await expect(page.getByText(/atienden acá/i)).toBeVisible();
+
+    const servicios = page.locator("#bk-flow").getByRole("button");
+    await servicios.first().click();
+
+    // El paso nuevo TIENE que aparecer en una org multi-prof.
+    await expect(
+      page.getByRole("heading", { name: /elegí profesional/i }),
+    ).toBeVisible();
+    const profesionalCards = page.locator("#bk-flow button.bk-servicio");
+    expect(await profesionalCards.count()).toBeGreaterThan(1);
+
+    // Elegimos el SEGUNDO profesional y verificamos que el paso de horarios
+    // lo anuncia ("con {nombre}") — la reserva queda atribuida a él.
+    const elegido = (await profesionalCards.nth(1).innerText()).trim();
+    await profesionalCards.nth(1).click();
+    await expect(
+      page.getByRole("heading", { name: /elegí un horario/i }),
+    ).toBeVisible();
+    await expect(page.getByText(new RegExp(`con ${escapeRe(elegido)}`))).toBeVisible();
+
+    await expect(slotButtons(page).first()).toBeVisible({ timeout: 30_000 });
+    await slotButtons(page).first().click();
+    await completarDatosYEnviar(page, nombre, telefono);
+    await expectExito(page);
+    // La pantalla de éxito repite la atribución.
+    await expect(page.getByText(new RegExp(`con ${escapeRe(elegido)}`))).toBeVisible();
+
+    console.log(`[E2E booking] multi-prof creado: "${nombre}" tel ${telefono} con ${elegido}`);
   });
 });
