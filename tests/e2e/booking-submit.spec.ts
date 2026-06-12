@@ -65,12 +65,14 @@ function telefonoUnico(offsetMs = 0): string {
 }
 
 /**
- * Botones de slot: muestran solo la hora vía fmtHora (toLocaleTimeString
- * es-AR, 2-digit). Según el ICU del browser, es-AR resuelve a 24h ("17:15")
- * o a 12h ("05:15 p. m." — el Chromium de Playwright hace esto), por eso el
- * regex acepta ambos. El sufijo anclado evita matchear "← Cambiar servicio".
+ * Botones de slot: el TEXTO visible es solo la hora (fmtHora, es-AR — 24h
+ * "17:15" o 12h "05:15 p. m." según el ICU del browser), pero el ACCESSIBLE
+ * NAME es el aria-label completo del PR de a11y (#45): "Viernes, 12 de
+ * junio, 03:00 p. m. hs". getByRole matchea contra el accessible name, así
+ * que el regex acepta el prefijo de fecha y exige el sufijo "hs" anclado
+ * (evita matchear "← Cambiar servicio" u otros botones).
  */
-const HORA_RE = /^\d{1,2}:\d{2}(\s*[ap]\.?\s*m\.?)?$/i;
+const HORA_RE = /\d{1,2}:\d{2}(\s*[ap]\.?\s*m\.?)?\s*hs$/i;
 
 function slotButtons(page: Page): Locator {
   return page.locator("#bk-flow").getByRole("button", { name: HORA_RE });
