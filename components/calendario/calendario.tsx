@@ -20,9 +20,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
+import { ProfFilterChips } from "@/components/agenda/prof-filter-chips";
 import * as I from "@/components/icons";
 import { PedidoModal } from "@/components/calendario/pedido-modal";
 import { TurnoCreateModal } from "@/components/hoy/turno-create-modal";
+import { inicialesProfesional, type ProfesionalLite } from "@/lib/agenda/profesional";
 import { useAgendaAutoRefresh } from "@/lib/use-agenda-refresh";
 import type { MonthGridCell } from "@/lib/db/calendario";
 import type {
@@ -225,6 +227,9 @@ function TurnoCardSemana({ turno, lane, totalLanes, pacientes }: { turno: TurnoS
         color: vis.color,
       }}
     >
+      {/* Atribución multi-profesional: profesionalNombre solo viene seteado en
+          vista "Todos" con >1 colegiado — en orgs Solo o con filtro activo es
+          null y el render histórico no cambia ni un píxel. */}
       {isNarrow ? (
         <>
           <div className="cal-turno-initials">
@@ -237,6 +242,11 @@ function TurnoCardSemana({ turno, lane, totalLanes, pacientes }: { turno: TurnoS
           </div>
           <div className="cal-turno-meta">
             <span className="fi-mono">{turno.hora}</span>
+            {turno.profesionalNombre ? (
+              <span className="cal-turno-prof" title={turno.profesionalNombre}>
+                {inicialesProfesional(turno.profesionalNombre)}
+              </span>
+            ) : null}
           </div>
         </>
       ) : (
@@ -256,6 +266,11 @@ function TurnoCardSemana({ turno, lane, totalLanes, pacientes }: { turno: TurnoS
               .replace("Consulta inicial", "Inicial")
               .replace("Seguimiento", "Segui")
               .replace("Deportiva", "Deport.")}
+            {turno.profesionalNombre ? (
+              <span className="cal-turno-prof" title={turno.profesionalNombre}>
+                {inicialesProfesional(turno.profesionalNombre)}
+              </span>
+            ) : null}
           </div>
         </>
       )}
@@ -393,6 +408,9 @@ function CalHeader({
   nextMonthIso,
   hoyMonthIso,
   onAgendar,
+  profesionales,
+  profActivo,
+  profHrefFor,
 }: {
   vista: Vista;
   setVista: (v: Vista) => void;
@@ -410,7 +428,12 @@ function CalHeader({
   nextMonthIso: string;
   hoyMonthIso: string;
   onAgendar: () => void;
+  profesionales: ProfesionalLite[];
+  profActivo: string | null;
+  profHrefFor: (id: string | null) => string;
 }) {
+  // Navegación semana/mes preserva el filtro de profesional activo.
+  const profQS = profActivo ? `&prof=${profActivo}` : "";
   return (
     <header className="cal-head">
       <div className="cal-head-top">
@@ -440,15 +463,15 @@ function CalHeader({
         <div className="cal-nav-l">
           {vista === "mes" ? (
             <>
-              <Link href={`/calendario?vista=mes&mes=${prevMonthIso}`} className="cal-nav-btn" aria-label="Mes anterior">
+              <Link href={`/calendario?vista=mes&mes=${prevMonthIso}${profQS}`} className="cal-nav-btn" aria-label="Mes anterior">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M15 18l-6-6 6-6" />
                 </svg>
               </Link>
-              <Link href={`/calendario?vista=mes&mes=${hoyMonthIso}`} className="cal-nav-today" title="Mes actual">
+              <Link href={`/calendario?vista=mes&mes=${hoyMonthIso}${profQS}`} className="cal-nav-today" title="Mes actual">
                 Hoy
               </Link>
-              <Link href={`/calendario?vista=mes&mes=${nextMonthIso}`} className="cal-nav-btn" aria-label="Mes siguiente">
+              <Link href={`/calendario?vista=mes&mes=${nextMonthIso}${profQS}`} className="cal-nav-btn" aria-label="Mes siguiente">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M9 18l6-6-6-6" />
                 </svg>
@@ -457,15 +480,15 @@ function CalHeader({
             </>
           ) : (
             <>
-              <Link href={`/calendario?w=${prevWeekIso}`} className="cal-nav-btn" aria-label="Semana anterior">
+              <Link href={`/calendario?w=${prevWeekIso}${profQS}`} className="cal-nav-btn" aria-label="Semana anterior">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M15 18l-6-6 6-6" />
                 </svg>
               </Link>
-              <Link href={`/calendario?w=${hoyWeekStartIso}`} className="cal-nav-today" title="Semana actual">
+              <Link href={`/calendario?w=${hoyWeekStartIso}${profQS}`} className="cal-nav-today" title="Semana actual">
                 Hoy
               </Link>
-              <Link href={`/calendario?w=${nextWeekIso}`} className="cal-nav-btn" aria-label="Semana siguiente">
+              <Link href={`/calendario?w=${nextWeekIso}${profQS}`} className="cal-nav-btn" aria-label="Semana siguiente">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M9 18l6-6-6-6" />
                 </svg>
@@ -475,6 +498,11 @@ function CalHeader({
           )}
         </div>
         <div className="cal-nav-r">
+          {/* Selector de profesional (modo clínica): solo llega con >1 colegiado
+              y rol cross-profesional; en bandeja no aplica (pedidos org-wide). */}
+          {profesionales.length > 1 && vista !== "bandeja" ? (
+            <ProfFilterChips profesionales={profesionales} profActivo={profActivo} hrefFor={profHrefFor} />
+          ) : null}
           <CalFilters estados={estados} setEstados={setEstados} pedidosPendientesCount={pedidosPendientesCount} mostrarPedidos={mostrarPedidos} setMostrarPedidos={setMostrarPedidos} />
           <button type="button" className="fi-btn fi-btn-primary" onClick={onAgendar}>
             <I.Plus size={12} /> Agendar
@@ -552,6 +580,7 @@ function VistaSemana({
   pacientes,
   weekDates,
   diasCerrados,
+  capacidadDiaMin,
   hoyIso,
   nowHHMM,
   onOpenBandeja,
@@ -564,6 +593,8 @@ function VistaSemana({
   weekDates: string[];
   /** Por índice (0=LUN..6=DOM): derivado de disponibilidad_profesional + eventos. */
   diasCerrados: boolean[];
+  /** Minutos de disponibilidad real por día; null = fallback histórico (600). */
+  capacidadDiaMin?: Array<number | null>;
   hoyIso: string;
   nowHHMM: string;
   onOpenBandeja: () => void;
@@ -604,7 +635,11 @@ function VistaSemana({
           const minutosOcupados =
             dayTs.reduce((acc, t) => acc + (t.dur || 45), 0) +
             dayBls.reduce((acc, b) => acc + (b.dur || 60), 0);
-          const pctCapacidad = cerrado ? 0 : Math.min(100, Math.round((minutosOcupados / 600) * 100));
+          // Denominador: minutos reales de disponibilidad del día (del
+          // profesional filtrado, o suma de todos los colegiados en "Todos").
+          // Sin disponibilidad cargada → 600 min, el comportamiento histórico.
+          const capacidadMin = capacidadDiaMin?.[i] ?? 600;
+          const pctCapacidad = cerrado ? 0 : Math.min(100, Math.round((minutosOcupados / capacidadMin) * 100));
 
           return (
             <div key={iso} className={"cal-day-head " + (isHoy ? "is-hoy " : "") + (cerrado ? "is-cerrado" : "")}>
@@ -818,6 +853,8 @@ interface CalendarioProps {
   weekDates: string[];
   /** Por índice de weekDates (0=LUN..6=DOM); ver deriveDiasCerrados. */
   diasCerrados?: boolean[];
+  /** Minutos de disponibilidad por día (0=LUN..6=DOM); ver deriveCapacidadSemana. */
+  capacidadDiaMin?: Array<number | null>;
   weekRangeLabel: string;
   hoyIso: string;
   nowHHMM: string;
@@ -834,9 +871,18 @@ interface CalendarioProps {
   mesPacientes: PacientesById;
   mesLabel: string;
   mesHoyIso: string;
+  /** Ancla "YYYY-MM" del mes activo — para que el selector de profesional preserve el mes. */
+  monthIso?: string;
   prevMonthIso: string;
   nextMonthIso: string;
   hoyMonthIso: string;
+  /**
+   * Modo clínica: colegiados para el selector de profesional. Lista vacía
+   * (default) = sin selector — el render histórico de orgs Solo no cambia.
+   */
+  profesionales?: ProfesionalLite[];
+  /** member.id activo en el filtro `?prof=`; null = "Todos". */
+  profActivo?: string | null;
 }
 
 export function Calendario({
@@ -846,9 +892,11 @@ export function Calendario({
   pacientes,
   weekDates,
   diasCerrados,
+  capacidadDiaMin,
   weekRangeLabel,
   hoyIso,
   nowHHMM,
+  weekStartIso,
   prevWeekIso,
   nextWeekIso,
   hoyWeekStartIso,
@@ -859,9 +907,12 @@ export function Calendario({
   mesPacientes,
   mesLabel,
   mesHoyIso,
+  monthIso,
   prevMonthIso,
   nextMonthIso,
   hoyMonthIso,
+  profesionales = [],
+  profActivo = null,
 }: CalendarioProps) {
   const router = useRouter();
   const [vista, setVista] = useState<Vista>(initialVista);
@@ -869,6 +920,14 @@ export function Calendario({
   const [mostrarPedidos, setMostrarPedidos] = useState(true);
   const [selectedPedido, setSelectedPedido] = useState<Pedido | null>(null);
   const [agendarOpen, setAgendarOpen] = useState(false);
+
+  // Href de cada chip del selector de profesional: preserva la vista activa
+  // (semana ?w= / mes ?mes=) — SSR puro, mismo patrón que la navegación.
+  const profHrefFor = (id: string | null) => {
+    const profQ = id ? `&prof=${id}` : "";
+    if (vista === "mes" && monthIso) return `/calendario?vista=mes&mes=${monthIso}${profQ}`;
+    return `/calendario?w=${weekStartIso}${profQ}`;
+  };
 
   // Live update: los turnos llegan por props (sin useState espejo), así que
   // un router.refresh() alcanza para que la vista se actualice sola.
@@ -904,6 +963,9 @@ export function Calendario({
         nextMonthIso={nextMonthIso}
         hoyMonthIso={hoyMonthIso}
         onAgendar={() => setAgendarOpen(true)}
+        profesionales={profesionales}
+        profActivo={profActivo}
+        profHrefFor={profHrefFor}
       />
 
       {vista === "semana" ? (
@@ -914,6 +976,7 @@ export function Calendario({
           pacientes={pacientes}
           weekDates={weekDates}
           diasCerrados={cerradosSemana}
+          capacidadDiaMin={capacidadDiaMin}
           hoyIso={hoyIso}
           nowHHMM={nowHHMM}
           onOpenBandeja={() => setVista("bandeja")}

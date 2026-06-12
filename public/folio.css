@@ -17023,3 +17023,57 @@ input:focus { outline: none; }
    del focus-trap cuando el modal todavía no tiene focusables (estado
    loading). Ver lib/use-modal-a11y.ts. */
 .a11y-modal-root:focus { outline: none; }
+
+/* ════════════════════════════════════════════════════════════════════════
+   AGENDA MULTI-PROFESIONAL (modo clínica, 2026-06) — SOLO APPENDS.
+   Clases nuevas: el selector de profesional (/hoy y /calendario) y la
+   atribución por turno solo se montan en orgs con >1 colegiado — las orgs
+   Solo jamás renderizan estos nodos y su baseline no cambia ni un píxel.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* Fila de chips "Todos | Dra. X | Dr. Y" (links SSR ?prof=). Mismo lenguaje
+   visual que .cal-chip, en clase propia para no tocar estilos existentes. */
+.fi-prof-filter {
+  display: inline-flex; align-items: center; gap: 4px;
+  flex-wrap: wrap;
+  margin: 14px 0 0;
+}
+.cal-nav-r .fi-prof-filter { margin: 0 6px 0 0; }
+.fi-prof-chip {
+  padding: 5px 10px; border-radius: var(--r-sm);
+  font-family: 'Geist Mono', monospace; font-size: 10.5px;
+  letter-spacing: .04em;
+  color: var(--ink-3); background: transparent;
+  border: 1px solid var(--line-soft);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 120ms var(--ease-in), color 120ms var(--ease-in), border-color 120ms var(--ease-in);
+}
+.fi-prof-chip:hover { color: var(--ink); border-color: var(--ink-4); }
+.fi-prof-chip.is-on {
+  background: var(--ink); color: var(--surface); border-color: var(--ink);
+}
+
+/* Atribución en /hoy (TurnoRow/CerradoRow, dentro de .fi-t-meta): chip chico
+   con el nombre corto del profesional. Mismo lenguaje que .fi-t-pv. */
+.fi-t-prof {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-family: 'Geist Mono', monospace; font-size: 10px;
+  letter-spacing: .04em;
+  color: var(--slate);
+  padding: 1px 6px; border-radius: 99px;
+  background: var(--slate-soft);
+  border: 1px solid transparent;
+}
+
+/* Atribución en la grilla semanal (TurnoCardSemana, dentro de .cal-turno-meta):
+   iniciales del profesional. Hereda el color de estado de la card. */
+.cal-turno-prof {
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: 'Geist Mono', monospace; font-size: 8.5px; font-weight: 600;
+  letter-spacing: .05em;
+  padding: 0 4px; border-radius: 99px;
+  margin-left: 4px;
+  background: var(--slate-soft); color: var(--slate);
+  border: 1px solid transparent;
+}
