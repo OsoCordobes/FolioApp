@@ -116,6 +116,30 @@ de producto de alto impacto se escalan al founder en vez de decidirse acá.
      `lautaro-amiune`, `lorenzomj925` (usuario real Lorenzo) y `anyburghini`
      (CEM — parece usuario real; no se toca).
 
+### D7 — M54 adelantada por el bloqueante B1 del review de #44 (2026-06-12)
+
+- **Contexto**: el review adversarial de #44 (REAGENDAR) encontró que el
+  pre-check del reagendado (fallback manual, per-profesional) divergía del
+  chequeo de createTurno (RPC org-wide): en una clínica multi-profesional el
+  pre-check podía pasar y el create fallar DESPUÉS de la transición
+  irreversible a REAGENDADO → huérfano determinístico. La auditoría clínica
+  encontró en paralelo el sobre-bloqueo org-wide del RPC (critical: el turno
+  del cardiólogo bloqueaba a la psicóloga).
+- **Decisión**: adelantar M54 (`slot_ocupado` con `p_profesional` +
+  `p_exclude_turno`, defaults NULL = semántica M53 idéntica) ANTES de rehacer
+  el PR #44. Aplicada a prod 2026-06-12 (verificada: firma única de 6 args),
+  PR #46 con spec pgTAP del caso dos-profesionales-misma-hora.
+- **Pendiente del rework de #44**: checkSlotOcupado usa el RPC con todos los
+  params (se elimina el skip-RPC), callers pasan profesionalId, el fallback
+  alinea bloqueo/pedido per-prof, getSlotsDisponibles filtra pedidos por
+  profesional, y revalidatePath corre también en el orphan path (I2).
+- **Escalado al founder (pixel-perfect)**: el botón Reagendar queda visible en
+  el estado por defecto de /hoy → los snapshots hoy-light/dark van a diffear.
+  El review verificó que ese baseline YA está stale en master (el botón X de
+  Cancelar de un merge anterior tampoco figura en el PNG). Recomendación:
+  regenerar los baselines de /hoy y /calendario como decisión consciente, en
+  vez de esconder funcionalidad para preservar un PNG viejo. Ver pendiente 5.
+
 ## Pendientes de decisión del founder
 
 1. **Renombrar tu org real**: tu organización (slug `lautaro-amiune`) se llama
@@ -132,3 +156,14 @@ de producto de alto impacto se escalan al founder en vez de decidirse acá.
 4. **Resend (email de confirmación de booking) apagado en prod**: faltan
    `RESEND_API_KEY` + `EMAIL_FROM` en Vercel. Si me das acceso/lo seteás, el
    email del booking sale solo.
+5. **Suite visual pixel-perfect: rota Y vacua** (corrección de la autocrítica
+   2026-06-12 a la versión anterior de este punto): los baselines commiteados
+   de las pantallas AUTENTICADAS son screenshots de /login — `app.spec.ts`
+   nunca se loguea, así que la suite comparó login-contra-login desde el
+   18-may y ninguna regresión visual real de /hoy//calendario fue observable.
+   Además: 26/26 specs de app fallan hoy (cookie banner post-baseline) y
+   18/20 del prototipo fallan por drift de entorno (900→1081px). **NO
+   regenerar baselines ahora** (cementaría la vacuidad): primero agregar
+   login/storageState a app.spec.ts, después regenerar TODO en entorno
+   pineado, y decidir si la suite entra a CI o se degrada explícitamente a
+   herramienta local. Esto es un proyecto chico (Lane B), no un toggle.

@@ -22,6 +22,9 @@ const eslintConfig = [
       "tests/visual/**-snapshots/**",
       "playwright-report/**",
       "test-results/**",
+      // Worktrees de agentes (cada uno con su .next compilado adentro):
+      // sin esta línea, lintear el checkout principal revienta con OOM.
+      ".claude/**",
     ],
   },
   {
