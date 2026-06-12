@@ -129,10 +129,14 @@ export async function getConfiguracionData(): Promise<Result<ConfiguracionData>>
 
   // 2. Google integration status. refresh_token_cifrado y ultimo_error se
   // leen SOLO para computar `muerta` server-side — no se serializan al cliente.
+  // La integración es per-member (unique org+profesional+proveedor): sin el
+  // filtro por profesional_id, en una CLINICA con 2+ profesionales conectados
+  // .maybeSingle() falla (multiple rows) o muestra el estado de OTRO member.
   const { data: googleIntegration } = await supabase
     .from("integration")
     .select("id, expira_ts, ultimo_error, ultimo_error_ts, ultimo_uso_ts, refresh_token_cifrado")
     .eq("organization_id", ctx.data.organization.id)
+    .eq("profesional_id", ctx.data.session.memberId)
     .eq("proveedor", "GOOGLE_CALENDAR")
     .maybeSingle();
 
