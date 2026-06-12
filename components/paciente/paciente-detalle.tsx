@@ -88,6 +88,7 @@ function SoapStacked({
             value={soap[s.id]}
             onChange={(e) => setSoap({ ...soap, [s.id]: e.target.value })}
             placeholder={`Escribí el ${s.label.toLowerCase()}…`}
+            aria-label={`${s.label} — nota SOAP. ${s.hint}`}
             spellCheck={false}
             rows={Math.max(3, Math.ceil((soap[s.id]?.length ?? 0) / 60))}
           />
@@ -555,28 +556,74 @@ function PacienteDetalleInner() {
     ["documentos", "Documentos"],
   ];
 
+  // Patrón WAI-ARIA Tabs: flechas mueven el foco entre tabs con activación
+  // automática (roving tabindex — solo la tab activa es tab-reachable).
+  const onTabKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>, id: TabId) => {
+    const ids = tabs.map(([tid]) => tid);
+    const idx = ids.indexOf(id);
+    let nextIdx: number | null = null;
+    if (e.key === "ArrowRight") nextIdx = (idx + 1) % ids.length;
+    else if (e.key === "ArrowLeft") nextIdx = (idx - 1 + ids.length) % ids.length;
+    else if (e.key === "Home") nextIdx = 0;
+    else if (e.key === "End") nextIdx = ids.length - 1;
+    if (nextIdx == null) return;
+    e.preventDefault();
+    const nextId = ids[nextIdx];
+    setTab(nextId);
+    document.getElementById(`pc-tab-${nextId}`)?.focus();
+  };
+
+  const panelProps = (id: TabId) => ({
+    role: "tabpanel" as const,
+    id: `pc-panel-${id}`,
+    "aria-labelledby": `pc-tab-${id}`,
+    tabIndex: 0,
+  });
+
   return (
     <div className="fi-content pc-content">
       <PacienteHeader />
 
-      <nav className="pc-tabs">
+      <nav className="pc-tabs" role="tablist" aria-label="Secciones de la ficha">
         {tabs.map(([id, lbl, isModule]) => (
           <button
             key={id}
+            id={`pc-tab-${id}`}
             type="button"
+            role="tab"
+            aria-selected={tab === id}
+            aria-controls={`pc-panel-${id}`}
+            tabIndex={tab === id ? 0 : -1}
             className={"pc-tab " + (tab === id ? "is-active" : "")}
             onClick={() => setTab(id)}
+            onKeyDown={(e) => onTabKeyDown(e, id)}
           >
             {lbl}
-            {isModule && tab !== id ? <span className="pc-tab-dot" /> : null}
+            {isModule && tab !== id ? <span className="pc-tab-dot" aria-hidden /> : null}
           </button>
         ))}
       </nav>
 
-      {tab === "informacion" ? <TabInformacion /> : null}
-      {tab === "plan" ? <TabPlan /> : null}
-      {tab === "sesiones" ? <TabSesiones /> : null}
-      {tab === "documentos" ? <TabDocumentos /> : null}
+      {tab === "informacion" ? (
+        <div {...panelProps("informacion")}>
+          <TabInformacion />
+        </div>
+      ) : null}
+      {tab === "plan" ? (
+        <div {...panelProps("plan")}>
+          <TabPlan />
+        </div>
+      ) : null}
+      {tab === "sesiones" ? (
+        <div {...panelProps("sesiones")}>
+          <TabSesiones />
+        </div>
+      ) : null}
+      {tab === "documentos" ? (
+        <div {...panelProps("documentos")}>
+          <TabDocumentos />
+        </div>
+      ) : null}
     </div>
   );
 }

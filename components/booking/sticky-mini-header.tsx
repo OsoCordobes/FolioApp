@@ -59,6 +59,12 @@ export function StickyMiniHeader({
     <div
       className={`bk-mini ${shown ? "is-shown" : ""}`.trim()}
       aria-hidden={!shown}
+      // A11y: en estado oculto (opacity 0) el CTA "Reservar" seguía en el
+      // tab order pese al aria-hidden (contradicción WCAG 4.1.2 / focus
+      // fantasma). `inert` lo saca del tab order y del árbol de
+      // accesibilidad sin tocar el render (la transición de opacity sigue
+      // funcionando — el nodo nunca se desmonta).
+      inert={!shown}
     >
       <span className="bk-mini-avatar" aria-hidden style={{ background: accentHex }}>
         {logoUrl ? (

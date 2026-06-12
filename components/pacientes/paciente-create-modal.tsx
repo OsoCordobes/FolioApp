@@ -11,9 +11,10 @@
  */
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 
 import { createPacienteAction } from "@/app/(app)/pacientes/actions";
+import { useModalA11y } from "@/lib/use-modal-a11y";
 
 interface PacienteCreateModalProps {
   onClose: () => void;
@@ -44,17 +45,10 @@ export function PacienteCreateModal({ onClose, onCreated }: PacienteCreateModalP
   const [pending, startTransition] = useTransition();
   const [err, setErr] = useState<string | null>(null);
 
-  // Escape cierra el modal cuando no estamos en submit.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !pending) {
-        e.preventDefault();
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, pending]);
+  // A11y de modal compartida: focus trap + Escape (deshabilitado en submit) +
+  // foco inicial + restore focus al cerrar. Ver lib/use-modal-a11y.ts.
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  useModalA11y(dialogRef, { onClose, closeDisabled: pending });
 
   const canSubmit =
     !pending &&
@@ -87,9 +81,12 @@ export function PacienteCreateModal({ onClose, onCreated }: PacienteCreateModalP
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="pac-create-title"
+      tabIndex={-1}
+      className="a11y-modal-root"
       style={{
         position: "fixed",
         inset: 0,

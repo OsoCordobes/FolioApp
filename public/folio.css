@@ -17005,3 +17005,21 @@ input:focus { outline: none; }
 @media (prefers-reduced-motion: reduce) {
   .bk-skel::after { animation: none; }
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   A11Y · WCAG AA camino de la demo (2026-06) — SOLO APPENDS.
+   Estas reglas no alteran ningún estilo existente: aplican únicamente a
+   clases nuevas (.a11y-*) sobre estados de foco que el baseline visual
+   no captura.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* Headings de paso (booking wizard) que reciben foco programático al cambiar
+   de vista (tabIndex={-1} + focus()). No son tab-reachable, así que el
+   indicador de foco no es requerido — lo suprimimos para no ensuciar el
+   flujo visual del paciente. */
+.a11y-focus-heading:focus { outline: none; }
+
+/* Contenedor raíz de modal (tabIndex={-1}): recibe foco solo como fallback
+   del focus-trap cuando el modal todavía no tiene focusables (estado
+   loading). Ver lib/use-modal-a11y.ts. */
+.a11y-modal-root:focus { outline: none; }

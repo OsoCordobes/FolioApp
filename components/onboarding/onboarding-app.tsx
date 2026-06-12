@@ -526,7 +526,11 @@ export function OnboardingApp({
 // ─── Save indicator (header derecho durante steps 2-8) ──────────────────────
 
 function SaveIndicator({ state }: { state: SaveState }) {
-  if (state.status === "idle") return <span />;
+  // A11y: todas las ramas devuelven un <span> raíz en la misma posición del
+  // árbol → React muta el mismo nodo DOM. Declarar aria-live también en el
+  // estado idle garantiza que la región exista ANTES de que llegue contenido
+  // (un live-region creado junto con su texto no se anuncia).
+  if (state.status === "idle") return <span aria-live="polite" role="status" />;
   const base: React.CSSProperties = {
     fontSize: 12,
     color: "var(--ink-3)",
@@ -537,7 +541,7 @@ function SaveIndicator({ state }: { state: SaveState }) {
   };
   if (state.status === "saving") {
     return (
-      <span style={base} aria-live="polite">
+      <span style={base} aria-live="polite" role="status">
         <SaveSpinner /> Guardando…
       </span>
     );
@@ -552,7 +556,7 @@ function SaveIndicator({ state }: { state: SaveState }) {
   // saved
   const ago = state.lastSavedAt ? secondsAgo(state.lastSavedAt) : null;
   return (
-    <span style={base} aria-live="polite">
+    <span style={base} aria-live="polite" role="status">
       <SavedCheck /> Guardado {ago ? `hace ${ago}` : "recién"}
     </span>
   );

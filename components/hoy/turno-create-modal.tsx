@@ -19,9 +19,6 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
-// Escape para cerrar (UX estándar de modales). Solo cuando no estamos en medio
-// del submit.
-
 import {
   createTurnoAction,
   loadCreateTurnoMeta,
@@ -30,6 +27,7 @@ import {
   type ServicioPickerRow,
 } from "@/app/(app)/hoy/actions";
 import { isoToLocalDatetime, localDatetimeToIso } from "@/lib/datetime-local";
+import { useModalA11y } from "@/lib/use-modal-a11y";
 
 interface TurnoCreateModalProps {
   defaultInicio?: string; // ISO with offset
@@ -106,17 +104,10 @@ export function TurnoCreateModal({
     };
   }, [preselectPacienteId]);
 
-  // Escape cierra el modal cuando no estamos en submit.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !submitting) {
-        e.preventDefault();
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, submitting]);
+  // A11y de modal compartida: focus trap + Escape (deshabilitado en submit) +
+  // foco inicial + restore focus al cerrar. Ver lib/use-modal-a11y.ts.
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  useModalA11y(dialogRef, { onClose, closeDisabled: submitting });
 
   // Focus inicial: cuando termina de cargar, enfocamos el primer input
   // relevante según el modo. Mejor a11y para usuarios de teclado.
@@ -184,9 +175,12 @@ export function TurnoCreateModal({
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="turno-create-title"
+      tabIndex={-1}
+      className="a11y-modal-root"
       style={{
         position: "fixed",
         inset: 0,
