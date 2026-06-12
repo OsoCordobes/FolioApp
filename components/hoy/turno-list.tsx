@@ -27,6 +27,8 @@ interface TurnoListProps {
   timezone?: string;
   onTransition: (id: string, to: EstadoTurno, extra?: Partial<Turno>) => void;
   onOpenFicha: (id: string) => void;
+  /** Abre el modal de reagendar para un turno (sube hasta Dashboard). */
+  onReagendar?: (id: string) => void;
   dense?: boolean;
 }
 
@@ -39,7 +41,7 @@ interface Group {
 
 const CANCELADOS_ESTADOS: EstadoTurno[] = ["cancelado", "no_asistio", "reagendado"];
 
-export function TurnoList({ turnos, pacientes, nextId, now, timezone, onTransition, onOpenFicha, dense }: TurnoListProps) {
+export function TurnoList({ turnos, pacientes, nextId, now, timezone, onTransition, onOpenFicha, onReagendar, dense }: TurnoListProps) {
   const [showCerrados, setShowCerrados] = useState(true);
   const [showCancelados, setShowCancelados] = useState(false);
 
@@ -92,6 +94,7 @@ export function TurnoList({ turnos, pacientes, nextId, now, timezone, onTransiti
                   timezone={timezone}
                   onTransition={onTransition}
                   onOpenFicha={onOpenFicha}
+                  onReagendar={onReagendar}
                 />
               ))}
             </div>

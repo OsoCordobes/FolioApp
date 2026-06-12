@@ -19,6 +19,7 @@ import { KpiStrip } from "@/components/hoy/kpi-strip";
 import { PageHeader } from "@/components/hoy/page-header";
 import { TurnoList } from "@/components/hoy/turno-list";
 import { TurnoCreateModal } from "@/components/hoy/turno-create-modal";
+import { TurnoReagendarModal } from "@/components/hoy/turno-reagendar-modal";
 import type { ProfesionalLite } from "@/lib/agenda/profesional";
 import { applyTransition } from "@/lib/turno-states";
 import { useAgendaAutoRefresh } from "@/lib/use-agenda-refresh";
@@ -51,6 +52,8 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
   const router = useRouter();
   const [turnos, setTurnos] = useState<Turno[]>(initialTurnos);
   const [walkInOpen, setWalkInOpen] = useState(false);
+  /** Turno con el modal de reagendar abierto (null = cerrado). */
+  const [reagendarFor, setReagendarFor] = useState<Turno | null>(null);
   const [transitionError, setTransitionError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const now = useNow(nowIso, 60_000);
@@ -173,6 +176,10 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
             now={now}
             timezone={timezone}
             onTransition={handleTransition}
+            onReagendar={(turnoId) => {
+              const turno = turnos.find((t) => t.id === turnoId);
+              if (turno) setReagendarFor(turno);
+            }}
             onOpenFicha={(turnoId) => {
               // Side panel-style ficha planeado para sprint posterior. Mientras
               // tanto, navegar a la ficha completa del paciente — toda la info
@@ -201,6 +208,23 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
           origen="WALK_IN"
           onClose={() => setWalkInOpen(false)}
           onCreated={() => setWalkInOpen(false)}
+        />
+      ) : null}
+
+      {/* Modal de reagendar: el inicio actual se arma de fechaIso (/hoy es un
+          día puntual) + hora local del turno — solo es el default del picker. */}
+      {reagendarFor ? (
+        <TurnoReagendarModal
+          turnoId={reagendarFor.id}
+          pacienteNombre={pacientes[reagendarFor.pacienteId]?.nombre ?? "Paciente"}
+          servicioNombre={reagendarFor.servicio}
+          inicioIso={`${fechaIso}T${reagendarFor.hora}`}
+          duracionMin={reagendarFor.duracionMin ?? 45}
+          onClose={() => setReagendarFor(null)}
+          onDone={() => {
+            setReagendarFor(null);
+            router.refresh();
+          }}
         />
       ) : null}
     </>

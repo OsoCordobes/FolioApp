@@ -21,6 +21,9 @@ Amiune", `is_internal_account=true`, sin gate de billing):
 - [ ] /configuracion: especialidad correcta para el cliente del domingo,
       nombre/dirección/logo presentables, **link público copiado y probado**
       (debe abrir /book/lautaro-amiune, no un 404).
+      ⚠️ NO cambies la especialidad de una org que ya tiene sesiones cargadas
+      (cambia la herramienta de TODA la ficha). Para demos de otra
+      especialidad, usá una org aparte.
 - [ ] Servicios: 2–3 activos con precios reales.
 - [ ] Disponibilidad: franjas cargadas **incluyendo el domingo** (la agenda
       semanal muestra el día de la demo).
@@ -34,6 +37,9 @@ Amiune", `is_internal_account=true`, sin gate de billing):
       servicio → slot → datos (tu propio email) → reservar. Debe terminar en
       «¡Turno confirmado!» y pasar el captcha de Turnstile real.
 - [ ] Con /hoy abierto en otra ventana: el turno nuevo aparece (live update).
+      ⚠️ El live update es polling cada 25 segundos: en vivo, narrá esa pausa
+      («en unos segundos aparece solo») o refrescá a mano — no te quedes en
+      silencio mirando la pantalla.
 - [ ] Transiciones: confirmar → en sala → atendiendo → cerrar. Cancelar uno.
 - [ ] Si `email: true` en health: revisar que llegó el email de confirmación.
 - [ ] Cancelá el turno de ensayo para dejar la agenda limpia.

@@ -264,6 +264,9 @@ export async function createPedidoPublico(
     p_org: org.id,
     p_inicio: inicioDate.toISOString(),
     p_fin: finDate.toISOString(),
+    // M54: chequeo per-profesional (org-wide sobre-bloqueaba en clínicas:
+    // el turno del cardiólogo rechazaba la reserva con la psicóloga).
+    p_profesional: profesional.id,
   });
 
   // Fallback en caso de que el RPC no exista todavía: chequear manualmente.
@@ -275,13 +278,21 @@ export async function createPedidoPublico(
     // checkSlotOcupado (lib/db/turnos.ts).
     const lookbackIso = new Date(inicioDate.getTime() - 8 * 60 * 60_000).toISOString();
 
+    // M54: mismo scope per-profesional que el RPC y que checkSlotOcupado
+    // (lib/db/turnos.ts): turno/bloqueo del profesional; pedido del
+    // profesional MÁS los sin asignar (bloqueo conservador). Fix incluido:
+    // la query de turno seleccionaba solo `id` — overlapsWith leía
+    // inicio/duracion_min como undefined → NaN → ningún turno contaba como
+    // conflicto en el fallback.
     const [{ data: turnoConflict }, { data: pedidoConflict }, { data: bloqueoConflict }] =
       await Promise.all([
         service
           .from("turno")
-          .select("id")
+          .select("id, inicio, duracion_min")
           .eq("organization_id", org.id)
+          .eq("profesional_id", profesional.id)
           .in("estado", ["AGENDADO", "CONFIRMADO", "EN_SALA", "ATENDIENDO"])
+          .is("deleted_at", null)
           .lt("inicio", finIso)
           .gte("inicio", lookbackIso)
           .limit(20),
@@ -290,6 +301,7 @@ export async function createPedidoPublico(
           .select("id, fecha_propuesta, duracion_min")
           .eq("organization_id", org.id)
           .eq("estado", "PENDIENTE")
+          .or(`profesional_id.eq.${profesional.id},profesional_id.is.null`)
           .not("fecha_propuesta", "is", null)
           .gte("fecha_propuesta", lookbackIso)
           .lt("fecha_propuesta", finIso)
@@ -298,6 +310,7 @@ export async function createPedidoPublico(
           .from("bloqueo")
           .select("id, inicio, duracion_min")
           .eq("organization_id", org.id)
+          .eq("profesional_id", profesional.id)
           .gte("inicio", lookbackIso)
           .lt("inicio", finIso)
           .limit(20),

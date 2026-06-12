@@ -39,9 +39,11 @@ interface TurnoRowProps {
   timezone?: string;
   onTransition: (id: string, to: EstadoTurno, extra?: Partial<Turno>) => void;
   onOpenFicha: (id: string) => void;
+  /** Abre el modal de reagendar (estados agendado|confirmado). */
+  onReagendar?: (id: string) => void;
 }
 
-export function TurnoRow({ turno, paciente, isNext, now, timezone, onTransition, onOpenFicha }: TurnoRowProps) {
+export function TurnoRow({ turno, paciente, isNext, now, timezone, onTransition, onOpenFicha, onReagendar }: TurnoRowProps) {
   const conf = STATE_CONF[turno.estado as keyof typeof STATE_CONF] ?? STATE_CONF.agendado;
   const isAtendiendo = turno.estado === "atendiendo";
   const isEnSala = turno.estado === "en_sala";
@@ -173,6 +175,24 @@ export function TurnoRow({ turno, paciente, isNext, now, timezone, onTransition,
           >
             {cta.label}
             {cta.icon}
+          </button>
+        ) : null}
+        {/* "Reagendar": ghost en la zona de acciones (misma zona que No-asistió
+            y Cancelar — no toca el layout colapsado del baseline). Solo en
+            agendado|confirmado: la matriz M09 permite → REAGENDADO desde ahí
+            (y desde no_asistio, que en la UI ya quedó plegado en Cancelados). */}
+        {(isAgendado || isConfirmado) && onReagendar ? (
+          <button
+            type="button"
+            className="fi-btn fi-btn-ghost"
+            onClick={(e) => {
+              e.stopPropagation();
+              onReagendar(turno.id);
+            }}
+            title="Mover el turno a otro horario"
+            aria-label={`Reagendar turno de ${paciente.nombre}`}
+          >
+            Reagendar
           </button>
         ) : null}
         {/* "No asistió": ghost (mismo patrón que cancelar), solo con la hora

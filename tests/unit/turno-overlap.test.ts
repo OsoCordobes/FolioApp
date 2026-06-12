@@ -145,3 +145,84 @@ test("decideSlotOcupado: sin excludePedidoId la semántica original no cambia", 
   });
   assert.equal(ocupado, true);
 });
+
+// ─── Exclusión de turno (reagendar — fix análogo a M53 pero para turnos) ──
+//
+// Al reagendar, el turno que se está moviendo sigue AGENDADO/CONFIRMADO
+// durante el chequeo del horario nuevo. Si el horario nuevo solapa con el
+// viejo (ej.: correr el turno 15 minutos), sin exclusión se auto-conflictúa.
+
+const TURNO_PROPIO = "33333333-3333-3333-3333-333333333333";
+const TURNO_AJENO = "44444444-4444-4444-4444-444444444444";
+
+test("decideSlotOcupado: el turno excluido no cuenta como conflicto (auto-conflicto al reagendar)", () => {
+  const ocupado = decideSlotOcupado(
+    slotInicio,
+    slotFin,
+    {
+      turnos: [{ id: TURNO_PROPIO, inicio: new Date(baseMs).toISOString(), duracion_min: 45 }],
+      pedidos: null,
+      bloqueos: null,
+    },
+    null,
+    TURNO_PROPIO,
+  );
+  assert.equal(ocupado, false);
+});
+
+test("decideSlotOcupado: otro turno solapado sigue contando aunque haya exclusión de turno", () => {
+  const ocupado = decideSlotOcupado(
+    slotInicio,
+    slotFin,
+    {
+      turnos: [
+        { id: TURNO_PROPIO, inicio: new Date(baseMs).toISOString(), duracion_min: 45 },
+        { id: TURNO_AJENO, inicio: new Date(baseMs + 10 * 60_000).toISOString(), duracion_min: 45 },
+      ],
+      pedidos: null,
+      bloqueos: null,
+    },
+    null,
+    TURNO_PROPIO,
+  );
+  assert.equal(ocupado, true);
+});
+
+test("decideSlotOcupado: la exclusión de turno no afecta pedidos ni bloqueos", () => {
+  const ocupado = decideSlotOcupado(
+    slotInicio,
+    slotFin,
+    {
+      turnos: [{ id: TURNO_PROPIO, inicio: new Date(baseMs).toISOString(), duracion_min: 45 }],
+      pedidos: [{ id: PEDIDO_AJENO, fecha_propuesta: new Date(baseMs).toISOString(), duracion_min: 45 }],
+      bloqueos: null,
+    },
+    null,
+    TURNO_PROPIO,
+  );
+  assert.equal(ocupado, true);
+});
+
+test("decideSlotOcupado: sin excludeTurnoId la semántica original no cambia", () => {
+  const ocupado = decideSlotOcupado(slotInicio, slotFin, {
+    turnos: [{ id: TURNO_PROPIO, inicio: new Date(baseMs).toISOString(), duracion_min: 45 }],
+    pedidos: null,
+    bloqueos: null,
+  });
+  assert.equal(ocupado, true);
+});
+
+test("decideSlotOcupado: exclusión de pedido y de turno conviven", () => {
+  const ocupado = decideSlotOcupado(
+    slotInicio,
+    slotFin,
+    {
+      turnos: [{ id: TURNO_PROPIO, inicio: new Date(baseMs).toISOString(), duracion_min: 45 }],
+      pedidos: [{ id: PEDIDO_PROPIO, fecha_propuesta: new Date(baseMs).toISOString(), duracion_min: 45 }],
+      bloqueos: null,
+    },
+    PEDIDO_PROPIO,
+    TURNO_PROPIO,
+  );
+  assert.equal(ocupado, false);
+});

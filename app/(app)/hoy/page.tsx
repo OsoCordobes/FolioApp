@@ -39,7 +39,7 @@ export default async function HoyPage({ searchParams }: PageProps) {
   // Dimensión profesional (modo clínica). Si la lectura de colegiados falla,
   // degradamos al comportamiento histórico (org-wide, sin selector) con un
   // warn — nunca tiramos la agenda abajo por el filtro.
-  const profsRes = await listProfesionalesLite();
+  const profsRes = await listProfesionalesLite(ctx.data.organization.id);
   if (!profsRes.ok) {
     console.warn(`[hoy] listProfesionalesLite falló: ${profsRes.error.message}`);
   }

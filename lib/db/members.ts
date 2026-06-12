@@ -216,16 +216,27 @@ export async function listMembers(): Promise<Result<TeamMemberRow[]>> {
  * de lectura ANGOSTA con service client que listMembers — los profile_ids ya
  * vienen del query RLS-scoped de member) con fallback al email.
  */
-export async function listProfesionalesLite(): Promise<Result<ProfesionalLite[]>> {
-  const ctx = await getActiveContext();
-  if (!ctx.ok) return ctx;
+export async function listProfesionalesLite(
+  /**
+   * Org activa, si el caller ya la tiene (las pages de /hoy y /calendario la
+   * tienen siempre): evita un segundo getActiveContext() en las dos páginas
+   * más calientes de la app (review PR #49). Sin argumento, se resuelve acá.
+   */
+  organizationId?: string,
+): Promise<Result<ProfesionalLite[]>> {
+  let orgId = organizationId;
+  if (!orgId) {
+    const ctx = await getActiveContext();
+    if (!ctx.ok) return ctx;
+    orgId = ctx.data.organization.id;
+  }
 
   const supabase = await createSupabaseServerClient();
 
   const { data, error } = await supabase
     .from("member")
     .select("id, profile_id")
-    .eq("organization_id", ctx.data.organization.id)
+    .eq("organization_id", orgId)
     .eq("es_colegiado", true)
     .is("deleted_at", null)
     .order("created_at", { ascending: true });
