@@ -25,6 +25,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 
+import { INVALID_GRANT_MARKER, isInvalidGrantError } from "@/lib/google/health";
 import { syncGoogleInbound, type IntegrationRow } from "@/lib/google/inbound";
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
 
@@ -82,9 +83,14 @@ export async function POST(request: NextRequest) {
       tags: { component: "gcal-sync", op: "inboundWebhook" },
       extra: { integrationId: integration.id, resourceState },
     });
+    // invalid_grant = token revocado → integración MUERTA hasta re-OAuth.
+    // Prefijo canónico para que la UI (nudge de /hoy, "Reconectar" en
+    // /configuracion) lo distinga de errores transitorios sin depender del
+    // texto exacto que devuelva googleapis.
+    const marca = isInvalidGrantError(e) ? `${INVALID_GRANT_MARKER}: ${msg}` : msg;
     await service
       .from("integration")
-      .update({ ultimo_error: msg.slice(0, 500), ultimo_error_ts: new Date().toISOString() })
+      .update({ ultimo_error: marca.slice(0, 500), ultimo_error_ts: new Date().toISOString() })
       .eq("id", integration.id);
     // 503: Google reintenta con backoff exponencial y desiste solo.
     return NextResponse.json({ ok: false, error: "sync_failed" }, { status: 503 });

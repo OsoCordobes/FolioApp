@@ -16,10 +16,45 @@ import { decryptColumn } from "@/lib/crypto";
 import type { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import { createEvent, updateEvent } from "./calendar";
+import { INVALID_GRANT_MARKER, isInvalidGrantError } from "./health";
 
 type ServerClient = Awaited<ReturnType<typeof createSupabaseServerClient>>;
 
 const DEFAULT_TZ = "America/Argentina/Cordoba";
+
+/**
+ * Best-effort: si el error de Google es invalid_grant (refresh token
+ * revocado → integración MUERTA hasta re-OAuth), persistir la marca en
+ * `integration.ultimo_error` para que la UI (banner de /hoy, estado
+ * "Reconectar" en /configuracion) pueda enterarse. Usa service client porque
+ * el caller puede ser un rol sin permiso de UPDATE sobre `integration`
+ * (RLS integration_write_admin: OWNER o el propio profesional).
+ *
+ * Nunca lanza: la marca es telemetría — jamás rompe el flujo del turno.
+ */
+async function marcarInvalidGrantBestEffort(
+  e: unknown,
+  organizationId: string,
+  profesionalMemberId: string,
+): Promise<void> {
+  if (!isInvalidGrantError(e)) return;
+  try {
+    const { createSupabaseServiceClient } = await import("@/lib/supabase/server");
+    const service = createSupabaseServiceClient();
+    const msg = e instanceof Error ? e.message : String(e);
+    await service
+      .from("integration")
+      .update({
+        ultimo_error: `${INVALID_GRANT_MARKER}: ${msg}`.slice(0, 500),
+        ultimo_error_ts: new Date().toISOString(),
+      })
+      .eq("organization_id", organizationId)
+      .eq("profesional_id", profesionalMemberId)
+      .eq("proveedor", "GOOGLE_CALENDAR");
+  } catch {
+    // ignore — el push ya reportó a Sentry; la marca es nice-to-have.
+  }
+}
 
 // ─── Payload puro (testeable sin DB ni Google) ─────────────────────────────
 
@@ -182,6 +217,7 @@ export async function pushTurnoToGoogle(input: {
       tags: { component: "gcal-sync", op: "pushTurnoToGoogle" },
       extra: { turnoId, organizationId, profesionalMemberId },
     });
+    await marcarInvalidGrantBestEffort(e, organizationId, profesionalMemberId);
   }
 }
 
@@ -223,5 +259,6 @@ export async function cancelTurnoEnGoogle(input: {
       tags: { component: "gcal-sync", op: "cancelTurnoEnGoogle" },
       extra: { turnoId, organizationId, profesionalMemberId },
     });
+    await marcarInvalidGrantBestEffort(e, organizationId, profesionalMemberId);
   }
 }

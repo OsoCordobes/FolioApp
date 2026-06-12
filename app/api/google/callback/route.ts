@@ -78,6 +78,11 @@ export async function GET(request: NextRequest) {
           expira_ts: tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : null,
           scopes: ["https://www.googleapis.com/auth/calendar.events"],
           meta_json: { calendar_id: "primary" },
+          // Reconectar limpia la marca de integración muerta (invalid_grant):
+          // sin esto, el nudge de /hoy y el "Reconectar" de /configuracion
+          // seguirían encendidos hasta el próximo sync exitoso.
+          ultimo_error: null,
+          ultimo_error_ts: null,
         },
         { onConflict: "organization_id,profesional_id,proveedor" },
       );

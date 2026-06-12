@@ -20,6 +20,7 @@ import { randomUUID } from "node:crypto";
 
 import { decryptColumn } from "@/lib/crypto";
 import { startWatchChannel, stopWatchChannel } from "@/lib/google/calendar";
+import { INVALID_GRANT_MARKER, isInvalidGrantError } from "@/lib/google/health";
 import { verifyBearer } from "@/lib/security/verify-bearer";
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
 
@@ -119,9 +120,12 @@ async function runRenew(): Promise<NextResponse> {
       const msg = e instanceof Error ? e.message : String(e);
       stats.errors.push(`${row.id}: ${msg}`);
 
+      // Prefijo canónico de integración muerta (ver lib/google/health.ts):
+      // el nudge de /hoy y el "Reconectar" de /configuracion lo leen.
+      const marca = isInvalidGrantError(e) ? `${INVALID_GRANT_MARKER}: ${msg}` : msg;
       await service
         .from("integration")
-        .update({ ultimo_error: msg.slice(0, 500), ultimo_error_ts: new Date().toISOString() })
+        .update({ ultimo_error: marca.slice(0, 500), ultimo_error_ts: new Date().toISOString() })
         .eq("id", row.id);
     }
   }
