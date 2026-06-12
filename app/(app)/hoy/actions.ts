@@ -11,17 +11,21 @@
  * la fuente de verdad. Si rechaza, el cliente revierte el estado local.
  *
  * También expone el flujo de creación rápida (walk-in / agendar manual):
- *   - loadCreateTurnoMeta() devuelve servicios + pacientes recientes + memberId
+ *   - loadCreateTurnoMeta() devuelve servicios + pacientes recientes +
+ *     colegiados activos (picker de profesional) + datos de la sesión
  *   - createTurnoAction() crea (o reutiliza) paciente + crea turno AGENDADO
  */
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import type { ProfesionalLite } from "@/lib/agenda/profesional";
 import { blindIndex, blindIndexPhone, encryptColumn } from "@/lib/crypto";
 import { err, mapSupabaseError, ok, type Result } from "@/lib/db/errors";
+import { listProfesionalesLite } from "@/lib/db/members";
 import { getActiveSession } from "@/lib/db/session";
 import { listPacientesDirectorio } from "@/lib/db/pacientes";
+import { resolveProfesionalDestino } from "@/lib/db/profesional-destino";
 import { createTurno, reagendarTurno, transitionTurno } from "@/lib/db/turnos";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { EstadoTurno } from "@/lib/types";
@@ -119,13 +123,18 @@ export interface PacientePickerRow {
 export interface CreateTurnoMeta {
   servicios: ServicioPickerRow[];
   pacientes: PacientePickerRow[];
-  profesionalId: string;
+  /** Colegiados activos de la org — alimenta el picker de profesional. */
+  profesionales: ProfesionalLite[];
+  /** member.id de la sesión (default del picker si es colegiado). */
+  sessionMemberId: string;
+  sessionEsColegiado: boolean;
 }
 
 /**
- * Devuelve los datos necesarios para llenar el modal de creación de turno.
- * Servicios activos de la org, pacientes recientes (hasta 50) y el memberId
- * del profesional activo (default profesional_id del turno).
+ * Devuelve los datos necesarios para llenar el modal de creación de turno:
+ * servicios activos de la org, pacientes recientes (hasta 50), colegiados
+ * activos (CLINICA-3: picker de profesional, visible solo con >1) y el
+ * member de la sesión para resolver el default del picker.
  */
 export async function loadCreateTurnoMeta(): Promise<Result<CreateTurnoMeta>> {
   const session = await getActiveSession();
@@ -145,6 +154,14 @@ export async function loadCreateTurnoMeta(): Promise<Result<CreateTurnoMeta>> {
   const pacientesRes = await listPacientesDirectorio();
   if (!pacientesRes.ok) return pacientesRes;
 
+  // Colegiados para el picker. Si la lectura falla, degradamos a lista vacía
+  // con warn (mismo patrón que /hoy y /calendario): el modal sigue operable y
+  // la validación server-side de createTurnoAction es el gate real.
+  const profsRes = await listProfesionalesLite(session.data.organizationId);
+  if (!profsRes.ok) {
+    console.warn(`[hoy] loadCreateTurnoMeta: listProfesionalesLite falló: ${profsRes.error.message}`);
+  }
+
   return ok({
     servicios: (servicios ?? []).map((s) => ({
       id: s.id as string,
@@ -158,7 +175,9 @@ export async function loadCreateTurnoMeta(): Promise<Result<CreateTurnoMeta>> {
       apellido: p.apellido ?? "",
       telefono: p.telefono,
     })),
-    profesionalId: session.data.memberId,
+    profesionales: profsRes.ok ? profsRes.data : [],
+    sessionMemberId: session.data.memberId,
+    sessionEsColegiado: session.data.esColegiado,
   });
 }
 
@@ -174,6 +193,13 @@ const createTurnoActionSchema = z
       })
       .optional(),
     servicioId: z.string().uuid(),
+    /**
+     * Profesional destino elegido en el picker (CLINICA-3). Opcional: si no
+     * viene y la sesión es colegiada, se usa la sesión; si no viene y la
+     * sesión NO es colegiada (secretaria), err("validation") — nunca más el
+     * hardcodeo silencioso a session.memberId.
+     */
+    profesionalId: z.string().uuid().optional(),
     inicio: z.string().datetime({ offset: true }),
     duracionMin: z.number().int().min(5).max(480),
     origen: z.enum(["MANUAL", "WALK_IN"]).default("MANUAL"),
@@ -202,6 +228,19 @@ export async function createTurnoAction(
   if (!session.ok) return session;
 
   const supabase = await createSupabaseServerClient();
+
+  // 0. Resolver el profesional destino ANTES de crear nada (CLINICA-3,
+  //    hallazgo A): un err de validación acá no deja paciente huérfano. La
+  //    validación server-side (colegiado activo de la org, vía RLS) es el
+  //    gate real — el picker de la UI es solo UX.
+  const profRes = await resolveProfesionalDestino(supabase, {
+    organizationId: session.data.organizationId,
+    profesionalId: d.profesionalId ?? null,
+    sessionMemberId: session.data.memberId,
+    sessionEsColegiado: session.data.esColegiado,
+  });
+  if (!profRes.ok) return profRes;
+  const profesionalId = profRes.data;
 
   // 1. Resolver paciente
   let pacienteId: string;
@@ -235,7 +274,9 @@ export async function createTurnoAction(
         organization_id: session.data.organizationId,
         identidad_id: identidad.id,
         tags: [],
-        profesional_principal_id: session.data.memberId,
+        // El paciente nuevo hereda el profesional ELEGIDO, no la sesión: si
+        // la secretaria agenda para la Dra. Gómez, el paciente es de Gómez.
+        profesional_principal_id: profesionalId,
       })
       .select("id")
       .single();
@@ -263,7 +304,7 @@ export async function createTurnoAction(
   const result = await createTurno({
     paciente_id: pacienteId,
     servicio_id: d.servicioId,
-    profesional_id: session.data.memberId,
+    profesional_id: profesionalId,
     inicio: d.inicio,
     duracion_min: d.duracionMin,
     precio_cents: (servicio?.precio_cents as number | undefined) ?? 0,

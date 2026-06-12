@@ -132,7 +132,7 @@ export function decideSlotOcupado(
  *
  * `excludePedidoId` (M53): al promover un pedido a turno, ese pedido sigue
  * PENDIENTE durante el chequeo y se contaría a sí mismo como conflicto. El
- * caller (promotePedidoToTurno / confirmarPedido) pasa su id para excluirlo
+ * caller (promotePedidoToTurno) pasa su id para excluirlo
  * tanto en el RPC como en el fallback.
  *
  * `excludeTurnoId` (M54, reagendar): el turno que se está moviendo se excluye
@@ -357,6 +357,18 @@ export async function createTurno(
 
 // ─── State machine: transicionar turno ─────────────────────────────────
 
+/**
+ * Estados cuyo ingreso cancela los side-effects pendientes del turno
+ * (recordatorios programados + evento de Google Calendar): el turno ya no va
+ * a ocurrir como estaba agendado. NO_ASISTIO incluido (auditoría CLINICA-3,
+ * hallazgo E): sin esto el calendar del médico seguía mostrando el evento de
+ * un paciente que no vino, y un recordatorio aún pendiente (ej. ausencia
+ * marcada antes de la hora del turno) podía dispararse igual. Si después se
+ * re-cita (NO_ASISTIO → REAGENDADO, carve-out M09), el turno NUEVO programa
+ * sus propios recordatorios y evento — re-cancelar el viejo es idempotente.
+ */
+export const ESTADOS_CANCELAN_SIDE_EFFECTS = ["CANCELADO", "REAGENDADO", "NO_ASISTIO"] as const;
+
 export async function transitionTurno(input: z.infer<typeof transitionSchema>): Promise<Result<void>> {
   const parsed = transitionSchema.safeParse(input);
   if (!parsed.success) {
@@ -447,7 +459,7 @@ export async function transitionTurno(input: z.infer<typeof transitionSchema>): 
       }),
     );
   }
-  if (parsed.data.to === "CANCELADO" || parsed.data.to === "REAGENDADO") {
+  if ((ESTADOS_CANCELAN_SIDE_EFFECTS as readonly string[]).includes(parsed.data.to)) {
     runAfterResponse(() =>
       cancelRecordatoriosForTurno(parsed.data.turnoId).catch(async (err) => {
         const { captureException } = await import("@sentry/nextjs");

@@ -5,13 +5,16 @@
  * /calendario (modal manual).
  *
  * Flujo:
- *   1. On open → carga metadata (servicios + pacientes recientes + profesionalId)
+ *   1. On open → carga metadata (servicios + pacientes recientes + colegiados)
  *      via loadCreateTurnoMeta server action.
  *   2. Usuario elige paciente existente (typeahead por nombre) o switcha a
  *      "Crear nuevo" (form inline: nombre / apellido / teléfono / email).
  *   3. Usuario elige servicio (dropdown), datetime (HTML datetime-local).
- *      Duración auto-fill del servicio, editable.
- *   4. Submit → createTurnoAction.
+ *      Duración auto-fill del servicio, editable. Con >1 colegiado en la org
+ *      aparece además el picker de profesional (CLINICA-3) — default según
+ *      resolvePickerProfesional (filtro activo > sesión colegiada > primero).
+ *      Con 0–1 colegiados el render histórico no cambia ni un píxel.
+ *   4. Submit → createTurnoAction (que valida server-side el profesional).
  *
  * Origen del turno: WALK_IN cuando se abre desde la FAB de /hoy con un default
  * de "ahora", MANUAL en cualquier otro caso.
@@ -26,6 +29,7 @@ import {
   type PacientePickerRow,
   type ServicioPickerRow,
 } from "@/app/(app)/hoy/actions";
+import { resolvePickerProfesional } from "@/lib/agenda/profesional";
 import { isoToLocalDatetime, localDatetimeToIso } from "@/lib/datetime-local";
 import { useModalA11y } from "@/lib/use-modal-a11y";
 
@@ -34,6 +38,12 @@ interface TurnoCreateModalProps {
   origen?: "MANUAL" | "WALK_IN";
   /** Si está set, abrimos en modo "existente" con el paciente preseleccionado. */
   preselectPacienteId?: string;
+  /**
+   * Profesional preseleccionado en el picker (CLINICA-3): el caller pasa su
+   * filtro `?prof=` activo para que "Agendar" con la agenda de la Dra. Gómez
+   * filtrada cree el turno EN esa agenda y no en la del usuario de sesión.
+   */
+  defaultProfesionalId?: string | null;
   onClose: () => void;
   onCreated: (turnoId: string) => void;
 }
@@ -51,6 +61,7 @@ export function TurnoCreateModal({
   defaultInicio,
   origen = "MANUAL",
   preselectPacienteId,
+  defaultProfesionalId,
   onClose,
   onCreated,
 }: TurnoCreateModalProps) {
@@ -63,6 +74,8 @@ export function TurnoCreateModal({
   const [pacienteQuery, setPacienteQuery] = useState("");
   const [nuevo, setNuevo] = useState<NuevoPacienteState>(EMPTY_NUEVO);
   const [servicioId, setServicioId] = useState<string | null>(null);
+  /** Profesional destino (CLINICA-3). Se setea al cargar la metadata. */
+  const [profesionalId, setProfesionalId] = useState<string | null>(null);
   const [inicioLocal, setInicioLocal] = useState<string>(() => isoToLocalDatetime(defaultInicio));
   const [duracion, setDuracion] = useState<number>(45);
   const [submitting, startTransition] = useTransition();
@@ -86,6 +99,15 @@ export function TurnoCreateModal({
         setServicioId(result.data.servicios[0].id);
         setDuracion(result.data.servicios[0].duracionMin);
       }
+      // Default del picker de profesional: filtro activo del caller > member
+      // de la sesión si es colegiado > primer colegiado (decisión pura).
+      setProfesionalId(
+        resolvePickerProfesional({
+          profesionales: result.data.profesionales,
+          sessionMemberId: result.data.sessionMemberId,
+          preferidoId: defaultProfesionalId,
+        }).defaultProfesionalId,
+      );
       // Si vino con preselectPacienteId: forzamos modo "existente". Sino, si no
       // hay pacientes recientes, abrir directamente el flujo "nuevo".
       if (preselectPacienteId) {
@@ -102,7 +124,10 @@ export function TurnoCreateModal({
     return () => {
       cancelled = true;
     };
-  }, [preselectPacienteId]);
+    // defaultProfesionalId solo afecta el default inicial del picker; ambos
+    // props son estables durante la vida del modal (el caller lo desmonta y
+    // remonta para "cambiarlos").
+  }, [preselectPacienteId, defaultProfesionalId]);
 
   // A11y de modal compartida: focus trap + Escape (deshabilitado en submit) +
   // foco inicial + restore focus al cerrar. Ver lib/use-modal-a11y.ts.
@@ -142,11 +167,16 @@ export function TurnoCreateModal({
       .slice(0, 8);
   }, [meta, pacienteQuery]);
 
+  // Picker de profesional: visible SOLO con >1 colegiado (org Solo intacta).
+  const pickerProfesionalVisible = (meta?.profesionales.length ?? 0) > 1;
+
   const canSubmit =
     !submitting &&
     servicioId != null &&
     inicioLocal.length > 0 &&
     duracion >= 5 &&
+    // Con picker visible el default ya viene seteado; guard defensivo igual.
+    (!pickerProfesionalVisible || profesionalId != null) &&
     (mode === "existente"
       ? pacienteId != null
       : nuevo.nombre.length > 0 && nuevo.apellido.length > 0 && nuevo.telefono.length >= 6);
@@ -158,6 +188,9 @@ export function TurnoCreateModal({
     startTransition(async () => {
       const result = await createTurnoAction({
         servicioId,
+        // Si hay un colegiado resuelto (picker o único), viaja explícito; el
+        // server igual valida y resuelve el fallback (sesión colegiada).
+        profesionalId: profesionalId ?? undefined,
         inicio: isoInicio,
         duracionMin: duracion,
         origen,
@@ -365,6 +398,22 @@ export function TurnoCreateModal({
                 ))}
               </select>
             </Field>
+
+            {pickerProfesionalVisible ? (
+              <Field label="Profesional">
+                <select
+                  value={profesionalId ?? ""}
+                  onChange={(e) => setProfesionalId(e.target.value || null)}
+                  style={inputStyle}
+                >
+                  {meta.profesionales.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.displayName}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            ) : null}
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 100px", gap: 8 }}>
               <Field label="Fecha y hora">

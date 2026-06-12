@@ -206,6 +206,10 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
       {walkInOpen ? (
         <TurnoCreateModal
           origen="WALK_IN"
+          // Con el filtro de profesional activo, el walk-in cae en ESA agenda
+          // (CLINICA-3, hallazgo F): sin esto el turno se creaba a nombre del
+          // usuario de sesión y "desaparecía" de la vista filtrada.
+          defaultProfesionalId={profActivo}
           onClose={() => setWalkInOpen(false)}
           onCreated={() => setWalkInOpen(false)}
         />

@@ -5,13 +5,14 @@
 import { z } from "zod";
 
 import { runAfterResponse } from "@/lib/after-response";
-import { blindIndex, blindIndexPhone, decryptColumn, encryptColumn, tryDecrypt } from "@/lib/crypto";
+import { blindIndex, blindIndexPhone, encryptColumn, tryDecrypt } from "@/lib/crypto";
 import { notifyBookingConfirmada } from "@/lib/email/notify";
 import { pushTurnoToGoogle } from "@/lib/google/sync";
 import { trackEvent } from "@/lib/observability/events";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import { err, mapSupabaseError, ok, type Result } from "./errors";
+import { resolveProfesionalDestino } from "./profesional-destino";
 import { scheduleRecordatoriosForTurno } from "./recordatorios";
 import { getActiveSession } from "./session";
 import { checkSlotOcupado } from "./turnos";
@@ -437,113 +438,18 @@ export async function createPedido(input: CreatePedidoInput): Promise<Result<{ i
   return ok({ id: data.id });
 }
 
-// ─── Confirmar pedido (lo transforma en Turno) ────────────────────────
-
-export async function confirmarPedido(
-  pedidoId: string,
-  pacienteId: string,
-  servicioId: string,
-  profesionalId: string,
-  inicio: string,
-): Promise<Result<{ turnoId: string }>> {
-  const session = await getActiveSession();
-  if (!session.ok) return session;
-
-  const supabase = await createSupabaseServerClient();
-
-  const { data: pedido, error: pedErr } = await supabase
-    .from("pedido")
-    .select("*")
-    .eq("id", pedidoId)
-    .eq("organization_id", session.data.organizationId)
-    .maybeSingle();
-
-  if (pedErr || !pedido) {
-    return err("not_found", "Pedido no encontrado.");
-  }
-
-  // ── CR-5: chequeo de solapamiento ANTES de tocar el estado del pedido.
-  //    Si el slot está ocupado abortamos sin haber modificado nada → el
-  //    pedido queda PENDIENTE (no se stranda en CONFIRMADO). Excluimos el
-  //    propio pedido del chequeo (M53): si inicio == fecha_propuesta se
-  //    auto-conflictuaba siempre.
-  const ocupado = await checkSlotOcupado(
-    supabase,
-    session.data.organizationId,
-    inicio,
-    pedido.duracion_min,
-    profesionalId,
-    pedidoId,
-  );
-  if (ocupado) {
-    return err(
-      "conflict",
-      "Ya hay un turno a esa hora. No se confirmó el pedido.",
-    );
-  }
-
-  // ── CR-7: compare-and-swap del estado. Flippeamos PENDIENTE→CONFIRMADO de
-  //    forma atómica ANTES de crear el turno. La guarda `.eq('estado',
-  //    'PENDIENTE')` garantiza que sólo un acepte concurrente gane: el que
-  //    obtiene la fila procede, el resto recibe 0 filas → conflict.
-  const { data: casRows, error: casErr } = await supabase
-    .from("pedido")
-    .update({
-      estado: "CONFIRMADO",
-      confirmado_ts: new Date().toISOString(),
-      paciente_id: pacienteId,
-    })
-    .eq("id", pedidoId)
-    .eq("organization_id", session.data.organizationId)
-    .eq("estado", "PENDIENTE")
-    .select("id");
-
-  const casDecision = decidePedidoCas(casRows?.length ?? 0, Boolean(casErr));
-  if (casDecision === "db_error") {
-    const mapped = mapSupabaseError(casErr ?? { message: "cas failed" });
-    return err(mapped.code, "No se pudo actualizar el pedido.", casErr?.message);
-  }
-  if (casDecision === "conflict") {
-    return err("conflict", "El pedido ya fue procesado por otra persona.");
-  }
-
-  // ── Crear turno. Si falla, rollback del CAS (volver el pedido a PENDIENTE)
-  //    para no dejarlo CONFIRMADO sin turno asociado.
-  const { data: turno, error: turnoErr } = await supabase
-    .from("turno")
-    .insert({
-      organization_id: session.data.organizationId,
-      paciente_id: pacienteId,
-      servicio_id: servicioId,
-      profesional_id: profesionalId,
-      inicio,
-      duracion_min: pedido.duracion_min,
-      precio_cents: pedido.precio_cents ?? 0,
-      origen: pedido.canal === "WEB" ? "BOOKING" : pedido.canal,
-      estado: "CONFIRMADO",
-    })
-    .select("id")
-    .single();
-
-  if (turnoErr || !turno) {
-    await supabase
-      .from("pedido")
-      .update({ estado: "PENDIENTE", confirmado_ts: null })
-      .eq("id", pedidoId)
-      .eq("organization_id", session.data.organizationId);
-    return err(
-      mapSupabaseError(turnoErr ?? { message: "no turno" }).code,
-      "No se pudo crear el turno desde el pedido.",
-      turnoErr?.message,
-    );
-  }
-
-  // ── H-APP-1: programar recordatorios 24h/2h (los pacientes que reservan
-  //    por web no los recibían). Fire-and-forget con captura Sentry.
-  scheduleRecordatoriosFireAndForget(session.data.organizationId, turno.id, inicio);
-
-  return ok({ turnoId: turno.id });
-}
+// ─── Confirmar pedido con otro horario (TODO, sin implementación) ─────
+//
+// Acá vivía `confirmarPedido`: dead code sin callers que reintroducía el bug
+// B1 (canal→origen crudo: INSTAGRAM/TELEFONO no existen en origen_turno → el
+// INSERT reventaba) y quedó fuera de los hooks de gcal/email del core. Se
+// borró en CLINICA-3 (auditoría 2026-06-12, hallazgo D).
+//
+// TODO("aceptar con otro horario"): cuando la bandeja ofrezca aceptar un
+// pedido en una hora distinta a la propuesta, implementarlo como wrapper FINO
+// de `promotePedidoToTurno` con override de `fechaPropuesta` — el core ya
+// hace slot check + CAS + mapeo canal→origen (B1) + recordatorios + push
+// gcal + email. NO reimplementar el flujo a mano.
 
 // ─── Rechazar pedido ──────────────────────────────────────────────────
 
@@ -595,11 +501,38 @@ interface PedidoConfirmRow {
   motivo_cifrado: Buffer | null;
 }
 
+/**
+ * Decisión pura (CLINICA-3, hallazgo C): un pedido cuyo nombre Y teléfono
+ * quedaron ilegibles (tryDecrypt → null por ciphertext corrupto / key drift)
+ * y que no referencia un paciente existente NO se puede aceptar — no habría
+ * con qué crear el paciente. Antes, el listado degradaba con tryDecrypt pero
+ * "Aceptar" usaba decryptColumn crudo: la fila se LISTABA y el acepte tiraba
+ * una excepción no manejada (500) fuera del contrato Result.
+ */
+export function pedidoIlegibleParaAceptar(input: {
+  nombre: string | null;
+  telefono: string | null;
+  pacienteId: string | null;
+}): boolean {
+  return input.nombre == null && input.telefono == null && input.pacienteId == null;
+}
+
 export async function aceptarPedido(
   pedidoId: string,
+  opts?: {
+    /**
+     * Profesional destino elegido en el picker del PedidoModal. Solo se usa
+     * cuando el pedido NO trae profesional_id propio (booking público sin
+     * preferencia / WhatsApp); se valida server-side como colegiado activo.
+     */
+    profesionalId?: string | null;
+  },
 ): Promise<Result<{ turnoId: string; pacienteId: string }>> {
   if (!z.string().uuid().safeParse(pedidoId).success) {
     return err("validation", "ID de pedido inválido.");
+  }
+  if (opts?.profesionalId != null && !z.string().uuid().safeParse(opts.profesionalId).success) {
+    return err("validation", "Identificador de profesional inválido.");
   }
   const session = await getActiveSession();
   if (!session.ok) return session;
@@ -634,22 +567,59 @@ export async function aceptarPedido(
   }
 
   // Descifrar los datos del paciente para pasarlos al core. Si pedido.paciente_id
-  // ya existe, el core los ignora (reutiliza el paciente).
-  const nombre = decryptColumn(pedidoRaw.nombre_cifrado) ?? "Sin nombre";
-  const telefono = decryptColumn(pedidoRaw.telefono_cifrado) ?? "";
-  const email = decryptColumn(pedidoRaw.email_cifrado);
-  const motivo = decryptColumn(pedidoRaw.motivo_cifrado);
+  // ya existe, el core los ignora (reutiliza el paciente). tryDecrypt (no
+  // decryptColumn crudo): un ciphertext corrupto degrada a null en vez de
+  // tirar una excepción fuera del contrato Result — mismo patrón que
+  // listPedidos, que ya LISTA estas filas degradadas.
+  const nombreDec = tryDecrypt(pedidoRaw.nombre_cifrado, "pedido.nombre_cifrado");
+  const telefonoDec = tryDecrypt(pedidoRaw.telefono_cifrado, "pedido.telefono_cifrado");
+  const email = tryDecrypt(pedidoRaw.email_cifrado, "pedido.email_cifrado");
+  const motivo = tryDecrypt(pedidoRaw.motivo_cifrado, "pedido.motivo_cifrado");
+
+  if (
+    pedidoIlegibleParaAceptar({
+      nombre: nombreDec,
+      telefono: telefonoDec,
+      pacienteId: pedidoRaw.paciente_id,
+    })
+  ) {
+    return err(
+      "validation",
+      "El pedido tiene datos ilegibles (nombre y teléfono no se pudieron descifrar). Rechazalo y creá el turno manual desde «Agendar».",
+    );
+  }
+  const nombre = nombreDec ?? "Sin nombre";
+  const telefono = telefonoDec ?? "";
+
+  // Profesional destino (CLINICA-3, hallazgo B): manda el del pedido (booking
+  // público con preferencia). Si el pedido no trae profesional, se usa el
+  // elegido en el picker (validado como colegiado activo de la org) o, sin
+  // picker, el member de la sesión SOLO si es colegiado. Una sesión no
+  // colegiada (secretaria) sin elección explícita → err("validation") — se
+  // eliminó el fallback silencioso a session.memberId, que asignaba el turno
+  // a la secretaria: invisible para el médico (RLS), fuera de su EXCLUDE M40
+  // y con push de gcal al calendar equivocado.
+  let profesionalId = pedidoRaw.profesional_id;
+  if (!profesionalId) {
+    const profRes = await resolveProfesionalDestino(supabase, {
+      organizationId: session.data.organizationId,
+      profesionalId: opts?.profesionalId ?? null,
+      sessionMemberId: session.data.memberId,
+      sessionEsColegiado: session.data.esColegiado,
+    });
+    if (!profRes.ok) return profRes;
+    profesionalId = profRes.data;
+  }
 
   // Delegamos en el core compartido `promotePedidoToTurno`: re-chequeo de slot,
   // resolución/creación del paciente (con dedup 23505), CAS PENDIENTE→CONFIRMADO,
-  // insert del turno (origen vía CANAL_TO_ORIGEN [B1]) y recordatorios. El
-  // profesional destino es el del pedido (booking público) o, en su defecto, el
-  // member de la sesión que acepta. trackEvent.pacienteCreated se dispara dentro
-  // del core cuando se crea un paciente nuevo.
+  // insert del turno (origen vía CANAL_TO_ORIGEN [B1]) y recordatorios.
+  // trackEvent.pacienteCreated se dispara dentro del core cuando se crea un
+  // paciente nuevo.
   return await promotePedidoToTurno(supabase, {
     pedidoId,
     organizationId: session.data.organizationId,
-    profesionalId: pedidoRaw.profesional_id ?? session.data.memberId,
+    profesionalId,
     servicioId: pedidoRaw.servicio_id,
     fechaPropuesta: pedidoRaw.fecha_propuesta,
     duracionMin: pedidoRaw.duracion_min,

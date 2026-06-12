@@ -14,8 +14,14 @@ import type { Result } from "@/lib/db/errors";
 
 export async function aceptarPedidoAction(
   pedidoId: string,
+  /**
+   * Profesional destino elegido en el picker del PedidoModal (CLINICA-3).
+   * Solo aplica cuando el pedido no trae profesional_id propio; se valida
+   * server-side como colegiado activo de la org en aceptarPedido.
+   */
+  profesionalId?: string,
 ): Promise<Result<{ turnoId: string; pacienteId: string }>> {
-  const result = await aceptarPedido(pedidoId);
+  const result = await aceptarPedido(pedidoId, { profesionalId: profesionalId ?? null });
   if (result.ok) {
     revalidatePath("/calendario");
     revalidatePath("/hoy");

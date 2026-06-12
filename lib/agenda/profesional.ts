@@ -76,6 +76,56 @@ export function resolveAgendaProfesional(input: ResolveAgendaProfInput): AgendaP
   };
 }
 
+// ─── Picker de profesional en modales (crear turno / aceptar pedido) ────────
+
+export interface ResolvePickerProfInput {
+  /** Colegiados activos de la org (listProfesionalesLite). */
+  profesionales: ProfesionalLite[];
+  /** member.id de la sesión activa. */
+  sessionMemberId: string;
+  /**
+   * Profesional preferido por el caller (el filtro `?prof=` activo en /hoy o
+   * /calendario), si vino. Solo se respeta si referencia a un colegiado real.
+   */
+  preferidoId?: string | null;
+}
+
+export interface PickerProfResolution {
+  /** ¿Renderizar el <select> de profesional? Solo con >1 colegiado. */
+  pickerVisible: boolean;
+  /** Preselección del picker (o el destino implícito si no hay picker). */
+  defaultProfesionalId: string | null;
+}
+
+/**
+ * Decisión pura del picker de profesional en los modales de creación/acepte
+ * (CLINICA-3): a quién se le asigna el turno por default.
+ *
+ * Reglas:
+ *   - Picker visible SOLO con >1 colegiado (org Solo: ni un píxel cambia).
+ *   - Default, en orden: (a) el profesional del filtro activo si el caller lo
+ *     pasó y es un colegiado real, (b) el member de la sesión si es colegiado
+ *     (está en la lista), (c) el primer colegiado. Lista vacía → null (el
+ *     server decide: sesión colegiada o err de validación).
+ *
+ * El default es solo UX — la validación real del destino es server-side
+ * (lib/db/profesional-destino.ts) y la RLS sigue siendo el gate de datos.
+ */
+export function resolvePickerProfesional(input: ResolvePickerProfInput): PickerProfResolution {
+  const { profesionales, sessionMemberId, preferidoId } = input;
+
+  const preferidoValido =
+    preferidoId != null && profesionales.some((p) => p.id === preferidoId) ? preferidoId : null;
+  const sesionColegiada = profesionales.some((p) => p.id === sessionMemberId)
+    ? sessionMemberId
+    : null;
+
+  return {
+    pickerVisible: profesionales.length > 1,
+    defaultProfesionalId: preferidoValido ?? sesionColegiada ?? profesionales[0]?.id ?? null,
+  };
+}
+
 /**
  * Iniciales para el chip de atribución: "Carla Gómez" → "CG", "Ana" → "A".
  * Máx 2 letras, uppercase; string vacío → "?" (defensivo).

@@ -121,6 +121,12 @@ export interface Pedido {
   email?: string;
   nuevo: boolean;
   pacienteId?: string;
+  /**
+   * member.id del profesional pedido en el booking (pedido.profesional_id,
+   * M43). null/undefined = sin asignar — el PedidoModal exige elegir uno
+   * antes de aceptar (CLINICA-3).
+   */
+  profesionalId?: string | null;
   fecha: string | null;
   hora: string | null;
   dur: number;
