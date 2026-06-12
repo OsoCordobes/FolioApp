@@ -15,6 +15,7 @@
 import type { ReactNode } from "react";
 
 import * as I from "@/components/icons";
+import { nombreCortoProfesional } from "@/lib/agenda/profesional";
 import { minutesTo, STATE_CONF } from "@/lib/dashboard-helpers";
 import { useLiveTimer } from "@/lib/use-live-timer";
 import type { EstadoTurno, Paciente, Turno } from "@/lib/types";
@@ -143,6 +144,14 @@ export function TurnoRow({ turno, paciente, isNext, now, timezone, onTransition,
         </div>
         <div className="fi-t-meta">
           <span>{turno.servicio}</span>
+          {/* Atribución multi-profesional: profesionalNombre solo viene seteado
+              en vista "Todos" con >1 colegiado — en orgs Solo o con filtro
+              activo es null y este nodo no existe (render histórico intacto). */}
+          {turno.profesionalNombre ? (
+            <span className="fi-t-prof" title={turno.profesionalNombre}>
+              {nombreCortoProfesional(turno.profesionalNombre)}
+            </span>
+          ) : null}
           {isAtendiendo ? (
             <span className="fi-t-live">
               <span className="fi-t-live-dot" />

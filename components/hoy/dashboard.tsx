@@ -13,11 +13,13 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 
+import { ProfFilterChips } from "@/components/agenda/prof-filter-chips";
 import * as I from "@/components/icons";
 import { KpiStrip } from "@/components/hoy/kpi-strip";
 import { PageHeader } from "@/components/hoy/page-header";
 import { TurnoList } from "@/components/hoy/turno-list";
 import { TurnoCreateModal } from "@/components/hoy/turno-create-modal";
+import type { ProfesionalLite } from "@/lib/agenda/profesional";
 import { applyTransition } from "@/lib/turno-states";
 import { useAgendaAutoRefresh } from "@/lib/use-agenda-refresh";
 import { useNow } from "@/lib/use-now";
@@ -36,9 +38,16 @@ interface DashboardProps {
   timezone: string;
   /** Org activa — habilita el live update (polling / realtime tras flag). */
   organizationId?: string;
+  /**
+   * Modo clínica: colegiados para el selector de profesional. Lista vacía
+   * (default) = sin selector — el render histórico de orgs Solo no cambia.
+   */
+  profesionales?: ProfesionalLite[];
+  /** member.id activo en el filtro `?prof=`; null = "Todos". */
+  profActivo?: string | null;
 }
 
-export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fechaAnio, nowIso, timezone, organizationId }: DashboardProps) {
+export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fechaAnio, nowIso, timezone, organizationId, profesionales = [], profActivo = null }: DashboardProps) {
   const router = useRouter();
   const [turnos, setTurnos] = useState<Turno[]>(initialTurnos);
   const [walkInOpen, setWalkInOpen] = useState(false);
@@ -119,6 +128,13 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
           timezone={timezone}
           onOpenWalkIn={() => setWalkInOpen(true)}
         />
+        {profesionales.length > 1 ? (
+          <ProfFilterChips
+            profesionales={profesionales}
+            profActivo={profActivo}
+            hrefFor={(id) => (id ? `/hoy?prof=${id}` : "/hoy")}
+          />
+        ) : null}
         <KpiStrip turnos={turnos} pacientes={pacientes} now={now} timezone={timezone} />
         {transitionError ? (
           <div

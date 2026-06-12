@@ -13,6 +13,7 @@ import { useMemo, useState } from "react";
 import * as I from "@/components/icons";
 import { CerradoRow } from "@/components/hoy/cerrado-row";
 import { TurnoRow } from "@/components/hoy/turno-row";
+import { nombreCortoProfesional } from "@/lib/agenda/profesional";
 import { fmtMoney } from "@/lib/dashboard-helpers";
 import type { EstadoTurno, PacientesById, Turno } from "@/lib/types";
 
@@ -171,6 +172,11 @@ export function TurnoList({ turnos, pacientes, nextId, now, timezone, onTransiti
                     </div>
                     <div className="fi-t-meta">
                       <span>{t.servicio}</span>
+                      {t.profesionalNombre ? (
+                        <span className="fi-t-prof" title={t.profesionalNombre}>
+                          {nombreCortoProfesional(t.profesionalNombre)}
+                        </span>
+                      ) : null}
                       <span className="fi-cerrados-dot">·</span>
                       <span>{estadoLabel[t.estado] ?? t.estado}</span>
                     </div>

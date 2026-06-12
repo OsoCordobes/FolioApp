@@ -7,6 +7,7 @@
  */
 
 import * as I from "@/components/icons";
+import { nombreCortoProfesional } from "@/lib/agenda/profesional";
 import { fmtMoney } from "@/lib/dashboard-helpers";
 import type { Paciente, Turno } from "@/lib/types";
 
@@ -40,6 +41,12 @@ export function CerradoRow({ turno, paciente, onOpenFicha }: CerradoRowProps) {
         </div>
         <div className="fi-t-meta">
           <span>{turno.servicio}</span>
+          {/* Atribución multi-profesional: solo en vista "Todos" multi-colegiado. */}
+          {turno.profesionalNombre ? (
+            <span className="fi-t-prof" title={turno.profesionalNombre}>
+              {nombreCortoProfesional(turno.profesionalNombre)}
+            </span>
+          ) : null}
           {turno.postVisita?.guardada ? (
             <span className="fi-t-pv fi-t-pv--ok">
               <I.Check size={10} /> post-visita
