@@ -102,37 +102,44 @@ export function PosturaCanvas({ value, onChange, readOnly }: PosturaCanvasProps)
           onPointerLeave={commit}
           style={{ touchAction: "none", cursor: readOnly ? "default" : "crosshair" }}
         >
-          {/* Figura masculina de espaldas (solo contorno, sin relleno) —
-              referencia para trazar caída de hombros, escoliosis, etc.
-              cx=140. Cabeza + cuello + trapecio/hombros + torso con cintura y
-              cadera + brazos colgando + escápulas sutiles + línea media. */}
+          {/* Figura masculina de espaldas — SOLO CONTORNO, sin relleno y SIN
+              piernas (torso hasta la pelvis/glúteos, como la lámina de
+              subluxación pélvica). Hombros, cintura y pelvis bien definidos para
+              trazar caída de hombros, escoliosis y báscula pélvica. cx=140. */}
           <g fill="none" stroke="var(--line)" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round">
             {/* cabeza */}
-            <ellipse cx="140" cy="38" rx="21" ry="25" />
+            <ellipse cx="140" cy="38" rx="20" ry="24" />
             {/* cuello */}
-            <path d="M 130 60 C 130 66, 130 68, 128 72 M 150 60 C 150 66, 150 68, 152 72" />
-            {/* tronco: trapecio → hombros (deltoides) → dorsal → cintura → cadera */}
+            <path d="M 131 60 C 131 66, 131 68, 129 72 M 149 60 C 149 66, 149 68, 151 72" />
+            {/* tronco: trapecio → hombros (deltoides) → dorsal → cintura (lo más
+                angosto) → pelvis (más ancha) → glúteos con surco interglúteo */}
             <path
-              d="M 128 72
-                 C 119 76, 101 82, 89 100
-                 C 83 110, 81 117, 83 129
-                 C 91 162, 98 184, 102 206
-                 C 104 227, 99 247, 103 259
-                 C 114 272, 166 272, 177 259
-                 C 181 247, 176 227, 178 206
-                 C 182 184, 189 162, 197 129
-                 C 199 117, 197 110, 191 100
-                 C 179 82, 161 76, 152 72"
+              d="M 129 72
+                 C 120 76, 102 82, 90 100
+                 C 84 110, 81 117, 83 129
+                 C 91 160, 98 182, 105 202
+                 C 107 216, 97 230, 97 244
+                 C 97 258, 101 272, 111 282
+                 C 121 290, 134 289, 140 279
+                 C 146 289, 159 290, 169 282
+                 C 179 272, 183 258, 183 244
+                 C 183 230, 173 216, 175 202
+                 C 182 182, 189 160, 197 129
+                 C 199 117, 196 110, 190 100
+                 C 178 82, 160 76, 151 72
+                 Z"
             />
             {/* brazo izquierdo colgando (deltoides → muñeca → cara interna) */}
-            <path d="M 85 124 C 74 148, 69 180, 73 208 C 75 219, 85 219, 87 208 C 91 184, 96 158, 97 135" />
+            <path d="M 85 125 C 74 150, 69 182, 73 210 C 75 221, 85 221, 87 210 C 91 186, 96 160, 97 136" />
             {/* brazo derecho */}
-            <path d="M 195 124 C 206 148, 211 180, 207 208 C 205 219, 195 219, 193 208 C 189 184, 184 158, 183 135" />
+            <path d="M 195 125 C 206 150, 211 182, 207 210 C 205 221, 195 221, 193 210 C 189 186, 184 160, 183 136" />
             {/* escápulas (sutiles, vista posterior) */}
             <path stroke="var(--line-soft)" strokeWidth="1.1" d="M 124 116 C 113 122, 112 140, 126 150" />
             <path stroke="var(--line-soft)" strokeWidth="1.1" d="M 156 116 C 167 122, 168 140, 154 150" />
+            {/* surco interglúteo */}
+            <path stroke="var(--line-soft)" strokeWidth="1.1" d="M 140 266 L 140 285" />
             {/* línea media de referencia (columna) */}
-            <line x1="140" y1="70" x2="140" y2="262" stroke="var(--line-soft)" strokeWidth="1" strokeDasharray="4 4" />
+            <line x1="140" y1="70" x2="140" y2="264" stroke="var(--line-soft)" strokeWidth="1" strokeDasharray="4 4" />
           </g>
 
           {/* Trazos confirmados. */}
