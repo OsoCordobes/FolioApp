@@ -136,22 +136,28 @@ export function QuiropraxiaTool({
         </div>
       ) : null}
 
-      <SpineMap data={verData} onChange={handleChange} readOnly={verReadOnly} />
-
-      <EvaluacionInicial
-        data={verData}
-        onChange={handleChange}
-        readOnly={verReadOnly}
-        pacienteId={pacienteId}
-        turno={snapshot ? null : turno}
-        radiografias={radiosVisibles}
-      />
-
-      <VisitControl
-        historial={historial}
-        selectedIndex={selectedVisit}
-        onSelect={setSelectedVisit}
-      />
+      {/* La columna vertebral vive SIEMPRE en la franja izquierda (como la
+          planilla); los campos de la evaluación van a la derecha. */}
+      <div className="pc-quiro-grid">
+        <div className="pc-quiro-col-spine">
+          <SpineMap data={verData} onChange={handleChange} readOnly={verReadOnly} />
+        </div>
+        <div className="pc-quiro-col-fields">
+          <EvaluacionInicial
+            data={verData}
+            onChange={handleChange}
+            readOnly={verReadOnly}
+            pacienteId={pacienteId}
+            turno={snapshot ? null : turno}
+            radiografias={radiosVisibles}
+          />
+          <VisitControl
+            historial={historial}
+            selectedIndex={selectedVisit}
+            onSelect={setSelectedVisit}
+          />
+        </div>
+      </div>
     </div>
   );
 }

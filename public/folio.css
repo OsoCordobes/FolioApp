@@ -17193,43 +17193,48 @@ input:focus { outline: none; }
 }
 .pc-quiro-icon-btn:hover { color: var(--ink); background: var(--surface-2); }
 
-/* ── Mapa vertebral ───────────────────────────────────────────────────────── */
+/* ── Layout: columna vertebral a la izquierda, campos a la derecha ────────── */
+.pc-quiro-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, 300px) 1fr;
+  gap: 22px; align-items: start;
+}
+.pc-quiro-col-spine { position: sticky; top: 16px; }
+.pc-quiro-col-fields { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+
+/* ── Mapa vertebral (columna lateral) ─────────────────────────────────────── */
 .pc-quiro-spine {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
-  padding: 18px 20px;
-  display: flex; flex-direction: column; gap: 14px;
+  padding: 16px 16px 14px;
+  display: flex; flex-direction: column; gap: 12px;
 }
 .pc-quiro-spine-head {
-  display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
 }
 .pc-quiro-vista-toggle { display: flex; gap: 6px; }
-.pc-quiro-spine-body {
-  display: grid;
-  grid-template-columns: minmax(180px, 260px) 1fr;
-  gap: 20px; align-items: start;
-}
-.pc-quiro-spine-svg-wrap {
+.pc-quiro-spine-illu {
   display: flex; justify-content: center;
   background: var(--bg);
   border: 1px solid var(--line-soft);
   border-radius: var(--r-md);
-  padding: 12px;
+  padding: 10px 8px;
 }
-.pc-quiro-svg { width: 100%; max-width: 220px; height: auto; }
+.pc-quiro-svg { width: 100%; max-width: 168px; height: auto; max-height: 460px; }
+.pc-quiro-spine-hint { text-align: center; padding: 2px 4px; }
 
-/* Panel lateral de la vértebra (técnica + listado). */
+/* Panel de la vértebra (técnica + listado), debajo de la ilustración. */
 .pc-quiro-vert-panel {
-  display: flex; flex-direction: column; gap: 12px;
+  display: flex; flex-direction: column; gap: 10px;
   background: var(--surface-2);
   border: 1px solid var(--line);
   border-radius: var(--r-md);
-  padding: 14px 16px;
+  padding: 12px 14px;
 }
 .pc-quiro-vert-panel-head {
   display: flex; align-items: center; justify-content: space-between;
-  font-size: 14px; color: var(--ink);
+  font-size: 13.5px; color: var(--ink);
 }
 
 /* ── Evaluación inicial (secciones apiladas) ──────────────────────────────── */
@@ -17326,7 +17331,9 @@ input:focus { outline: none; }
   font-size: 12.5px;
 }
 
-/* Responsive: en angosto, el panel de la vértebra cae debajo del SVG. */
-@media (max-width: 720px) {
-  .pc-quiro-spine-body { grid-template-columns: 1fr; }
+/* Responsive: en angosto, la columna vertebral pasa arriba de los campos. */
+@media (max-width: 860px) {
+  .pc-quiro-grid { grid-template-columns: 1fr; }
+  .pc-quiro-col-spine { position: static; }
+  .pc-quiro-svg { max-height: 380px; }
 }
