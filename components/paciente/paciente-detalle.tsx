@@ -221,6 +221,19 @@ function TabPlan() {
   const router = useRouter();
   const turnoActivo = plan.turnoActivo;
 
+  // Workstream 6 · la ficha quiropraxia v2 reemplaza el SOAP: la Tool ocupa todo
+  // el ancho (sin la grilla 380px) y NO se rinde <SoapStacked>. Cardio/psico
+  // siguen con la grilla + SOAP, exactamente igual que antes.
+  const hideSoap = especialidad === "quiropraxia";
+
+  // Props OPCIONALES nuevas (Workstream 6) — inofensivas para cardio/psico, que
+  // las ignoran. La Tool quiro las usa para radiografías + carry-forward.
+  const toolExtras = {
+    pacienteId: paciente.id,
+    turno: turnoActivo ? { id: turnoActivo.id, tieneSesionGuardada: turnoActivo.tieneSesionGuardada } : null,
+    radiografias: plan.radiografias,
+  };
+
   // Borrador local del toolData de la herramienta. Si el turno en curso ya
   // tiene sesión guardada, re-hidrata desde ahí: el writer sobreescribe las
   // columnas tool en cada guardado re-hidratable, así que "guardar solo SOAP"
@@ -326,21 +339,40 @@ function TabPlan() {
         </div>
       ) : null}
 
-      <div className="pc-plan-grid">
-        {/* M55 · la Tool recibe SOLO el historial de SU tool_id (legacy NULL
-            cuenta como quiropraxia): en fichas mixtas (cardio + psico) cada
-            herramienta ve sus propias sesiones. El resumen por sesión de
-            HistorialReciente/TabSesiones sigue siendo por tool_id persistido.
-            readOnly cuando no hay turno activo: editar un borrador que no se
-            puede guardar sería engañoso. */}
+      {/* M55 · la Tool recibe SOLO el historial de SU tool_id (legacy NULL
+          cuenta como quiropraxia): en fichas mixtas (cardio + psico) cada
+          herramienta ve sus propias sesiones. El resumen por sesión de
+          HistorialReciente/TabSesiones sigue siendo por tool_id persistido.
+          readOnly cuando no hay turno activo: editar un borrador que no se
+          puede guardar sería engañoso.
+          Workstream 6 · quiropraxia (hideSoap) rinde la Tool a ancho completo y
+          omite el SOAP; el resto conserva la grilla 380px + SOAP. */}
+      {hideSoap ? (
         <def.Tool
           value={toolValue}
           onChange={setToolValue}
           readOnly={!turnoActivo}
           historial={filtrarToolHistorial(plan.toolHistorial, especialidad)}
+          {...toolExtras}
         />
-        <SoapStacked soap={soap} setSoap={setSoap} saveBadge={saveBadge} />
-      </div>
+      ) : (
+        <div className="pc-plan-grid">
+          <def.Tool
+            value={toolValue}
+            onChange={setToolValue}
+            readOnly={!turnoActivo}
+            historial={filtrarToolHistorial(plan.toolHistorial, especialidad)}
+            {...toolExtras}
+          />
+          <SoapStacked soap={soap} setSoap={setSoap} saveBadge={saveBadge} />
+        </div>
+      )}
+
+      {/* Sin SoapStacked (quiro) el badge de guardado se muestra acá, alineado
+          al bloque de acciones de guardado de abajo. */}
+      {hideSoap && saveBadge ? (
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>{saveBadge}</div>
+      ) : null}
 
       {turnoActivo ? (
         <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 12 }}>

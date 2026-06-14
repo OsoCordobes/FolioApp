@@ -35,6 +35,24 @@ export interface SpecialtyToolProps {
   readOnly?: boolean;
   /** Sesiones previas, ordenadas DESC por fecha (la más reciente primero). */
   historial: ToolHistorialEntry[];
+  // ─── Campos OPCIONALES (Workstream 6) ────────────────────────────────────
+  // Aditivos: las Tools de cardio/psico los ignoran. Los usa la Tool de
+  // quiropraxia v2 (galería de radiografías + carry-forward gateado por turno).
+  /** Id del paciente de la ficha — para adjuntar radiografías. */
+  pacienteId?: string;
+  /**
+   * Turno en curso (subset de PlanData.turnoActivo): habilita el adjunto de
+   * radiografías (necesitan una sesión guardada) y gatea el carry-forward.
+   */
+  turno?: { id: string; tieneSesionGuardada: boolean } | null;
+  /** Galería de radiografías del paciente (signed URLs de vida corta). */
+  radiografias?: ReadonlyArray<{
+    id: string;
+    fecha: string;
+    descripcion: string | null;
+    signedUrl: string;
+    sesionId: string | null;
+  }>;
 }
 
 // ─── Intake avanzado por especialidad (Workstream 5) ──────────────────────────

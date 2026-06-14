@@ -17140,3 +17140,193 @@ input:focus { outline: none; }
 }
 .pc-sin-turno svg { flex-shrink: 0; margin-top: 1px; color: var(--ink-4); }
 .pc-sin-turno p { margin: 0; font-size: 12.5px; line-height: 1.5; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   M-quiropraxia v2 (Workstream 6) — ficha quiropráctica reestructurada.
+
+   Ámbito: solo la Tool de quiropraxia (slot a ancho completo, sin SOAP).
+   Reusa el look de pc-card / fi-eyebrow / fi-wi-field / pc-soap-textarea y SOLO
+   tokens del tema (--accent, --ink-*, --surface*, --line*, --r-*, --green/
+   amber/red, --ease-in) — sin hex off-theme.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+.pc-quiro-tool {
+  display: flex; flex-direction: column; gap: 22px;
+  width: 100%;
+}
+.pc-quiro-muted { color: var(--ink-3); font-size: 12.5px; line-height: 1.5; margin: 0; }
+
+/* Input puntual de la galería (no hay clase genérica de input en el tema). */
+.pc-quiro-input {
+  flex: 1; min-width: 120px;
+  padding: 8px 11px;
+  background: var(--bg);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm);
+  font-family: 'Geist', sans-serif; font-size: 13px; color: var(--ink);
+  transition: border-color 120ms var(--ease-in), background 120ms var(--ease-in);
+}
+.pc-quiro-input:focus { outline: none; border-color: var(--accent); background: var(--surface); }
+.pc-quiro-input::placeholder { color: var(--ink-4); }
+.pc-quiro-input:disabled { opacity: .55; cursor: not-allowed; }
+
+/* Pill genérica (toggle de vista, modos del leg check, controles de postura). */
+.pc-quiro-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 11px;
+  font-size: 12px; font-weight: 500; color: var(--ink-3);
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 999px; cursor: pointer;
+  transition: background 120ms var(--ease-in), color 120ms var(--ease-in), border-color 120ms var(--ease-in);
+}
+.pc-quiro-pill:hover:not(:disabled) { color: var(--ink); border-color: var(--ink-4); }
+.pc-quiro-pill.is-active {
+  color: var(--surface); background: var(--accent); border-color: transparent;
+}
+.pc-quiro-pill:disabled { opacity: .5; cursor: not-allowed; }
+
+.pc-quiro-icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px;
+  color: var(--ink-3); background: transparent; border: none; cursor: pointer;
+  border-radius: var(--r-sm);
+}
+.pc-quiro-icon-btn:hover { color: var(--ink); background: var(--surface-2); }
+
+/* ── Mapa vertebral ───────────────────────────────────────────────────────── */
+.pc-quiro-spine {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 18px 20px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.pc-quiro-spine-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+}
+.pc-quiro-vista-toggle { display: flex; gap: 6px; }
+.pc-quiro-spine-body {
+  display: grid;
+  grid-template-columns: minmax(180px, 260px) 1fr;
+  gap: 20px; align-items: start;
+}
+.pc-quiro-spine-svg-wrap {
+  display: flex; justify-content: center;
+  background: var(--bg);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-md);
+  padding: 12px;
+}
+.pc-quiro-svg { width: 100%; max-width: 220px; height: auto; }
+
+/* Panel lateral de la vértebra (técnica + listado). */
+.pc-quiro-vert-panel {
+  display: flex; flex-direction: column; gap: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 14px 16px;
+}
+.pc-quiro-vert-panel-head {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 14px; color: var(--ink);
+}
+
+/* ── Evaluación inicial (secciones apiladas) ──────────────────────────────── */
+.pc-quiro-eval {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 18px 20px;
+  display: flex; flex-direction: column; gap: 18px;
+}
+.pc-quiro-eval-head { margin-bottom: -4px; }
+.pc-quiro-eval-section { display: flex; flex-direction: column; gap: 8px; }
+.pc-quiro-eval-label {
+  font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* ── Análisis postural ────────────────────────────────────────────────────── */
+.pc-quiro-postura { display: flex; flex-direction: column; gap: 10px; }
+.pc-quiro-postura-canvas { display: flex; flex-direction: column; gap: 8px; }
+.pc-quiro-postura-svg {
+  width: 100%; max-width: 280px; height: auto;
+  background: var(--bg);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-md);
+  align-self: center;
+}
+.pc-quiro-postura-tools { display: flex; gap: 8px; justify-content: center; }
+
+/* ── Leg check ────────────────────────────────────────────────────────────── */
+.pc-quiro-legcheck { display: flex; flex-direction: column; gap: 10px; }
+.pc-quiro-legcheck-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* ── Radiografías ─────────────────────────────────────────────────────────── */
+.pc-quiro-radios { display: flex; flex-direction: column; gap: 12px; }
+.pc-quiro-radios-head { display: flex; align-items: center; justify-content: space-between; }
+.pc-quiro-radios-list {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px;
+}
+.pc-quiro-radio-item { display: flex; flex-direction: column; gap: 6px; }
+.pc-quiro-radio-thumb {
+  display: block; aspect-ratio: 4 / 3; overflow: hidden;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+.pc-quiro-radio-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pc-quiro-radio-file {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 6px; width: 100%; height: 100%;
+  color: var(--ink-3); font-size: 12px;
+}
+.pc-quiro-radio-meta { display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
+.pc-quiro-radio-meta b { color: var(--ink); }
+.pc-quiro-radio-meta span { color: var(--ink-3); line-height: 1.4; }
+.pc-quiro-radios-upload {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  padding-top: 4px;
+}
+.pc-quiro-file-label { position: relative; display: inline-flex; cursor: pointer; }
+.pc-quiro-file-label input[type="file"] {
+  position: absolute; inset: 0; opacity: 0; width: 100%; cursor: pointer;
+}
+.pc-quiro-file-label input[type="file"]:disabled { cursor: not-allowed; }
+.pc-quiro-radios-hint { flex-basis: 100%; }
+.pc-quiro-radios-error { flex-basis: 100%; margin: 0; font-size: 12.5px; color: var(--red); }
+
+/* ── Control de visitas ───────────────────────────────────────────────────── */
+.pc-quiro-visits {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 16px 18px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.pc-quiro-visits-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.pc-quiro-visits-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.pc-quiro-visit-cell {
+  padding: 6px 12px; font-size: 12px; color: var(--ink-2);
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-sm); cursor: pointer;
+  transition: border-color 120ms var(--ease-in), color 120ms var(--ease-in);
+}
+.pc-quiro-visit-cell:hover { border-color: var(--ink-4); color: var(--ink); }
+.pc-quiro-visit-cell.is-active { color: var(--surface); background: var(--accent); border-color: transparent; }
+
+/* ── Banner de snapshot (visita pasada en solo lectura) ───────────────────── */
+.pc-quiro-snapshot-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 14px;
+  background: var(--amber-soft); color: var(--amber);
+  border: 1px solid transparent; border-radius: var(--r-md);
+  font-size: 12.5px;
+}
+
+/* Responsive: en angosto, el panel de la vértebra cae debajo del SVG. */
+@media (max-width: 720px) {
+  .pc-quiro-spine-body { grid-template-columns: 1fr; }
+}

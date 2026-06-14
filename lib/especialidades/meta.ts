@@ -27,7 +27,7 @@ import {
 } from "@/lib/especialidades/psicologia/schema";
 import { intakeAvanzadoPsicologia } from "@/lib/especialidades/psicologia/intake";
 import {
-  quiropraxiaToolDataSchema,
+  quiropraxiaToolDataV2Schema,
   resumenSesionQuiropraxia,
 } from "@/lib/especialidades/quiropraxia/schema";
 import { intakeAvanzadoQuiropraxia } from "@/lib/especialidades/quiropraxia/intake";
@@ -111,8 +111,21 @@ export interface EspecialidadMeta {
   nombre: string;
   /** Texto del badge del tab Plan ("Módulo · Quiropraxia"). */
   badgeLabel: string;
-  /** Id versionado del shape de sesion.tool_data_cifrado (M50). */
+  /**
+   * Id versionado que el writer ESTAMPA en sesion.tool_id al guardar (M50). Es
+   * el shape de ESCRITURA actual; para quiropraxia es `quiropraxia.ficha.v2`
+   * (Workstream 6). Las sesiones viejas conservan el id con que se guardaron.
+   */
   toolId: string;
+  /**
+   * TODOS los tool_ids que esta especialidad sabe LEER (incluye el de escritura
+   * `toolId` + los versionados anteriores). La resolución por tool_id
+   * (getEspecialidadMetaByToolId) matchea por membresía en este array, no por
+   * igualdad con `toolId`: así un id versionado viejo (ej. `quiropraxia.spine.v1`)
+   * sigue resolviendo a su especialidad y las sesiones legacy no quedan
+   * huérfanas al bumpear el shape de escritura. Workstream 6 · BLOCKER FIX.
+   */
+  toolIds: readonly string[];
   /** Schema zod del toolData — el writer valida antes de cifrar. */
   schema: z.ZodType;
   /** Resumen de una sesión para HistorialReciente / TabSesiones. */
@@ -130,8 +143,11 @@ export const ESPECIALIDADES_META: Record<EspecialidadSlug, EspecialidadMeta> = {
     slug: "quiropraxia",
     nombre: "Quiropraxia",
     badgeLabel: "Módulo · Quiropraxia",
-    toolId: "quiropraxia.spine.v1",
-    schema: quiropraxiaToolDataSchema,
+    // Workstream 6 · el writer estampa v2; v1 (quiropraxia.spine.v1) se sigue
+    // LEYENDO (sesiones viejas) vía toolIds — no queda huérfana.
+    toolId: "quiropraxia.ficha.v2",
+    toolIds: ["quiropraxia.ficha.v2", "quiropraxia.spine.v1"],
+    schema: quiropraxiaToolDataV2Schema,
     resumenSesion: resumenSesionQuiropraxia,
     intakeAvanzado: intakeAvanzadoQuiropraxia,
   },
@@ -140,6 +156,7 @@ export const ESPECIALIDADES_META: Record<EspecialidadSlug, EspecialidadMeta> = {
     nombre: "Cardiología",
     badgeLabel: "Módulo · Cardiología",
     toolId: "cardiologia.cv.v1",
+    toolIds: ["cardiologia.cv.v1"],
     schema: cardiologiaToolDataSchema,
     resumenSesion: resumenSesionCardiologia,
     intakeAvanzado: intakeAvanzadoCardiologia,
@@ -149,6 +166,7 @@ export const ESPECIALIDADES_META: Record<EspecialidadSlug, EspecialidadMeta> = {
     nombre: "Psicología",
     badgeLabel: "Módulo · Psicología",
     toolId: "psicologia.escalas.v1",
+    toolIds: ["psicologia.escalas.v1"],
     schema: psicologiaToolDataSchema,
     resumenSesion: resumenSesionPsicologia,
     intakeAvanzado: intakeAvanzadoPsicologia,
@@ -169,11 +187,16 @@ export function getIntakeAvanzadoConfig(slug: string | null | undefined): Intake
   return ESPECIALIDADES_META[normalizeEspecialidadSlug(slug)].intakeAvanzado;
 }
 
-/** Meta por toolId (sesion.tool_id) o null si el registry no lo conoce. */
+/**
+ * Meta por toolId (sesion.tool_id) o null si el registry no lo conoce. Matchea
+ * por MEMBRESÍA en `toolIds` (no por igualdad con `toolId`): un id versionado
+ * viejo — ej. `quiropraxia.spine.v1` — sigue resolviendo a su especialidad
+ * después de que el shape de escritura se bumpea (Workstream 6 · two-id).
+ */
 export function getEspecialidadMetaByToolId(toolId: string | null | undefined): EspecialidadMeta | null {
   if (!toolId) return null;
   for (const slug of ESPECIALIDAD_SLUGS) {
-    if (ESPECIALIDADES_META[slug].toolId === toolId) return ESPECIALIDADES_META[slug];
+    if (ESPECIALIDADES_META[slug].toolIds.includes(toolId)) return ESPECIALIDADES_META[slug];
   }
   return null;
 }

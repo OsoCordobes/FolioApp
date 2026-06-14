@@ -9,7 +9,7 @@ import {
   normalizeEspecialidadSlug,
 } from "../../lib/especialidades/meta";
 
-test("resumenSesion quiro: reproduce el formato histórico del reader", () => {
+test("resumenSesion quiro v1: reproduce el formato histórico del reader", () => {
   const meta = ESPECIALIDADES_META.quiropraxia;
   assert.equal(
     meta.resumenSesion({ v: 1, vertebras: [{ id: "C4", estado: "ajustada" }, { id: "L5", estado: "ajustada" }] }),
@@ -19,6 +19,32 @@ test("resumenSesion quiro: reproduce el formato histórico del reader", () => {
   // Turno cerrado sin sesion row / sin tool data → mismo copy que antes.
   assert.equal(meta.resumenSesion(null), "Sin notas vertebrales");
   assert.equal(meta.resumenSesion(undefined), "Sin notas vertebrales");
+});
+
+test("resumenSesion quiro v2: cuenta de vértebras con notas (Workstream 6)", () => {
+  const meta = ESPECIALIDADES_META.quiropraxia;
+  assert.equal(
+    meta.resumenSesion({
+      v: 2,
+      vista: "posterior",
+      vertebras: [
+        { id: "C4", tecnicaAjuste: "drop" },
+        { id: "L5", listado: "PLI" },
+        { id: "T7", tecnicaAjuste: "diversificada" },
+      ],
+    }),
+    "3 vértebras con notas",
+  );
+  assert.equal(
+    meta.resumenSesion({ v: 2, vista: "posterior", vertebras: [{ id: "C4", listado: "PRS" }] }),
+    "1 vértebra con notas",
+  );
+  // v2 sin vértebras con contenido → mismo copy genérico.
+  assert.equal(meta.resumenSesion({ v: 2, vista: "posterior" }), "Sin notas vertebrales");
+  assert.equal(
+    meta.resumenSesion({ v: 2, vista: "posterior", vertebras: [{ id: "C4" }, { id: "L5", tecnicaAjuste: "  " }] }),
+    "Sin notas vertebrales",
+  );
 });
 
 test("resumenSesion fallbacks: shapes desconocidos degradan al copy genérico", () => {
@@ -39,11 +65,18 @@ test("resumenSesion fallbacks: shapes desconocidos degradan al copy genérico", 
   );
 });
 
-test("slugs y toolIds: registry consistente con M50", () => {
+test("slugs y toolIds: registry consistente (Workstream 6 · write id v2)", () => {
   assert.deepEqual([...ESPECIALIDAD_SLUGS], ["quiropraxia", "cardiologia", "psicologia"]);
-  assert.equal(ESPECIALIDADES_META.quiropraxia.toolId, "quiropraxia.spine.v1");
+  // El id de ESCRITURA de quiropraxia es v2; v1 se sigue LEYENDO via toolIds.
+  assert.equal(ESPECIALIDADES_META.quiropraxia.toolId, "quiropraxia.ficha.v2");
+  assert.deepEqual(
+    [...ESPECIALIDADES_META.quiropraxia.toolIds],
+    ["quiropraxia.ficha.v2", "quiropraxia.spine.v1"],
+  );
   assert.equal(ESPECIALIDADES_META.cardiologia.toolId, "cardiologia.cv.v1");
+  assert.deepEqual([...ESPECIALIDADES_META.cardiologia.toolIds], ["cardiologia.cv.v1"]);
   assert.equal(ESPECIALIDADES_META.psicologia.toolId, "psicologia.escalas.v1");
+  assert.deepEqual([...ESPECIALIDADES_META.psicologia.toolIds], ["psicologia.escalas.v1"]);
 });
 
 test("getEspecialidadMeta: fallback a quiropraxia para slugs desconocidos", () => {
@@ -54,7 +87,10 @@ test("getEspecialidadMeta: fallback a quiropraxia para slugs desconocidos", () =
   assert.equal(normalizeEspecialidadSlug("psicologia"), "psicologia");
 });
 
-test("getEspecialidadMetaByToolId: resuelve por toolId, null para desconocidos", () => {
+test("getEspecialidadMetaByToolId: resuelve por MEMBRESÍA (v1 + v2), null para desconocidos", () => {
+  // Workstream 6 · two-id: el id v2 de escritura Y el v1 legacy resuelven a
+  // quiropraxia — las sesiones viejas no quedan huérfanas al bumpear el shape.
+  assert.equal(getEspecialidadMetaByToolId("quiropraxia.ficha.v2")?.slug, "quiropraxia");
   assert.equal(getEspecialidadMetaByToolId("quiropraxia.spine.v1")?.slug, "quiropraxia");
   assert.equal(getEspecialidadMetaByToolId("cardiologia.cv.v1")?.slug, "cardiologia");
   assert.equal(getEspecialidadMetaByToolId("psicologia.escalas.v1")?.slug, "psicologia");
@@ -75,7 +111,13 @@ test("getEspecialidadMetaByToolId: resuelve por toolId, null para desconocidos",
 // vacío con el tool_id equivocado (corrupción silenciosa de PHI).
 
 const PAYLOADS_VALIDOS = {
-  quiropraxia: { v: 1, vertebras: [{ id: "C4", estado: "ajustada" }] },
+  // Workstream 6 · quiropraxia ahora escribe v2 (el schema del registry es v2).
+  quiropraxia: {
+    v: 2,
+    vista: "posterior",
+    vertebras: [{ id: "C4", tecnicaAjuste: "drop", listado: "PLI" }],
+    palpacionEstatica: "Hipertonía paravertebral C4-C6.",
+  },
   cardiologia: {
     v: 1,
     panel: { taSistolica: 130, taDiastolica: 85, fc: 72, factores: { hta: true } },
@@ -103,13 +145,15 @@ test("cross-tool: cada payload RECHAZA contra los schemas de las otras dos espec
   }
 });
 
-test("cross-tool: el rechazo es por .strict(), no por casualidad — sin claves ajenas {v:1} sigue siendo válido donde corresponde", () => {
+test("cross-tool: el rechazo es por .strict(), no por casualidad — sin claves ajenas {v:1}/{v:2} pelado donde corresponde", () => {
   // Documenta el mecanismo: cardio/psico aceptan {v:1} pelado (campos de
   // contenido opcionales) — el peligro era exactamente que un payload ajeno
-  // degradara a eso. Quiro exige `vertebras`, así que ni {v:1} le parsea.
+  // degradara a eso. Quiro v2 exige `v: 2`, así que ni {v:1} ni {v:2} pelado
+  // de otra tool le parsean; {v:2} pelado SÍ (vértebras/secciones opcionales).
   assert.equal(ESPECIALIDADES_META.cardiologia.schema.safeParse({ v: 1 }).success, true);
   assert.equal(ESPECIALIDADES_META.psicologia.schema.safeParse({ v: 1 }).success, true);
   assert.equal(ESPECIALIDADES_META.quiropraxia.schema.safeParse({ v: 1 }).success, false);
+  assert.equal(ESPECIALIDADES_META.quiropraxia.schema.safeParse({ v: 2 }).success, true);
 });
 
 test("re-hidratación: lo que el writer persistió (schema.parse(...).data) re-parsea idéntico con .strict()", () => {
@@ -129,9 +173,14 @@ test("re-hidratación: lo que el writer persistió (schema.parse(...).data) re-p
 });
 
 test("schemas: las tres especialidades validan estricto (v literal, shape propio)", () => {
+  // Workstream 6 · quiro escribe v2: {v:2} pelado válido; {v:1} y sin `v` no.
+  assert.equal(
+    ESPECIALIDADES_META.quiropraxia.schema.safeParse({ v: 2, vista: "posterior" }).success,
+    true,
+  );
   assert.equal(
     ESPECIALIDADES_META.quiropraxia.schema.safeParse({ v: 1, vertebras: [] }).success,
-    true,
+    false,
   );
   assert.equal(
     ESPECIALIDADES_META.quiropraxia.schema.safeParse({ vertebras: [] }).success,

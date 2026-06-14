@@ -1,260 +1,333 @@
 "use client";
 
 /**
- * Folio · especialidades · quiropraxia · mapa vertebral (SVG, vista lateral).
+ * Folio · especialidades · quiropraxia · mapa vertebral v2 (Workstream 6).
  *
- * Port de `SpineMap` en folio/paciente.jsx (líneas 92-281). 24 vértebras
- * en lordosis cervical + cifosis dorsal + lordosis lumbar. Click marca
- * estado (normal/leve/moderado/severo/ajustada), hover muestra tooltip.
+ * Reescritura para la ficha v2: dos vistas (posterior — hoja de trabajo
+ * clásica, columna centrada — y lateral — la curva legacy SPINE_VERTEBRAS) con
+ * un toggle. Click sobre una vértebra abre un PANEL LATERAL fijo con dos
+ * textareas: "Técnica de ajuste" y "Listado", que escriben en
+ * data.vertebras[id]. Una vértebra con CUALQUIER contenido muestra un marcador
+ * único color acento (se retiró la clasificación de 5 estados de v1).
  *
- * Movido de components/paciente/spine-map.tsx en Fase B. El acceso al
- * contexto de la ficha se reemplazó por la prop `ultimoAjuste` (la deriva el
- * Tool quiro desde el historial) — mismo dato, sin acoplar el SVG al slot.
+ * Controlado: deriva todo de `data` (toolData v2) y emite cada cambio con
+ * `onChange(next)`. readOnly deshabilita la edición (snapshot / sin turno).
+ *
+ * El panel cierra con Escape y con click afuera. Se prefiere un panel lateral
+ * fijo al lado del SVG (no un popover anclado a la vértebra): más fácil de
+ * posicionar para ambas vistas.
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
+import * as I from "@/components/icons";
 import {
-  ESTADO_VERT,
+  POSTERIOR_VERTEBRAS,
   SPINE_VERTEBRAS,
-  fmtFecha,
 } from "@/lib/especialidades/quiropraxia/spine-config";
-import type { EstadoVertebra } from "@/lib/especialidades/quiropraxia/schema";
+import type {
+  QuiropraxiaToolDataV2,
+  VistaQuiro,
+} from "@/lib/especialidades/quiropraxia/schema";
 
 interface SpineMapProps {
-  states: Record<string, EstadoVertebra>;
-  setStates: (
-    updater: (prev: Record<string, EstadoVertebra>) => Record<string, EstadoVertebra>,
-  ) => void;
-  /** Fecha (YYYY-MM-DD) del último ajuste por vértebra — tooltip de hover. */
-  ultimoAjuste: Record<string, string>;
+  data: QuiropraxiaToolDataV2;
+  onChange: (next: QuiropraxiaToolDataV2) => void;
+  readOnly?: boolean;
 }
 
-export function SpineMap({ states, setStates, ultimoAjuste }: SpineMapProps) {
-  const [selected, setSelected] = useState<string | null>(null);
-  const [hover, setHover] = useState<string | null>(null);
+type VertNota = NonNullable<QuiropraxiaToolDataV2["vertebras"]>[number];
 
-  const setVert = (id: string, estado: EstadoVertebra) => {
-    setStates((prev) => {
-      const next = { ...prev };
-      if (estado === "normal") delete next[id];
-      else next[id] = estado;
-      return next;
-    });
+function notaDe(data: QuiropraxiaToolDataV2, id: string): VertNota | undefined {
+  return (data.vertebras ?? []).find((v) => v.id === id);
+}
+
+function tieneContenido(n: VertNota | undefined): boolean {
+  if (!n) return false;
+  return (
+    (n.tecnicaAjuste != null && n.tecnicaAjuste.trim() !== "") ||
+    (n.listado != null && n.listado.trim() !== "")
+  );
+}
+
+export function SpineMap({ data, onChange, readOnly }: SpineMapProps) {
+  const vista: VistaQuiro = data.vista ?? "posterior";
+  const [selected, setSelected] = useState<string | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+
+  // Escape + click afuera cierran el panel de la vértebra.
+  useEffect(() => {
+    if (selected == null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSelected(null);
+    };
+    const onClick = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (panelRef.current && !panelRef.current.contains(t)) {
+        // No cerrar al clickear una vértebra del SVG (eso lo maneja su handler).
+        const svgVert = (e.target as HTMLElement)?.closest?.("[data-vert]");
+        if (!svgVert) setSelected(null);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onClick);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onClick);
+    };
+  }, [selected]);
+
+  const setVista = (next: VistaQuiro) => {
+    if (readOnly) return;
     setSelected(null);
+    onChange({ ...data, vista: next });
   };
 
-  const currentEstado = (id: string): EstadoVertebra => states[id] ?? "normal";
-  const hoverData = hover ? SPINE_VERTEBRAS.find((v) => v.id === hover) ?? null : null;
+  const updateNota = (id: string, patch: Partial<Pick<VertNota, "tecnicaAjuste" | "listado">>) => {
+    if (readOnly) return;
+    const vertebras = [...(data.vertebras ?? [])];
+    const idx = vertebras.findIndex((v) => v.id === id);
+    const merged: VertNota = { id, ...(idx >= 0 ? vertebras[idx] : {}), ...patch };
+    // Si quedó sin contenido, sacarla del array (no acumular vértebras vacías).
+    if (!tieneContenido(merged)) {
+      if (idx >= 0) vertebras.splice(idx, 1);
+    } else if (idx >= 0) {
+      vertebras[idx] = merged;
+    } else {
+      vertebras.push(merged);
+    }
+    onChange({ ...data, vertebras });
+  };
+
+  const selectedNota = selected ? notaDe(data, selected) : undefined;
 
   return (
-    <div className="pc-spine-wrap">
-      <header className="pc-spine-head">
+    <div className="pc-quiro-spine">
+      <header className="pc-quiro-spine-head">
         <div>
-          <span className="fi-eyebrow">Mapa vertebral · vista lateral</span>
-          <p>Click sobre una vértebra para marcar estado. Hover para detalle.</p>
+          <span className="fi-eyebrow">Mapa vertebral</span>
+          <p className="pc-quiro-muted">
+            Click sobre una vértebra para cargar técnica de ajuste y listado.
+          </p>
         </div>
-        <div className="pc-spine-legend">
-          {(["normal", "leve", "moderado", "severo", "ajustada"] as EstadoVertebra[]).map((k) => (
-            <span key={k} className="pc-legend-item">
-              <span className="pc-legend-swatch" style={{ background: ESTADO_VERT[k].color }} />
-              <span>{ESTADO_VERT[k].lbl}</span>
-            </span>
+        <div className="pc-quiro-vista-toggle" role="group" aria-label="Cambiar vista">
+          {(["posterior", "lateral"] as VistaQuiro[]).map((v) => (
+            <button
+              key={v}
+              type="button"
+              className={"pc-quiro-pill " + (vista === v ? "is-active" : "")}
+              onClick={() => setVista(v)}
+              disabled={readOnly}
+              aria-pressed={vista === v}
+            >
+              {v === "posterior" ? "Posterior" : "Lateral"}
+            </button>
           ))}
         </div>
       </header>
 
-      <div className="pc-spine-body">
-        <div className="pc-spine-region-labels">
-          <span style={{ top: 90 }}>Cervical</span>
-          <span style={{ top: 300 }}>Dorsal</span>
-          <span style={{ top: 540 }}>Lumbar</span>
+      <div className="pc-quiro-spine-body">
+        <div className="pc-quiro-spine-svg-wrap">
+          {vista === "posterior" ? (
+            <PosteriorSvg data={data} selected={selected} onPick={setSelected} />
+          ) : (
+            <LateralSvg data={data} selected={selected} onPick={setSelected} />
+          )}
         </div>
 
-        <svg
-          className="pc-spine-svg"
-          viewBox="0 0 220 620"
-          preserveAspectRatio="xMidYMid meet"
-          role="img"
-          aria-label="Mapa vertebral lateral"
-        >
-          <defs>
-            <linearGradient id="pc-spine-fade" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="var(--line-soft)" stopOpacity="0" />
-              <stop offset="20%" stopColor="var(--line-soft)" stopOpacity="0.6" />
-              <stop offset="80%" stopColor="var(--line-soft)" stopOpacity="0.6" />
-              <stop offset="100%" stopColor="var(--line-soft)" stopOpacity="0" />
-            </linearGradient>
-          </defs>
-
-          <path
-            d="M 122 40 C 138 100, 134 130, 122 170 C 110 200, 86 290, 88 330 C 92 380, 130 470, 134 500 C 144 540, 146 580, 132 610"
-            fill="none"
-            stroke="url(#pc-spine-fade)"
-            strokeWidth="22"
-            strokeLinecap="round"
-          />
-
-          <ellipse
-            cx="120"
-            cy="30"
-            rx="34"
-            ry="28"
-            fill="none"
-            stroke="var(--line-soft)"
-            strokeWidth="1.5"
-            strokeDasharray="2 3"
-            opacity="0.6"
-          />
-
-          <path
-            d="M 120 610 L 132 614 L 140 622 L 124 626 L 112 622 Z"
-            fill="var(--line-soft)"
-            opacity="0.5"
-          />
-
-          {SPINE_VERTEBRAS.map((v) => {
-            const est = currentEstado(v.id);
-            const cfg = ESTADO_VERT[est];
-            const isHover = hover === v.id;
-            const isSelected = selected === v.id;
-            const filled = est !== "normal";
-            const { w, h } = v;
-
-            const path = `
-              M ${-w * 0.5} 0
-              Q ${-w * 0.32} ${-h * 0.28} ${-w * 0.08} ${-h * 0.42}
-              L ${w * 0.32} ${-h * 0.5}
-              Q ${w * 0.52} ${-h * 0.5} ${w * 0.52} ${-h * 0.3}
-              L ${w * 0.52} ${h * 0.3}
-              Q ${w * 0.52} ${h * 0.5} ${w * 0.32} ${h * 0.5}
-              L ${-w * 0.08} ${h * 0.42}
-              Q ${-w * 0.32} ${h * 0.28} ${-w * 0.5} 0
-              Z`;
-
-            const fill = filled ? cfg.color : "var(--surface)";
-            const stroke = isSelected ? "var(--ink)" : filled ? cfg.ring : "var(--ink-4)";
-            const sw = isSelected ? 1.6 : 0.9;
-
-            return (
-              <g
-                key={v.id}
-                transform={`translate(${v.x} ${v.y}) rotate(${v.tilt})`}
-                onClick={() => setSelected(isSelected ? null : v.id)}
-                onMouseEnter={() => setHover(v.id)}
-                onMouseLeave={() => setHover((h2) => (h2 === v.id ? null : h2))}
-                style={{ cursor: "default" }}
+        {selected ? (
+          <aside className="pc-quiro-vert-panel" ref={panelRef}>
+            <div className="pc-quiro-vert-panel-head">
+              <b>{labelDe(selected, vista)}</b>
+              <button
+                type="button"
+                className="pc-quiro-icon-btn"
+                onClick={() => setSelected(null)}
+                aria-label="Cerrar"
               >
-                <ellipse
-                  cx={w * 0.18}
-                  cy={h * 0.55}
-                  rx={w * 0.32}
-                  ry={h * 0.08}
-                  fill="rgba(27,24,18,.06)"
-                />
-
-                <path
-                  d={path}
-                  fill={fill}
-                  stroke={stroke}
-                  strokeWidth={sw}
-                  strokeLinejoin="round"
-                  style={{ transition: "fill 240ms var(--ease-in), stroke 120ms var(--ease-in)" }}
-                />
-
-                <circle
-                  cx={-w * 0.02}
-                  cy={0}
-                  r={Math.min(w * 0.07, h * 0.22, 2.2)}
-                  fill={filled ? "rgba(0,0,0,.22)" : "var(--line)"}
-                />
-
-                {filled ? (
-                  <path
-                    d={`M ${w * 0.05} ${-h * 0.36} Q ${w * 0.3} ${-h * 0.5} ${w * 0.45} ${-h * 0.3}`}
-                    fill="none"
-                    stroke="rgba(255,255,255,.32)"
-                    strokeWidth="0.9"
-                    strokeLinecap="round"
-                  />
-                ) : null}
-
-                {isHover || isSelected ? (
-                  <path
-                    d={path}
-                    fill="none"
-                    stroke={cfg.ring}
-                    strokeWidth="1"
-                    strokeDasharray="2 2"
-                    opacity="0.55"
-                    transform="scale(1.18)"
-                  />
-                ) : null}
-              </g>
-            );
-          })}
-        </svg>
-
-        {hoverData && !selected
-          ? (() => {
-              const est = currentEstado(hoverData.id);
-              const cfg = ESTADO_VERT[est];
-              const ultimo = ultimoAjuste[hoverData.id];
-              return (
-                <div
-                  className="pc-spine-tip"
-                  style={{ left: hoverData.x + 30, top: hoverData.y - 24 }}
-                >
-                  <b>{hoverData.id}</b>
-                  <span style={{ color: cfg.color }}>{cfg.lbl}</span>
-                  {ultimo ? (
-                    <span className="muted">último ajuste {fmtFecha(ultimo)}</span>
-                  ) : null}
-                </div>
-              );
-            })()
-          : null}
-
-        {selected
-          ? (() => {
-              const v = SPINE_VERTEBRAS.find((x) => x.id === selected);
-              if (!v) return null;
-              return (
-                <div
-                  className="pc-spine-popover"
-                  style={{ left: v.x + 30, top: Math.min(v.y - 40, 480) }}
-                >
-                  <div className="pc-spine-popover-head">
-                    <b>{selected}</b>
-                    <button
-                      type="button"
-                      onClick={() => setSelected(null)}
-                      className="pc-spine-popover-close"
-                      aria-label="Cerrar"
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                        <path d="M18 6 6 18M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                  <div className="pc-spine-popover-opts">
-                    {(Object.entries(ESTADO_VERT) as [EstadoVertebra, (typeof ESTADO_VERT)[EstadoVertebra]][]).map(([k, c]) => (
-                      <button
-                        key={k}
-                        type="button"
-                        className={"pc-spine-opt " + (currentEstado(selected) === k ? "is-active" : "")}
-                        onClick={() => setVert(selected, k)}
-                      >
-                        <span className="pc-spine-opt-dot" style={{ background: c.color }} />
-                        <span>{c.lbl}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              );
-            })()
-          : null}
+                <I.X size={14} />
+              </button>
+            </div>
+            <label className="fi-wi-field">
+              <span>Técnica de ajuste</span>
+              <textarea
+                className="pc-soap-textarea"
+                rows={3}
+                maxLength={500}
+                value={selectedNota?.tecnicaAjuste ?? ""}
+                onChange={(e) => updateNota(selected, { tecnicaAjuste: e.target.value })}
+                readOnly={readOnly}
+                placeholder="Ej. diversificada, drop, thompson…"
+              />
+            </label>
+            <label className="fi-wi-field">
+              <span>Listado</span>
+              <textarea
+                className="pc-soap-textarea"
+                rows={3}
+                maxLength={500}
+                value={selectedNota?.listado ?? ""}
+                onChange={(e) => updateNota(selected, { listado: e.target.value })}
+                readOnly={readOnly}
+                placeholder="Ej. PLI, PRS, ASRP…"
+              />
+            </label>
+          </aside>
+        ) : null}
       </div>
     </div>
+  );
+}
+
+// ─── Etiqueta humana de una vértebra según la vista ──────────────────────────
+
+function labelDe(id: string, vista: VistaQuiro): string {
+  if (vista === "posterior") {
+    return POSTERIOR_VERTEBRAS.find((v) => v.id === id)?.label ?? id;
+  }
+  return id;
+}
+
+// ─── Vista posterior: columna centrada (hoja de trabajo) ─────────────────────
+
+function PosteriorSvg({
+  data,
+  selected,
+  onPick,
+}: {
+  data: QuiropraxiaToolDataV2;
+  selected: string | null;
+  onPick: (id: string) => void;
+}) {
+  return (
+    <svg
+      className="pc-quiro-svg"
+      viewBox="0 0 220 620"
+      preserveAspectRatio="xMidYMid meet"
+      role="img"
+      aria-label="Mapa vertebral posterior"
+    >
+      {/* Línea media de la columna. */}
+      <line
+        x1="110"
+        y1="30"
+        x2="110"
+        y2="610"
+        stroke="var(--line-soft)"
+        strokeWidth="2"
+      />
+      {POSTERIOR_VERTEBRAS.map((v) => {
+        const nota = notaDe(data, v.id);
+        const filled = tieneContenido(nota);
+        const isSelected = selected === v.id;
+        return (
+          <g
+            key={v.id}
+            data-vert={v.id}
+            transform={`translate(${v.x} ${v.y})`}
+            onClick={() => onPick(v.id)}
+            style={{ cursor: "pointer" }}
+          >
+            <rect
+              x={-v.w / 2}
+              y={-v.h / 2}
+              width={v.w}
+              height={v.h}
+              rx="3"
+              fill={filled ? "var(--accent)" : "var(--surface)"}
+              stroke={isSelected ? "var(--ink)" : filled ? "var(--accent)" : "var(--ink-4)"}
+              strokeWidth={isSelected ? 1.8 : 1}
+              style={{ transition: "fill 200ms var(--ease-in)" }}
+            />
+            <text
+              x={-v.w / 2 - 6}
+              y={4}
+              textAnchor="end"
+              fontSize="9"
+              fill="var(--ink-3)"
+            >
+              {v.label}
+            </text>
+            {filled ? (
+              <circle cx={0} cy={0} r="2.4" fill="var(--surface)" />
+            ) : null}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+// ─── Vista lateral: la curva legacy SPINE_VERTEBRAS ──────────────────────────
+
+function LateralSvg({
+  data,
+  selected,
+  onPick,
+}: {
+  data: QuiropraxiaToolDataV2;
+  selected: string | null;
+  onPick: (id: string) => void;
+}) {
+  return (
+    <svg
+      className="pc-quiro-svg"
+      viewBox="0 0 220 620"
+      preserveAspectRatio="xMidYMid meet"
+      role="img"
+      aria-label="Mapa vertebral lateral"
+    >
+      <defs>
+        <linearGradient id="pc-quiro-spine-fade" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="var(--line-soft)" stopOpacity="0" />
+          <stop offset="20%" stopColor="var(--line-soft)" stopOpacity="0.6" />
+          <stop offset="80%" stopColor="var(--line-soft)" stopOpacity="0.6" />
+          <stop offset="100%" stopColor="var(--line-soft)" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+
+      <path
+        d="M 122 40 C 138 100, 134 130, 122 170 C 110 200, 86 290, 88 330 C 92 380, 130 470, 134 500 C 144 540, 146 580, 132 610"
+        fill="none"
+        stroke="url(#pc-quiro-spine-fade)"
+        strokeWidth="22"
+        strokeLinecap="round"
+      />
+
+      {SPINE_VERTEBRAS.map((v) => {
+        const nota = notaDe(data, v.id);
+        const filled = tieneContenido(nota);
+        const isSelected = selected === v.id;
+        const { w, h } = v;
+        const path = `
+          M ${-w * 0.5} 0
+          Q ${-w * 0.32} ${-h * 0.28} ${-w * 0.08} ${-h * 0.42}
+          L ${w * 0.32} ${-h * 0.5}
+          Q ${w * 0.52} ${-h * 0.5} ${w * 0.52} ${-h * 0.3}
+          L ${w * 0.52} ${h * 0.3}
+          Q ${w * 0.52} ${h * 0.5} ${w * 0.32} ${h * 0.5}
+          L ${-w * 0.08} ${h * 0.42}
+          Q ${-w * 0.32} ${h * 0.28} ${-w * 0.5} 0
+          Z`;
+        return (
+          <g
+            key={v.id}
+            data-vert={v.id}
+            transform={`translate(${v.x} ${v.y}) rotate(${v.tilt})`}
+            onClick={() => onPick(v.id)}
+            style={{ cursor: "pointer" }}
+          >
+            <path
+              d={path}
+              fill={filled ? "var(--accent)" : "var(--surface)"}
+              stroke={isSelected ? "var(--ink)" : filled ? "var(--accent)" : "var(--ink-4)"}
+              strokeWidth={isSelected ? 1.6 : 0.9}
+              strokeLinejoin="round"
+              style={{ transition: "fill 200ms var(--ease-in)" }}
+            />
+          </g>
+        );
+      })}
+    </svg>
   );
 }

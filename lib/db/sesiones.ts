@@ -28,7 +28,12 @@ import {
   type EspecialidadMeta,
   type EspecialidadSlug,
 } from "@/lib/especialidades/meta";
-import type { QuiropraxiaToolData } from "@/lib/especialidades/quiropraxia/schema";
+import {
+  mirrorVertebrasV2,
+  quiropraxiaToolDataSchema,
+  type QuiropraxiaToolData,
+  type QuiropraxiaToolDataV2,
+} from "@/lib/especialidades/quiropraxia/schema";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import { err, mapSupabaseError, ok, type Result } from "./errors";
@@ -258,16 +263,25 @@ export async function upsertSesion(input: UpsertSesionInput): Promise<Result<{ i
   // ── Tool de especialidad (M50/M55) ────────────────────────────────────
   let toolData: unknown = d.toolData ?? null;
   let toolMeta: EspecialidadMeta | null = null;
+  // Workstream 6 · path legacy raw-vertebras: persiste un payload v1 con el
+  // tool_id de LECTURA v1 (no el v2 de escritura del registry) — esos callers
+  // mandan el shape viejo `{id, estado}` y nunca pasan por el Tool v2.
+  let legacyV1: QuiropraxiaToolData | null = null;
   // F-PHI: si el guardado viene SIN toolData pero la sesión existente tiene
   // datos de una herramienta que la ficha NO pudo re-hidratar (tool_id de otra
   // especialidad / fila legacy), el UPDATE no debe tocar las columnas tool.
   let preservarToolColumns = false;
 
   if (toolData == null && d.vertebras) {
-    // Callers legacy mandan solo `vertebras` → toolData quiro implícito (sin
-    // lookup de especialidad: vertebras ES la herramienta de quiropraxia).
-    toolMeta = ESPECIALIDADES_META.quiropraxia;
-    toolData = { v: 1, vertebras: d.vertebras } satisfies QuiropraxiaToolData;
+    // Callers legacy mandan solo `vertebras` → toolData quiro v1 implícito (sin
+    // lookup de especialidad: vertebras ES la herramienta de quiropraxia). Se
+    // valida y estampa como v1 (quiropraxia.spine.v1), no como la ficha v2.
+    const parsedV1 = quiropraxiaToolDataSchema.safeParse({ v: 1, vertebras: d.vertebras });
+    if (!parsedV1.success) {
+      return err("validation", "toolData inválido para Quiropraxia.", parsedV1.error.message);
+    }
+    legacyV1 = parsedV1.data;
+    toolData = parsedV1.data;
   } else if (toolData != null) {
     // M55 · derivación SERVER-SIDE del toolId: especialidad efectiva del
     // PROFESIONAL del turno (especialidadEfectivaDelTurno). Nunca se confía en
@@ -299,10 +313,17 @@ export async function upsertSesion(input: UpsertSesionInput): Promise<Result<{ i
   }
 
   // Espejo legacy de quiropraxia (vista M14 + índice gin; se retira en Fase F).
+  // SIEMPRE un array (la columna es NOT NULL DEFAULT [] con CHECK
+  // jsonb_typeof = 'array') — nunca undefined.
   let vertebrasEspejo: Array<{ id: string; estado: string }> = d.vertebras ?? [];
   let toolId: string | null = null;
 
-  if (toolMeta) {
+  if (legacyV1) {
+    // Path legacy raw-vertebras: payload v1 ya validado → estampa el id v1 y
+    // espeja el shape v1 tal cual.
+    toolId = "quiropraxia.spine.v1";
+    vertebrasEspejo = legacyV1.vertebras;
+  } else if (toolMeta) {
     const parsedTool = toolMeta.schema.safeParse(toolData);
     if (!parsedTool.success) {
       return err(
@@ -314,7 +335,10 @@ export async function upsertSesion(input: UpsertSesionInput): Promise<Result<{ i
     toolData = parsedTool.data;
     toolId = toolMeta.toolId;
     if (toolMeta.slug === "quiropraxia") {
-      vertebrasEspejo = (toolData as QuiropraxiaToolData).vertebras;
+      // Workstream 6 · el toolData quiro del registry es v2: el espejo
+      // vertebras_json se deriva de las vértebras con contenido
+      // (mirrorVertebrasV2), no del shape v1. Aislado del resumen humano.
+      vertebrasEspejo = mirrorVertebrasV2(toolData as QuiropraxiaToolDataV2);
     }
   }
 

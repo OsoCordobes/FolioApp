@@ -17,6 +17,11 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { getActiveContext } from "@/lib/db/active-context";
+import {
+  buildDocumentoStoragePath,
+  createDocumentoClinico,
+  refreshSignedUrl,
+} from "@/lib/db/documentos";
 import { savePacienteIntakeAvanzado } from "@/lib/db/paciente-intake";
 import { createPaciente } from "@/lib/db/pacientes";
 import { savePlanTratamiento } from "@/lib/db/plan-tratamiento";
@@ -318,4 +323,137 @@ export async function savePlanTratamientoAction(
   revalidatePath("/pacientes/[id]");
   revalidatePath(`/pacientes/${parsed.data.pacienteId}`);
   return ok({ id: result.data.id });
+}
+
+// ─── Radiografías de la Tool quiropraxia (Workstream 6) ──────────────────────
+
+const RADIO_BUCKET = "documentos-clinicos";
+const RADIO_MAX_BYTES = 50 * 1024 * 1024; // espeja el CHECK documento_tamanio_limite (M08)
+// image/* | pdf | dicom. El set fino lo re-valida createDocumentoClinico contra
+// ALLOWED_MIME; acá hacemos un primer filtro barato antes de subir bytes.
+function radioMimeOk(mime: string): boolean {
+  return mime.startsWith("image/") || mime === "application/pdf" || mime === "application/dicom";
+}
+
+/**
+ * Adjunta una radiografía a la sesión del turno en curso (documento_clinico
+ * tipo RADIOGRAFIA, M08). Sube los bytes server-side al bucket privado y
+ * registra la fila con el storage_path canónico.
+ *
+ * Reglas:
+ *   - turno ∈ org activa Y turno.paciente_id == pacienteId (mismo guard IDOR
+ *     que upsertSesion — no se confía en IDs del cliente).
+ *   - debe existir una sesion para el turno (la radiografía cuelga de ella):
+ *     sino se pide "Guardá la sesión antes de adjuntar radiografías." — así el
+ *     documento siempre queda atado a una visita.
+ *   - mime image/* | pdf | dicom y tamaño <= 50 MB.
+ *
+ * PHI: el nombre/descripción no se loguean; el blob vive en el bucket privado y
+ * la fila la lee la ficha con signed URLs de vida corta.
+ */
+export async function uploadRadiografiaAction(
+  formData: FormData,
+): Promise<Result<{ documentoId: string }>> {
+  const file = formData.get("file");
+  const pacienteId = String(formData.get("pacienteId") ?? "");
+  const turnoId = String(formData.get("turnoId") ?? "");
+  const descripcionRaw = formData.get("descripcion");
+  const descripcion =
+    typeof descripcionRaw === "string" && descripcionRaw.trim() !== ""
+      ? descripcionRaw.trim().slice(0, 2000)
+      : undefined;
+
+  if (!(file instanceof Blob) || file.size === 0) {
+    return err("validation", "Adjuntá un archivo válido.");
+  }
+  if (!z.string().uuid().safeParse(pacienteId).success || !z.string().uuid().safeParse(turnoId).success) {
+    return err("validation", "Datos de la radiografía inválidos.");
+  }
+  if (file.size > RADIO_MAX_BYTES) {
+    return err("validation", "El archivo supera el límite de 50 MB.");
+  }
+  const mimeType = file.type || "application/octet-stream";
+  if (!radioMimeOk(mimeType)) {
+    return err("validation", `Tipo de archivo no permitido: ${mimeType}.`);
+  }
+  const filename = file instanceof File && file.name ? file.name : "radiografia.bin";
+
+  const ctx = await getActiveContext();
+  if (!ctx.ok) return ctx;
+  const organizationId = ctx.data.session.organizationId;
+
+  const supabase = await createSupabaseServerClient();
+
+  // F-AUTH (IDOR): turno ∈ org activa Y turno↔paciente. Mismo SELECT-guard que
+  // upsertSesion/checkTurnoOwnership; resolvemos también la sesion del turno.
+  const { data: turnoRow, error: turnoErr } = await supabase
+    .from("turno")
+    .select("organization_id, paciente_id")
+    .eq("id", turnoId)
+    .maybeSingle();
+  if (turnoErr) return err("db_error", "No pudimos validar el turno.", turnoErr.message);
+  const turno = turnoRow as { organization_id: string; paciente_id: string } | null;
+  if (!turno || turno.organization_id !== organizationId) {
+    return err("forbidden", "Ese turno no pertenece a tu organización.");
+  }
+  if (turno.paciente_id !== pacienteId) {
+    return err("forbidden", "El turno no corresponde a ese paciente.");
+  }
+
+  // La radiografía cuelga de la sesion del turno: si todavía no hay sesión, se
+  // pide guardarla primero (el documento siempre queda atado a una visita).
+  const { data: sesionRow } = await supabase
+    .from("sesion")
+    .select("id")
+    .eq("turno_id", turnoId)
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+  const sesionId = (sesionRow as { id: string } | null)?.id ?? null;
+  if (!sesionId) {
+    return err("validation", "Guardá la sesión antes de adjuntar radiografías.");
+  }
+
+  // Subida server-side de los bytes al bucket privado. El storage_path canónico
+  // (bucket/{org}/{paciente}/{uuid}.{ext}) lo arma buildDocumentoStoragePath;
+  // el upload va SIN el prefijo del bucket.
+  const storagePath = buildDocumentoStoragePath({ organizationId, pacienteId, filename });
+  const pathInBucket = storagePath.replace(/^documentos-clinicos\//, "");
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const { error: uploadErr } = await supabase.storage
+    .from(RADIO_BUCKET)
+    .upload(pathInBucket, bytes, { contentType: mimeType });
+  if (uploadErr) {
+    return err("db_error", "No pudimos subir el archivo.", uploadErr.message);
+  }
+
+  const created = await createDocumentoClinico({
+    pacienteId,
+    sesionId,
+    tipo: "RADIOGRAFIA",
+    storagePath,
+    mimeType,
+    tamanioBytes: file.size,
+    descripcion,
+  });
+  if (!created.ok) return created;
+
+  // La vuelta: la galería de la Tool quiro trae la radiografía nueva.
+  revalidatePath(`/pacientes/${pacienteId}`);
+  return ok({ documentoId: created.data.id });
+}
+
+/**
+ * Refresca el signed URL de una radiografía (los URLs de la galería expiran a
+ * los 5 min). Wrapper fino sobre refreshSignedUrl — la tenancy la cubre el
+ * propio reader (org-scoped).
+ */
+export async function refreshRadiografiaUrlAction(
+  documentoId: string,
+): Promise<Result<{ signedUrl: string }>> {
+  if (!z.string().uuid().safeParse(documentoId).success) {
+    return err("validation", "ID inválido.");
+  }
+  const result = await refreshSignedUrl(documentoId);
+  if (!result.ok) return result;
+  return ok({ signedUrl: result.data });
 }

@@ -38,6 +38,7 @@ import {
 import type { ToolHistorialEntry } from "@/lib/especialidades/types";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
+import { listDocumentosPaciente } from "./documentos";
 import { err, ok, type Result } from "./errors";
 
 // ─── Shapes esperados por el componente (prototipo) ───────────────────────
@@ -114,6 +115,30 @@ export interface TurnoActivoFicha {
    * y bloquearía también el guardado del SOAP.
    */
   toolDraft: unknown;
+  /**
+   * Workstream 6 · ¿existe YA una fila sesion para este turno? (cualquier
+   * sesion.turno_id == turnoEnCurso.id). La Tool quiro lo usa para dos cosas:
+   *   1. habilitar el adjunto de radiografías (necesitan una sesión donde
+   *      colgar el documento_clinico).
+   *   2. decidir el carry-forward: solo se siembra el borrador desde la última
+   *      visita cuando el turno es GENUINAMENTE fresco (sin sesión todavía).
+   */
+  tieneSesionGuardada: boolean;
+}
+
+/**
+ * Workstream 6 · una radiografía del paciente para la galería de la Tool quiro.
+ * `signedUrl` es de vida corta (5 min, lib/db/documentos.ts) — se refresca
+ * client-side al expirar. Solo se trae para fichas con especialidad activa
+ * quiropraxia (otras orgs reciben []).
+ */
+export interface RadiografiaFicha {
+  id: string;
+  /** YYYY-MM-DD: fecha_estudio ?? created_at.slice(0,10). */
+  fecha: string;
+  descripcion: string | null;
+  signedUrl: string;
+  sesionId: string | null;
 }
 
 export interface PlanData {
@@ -144,6 +169,14 @@ export interface PlanData {
    * turno (sesion.turno_id UNIQUE, M10) vía saveSesionFichaAction.
    */
   turnoActivo: TurnoActivoFicha | null;
+  /**
+   * Workstream 6 · galería de radiografías del paciente (documento_clinico tipo
+   * RADIOGRAFIA) para la Tool quiro, con signed URLs de vida corta. Solo se
+   * llena cuando la especialidad ACTIVA es quiropraxia (otras orgs: []) — la
+   * Tool de cardio/psico la ignora. Server-side: los URLs firmados son seguros
+   * de mandar al cliente (expiran en 5 min).
+   */
+  radiografias: RadiografiaFicha[];
   /**
    * M58 · valores CRUDOS del plan persistido (plan_tratamiento, 1:1 por
    * paciente) para prefillear el modal de edición. Todos null cuando no hay
@@ -265,20 +298,23 @@ export async function getPacienteFicha(
       .eq("id", pacienteId)
       .eq("organization_id", organizationId)
       .maybeSingle(),
+    // Workstream 6 · .limit(50) (antes 10): más historial de visitas para el
+    // "Control de visitas" quiro. Costo: hasta 50 sesiones descifran SOAP +
+    // tool_data por ficha (vs 10) — aceptable para una sola ficha por request.
     supabase
       .from("sesion")
       .select("id, turno_id, paciente_id, soap_s_cifrado, soap_o_cifrado, soap_a_cifrado, soap_p_cifrado, vertebras_json, tool_id, tool_data_cifrado, notas_cifrado, created_at")
       .eq("paciente_id", pacienteId)
       .eq("organization_id", organizationId)
       .order("created_at", { ascending: false })
-      .limit(10),
+      .limit(50),
     supabase
       .from("turno_extendido")
       .select("id, inicio, duracion_min, duracion_real_min, estado, servicio_nombre, profesional_id, atendiendo_desde")
       .eq("paciente_id", pacienteId)
       .eq("organization_id", organizationId)
       .order("inicio", { ascending: false })
-      .limit(10),
+      .limit(50),
     // M58 · plan de tratamiento persistido (1:1 por paciente). maybeSingle:
     // la mayoría de los pacientes no tiene fila todavía → el card cae a los
     // valores derivados de los turnos.
@@ -447,6 +483,10 @@ export async function getPacienteFicha(
         estado: turnoEnCurso.estado as TurnoActivoFicha["estado"],
         especialidad: especialidadActiva,
         atendiendoDesde: turnoEnCurso.atendiendo_desde ?? null,
+        // Workstream 6 · ¿ya hay una sesion para este turno? (sesiones ya está
+        // en memoria — sin query extra). Habilita radiografías + gatea el
+        // carry-forward de la Tool quiro.
+        tieneSesionGuardada: sesiones.some((s) => s.turno_id === turnoEnCurso.id),
         toolDraft:
           // M55 · re-hidratar SOLO si el tool_id persistido es el de la
           // especialidad activa: un draft cross-tool re-enviado al writer
@@ -462,6 +502,24 @@ export async function getPacienteFicha(
             : null,
       }
     : null;
+
+  // Workstream 6 · radiografías para la galería de la Tool quiro. Solo se
+  // consultan cuando la especialidad ACTIVA es quiropraxia: una org cardio/psico
+  // no paga la query extra (la Tool igual ignora el campo). Un error de lectura
+  // degrada a [] (la galería se muestra vacía, la ficha no se rompe).
+  let radiografias: RadiografiaFicha[] = [];
+  if (especialidadActiva === "quiropraxia") {
+    const radRes = await listDocumentosPaciente({ pacienteId, tipo: "RADIOGRAFIA" });
+    if (radRes.ok) {
+      radiografias = radRes.data.map((doc) => ({
+        id: doc.id,
+        fecha: (doc.fecha_estudio ?? doc.created_at).slice(0, 10),
+        descripcion: doc.descripcion,
+        signedUrl: doc.signedUrl,
+        sesionId: doc.sesion_id,
+      }));
+    }
+  }
 
   // M58 · valores derivados (de los turnos) usados como fallback cuando el
   // plan persistido no llena un campo.
@@ -486,6 +544,7 @@ export async function getPacienteFicha(
     sesiones: historial,
     toolHistorial,
     turnoActivo,
+    radiografias,
     // Valores CRUDOS para prefillear el modal (null cuando no hay fila).
     planEditable: {
       sesionesObjetivo: planRow?.sesiones_objetivo ?? null,
