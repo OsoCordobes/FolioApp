@@ -64,6 +64,7 @@ export default async function PacientePage({ params }: PageProps) {
       plan={data.data.plan}
       cumple={data.data.cumple}
       especialidad={especialidad}
+      intakeAvanzado={data.data.intakeAvanzado}
     />
   );
 }

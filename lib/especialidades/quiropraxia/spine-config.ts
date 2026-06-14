@@ -53,6 +53,64 @@ export const SPINE_VERTEBRAS: SpineVertebra[] = [
   { id: "L5", region: "lumbar",  x: 134, y: 588, w: 62, h: 19, tilt:  5 },
 ];
 
+// ─── Vista posterior (Workstream 6) ──────────────────────────────────────────
+//
+// Columna vertical centrada y simétrica (NO la curva lateral): la hoja de
+// trabajo quiropráctica clásica con las etiquetas al costado de una columna de
+// celdas. 27 entradas top→bottom: C0 (occipucio), C1..C7, T1..T12, L1..L5,
+// S (sacro), P (cóccix/pelvis). Mismo tipo SpineVertebra que la lateral; `tilt`
+// queda en 0 (columna recta) y `x` es constante (centrada).
+
+export interface PosteriorVertebra {
+  id: string;
+  region: "cervical" | "dorsal" | "lumbar" | "sacro";
+  /** Etiqueta humana al costado (ej. "Occipucio", "Sacro", "Cóccix"). */
+  label: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+// Generación determinística de la columna centrada. viewBox 220×620 (igual que
+// la lateral) para que ambos SVG compartan dimensiones y el toggle no salte.
+const POSTERIOR_X = 110;          // centro horizontal del viewBox 220
+const POSTERIOR_TOP = 40;         // y de la primera celda (C0)
+const POSTERIOR_STEP = 21;        // separación vertical entre celdas
+const POSTERIOR_W = 46;           // ancho de cada celda
+const POSTERIOR_H = 14;           // alto de cada celda
+
+const POSTERIOR_DEFS: Array<{ id: string; region: PosteriorVertebra["region"]; label: string }> = [
+  { id: "C0", region: "cervical", label: "Occipucio" },
+  ...Array.from({ length: 7 }, (_, i) => ({
+    id: `C${i + 1}`,
+    region: "cervical" as const,
+    label: `C${i + 1}`,
+  })),
+  ...Array.from({ length: 12 }, (_, i) => ({
+    id: `T${i + 1}`,
+    region: "dorsal" as const,
+    label: `T${i + 1}`,
+  })),
+  ...Array.from({ length: 5 }, (_, i) => ({
+    id: `L${i + 1}`,
+    region: "lumbar" as const,
+    label: `L${i + 1}`,
+  })),
+  { id: "S", region: "sacro", label: "Sacro" },
+  { id: "P", region: "sacro", label: "Cóccix" },
+];
+
+export const POSTERIOR_VERTEBRAS: PosteriorVertebra[] = POSTERIOR_DEFS.map((d, i) => ({
+  id: d.id,
+  region: d.region,
+  label: d.label,
+  x: POSTERIOR_X,
+  y: POSTERIOR_TOP + i * POSTERIOR_STEP,
+  w: POSTERIOR_W,
+  h: POSTERIOR_H,
+}));
+
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
 export function fmtFecha(iso: string): string {

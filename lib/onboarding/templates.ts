@@ -19,6 +19,7 @@ import type { EspecialidadSlug } from "@/lib/especialidades/meta";
 
 export type RubroId =
   | "quiropraxia"
+  | "cardiologia"
   | "kinesiologia"
   | "psicologia"
   | "nutricion"
@@ -80,6 +81,18 @@ const TEMPLATES: Record<RubroId, RubroTemplate> = {
     ],
     bioTemplate: (ciudad) =>
       `Quiropráctica y bienestar postural en ${ciudad}. Atención personalizada para mejorar tu calidad de vida.`,
+    horarios: STANDARD_AM_PM,
+  },
+  "cardiologia": {
+    label: "Cardiología",
+    servicios: [
+      { nombre: "Consulta cardiológica inicial", dur: 40, precioCents: 1800000, tipoCanonico: "CONSULTA_INICIAL" },
+      { nombre: "Control cardiológico", dur: 30, precioCents: 1200000, tipoCanonico: "SEGUIMIENTO_ESTANDAR" },
+      { nombre: "Electrocardiograma", dur: 20, precioCents: 1000000, tipoCanonico: "SERVICIO_ESPECIALIZADO" },
+      { nombre: "Ergometría", dur: 45, precioCents: 2500000, tipoCanonico: "SERVICIO_ESPECIALIZADO" },
+    ],
+    bioTemplate: (ciudad) =>
+      `Cardiología clínica en ${ciudad}. Prevención, diagnóstico y seguimiento cardiovascular.`,
     horarios: STANDARD_AM_PM,
   },
   "kinesiologia": {
@@ -210,14 +223,10 @@ export const TIPOS_CANONICOS_VALIDOS = [
 ] as const;
 
 const ESPECIALIDAD_SERVICIOS: Record<EspecialidadSlug, ServicioTemplate[]> = {
-  // Quiropraxia mantiene el set histórico del rubro homónimo.
+  // Quiropraxia y cardiología comparten el set del rubro homónimo (M59:
+  // especialidad y rubro quedan 1:1 con el selector único del onboarding).
   quiropraxia: TEMPLATES.quiropraxia.servicios,
-  cardiologia: [
-    { nombre: "Consulta cardiológica inicial", dur: 40, precioCents: 1800000, tipoCanonico: "CONSULTA_INICIAL" },
-    { nombre: "Control cardiológico", dur: 30, precioCents: 1200000, tipoCanonico: "SEGUIMIENTO_ESTANDAR" },
-    { nombre: "Electrocardiograma", dur: 20, precioCents: 1000000, tipoCanonico: "SERVICIO_ESPECIALIZADO" },
-    { nombre: "Ergometría", dur: 45, precioCents: 2500000, tipoCanonico: "SERVICIO_ESPECIALIZADO" },
-  ],
+  cardiologia: TEMPLATES.cardiologia.servicios,
   psicologia: [
     { nombre: "Primera entrevista", dur: 50, precioCents: 1800000, tipoCanonico: "CONSULTA_INICIAL" },
     { nombre: "Sesión de psicoterapia", dur: 50, precioCents: 1500000, tipoCanonico: "SEGUIMIENTO_ESTANDAR" },

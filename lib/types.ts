@@ -71,6 +71,13 @@ export interface Turno {
    * o con filtro de profesional activo queda null y la card no cambia.
    */
   profesionalNombre?: string | null;
+  /**
+   * M56 · motivo/aclaraciones del booking público (turno.nota_reserva_cifrado),
+   * ya DESENCRIPTADO server-side. Es PHI: el fetcher lo setea SOLO para roles
+   * con acceso clínico (canReadClinical); para el resto queda null/undefined y
+   * el cliente nunca ve el texto ni el ciphertext.
+   */
+  notaReserva?: string | null;
 }
 
 /** Turno de la semana / mes (compacto, para grilla de calendario) */
@@ -87,6 +94,12 @@ export interface TurnoSemana {
   profesionalId?: string | null;
   /** Display name — solo seteado en vista "Todos" con >1 colegiado (ver Turno). */
   profesionalNombre?: string | null;
+  /**
+   * M56 · motivo del booking público (turno.nota_reserva_cifrado) ya
+   * DESENCRIPTADO server-side. PHI: el fetcher lo setea SOLO para roles con
+   * acceso clínico; para el resto queda null y el cliente nunca lo recibe.
+   */
+  notaReserva?: string | null;
 }
 
 // ─── Pacientes ──────────────────────────────────────────────────────────────

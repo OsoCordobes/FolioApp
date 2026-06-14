@@ -38,6 +38,7 @@ import {
 import type { ToolHistorialEntry } from "@/lib/especialidades/types";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
+import { listDocumentosPaciente } from "./documentos";
 import { err, ok, type Result } from "./errors";
 
 // ─── Shapes esperados por el componente (prototipo) ───────────────────────
@@ -59,6 +60,21 @@ export interface PacienteFichaInfo {
   telefono: string;
   tel: string;
   email: string;
+  /** M59 · ocupación (PII desencriptada). "" si no está cargada. */
+  ocupacion: string;
+  /** M59 · recomendado por (PII de tercero, desencriptada). "" si no está. */
+  recomendadoPor: string;
+}
+
+/**
+ * Workstream 5 · intake avanzado por especialidad para la ficha (M60). La
+ * especialidad es la ACTIVA resuelta (member del turno en curso ?? org); `datos`
+ * ya viene descifrado + JSON.parse tolerante. null si no hay fila para esa
+ * especialidad. Los labels los pone la UI desde el config del registry.
+ */
+export interface IntakeAvanzadoFicha {
+  especialidad: EspecialidadSlug;
+  datos: Record<string, unknown>;
 }
 
 export interface SesionPlan {
@@ -81,6 +97,13 @@ export interface TurnoActivoFicha {
    */
   especialidad: EspecialidadSlug;
   /**
+   * turno.atendiendo_desde (ISO) o null. Lo usa "Guardar y cerrar" en la ficha
+   * para derivar la duración real de la sesión (Date.now() − atendiendoDesde)
+   * al cerrar el turno — mismo cálculo que el botón "Cerrar turno" de /hoy.
+   * Solo es non-null mientras el turno está ATENDIENDO (CHECK M09).
+   */
+  atendiendoDesde: string | null;
+  /**
    * toolData ya guardado para este turno (sesion.tool_data_cifrado
    * descifrado) o null si todavía no hay sesión / no tiene tool data.
    * El tab Plan re-hidrata el borrador del slot con esto: el writer
@@ -92,6 +115,30 @@ export interface TurnoActivoFicha {
    * y bloquearía también el guardado del SOAP.
    */
   toolDraft: unknown;
+  /**
+   * Workstream 6 · ¿existe YA una fila sesion para este turno? (cualquier
+   * sesion.turno_id == turnoEnCurso.id). La Tool quiro lo usa para dos cosas:
+   *   1. habilitar el adjunto de radiografías (necesitan una sesión donde
+   *      colgar el documento_clinico).
+   *   2. decidir el carry-forward: solo se siembra el borrador desde la última
+   *      visita cuando el turno es GENUINAMENTE fresco (sin sesión todavía).
+   */
+  tieneSesionGuardada: boolean;
+}
+
+/**
+ * Workstream 6 · una radiografía del paciente para la galería de la Tool quiro.
+ * `signedUrl` es de vida corta (5 min, lib/db/documentos.ts) — se refresca
+ * client-side al expirar. Solo se trae para fichas con especialidad activa
+ * quiropraxia (otras orgs reciben []).
+ */
+export interface RadiografiaFicha {
+  id: string;
+  /** YYYY-MM-DD: fecha_estudio ?? created_at.slice(0,10). */
+  fecha: string;
+  descripcion: string | null;
+  signedUrl: string;
+  sesionId: string | null;
 }
 
 export interface PlanData {
@@ -122,12 +169,41 @@ export interface PlanData {
    * turno (sesion.turno_id UNIQUE, M10) vía saveSesionFichaAction.
    */
   turnoActivo: TurnoActivoFicha | null;
+  /**
+   * Workstream 6 · galería de radiografías del paciente (documento_clinico tipo
+   * RADIOGRAFIA) para la Tool quiro, con signed URLs de vida corta. Solo se
+   * llena cuando la especialidad ACTIVA es quiropraxia (otras orgs: []) — la
+   * Tool de cardio/psico la ignora. Server-side: los URLs firmados son seguros
+   * de mandar al cliente (expiran en 5 min).
+   */
+  radiografias: RadiografiaFicha[];
+  /**
+   * M58 · valores CRUDOS del plan persistido (plan_tratamiento, 1:1 por
+   * paciente) para prefillear el modal de edición. Todos null cuando no hay
+   * fila todavía — el card sigue mostrando los valores derivados de arriba.
+   * Separado de los campos de display (total/frecuencia/…) que ya combinan
+   * stored ?? derivado: acá el modal necesita el valor stored tal cual.
+   */
+  planEditable: {
+    sesionesObjetivo: number | null;
+    frecuencia: string | null;
+    diagnostico: string | null;
+    proximoControl: string | null;
+    notas: string | null;
+  };
 }
 
 export interface PacienteFichaData {
   paciente: PacienteFichaInfo;
   plan: PlanData;
   cumple: string; // "18 may" o "—"
+  /**
+   * Workstream 5 · intake avanzado de la especialidad ACTIVA (M60), o null si no
+   * hay fila. La sección "Información avanzada" de la ficha lo rinde read-only +
+   * un modal de edición. Solo se trae el de la especialidad activa (no las otras
+   * de una ficha mixta) — la edición es por la especialidad del slot.
+   */
+  intakeAvanzado: IntakeAvanzadoFicha | null;
 }
 
 // ─── Tipos de rows DB ──────────────────────────────────────────────────────
@@ -146,9 +222,18 @@ interface PacienteCompletoRow {
   apellido_cifrado: string | null;
   email_cifrado: string | null;
   telefono_cifrado: string | null;
+  // M59 · campos comunes de intake (PII cifrada, expuestos por paciente_completo).
+  ocupacion_cifrado: string | null;
+  recomendado_por_cifrado: string | null;
   diagnosticos_activos: number;
   alergias_activas: number;
   medicaciones_vigentes: number;
+}
+
+/** M60 · fila de intake avanzado (1 por paciente+especialidad). */
+interface IntakeAvanzadoRow {
+  especialidad: string;
+  datos_cifrado: string | null;
 }
 
 interface SesionRow {
@@ -175,6 +260,18 @@ interface TurnoExtRow {
   servicio_nombre: string;
   /** M55 · profesional asignado — decide la especialidad efectiva del slot. */
   profesional_id: string | null;
+  /** turno.atendiendo_desde (ISO) — base del cálculo de duración real al cerrar. */
+  atendiendo_desde: string | null;
+}
+
+/** M58 · plan de tratamiento persistido (1:1 por paciente). */
+interface PlanTratamientoRow {
+  id: string;
+  sesiones_objetivo: number | null;
+  frecuencia: string | null;
+  diagnostico_cifrado: string | null;
+  proximo_control: string | null;
+  notas_cifrado: string | null;
 }
 
 // ─── Fetcher principal ─────────────────────────────────────────────────────
@@ -194,27 +291,47 @@ export async function getPacienteFicha(
 
   const supabase = await createSupabaseServerClient();
 
-  const [pacRes, sesionesRes, turnosRes] = await Promise.all([
+  const [pacRes, sesionesRes, turnosRes, planRes, intakeRes] = await Promise.all([
     supabase
       .from("paciente_completo")
       .select("*")
       .eq("id", pacienteId)
       .eq("organization_id", organizationId)
       .maybeSingle(),
+    // Workstream 6 · .limit(50) (antes 10): más historial de visitas para el
+    // "Control de visitas" quiro. Costo: hasta 50 sesiones descifran SOAP +
+    // tool_data por ficha (vs 10) — aceptable para una sola ficha por request.
     supabase
       .from("sesion")
       .select("id, turno_id, paciente_id, soap_s_cifrado, soap_o_cifrado, soap_a_cifrado, soap_p_cifrado, vertebras_json, tool_id, tool_data_cifrado, notas_cifrado, created_at")
       .eq("paciente_id", pacienteId)
       .eq("organization_id", organizationId)
       .order("created_at", { ascending: false })
-      .limit(10),
+      .limit(50),
     supabase
       .from("turno_extendido")
-      .select("id, inicio, duracion_min, duracion_real_min, estado, servicio_nombre, profesional_id")
+      .select("id, inicio, duracion_min, duracion_real_min, estado, servicio_nombre, profesional_id, atendiendo_desde")
       .eq("paciente_id", pacienteId)
       .eq("organization_id", organizationId)
       .order("inicio", { ascending: false })
-      .limit(10),
+      .limit(50),
+    // M58 · plan de tratamiento persistido (1:1 por paciente). maybeSingle:
+    // la mayoría de los pacientes no tiene fila todavía → el card cae a los
+    // valores derivados de los turnos.
+    supabase
+      .from("plan_tratamiento")
+      .select("id, sesiones_objetivo, frecuencia, diagnostico_cifrado, proximo_control, notas_cifrado")
+      .eq("paciente_id", pacienteId)
+      .eq("organization_id", organizationId)
+      .maybeSingle(),
+    // M60 · intake avanzado del paciente (puede haber uno por especialidad en
+    // fichas mixtas). Traemos todos y abajo elegimos el de la especialidad
+    // ACTIVA (resuelta más abajo, una vez conocido el profesional del turno).
+    supabase
+      .from("paciente_intake_avanzado")
+      .select("especialidad, datos_cifrado")
+      .eq("paciente_id", pacienteId)
+      .eq("organization_id", organizationId),
   ]);
 
   if (pacRes.error) return err("db_error", "Error leyendo paciente.", pacRes.error.message);
@@ -223,6 +340,11 @@ export async function getPacienteFicha(
   const row = pacRes.data as unknown as PacienteCompletoRow;
   const sesiones = (sesionesRes.data ?? []) as unknown as SesionRow[];
   const turnos = (turnosRes.data ?? []) as unknown as TurnoExtRow[];
+  // M58 · plan persistido. Un error de lectura NO rompe la ficha: degradamos a
+  // null (el card sigue funcionando con los valores derivados de los turnos).
+  const planRow = (planRes.data ?? null) as unknown as PlanTratamientoRow | null;
+  const planDiagnostico = tryDecrypt(planRow?.diagnostico_cifrado, "plan.diagnostico");
+  const planNotas = tryDecrypt(planRow?.notas_cifrado, "plan.notas");
 
   const nombre = tryDecrypt(row.nombre_cifrado, "nombre");
   const apellido = tryDecrypt(row.apellido_cifrado, "apellido");
@@ -231,6 +353,9 @@ export async function getPacienteFicha(
   const notas = tryDecrypt(row.notas_importantes_cifrado, "notas") ?? "";
   const tel = tryDecrypt(row.telefono_cifrado, "telefono") ?? "";
   const email = tryDecrypt(row.email_cifrado, "email") ?? "";
+  // M59 · campos comunes de intake (PII).
+  const ocupacion = tryDecrypt(row.ocupacion_cifrado, "ocupacion") ?? "";
+  const recomendadoPor = tryDecrypt(row.recomendado_por_cifrado, "recomendado_por") ?? "";
 
   const cerrados = turnos.filter((t) => t.estado === "CERRADO");
   const sesionesCompletadas = cerrados.length;
@@ -300,6 +425,8 @@ export async function getPacienteFicha(
     telefono: tel,
     tel,
     email,
+    ocupacion,
+    recomendadoPor,
   };
 
   const proximoTurno = turnos.find((t) =>
@@ -339,11 +466,27 @@ export async function getPacienteFicha(
     );
   }
 
+  // M60 · intake avanzado de la especialidad ACTIVA. De todas las filas del
+  // paciente (una por especialidad en fichas mixtas) tomamos la que matchea la
+  // especialidad activa del slot — es la que el modal de edición de la ficha
+  // edita. datos_cifrado se descifra + JSON.parse tolerante (corrupción/JSON
+  // inválido degrada a null, no rompe la ficha).
+  const intakeRows = (intakeRes.data ?? []) as unknown as IntakeAvanzadoRow[];
+  const intakeRow = intakeRows.find((r) => r.especialidad === especialidadActiva) ?? null;
+  const intakeAvanzado: IntakeAvanzadoFicha | null = intakeRow
+    ? { especialidad: especialidadActiva, datos: parseIntakeDatos(intakeRow.datos_cifrado) }
+    : null;
+
   const turnoActivo: TurnoActivoFicha | null = turnoEnCurso
     ? {
         id: turnoEnCurso.id,
         estado: turnoEnCurso.estado as TurnoActivoFicha["estado"],
         especialidad: especialidadActiva,
+        atendiendoDesde: turnoEnCurso.atendiendo_desde ?? null,
+        // Workstream 6 · ¿ya hay una sesion para este turno? (sesiones ya está
+        // en memoria — sin query extra). Habilita radiografías + gatea el
+        // carry-forward de la Tool quiro.
+        tieneSesionGuardada: sesiones.some((s) => s.turno_id === turnoEnCurso.id),
         toolDraft:
           // M55 · re-hidratar SOLO si el tool_id persistido es el de la
           // especialidad activa: un draft cross-tool re-enviado al writer
@@ -360,25 +503,61 @@ export async function getPacienteFicha(
       }
     : null;
 
+  // Workstream 6 · radiografías para la galería de la Tool quiro. Solo se
+  // consultan cuando la especialidad ACTIVA es quiropraxia: una org cardio/psico
+  // no paga la query extra (la Tool igual ignora el campo). Un error de lectura
+  // degrada a [] (la galería se muestra vacía, la ficha no se rompe).
+  let radiografias: RadiografiaFicha[] = [];
+  if (especialidadActiva === "quiropraxia") {
+    const radRes = await listDocumentosPaciente({ pacienteId, tipo: "RADIOGRAFIA" });
+    if (radRes.ok) {
+      radiografias = radRes.data.map((doc) => ({
+        id: doc.id,
+        fecha: (doc.fecha_estudio ?? doc.created_at).slice(0, 10),
+        descripcion: doc.descripcion,
+        signedUrl: doc.signedUrl,
+        sesionId: doc.sesion_id,
+      }));
+    }
+  }
+
+  // M58 · valores derivados (de los turnos) usados como fallback cuando el
+  // plan persistido no llena un campo.
+  const frecuenciaDerivada = deducirFrecuencia(cerrados.map((t) => t.inicio));
+  const proximoControlDerivado = proximoTurno?.inicio.slice(0, 10) ?? "—";
+
   const plan: PlanData = {
-    total: Math.max(sesionesCompletadas, 1),
+    // Si hay plan persistido, sus campos OVERRIDEAN el display derivado (campo
+    // a campo: stored ?? derivado). `completadas` SIEMPRE es derivado (cuenta
+    // de turnos cerrados — no editable). El resto del shape no cambia, así el
+    // card renderiza idéntico con o sin fila.
+    total: planRow?.sesiones_objetivo ?? Math.max(sesionesCompletadas, 1),
     completadas: sesionesCompletadas,
-    frecuencia: deducirFrecuencia(cerrados.map((t) => t.inicio)),
+    frecuencia: planRow?.frecuencia ?? frecuenciaDerivada,
     inicio,
-    proximoControl: proximoTurno?.inicio.slice(0, 10) ?? "—",
+    proximoControl: planRow?.proximo_control ?? proximoControlDerivado,
     precio: 0,
-    diagnostico,
+    diagnostico: planDiagnostico ?? diagnostico,
     vertebrasEstado,
     ultimoAjuste,
     soap,
     sesiones: historial,
     toolHistorial,
     turnoActivo,
+    radiografias,
+    // Valores CRUDOS para prefillear el modal (null cuando no hay fila).
+    planEditable: {
+      sesionesObjetivo: planRow?.sesiones_objetivo ?? null,
+      frecuencia: planRow?.frecuencia ?? null,
+      diagnostico: planDiagnostico,
+      proximoControl: planRow?.proximo_control ?? null,
+      notas: planNotas,
+    },
   };
 
   const cumple = row.fecha_nacimiento ? formatCumple(row.fecha_nacimiento) : "—";
 
-  return ok({ paciente, plan, cumple });
+  return ok({ paciente, plan, cumple, intakeAvanzado });
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -425,6 +604,26 @@ function sesionToolData(s: SesionRow): unknown {
     v: 1,
     vertebras: (s.vertebras_json ?? []).map((v) => ({ id: v.id, estado: v.estado })),
   };
+}
+
+/**
+ * Descifra + JSON.parse del datos_cifrado del intake avanzado (M60). Tolerante:
+ * ciphertext corrupto, JSON inválido o shape no-objeto degradan a `{}` (la
+ * sección de la ficha muestra "sin datos" en vez de romper).
+ */
+function parseIntakeDatos(datosCifrado: string | null): Record<string, unknown> {
+  if (datosCifrado == null) return {};
+  const plain = tryDecrypt(datosCifrado, "intake.datos");
+  if (plain == null) return {};
+  try {
+    const parsed = JSON.parse(plain) as unknown;
+    if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    // PHI: no loguear en producción (linkage a datos clínicos). Degrada a {}.
+  }
+  return {};
 }
 
 function calcularEdad(fechaNacimiento: string): number {

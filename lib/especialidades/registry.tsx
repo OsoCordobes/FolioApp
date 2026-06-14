@@ -64,10 +64,17 @@ export {
   filtrarToolHistorial,
   getEspecialidadMeta,
   getEspecialidadMetaByToolId,
+  getIntakeAvanzadoConfig,
   isEspecialidadSlug,
   normalizeEspecialidadSlug,
   resolveEspecialidadEfectiva,
   toolPerteneceAEspecialidad,
 } from "@/lib/especialidades/meta";
 export type { EspecialidadMeta, EspecialidadSlug } from "@/lib/especialidades/meta";
-export type { SpecialtyToolProps, ToolHistorialEntry } from "@/lib/especialidades/types";
+export type {
+  IntakeAvanzadoConfig,
+  IntakeCampo,
+  IntakeCampoTipo,
+  SpecialtyToolProps,
+  ToolHistorialEntry,
+} from "@/lib/especialidades/types";

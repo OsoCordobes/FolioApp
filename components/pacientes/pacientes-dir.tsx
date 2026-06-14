@@ -17,6 +17,7 @@ import * as I from "@/components/icons";
 import { TurnoCreateModal } from "@/components/hoy/turno-create-modal";
 import { PacienteCreateModal } from "@/components/pacientes/paciente-create-modal";
 import type { PacienteDirRow } from "@/lib/db/pacientes-dir";
+import type { EspecialidadSlug } from "@/lib/especialidades/meta";
 
 // Re-export con el alias del prototipo para no tocar el resto del archivo.
 type PacienteDir = PacienteDirRow;
@@ -426,9 +427,21 @@ function csvEscape(value: string): string {
 interface PacientesDirProps {
   pacientes: PacienteDir[];
   initialQuery?: string;
+  /**
+   * Workstream 5 · especialidad EFECTIVA del usuario — decide qué campos
+   * avanzados muestra el alta. El modal hace fallback a quiropraxia si no llega.
+   */
+  especialidad?: EspecialidadSlug;
+  /** true en orgs CLINICA: el alta deja elegir la especialidad del avanzado. */
+  permiteElegirEspecialidad?: boolean;
 }
 
-export function PacientesDir({ pacientes, initialQuery = "" }: PacientesDirProps) {
+export function PacientesDir({
+  pacientes,
+  initialQuery = "",
+  especialidad,
+  permiteElegirEspecialidad = false,
+}: PacientesDirProps) {
   const [q, setQ] = useState(initialQuery);
   const [filtro, setFiltro] = useState("todos");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -524,6 +537,8 @@ export function PacientesDir({ pacientes, initialQuery = "" }: PacientesDirProps
 
       {createOpen ? (
         <PacienteCreateModal
+          especialidad={especialidad}
+          permiteElegirEspecialidad={permiteElegirEspecialidad}
           onClose={() => setCreateOpen(false)}
           onCreated={(id) => {
             // Tras crear, mandar al user a la ficha del paciente nuevo para

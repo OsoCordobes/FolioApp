@@ -16,7 +16,7 @@
 import { createContext, useContext, type ReactNode } from "react";
 
 import type { EspecialidadSlug } from "@/lib/especialidades/meta";
-import type { PacienteFichaInfo, PlanData } from "@/lib/db/paciente-ficha";
+import type { IntakeAvanzadoFicha, PacienteFichaInfo, PlanData } from "@/lib/db/paciente-ficha";
 
 interface PacienteFichaContextValue {
   paciente: PacienteFichaInfo;
@@ -28,6 +28,11 @@ interface PacienteFichaContextValue {
    * sin turno en curso, la de la org. Decide la herramienta del tab Plan.
    */
   especialidad: EspecialidadSlug;
+  /**
+   * Workstream 5 · intake avanzado de la especialidad ACTIVA (M60) o null. El
+   * tab Información lo muestra read-only + un modal de edición.
+   */
+  intakeAvanzado: IntakeAvanzadoFicha | null;
 }
 
 const PacienteFichaContext = createContext<PacienteFichaContextValue | null>(null);

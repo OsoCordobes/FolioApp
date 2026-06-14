@@ -17,15 +17,18 @@ import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 
 import * as I from "@/components/icons";
-import { saveSesionFichaAction } from "@/app/(app)/pacientes/actions";
+import { saveSesionFichaAction, saveSesionYCerrarAction } from "@/app/(app)/pacientes/actions";
 import { TurnoCreateModal } from "@/components/hoy/turno-create-modal";
 import { PacienteFichaProvider, usePacienteFicha } from "@/components/paciente/contexto";
+import { IntakeAvanzadoModal } from "@/components/paciente/intake-avanzado-modal";
+import { PlanTratamientoModal } from "@/components/paciente/plan-tratamiento-modal";
 import {
   filtrarToolHistorial,
   getEspecialidad,
+  getIntakeAvanzadoConfig,
   type EspecialidadSlug,
 } from "@/lib/especialidades/registry";
-import type { PacienteFichaInfo, PlanData } from "@/lib/db/paciente-ficha";
+import type { IntakeAvanzadoFicha, PacienteFichaInfo, PlanData } from "@/lib/db/paciente-ficha";
 
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
@@ -105,7 +108,8 @@ function SoapStacked({
 // ─── Sub: Plan de tratamiento ──────────────────────────────────────────────
 
 function PlanTratamiento() {
-  const { plan } = usePacienteFicha();
+  const { paciente, plan } = usePacienteFicha();
+  const [editOpen, setEditOpen] = useState(false);
   const pct = plan.total > 0 ? Math.round((plan.completadas / plan.total) * 100) : 0;
   return (
     <section className="pc-card pc-plan">
@@ -114,9 +118,8 @@ function PlanTratamiento() {
         <button
           type="button"
           className="pc-link"
-          disabled
-          title="Próximamente — editá desde Configuración o agregá nota en Sesiones"
-          aria-disabled="true"
+          onClick={() => setEditOpen(true)}
+          title="Editar objetivos, frecuencia y diagnóstico del plan"
         >
           Editar
         </button>
@@ -153,6 +156,14 @@ function PlanTratamiento() {
           <b>{plan.diagnostico}</b>
         </div>
       </div>
+
+      {editOpen ? (
+        <PlanTratamientoModal
+          pacienteId={paciente.id}
+          prefill={plan.planEditable}
+          onClose={() => setEditOpen(false)}
+        />
+      ) : null}
     </section>
   );
 }
@@ -210,6 +221,19 @@ function TabPlan() {
   const router = useRouter();
   const turnoActivo = plan.turnoActivo;
 
+  // Workstream 6 · la ficha quiropraxia v2 reemplaza el SOAP: la Tool ocupa todo
+  // el ancho (sin la grilla 380px) y NO se rinde <SoapStacked>. Cardio/psico
+  // siguen con la grilla + SOAP, exactamente igual que antes.
+  const hideSoap = especialidad === "quiropraxia";
+
+  // Props OPCIONALES nuevas (Workstream 6) — inofensivas para cardio/psico, que
+  // las ignoran. La Tool quiro las usa para radiografías + carry-forward.
+  const toolExtras = {
+    pacienteId: paciente.id,
+    turno: turnoActivo ? { id: turnoActivo.id, tieneSesionGuardada: turnoActivo.tieneSesionGuardada } : null,
+    radiografias: plan.radiografias,
+  };
+
   // Borrador local del toolData de la herramienta. Si el turno en curso ya
   // tiene sesión guardada, re-hidrata desde ahí: el writer sobreescribe las
   // columnas tool en cada guardado re-hidratable, así que "guardar solo SOAP"
@@ -240,7 +264,38 @@ function TabPlan() {
       // sesión recién guardada (el borrador local no se resetea: useState).
       router.refresh();
     } else {
-      setSaveError(result.error.message);
+      setSaveError(`No se pudo guardar: ${result.error.message}`);
+    }
+  };
+
+  // "Guardar y cerrar": persiste la sesión Y cierra el turno (ATENDIENDO →
+  // CERRADO) en un solo paso. La action devuelve ok({ cerrado }) — un err
+  // significa que el guardado falló; ok({ cerrado: false }) que se guardó pero
+  // el cierre no, sin perder el trabajo.
+  const handleGuardarYCerrar = async () => {
+    if (!turnoActivo || saving) return;
+    setSaving(true);
+    setSaveError(null);
+    const result = await saveSesionYCerrarAction({
+      turnoId: turnoActivo.id,
+      pacienteId: paciente.id,
+      toolValue,
+      soap,
+    });
+    if (result.ok && result.data.cerrado) {
+      // Turno cerrado: el lugar natural es la agenda del día (el turno ya no
+      // está en curso). No reseteamos `saving` — navegamos fuera de la ficha.
+      router.push("/hoy");
+      return;
+    }
+    setSaving(false);
+    if (result.ok) {
+      // Sesión guardada pero el cierre falló — copy explícito, el trabajo no se
+      // pierde y el turno sigue en curso (se puede reintentar cerrar).
+      setSaveError(`Sesión guardada, pero no se pudo cerrar el turno: ${result.data.cierreError ?? "intentá de nuevo."}`);
+    } else {
+      // El guardado mismo falló: nunca se intentó cerrar.
+      setSaveError(`No se pudo guardar: ${result.error.message}`);
     }
   };
 
@@ -269,29 +324,66 @@ function TabPlan() {
         <span>{def.badgeLabel}</span>
       </div>
 
-      <div className="pc-plan-grid">
-        {/* M55 · la Tool recibe SOLO el historial de SU tool_id (legacy NULL
-            cuenta como quiropraxia): en fichas mixtas (cardio + psico) cada
-            herramienta ve sus propias sesiones. El resumen por sesión de
-            HistorialReciente/TabSesiones sigue siendo por tool_id persistido. */}
+      {/* Sin turno en curso no hay sesión contra la cual guardar (sesion.turno_id
+          UNIQUE): la herramienta se rinde en modo lectura y un aviso honesto
+          explica el porqué + cómo habilitar el guardado. Genérico para todas las
+          especialidades (la Tool respeta `readOnly` vía SpecialtyToolProps). */}
+      {!turnoActivo ? (
+        <div className="pc-sin-turno" role="note">
+          <I.Lock size={14} aria-hidden />
+          <p>
+            No hay un turno en curso para este paciente. Iniciá la atención desde{" "}
+            <Link href="/hoy" className="pc-link">/hoy</Link>{" "}
+            (o sacá un turno) para registrar y guardar la sesión.
+          </p>
+        </div>
+      ) : null}
+
+      {/* M55 · la Tool recibe SOLO el historial de SU tool_id (legacy NULL
+          cuenta como quiropraxia): en fichas mixtas (cardio + psico) cada
+          herramienta ve sus propias sesiones. El resumen por sesión de
+          HistorialReciente/TabSesiones sigue siendo por tool_id persistido.
+          readOnly cuando no hay turno activo: editar un borrador que no se
+          puede guardar sería engañoso.
+          Workstream 6 · quiropraxia (hideSoap) rinde la Tool a ancho completo y
+          omite el SOAP; el resto conserva la grilla 380px + SOAP. */}
+      {hideSoap ? (
         <def.Tool
           value={toolValue}
           onChange={setToolValue}
+          readOnly={!turnoActivo}
           historial={filtrarToolHistorial(plan.toolHistorial, especialidad)}
+          {...toolExtras}
         />
-        <SoapStacked soap={soap} setSoap={setSoap} saveBadge={saveBadge} />
-      </div>
+      ) : (
+        <div className="pc-plan-grid">
+          <def.Tool
+            value={toolValue}
+            onChange={setToolValue}
+            readOnly={!turnoActivo}
+            historial={filtrarToolHistorial(plan.toolHistorial, especialidad)}
+            {...toolExtras}
+          />
+          <SoapStacked soap={soap} setSoap={setSoap} saveBadge={saveBadge} />
+        </div>
+      )}
+
+      {/* Sin SoapStacked (quiro) el badge de guardado se muestra acá, alineado
+          al bloque de acciones de guardado de abajo. */}
+      {hideSoap && saveBadge ? (
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>{saveBadge}</div>
+      ) : null}
 
       {turnoActivo ? (
         <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 12 }}>
           {saveError ? (
             <span role="alert" style={{ color: "var(--red)", fontSize: 12.5 }}>
-              No se pudo guardar: {saveError}
+              {saveError}
             </span>
           ) : null}
           <button
             type="button"
-            className="fi-btn fi-btn-primary"
+            className="fi-btn fi-btn-secondary"
             onClick={() => {
               void handleGuardar();
             }}
@@ -301,6 +393,24 @@ function TabPlan() {
           >
             {saving ? "Guardando…" : "Guardar sesión"}
           </button>
+          {/* "Guardar y cerrar": solo con el turno ya EN ATENCIÓN (ATENDIENDO →
+              CERRADO). En EN_SALA todavía no arrancó la atención, así que solo
+              se ofrece "Guardar sesión" (el cierre lo hace "Abrir ficha" → ...
+              → "Cerrar turno" / esta acción una vez en curso). */}
+          {turnoActivo.estado === "ATENDIENDO" ? (
+            <button
+              type="button"
+              className="fi-btn fi-btn-primary"
+              onClick={() => {
+                void handleGuardarYCerrar();
+              }}
+              disabled={saving}
+              aria-busy={saving}
+              title="Guarda la sesión y cierra el turno (suma a la recaudación del día)"
+            >
+              {saving ? "Guardando…" : "Guardar y cerrar"}
+            </button>
+          ) : null}
         </div>
       ) : null}
 
@@ -338,6 +448,10 @@ function TabInformacion() {
           <dd>{paciente.email || "—"}</dd>
           <dt>Cumpleaños</dt>
           <dd>{cumple}</dd>
+          <dt>Ocupación</dt>
+          <dd>{paciente.ocupacion || "—"}</dd>
+          <dt>Recomendado por</dt>
+          <dd>{paciente.recomendadoPor || "—"}</dd>
           <dt>Obra social</dt>
           <dd>Particular</dd>
         </dl>
@@ -361,8 +475,74 @@ function TabInformacion() {
           {paciente.notasImportantes || "Sin notas registradas todavía."}
         </p>
       </section>
+      <InfoAvanzada />
     </div>
   );
+}
+
+// ─── Sub: Información avanzada por especialidad (read-only + editar) ──────────
+
+function InfoAvanzada() {
+  const { paciente, especialidad, intakeAvanzado } = usePacienteFicha();
+  const [editOpen, setEditOpen] = useState(false);
+
+  // Los campos/labels salen del config de la especialidad ACTIVA. Mostramos
+  // todos los campos del config con su valor (o "—" si no está) para que la
+  // ficha refleje la anamnesis completa de esa especialidad.
+  const campos = getIntakeAvanzadoConfig(especialidad).campos;
+  const datos = intakeAvanzado?.datos ?? {};
+
+  return (
+    <section className="pc-card">
+      <header className="pc-card-head">
+        <span className="fi-eyebrow">Información avanzada</span>
+        <button
+          type="button"
+          className="pc-link"
+          onClick={() => setEditOpen(true)}
+          title="Editar los antecedentes de esta especialidad"
+        >
+          Editar
+        </button>
+      </header>
+      {campos.length === 0 ? (
+        <p className="pc-card-text muted">No hay campos avanzados para esta especialidad.</p>
+      ) : (
+        <dl className="pc-dl">
+          {campos.map((campo) => (
+            <FragmentCampo key={campo.key} label={campo.label} valor={fmtIntakeValor(datos[campo.key])} />
+          ))}
+        </dl>
+      )}
+
+      {editOpen ? (
+        <IntakeAvanzadoModal
+          pacienteId={paciente.id}
+          especialidad={especialidad}
+          datos={intakeAvanzado?.datos ?? null}
+          onClose={() => setEditOpen(false)}
+        />
+      ) : null}
+    </section>
+  );
+}
+
+/** Una fila dt/dd del intake avanzado (label + valor formateado). */
+function FragmentCampo({ label, valor }: { label: string; valor: string }) {
+  return (
+    <>
+      <dt>{label}</dt>
+      <dd>{valor}</dd>
+    </>
+  );
+}
+
+/** Formatea un valor del intake para la vista read-only (es-AR). */
+function fmtIntakeValor(value: unknown): string {
+  if (value === true) return "Sí";
+  if (value === false || value == null) return "—";
+  if (typeof value === "string") return value.trim().length > 0 ? value : "—";
+  return String(value);
 }
 
 function TabSesiones() {
@@ -549,11 +729,19 @@ interface PacienteDetalleProps {
   cumple: string;
   /** Especialidad de la org (M50) — el server component la saca del contexto activo. */
   especialidad: EspecialidadSlug;
+  /** Workstream 5 · intake avanzado de la especialidad activa (M60) o null. */
+  intakeAvanzado: IntakeAvanzadoFicha | null;
 }
 
-export function PacienteDetalle({ paciente, plan, cumple, especialidad }: PacienteDetalleProps) {
+export function PacienteDetalle({
+  paciente,
+  plan,
+  cumple,
+  especialidad,
+  intakeAvanzado,
+}: PacienteDetalleProps) {
   return (
-    <PacienteFichaProvider value={{ paciente, plan, cumple, especialidad }}>
+    <PacienteFichaProvider value={{ paciente, plan, cumple, especialidad, intakeAvanzado }}>
       <PacienteDetalleInner />
     </PacienteFichaProvider>
   );

@@ -35,4 +35,63 @@ export interface SpecialtyToolProps {
   readOnly?: boolean;
   /** Sesiones previas, ordenadas DESC por fecha (la más reciente primero). */
   historial: ToolHistorialEntry[];
+  // ─── Campos OPCIONALES (Workstream 6) ────────────────────────────────────
+  // Aditivos: las Tools de cardio/psico los ignoran. Los usa la Tool de
+  // quiropraxia v2 (galería de radiografías + carry-forward gateado por turno).
+  /** Id del paciente de la ficha — para adjuntar radiografías. */
+  pacienteId?: string;
+  /**
+   * Turno en curso (subset de PlanData.turnoActivo): habilita el adjunto de
+   * radiografías (necesitan una sesión guardada) y gatea el carry-forward.
+   */
+  turno?: { id: string; tieneSesionGuardada: boolean } | null;
+  /** Galería de radiografías del paciente (signed URLs de vida corta). */
+  radiografias?: ReadonlyArray<{
+    id: string;
+    fecha: string;
+    descripcion: string | null;
+    signedUrl: string;
+    sesionId: string | null;
+  }>;
+}
+
+// ─── Intake avanzado por especialidad (Workstream 5) ──────────────────────────
+//
+// El alta de paciente tiene una sección "Información avanzada (opcional)" cuyos
+// campos dependen de la especialidad (anamnesis del quiropráctico; sets de
+// factores/antecedentes para cardio/psico). El form los renderiza dinámicamente
+// desde `campos`; el writer (lib/db/paciente-intake.ts) valida los datos contra
+// `schema` antes de cifrarlos en paciente_intake_avanzado.datos_cifrado (M60).
+//
+// Server-safe: este módulo no importa React. Cada config vive en
+// lib/especialidades/<slug>/intake.ts y se enchufa en ESPECIALIDADES_META.
+
+/** Tipo de control del form para un campo del intake avanzado. */
+export type IntakeCampoTipo = "text" | "textarea" | "boolean" | "select";
+
+/** Un campo del intake avanzado — describe el control y su label es-AR. */
+export interface IntakeCampo {
+  /** Clave del campo (== clave en el schema zod y en el JSON persistido). */
+  key: string;
+  /** Label es-AR para el form y la vista read-only de la ficha. */
+  label: string;
+  /** Tipo de control a renderizar. */
+  tipo: IntakeCampoTipo;
+  /** Opciones para `tipo: "select"` (ignorado en el resto). */
+  opciones?: readonly string[];
+}
+
+/**
+ * Config del intake avanzado de una especialidad.
+ *
+ * `schema` es un objeto zod de campos OPCIONALES (NO .strict — additive-friendly:
+ * sumar un campo nuevo no invalida filas viejas, y claves desconocidas se
+ * stripean en vez de rechazar). El writer valida `datos` contra este schema
+ * server-side, sea cual sea el valor que mande el cliente.
+ */
+export interface IntakeAvanzadoConfig {
+  /** Schema zod de campos opcionales (string/boolean) keyeado por campo.key. */
+  schema: import("zod").ZodType;
+  /** Campos a renderizar, en orden. */
+  campos: readonly IntakeCampo[];
 }
