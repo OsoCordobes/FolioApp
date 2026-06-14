@@ -17,7 +17,7 @@ import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 
 import * as I from "@/components/icons";
-import { saveSesionFichaAction } from "@/app/(app)/pacientes/actions";
+import { saveSesionFichaAction, saveSesionYCerrarAction } from "@/app/(app)/pacientes/actions";
 import { TurnoCreateModal } from "@/components/hoy/turno-create-modal";
 import { PacienteFichaProvider, usePacienteFicha } from "@/components/paciente/contexto";
 import { PlanTratamientoModal } from "@/components/paciente/plan-tratamiento-modal";
@@ -249,7 +249,38 @@ function TabPlan() {
       // sesión recién guardada (el borrador local no se resetea: useState).
       router.refresh();
     } else {
-      setSaveError(result.error.message);
+      setSaveError(`No se pudo guardar: ${result.error.message}`);
+    }
+  };
+
+  // "Guardar y cerrar": persiste la sesión Y cierra el turno (ATENDIENDO →
+  // CERRADO) en un solo paso. La action devuelve ok({ cerrado }) — un err
+  // significa que el guardado falló; ok({ cerrado: false }) que se guardó pero
+  // el cierre no, sin perder el trabajo.
+  const handleGuardarYCerrar = async () => {
+    if (!turnoActivo || saving) return;
+    setSaving(true);
+    setSaveError(null);
+    const result = await saveSesionYCerrarAction({
+      turnoId: turnoActivo.id,
+      pacienteId: paciente.id,
+      toolValue,
+      soap,
+    });
+    if (result.ok && result.data.cerrado) {
+      // Turno cerrado: el lugar natural es la agenda del día (el turno ya no
+      // está en curso). No reseteamos `saving` — navegamos fuera de la ficha.
+      router.push("/hoy");
+      return;
+    }
+    setSaving(false);
+    if (result.ok) {
+      // Sesión guardada pero el cierre falló — copy explícito, el trabajo no se
+      // pierde y el turno sigue en curso (se puede reintentar cerrar).
+      setSaveError(`Sesión guardada, pero no se pudo cerrar el turno: ${result.data.cierreError ?? "intentá de nuevo."}`);
+    } else {
+      // El guardado mismo falló: nunca se intentó cerrar.
+      setSaveError(`No se pudo guardar: ${result.error.message}`);
     }
   };
 
@@ -278,14 +309,32 @@ function TabPlan() {
         <span>{def.badgeLabel}</span>
       </div>
 
+      {/* Sin turno en curso no hay sesión contra la cual guardar (sesion.turno_id
+          UNIQUE): la herramienta se rinde en modo lectura y un aviso honesto
+          explica el porqué + cómo habilitar el guardado. Genérico para todas las
+          especialidades (la Tool respeta `readOnly` vía SpecialtyToolProps). */}
+      {!turnoActivo ? (
+        <div className="pc-sin-turno" role="note">
+          <I.Lock size={14} aria-hidden />
+          <p>
+            No hay un turno en curso para este paciente. Iniciá la atención desde{" "}
+            <Link href="/hoy" className="pc-link">/hoy</Link>{" "}
+            (o sacá un turno) para registrar y guardar la sesión.
+          </p>
+        </div>
+      ) : null}
+
       <div className="pc-plan-grid">
         {/* M55 · la Tool recibe SOLO el historial de SU tool_id (legacy NULL
             cuenta como quiropraxia): en fichas mixtas (cardio + psico) cada
             herramienta ve sus propias sesiones. El resumen por sesión de
-            HistorialReciente/TabSesiones sigue siendo por tool_id persistido. */}
+            HistorialReciente/TabSesiones sigue siendo por tool_id persistido.
+            readOnly cuando no hay turno activo: editar un borrador que no se
+            puede guardar sería engañoso. */}
         <def.Tool
           value={toolValue}
           onChange={setToolValue}
+          readOnly={!turnoActivo}
           historial={filtrarToolHistorial(plan.toolHistorial, especialidad)}
         />
         <SoapStacked soap={soap} setSoap={setSoap} saveBadge={saveBadge} />
@@ -295,12 +344,12 @@ function TabPlan() {
         <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 12 }}>
           {saveError ? (
             <span role="alert" style={{ color: "var(--red)", fontSize: 12.5 }}>
-              No se pudo guardar: {saveError}
+              {saveError}
             </span>
           ) : null}
           <button
             type="button"
-            className="fi-btn fi-btn-primary"
+            className="fi-btn fi-btn-secondary"
             onClick={() => {
               void handleGuardar();
             }}
@@ -310,6 +359,24 @@ function TabPlan() {
           >
             {saving ? "Guardando…" : "Guardar sesión"}
           </button>
+          {/* "Guardar y cerrar": solo con el turno ya EN ATENCIÓN (ATENDIENDO →
+              CERRADO). En EN_SALA todavía no arrancó la atención, así que solo
+              se ofrece "Guardar sesión" (el cierre lo hace "Abrir ficha" → ...
+              → "Cerrar turno" / esta acción una vez en curso). */}
+          {turnoActivo.estado === "ATENDIENDO" ? (
+            <button
+              type="button"
+              className="fi-btn fi-btn-primary"
+              onClick={() => {
+                void handleGuardarYCerrar();
+              }}
+              disabled={saving}
+              aria-busy={saving}
+              title="Guarda la sesión y cierra el turno (suma a la recaudación del día)"
+            >
+              {saving ? "Guardando…" : "Guardar y cerrar"}
+            </button>
+          ) : null}
         </div>
       ) : null}
 

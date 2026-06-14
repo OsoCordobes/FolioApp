@@ -81,6 +81,13 @@ export interface TurnoActivoFicha {
    */
   especialidad: EspecialidadSlug;
   /**
+   * turno.atendiendo_desde (ISO) o null. Lo usa "Guardar y cerrar" en la ficha
+   * para derivar la duración real de la sesión (Date.now() − atendiendoDesde)
+   * al cerrar el turno — mismo cálculo que el botón "Cerrar turno" de /hoy.
+   * Solo es non-null mientras el turno está ATENDIENDO (CHECK M09).
+   */
+  atendiendoDesde: string | null;
+  /**
    * toolData ya guardado para este turno (sesion.tool_data_cifrado
    * descifrado) o null si todavía no hay sesión / no tiene tool data.
    * El tab Plan re-hidrata el borrador del slot con esto: el writer
@@ -189,6 +196,8 @@ interface TurnoExtRow {
   servicio_nombre: string;
   /** M55 · profesional asignado — decide la especialidad efectiva del slot. */
   profesional_id: string | null;
+  /** turno.atendiendo_desde (ISO) — base del cálculo de duración real al cerrar. */
+  atendiendo_desde: string | null;
 }
 
 /** M58 · plan de tratamiento persistido (1:1 por paciente). */
@@ -234,7 +243,7 @@ export async function getPacienteFicha(
       .limit(10),
     supabase
       .from("turno_extendido")
-      .select("id, inicio, duracion_min, duracion_real_min, estado, servicio_nombre, profesional_id")
+      .select("id, inicio, duracion_min, duracion_real_min, estado, servicio_nombre, profesional_id, atendiendo_desde")
       .eq("paciente_id", pacienteId)
       .eq("organization_id", organizationId)
       .order("inicio", { ascending: false })
@@ -382,6 +391,7 @@ export async function getPacienteFicha(
         id: turnoEnCurso.id,
         estado: turnoEnCurso.estado as TurnoActivoFicha["estado"],
         especialidad: especialidadActiva,
+        atendiendoDesde: turnoEnCurso.atendiendo_desde ?? null,
         toolDraft:
           // M55 · re-hidratar SOLO si el tool_id persistido es el de la
           // especialidad activa: un draft cross-tool re-enviado al writer

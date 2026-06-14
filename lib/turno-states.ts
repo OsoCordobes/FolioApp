@@ -45,7 +45,11 @@ export const TURNO_STATE_CONF: Record<EstadoTurno, EstadoTurnoConfig> = {
 };
 
 const VALID_TRANSITIONS: Record<EstadoTurno, EstadoTurno[]> = {
-  agendado:   ["confirmado", "cancelado", "reagendado", "no_asistio"],
+  // M57 · agendado → en_sala directo (además de → confirmado): el flujo de
+  // llegada ("Marcar llegada") salta la confirmación cuando el paciente ya
+  // está en el consultorio. El trigger turno_record_transition (M57) habilita
+  // la misma arista en DB, así el update optimista del cliente no se revierte.
+  agendado:   ["confirmado", "en_sala", "cancelado", "reagendado", "no_asistio"],
   confirmado: ["en_sala", "no_asistio", "cancelado", "reagendado"],
   en_sala:    ["atendiendo", "cancelado"],
   atendiendo: ["cerrado"],

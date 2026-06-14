@@ -20,8 +20,10 @@ import { getActiveContext } from "@/lib/db/active-context";
 import { createPaciente } from "@/lib/db/pacientes";
 import { savePlanTratamiento } from "@/lib/db/plan-tratamiento";
 import { upsertSesion } from "@/lib/db/sesiones";
+import { transitionTurno } from "@/lib/db/turnos";
 import { err, ok, type Result } from "@/lib/db/errors";
 import { buildUpsertSesionInput } from "@/lib/especialidades/draft";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const createPacienteActionSchema = z.object({
   nombre: z.string().min(1).max(80),
@@ -120,6 +122,102 @@ export async function saveSesionFichaAction(
   // La vuelta: la ficha re-renderiza con la sesión nueva en plan.toolHistorial.
   revalidatePath(`/pacientes/${parsed.data.pacienteId}`);
   return ok({ sesionId: result.data.id });
+}
+
+// ─── Guardar y cerrar el turno desde la ficha (tab Plan) ─────────────────────
+
+/**
+ * Resultado de "Guardar y cerrar". `ok` SIEMPRE implica que la sesión se
+ * guardó; `cerrado` distingue el cierre exitoso del caso "se guardó pero no se
+ * pudo cerrar" (el cliente muestra distinto copy y NO navega fuera). Modelarlo
+ * así — en vez de un err con code adivinable — evita que el cliente tenga que
+ * discriminar por code (save y close comparten codes como db_error/forbidden).
+ */
+export interface SaveSesionYCerrarResult {
+  /** true = turno cerrado; false = sesión guardada pero el cierre falló. */
+  cerrado: boolean;
+  /** Mensaje del fallo del cierre (solo presente cuando cerrado === false). */
+  cierreError?: string;
+}
+
+/**
+ * Guarda la sesión del turno en curso (igual que saveSesionFichaAction) Y, si
+ * eso ok, cierra el turno (ATENDIENDO → CERRADO). Mismo shape de input que
+ * saveSesionFichaAction.
+ *
+ * Orden deliberado (datos clínicos primero, side-effect terminal después):
+ *   1. upsertSesion — si falla, RETORNA un err temprano: NUNCA se cierra sobre
+ *      un guardado fallido. Un err de esta action == el guardado falló.
+ *   2. transitionTurno(→CERRADO) con la duración real derivada de
+ *      atendiendo_desde (mismo cálculo que "Cerrar turno" en /hoy). Si ESTO
+ *      falla, devolvemos ok({ cerrado: false, cierreError }) — la sesión YA
+ *      está persistida, así que no es un fracaso de la action; el cliente
+ *      muestra "Sesión guardada, pero no se pudo cerrar…" sin perder el trabajo.
+ *
+ * Tenancy: el SELECT de atendiendo_desde es org-scoped (organizationId del
+ * contexto activo); el guard cross-org de turnoId/pacienteId ya vive en
+ * upsertSesion y transitionTurno (RLS + triggers como última línea en DB).
+ */
+export async function saveSesionYCerrarAction(
+  input: SaveSesionFichaActionInput,
+): Promise<Result<SaveSesionYCerrarResult>> {
+  const parsed = saveSesionFichaSchema.safeParse(input);
+  if (!parsed.success) {
+    return err("validation", "Datos de la sesión inválidos.", parsed.error.message);
+  }
+
+  const ctx = await getActiveContext();
+  if (!ctx.ok) return ctx;
+
+  // Duración real: minutos desde atendiendo_desde hasta ahora, org-scoped. Solo
+  // se aplica si cae en [0, 480] (mismo límite que el schema de transitionTurno);
+  // fuera de rango o sin timestamp → undefined (transitionTurno no toca
+  // duracion_real_min y la columna conserva lo que tuviera).
+  const supabase = await createSupabaseServerClient();
+  const { data: turnoRow } = await supabase
+    .from("turno")
+    .select("atendiendo_desde")
+    .eq("id", parsed.data.turnoId)
+    .eq("organization_id", ctx.data.session.organizationId)
+    .maybeSingle();
+
+  const atendiendoDesde = (turnoRow as { atendiendo_desde: string | null } | null)?.atendiendo_desde ?? null;
+  let duracionRealMin: number | undefined;
+  if (atendiendoDesde) {
+    const mins = Math.round((Date.now() - new Date(atendiendoDesde).getTime()) / 60000);
+    if (mins >= 0 && mins <= 480) duracionRealMin = mins;
+  }
+
+  // 1. Guardar la sesión (writer único — deriva tool_id, valida y cifra). Si
+  //    falla, NO cerramos: la sesión es lo que importa.
+  const saved = await upsertSesion(
+    buildUpsertSesionInput({
+      turnoId: parsed.data.turnoId,
+      pacienteId: parsed.data.pacienteId,
+      toolValue: parsed.data.toolValue ?? null,
+      soap: parsed.data.soap,
+    }),
+  );
+  if (!saved.ok) return saved;
+
+  // 2. Cerrar el turno. Si falla, la sesión YA quedó guardada: devolvemos un
+  //    ok parcial (cerrado: false) con el mensaje del cierre para el cliente.
+  const closed = await transitionTurno({
+    turnoId: parsed.data.turnoId,
+    to: "CERRADO",
+    duracionRealMin,
+  });
+  if (!closed.ok) {
+    // El guardado persistió → la ficha igual debe refrescar el historial.
+    revalidatePath(`/pacientes/${parsed.data.pacienteId}`);
+    return ok({ cerrado: false, cierreError: closed.error.message });
+  }
+
+  // La vuelta: /hoy deja de mostrar el turno como activo y la ficha re-renderiza
+  // con la sesión nueva en plan.toolHistorial.
+  revalidatePath("/hoy");
+  revalidatePath(`/pacientes/${parsed.data.pacienteId}`);
+  return ok({ cerrado: true });
 }
 
 // ─── Guardar plan de tratamiento (card "Plan de tratamiento") ────────────────

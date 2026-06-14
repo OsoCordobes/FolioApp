@@ -17092,3 +17092,51 @@ input:focus { outline: none; }
   overflow: hidden; white-space: nowrap;
 }
 .cal-mes-event-btn:hover { text-decoration: underline; }
+
+/* ─── M57 · menú "⋮" de acciones secundarias del turno (Workstream 2) ────────
+   Popover de Reagendar / No asistió / Cancelar en la fila de /hoy. Reemplaza
+   los botones inline para mantener el baseline colapsado de la fila. Accesible
+   a mano (no useModalA11y): trigger aria-haspopup + role="menu"/menuitem. Solo
+   tokens existentes (sin hex off-theme). */
+.fi-t-menu { position: relative; display: inline-flex; }
+.fi-t-menu-trigger {
+  /* Botón compacto cuadrado para el glifo ⋮ (mismo chrome que fi-btn-ghost). */
+  padding: 6px 8px; line-height: 1; font-size: 16px;
+}
+.fi-t-menu-pop {
+  position: absolute; top: calc(100% + 4px); right: 0; z-index: 30;
+  min-width: 168px;
+  display: flex; flex-direction: column;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-2);
+}
+.fi-t-menu-item {
+  display: flex; align-items: center;
+  width: 100%; padding: 7px 10px;
+  border: none; background: none; cursor: pointer;
+  font: inherit; font-size: 12.5px; font-weight: 500; color: var(--ink);
+  text-align: left; border-radius: var(--r-sm);
+  transition: background 120ms var(--ease-in), color 120ms var(--ease-in);
+}
+.fi-t-menu-item:hover { background: var(--surface-2); }
+.fi-t-menu-item:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--accent-soft); }
+.fi-t-menu-item--danger { color: var(--red); }
+.fi-t-menu-item--danger:hover { background: var(--red-soft); }
+
+/* ─── Empty-state "sin turno en curso" del tab Plan (Workstream 2) ───────────
+   Aviso honesto cuando no hay turno activo: la herramienta queda en readOnly y
+   este nota explica por qué + cómo habilitar el guardado. Estilo muted alineado
+   con "Borrador local" del SOAP. Solo tokens existentes. */
+.pc-sin-turno {
+  display: flex; align-items: flex-start; gap: 8px;
+  margin-bottom: 12px; padding: 10px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  color: var(--ink-3);
+}
+.pc-sin-turno svg { flex-shrink: 0; margin-top: 1px; color: var(--ink-4); }
+.pc-sin-turno p { margin: 0; font-size: 12.5px; line-height: 1.5; }
