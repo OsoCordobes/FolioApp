@@ -232,6 +232,8 @@ function TabPlan() {
     pacienteId: paciente.id,
     turno: turnoActivo ? { id: turnoActivo.id, tieneSesionGuardada: turnoActivo.tieneSesionGuardada } : null,
     radiografias: plan.radiografias,
+    // Cardiología la usa en el score de riesgo CV (≥60 suma); quiro/psico la ignoran.
+    edad: paciente.edad > 0 ? paciente.edad : undefined,
   };
 
   // Borrador local del toolData de la herramienta. Si el turno en curso ya

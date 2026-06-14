@@ -17222,6 +17222,13 @@ input:focus { outline: none; }
   padding: 10px 8px;
 }
 .pc-quiro-svg { width: 100%; max-width: 168px; height: auto; max-height: 460px; }
+/* Foco de teclado visible sobre la vértebra seleccionable (WCAG 2.4.7). */
+.pc-quiro-svg [data-vert] { outline: none; }
+.pc-quiro-svg [data-vert]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-radius: 3px;
+}
 .pc-quiro-spine-hint { text-align: center; padding: 2px 4px; }
 
 /* Panel de la vértebra (técnica + listado), debajo de la ilustración. */

@@ -53,6 +53,11 @@ export interface SpecialtyToolProps {
     signedUrl: string;
     sesionId: string | null;
   }>;
+  /**
+   * Edad del paciente (años). La usa cardiología en el score de riesgo CV
+   * (scoreRiesgoCV suma riesgo si edad ≥ 60); quiro/psico la ignoran.
+   */
+  edad?: number;
 }
 
 // ─── Intake avanzado por especialidad (Workstream 5) ──────────────────────────
