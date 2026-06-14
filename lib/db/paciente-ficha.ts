@@ -122,6 +122,20 @@ export interface PlanData {
    * turno (sesion.turno_id UNIQUE, M10) vía saveSesionFichaAction.
    */
   turnoActivo: TurnoActivoFicha | null;
+  /**
+   * M58 · valores CRUDOS del plan persistido (plan_tratamiento, 1:1 por
+   * paciente) para prefillear el modal de edición. Todos null cuando no hay
+   * fila todavía — el card sigue mostrando los valores derivados de arriba.
+   * Separado de los campos de display (total/frecuencia/…) que ya combinan
+   * stored ?? derivado: acá el modal necesita el valor stored tal cual.
+   */
+  planEditable: {
+    sesionesObjetivo: number | null;
+    frecuencia: string | null;
+    diagnostico: string | null;
+    proximoControl: string | null;
+    notas: string | null;
+  };
 }
 
 export interface PacienteFichaData {
@@ -177,6 +191,16 @@ interface TurnoExtRow {
   profesional_id: string | null;
 }
 
+/** M58 · plan de tratamiento persistido (1:1 por paciente). */
+interface PlanTratamientoRow {
+  id: string;
+  sesiones_objetivo: number | null;
+  frecuencia: string | null;
+  diagnostico_cifrado: string | null;
+  proximo_control: string | null;
+  notas_cifrado: string | null;
+}
+
 // ─── Fetcher principal ─────────────────────────────────────────────────────
 
 export async function getPacienteFicha(
@@ -194,7 +218,7 @@ export async function getPacienteFicha(
 
   const supabase = await createSupabaseServerClient();
 
-  const [pacRes, sesionesRes, turnosRes] = await Promise.all([
+  const [pacRes, sesionesRes, turnosRes, planRes] = await Promise.all([
     supabase
       .from("paciente_completo")
       .select("*")
@@ -215,6 +239,15 @@ export async function getPacienteFicha(
       .eq("organization_id", organizationId)
       .order("inicio", { ascending: false })
       .limit(10),
+    // M58 · plan de tratamiento persistido (1:1 por paciente). maybeSingle:
+    // la mayoría de los pacientes no tiene fila todavía → el card cae a los
+    // valores derivados de los turnos.
+    supabase
+      .from("plan_tratamiento")
+      .select("id, sesiones_objetivo, frecuencia, diagnostico_cifrado, proximo_control, notas_cifrado")
+      .eq("paciente_id", pacienteId)
+      .eq("organization_id", organizationId)
+      .maybeSingle(),
   ]);
 
   if (pacRes.error) return err("db_error", "Error leyendo paciente.", pacRes.error.message);
@@ -223,6 +256,11 @@ export async function getPacienteFicha(
   const row = pacRes.data as unknown as PacienteCompletoRow;
   const sesiones = (sesionesRes.data ?? []) as unknown as SesionRow[];
   const turnos = (turnosRes.data ?? []) as unknown as TurnoExtRow[];
+  // M58 · plan persistido. Un error de lectura NO rompe la ficha: degradamos a
+  // null (el card sigue funcionando con los valores derivados de los turnos).
+  const planRow = (planRes.data ?? null) as unknown as PlanTratamientoRow | null;
+  const planDiagnostico = tryDecrypt(planRow?.diagnostico_cifrado, "plan.diagnostico");
+  const planNotas = tryDecrypt(planRow?.notas_cifrado, "plan.notas");
 
   const nombre = tryDecrypt(row.nombre_cifrado, "nombre");
   const apellido = tryDecrypt(row.apellido_cifrado, "apellido");
@@ -360,20 +398,37 @@ export async function getPacienteFicha(
       }
     : null;
 
+  // M58 · valores derivados (de los turnos) usados como fallback cuando el
+  // plan persistido no llena un campo.
+  const frecuenciaDerivada = deducirFrecuencia(cerrados.map((t) => t.inicio));
+  const proximoControlDerivado = proximoTurno?.inicio.slice(0, 10) ?? "—";
+
   const plan: PlanData = {
-    total: Math.max(sesionesCompletadas, 1),
+    // Si hay plan persistido, sus campos OVERRIDEAN el display derivado (campo
+    // a campo: stored ?? derivado). `completadas` SIEMPRE es derivado (cuenta
+    // de turnos cerrados — no editable). El resto del shape no cambia, así el
+    // card renderiza idéntico con o sin fila.
+    total: planRow?.sesiones_objetivo ?? Math.max(sesionesCompletadas, 1),
     completadas: sesionesCompletadas,
-    frecuencia: deducirFrecuencia(cerrados.map((t) => t.inicio)),
+    frecuencia: planRow?.frecuencia ?? frecuenciaDerivada,
     inicio,
-    proximoControl: proximoTurno?.inicio.slice(0, 10) ?? "—",
+    proximoControl: planRow?.proximo_control ?? proximoControlDerivado,
     precio: 0,
-    diagnostico,
+    diagnostico: planDiagnostico ?? diagnostico,
     vertebrasEstado,
     ultimoAjuste,
     soap,
     sesiones: historial,
     toolHistorial,
     turnoActivo,
+    // Valores CRUDOS para prefillear el modal (null cuando no hay fila).
+    planEditable: {
+      sesionesObjetivo: planRow?.sesiones_objetivo ?? null,
+      frecuencia: planRow?.frecuencia ?? null,
+      diagnostico: planDiagnostico,
+      proximoControl: planRow?.proximo_control ?? null,
+      notas: planNotas,
+    },
   };
 
   const cumple = row.fecha_nacimiento ? formatCumple(row.fecha_nacimiento) : "—";

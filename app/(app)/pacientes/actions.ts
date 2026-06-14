@@ -18,6 +18,7 @@ import { z } from "zod";
 
 import { getActiveContext } from "@/lib/db/active-context";
 import { createPaciente } from "@/lib/db/pacientes";
+import { savePlanTratamiento } from "@/lib/db/plan-tratamiento";
 import { upsertSesion } from "@/lib/db/sesiones";
 import { err, ok, type Result } from "@/lib/db/errors";
 import { buildUpsertSesionInput } from "@/lib/especialidades/draft";
@@ -119,4 +120,40 @@ export async function saveSesionFichaAction(
   // La vuelta: la ficha re-renderiza con la sesión nueva en plan.toolHistorial.
   revalidatePath(`/pacientes/${parsed.data.pacienteId}`);
   return ok({ sesionId: result.data.id });
+}
+
+// ─── Guardar plan de tratamiento (card "Plan de tratamiento") ────────────────
+
+const savePlanTratamientoSchema = z.object({
+  pacienteId: z.string().uuid(),
+  sesionesObjetivo: z.number().int().min(0).max(1000).nullable(),
+  frecuencia: z.string().max(60).nullable(),
+  diagnostico: z.string().max(2000).nullable(),
+  proximoControl: z.string().date().nullable(),
+  notas: z.string().max(5000).nullable(),
+});
+
+export type SavePlanTratamientoActionInput = z.infer<typeof savePlanTratamientoSchema>;
+
+/**
+ * Persiste los campos editables del plan de tratamiento (1:1 por paciente,
+ * M58) — genérico, sin campos por especialidad. `diagnostico` y `notas` son
+ * PHI y se cifran en el writer (savePlanTratamiento); el resto es no-PHI.
+ * Tenancy/coherencia los cubre la RLS + el trigger same-org en DB.
+ */
+export async function savePlanTratamientoAction(
+  input: SavePlanTratamientoActionInput,
+): Promise<Result<{ id: string }>> {
+  const parsed = savePlanTratamientoSchema.safeParse(input);
+  if (!parsed.success) {
+    return err("validation", "Datos del plan de tratamiento inválidos.", parsed.error.message);
+  }
+
+  const result = await savePlanTratamiento(parsed.data);
+  if (!result.ok) return result;
+
+  // La vuelta: la ficha re-renderiza el card con los valores recién guardados.
+  revalidatePath("/pacientes/[id]");
+  revalidatePath(`/pacientes/${parsed.data.pacienteId}`);
+  return ok({ id: result.data.id });
 }

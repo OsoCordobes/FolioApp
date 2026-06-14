@@ -20,6 +20,7 @@ import * as I from "@/components/icons";
 import { saveSesionFichaAction } from "@/app/(app)/pacientes/actions";
 import { TurnoCreateModal } from "@/components/hoy/turno-create-modal";
 import { PacienteFichaProvider, usePacienteFicha } from "@/components/paciente/contexto";
+import { PlanTratamientoModal } from "@/components/paciente/plan-tratamiento-modal";
 import {
   filtrarToolHistorial,
   getEspecialidad,
@@ -105,7 +106,8 @@ function SoapStacked({
 // ─── Sub: Plan de tratamiento ──────────────────────────────────────────────
 
 function PlanTratamiento() {
-  const { plan } = usePacienteFicha();
+  const { paciente, plan } = usePacienteFicha();
+  const [editOpen, setEditOpen] = useState(false);
   const pct = plan.total > 0 ? Math.round((plan.completadas / plan.total) * 100) : 0;
   return (
     <section className="pc-card pc-plan">
@@ -114,9 +116,8 @@ function PlanTratamiento() {
         <button
           type="button"
           className="pc-link"
-          disabled
-          title="Próximamente — editá desde Configuración o agregá nota en Sesiones"
-          aria-disabled="true"
+          onClick={() => setEditOpen(true)}
+          title="Editar objetivos, frecuencia y diagnóstico del plan"
         >
           Editar
         </button>
@@ -153,6 +154,14 @@ function PlanTratamiento() {
           <b>{plan.diagnostico}</b>
         </div>
       </div>
+
+      {editOpen ? (
+        <PlanTratamientoModal
+          pacienteId={paciente.id}
+          prefill={plan.planEditable}
+          onClose={() => setEditOpen(false)}
+        />
+      ) : null}
     </section>
   );
 }
