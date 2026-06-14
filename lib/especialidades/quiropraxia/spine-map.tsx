@@ -220,6 +220,13 @@ function PosteriorSvg({
             data-vert={v.id}
             transform={`translate(${v.x} ${v.y})`}
             onClick={() => onPick(v.id)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onPick(v.id);
+              }
+            }}
+            tabIndex={0}
             style={{ cursor: "pointer" }}
             role="button"
             aria-label={`Vértebra ${v.label}`}
@@ -422,6 +429,13 @@ function LateralSvg({
             data-vert={v.id}
             transform={`translate(${v.x} ${v.y}) rotate(${v.tilt})`}
             onClick={() => onPick(v.id)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onPick(v.id);
+              }
+            }}
+            tabIndex={0}
             style={{ cursor: "pointer" }}
             role="button"
             aria-label={`Vértebra ${v.id}`}

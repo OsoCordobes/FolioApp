@@ -313,7 +313,7 @@ function EstudioRow({
 
 const NUEVO_ESTUDIO_INICIAL = { tipo: "", fecha: "", hallazgos: "", conclusion: "" };
 
-export function CardiologiaTool({ value, onChange, readOnly, historial }: SpecialtyToolProps) {
+export function CardiologiaTool({ value, onChange, readOnly, historial, edad }: SpecialtyToolProps) {
   const draft = useMemo(() => parseDraft(value), [value]);
   const series = useMemo(() => deriveCardioSeries(historial), [historial]);
   const estudiosHistorial = useMemo(() => {
@@ -356,7 +356,7 @@ export function CardiologiaTool({ value, onChange, readOnly, historial }: Specia
   // ── Panel CV: factores ──
   const factores = draft.panel?.factores ?? {};
   const nFactores = FACTORES_RIESGO.filter((f) => factores[f] === true).length;
-  const riesgo = scoreRiesgoCV(factores);
+  const riesgo = scoreRiesgoCV(factores, edad);
 
   const toggleFactor = (f: FactorRiesgo) => {
     const next = { ...factores };

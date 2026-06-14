@@ -18,6 +18,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import * as I from "@/components/icons";
 import { nombreCortoProfesional } from "@/lib/agenda/profesional";
 import { minutesTo, STATE_CONF } from "@/lib/dashboard-helpers";
+import { canTransition } from "@/lib/turno-states";
 import { useLiveTimer } from "@/lib/use-live-timer";
 import type { EstadoTurno, Paciente, Turno } from "@/lib/types";
 
@@ -105,11 +106,10 @@ export function TurnoRow({ turno, paciente, isNext, now, timezone, onTransition,
   // actual (terminales: cerrado/cancelado/no_asistio/reagendado), no montamos
   // el trigger del menú.
   const puedeReagendar = (isAgendado || isConfirmado) && onReagendar != null;
-  const puedeCancelar =
-    turno.estado !== "cerrado" &&
-    turno.estado !== "cancelado" &&
-    turno.estado !== "no_asistio" &&
-    turno.estado !== "reagendado";
+  // Gateado por la matriz REAL (no por exclusión): atendiendo solo permite
+  // → cerrado, así que "Cancelar" no debe ofrecerse ahí (evita un confirm
+  // destructivo que después no-opea — la transición la rechaza applyTransition).
+  const puedeCancelar = canTransition(turno.estado, "cancelado");
   const tieneMenu = puedeReagendar || showNoAsistio || puedeCancelar;
 
   return (

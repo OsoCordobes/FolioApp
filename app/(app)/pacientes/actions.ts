@@ -47,7 +47,10 @@ const createPacienteActionSchema = z.object({
   recomendadoPor: z.string().max(120).optional().or(z.literal("")),
   motivoConsulta: z.string().max(2000).optional().or(z.literal("")),
   tipoDoc: z.enum(["DNI", "LE", "LC", "CI", "PASAPORTE"]).optional(),
-  numeroDoc: z.string().max(20).optional().or(z.literal("")),
+  // Alineado con el writer (lib/db/pacientes.ts min(5)): un documento de 1–4
+  // caracteres daba un "Datos inválidos" genérico recién en el writer (audit L5).
+  // Vacío sigue permitido (el documento es opcional).
+  numeroDoc: z.string().min(5, "El documento debe tener al menos 5 caracteres.").max(20).optional().or(z.literal("")),
   // Workstream 5 · intake avanzado por especialidad (opcional). El shape de
   // `datos` lo valida el writer contra el schema de la especialidad.
   intakeAvanzado: z

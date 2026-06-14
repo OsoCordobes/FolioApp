@@ -160,12 +160,12 @@ function Row({ label, sub, children, vertical }: { label: string; sub?: string; 
   );
 }
 
-function TextInput({ value, onChange, placeholder, prefix, type = "text" }: { value: string; onChange: (v: string) => void; placeholder?: string; prefix?: string; type?: string }) {
+function TextInput({ value, onChange, placeholder, prefix, type = "text", readOnly }: { value: string; onChange: (v: string) => void; placeholder?: string; prefix?: string; type?: string; readOnly?: boolean }) {
   if (prefix) {
     return (
       <div className="cfg-input-prefix">
         <span className="fm-mono">{prefix}</span>
-        <input type={type} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
+        <input type={type} value={value} placeholder={placeholder} readOnly={readOnly} onChange={(e) => onChange(e.target.value)} />
       </div>
     );
   }
@@ -175,6 +175,7 @@ function TextInput({ value, onChange, placeholder, prefix, type = "text" }: { va
       type={type}
       value={value}
       placeholder={placeholder}
+      readOnly={readOnly}
       onChange={(e) => onChange(e.target.value)}
     />
   );
@@ -206,8 +207,8 @@ function SecCuenta({ c, set }: { c: ConsultorioData; set: (patch: Partial<Consul
         <Row label="Matrícula" sub="Formato libre">
           <TextInput value={c.matricula} onChange={(v) => set({ matricula: v })} />
         </Row>
-        <Row label="Email" sub="Para login y notificaciones del sistema">
-          <TextInput type="email" value={c.email} onChange={(v) => set({ email: v })} />
+        <Row label="Email" sub="Es tu email de inicio de sesión — se gestiona desde tu cuenta, no se edita acá.">
+          <TextInput type="email" value={c.email} onChange={() => {}} readOnly />
         </Row>
         <Row label="Teléfono">
           <TextInput

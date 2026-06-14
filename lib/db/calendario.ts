@@ -295,7 +295,9 @@ export async function getCalendarioSemana(input: FetcherInput): Promise<Result<C
           "fecha_propuesta, duracion_min, servicio_id, motivo_cifrado, precio_cents, recibido_ts, confirmado_ts",
       )
       .eq("organization_id", organizationId)
-      .in("estado", ["PENDIENTE", "REAGENDADO"])
+      // Solo PENDIENTE: la UI filtra estricto por "pendiente"; traer REAGENDADO
+      // descifraba PII de filas que ninguna vista renderiza (audit L9).
+      .eq("estado", "PENDIENTE")
       .order("recibido_ts", { ascending: false }),
     // Disponibilidad activa — decide qué días de finde se pintan "Cerrado" y
     // el denominador del % de capacidad por día. Con filtro de profesional
@@ -359,7 +361,12 @@ export async function getCalendarioSemana(input: FetcherInput): Promise<Result<C
     const nombre = tryDecrypt(row.nombre_cifrado, `pedido.${row.id}.nombre`) ?? "Sin nombre";
     const tel = tryDecrypt(row.telefono_cifrado, `pedido.${row.id}.tel`) ?? "";
     const email = tryDecrypt(row.email_cifrado, `pedido.${row.id}.email`);
-    const motivo = tryDecrypt(row.motivo_cifrado, `pedido.${row.id}.motivo`) ?? "";
+    // M56/M3: el motivo del booking es PHI clínica — solo se descifra para roles
+    // clínicos (mismo gate fail-closed que turno.notaReserva). Recepción triage
+    // por nombre/servicio/fecha; no ve el motivo.
+    const motivo = canReadClinical
+      ? (tryDecrypt(row.motivo_cifrado, `pedido.${row.id}.motivo`) ?? "")
+      : "";
 
     return {
       id: row.id,
