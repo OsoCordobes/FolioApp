@@ -53,63 +53,78 @@ export const SPINE_VERTEBRAS: SpineVertebra[] = [
   { id: "L5", region: "lumbar",  x: 134, y: 588, w: 62, h: 19, tilt:  5 },
 ];
 
-// ─── Vista posterior (Workstream 6) ──────────────────────────────────────────
+// ─── Vista posterior · ilustración anatómica (Workstream 6 · rework) ──────────
 //
-// Columna vertical centrada y simétrica (NO la curva lateral): la hoja de
-// trabajo quiropráctica clásica con las etiquetas al costado de una columna de
-// celdas. 27 entradas top→bottom: C0 (occipucio), C1..C7, T1..T12, L1..L5,
-// S (sacro), P (cóccix/pelvis). Mismo tipo SpineVertebra que la lateral; `tilt`
-// queda en 0 (columna recta) y `x` es constante (centrada).
+// Columna vertebral vista DE ESPALDAS (posterior), anatómicamente fiel a la hoja
+// de trabajo quiropráctica: occipucio → cervicales (C1–C7) → dorsales (T1–T12,
+// apófisis espinosas largas que se solapan tipo teja) → lumbares (L1–L5, cuerpos
+// grandes) → sacro (triángulo con cresta y forámenes) → cóccix. Cada vértebra es
+// un glifo (apófisis espinosa central + apófisis transversas + láminas) cuyo
+// ancho crece de cervical a lumbar — la silueta característica de una columna
+// real, no celdas rectangulares.
+//
+// viewBox angosto y alto (la columna vive SIEMPRE en una franja lateral). El
+// centro horizontal es POSTERIOR_CX; `y` es el centro vertical del cuerpo
+// vertebral; `region` decide la forma+tamaño del glifo (lo dibuja spine-map).
+
+export type RegionVert = "occipucio" | "cervical" | "dorsal" | "lumbar" | "sacro" | "coccix";
 
 export interface PosteriorVertebra {
   id: string;
-  region: "cervical" | "dorsal" | "lumbar" | "sacro";
-  /** Etiqueta humana al costado (ej. "Occipucio", "Sacro", "Cóccix"). */
+  region: RegionVert;
+  /** Etiqueta al costado (ej. "C0", "T7", "Sacro"). */
   label: string;
+  /** Centro horizontal (constante: columna recta en vista posterior). */
   x: number;
+  /** Centro vertical del glifo en el viewBox. */
   y: number;
+  /** Ancho de referencia del glifo (crece cervical→lumbar). */
   w: number;
+  /** Alto/paso vertical del glifo. */
   h: number;
 }
 
-// Generación determinística de la columna centrada. viewBox 220×620 (igual que
-// la lateral) para que ambos SVG compartan dimensiones y el toggle no salte.
-const POSTERIOR_X = 110;          // centro horizontal del viewBox 220
-const POSTERIOR_TOP = 40;         // y de la primera celda (C0)
-const POSTERIOR_STEP = 21;        // separación vertical entre celdas
-const POSTERIOR_W = 46;           // ancho de cada celda
-const POSTERIOR_H = 14;           // alto de cada celda
+export const POSTERIOR_CX = 76;          // centro horizontal del viewBox (152 ancho)
+export const POSTERIOR_VIEWBOX_W = 152;
+export const POSTERIOR_VIEWBOX_H = 660;
 
-const POSTERIOR_DEFS: Array<{ id: string; region: PosteriorVertebra["region"]; label: string }> = [
-  { id: "C0", region: "cervical", label: "Occipucio" },
-  ...Array.from({ length: 7 }, (_, i) => ({
-    id: `C${i + 1}`,
-    region: "cervical" as const,
-    label: `C${i + 1}`,
-  })),
-  ...Array.from({ length: 12 }, (_, i) => ({
-    id: `T${i + 1}`,
-    region: "dorsal" as const,
-    label: `T${i + 1}`,
-  })),
-  ...Array.from({ length: 5 }, (_, i) => ({
-    id: `L${i + 1}`,
-    region: "lumbar" as const,
-    label: `L${i + 1}`,
-  })),
+// Construcción top→bottom con pasos y anchos por región (anatómicos). El paso es
+// la distancia al centro de la vértebra siguiente; el ancho alimenta el glifo.
+const REGION_SPEC: Record<RegionVert, { step: number; w: number; h: number }> = {
+  occipucio: { step: 34, w: 74, h: 26 },
+  cervical:  { step: 15, w: 26, h: 12 },
+  dorsal:    { step: 18, w: 40, h: 14 },
+  lumbar:    { step: 23, w: 56, h: 18 },
+  sacro:     { step: 44, w: 54, h: 40 },
+  coccix:    { step: 18, w: 20, h: 16 },
+};
+
+const POSTERIOR_DEFS: Array<{ id: string; region: RegionVert; label: string }> = [
+  { id: "C0", region: "occipucio", label: "C0" },
+  ...Array.from({ length: 7 }, (_, i) => ({ id: `C${i + 1}`, region: "cervical" as const, label: `C${i + 1}` })),
+  ...Array.from({ length: 12 }, (_, i) => ({ id: `T${i + 1}`, region: "dorsal" as const, label: `T${i + 1}` })),
+  ...Array.from({ length: 5 }, (_, i) => ({ id: `L${i + 1}`, region: "lumbar" as const, label: `L${i + 1}` })),
   { id: "S", region: "sacro", label: "Sacro" },
-  { id: "P", region: "sacro", label: "Cóccix" },
+  { id: "P", region: "coccix", label: "Cóccix" },
 ];
 
-export const POSTERIOR_VERTEBRAS: PosteriorVertebra[] = POSTERIOR_DEFS.map((d, i) => ({
-  id: d.id,
-  region: d.region,
-  label: d.label,
-  x: POSTERIOR_X,
-  y: POSTERIOR_TOP + i * POSTERIOR_STEP,
-  w: POSTERIOR_W,
-  h: POSTERIOR_H,
-}));
+// Acumula la posición vertical sumando el paso de la región de cada vértebra.
+export const POSTERIOR_VERTEBRAS: PosteriorVertebra[] = (() => {
+  const out: PosteriorVertebra[] = [];
+  let y = 40;
+  for (let i = 0; i < POSTERIOR_DEFS.length; i++) {
+    const d = POSTERIOR_DEFS[i];
+    const spec = REGION_SPEC[d.region];
+    // El centro del glifo cae a medio paso desde el borde previo.
+    y += i === 0 ? spec.h / 2 : 0;
+    out.push({ id: d.id, region: d.region, label: d.label, x: POSTERIOR_CX, y, w: spec.w, h: spec.h });
+    const next = POSTERIOR_DEFS[i + 1];
+    const stepFrom = spec.step;
+    const stepTo = next ? REGION_SPEC[next.region].step : spec.step;
+    y += (stepFrom + stepTo) / 2;
+  }
+  return out;
+})();
 
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
