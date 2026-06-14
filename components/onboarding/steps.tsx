@@ -12,7 +12,7 @@
  * Step 9 vive en step9-moment.tsx (separado por su tamaño + animaciones propias).
  */
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 
 import { connectGoogleCalendar } from "@/app/(app)/configuracion/actions";
 import { updateOnboardingStep } from "@/app/(public)/onboarding/actions";
@@ -28,7 +28,6 @@ import {
   getEspecialidadServicios,
   getKnownTemplateServiceSignatures,
   getRubroTemplate,
-  listRubros,
   type ServicioTemplate,
 } from "@/lib/onboarding/templates";
 
@@ -153,8 +152,7 @@ function previewDataFor(data: OnboardingDataState): PublicCardData {
 
 function rubroLabel(id: string | undefined): string | undefined {
   if (!id) return undefined;
-  const found = listRubros().find((r) => r.id === id);
-  return found?.label;
+  return getRubroTemplate(id).label;
 }
 
 // ─── Helpers de templates de servicios (rubro + especialidad) ──────────────
@@ -263,7 +261,6 @@ export function Step2Profesional({ data, set, next, back, skip, orgSlug }: StepP
 export function Step3Consultorio({ data, set, next, back, skip, orgId, orgSlug }: StepProps) {
   const [errors, setErrors] = useState<Partial<Record<keyof OnboardingDataState, string>>>({});
   const [draftSlug, setDraftSlug] = useState<string>(orgSlug ?? "");
-  const rubros = useMemo(() => listRubros(), []);
 
   useEffect(() => {
     if (orgSlug) setDraftSlug(orgSlug);
@@ -279,22 +276,22 @@ export function Step3Consultorio({ data, set, next, back, skip, orgId, orgSlug }
   };
 
   /**
-   * Cuando el user cambia el rubro, aplicamos smart defaults SOLO en campos
-   * vacíos (no pisamos lo que ya escribió). La bio se sugiere solo si está
-   * vacía Y hay ciudad disponible.
+   * Selector único de especialidad (feedback de demo: el rubro con 11 opciones
+   * fantasma era redundante). La especialidad es la fuente de verdad y el
+   * `rubro` deriva 1:1 del slug (alimenta el label público + analytics). Aplica
+   * smart defaults SOLO en campos vacíos / sin tocar (no pisa lo que el user
+   * escribió): servicios por especialidad (consistente con Step 6) + bio y
+   * horarios del template del rubro homónimo.
    */
-  const onRubroChange = (newRubro: string) => {
-    set({ rubro: newRubro });
-    const tpl = getRubroTemplate(newRubro);
-    const patch: Partial<OnboardingDataState> = {};
+  const onEspecialidadChange = (slug: string) => {
+    const tpl = getRubroTemplate(slug); // rubro === especialidad (1:1)
+    const patch: Partial<OnboardingDataState> = { especialidad: slug, rubro: slug };
 
     if (!data.bio.trim() && data.ciudad.trim()) {
       patch.bio = tpl.bioTemplate(data.ciudad);
     }
-    // Solo aplicamos defaults de servicios/horarios si user no los modificó
-    // (defaults iniciales o template conocido — ver serviciosUntouched).
-    if (serviciosUntouched(data.servicios) && tpl.servicios.length > 0) {
-      patch.servicios = templateToStateServicios(tpl.servicios);
+    if (serviciosUntouched(data.servicios)) {
+      patch.servicios = templateToStateServicios(getEspecialidadServicios(slug));
     }
     const isDefaultHorarios =
       data.diasActivos.length === 5 &&
@@ -307,19 +304,6 @@ export function Step3Consultorio({ data, set, next, back, skip, orgId, orgSlug }
       patch.slotMin = tpl.horarios.slotMin;
     }
 
-    if (Object.keys(patch).length > 0) set(patch);
-  };
-
-  /**
-   * Cambio de especialidad (M50): además del slug, precarga los servicios
-   * template de la especialidad si el user no los editó a mano. Step 6
-   * repite el check al montar (cubre el caso resume).
-   */
-  const onEspecialidadChange = (slug: string) => {
-    const patch: Partial<OnboardingDataState> = { especialidad: slug };
-    if (serviciosUntouched(data.servicios)) {
-      patch.servicios = templateToStateServicios(getEspecialidadServicios(slug));
-    }
     set(patch);
   };
 
@@ -380,14 +364,6 @@ export function Step3Consultorio({ data, set, next, back, skip, orgId, orgSlug }
             value={data.consultorioNombre}
             onChange={(e) => { set({ consultorioNombre: e.target.value }); if (errors.consultorioNombre) setErrors((p) => ({ ...p, consultorioNombre: undefined })); }}
             onBlur={() => onBlur("consultorioNombre")} />
-        </Field>
-
-        <Field label="Rubro">
-          <select value={data.rubro} onChange={(e) => onRubroChange(e.target.value)}>
-            {rubros.map((r) => (
-              <option key={r.id} value={r.id}>{r.label}</option>
-            ))}
-          </select>
         </Field>
 
         <div className="onb-field">

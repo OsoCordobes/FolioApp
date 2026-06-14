@@ -7,6 +7,7 @@
 
 const RUBRO_LABELS: Record<string, string> = {
   quiropraxia: "Quiropraxia",
+  cardiologia: "Cardiología",
   kinesiologia: "Kinesiología",
   fonoaudiologia: "Fonoaudiología",
   psicologia: "Psicología",
