@@ -20,14 +20,18 @@ import {
   cardiologiaToolDataSchema,
   resumenSesionCardiologia,
 } from "@/lib/especialidades/cardiologia/schema";
+import { intakeAvanzadoCardiologia } from "@/lib/especialidades/cardiologia/intake";
 import {
   psicologiaToolDataSchema,
   resumenSesionPsicologia,
 } from "@/lib/especialidades/psicologia/schema";
+import { intakeAvanzadoPsicologia } from "@/lib/especialidades/psicologia/intake";
 import {
   quiropraxiaToolDataSchema,
   resumenSesionQuiropraxia,
 } from "@/lib/especialidades/quiropraxia/schema";
+import { intakeAvanzadoQuiropraxia } from "@/lib/especialidades/quiropraxia/intake";
+import type { IntakeAvanzadoConfig } from "@/lib/especialidades/types";
 
 // ─── Slugs ──────────────────────────────────────────────────────────────────
 
@@ -113,6 +117,12 @@ export interface EspecialidadMeta {
   schema: z.ZodType;
   /** Resumen de una sesión para HistorialReciente / TabSesiones. */
   resumenSesion(toolData: unknown): string;
+  /**
+   * Workstream 5 · config de la sección "Información avanzada (opcional)" del
+   * alta: campos a renderizar + schema zod que el writer valida antes de cifrar
+   * en paciente_intake_avanzado (M60). Vive en lib/especialidades/<slug>/intake.ts.
+   */
+  intakeAvanzado: IntakeAvanzadoConfig;
 }
 
 export const ESPECIALIDADES_META: Record<EspecialidadSlug, EspecialidadMeta> = {
@@ -123,6 +133,7 @@ export const ESPECIALIDADES_META: Record<EspecialidadSlug, EspecialidadMeta> = {
     toolId: "quiropraxia.spine.v1",
     schema: quiropraxiaToolDataSchema,
     resumenSesion: resumenSesionQuiropraxia,
+    intakeAvanzado: intakeAvanzadoQuiropraxia,
   },
   cardiologia: {
     slug: "cardiologia",
@@ -131,6 +142,7 @@ export const ESPECIALIDADES_META: Record<EspecialidadSlug, EspecialidadMeta> = {
     toolId: "cardiologia.cv.v1",
     schema: cardiologiaToolDataSchema,
     resumenSesion: resumenSesionCardiologia,
+    intakeAvanzado: intakeAvanzadoCardiologia,
   },
   psicologia: {
     slug: "psicologia",
@@ -139,12 +151,22 @@ export const ESPECIALIDADES_META: Record<EspecialidadSlug, EspecialidadMeta> = {
     toolId: "psicologia.escalas.v1",
     schema: psicologiaToolDataSchema,
     resumenSesion: resumenSesionPsicologia,
+    intakeAvanzado: intakeAvanzadoPsicologia,
   },
 };
 
 /** Meta por slug, con fallback a quiropraxia para valores desconocidos. */
 export function getEspecialidadMeta(slug: string | null | undefined): EspecialidadMeta {
   return ESPECIALIDADES_META[normalizeEspecialidadSlug(slug)];
+}
+
+/**
+ * Config del intake avanzado de una especialidad, con fallback a quiropraxia
+ * para slugs desconocidos (mismo criterio que getEspecialidadMeta). La usan el
+ * form del alta, el writer (lib/db/paciente-intake.ts) y la vista de la ficha.
+ */
+export function getIntakeAvanzadoConfig(slug: string | null | undefined): IntakeAvanzadoConfig {
+  return ESPECIALIDADES_META[normalizeEspecialidadSlug(slug)].intakeAvanzado;
 }
 
 /** Meta por toolId (sesion.tool_id) o null si el registry no lo conoce. */

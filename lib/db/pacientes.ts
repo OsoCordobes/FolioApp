@@ -11,10 +11,12 @@ import { z } from "zod";
 
 import { capabilitiesFor } from "@/lib/auth/capabilities";
 import { blindIndex, blindIndexPhone, encryptColumn, tryDecrypt } from "@/lib/crypto";
+import { ESPECIALIDAD_SLUGS } from "@/lib/especialidades/meta";
 import { trackEvent } from "@/lib/observability/events";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import { err, mapSupabaseError, ok, type Result } from "./errors";
+import { savePacienteIntakeAvanzado } from "./paciente-intake";
 import { resolveProfesionalDestino } from "./profesional-destino";
 import { getActiveSession } from "./session";
 
@@ -37,10 +39,21 @@ const createPacienteSchema = z.object({
   domicilioCiudad: z.string().max(60).optional(),
   domicilioProvincia: z.string().max(60).optional(),
   domicilioCp: z.string().max(15).optional(),
+  // M59 · campos comunes de intake (PII cifrada en paciente_identidad).
+  ocupacion: z.string().max(120).optional(),
+  recomendadoPor: z.string().max(120).optional(),
   motivoConsulta: z.string().max(2000).optional(),
   notasImportantes: z.string().max(2000).optional(),
   tags: z.array(z.string().max(40)).max(10).default([]),
   profesionalPrincipalId: z.string().uuid().optional(),
+  // Workstream 5 · intake avanzado por especialidad (opcional, M60). Se inserta
+  // best-effort DESPUÉS del paciente — nunca bloquea el alta (ver createPaciente).
+  intakeAvanzado: z
+    .object({
+      especialidad: z.enum(ESPECIALIDAD_SLUGS),
+      datos: z.record(z.string(), z.unknown()),
+    })
+    .optional(),
 });
 
 export type CreatePacienteInput = z.infer<typeof createPacienteSchema>;
@@ -235,6 +248,10 @@ export async function createPaciente(input: CreatePacienteInput): Promise<Result
       telefono_cifrado: encryptColumn(d.telefono)!,
       domicilio_calle_cifrado: encryptColumn(d.domicilioCalle ?? null),
       domicilio_numero_cifrado: encryptColumn(d.domicilioNumero ?? null),
+      // M59 · campos comunes de intake (PII cifrada). recomendado_por es PII de
+      // un tercero; ambos los borra la pseudonimización al eliminar la identidad.
+      ocupacion_cifrado: encryptColumn(d.ocupacion ?? null),
+      recomendado_por_cifrado: encryptColumn(d.recomendadoPor ?? null),
       fecha_nacimiento: d.fechaNacimiento ?? null,
       sexo_biologico: d.sexoBiologico ?? null,
       genero_autopercibido: d.generoAutopercibido ?? null,
@@ -273,6 +290,20 @@ export async function createPaciente(input: CreatePacienteInput): Promise<Result
     await supabase.from("paciente_identidad").delete().eq("id", identidad.id);
     const mapped = pacErr ? mapSupabaseError(pacErr) : { code: "db_error" as const, message: "No se creó el paciente." };
     return err(mapped.code, mapped.message, pacErr?.message);
+  }
+
+  // Workstream 5 · intake avanzado (opcional, M60). BEST-EFFORT: el alta NUNCA
+  // se bloquea ni se rollbackea por el intake (requisito del owner: la sección
+  // avanzada jamás impide guardar al paciente). Solo se intenta si hay al menos
+  // un valor no vacío; si falla, se ignora (el savePacienteIntakeAvanzado ya
+  // valida + cifra server-side y mapea sus propios errores). El paciente queda
+  // creado y el usuario puede completar/corregir el avanzado desde la ficha.
+  if (d.intakeAvanzado && tieneAlgunValor(d.intakeAvanzado.datos)) {
+    await savePacienteIntakeAvanzado({
+      pacienteId: paciente.id,
+      especialidad: d.intakeAvanzado.especialidad,
+      datos: d.intakeAvanzado.datos,
+    });
   }
 
   // Business event (Sprint 2 T2.2). Fire-and-forget: si PostHog falla no
@@ -321,5 +352,21 @@ export async function getPacienteCompleto(pacienteId: string): Promise<Result<Re
     domicilio_numero: tryDecrypt(row.domicilio_numero_cifrado as Buffer | null, "paciente.domicilio_numero"),
     motivo_consulta: tryDecrypt(row.motivo_consulta_cifrado as Buffer | null, "paciente.motivo_consulta"),
     notas_importantes: tryDecrypt(row.notas_importantes_cifrado as Buffer | null, "paciente.notas_importantes"),
+  });
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/**
+ * ¿El objeto de datos del intake avanzado tiene AL MENOS un valor "real"?
+ * (string no vacío o booleano true). Sirve para no insertar una fila vacía si el
+ * usuario abrió la sección avanzada pero no completó nada. `false` (un checkbox
+ * destildado) cuenta como "sin valor" — no aporta información clínica.
+ */
+function tieneAlgunValor(datos: Record<string, unknown>): boolean {
+  return Object.values(datos).some((v) => {
+    if (typeof v === "string") return v.trim().length > 0;
+    if (typeof v === "boolean") return v === true;
+    return v != null;
   });
 }

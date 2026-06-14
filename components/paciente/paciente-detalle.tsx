@@ -20,13 +20,15 @@ import * as I from "@/components/icons";
 import { saveSesionFichaAction, saveSesionYCerrarAction } from "@/app/(app)/pacientes/actions";
 import { TurnoCreateModal } from "@/components/hoy/turno-create-modal";
 import { PacienteFichaProvider, usePacienteFicha } from "@/components/paciente/contexto";
+import { IntakeAvanzadoModal } from "@/components/paciente/intake-avanzado-modal";
 import { PlanTratamientoModal } from "@/components/paciente/plan-tratamiento-modal";
 import {
   filtrarToolHistorial,
   getEspecialidad,
+  getIntakeAvanzadoConfig,
   type EspecialidadSlug,
 } from "@/lib/especialidades/registry";
-import type { PacienteFichaInfo, PlanData } from "@/lib/db/paciente-ficha";
+import type { IntakeAvanzadoFicha, PacienteFichaInfo, PlanData } from "@/lib/db/paciente-ficha";
 
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
@@ -414,6 +416,10 @@ function TabInformacion() {
           <dd>{paciente.email || "—"}</dd>
           <dt>Cumpleaños</dt>
           <dd>{cumple}</dd>
+          <dt>Ocupación</dt>
+          <dd>{paciente.ocupacion || "—"}</dd>
+          <dt>Recomendado por</dt>
+          <dd>{paciente.recomendadoPor || "—"}</dd>
           <dt>Obra social</dt>
           <dd>Particular</dd>
         </dl>
@@ -437,8 +443,74 @@ function TabInformacion() {
           {paciente.notasImportantes || "Sin notas registradas todavía."}
         </p>
       </section>
+      <InfoAvanzada />
     </div>
   );
+}
+
+// ─── Sub: Información avanzada por especialidad (read-only + editar) ──────────
+
+function InfoAvanzada() {
+  const { paciente, especialidad, intakeAvanzado } = usePacienteFicha();
+  const [editOpen, setEditOpen] = useState(false);
+
+  // Los campos/labels salen del config de la especialidad ACTIVA. Mostramos
+  // todos los campos del config con su valor (o "—" si no está) para que la
+  // ficha refleje la anamnesis completa de esa especialidad.
+  const campos = getIntakeAvanzadoConfig(especialidad).campos;
+  const datos = intakeAvanzado?.datos ?? {};
+
+  return (
+    <section className="pc-card">
+      <header className="pc-card-head">
+        <span className="fi-eyebrow">Información avanzada</span>
+        <button
+          type="button"
+          className="pc-link"
+          onClick={() => setEditOpen(true)}
+          title="Editar los antecedentes de esta especialidad"
+        >
+          Editar
+        </button>
+      </header>
+      {campos.length === 0 ? (
+        <p className="pc-card-text muted">No hay campos avanzados para esta especialidad.</p>
+      ) : (
+        <dl className="pc-dl">
+          {campos.map((campo) => (
+            <FragmentCampo key={campo.key} label={campo.label} valor={fmtIntakeValor(datos[campo.key])} />
+          ))}
+        </dl>
+      )}
+
+      {editOpen ? (
+        <IntakeAvanzadoModal
+          pacienteId={paciente.id}
+          especialidad={especialidad}
+          datos={intakeAvanzado?.datos ?? null}
+          onClose={() => setEditOpen(false)}
+        />
+      ) : null}
+    </section>
+  );
+}
+
+/** Una fila dt/dd del intake avanzado (label + valor formateado). */
+function FragmentCampo({ label, valor }: { label: string; valor: string }) {
+  return (
+    <>
+      <dt>{label}</dt>
+      <dd>{valor}</dd>
+    </>
+  );
+}
+
+/** Formatea un valor del intake para la vista read-only (es-AR). */
+function fmtIntakeValor(value: unknown): string {
+  if (value === true) return "Sí";
+  if (value === false || value == null) return "—";
+  if (typeof value === "string") return value.trim().length > 0 ? value : "—";
+  return String(value);
 }
 
 function TabSesiones() {
@@ -625,11 +697,19 @@ interface PacienteDetalleProps {
   cumple: string;
   /** Especialidad de la org (M50) — el server component la saca del contexto activo. */
   especialidad: EspecialidadSlug;
+  /** Workstream 5 · intake avanzado de la especialidad activa (M60) o null. */
+  intakeAvanzado: IntakeAvanzadoFicha | null;
 }
 
-export function PacienteDetalle({ paciente, plan, cumple, especialidad }: PacienteDetalleProps) {
+export function PacienteDetalle({
+  paciente,
+  plan,
+  cumple,
+  especialidad,
+  intakeAvanzado,
+}: PacienteDetalleProps) {
   return (
-    <PacienteFichaProvider value={{ paciente, plan, cumple, especialidad }}>
+    <PacienteFichaProvider value={{ paciente, plan, cumple, especialidad, intakeAvanzado }}>
       <PacienteDetalleInner />
     </PacienteFichaProvider>
   );

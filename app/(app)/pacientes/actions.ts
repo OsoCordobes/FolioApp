@@ -17,12 +17,14 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { getActiveContext } from "@/lib/db/active-context";
+import { savePacienteIntakeAvanzado } from "@/lib/db/paciente-intake";
 import { createPaciente } from "@/lib/db/pacientes";
 import { savePlanTratamiento } from "@/lib/db/plan-tratamiento";
 import { upsertSesion } from "@/lib/db/sesiones";
 import { transitionTurno } from "@/lib/db/turnos";
 import { err, ok, type Result } from "@/lib/db/errors";
 import { buildUpsertSesionInput } from "@/lib/especialidades/draft";
+import { ESPECIALIDAD_SLUGS } from "@/lib/especialidades/meta";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const createPacienteActionSchema = z.object({
@@ -30,12 +32,31 @@ const createPacienteActionSchema = z.object({
   apellido: z.string().min(1).max(80),
   telefono: z.string().min(6).max(30),
   email: z.string().email().optional().or(z.literal("")),
+  // M59 · campos comunes de intake (el form los pide requeridos, pero el schema
+  // los acepta vacíos para no romper otros callers de la action).
+  fechaNacimiento: z.string().date().optional().or(z.literal("")),
+  // Lugar de residencia del form → domicilio_ciudad.
+  domicilioCiudad: z.string().max(60).optional().or(z.literal("")),
+  domicilioProvincia: z.string().max(60).optional().or(z.literal("")),
+  ocupacion: z.string().max(120).optional().or(z.literal("")),
+  recomendadoPor: z.string().max(120).optional().or(z.literal("")),
   motivoConsulta: z.string().max(2000).optional().or(z.literal("")),
   tipoDoc: z.enum(["DNI", "LE", "LC", "CI", "PASAPORTE"]).optional(),
   numeroDoc: z.string().max(20).optional().or(z.literal("")),
+  // Workstream 5 · intake avanzado por especialidad (opcional). El shape de
+  // `datos` lo valida el writer contra el schema de la especialidad.
+  intakeAvanzado: z
+    .object({
+      especialidad: z.enum(ESPECIALIDAD_SLUGS),
+      datos: z.record(z.string(), z.unknown()),
+    })
+    .optional(),
 });
 
 export type CreatePacienteActionInput = z.infer<typeof createPacienteActionSchema>;
+
+const emptyToUndef = (v: string | undefined): string | undefined =>
+  v && v.length > 0 ? v : undefined;
 
 export async function createPacienteAction(
   input: CreatePacienteActionInput,
@@ -50,16 +71,59 @@ export async function createPacienteAction(
     nombre: d.nombre,
     apellido: d.apellido,
     telefono: d.telefono,
-    email: d.email && d.email.length > 0 ? d.email : undefined,
-    motivoConsulta: d.motivoConsulta && d.motivoConsulta.length > 0 ? d.motivoConsulta : undefined,
+    email: emptyToUndef(d.email),
+    fechaNacimiento: emptyToUndef(d.fechaNacimiento),
+    domicilioCiudad: emptyToUndef(d.domicilioCiudad),
+    domicilioProvincia: emptyToUndef(d.domicilioProvincia),
+    ocupacion: emptyToUndef(d.ocupacion),
+    recomendadoPor: emptyToUndef(d.recomendadoPor),
+    motivoConsulta: emptyToUndef(d.motivoConsulta),
     tipoDoc: d.tipoDoc ?? "DNI",
-    numeroDoc: d.numeroDoc && d.numeroDoc.length > 0 ? d.numeroDoc : undefined,
+    numeroDoc: emptyToUndef(d.numeroDoc),
     tags: [],
+    intakeAvanzado: d.intakeAvanzado,
   });
 
   if (!result.ok) return result;
 
   revalidatePath("/pacientes");
+  return ok({ id: result.data.id });
+}
+
+// ─── Guardar intake avanzado desde la ficha (tab Información) ─────────────────
+
+const saveIntakeAvanzadoSchema = z.object({
+  pacienteId: z.string().uuid(),
+  especialidad: z.enum(ESPECIALIDAD_SLUGS),
+  datos: z.record(z.string(), z.unknown()),
+});
+
+export type SaveIntakeAvanzadoActionInput = z.infer<typeof saveIntakeAvanzadoSchema>;
+
+/**
+ * Persiste el intake avanzado de una especialidad desde el modal de edición de
+ * la ficha (1:1 por paciente+especialidad, M60). El writer valida `datos`
+ * contra el schema de la especialidad y cifra el JSON server-side. Tenancy y
+ * coherencia los cubren la RLS + el trigger same-org en DB.
+ */
+export async function savePacienteIntakeAvanzadoAction(
+  input: SaveIntakeAvanzadoActionInput,
+): Promise<Result<{ id: string }>> {
+  const parsed = saveIntakeAvanzadoSchema.safeParse(input);
+  if (!parsed.success) {
+    return err("validation", "Datos del intake avanzado inválidos.", parsed.error.message);
+  }
+
+  const result = await savePacienteIntakeAvanzado({
+    pacienteId: parsed.data.pacienteId,
+    especialidad: parsed.data.especialidad,
+    datos: parsed.data.datos,
+  });
+  if (!result.ok) return result;
+
+  // La vuelta: la ficha re-renderiza la sección avanzada con los valores nuevos.
+  revalidatePath("/pacientes/[id]");
+  revalidatePath(`/pacientes/${parsed.data.pacienteId}`);
   return ok({ id: result.data.id });
 }
 

@@ -59,6 +59,21 @@ export interface PacienteFichaInfo {
   telefono: string;
   tel: string;
   email: string;
+  /** M59 · ocupación (PII desencriptada). "" si no está cargada. */
+  ocupacion: string;
+  /** M59 · recomendado por (PII de tercero, desencriptada). "" si no está. */
+  recomendadoPor: string;
+}
+
+/**
+ * Workstream 5 · intake avanzado por especialidad para la ficha (M60). La
+ * especialidad es la ACTIVA resuelta (member del turno en curso ?? org); `datos`
+ * ya viene descifrado + JSON.parse tolerante. null si no hay fila para esa
+ * especialidad. Los labels los pone la UI desde el config del registry.
+ */
+export interface IntakeAvanzadoFicha {
+  especialidad: EspecialidadSlug;
+  datos: Record<string, unknown>;
 }
 
 export interface SesionPlan {
@@ -149,6 +164,13 @@ export interface PacienteFichaData {
   paciente: PacienteFichaInfo;
   plan: PlanData;
   cumple: string; // "18 may" o "—"
+  /**
+   * Workstream 5 · intake avanzado de la especialidad ACTIVA (M60), o null si no
+   * hay fila. La sección "Información avanzada" de la ficha lo rinde read-only +
+   * un modal de edición. Solo se trae el de la especialidad activa (no las otras
+   * de una ficha mixta) — la edición es por la especialidad del slot.
+   */
+  intakeAvanzado: IntakeAvanzadoFicha | null;
 }
 
 // ─── Tipos de rows DB ──────────────────────────────────────────────────────
@@ -167,9 +189,18 @@ interface PacienteCompletoRow {
   apellido_cifrado: string | null;
   email_cifrado: string | null;
   telefono_cifrado: string | null;
+  // M59 · campos comunes de intake (PII cifrada, expuestos por paciente_completo).
+  ocupacion_cifrado: string | null;
+  recomendado_por_cifrado: string | null;
   diagnosticos_activos: number;
   alergias_activas: number;
   medicaciones_vigentes: number;
+}
+
+/** M60 · fila de intake avanzado (1 por paciente+especialidad). */
+interface IntakeAvanzadoRow {
+  especialidad: string;
+  datos_cifrado: string | null;
 }
 
 interface SesionRow {
@@ -227,7 +258,7 @@ export async function getPacienteFicha(
 
   const supabase = await createSupabaseServerClient();
 
-  const [pacRes, sesionesRes, turnosRes, planRes] = await Promise.all([
+  const [pacRes, sesionesRes, turnosRes, planRes, intakeRes] = await Promise.all([
     supabase
       .from("paciente_completo")
       .select("*")
@@ -257,6 +288,14 @@ export async function getPacienteFicha(
       .eq("paciente_id", pacienteId)
       .eq("organization_id", organizationId)
       .maybeSingle(),
+    // M60 · intake avanzado del paciente (puede haber uno por especialidad en
+    // fichas mixtas). Traemos todos y abajo elegimos el de la especialidad
+    // ACTIVA (resuelta más abajo, una vez conocido el profesional del turno).
+    supabase
+      .from("paciente_intake_avanzado")
+      .select("especialidad, datos_cifrado")
+      .eq("paciente_id", pacienteId)
+      .eq("organization_id", organizationId),
   ]);
 
   if (pacRes.error) return err("db_error", "Error leyendo paciente.", pacRes.error.message);
@@ -278,6 +317,9 @@ export async function getPacienteFicha(
   const notas = tryDecrypt(row.notas_importantes_cifrado, "notas") ?? "";
   const tel = tryDecrypt(row.telefono_cifrado, "telefono") ?? "";
   const email = tryDecrypt(row.email_cifrado, "email") ?? "";
+  // M59 · campos comunes de intake (PII).
+  const ocupacion = tryDecrypt(row.ocupacion_cifrado, "ocupacion") ?? "";
+  const recomendadoPor = tryDecrypt(row.recomendado_por_cifrado, "recomendado_por") ?? "";
 
   const cerrados = turnos.filter((t) => t.estado === "CERRADO");
   const sesionesCompletadas = cerrados.length;
@@ -347,6 +389,8 @@ export async function getPacienteFicha(
     telefono: tel,
     tel,
     email,
+    ocupacion,
+    recomendadoPor,
   };
 
   const proximoTurno = turnos.find((t) =>
@@ -385,6 +429,17 @@ export async function getPacienteFicha(
       orgEspecialidad,
     );
   }
+
+  // M60 · intake avanzado de la especialidad ACTIVA. De todas las filas del
+  // paciente (una por especialidad en fichas mixtas) tomamos la que matchea la
+  // especialidad activa del slot — es la que el modal de edición de la ficha
+  // edita. datos_cifrado se descifra + JSON.parse tolerante (corrupción/JSON
+  // inválido degrada a null, no rompe la ficha).
+  const intakeRows = (intakeRes.data ?? []) as unknown as IntakeAvanzadoRow[];
+  const intakeRow = intakeRows.find((r) => r.especialidad === especialidadActiva) ?? null;
+  const intakeAvanzado: IntakeAvanzadoFicha | null = intakeRow
+    ? { especialidad: especialidadActiva, datos: parseIntakeDatos(intakeRow.datos_cifrado) }
+    : null;
 
   const turnoActivo: TurnoActivoFicha | null = turnoEnCurso
     ? {
@@ -443,7 +498,7 @@ export async function getPacienteFicha(
 
   const cumple = row.fecha_nacimiento ? formatCumple(row.fecha_nacimiento) : "—";
 
-  return ok({ paciente, plan, cumple });
+  return ok({ paciente, plan, cumple, intakeAvanzado });
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -490,6 +545,26 @@ function sesionToolData(s: SesionRow): unknown {
     v: 1,
     vertebras: (s.vertebras_json ?? []).map((v) => ({ id: v.id, estado: v.estado })),
   };
+}
+
+/**
+ * Descifra + JSON.parse del datos_cifrado del intake avanzado (M60). Tolerante:
+ * ciphertext corrupto, JSON inválido o shape no-objeto degradan a `{}` (la
+ * sección de la ficha muestra "sin datos" en vez de romper).
+ */
+function parseIntakeDatos(datosCifrado: string | null): Record<string, unknown> {
+  if (datosCifrado == null) return {};
+  const plain = tryDecrypt(datosCifrado, "intake.datos");
+  if (plain == null) return {};
+  try {
+    const parsed = JSON.parse(plain) as unknown;
+    if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    // PHI: no loguear en producción (linkage a datos clínicos). Degrada a {}.
+  }
+  return {};
 }
 
 function calcularEdad(fechaNacimiento: string): number {
