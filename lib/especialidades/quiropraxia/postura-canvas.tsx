@@ -102,32 +102,37 @@ export function PosturaCanvas({ value, onChange, readOnly }: PosturaCanvasProps)
           onPointerLeave={commit}
           style={{ touchAction: "none", cursor: readOnly ? "default" : "crosshair" }}
         >
-          {/* Torso de espaldas: cabeza + hombros + contorno simple. */}
-          <g fill="none" stroke="var(--line)" strokeWidth="1.5" strokeLinejoin="round">
+          {/* Figura masculina de espaldas (solo contorno, sin relleno) —
+              referencia para trazar caída de hombros, escoliosis, etc.
+              cx=140. Cabeza + cuello + trapecio/hombros + torso con cintura y
+              cadera + brazos colgando + escápulas sutiles + línea media. */}
+          <g fill="none" stroke="var(--line)" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round">
             {/* cabeza */}
-            <circle cx={VIEW_W / 2} cy="42" r="26" />
+            <ellipse cx="140" cy="38" rx="21" ry="25" />
             {/* cuello */}
-            <path d={`M ${VIEW_W / 2 - 12} 66 L ${VIEW_W / 2 - 12} 80 M ${VIEW_W / 2 + 12} 66 L ${VIEW_W / 2 + 12} 80`} />
-            {/* hombros + torso */}
+            <path d="M 130 60 C 130 66, 130 68, 128 72 M 150 60 C 150 66, 150 68, 152 72" />
+            {/* tronco: trapecio → hombros (deltoides) → dorsal → cintura → cadera */}
             <path
-              d={`M ${VIEW_W / 2 - 12} 80
-                  C ${VIEW_W / 2 - 70} 86, ${VIEW_W / 2 - 86} 96, ${VIEW_W / 2 - 86} 110
-                  C ${VIEW_W / 2 - 80} 150, ${VIEW_W / 2 - 70} 175, ${VIEW_W / 2 - 64} 230
-                  C ${VIEW_W / 2 - 60} 280, ${VIEW_W / 2 - 40} 300, ${VIEW_W / 2} 300
-                  C ${VIEW_W / 2 + 40} 300, ${VIEW_W / 2 + 60} 280, ${VIEW_W / 2 + 64} 230
-                  C ${VIEW_W / 2 + 70} 175, ${VIEW_W / 2 + 80} 150, ${VIEW_W / 2 + 86} 110
-                  C ${VIEW_W / 2 + 86} 96, ${VIEW_W / 2 + 70} 86, ${VIEW_W / 2 + 12} 80`}
+              d="M 128 72
+                 C 119 76, 101 82, 89 100
+                 C 83 110, 81 117, 83 129
+                 C 91 162, 98 184, 102 206
+                 C 104 227, 99 247, 103 259
+                 C 114 272, 166 272, 177 259
+                 C 181 247, 176 227, 178 206
+                 C 182 184, 189 162, 197 129
+                 C 199 117, 197 110, 191 100
+                 C 179 82, 161 76, 152 72"
             />
-            {/* línea media de referencia */}
-            <line
-              x1={VIEW_W / 2}
-              y1="80"
-              x2={VIEW_W / 2}
-              y2="300"
-              stroke="var(--line-soft)"
-              strokeWidth="1"
-              strokeDasharray="4 4"
-            />
+            {/* brazo izquierdo colgando (deltoides → muñeca → cara interna) */}
+            <path d="M 85 124 C 74 148, 69 180, 73 208 C 75 219, 85 219, 87 208 C 91 184, 96 158, 97 135" />
+            {/* brazo derecho */}
+            <path d="M 195 124 C 206 148, 211 180, 207 208 C 205 219, 195 219, 193 208 C 189 184, 184 158, 183 135" />
+            {/* escápulas (sutiles, vista posterior) */}
+            <path stroke="var(--line-soft)" strokeWidth="1.1" d="M 124 116 C 113 122, 112 140, 126 150" />
+            <path stroke="var(--line-soft)" strokeWidth="1.1" d="M 156 116 C 167 122, 168 140, 154 150" />
+            {/* línea media de referencia (columna) */}
+            <line x1="140" y1="70" x2="140" y2="262" stroke="var(--line-soft)" strokeWidth="1" strokeDasharray="4 4" />
           </g>
 
           {/* Trazos confirmados. */}
