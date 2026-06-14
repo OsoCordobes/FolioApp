@@ -23,6 +23,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ProfFilterChips } from "@/components/agenda/prof-filter-chips";
 import * as I from "@/components/icons";
 import { PedidoModal } from "@/components/calendario/pedido-modal";
+import { TurnoDetalleModal } from "@/components/calendario/turno-detalle-modal";
 import { TurnoCreateModal } from "@/components/hoy/turno-create-modal";
 import { inicialesProfesional, type ProfesionalLite } from "@/lib/agenda/profesional";
 import { useAgendaAutoRefresh } from "@/lib/use-agenda-refresh";
@@ -190,7 +191,19 @@ const PEDIDO_CANAL_INFO: Record<string, { lbl: string; short: string }> = {
 
 // ─── Cards ──────────────────────────────────────────────────────────────────
 
-function TurnoCardSemana({ turno, lane, totalLanes, pacientes }: { turno: TurnoSemana; lane: number; totalLanes: number; pacientes: PacientesById }) {
+function TurnoCardSemana({
+  turno,
+  lane,
+  totalLanes,
+  pacientes,
+  onSelect,
+}: {
+  turno: TurnoSemana;
+  lane: number;
+  totalLanes: number;
+  pacientes: PacientesById;
+  onSelect: (t: TurnoSemana) => void;
+}) {
   const paciente = pacientes[turno.pacienteId];
   if (!paciente) return null;
   const vis = STATE_VIS[turno.estado] ?? STATE_VIS.agendado;
@@ -210,6 +223,8 @@ function TurnoCardSemana({ turno, lane, totalLanes, pacientes }: { turno: TurnoS
     .slice(0, 2)
     .toUpperCase();
 
+  // Click/Enter/Space abren el detalle del turno (mismo patrón a11y que
+  // PedidoGhostCard, pero conservando el <div> y su layout absoluto).
   return (
     <div
       className={
@@ -218,6 +233,16 @@ function TurnoCardSemana({ turno, lane, totalLanes, pacientes }: { turno: TurnoS
         (isCancelado ? "is-cancelado " : "") +
         (isNarrow ? "is-narrow" : "")
       }
+      role="button"
+      tabIndex={0}
+      title={`${paciente.nombre} · ${turno.hora}`}
+      onClick={() => onSelect(turno)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect(turno);
+        }
+      }}
       style={{
         top,
         height,
@@ -225,6 +250,7 @@ function TurnoCardSemana({ turno, lane, totalLanes, pacientes }: { turno: TurnoS
         background: vis.bg,
         border: `1px ${vis.borderStyle} ${vis.borderColor}`,
         color: vis.color,
+        cursor: "pointer",
       }}
     >
       {/* Atribución multi-profesional: profesionalNombre solo viene seteado en
@@ -585,6 +611,7 @@ function VistaSemana({
   nowHHMM,
   onOpenBandeja,
   onSelectPedido,
+  onSelectTurno,
 }: {
   turnos: TurnoSemana[];
   bloqueos: Bloqueo[];
@@ -599,6 +626,7 @@ function VistaSemana({
   nowHHMM: string;
   onOpenBandeja: () => void;
   onSelectPedido: (p: Pedido) => void;
+  onSelectTurno: (t: TurnoSemana) => void;
 }) {
   const pedidosSinFecha = pedidos.filter((p) => p.estado === "pendiente" && !p.fecha);
 
@@ -741,6 +769,7 @@ function VistaSemana({
                     lane={ev._lane}
                     totalLanes={ev._totalLanes}
                     pacientes={pacientes}
+                    onSelect={onSelectTurno}
                   />
                 );
               })}
@@ -769,11 +798,13 @@ function VistaMes({
   turnos,
   pacientes,
   hoyIso,
+  onSelectTurno,
 }: {
   grid: MonthGridCell[];
   turnos: TurnoSemana[];
   pacientes: PacientesById;
   hoyIso: string;
+  onSelectTurno: (t: TurnoSemana) => void;
 }) {
   // Agrupar turnos por fecha (YYYY-MM-DD).
   const turnosPorDia = useMemo(() => {
@@ -823,10 +854,20 @@ function VistaMes({
                   {dayTurnos.slice(0, MAX_PREVIEW).map((t) => {
                     const paciente = pacientes[t.pacienteId];
                     const nombre = paciente ? abreviar(paciente.nombre) : "Turno";
+                    // Click abre el mismo detalle que la vista semanal. El <button>
+                    // resetea estilos (font/color/border) para no alterar el
+                    // render del preview mensual; solo agrega cursor + hit-area.
                     return (
-                      <li key={t.id} className="cal-mes-event" title={`${t.hora} · ${nombre}`}>
-                        <span className="fi-mono cal-mes-event-h">{t.hora}</span>
-                        <span className="cal-mes-event-n">{nombre}</span>
+                      <li key={t.id} className="cal-mes-event">
+                        <button
+                          type="button"
+                          className="cal-mes-event-btn"
+                          title={`${t.hora} · ${nombre}`}
+                          onClick={() => onSelectTurno(t)}
+                        >
+                          <span className="fi-mono cal-mes-event-h">{t.hora}</span>
+                          <span className="cal-mes-event-n">{nombre}</span>
+                        </button>
                       </li>
                     );
                   })}
@@ -930,6 +971,7 @@ export function Calendario({
   const [estados, setEstados] = useState<Set<string>>(new Set());
   const [mostrarPedidos, setMostrarPedidos] = useState(true);
   const [selectedPedido, setSelectedPedido] = useState<Pedido | null>(null);
+  const [selectedTurno, setSelectedTurno] = useState<TurnoSemana | null>(null);
   const [agendarOpen, setAgendarOpen] = useState(false);
 
   // Href de cada chip del selector de profesional: preserva la vista activa
@@ -992,6 +1034,7 @@ export function Calendario({
           nowHHMM={nowHHMM}
           onOpenBandeja={() => setVista("bandeja")}
           onSelectPedido={setSelectedPedido}
+          onSelectTurno={setSelectedTurno}
         />
       ) : vista === "bandeja" ? (
         <VistaBandejaSimple
@@ -1004,6 +1047,7 @@ export function Calendario({
           turnos={mesTurnos}
           pacientes={mesPacientes}
           hoyIso={mesHoyIso}
+          onSelectTurno={setSelectedTurno}
         />
       )}
 
@@ -1017,6 +1061,30 @@ export function Calendario({
           onResolved={() => setSelectedPedido(null)}
         />
       ) : null}
+
+      {/* Detalle del turno (M56): el turno puede venir de la grilla semanal
+          (pacientes) o de la mensual (mesPacientes) — resolvemos el paciente
+          en ambos pools. Nombre/teléfono ya vienen desencriptados server-side;
+          notaReserva solo está presente para roles clínicos (gate en el fetcher). */}
+      {selectedTurno ? (() => {
+        const pac = pacientes[selectedTurno.pacienteId] ?? mesPacientes[selectedTurno.pacienteId];
+        return (
+          <TurnoDetalleModal
+            pacienteNombre={pac?.nombre ?? "Paciente"}
+            pacienteId={selectedTurno.pacienteId}
+            fecha={selectedTurno.fecha}
+            hora={selectedTurno.hora}
+            dur={selectedTurno.dur}
+            servicio={selectedTurno.servicio}
+            estado={selectedTurno.estado}
+            origen={selectedTurno.origen}
+            profesionalNombre={selectedTurno.profesionalNombre ?? null}
+            telefono={pac?.telefono ?? null}
+            notaReserva={selectedTurno.notaReserva ?? null}
+            onClose={() => setSelectedTurno(null)}
+          />
+        );
+      })() : null}
 
       {/* Entry point "Agendar": reusa el modal de /hoy tal cual (origen MANUAL).
           createTurnoAction ya revalida /calendario; el refresh fuerza el

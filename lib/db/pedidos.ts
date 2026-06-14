@@ -326,6 +326,10 @@ export async function promotePedidoToTurno(
     }
 
     // d. Insertar turno CONFIRMADO. Si falla, rollback del CAS a PENDIENTE.
+    //    M56: copiamos el motivo del booking a turno.nota_reserva_cifrado
+    //    (re-cifrado AES-256-GCM) para que el detalle del turno muestre la
+    //    aclaración del paciente sin tener que volver al pedido. Cubre tanto el
+    //    acepte manual de bandeja como el auto-confirm público (ambos pasan acá).
     const { data: turno, error: turnoErr } = await client
       .from("turno")
       .insert({
@@ -338,6 +342,7 @@ export async function promotePedidoToTurno(
         precio_cents: precioCents ?? 0,
         origen: buildTurnoOrigenFromCanal(canal),
         estado: "CONFIRMADO",
+        nota_reserva_cifrado: encryptColumn(motivo ?? null),
       })
       .select("id")
       .single();

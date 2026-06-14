@@ -16,10 +16,12 @@
  * del rol activo.
  */
 
+import { capabilitiesFor } from "@/lib/auth/capabilities";
 import { decryptColumn } from "@/lib/crypto";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import { err, ok, type Result } from "./errors";
+import { getActiveSession } from "./session";
 import type { Paciente, PacientesById, EstadoTurno, OrigenTurno, PostVisita, Turno } from "@/lib/types";
 
 // ─── Tipo de fila de turno_extendido ───────────────────────────────────────
@@ -46,6 +48,8 @@ interface TurnoExtendidoRow {
   servicio_tipo_canonico: string;
   pago_id: string | null;
   profesional_id: string;
+  /** M56 · motivo del booking público (PHI). Solo se descifra para roles clínicos. */
+  nota_reserva_cifrado: string | null;
 }
 
 // ─── Mapeos enum DB → UI ───────────────────────────────────────────────────
@@ -118,6 +122,14 @@ export async function getDashboardHoy(input: FetcherInput): Promise<Result<Dashb
   const { organizationId, fechaIso, timezone, profesionalId, profesionalesNombreById } = input;
   const supabase = await createSupabaseServerClient();
 
+  // M56 · gate clínico: la nota de reserva (motivo del booking) es PHI. Solo se
+  // descifra para roles con acceso clínico (espejo de can_read_clinical en RLS).
+  // Fail-closed sin sesión.
+  const sessionRes = await getActiveSession();
+  const canReadClinical = sessionRes.ok
+    ? capabilitiesFor(sessionRes.data.role, sessionRes.data.esColegiado).canReadClinical
+    : false;
+
   // Rango UTC equivalente a [00:00, 24:00) en la zona horaria de la org.
   // Conversión via UTC offset es propensa a DST issues; usamos `tz_to_utc_range`
   // calculado en JS pasando la fecha pivot a Intl.
@@ -130,7 +142,7 @@ export async function getDashboardHoy(input: FetcherInput): Promise<Result<Dashb
         "gcal_event_id, atendiendo_desde, duracion_real_min, " +
         "paciente_id, paciente_nombre_cifrado, paciente_apellido_cifrado, paciente_telefono_cifrado, " +
         "paciente_tipo, paciente_tags, paciente_alerta_alergia, " +
-        "servicio_nombre, servicio_tipo_canonico, pago_id, profesional_id",
+        "servicio_nombre, servicio_tipo_canonico, pago_id, profesional_id, nota_reserva_cifrado",
     )
     .eq("organization_id", organizationId)
     .gte("inicio", startUtc)
@@ -158,7 +170,13 @@ export async function getDashboardHoy(input: FetcherInput): Promise<Result<Dashb
     if (!pacientesAcum.has(row.paciente_id)) {
       pacientesAcum.set(row.paciente_id, rowToPaciente(row));
     }
-    return rowToTurno(row, postVisitaByTurno.get(row.id) ?? null, timezone, profesionalesNombreById);
+    return rowToTurno(
+      row,
+      postVisitaByTurno.get(row.id) ?? null,
+      timezone,
+      profesionalesNombreById,
+      canReadClinical,
+    );
   });
 
   const pacientes: PacientesById = Object.fromEntries(pacientesAcum.entries());
@@ -224,6 +242,7 @@ function rowToTurno(
   postVisitaFlag: { guardada: boolean } | null,
   timezone: string,
   profesionalesNombreById?: Record<string, string>,
+  canReadClinical = false,
 ): Turno {
   const estado = ESTADO_DB_TO_UI[row.estado];
   const origen = ORIGEN_DB_TO_UI[row.origen];
@@ -247,6 +266,11 @@ function rowToTurno(
     cobro: row.pago_id ? { estado: "pagado", ts: null } : { estado: "pendiente", ts: null },
     profesionalId: row.profesional_id ?? null,
     profesionalNombre: profesionalesNombreById?.[row.profesional_id] ?? null,
+    // M56 · gate PHI: solo desciframos la nota de reserva para roles clínicos;
+    // para el resto queda null y nunca sale del server (ni texto ni cifrado).
+    notaReserva: canReadClinical
+      ? tryDecrypt(row.nota_reserva_cifrado, `turno.${row.id}.nota_reserva`)
+      : null,
   };
 }
 

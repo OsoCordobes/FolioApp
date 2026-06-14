@@ -17077,3 +17077,18 @@ input:focus { outline: none; }
   background: var(--slate-soft); color: var(--slate);
   border: 1px solid transparent;
 }
+
+/* ─── M56 turno detalle ─────────────────────────────────────────────────────
+   Botón clickeable del preview de turno en la vista mensual. El <li>
+   .cal-mes-event conserva el chrome (fondo, padding, color); el botón es un
+   contenedor flex transparente que ocupa todo el alto/ancho del <li> y abre el
+   detalle del turno. Reset de defaults del <button> para no alterar el render.
+   Usa solo tokens existentes. */
+.cal-mes-event-btn {
+  display: flex; align-items: baseline; gap: 5px;
+  width: 100%; margin: 0; padding: 0;
+  border: none; background: none; cursor: pointer;
+  font: inherit; color: inherit; text-align: left;
+  overflow: hidden; white-space: nowrap;
+}
+.cal-mes-event-btn:hover { text-decoration: underline; }

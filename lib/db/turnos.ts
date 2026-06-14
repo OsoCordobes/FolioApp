@@ -281,6 +281,15 @@ export async function listTurnosSemana(fechaDesde: string, fechaHasta: string): 
 
 export async function createTurno(
   input: CreateTurnoInput,
+  opts?: {
+    /**
+     * M56: literal bytea (`\\x…`) ya cifrado de la nota de reserva. Se usa al
+     * reagendar para arrastrar el motivo del booking del turno original al
+     * reemplazo (sin re-descifrar/re-cifrar — ya viene como wire). Opcional:
+     * los callers normales (Agendar manual) lo omiten y la columna queda NULL.
+     */
+    notaReservaCifrado?: string | null;
+  },
 ): Promise<Result<{ id: string }>> {
   const parsed = turnoSchema.safeParse(input);
   if (!parsed.success) {
@@ -309,6 +318,11 @@ export async function createTurno(
       ...parsed.data,
       organization_id: session.data.organizationId,
       estado: "AGENDADO",
+      // M56: arrastra la nota de reserva del original al reagendar (undefined
+      // → la columna queda NULL, comportamiento histórico del Agendar manual).
+      ...(opts?.notaReservaCifrado != null
+        ? { nota_reserva_cifrado: opts.notaReservaCifrado }
+        : {}),
     })
     .select("id")
     .single();
@@ -575,9 +589,11 @@ export async function reagendarTurno(
   const supabase = await createSupabaseServerClient();
 
   // 1. Turno original, org-scoped (RLS además filtra por scope del rol).
+  //    M56: traemos nota_reserva_cifrado para arrastrarla al reemplazo — el
+  //    reagendado no debe perder el motivo del booking original.
   const { data: turno, error: selErr } = await supabase
     .from("turno")
-    .select("id, estado, paciente_id, servicio_id, profesional_id, precio_cents, duracion_min")
+    .select("id, estado, paciente_id, servicio_id, profesional_id, precio_cents, duracion_min, nota_reserva_cifrado")
     .eq("id", parsed.data.turnoId)
     .eq("organization_id", session.data.organizationId)
     .is("deleted_at", null)
@@ -628,15 +644,20 @@ export async function reagendarTurno(
   hooks?.onTransitioned?.();
 
   // 4. Crear el turno nuevo (programa recordatorios + push gcal nuevos).
-  const created = await createTurno({
-    paciente_id: turno.paciente_id as string,
-    servicio_id: turno.servicio_id as string,
-    profesional_id: turno.profesional_id as string,
-    inicio: parsed.data.nuevoInicio,
-    duracion_min: duracionNueva,
-    precio_cents: turno.precio_cents as number,
-    origen: "MANUAL",
-  });
+  //    M56: arrastra la nota de reserva del original (ya viene como wire bytea
+  //    `\\x…`; se re-inserta tal cual sin descifrar — no es PHI legible acá).
+  const created = await createTurno(
+    {
+      paciente_id: turno.paciente_id as string,
+      servicio_id: turno.servicio_id as string,
+      profesional_id: turno.profesional_id as string,
+      inicio: parsed.data.nuevoInicio,
+      duracion_min: duracionNueva,
+      precio_cents: turno.precio_cents as number,
+      origen: "MANUAL",
+    },
+    { notaReservaCifrado: (turno.nota_reserva_cifrado as string | null) ?? null },
+  );
   if (!created.ok) {
     // El viejo ya quedó REAGENDADO (terminal) — sin RPC transaccional no se
     // puede revertir. Mensaje accionable para que el turno no se pierda.

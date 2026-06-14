@@ -12,10 +12,12 @@
  *   - DST-safe via Intl + offset probe.
  */
 
+import { capabilitiesFor } from "@/lib/auth/capabilities";
 import { decryptColumn } from "@/lib/crypto";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import { err, ok, type Result } from "./errors";
+import { getActiveSession } from "./session";
 import type {
   Bloqueo,
   CanalPedido,
@@ -45,6 +47,8 @@ interface TurnoExtendidoRow {
   paciente_alerta_alergia: boolean;
   servicio_nombre: string;
   profesional_id: string;
+  /** M56 · motivo del booking público (PHI). Solo se descifra para roles clínicos. */
+  nota_reserva_cifrado: string | null;
 }
 
 interface BloqueoRow {
@@ -247,6 +251,14 @@ export async function getCalendarioSemana(input: FetcherInput): Promise<Result<C
 
   const { startUtc, endUtc } = computeWeekRangeUtc(weekStartIso, tz);
 
+  // M56 · gate clínico: la nota de reserva (motivo del booking) es PHI. Solo se
+  // descifra para roles con acceso clínico (espejo de can_read_clinical en RLS).
+  // Si la sesión no resuelve, fail-closed: tratamos como sin acceso clínico.
+  const sessionRes = await getActiveSession();
+  const canReadClinical = sessionRes.ok
+    ? capabilitiesFor(sessionRes.data.role, sessionRes.data.esColegiado).canReadClinical
+    : false;
+
   // 4 queries en paralelo: turnos, bloqueos, pedidos, disponibilidad.
   const [turnosRes, bloqueosRes, pedidosRes, dispRes] = await Promise.all([
     (async () => {
@@ -255,7 +267,8 @@ export async function getCalendarioSemana(input: FetcherInput): Promise<Result<C
         .select(
           "id, organization_id, inicio, duracion_min, estado, origen, " +
             "paciente_id, paciente_nombre_cifrado, paciente_apellido_cifrado, paciente_telefono_cifrado, " +
-            "paciente_tipo, paciente_tags, paciente_alerta_alergia, servicio_nombre, profesional_id",
+            "paciente_tipo, paciente_tags, paciente_alerta_alergia, servicio_nombre, profesional_id, " +
+            "nota_reserva_cifrado",
         )
         .eq("organization_id", organizationId)
         .gte("inicio", startUtc)
@@ -326,6 +339,11 @@ export async function getCalendarioSemana(input: FetcherInput): Promise<Result<C
       origen: ORIGEN_DB_TO_UI[row.origen],
       profesionalId: row.profesional_id ?? null,
       profesionalNombre: profesionalesNombreById?.[row.profesional_id] ?? null,
+      // M56 · gate PHI: solo desciframos la nota de reserva para roles clínicos;
+      // para el resto queda null y nunca sale del server (ni texto ni cifrado).
+      notaReserva: canReadClinical
+        ? tryDecrypt(row.nota_reserva_cifrado, `turno.${row.id}.nota_reserva`)
+        : null,
     };
   });
 
@@ -700,6 +718,12 @@ export async function getCalendarioMes(input: MesFetcherInput): Promise<Result<C
   const tz = timezone || "America/Argentina/Cordoba";
   const supabase = await createSupabaseServerClient();
 
+  // M56 · gate clínico (ver getCalendarioSemana). Fail-closed sin sesión.
+  const sessionRes = await getActiveSession();
+  const canReadClinical = sessionRes.ok
+    ? capabilitiesFor(sessionRes.data.role, sessionRes.data.esColegiado).canReadClinical
+    : false;
+
   const hoyIso = ymdInTz(new Date().toISOString(), tz);
   const grid = buildMonthGrid(monthIso, hoyIso);
   const firstIso = grid[0].dateIso;
@@ -716,7 +740,8 @@ export async function getCalendarioMes(input: MesFetcherInput): Promise<Result<C
     .select(
       "id, organization_id, inicio, duracion_min, estado, origen, " +
         "paciente_id, paciente_nombre_cifrado, paciente_apellido_cifrado, paciente_telefono_cifrado, " +
-        "paciente_tipo, paciente_tags, paciente_alerta_alergia, servicio_nombre, profesional_id",
+        "paciente_tipo, paciente_tags, paciente_alerta_alergia, servicio_nombre, profesional_id, " +
+        "nota_reserva_cifrado",
     )
     .eq("organization_id", organizationId)
     .in("estado", ["AGENDADO", "CONFIRMADO", "EN_SALA", "ATENDIENDO", "CERRADO"])
@@ -745,6 +770,10 @@ export async function getCalendarioMes(input: MesFetcherInput): Promise<Result<C
       origen: ORIGEN_DB_TO_UI[row.origen],
       profesionalId: row.profesional_id ?? null,
       profesionalNombre: profesionalesNombreById?.[row.profesional_id] ?? null,
+      // M56 · gate PHI (ver getCalendarioSemana).
+      notaReserva: canReadClinical
+        ? tryDecrypt(row.nota_reserva_cifrado, `turno.${row.id}.nota_reserva`)
+        : null,
     };
   });
 
