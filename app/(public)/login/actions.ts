@@ -205,5 +205,6 @@ export async function signOut(): Promise<void> {
   const cookieStore = await cookies();
   cookieStore.delete("folio.active_org");
 
-  redirect("/login");
+  // Al landing público (no /login): desde ahí hay "Ingresar" para volver a entrar.
+  redirect("/");
 }
