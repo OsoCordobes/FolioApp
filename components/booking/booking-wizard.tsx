@@ -25,6 +25,7 @@ import {
   type BookingVista,
   type ProfesionalPublico,
 } from "@/lib/booking/wizard-profesional";
+import { waMeLink } from "@/lib/format/phone";
 import { PRIVACY_VERSION } from "@/lib/legal/versions";
 
 import { StickyMiniHeader } from "./sticky-mini-header";
@@ -556,22 +557,27 @@ export function BookingWizard({
                   No encontramos horarios libres en los próximos 14 días.
                 </p>
                 <p style={{ margin: "8px 0 0", fontSize: 13 }}>
-                  {org.telefonoPublico ? (
-                    <>
-                      Escribile al consultorio por{" "}
-                      <a
-                        href={`https://wa.me/${org.telefonoPublico.replace(/\D/g, "")}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ color: "var(--accent-2)" }}
-                      >
-                        WhatsApp
-                      </a>{" "}
-                      para coordinar un turno, o probá con otro servicio.
-                    </>
-                  ) : (
-                    <>Contactá al consultorio para coordinar un turno, o probá con otro servicio.</>
-                  )}
+                  {(() => {
+                    // Normaliza el teléfono público del consultorio a E.164 AR
+                    // antes de armar el wa.me (auditoría L4).
+                    const waLink = waMeLink(org.telefonoPublico);
+                    return waLink ? (
+                      <>
+                        Escribile al consultorio por{" "}
+                        <a
+                          href={waLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: "var(--accent-2)" }}
+                        >
+                          WhatsApp
+                        </a>{" "}
+                        para coordinar un turno, o probá con otro servicio.
+                      </>
+                    ) : (
+                      <>Contactá al consultorio para coordinar un turno, o probá con otro servicio.</>
+                    );
+                  })()}
                 </p>
                 <button
                   type="button"

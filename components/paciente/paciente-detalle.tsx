@@ -28,6 +28,7 @@ import {
   getIntakeAvanzadoConfig,
   type EspecialidadSlug,
 } from "@/lib/especialidades/registry";
+import { toWhatsappE164 } from "@/lib/format/phone";
 import type { IntakeAvanzadoFicha, PacienteFichaInfo, PlanData } from "@/lib/db/paciente-ficha";
 
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
@@ -632,7 +633,9 @@ function TabDocumentos() {
 // ─── Header del paciente ──────────────────────────────────────────────────
 
 function PacienteWhatsAppButton({ telefono, nombre }: { telefono: string; nombre: string }) {
-  const num = telefono.replace(/[^0-9]/g, "");
+  // Normaliza a E.164 AR (54 + 9 móvil + NSN, sin 0/15) para que el deep-link
+  // sirva con teléfonos en formato local (auditoría L4).
+  const num = toWhatsappE164(telefono);
   if (!num) {
     return (
       <button

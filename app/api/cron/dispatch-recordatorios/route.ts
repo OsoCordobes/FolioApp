@@ -29,6 +29,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { decryptColumn } from "@/lib/crypto";
+import { toWhatsappE164 } from "@/lib/format/phone";
 import { verifyBearer } from "@/lib/security/verify-bearer";
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
 import {
@@ -203,7 +204,8 @@ async function processJob(
   });
   const direccion = [org.direccion_completa, org.ciudad].filter(Boolean).join(", ");
 
-  const phoneE164 = normalizeArPhone(telefono);
+  const phoneE164 = toWhatsappE164(telefono);
+  if (!phoneE164) throw new Error("teléfono inválido (no normalizable a E.164 AR)");
 
   if (job.tipo === "CONFIRMACION_24H") {
     await sendConfirmacion24h({
@@ -241,13 +243,4 @@ async function processJob(
     .from("recordatorio_job")
     .update({ enviado_ts: new Date().toISOString(), error_msg: null })
     .eq("id", job.id);
-}
-
-/** Normaliza teléfono AR a E.164 sin '+': "54 9 351 555 1234" -> "5493515551234". */
-function normalizeArPhone(raw: string): string {
-  const digits = raw.replace(/\D/g, "");
-  if (digits.startsWith("54")) return digits;
-  if (digits.startsWith("0")) return "54" + digits.slice(1);
-  if (digits.startsWith("9")) return "54" + digits;
-  return "549" + digits;
 }
