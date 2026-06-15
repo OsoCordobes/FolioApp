@@ -12,13 +12,18 @@
  * contenido del main (header de página, KPIs, listas, etc.).
  */
 
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { EmailVerifyBanner } from "@/components/auth/email-verify-banner";
 import { Sidebar, type GoogleSyncStatus } from "@/components/sidebar";
 import { getActiveContext } from "@/lib/db/active-context";
 import { BILLING_RECOVERY_PATH, shouldGateToBilling } from "@/lib/db/suscripcion";
+import {
+  ESPECIALIDAD_OVERRIDE_COOKIE,
+  isEspecialidadSlug,
+  type EspecialidadSlug,
+} from "@/lib/especialidades/meta";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export default async function AppShellLayout({
@@ -71,6 +76,14 @@ export default async function AppShellLayout({
 
   const googleSync = await loadGoogleSyncStatus(session.organizationId, session.memberId);
 
+  // Override de especialidad (cuentas internas): para resaltar la vista activa
+  // del selector del sidebar. Solo se lee si la org es interna.
+  let especialidadOverride: EspecialidadSlug | null = null;
+  if (organization.isInternalAccount) {
+    const raw = (await cookies()).get(ESPECIALIDAD_OVERRIDE_COOKIE)?.value;
+    if (raw && isEspecialidadSlug(raw)) especialidadOverride = raw;
+  }
+
   return (
     <div className="fi-app">
       <Sidebar
@@ -87,6 +100,8 @@ export default async function AppShellLayout({
         role={session.role}
         esColegiado={session.esColegiado}
         googleSync={googleSync}
+        especialidad={organization.especialidad}
+        especialidadOverride={especialidadOverride}
       />
       <main className="fi-main">
         {session.emailVerified === false ? (

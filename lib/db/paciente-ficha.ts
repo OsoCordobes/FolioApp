@@ -284,6 +284,14 @@ export async function getPacienteFicha(
    * caller ya la tiene en el ActiveContext — se pasa para no re-leerla acá.
    */
   orgEspecialidad: EspecialidadSlug,
+  /**
+   * Override de especialidad para CUENTAS INTERNAS (is_internal_account): si se
+   * provee, FUERZA la especialidad activa del slot (ficha + intake + radiografías)
+   * sin importar el turno/org. El caller solo lo pasa cuando la org es interna y
+   * hay cookie válida (ver pacientes/[id]/page.tsx). null/undefined = comportamiento
+   * normal (turno en curso ?? org).
+   */
+  especialidadOverride?: EspecialidadSlug | null,
 ): Promise<Result<PacienteFichaData>> {
   if (!/^[0-9a-f-]{36}$/i.test(pacienteId)) {
     return err("validation", "ID de paciente inválido.");
@@ -454,7 +462,12 @@ export async function getPacienteFicha(
   // siendo de ese profesional aunque esté de baja — su especialidad sigue
   // decidiendo la herramienta (mismo criterio que el writer).
   let especialidadActiva: EspecialidadSlug = orgEspecialidad;
-  if (turnoEnCurso?.profesional_id) {
+  if (especialidadOverride) {
+    // Cuenta interna previsualizando otra ficha: el override manda sobre todo
+    // (intake, radiografías, herramienta). Display-only; el writer igual valida
+    // con zod .strict() al guardar.
+    especialidadActiva = especialidadOverride;
+  } else if (turnoEnCurso?.profesional_id) {
     const { data: profRow } = await supabase
       .from("member")
       .select("especialidad")

@@ -359,6 +359,38 @@ input:focus { outline: none; }
   background: var(--accent); color: #FBF9F4; font-weight: 500;
 }
 
+/* ── Selector de especialidad · solo cuentas internas (demo/QA) ──────────── */
+.fi-esp-switcher {
+  margin: 8px 12px 0;
+  padding: 8px 10px;
+  border: 1px dashed var(--accent-warm, #d8b766);
+  border-radius: var(--r-md);
+  background: var(--surface-soft, #fff7e0);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.fi-esp-switcher-lbl {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.4px;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.fi-esp-switcher-pills { display: flex; flex-wrap: wrap; gap: 4px; }
+.fi-esp-pill {
+  flex: 1 1 auto;
+  padding: 4px 6px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm);
+  background: var(--surface, #fff);
+  color: var(--ink-2);
+  font-size: 11px; font-weight: 500; line-height: 1.2;
+  cursor: pointer;
+  transition: background 120ms var(--ease-in), color 120ms var(--ease-in), border-color 120ms var(--ease-in);
+}
+.fi-esp-pill:hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
+.fi-esp-pill.is-active {
+  background: var(--accent); border-color: var(--accent); color: #FBF9F4; font-weight: 600;
+}
+.fi-esp-pill:disabled { opacity: 0.6; cursor: default; }
+.fi-esp-pill-real { opacity: 0.7; }
+
 .fi-side-bottom {
   margin-top: auto;
   display: flex; flex-direction: column; gap: 12px;
