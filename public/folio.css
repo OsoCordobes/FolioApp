@@ -17376,3 +17376,332 @@ input:focus { outline: none; }
   .pc-quiro-col-spine { position: static; }
   .pc-quiro-svg { max-height: 380px; }
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   BOOK LANDING · /book/[slug] · landing médico-first (.bl-*) — SOLO APPENDS.
+   El acento del consultorio se inyecta inline (--accent/--accent-2/
+   --accent-soft) sobre .bl-root; estas reglas solo consumen tokens, así que
+   se adaptan a dark mode ([data-theme]) y al acento por org sin reglas extra.
+   El wizard (.bk-*) vive intacto dentro de #reservar.
+   ════════════════════════════════════════════════════════════════════════ */
+
+.bl-root {
+  background: var(--bg);
+  min-height: 100vh;
+  color: var(--ink);
+  font-family: var(--font-sans, system-ui, sans-serif);
+}
+
+/* Header glass — marca del consultorio (Folio NO aparece acá). */
+.bl-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 12px clamp(16px, 4vw, 28px);
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line-soft);
+}
+.bl-header-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.bl-header-logo { border-radius: var(--r-sm); object-fit: cover; display: block; }
+.bl-header-name {
+  font-weight: 500;
+  font-size: var(--fs-md, 15px);
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bl-header-cta { flex-shrink: 0; cursor: pointer; text-decoration: none; }
+
+.bl-main {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 0 clamp(16px, 4vw, 28px);
+}
+
+/* Hero médico-first */
+.bl-hero {
+  display: flex;
+  align-items: center;
+  gap: clamp(20px, 5vw, 48px);
+  padding: clamp(32px, 6vw, 64px) 0 clamp(28px, 5vw, 48px);
+}
+.bl-hero-text { flex: 1 1 0; min-width: 0; }
+.bl-hero-figure { flex-shrink: 0; }
+.bl-hero-logo {
+  width: 160px;
+  height: 160px;
+  border-radius: var(--r-xl);
+  object-fit: cover;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-2);
+  display: block;
+}
+.bl-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--accent);
+  font-size: var(--fs-xs, 11px);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+.bl-eyebrow-motif { display: block; flex-shrink: 0; }
+.bl-hero-title {
+  font-family: var(--font-display, Georgia, serif);
+  font-weight: 500;
+  font-size: clamp(2rem, 5.5vw, 3.25rem);
+  line-height: 1.04;
+  color: var(--ink);
+  margin: 0 0 8px;
+}
+.bl-hero-sub { font-size: var(--fs-md, 15px); color: var(--ink-2); margin: 0 0 14px; }
+.bl-hero-value {
+  font-size: var(--fs-lg, 18px);
+  color: var(--ink-2);
+  line-height: 1.55;
+  max-width: 42ch;
+  margin: 0 0 22px;
+}
+.bl-hero-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.bl-btn-lg {
+  padding: 11px 22px;
+  font-size: var(--fs-md, 15px);
+  cursor: pointer;
+  text-decoration: none;
+}
+.bl-confirm-note {
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--fs-sm, 12.5px);
+  color: var(--green);
+}
+.bl-trust-micro {
+  margin: 16px 0 0;
+  font-size: var(--fs-xs, 11px);
+  color: var(--ink-3);
+  letter-spacing: 0.02em;
+}
+
+/* "Atienden acá" — degradación de la futura sección Equipo (multi-prof). */
+.bl-team-lite {
+  padding: 18px 20px;
+  margin: 0 0 8px;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-lg);
+}
+.bl-section-eyebrow {
+  font-size: var(--fs-xs, 11px);
+  font-weight: 600;
+  color: var(--ink-2);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0 0 10px;
+}
+.bl-team-lite-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  font-size: var(--fs-body, 14px);
+  color: var(--ink);
+}
+
+/* Reserva enfocada — el wizard intacto, en columna centrada. */
+.bl-book { padding: clamp(28px, 5vw, 48px) 0; scroll-margin-top: 76px; }
+.bl-book-title {
+  font-family: var(--font-display, Georgia, serif);
+  font-weight: 500;
+  font-size: clamp(1.5rem, 3.5vw, 2rem);
+  color: var(--ink);
+  text-align: center;
+  margin: 0 0 24px;
+}
+.bl-book-frame { max-width: 720px; margin: 0 auto; }
+
+/* Powered by Folio — sello sutil + adquisición suave. */
+.bl-powered {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 28px 20px 40px;
+  margin-top: 8px;
+  border-top: 1px solid var(--line-soft);
+}
+.bl-powered-mark { display: inline-flex; }
+.bl-powered-text { font-size: var(--fs-sm, 12.5px); color: var(--ink-3); }
+.bl-powered-text b { color: var(--ink); font-weight: 500; }
+.bl-powered-cta {
+  font-size: var(--fs-sm, 12.5px);
+  color: var(--accent);
+  font-weight: 500;
+  text-decoration: none;
+}
+.bl-powered-cta:hover { color: var(--accent-2); text-decoration: underline; }
+
+/* Entrada del hero (gateada por reduce-motion). */
+.bl-hero-text {
+  animation: bl-rise 640ms var(--ease-emphasized-out, cubic-bezier(0, 0, .2, 1)) both;
+}
+.bl-hero-figure {
+  animation: bl-rise 640ms var(--ease-emphasized-out, cubic-bezier(0, 0, .2, 1)) 80ms both;
+}
+@keyframes bl-rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Responsive — hero apilado, figura arriba. */
+@media (max-width: 760px) {
+  .bl-hero { flex-direction: column-reverse; align-items: flex-start; }
+  .bl-hero-figure { align-self: center; }
+  .bl-hero-logo { width: 120px; height: 120px; }
+  .bl-header-cta { padding: 7px 14px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bl-hero-text,
+  .bl-hero-figure { animation: none; }
+}
+
+/* ── Book Landing · Slice 2 · secciones sobre/servicios/seguridad/ubicación ── */
+
+.bl-section-title {
+  font-family: var(--font-display, Georgia, serif);
+  font-weight: 500;
+  font-size: clamp(1.25rem, 2.6vw, 1.6rem);
+  color: var(--ink);
+  margin: 0 0 16px;
+}
+
+/* Bloques de sección con respiro vertical consistente. */
+.bl-about,
+.bl-services,
+.bl-trust,
+.bl-location { padding: clamp(20px, 4vw, 36px) 0; }
+
+.bl-about-text {
+  font-size: var(--fs-md, 15px);
+  color: var(--ink-2);
+  line-height: 1.65;
+  max-width: 62ch;
+  margin: 0;
+  white-space: pre-line;
+}
+
+/* Servicios — vitrina */
+.bl-services-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+.bl-service-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-lg);
+}
+.bl-service-info { display: flex; flex-direction: column; gap: 2px; }
+.bl-service-name { font-weight: 500; font-size: var(--fs-md, 15px); color: var(--ink); }
+.bl-service-dur { font-size: var(--fs-sm, 12.5px); color: var(--ink-3); }
+.bl-service-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.bl-service-price { font-size: var(--fs-body, 14px); color: var(--ink); }
+.bl-service-cta {
+  font-size: var(--fs-sm, 12.5px);
+  font-weight: 500;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: var(--r-sm);
+  padding: 6px 14px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.bl-service-cta:hover { background: var(--accent-soft); }
+
+/* Seguridad / confianza */
+.bl-trust {
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-xl);
+  padding: clamp(24px, 4vw, 36px);
+  margin: clamp(16px, 3vw, 24px) 0;
+}
+.bl-trust-lead {
+  font-size: var(--fs-md, 15px);
+  color: var(--ink-2);
+  line-height: 1.6;
+  max-width: 56ch;
+  margin: 0 0 20px;
+}
+.bl-trust-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 18px;
+}
+.bl-trust-item { display: flex; align-items: flex-start; gap: 12px; }
+.bl-trust-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--r-md);
+  background: var(--accent-soft);
+  color: var(--accent-2);
+}
+.bl-trust-item-title { font-weight: 500; font-size: var(--fs-body, 14px); color: var(--ink); margin: 0 0 3px; }
+.bl-trust-item-text { font-size: var(--fs-sm, 12.5px); color: var(--ink-3); line-height: 1.5; margin: 0; }
+
+/* Ubicación / contacto */
+.bl-location-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.bl-location-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--fs-md, 15px);
+  color: var(--ink-2);
+}
+.bl-location-row svg { color: var(--ink-3); flex-shrink: 0; }
+.bl-location-row a { color: var(--accent-2); text-decoration: none; }
+.bl-location-row a:hover { text-decoration: underline; }
+
+/* Barra sticky de reserva (solo mobile). */
+.bl-sticky-sentinel { height: 1px; width: 100%; }
+.bl-sticky-cta {
+  display: none;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid var(--line);
+}
+.bl-sticky-btn { width: 100%; justify-content: center; cursor: pointer; text-decoration: none; }
+
+@media (max-width: 760px) {
+  .bl-sticky-cta.is-shown { display: block; }
+  /* Espacio para que la barra no tape el powered-by. */
+  .bl-powered { padding-bottom: 84px; }
+}

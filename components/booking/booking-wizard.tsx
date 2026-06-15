@@ -15,7 +15,6 @@ import {
   createPedidoPublico,
   fetchSlotsPublico,
 } from "@/app/(public)/book/[slug]/actions";
-import { PublicCard } from "@/components/public-card/public-card";
 import {
   esMultiProfesional,
   nombreProfesionalSeleccionado,
@@ -26,8 +25,6 @@ import {
   type ProfesionalPublico,
 } from "@/lib/booking/wizard-profesional";
 import { PRIVACY_VERSION } from "@/lib/legal/versions";
-
-import { StickyMiniHeader } from "./sticky-mini-header";
 
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
 
@@ -161,9 +158,6 @@ export function BookingWizard({
   const captchaContainerRef = useRef<HTMLDivElement | null>(null);
   const captchaWidgetIdRef = useRef<string | null>(null);
   const [pending, startTransition] = useTransition();
-  // Sentinel used by <StickyMiniHeader>'s IntersectionObserver to detect
-  // when the hero card scrolls out of view on mobile.
-  const cardSentinelRef = useRef<HTMLDivElement | null>(null);
 
   // A11y · anuncio de pasos: al cambiar de vista movemos el foco al heading
   // del paso (tabIndex={-1}). El lector de pantalla anuncia el nuevo contexto
@@ -243,123 +237,12 @@ export function BookingWizard({
     });
   }, [vista, servicioId, org.slug, multiProf, profesionalSelId]);
 
-  const initials = (org.nombre || "F")
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((s) => s[0]?.toUpperCase() ?? "")
-    .join("");
-  const appHost =
-    typeof window !== "undefined" ? window.location.host : "folio-app-ten.vercel.app";
-
   // ─── Render ──────────────────────────────────────────────────────────
+  // El chrome de página (hero, header sticky, "atienden acá", powered-by) lo
+  // provee <BookLanding>; acá vive SOLO el flujo de pasos dentro de #reservar.
 
   return (
-    <div className="bk-page" style={{ background: "var(--bg)", minHeight: "100vh" }}>
-      <StickyMiniHeader
-        sentinelRef={cardSentinelRef}
-        name={org.nombre}
-        logoUrl={org.logoUrl}
-        initials={initials}
-        accentHex={org.acentoHex}
-        onReserveClick={() => {
-          setVista("servicio");
-          document
-            .getElementById("bk-flow")
-            ?.scrollIntoView({ behavior: "smooth", block: "start" });
-        }}
-      />
-      <main style={{ maxWidth: 720, margin: "0 auto", padding: "32px 24px 96px" }}>
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: 32 }}>
-          <PublicCard
-            variant="full"
-            appUrl={appHost}
-            onCta={() => {
-              // Scroll suave al wizard sin resetear el paso actual (si el
-              // paciente ya está cargando datos, no le pisamos el progreso).
-              document
-                .getElementById("bk-flow")
-                ?.scrollIntoView({ behavior: "smooth", block: "start" });
-            }}
-            data={{
-              nombre: org.nombre,
-              rubro: org.rubro,
-              ciudad: org.ciudad,
-              provincia: org.provincia,
-              bio: org.bio,
-              telefonoPublico: org.telefonoPublico,
-              instagramHandle: org.instagramHandle,
-              direccionCompleta: org.direccionCompleta,
-              acentoHex: org.acentoHex,
-              logoUrl: org.logoUrl,
-              cardMood: org.cardMood,
-              slug: org.slug,
-              servicios: servicios.map((s) => ({
-                nombre: s.nombre,
-                dur: s.duracion_min,
-                precioCents: s.precio_cents,
-              })),
-            }}
-          />
-        </div>
-
-        {/* Sentinel sits in normal flow immediately after the hero. When it
-            scrolls past the top of the viewport (rootMargin -56 px), the
-            sticky mini-header emerges. Placing it here — not at top:0 with
-            position:absolute — means initial paint reports isIntersecting=true
-            and the mini stays hidden until real scroll. */}
-        <div
-          ref={cardSentinelRef}
-          aria-hidden
-          style={{ height: 1, width: "100%" }}
-        />
-
-        {/* CLINICA-4 · franja "Atienden acá" bajo la card, solo multi-prof
-            (en Solo no se monta: cero cambios). MINIMAL a propósito: nombres
-            que ya vienen descifrados del server — especialidad/matrícula por
-            profesional es fase 2 (requiere member.especialidad, migración). */}
-        {multiProf ? (
-          <section
-            aria-label="Profesionales que atienden en este consultorio"
-            style={{
-              margin: "0 0 32px",
-              padding: "16px 20px",
-              background: "var(--surface)",
-              border: "1px solid var(--line-soft)",
-              borderRadius: "var(--r-md)",
-            }}
-          >
-            <h2
-              style={{
-                fontSize: 13,
-                fontWeight: 600,
-                color: "var(--ink-2)",
-                textTransform: "uppercase",
-                letterSpacing: 0.4,
-                margin: "0 0 8px",
-              }}
-            >
-              Atienden acá
-            </h2>
-            <ul
-              style={{
-                listStyle: "none",
-                margin: 0,
-                padding: 0,
-                display: "flex",
-                flexWrap: "wrap",
-                gap: "4px 16px",
-              }}
-            >
-              {profesionales.map((p) => (
-                <li key={p.id} style={{ fontSize: 14, color: "var(--ink)" }}>
-                  {p.displayName}
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
-
-        <div id="bk-flow">
+    <div id="bk-flow" className="bk-flow">
         {vista === "servicio" ? (
           <section>
             <h2
@@ -903,8 +786,6 @@ export function BookingWizard({
             </div>
           </section>
         ) : null}
-        </div>
-      </main>
     </div>
   );
 }

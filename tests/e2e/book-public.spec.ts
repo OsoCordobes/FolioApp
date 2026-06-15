@@ -1,69 +1,72 @@
 import { expect, test } from "@playwright/test";
 
 /**
- * Folio · /book/[slug] integration — Playwright e2e.
+ * Folio · /dev/book-preview · BookLanding + booking flow — Playwright e2e.
  *
  * Drives /dev/book-preview (mock data shape identical to /book/[slug]).
- * Verifies:
- *   - The PublicCard hero (variant=full) renders above the booking flow.
- *   - The booking 3-step flow itself is unchanged ("Elegí el servicio").
- *   - On mobile (375 px) the sticky mini header emerges after scrolling
- *     past the hero, and the booking flow has id="bk-flow" so the
- *     mini-CTA can smooth-scroll to it.
+ * Verifies the doctor-first landing integration:
+ *   - The hero renders the org name + a "Reservar" CTA that anchors to the
+ *     focused booking section (#reservar).
+ *   - The booking flow itself is unchanged ("Elegí el servicio", id="bk-flow").
+ *   - The landing surfaces the services vitrine + the "Hecho con Folio"
+ *     powered-by footer.
+ *   - On desktop the sticky mobile CTA is hidden; on mobile it is mounted
+ *     with #reservar/#bk-flow as its smooth-scroll target.
  *
  * The real /book/[slug] route fetches the same data shape from Supabase;
  * this test isolates the UI integration without touching the DB.
  */
 
-test.describe("/dev/book-preview · PublicCard + booking flow", () => {
-  test("PublicCard hero (variant=full) sits above the booking flow", async ({ page }) => {
+test.describe("/dev/book-preview · BookLanding + booking flow", () => {
+  test("hero renders the org name + a Reservar CTA above the flow", async ({ page }) => {
     await page.goto("/dev/book-preview");
-    const card = page.locator(".fpc-card.fpc-variant-full");
-    await expect(card).toBeVisible();
-    // Hero shows the org name.
-    await expect(card.locator(".fpc-name")).toContainText("Atelier Kinesiología");
-    // The CTA is the public-card CTA, not the wizard's button (yet).
-    await expect(card.getByRole("button", { name: /reservar turno/i })).toBeVisible();
+    const hero = page.locator(".bl-hero");
+    await expect(hero).toBeVisible();
+    await expect(hero.locator(".bl-hero-title")).toContainText("Atelier Kinesiología");
+    const cta = hero.locator("a.bl-btn-lg");
+    await expect(cta).toContainText(/reservar/i);
+    await expect(cta).toHaveAttribute("href", "#reservar");
   });
 
-  test("booking 3-step flow renders below the card with id='bk-flow'", async ({ page }) => {
+  test("booking flow renders inside #reservar with id='bk-flow'", async ({ page }) => {
     await page.goto("/dev/book-preview");
-    await expect(page.locator("#bk-flow")).toBeVisible();
+    await expect(page.locator("#reservar #bk-flow")).toBeVisible();
     await expect(
       page.locator("#bk-flow").getByRole("heading", { name: /elegí el servicio/i }),
     ).toBeVisible();
   });
 
-  test("desktop: sticky mini header is hidden", async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 800 });
+  test("landing surfaces the services vitrine + 'Hecho con Folio' footer", async ({ page }) => {
     await page.goto("/dev/book-preview");
-    // The .bk-mini element exists but has display:none above 767 px.
-    const mini = page.locator(".bk-mini");
-    await expect(mini).toBeAttached();
-    await expect(mini).not.toBeVisible();
+    await expect(page.locator(".bl-services .bl-service-card").first()).toBeVisible();
+    await expect(page.locator(".bl-powered")).toContainText(/hecho con\s*folio/i);
+    await expect(page.locator(".bl-powered-cta")).toContainText(/creá la tuya/i);
   });
 
-  test("mobile: sticky mini header is mounted with expected DOM contract", async ({ page }) => {
-    // Mounting + DOM-contract coverage. The IntersectionObserver-driven
-    // `is-shown` toggle is verified manually at the F7 visual gate against
-    // a real /book/<slug> page — recreating that interaction reliably in a
-    // headless browser proved brittle across viewport sizes, so we assert
-    // the parts that are deterministic:
-    //   - the mini bar exists in the DOM and is display:flex on mobile
-    //   - it carries the org name + reserve CTA
-    //   - the booking flow has id="bk-flow" so the CTA's smooth-scroll
-    //     target resolves
+  test("desktop: sticky mobile CTA is hidden", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto("/dev/book-preview");
+    const sticky = page.locator(".bl-sticky-cta");
+    await expect(sticky).toBeAttached();
+    await expect(sticky).not.toBeVisible();
+  });
+
+  test("mobile: sticky CTA is mounted with #reservar/#bk-flow scroll target", async ({ page }) => {
+    // The IntersectionObserver-driven `is-shown` toggle is verified manually at
+    // the visual gate against a real /book/<slug> page — recreating that scroll
+    // interaction reliably headless proved brittle across viewports, so we
+    // assert the deterministic parts:
+    //   - the sticky bar exists in the DOM on mobile
+    //   - it carries the reserve CTA anchored to #reservar
+    //   - the booking flow target (#reservar / #bk-flow) resolves
     await page.setViewportSize({ width: 375, height: 720 });
     await page.goto("/dev/book-preview");
-    const mini = page.locator(".bk-mini");
-    // Mounted (display:flex on mobile) — opacity 0 until IO fires.
-    await expect(mini).toBeAttached();
-    // Org name + CTA are inside the DOM even before the bar fades in.
-    // Use CSS selectors not getByRole because aria-hidden=true on the parent
-    // removes children from the accessibility tree at initial paint.
-    await expect(mini.locator(".bk-mini-name")).toContainText("Atelier Kinesiología");
-    await expect(mini.locator(".bk-mini-cta")).toBeAttached();
-    await expect(mini.locator(".bk-mini-cta")).toContainText(/reservar/i);
+    const sticky = page.locator(".bl-sticky-cta");
+    await expect(sticky).toBeAttached();
+    const btn = sticky.locator(".bl-sticky-btn");
+    await expect(btn).toContainText(/reservar/i);
+    await expect(btn).toHaveAttribute("href", "#reservar");
+    await expect(page.locator("#reservar")).toBeAttached();
     await expect(page.locator("#bk-flow")).toBeAttached();
   });
 });
