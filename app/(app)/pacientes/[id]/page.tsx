@@ -28,7 +28,10 @@ interface PageProps {
   params: Promise<{ id: string }>;
 }
 
-const ROLES_PUEDEN_VER_PHI = new Set(["OWNER", "DIRECTOR", "PROFESIONAL", "COORDINADOR"]);
+// COORDINADOR fuera: no tiene acceso clínico (la RLS le niega la ficha), así
+// que dejarlo pasar la allowlist terminaba en 404 desde el data layer en vez de
+// un redirect limpio a /pacientes (audit L6). No hay fuga PHI — es UX.
+const ROLES_PUEDEN_VER_PHI = new Set(["OWNER", "DIRECTOR", "PROFESIONAL"]);
 
 export default async function PacientePage({ params }: PageProps) {
   const ctx = await getActiveContext();

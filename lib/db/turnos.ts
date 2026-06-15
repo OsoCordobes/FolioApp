@@ -510,10 +510,10 @@ export async function transitionTurno(input: z.infer<typeof transitionSchema>): 
 
 /**
  * Estados desde los que el trigger `turno_record_transition` (M09, security
- * definer desde M47) permite transicionar a REAGENDADO. Verificado contra la
- * matriz real del SQL:
+ * definer desde M47, AGENDADO→EN_SALA agregado en M57) permite transicionar a
+ * REAGENDADO. Verificado contra la matriz real del SQL:
  *
- *   AGENDADO   → CONFIRMADO | CANCELADO | REAGENDADO | NO_ASISTIO
+ *   AGENDADO   → CONFIRMADO | EN_SALA | CANCELADO | REAGENDADO | NO_ASISTIO
  *   CONFIRMADO → EN_SALA | NO_ASISTIO | CANCELADO | REAGENDADO
  *   EN_SALA    → ATENDIENDO | CANCELADO
  *   ATENDIENDO → CERRADO

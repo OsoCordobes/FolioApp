@@ -1369,7 +1369,7 @@ function SecEquipo({
 
 // ─── Sección: Plan ─────────────────────────────────────────────────────────
 
-function SecPlan() {
+function SecPlan({ isOwner }: { isOwner: boolean }) {
   return (
     <>
       <Section title="Suscripción">
@@ -1383,9 +1383,15 @@ function SecPlan() {
             </p>
           </div>
           <div className="cfg-plan-card-r">
-            <a href="/configuracion/billing" className="fi-btn fi-btn-primary">
-              Gestionar suscripción
-            </a>
+            {/* /configuracion/billing hace notFound() salvo OWNER (audit L2):
+                solo el titular ve los CTAs, el resto un texto en vez de un 404. */}
+            {isOwner ? (
+              <a href="/configuracion/billing" className="fi-btn fi-btn-primary">
+                Gestionar suscripción
+              </a>
+            ) : (
+              <span className="muted">Solo el titular de la cuenta gestiona la suscripción.</span>
+            )}
           </div>
         </div>
       </Section>
@@ -1395,9 +1401,13 @@ function SecPlan() {
           <span className="muted">Editables desde la sección Consultorio.</span>
         </Row>
         <Row label="Historial de cobros" sub="Tus últimos movimientos">
-          <a href="/configuracion/billing" className="cfg-link">
-            Ver historial completo
-          </a>
+          {isOwner ? (
+            <a href="/configuracion/billing" className="cfg-link">
+              Ver historial completo
+            </a>
+          ) : (
+            <span className="muted">Disponible para el titular de la cuenta.</span>
+          )}
         </Row>
       </Section>
 
@@ -1668,7 +1678,7 @@ export function Configuracion({
             />
           ) : null}
           {seccion === "integraciones" ? <SecIntegraciones googleCalendar={googleCalendar} /> : null}
-          {seccion === "plan"          ? <SecPlan /> : null}
+          {seccion === "plan"          ? <SecPlan isOwner={isOwner} /> : null}
         </div>
       </div>
     </div>

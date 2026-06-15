@@ -8,12 +8,10 @@
  * navegación entre semanas es via query param `?w=YYYY-MM-DD` (lunes anchor)
  * que el SC parsea y le da al fetcher.
  *
- * Diferidas a sprints futuros (UI funcional, no data layer):
- *  - Drag & drop para mover/duplicar turnos.
- *  - Selection (drag para crear bloqueo).
- *  - Popovers (Agendar, ver detalle de turno).
- *  - Modal cal-pedido-modal para confirmar/rechazar pedidos.
- *  - VistaBandeja y VistaMes (placeholder por ahora).
+ * Ya implementados: VistaSemana/VistaMes/VistaBandeja, modal de pedido
+ * (confirmar/rechazar) y modal de detalle de turno (M56). Diferidos a sprints
+ * futuros (UI, no data layer): drag & drop para mover/duplicar turnos y la
+ * selección por arrastre para crear bloqueos.
  */
 
 import Link from "next/link";

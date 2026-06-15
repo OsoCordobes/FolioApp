@@ -126,8 +126,11 @@ function Login({ setVista, prefilledEmail, notice, clearNotice }: LoginProps) {
       setErr("Ingresá un email válido");
       return;
     }
-    if (password.length < 8) {
-      setErr("Mínimo 8 caracteres");
+    // Login NO impone largo mínimo: cuentas legacy pueden tener contraseñas
+    // <8 chars; la validación de credenciales la hace el server/Supabase Auth.
+    // El min(8) se conserva solo en el alta (signup). (audit L1)
+    if (!password) {
+      setErr("Ingresá tu contraseña");
       return;
     }
     setErr("");
