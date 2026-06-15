@@ -17,9 +17,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, type ReactNode } from "react";
 
+import { EspecialidadSwitcher } from "@/components/especialidad-switcher";
 import { FolioMark } from "@/components/folio-mark";
 import * as I from "@/components/icons";
 import { capabilitiesFor, type Capabilities, type Role } from "@/lib/auth/capabilities";
+import type { EspecialidadSlug } from "@/lib/especialidades/meta";
 import { formatRubro, formatProfesionalDisplay } from "@/lib/format/identity";
 
 interface NavItem {
@@ -70,9 +72,21 @@ export interface SidebarProps {
   esColegiado?: boolean;
   /** Estado de Google Calendar sync. */
   googleSync?: GoogleSyncStatus;
+  /** M50 · especialidad real de la org (para el selector de cuentas internas). */
+  especialidad?: EspecialidadSlug;
+  /** Override de especialidad activo (cuentas internas), o null. */
+  especialidadOverride?: EspecialidadSlug | null;
 }
 
-export function Sidebar({ organization, profile, role, esColegiado = false, googleSync }: SidebarProps) {
+export function Sidebar({
+  organization,
+  profile,
+  role,
+  esColegiado = false,
+  googleSync,
+  especialidad,
+  especialidadOverride,
+}: SidebarProps) {
   const caps = capabilitiesFor(role, esColegiado);
   const navItems = NAV_ITEMS.filter((item) => !item.requires || item.requires(caps));
   const pathname = usePathname() ?? "/";
@@ -93,6 +107,12 @@ export function Sidebar({ organization, profile, role, esColegiado = false, goog
       </div>
 
       {organization.isInternalAccount ? <InternalAccountBadge /> : null}
+      {organization.isInternalAccount && especialidad ? (
+        <EspecialidadSwitcher
+          current={especialidadOverride ?? especialidad}
+          orgEspecialidad={especialidad}
+        />
+      ) : null}
 
       <SidebarSearch />
 

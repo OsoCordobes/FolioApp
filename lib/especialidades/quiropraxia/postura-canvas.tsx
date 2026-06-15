@@ -26,7 +26,7 @@ interface PosturaCanvasProps {
 }
 
 const VIEW_W = 280;
-const VIEW_H = 320;
+const VIEW_H = 230;
 const MAX_STROKES = 200;
 
 function pointsToStr(pts: Punto[]): string {
@@ -102,44 +102,38 @@ export function PosturaCanvas({ value, onChange, readOnly }: PosturaCanvasProps)
           onPointerLeave={commit}
           style={{ touchAction: "none", cursor: readOnly ? "default" : "crosshair" }}
         >
-          {/* Figura masculina de espaldas — SOLO CONTORNO, sin relleno y SIN
-              piernas (torso hasta la pelvis/glúteos, como la lámina de
-              subluxación pélvica). Hombros, cintura y pelvis bien definidos para
-              trazar caída de hombros, escoliosis y báscula pélvica. cx=140. */}
+          {/* Figura de espaldas recortada justo debajo de los hombros (cabeza +
+              cuello + trapecios + deltoides), siguiendo la lámina de referencia
+              quiropráctica. Solo contorno con tokens; caída de hombros natural
+              para trazar nivel de hombros, inclinación cefálica y rotación.
+              cx=140. */}
           <g fill="none" stroke="var(--line)" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round">
-            {/* cabeza */}
-            <ellipse cx="140" cy="38" rx="20" ry="24" />
-            {/* cuello */}
-            <path d="M 131 60 C 131 66, 131 68, 129 72 M 149 60 C 149 66, 149 68, 151 72" />
-            {/* tronco: trapecio → hombros (deltoides) → dorsal → cintura (lo más
-                angosto) → pelvis (más ancha) → glúteos con surco interglúteo */}
+            {/* contorno: cabeza → cuello → trapecio → deltoides → recorte dorsal */}
             <path
-              d="M 129 72
-                 C 120 76, 102 82, 90 100
-                 C 84 110, 81 117, 83 129
-                 C 91 160, 98 182, 105 202
-                 C 107 216, 97 230, 97 244
-                 C 97 258, 101 272, 111 282
-                 C 121 290, 134 289, 140 279
-                 C 146 289, 159 290, 169 282
-                 C 179 272, 183 258, 183 244
-                 C 183 230, 173 216, 175 202
-                 C 182 182, 189 160, 197 129
-                 C 199 117, 196 110, 190 100
-                 C 178 82, 160 76, 151 72
+              d="M 140 20
+                 C 161 20, 176 35, 176 56
+                 C 176 78, 166 92, 152 100
+                 C 151 105, 151 109, 151 113
+                 C 172 120, 212 132, 240 150
+                 C 248 156, 252 165, 250 178
+                 C 249 188, 246 194, 240 199
+                 C 210 205, 178 207, 140 207
+                 C 102 207, 70 205, 40 199
+                 C 34 194, 31 188, 30 178
+                 C 28 165, 32 156, 40 150
+                 C 68 132, 108 120, 129 113
+                 C 129 109, 129 105, 128 100
+                 C 114 92, 104 78, 104 56
+                 C 104 35, 119 20, 140 20
                  Z"
             />
-            {/* brazo izquierdo colgando (deltoides → muñeca → cara interna) */}
-            <path d="M 85 125 C 74 150, 69 182, 73 210 C 75 221, 85 221, 87 210 C 91 186, 96 160, 97 136" />
-            {/* brazo derecho */}
-            <path d="M 195 125 C 206 150, 211 182, 207 210 C 205 221, 195 221, 193 210 C 189 186, 184 160, 183 136" />
-            {/* escápulas (sutiles, vista posterior) */}
-            <path stroke="var(--line-soft)" strokeWidth="1.1" d="M 124 116 C 113 122, 112 140, 126 150" />
-            <path stroke="var(--line-soft)" strokeWidth="1.1" d="M 156 116 C 167 122, 168 140, 154 150" />
-            {/* surco interglúteo */}
-            <path stroke="var(--line-soft)" strokeWidth="1.1" d="M 140 266 L 140 285" />
-            {/* línea media de referencia (columna) */}
-            <line x1="140" y1="70" x2="140" y2="264" stroke="var(--line-soft)" strokeWidth="1" strokeDasharray="4 4" />
+            {/* nuca / nacimiento del pelo */}
+            <path stroke="var(--line-soft)" strokeWidth="1.1" d="M 118 88 C 128 96, 152 96, 162 88" />
+            {/* C7 + línea media de referencia (plomada) */}
+            <line x1="140" y1="106" x2="140" y2="201" stroke="var(--line-soft)" strokeWidth="1" strokeDasharray="4 4" />
+            {/* escápulas sutiles (vista posterior) */}
+            <path stroke="var(--line-soft)" strokeWidth="1.1" d="M 110 152 C 99 161, 100 180, 115 189" />
+            <path stroke="var(--line-soft)" strokeWidth="1.1" d="M 170 152 C 181 161, 180 180, 165 189" />
           </g>
 
           {/* Trazos confirmados. */}

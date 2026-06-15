@@ -44,6 +44,15 @@ export function isEspecialidadSlug(value: string): value is EspecialidadSlug {
 }
 
 /**
+ * Cookie de override de especialidad para CUENTAS INTERNAS (is_internal_account).
+ * Permite previsualizar la ficha clínica de otra especialidad sin tocar la
+ * config real del consultorio. Solo se HONRA server-side cuando la org es
+ * interna (ver el layout (app) y pacientes/[id]/page.tsx). Valor = un
+ * EspecialidadSlug; ausente o inválido = sin override (se usa la real).
+ */
+export const ESPECIALIDAD_OVERRIDE_COOKIE = "folio_esp_override";
+
+/**
  * Normaliza un valor arbitrario (ej. columna organization.especialidad) a un
  * slug conocido. Fallback a quiropraxia: una org con valor desconocido (CHECK
  * futuro más amplio que el registry deployado) degrada al comportamiento
