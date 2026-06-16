@@ -20,7 +20,9 @@ import { notFound } from "next/navigation";
 import { cache } from "react";
 
 import { BookLanding } from "@/components/book-landing/book-landing";
+import { isOrgListedInDirectory } from "@/lib/db/directorio";
 import { listProfesionalesPublico } from "@/lib/db/members";
+import { getEspecialidadMeta, isEspecialidadSlug } from "@/lib/especialidades/meta";
 import { formatRubro } from "@/lib/format/identity";
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
 
@@ -81,7 +83,45 @@ const getOrgPublica = cache(async (slug: string): Promise<OrgPublicRow | null> =
   return org as OrgPublicRow;
 });
 
+/**
+ * ¿La org optó por listarse en el directorio? Gobierna la indexabilidad (robots)
+ * + el JSON-LD. cache() dedupea la query entre generateMetadata y el render del
+ * mismo request. GUARDED en lib/db/directorio → false si M64 no está aplicada.
+ */
+const getOrgListado = cache((slug: string) => isOrgListedInDirectory(slug));
+
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://folio-app-ten.vercel.app";
+
+/**
+ * JSON-LD MedicalBusiness para /book/[slug]. Solo se emite cuando la org está
+ * listada en el directorio (mismo límite de consentimiento que la indexación).
+ * Escape de "<" para evitar romper el </script> (igual que el landing marketing).
+ */
+function buildBookJsonLd(org: OrgPublicRow): string {
+  const especialidadNombre =
+    org.especialidad && isEspecialidadSlug(org.especialidad)
+      ? getEspecialidadMeta(org.especialidad).nombre
+      : formatRubro(org.rubro);
+  const node: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": "MedicalBusiness",
+    name: org.nombre,
+    url: `${APP_URL}/book/${org.slug}`,
+  };
+  if (especialidadNombre) node.medicalSpecialty = especialidadNombre;
+  if (org.logo_url) node.image = org.logo_url;
+  if (org.telefono_publico) node.telephone = org.telefono_publico;
+  if (org.direccion_completa || org.ciudad || org.provincia) {
+    node.address = {
+      "@type": "PostalAddress",
+      ...(org.direccion_completa ? { streetAddress: org.direccion_completa } : {}),
+      ...(org.ciudad ? { addressLocality: org.ciudad } : {}),
+      ...(org.provincia ? { addressRegion: org.provincia } : {}),
+      addressCountry: "AR",
+    };
+  }
+  return JSON.stringify(node).replace(/</g, "\\u003c");
+}
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
@@ -102,10 +142,18 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     org.bio?.trim() ||
     `Turnos online con ${org.nombre}${rubro ? ` · ${rubro}` : ""}${lugar ? ` · ${lugar}` : ""}. Elegí servicio y horario en menos de un minuto.`;
 
+  // Indexabilidad gateada al opt-in del directorio (M64): un link de reserva
+  // compartido por el médico sigue siendo accesible (200), pero NO se indexa en
+  // Google sin consentimiento explícito. Default (no listado / M64 sin aplicar)
+  // = noindex, follow. Canonical ref-free para no fragmentar el ranking con ?ref.
+  const listado = await getOrgListado(slug);
+
   return {
     metadataBase: new URL(APP_URL),
     title,
     description,
+    alternates: { canonical: `/book/${org.slug}` },
+    robots: { index: listado, follow: true },
     openGraph: {
       title,
       description,
@@ -149,30 +197,43 @@ export default async function BookPage({ params }: PageProps) {
     listProfesionalesPublico(org.id),
   ]);
 
+  // JSON-LD solo si la org optó por el directorio (mismo límite de
+  // consentimiento que la indexación). cache() comparte la query con metadata.
+  const listado = await getOrgListado(slug);
+  const jsonLd = listado ? buildBookJsonLd(org) : null;
+
   return (
-    <BookLanding
-      org={{
-        slug: org.slug,
-        nombre: org.nombre,
-        ciudad: org.ciudad,
-        provincia: org.provincia,
-        rubro: org.rubro,
-        especialidad: org.especialidad,
-        acentoHex: org.acento_hex,
-        logoUrl: org.logo_url,
-        cardMood: (org.card_mood ?? "editorial") as
-          | "calido"
-          | "clinico"
-          | "editorial"
-          | "boutique",
-        bio: org.bio,
-        telefonoPublico: org.telefono_publico,
-        direccionCompleta: org.direccion_completa,
-        instagramHandle: org.instagram_handle,
-        autoConfirmar: org.auto_confirmar_reservas,
-      }}
-      servicios={servicios ?? []}
-      profesionales={profesionalesRes.ok ? profesionalesRes.data : []}
-    />
+    <>
+      {jsonLd ? (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: jsonLd }}
+        />
+      ) : null}
+      <BookLanding
+        org={{
+          slug: org.slug,
+          nombre: org.nombre,
+          ciudad: org.ciudad,
+          provincia: org.provincia,
+          rubro: org.rubro,
+          especialidad: org.especialidad,
+          acentoHex: org.acento_hex,
+          logoUrl: org.logo_url,
+          cardMood: (org.card_mood ?? "editorial") as
+            | "calido"
+            | "clinico"
+            | "editorial"
+            | "boutique",
+          bio: org.bio,
+          telefonoPublico: org.telefono_publico,
+          direccionCompleta: org.direccion_completa,
+          instagramHandle: org.instagram_handle,
+          autoConfirmar: org.auto_confirmar_reservas,
+        }}
+        servicios={servicios ?? []}
+        profesionales={profesionalesRes.ok ? profesionalesRes.data : []}
+      />
+    </>
   );
 }
