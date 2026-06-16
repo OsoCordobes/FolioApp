@@ -1,5 +1,5 @@
 -- ════════════════════════════════════════════════════════════════════════════
--- Folio · M62 spec · pseudonimizar_paciente acepta service_role (cron de purga)
+-- Folio · M63 spec · pseudonimizar_paciente acepta service_role (cron de purga)
 -- ════════════════════════════════════════════════════════════════════════════
 -- Regresión que esto guarda: M60/M61 reescribieron el cuerpo de la proc a
 -- partir de M25 y perdieron la rama service_role que M45 había agregado para el
@@ -37,7 +37,7 @@ BEGIN
   -- fixtures: org + identidad (con blind-index hashes de 64 chars) + paciente +
   -- PII de terceros (contacto, tutor) + intake avanzado.
   INSERT INTO organization (id, slug, nombre)
-    VALUES (v_org, 'm62-dry-' || substr(md5(random()::text), 1, 12), 'M62 Service Role Spec (dry)');
+    VALUES (v_org, 'm63-dry-' || substr(md5(random()::text), 1, 12), 'M63 Service Role Spec (dry)');
   INSERT INTO paciente_identidad
     (id, organization_id, nombre_cifrado, apellido_cifrado, telefono_cifrado, dni_hash, nombre_hash)
     VALUES (v_ident, v_org, '\x01'::bytea, '\x02'::bytea, '\x03'::bytea,
@@ -52,18 +52,18 @@ BEGIN
     VALUES (v_org, v_pac, 'psicologia');
 
   -- llamada service-role en dry-run: NO debe lanzar.
-  v_res := public.pseudonimizar_paciente(v_pac, 'M62 spec service_role dry-run', true);
+  v_res := public.pseudonimizar_paciente(v_pac, 'M63 spec service_role dry-run', true);
 
   IF v_res ->> 'actor_role' IS DISTINCT FROM 'service_role' THEN
-    RAISE EXCEPTION 'M62 spec FAIL: dry_run actor_role = % (esperado service_role)', v_res ->> 'actor_role';
+    RAISE EXCEPTION 'M63 spec FAIL: dry_run actor_role = % (esperado service_role)', v_res ->> 'actor_role';
   END IF;
   IF (v_res ->> 'dry_run')::boolean IS DISTINCT FROM true THEN
-    RAISE EXCEPTION 'M62 spec FAIL: dry_run flag != true';
+    RAISE EXCEPTION 'M63 spec FAIL: dry_run flag != true';
   END IF;
   IF (v_res ->> 'contactos_emergencia_a_borrar')::int <> 1
      OR (v_res ->> 'tutores_legales_a_borrar')::int <> 1
      OR (v_res ->> 'intake_avanzado_a_borrar')::int <> 1 THEN
-    RAISE EXCEPTION 'M62 spec FAIL: conteos dry_run inesperados: %', v_res;
+    RAISE EXCEPTION 'M63 spec FAIL: conteos dry_run inesperados: %', v_res;
   END IF;
 
   -- dry_run NO debe haber mutado nada.
@@ -73,10 +73,10 @@ BEGIN
      OR (SELECT count(*) FROM paciente_intake_avanzado WHERE paciente_id = v_pac) <> 1
      OR (SELECT pseudonimizado_en FROM paciente WHERE id = v_pac) IS NOT NULL
      OR (SELECT count(*) FROM pseudonimizacion_event WHERE paciente_id = v_pac) <> 0 THEN
-    RAISE EXCEPTION 'M62 spec FAIL: dry_run mutó datos';
+    RAISE EXCEPTION 'M63 spec FAIL: dry_run mutó datos';
   END IF;
 
-  RAISE NOTICE 'M62 spec OK (1/3): service_role dry_run no lanza y no muta';
+  RAISE NOTICE 'M63 spec OK (1/3): service_role dry_run no lanza y no muta';
 END $$;
 
 -- ─── 2. service_role + ejecución real: borra todo, no lanza ───────────────────
@@ -90,7 +90,7 @@ BEGIN
   PERFORM set_config('request.jwt.claim.role', 'service_role', true);
 
   INSERT INTO organization (id, slug, nombre)
-    VALUES (v_org, 'm62-real-' || substr(md5(random()::text), 1, 12), 'M62 Service Role Spec (real)');
+    VALUES (v_org, 'm63-real-' || substr(md5(random()::text), 1, 12), 'M63 Service Role Spec (real)');
   INSERT INTO paciente_identidad
     (id, organization_id, nombre_cifrado, apellido_cifrado, telefono_cifrado, dni_hash, nombre_hash)
     VALUES (v_ident, v_org, '\x01'::bytea, '\x02'::bytea, '\x03'::bytea,
@@ -105,41 +105,41 @@ BEGIN
     VALUES (v_org, v_pac, 'cardiologia');
 
   -- ejecución real con service_role: NO debe lanzar.
-  v_res := public.pseudonimizar_paciente(v_pac, 'M62 spec service_role real run', false);
+  v_res := public.pseudonimizar_paciente(v_pac, 'M63 spec service_role real run', false);
 
   IF v_res ->> 'actor_role' IS DISTINCT FROM 'service_role' THEN
-    RAISE EXCEPTION 'M62 spec FAIL: real actor_role = % (esperado service_role)', v_res ->> 'actor_role';
+    RAISE EXCEPTION 'M63 spec FAIL: real actor_role = % (esperado service_role)', v_res ->> 'actor_role';
   END IF;
   IF (v_res ->> 'contactos_emergencia_borrados')::int <> 1
      OR (v_res ->> 'tutores_legales_borrados')::int <> 1
      OR (v_res ->> 'intake_avanzado_borrados')::int <> 1 THEN
-    RAISE EXCEPTION 'M62 spec FAIL: conteos de borrado inesperados: %', v_res;
+    RAISE EXCEPTION 'M63 spec FAIL: conteos de borrado inesperados: %', v_res;
   END IF;
 
   -- todas las tablas de PII vaciadas para el paciente.
   IF (SELECT count(*) FROM paciente_identidad WHERE id = v_ident) <> 0 THEN
-    RAISE EXCEPTION 'M62 spec FAIL: paciente_identidad no borrada';
+    RAISE EXCEPTION 'M63 spec FAIL: paciente_identidad no borrada';
   END IF;
   IF (SELECT count(*) FROM contacto_emergencia WHERE paciente_id = v_pac) <> 0 THEN
-    RAISE EXCEPTION 'M62 spec FAIL: contacto_emergencia no borrado';
+    RAISE EXCEPTION 'M63 spec FAIL: contacto_emergencia no borrado';
   END IF;
   IF (SELECT count(*) FROM tutor_legal WHERE paciente_id = v_pac) <> 0 THEN
-    RAISE EXCEPTION 'M62 spec FAIL: tutor_legal no borrado';
+    RAISE EXCEPTION 'M63 spec FAIL: tutor_legal no borrado';
   END IF;
   IF (SELECT count(*) FROM paciente_intake_avanzado WHERE paciente_id = v_pac) <> 0 THEN
-    RAISE EXCEPTION 'M62 spec FAIL: paciente_intake_avanzado no borrado';
+    RAISE EXCEPTION 'M63 spec FAIL: paciente_intake_avanzado no borrado';
   END IF;
   IF (SELECT identidad_id FROM paciente WHERE id = v_pac) IS NOT NULL
      OR (SELECT pseudonimizado_en FROM paciente WHERE id = v_pac) IS NULL THEN
-    RAISE EXCEPTION 'M62 spec FAIL: paciente no quedó pseudonimizado';
+    RAISE EXCEPTION 'M63 spec FAIL: paciente no quedó pseudonimizado';
   END IF;
 
   -- el audit-trail se grabó, con performed_by NULL (no hay actor humano).
   IF (SELECT count(*) FROM pseudonimizacion_event WHERE paciente_id = v_pac AND performed_by IS NULL) <> 1 THEN
-    RAISE EXCEPTION 'M62 spec FAIL: pseudonimizacion_event no grabado con performed_by NULL';
+    RAISE EXCEPTION 'M63 spec FAIL: pseudonimizacion_event no grabado con performed_by NULL';
   END IF;
 
-  RAISE NOTICE 'M62 spec OK (2/3): service_role real run borra todo sin lanzar';
+  RAISE NOTICE 'M63 spec OK (2/3): service_role real run borra todo sin lanzar';
 END $$;
 
 -- ─── 3. sin service_role y sin auth.uid() (anon) SIGUE rechazando ─────────────
@@ -154,12 +154,12 @@ BEGIN
   EXCEPTION WHEN others THEN
     v_caught := true;
     IF sqlerrm NOT LIKE '%requiere auth.uid()%' THEN
-      RAISE EXCEPTION 'M62 spec FAIL: anon rechazado con mensaje inesperado: %', sqlerrm;
+      RAISE EXCEPTION 'M63 spec FAIL: anon rechazado con mensaje inesperado: %', sqlerrm;
     END IF;
   END;
   IF NOT v_caught THEN
-    RAISE EXCEPTION 'M62 spec FAIL: anon (sin auth.uid() ni service_role) NO fue rechazado';
+    RAISE EXCEPTION 'M63 spec FAIL: anon (sin auth.uid() ni service_role) NO fue rechazado';
   END IF;
 
-  RAISE NOTICE 'M62 spec OK (3/3): anon sin auth.uid() sigue rechazado';
+  RAISE NOTICE 'M63 spec OK (3/3): anon sin auth.uid() sigue rechazado';
 END $$;

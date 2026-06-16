@@ -1,5 +1,5 @@
 -- ════════════════════════════════════════════════════════════════════════════
--- Folio · M62 · pseudonimizar_paciente: restaura la rama service_role (cron purga)
+-- Folio · M63 · pseudonimizar_paciente: restaura la rama service_role (cron purga)
 -- ════════════════════════════════════════════════════════════════════════════
 -- Regresión funcional (la purga post-grace de 30 días nunca corre):
 --
@@ -67,7 +67,7 @@ DECLARE
   v_tutores_borrados   int;
 BEGIN
   v_actor_id := auth.uid();
-  -- M45/M62: el cron /api/cron/account-purge invoca con service_role (sin JWT de
+  -- M45/M63: el cron /api/cron/account-purge invoca con service_role (sin JWT de
   -- usuario → auth.uid() = NULL). Antes esto abortaba con "requiere auth.uid()"
   -- y la purga post-grace de 30 días (Ley 25.326 art. 16) nunca corría.
   v_is_service := v_actor_id IS NULL AND coalesce(auth.role(), '') = 'service_role';
@@ -165,4 +165,4 @@ END
 $$;
 
 COMMENT ON FUNCTION public.pseudonimizar_paciente(uuid, text, boolean) IS
-  'Folio · M13 + M25 + M45 + M60 + M61 + M62 · pseudonimización de paciente. Borra paciente_identidad + paciente_intake_avanzado + contacto_emergencia + tutor_legal (PII propia y de terceros), marca paciente.pseudonimizado_en, y graba pseudonimizacion_event con SHA-256 del DNI + nombre. SECURITY DEFINER. Callers: UI (OWNER/DIRECTOR, valida membership) y cron account-purge (service_role, auth.uid() NULL → performed_by NULL).';
+  'Folio · M13 + M25 + M45 + M60 + M61 + M63 · pseudonimización de paciente. Borra paciente_identidad + paciente_intake_avanzado + contacto_emergencia + tutor_legal (PII propia y de terceros), marca paciente.pseudonimizado_en, y graba pseudonimizacion_event con SHA-256 del DNI + nombre. SECURITY DEFINER. Callers: UI (OWNER/DIRECTOR, valida membership) y cron account-purge (service_role, auth.uid() NULL → performed_by NULL).';
