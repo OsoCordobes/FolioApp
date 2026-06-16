@@ -32,7 +32,7 @@ export function Hero() {
         <div className="fl-hero-copy">
           <p className="fl-hero-sub">
             Turnos, reservas online, recordatorios por WhatsApp y tus números — y cada
-            nota clínica cifrada antes de tocar la base de datos.
+            historia clínica guardada bajo llave, que solo tu consultorio puede leer.
           </p>
           <div className="fl-hero-ctas">
             <Link className="fi-btn fi-btn-primary fl-btn-lg" href="/onboarding" data-fl-cta="hero">
@@ -41,7 +41,7 @@ export function Hero() {
           </div>
           <p className="fl-hero-note">Sin tarjeta. Cancelás cuando quieras.</p>
           <ul className="fl-hero-stats" aria-label="Compromisos de Folio">
-            <li>AES-256-GCM</li>
+            <li>Historias cifradas</li>
             <li>Ley 25.326</li>
             <li>7 días gratis</li>
             <li>Hecho en Argentina</li>
@@ -74,7 +74,7 @@ export function Hero() {
                 <span className="fl-mock-day">Hoy · mar 10 jun</span>
                 <span className="fl-mock-lock">
                   <Lock size={13} />
-                  Cifrada · AES-256-GCM
+                  Historia cifrada
                 </span>
               </header>
               <div className="fl-mock-row">

@@ -14256,18 +14256,69 @@ input:focus { outline: none; }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* fl-cta-final */
+/* fl-cta-final · panel DARK — bookend con la bóveda (mismo truco: redeclara
+   localmente los tokens de [data-theme="dark"], líneas ~195-226; en dark
+   real queda idéntico sin reglas extra). Cero hex inventado. */
 .fl-cta-panel {
+  /* superficies + tinta + acento — copia exacta de [data-theme="dark"] */
+  --bg:        #14130F;
+  --surface:   #1B1A14;
+  --surface-2: #232017;
+  --line:      #2F2B1F;
+  --line-soft: #252118;
+  --ink:       #E8E2D2;
+  --ink-2:     #B5AE99;
+  --ink-3:     #847E69;
+  --accent:    #C29553;
+  --accent-2:  #DDB070;
+  --accent-soft:   rgba(194,149,83,.14);
+  --accent-soft-2: rgba(194,149,83,.24);
+  --shadow-1:  0 1px 2px rgba(0,0,0,.4), 0 1px 1px rgba(0,0,0,.3);
+  --shadow-2:  0 8px 24px rgba(0,0,0,.4), 0 2px 6px rgba(0,0,0,.25);
+
+  position: relative;
+  isolation: isolate;
+  overflow: clip;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--space-5);
-  padding: clamp(var(--space-10), 6vw, var(--space-16)) var(--space-6);
-  background: var(--accent-soft);
-  border: 1px solid var(--accent-soft-2);
+  padding: clamp(var(--space-12), 8vw, var(--space-20)) var(--space-6);
+  background: var(--bg);
+  color: var(--ink);
+  color-scheme: dark;
+  border: 1px solid var(--line);
   border-radius: var(--r-xl);
-  box-shadow: var(--shadow-hero);
+  box-shadow: var(--shadow-2);
   text-align: center;
+}
+/* Brasa radial cálida desde arriba — profundidad sin romper el contraste. */
+.fl-cta-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(120% 90% at 50% 0%, var(--accent-soft), transparent 70%);
+  pointer-events: none;
+}
+.fl-cta-eyebrow {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+/* Tinta-sobre-brass: #14130F sobre #C29553 ≈ 6.3:1 (AA); el #FBF9F4 global
+   del .fi-btn-primary no alcanza AA sobre el accent dark de este panel. */
+.fl-cta-panel .fi-btn-primary {
+  color: var(--bg);
+  font-weight: 600;
+  border-color: var(--accent-2);
+}
+.fl-cta-panel .fi-btn-primary:hover {
+  background: var(--accent-2);
 }
 .fl-cta-title {
   margin: 0;
@@ -14595,25 +14646,23 @@ input:focus { outline: none; }
   font-variant-numeric: tabular-nums;
 }
 
-/* fl-faq */
+/* fl-faq · editorial: sin cajas — divisores finos, pregunta generosa y
+   apertura fluida (interpolate-size + ::details-content, progressive). */
 .fl-faq-list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
   max-width: 760px;
   margin-top: var(--space-8);
+  border-top: 1px solid var(--line);
 }
 
 .fl-faq-item {
-  background: var(--surface);
-  border: 1px solid var(--line-soft);
-  border-radius: var(--r-lg);
-  box-shadow: var(--shadow-1);
+  border-bottom: 1px solid var(--line);
   transition: border-color var(--dur-quick) var(--ease-standard-out);
 }
 
 .fl-faq-item[open] {
-  border-color: var(--line);
+  border-bottom-color: color-mix(in srgb, var(--accent) 35%, var(--line));
 }
 
 .fl-faq-q {
@@ -14621,14 +14670,14 @@ input:focus { outline: none; }
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
-  padding: var(--space-4) var(--space-5);
+  padding: var(--space-5) var(--space-1);
   cursor: pointer;
   font-size: var(--fs-md);
   font-weight: 600;
   line-height: 1.4;
   color: var(--ink);
   list-style: none;
-  border-radius: var(--r-lg);
+  border-radius: var(--r-sm);
 }
 
 .fl-faq-q-text {
@@ -14660,7 +14709,7 @@ input:focus { outline: none; }
 
 .fl-faq-a {
   margin: 0;
-  padding: 0 var(--space-5) var(--space-5);
+  padding: 0 var(--space-1) var(--space-5);
   font-size: var(--fs-body);
   line-height: 1.65;
   color: var(--ink-2);
@@ -14677,6 +14726,29 @@ input:focus { outline: none; }
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* Apertura fluida del <details> — Chrome 129+; el resto conserva el snap
+   nativo + el fade del answer (fl-faq-open). */
+@supports (interpolate-size: allow-keywords) {
+  @media (prefers-reduced-motion: no-preference) {
+    .fl-faq-item {
+      interpolate-size: allow-keywords;
+    }
+    .fl-faq-item::details-content {
+      opacity: 0;
+      block-size: 0;
+      overflow-y: clip;
+      transition:
+        content-visibility var(--dur-snappy) allow-discrete,
+        opacity var(--dur-snappy) var(--ease-standard),
+        block-size var(--dur-snappy) var(--ease-standard);
+    }
+    .fl-faq-item[open]::details-content {
+      opacity: 1;
+      block-size: auto;
+    }
   }
 }
 
@@ -15436,7 +15508,7 @@ input:focus { outline: none; }
 }
 
 .fl-vault-title {
-  margin: 0 0 var(--space-12);
+  margin: 0 0 var(--space-4);
   max-width: 16ch;
   font-family: var(--font-display);
   font-size: var(--fl-display-lg);
@@ -15445,6 +15517,16 @@ input:focus { outline: none; }
   letter-spacing: -0.02em;
   color: var(--ink);
   text-wrap: balance;
+}
+
+/* Subtítulo humano — la audiencia es médica: la promesa va sin jerga. */
+.fl-vault-sub {
+  margin: 0 0 var(--space-12);
+  max-width: 46ch;
+  font-size: var(--fs-md);
+  line-height: 1.55;
+  color: var(--ink-2);
+  text-wrap: pretty;
 }
 
 /* Grid 2×2 con separadores finos (--line-soft) entre items. */
@@ -15475,9 +15557,10 @@ input:focus { outline: none; }
   font-variant-numeric: tabular-nums;
   color: var(--accent);
 }
-/* Identificadores largos (AES-256-GCM): clamp menor para no desbordar. */
+/* Displays largos («Solo tu equipo»): clamp menor para no desbordar, pero
+   con peso display — balancea la fila contra los numerales gigantes. */
 .fl-vault-num--code {
-  font-size: clamp(1.55rem, 3.6vw, 2.75rem);
+  font-size: clamp(1.9rem, 4.6vw, 3.4rem);
   letter-spacing: var(--track-tight-0);
 }
 
@@ -16917,17 +17000,16 @@ input:focus { outline: none; }
   color: var(--accent-2);
 }
 
-/* FAQ: hover del summary con fondo suave; abierto, el summary cuadra sus
-   esquinas inferiores para integrarse con la respuesta. */
+/* FAQ editorial: el hover responde con tinta cálida (sin fondo — el estilo
+   sin cajas no lo necesita) y el chevron se enciende en accent. */
 .fl-faq-q {
-  transition: background var(--dur-quick) var(--ease-standard);
+  transition: color var(--dur-quick) var(--ease-standard);
 }
 .fl-faq-q:hover {
-  background: var(--surface-2);
+  color: var(--accent-2);
 }
-.fl-faq-item[open] .fl-faq-q {
-  border-end-start-radius: 0;
-  border-end-end-radius: 0;
+.fl-faq-q:hover .fl-faq-chevron {
+  color: var(--accent);
 }
 
 /* ── 4 · Scroll cue del hero ──────────────────────────────────────────────
@@ -16995,6 +17077,134 @@ input:focus { outline: none; }
   .fl-hero-cue:hover {
     transform: none;
     box-shadow: none;
+  }
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * LANDING · Fragmento R3 — micro-interacciones premium (refinamiento 2)
+ * Capa por encima de R1: sheen del CTA primario, barrido de los displays de
+ * la bóveda (eco del clip-path de la escena de cifrado), hover de pricing,
+ * settle del subrayado del hero y detalles de selección. Solo tokens var() /
+ * color-mix (el blanco del sheen es overlay, mismo precedente que --shadow-hero);
+ * todo scopeado .fl-*.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+/* ── 1 · Selección de texto — brass, la marca hasta en el detalle ───────── */
+.fl-root ::selection {
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
+}
+
+/* ── 2 · Sheen del CTA primario — una pasada de luz al hover ────────────── */
+.fl-root .fi-btn-primary {
+  position: relative;
+  overflow: clip;
+}
+.fl-root .fi-btn-primary::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 36%,
+    rgba(255, 255, 255, 0.26) 50%,
+    transparent 64%
+  );
+  transform: translateX(-130%);
+  pointer-events: none;
+}
+.fl-root .fi-btn-primary:hover::before {
+  transform: translateX(130%);
+  transition: transform var(--dur-cinematic) var(--ease-standard);
+}
+
+/* ── 3 · Bóveda: los displays se revelan con el mismo barrido que el
+       ciphertext de las 14:00 — coherencia narrativa. Fallback: estáticos. ── */
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .fl-vault-num {
+      animation: fl-vault-wipe linear both;
+      animation-timeline: view();
+      animation-range: entry 50% entry 100%;
+    }
+  }
+}
+@keyframes fl-vault-wipe {
+  from { clip-path: inset(0 100% 0 0); }
+  to   { clip-path: inset(0 0 0 0); }
+}
+
+/* ── 4 · Mock del hero: respira hacia arriba al hover (desktop) ─────────── */
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .fl-mock {
+    transition: transform var(--dur-cinematic) var(--ease-standard);
+  }
+  .fl-hero-visual:hover .fl-mock {
+    transform: translateY(-4px);
+  }
+}
+
+/* ── 5 · Pricing: lift + borde que se enciende (la featured, con halo) ──── */
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .fl-price-card {
+    transition:
+      transform var(--dur-snappy) var(--ease-standard-out),
+      box-shadow var(--dur-snappy) var(--ease-standard-out),
+      border-color var(--dur-snappy) var(--ease-standard-out);
+  }
+  .fl-price-card:hover {
+    transform: translateY(-3px);
+    border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+    box-shadow: var(--shadow-2);
+  }
+  .fl-price-card--featured:hover {
+    border-color: var(--accent);
+    box-shadow:
+      0 14px 36px color-mix(in srgb, var(--accent) 20%, transparent),
+      var(--shadow-2);
+  }
+}
+
+/* ── 6 · Subrayado del hero: «cifrada.» asienta su subrayado después de que
+       la línea sube (backwards: arranca transparente durante el delay) ──── */
+@media (prefers-reduced-motion: no-preference) {
+  .fl-hero-accent {
+    animation: fl-accent-settle var(--dur-cinematic) var(--ease-standard-out) 420ms backwards;
+  }
+}
+@keyframes fl-accent-settle {
+  from {
+    text-decoration-color: transparent;
+    text-underline-offset: 0.3em;
+  }
+}
+
+/* ── 7 · Bento: la demo acompaña el hover de la celda con un paso ────────── */
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .fl-bento-demo {
+    transition: transform var(--dur-snappy) var(--ease-standard-out);
+  }
+  .fl-bento-cell:hover .fl-bento-demo {
+    transform: translateY(-2px);
+  }
+}
+
+/* ── 8 · Footer: transición de tinta en los links ───────────────────────── */
+.fl-footer-link {
+  transition: color var(--dur-quick) var(--ease-standard);
+  text-underline-offset: 3px;
+}
+
+/* ── 9 · Reduced motion — anula lo de este fragmento que no está ya gateado ── */
+@media (prefers-reduced-motion: reduce) {
+  .fl-root .fi-btn-primary::before {
+    content: none;
+  }
+  .fl-vault-num,
+  .fl-hero-accent {
+    animation: none !important;
+  }
+  .fl-footer-link {
+    transition: none !important;
   }
 }
 

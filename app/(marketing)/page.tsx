@@ -44,7 +44,7 @@ function buildJsonLd(): string {
         inLanguage: "es-AR",
         url: BASE_URL,
         description:
-          "El día de tu consultorio, armado solo: turnos, reservas online, recordatorios por WhatsApp y notas clínicas cifradas con AES-256-GCM. Para profesionales de la salud en Argentina.",
+          "El día de tu consultorio, armado solo: turnos, reservas online, recordatorios por WhatsApp e historias clínicas cifradas. Para profesionales de la salud en Argentina.",
         offers: [
           {
             "@type": "Offer",

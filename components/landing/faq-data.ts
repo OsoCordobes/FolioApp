@@ -38,7 +38,7 @@ export const FAQ_ITEMS: { q: string; a: string }[] = [
   },
   {
     q: "¿Quién puede ver las historias clínicas?",
-    a: "Solo los profesionales habilitados de tu consultorio. Cada nota se cifra con AES-256-GCM antes de tocar la base de datos, y cada consultorio queda aislado del resto.",
+    a: "Solo los profesionales habilitados de tu consultorio. Cada nota se guarda cifrada en la base de datos y se descifra únicamente para mostrársela a tu equipo; cada consultorio queda aislado del resto.",
   },
   {
     q: "¿Cómo pago?",
