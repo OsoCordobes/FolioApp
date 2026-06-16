@@ -14,6 +14,8 @@
  * a `wa.me` (deep link) cuando WA Cloud no esté disponible.
  */
 
+import { toWhatsappE164 } from "@/lib/format/phone";
+
 const API_VERSION = "v22.0";                  // current GA de Meta WhatsApp Cloud API
 const API_BASE = `https://graph.facebook.com/${API_VERSION}`;
 
@@ -121,7 +123,9 @@ export async function sendText(input: SendTextInput): Promise<{ id: string }> {
 // ─── Fallback wa.me deep link (sin Cloud API) ──────────────────────────
 
 export function fallbackWaMeLink(phoneE164: string, message?: string): string {
-  const phone = phoneE164.replace(/[^\d]/g, "");
+  // Normalizamos AR vía el helper compartido (única normalización del repo);
+  // si la entrada no es AR pero ya viene en E.164, caemos a sus dígitos.
+  const phone = toWhatsappE164(phoneE164) ?? phoneE164.replace(/[^\d]/g, "");
   const text = message ? `?text=${encodeURIComponent(message)}` : "";
   return `https://wa.me/${phone}${text}`;
 }

@@ -16,6 +16,7 @@ import { useMemo, useState } from "react";
 import * as I from "@/components/icons";
 import { TurnoCreateModal } from "@/components/hoy/turno-create-modal";
 import { PacienteCreateModal } from "@/components/pacientes/paciente-create-modal";
+import { toWhatsappE164 } from "@/lib/format/phone";
 import type { PacienteDirRow } from "@/lib/db/pacientes-dir";
 import type { EspecialidadSlug } from "@/lib/especialidades/meta";
 
@@ -561,9 +562,14 @@ export function PacientesDir({
 }
 
 function handleBulkWhatsApp(selected: Set<string>, pacientes: PacienteDir[]): void {
-  const elegidos = pacientes.filter((p) => selected.has(p.id) && p.tel);
+  // Normaliza a E.164 AR (54 + 9 móvil + NSN, sin 0/15): un teléfono cargado en
+  // formato local abriría un wa.me inválido sin esto (auditoría L4).
+  const elegidos = pacientes
+    .filter((p) => selected.has(p.id))
+    .map((p) => ({ p, e164: toWhatsappE164(p.tel) }))
+    .filter((x): x is { p: PacienteDir; e164: string } => x.e164 !== null);
   if (elegidos.length === 0) {
-    alert("Ninguno de los pacientes seleccionados tiene teléfono cargado.");
+    alert("Ninguno de los pacientes seleccionados tiene un teléfono válido cargado.");
     return;
   }
   if (elegidos.length > 1) {
@@ -572,9 +578,7 @@ function handleBulkWhatsApp(selected: Set<string>, pacientes: PacienteDir[]): vo
     );
     if (!ok) return;
   }
-  for (const p of elegidos) {
-    const num = p.tel.replace(/[^0-9]/g, "");
-    if (!num) continue;
-    window.open(`https://wa.me/${num}`, "_blank", "noopener");
+  for (const { e164 } of elegidos) {
+    window.open(`https://wa.me/${e164}`, "_blank", "noopener");
   }
 }
