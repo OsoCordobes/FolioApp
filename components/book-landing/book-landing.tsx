@@ -11,9 +11,9 @@
  * lógica de reserva (consent, captcha, rate-limits, auto-confirm) vive intacta
  * en components/booking/booking-wizard.tsx + app/(public)/book/[slug]/actions.ts.
  *
- * Secciones: header · hero · sobre · equipo(lite) · servicios · seguridad ·
- * ubicación · reserva · powered-by. Foto/bio/matrícula por profesional llegan
- * en Fase 2 (member.perfil_publico, M61).
+ * Secciones: header · hero · sobre · equipo · servicios · seguridad ·
+ * ubicación · reserva · powered-by. El equipo y (en orgs solo) el hero muestran
+ * foto/bio/matrícula por profesional — member.perfil_publico (M62).
  */
 
 import type { ReactNode } from "react";
@@ -23,7 +23,7 @@ import { Motif } from "@/components/book-landing/motifs";
 import { StickyBookCta } from "@/components/book-landing/sticky-book-cta";
 import { BookingWizard } from "@/components/booking/booking-wizard";
 import { FolioMark } from "@/components/folio-mark";
-import type { ProfesionalPublico } from "@/lib/booking/wizard-profesional";
+import type { ProfesionalPerfilPublico } from "@/lib/db/members";
 import { resolveBookLandingContent } from "@/lib/book-landing/content";
 import { formatArs } from "@/lib/format/currency";
 import { adjustHexLightness } from "@/lib/format/initials";
@@ -69,7 +69,7 @@ export function BookLanding({
 }: {
   org: BookLandingOrg;
   servicios: ServicioPublic[];
-  profesionales?: ProfesionalPublico[];
+  profesionales?: ProfesionalPerfilPublico[];
 }) {
   const acento = isValidHex(org.acentoHex) ? org.acentoHex : DEFAULT_ACENTO;
   const acento2 = adjustHexLightness(acento, -12);
@@ -81,6 +81,19 @@ export function BookLanding({
   const tieneContacto =
     !!org.direccionCompleta || !!org.telefonoPublico || !!org.instagramHandle;
   const sobreTitulo = multiProf ? "Sobre el consultorio" : "Sobre mí";
+
+  // Solo (1 colegiado): su foto/matrícula enriquecen el hero. La figura del
+  // hero prioriza el logo del consultorio si lo subió; si no, la foto del
+  // profesional solo; si no, iniciales.
+  const profesionalSolo = !multiProf && profesionales.length === 1 ? profesionales[0] : null;
+  const heroMatricula = profesionalSolo?.matricula ?? null;
+  const heroFotoProfesional = !org.logoUrl ? (profesionalSolo?.fotoUrl ?? null) : null;
+  // Reduce el perfil rico a {id, displayName} para el selector del wizard
+  // (su contrato no cambia: foto/bio/matrícula son solo para la landing).
+  const profesionalesLite = profesionales.map((p) => ({
+    id: p.id,
+    displayName: p.displayName,
+  }));
 
   return (
     <div
@@ -125,6 +138,9 @@ export function BookLanding({
             </div>
             <h1 className="bl-hero-title">{org.nombre}</h1>
             {lugar ? <p className="bl-hero-sub">{lugar}</p> : null}
+            {heroMatricula ? (
+              <p className="bl-hero-matricula fm-mono">M.P. {heroMatricula}</p>
+            ) : null}
             <p className="bl-hero-value">{content.heroValueLine}</p>
             <div className="bl-hero-actions">
               <a href="#reservar" className="fi-btn fi-btn-primary bl-btn-lg">
@@ -150,6 +166,14 @@ export function BookLanding({
                 loading="eager"
                 decoding="async"
               />
+            ) : heroFotoProfesional && profesionalSolo ? (
+              // Solo sin logo: foto del profesional como avatar redondo grande.
+              <AvatarIniciales
+                fullName={profesionalSolo.displayName}
+                avatarUrl={heroFotoProfesional}
+                acentoHex={acento}
+                size="xl"
+              />
             ) : (
               <AvatarIniciales fullName={org.nombre} acentoHex={acento} size="xl" />
             )}
@@ -167,20 +191,33 @@ export function BookLanding({
           </section>
         ) : null}
 
-        {/* "Atienden acá" — degradación de la futura sección Equipo (multi-prof).
-            Nombres ya descifrados server-side; foto/bio/matrícula por
-            profesional llegan en Fase 2 (member.perfil_publico, M61). */}
+        {/* Nuestro equipo (multi-prof): foto + matrícula + bio por profesional
+            (M62). Degrada con gracia — sin foto → iniciales; sin bio → se omite. */}
         {multiProf ? (
           <section
-            className="bl-team-lite"
+            className="bl-team"
             aria-label="Profesionales que atienden en este consultorio"
           >
-            <h2 className="bl-section-eyebrow">Atienden acá</h2>
-            <ul className="bl-team-lite-list">
+            <h2 className="bl-section-title">Nuestro equipo</h2>
+            <div className="bl-team-grid">
               {profesionales.map((p) => (
-                <li key={p.id}>{p.displayName}</li>
+                <div key={p.id} className="bl-team-card">
+                  <AvatarIniciales
+                    fullName={p.displayName}
+                    avatarUrl={p.fotoUrl}
+                    acentoHex={acento}
+                    size="md"
+                  />
+                  <div className="bl-team-info">
+                    <p className="bl-team-name">{p.displayName}</p>
+                    {p.matricula ? (
+                      <p className="bl-team-matricula fm-mono">M.P. {p.matricula}</p>
+                    ) : null}
+                    {p.bioPublica ? <p className="bl-team-bio">{p.bioPublica}</p> : null}
+                  </div>
+                </div>
               ))}
-            </ul>
+            </div>
           </section>
         ) : null}
 
@@ -285,7 +322,7 @@ export function BookLanding({
                 instagramHandle: org.instagramHandle,
               }}
               servicios={servicios}
-              profesionales={profesionales}
+              profesionales={profesionalesLite}
             />
           </div>
         </section>

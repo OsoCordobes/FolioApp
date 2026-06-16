@@ -91,6 +91,10 @@ interface MemberRow {
   profesionales_gestionados: string[];
   equipo_id: string | null;
   es_colegiado: boolean;
+  /** M62 · perfil público por profesional (foto/bio/matrícula visible). */
+  foto_publica_url: string | null;
+  bio_publica: string | null;
+  mostrar_matricula: boolean;
   invited_by_id: string | null;
   accepted_at: string | null;
   deleted_at: string | null;

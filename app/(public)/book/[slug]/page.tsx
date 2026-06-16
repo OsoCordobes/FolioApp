@@ -20,7 +20,7 @@ import { notFound } from "next/navigation";
 import { cache } from "react";
 
 import { BookLanding } from "@/components/book-landing/book-landing";
-import { listProfesionalesLitePublico } from "@/lib/db/members";
+import { listProfesionalesPublico } from "@/lib/db/members";
 import { formatRubro } from "@/lib/format/identity";
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
 
@@ -131,12 +131,13 @@ export default async function BookPage({ params }: PageProps) {
   }
 
   const service = createSupabaseServiceClient();
-  // Servicios + profesionales reservables en paralelo (CLINICA-4). La lista
-  // de colegiados alimenta el paso "Elegí profesional" del wizard (solo se
-  // muestra con >1) y la franja bajo la card. ISR (revalidate=300): el
-  // decrypt de nombres corre 1 vez cada 5 min, no por visita. Si la lectura
-  // falla, degradamos a [] — el wizard cae al flujo histórico y el server
-  // resuelve el default (nunca rompemos el booking por la lista de display).
+  // Servicios + profesionales reservables en paralelo (CLINICA-4). El perfil
+  // público rico (M62: foto/bio/matrícula) alimenta el hero, la sección Equipo
+  // y el paso "Elegí profesional" del wizard (BookLanding lo reduce a
+  // {id, displayName} para el selector). ISR (revalidate=300): el decrypt de
+  // nombres corre 1 vez cada 5 min, no por visita. Si la lectura falla,
+  // degradamos a [] — el wizard cae al flujo histórico y el server resuelve el
+  // default (nunca rompemos el booking por la lista de display).
   const [{ data: servicios }, profesionalesRes] = await Promise.all([
     service
       .from("servicio")
@@ -145,7 +146,7 @@ export default async function BookPage({ params }: PageProps) {
       .eq("activo", true)
       .is("deleted_at", null)
       .order("tipo_canonico"),
-    listProfesionalesLitePublico(org.id),
+    listProfesionalesPublico(org.id),
   ]);
 
   return (
