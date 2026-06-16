@@ -10,9 +10,10 @@
  * En F5/F6 los toggles de Google/WhatsApp ejecutan el flow OAuth real.
  */
 
-import { useState, useTransition, type ReactNode } from "react";
+import { useId, useState, useTransition, type ReactNode } from "react";
 
 import * as I from "@/components/icons";
+import { PhotoUpload } from "@/components/configuracion/photo-upload";
 import {
   connectGoogleCalendar,
   countSesionesOtraEspecialidadAction,
@@ -27,6 +28,10 @@ import {
   saveServiciosAction,
   updateMemberEspecialidadAction,
 } from "@/app/(app)/configuracion/actions";
+import {
+  saveBioPublica,
+  setMostrarMatricula,
+} from "@/app/(app)/configuracion/perfil-publico-actions";
 import { roleLabel } from "@/lib/auth/capabilities";
 import type {
   CreateInvitationInput,
@@ -100,11 +105,14 @@ type ServicioCfg = ServicioRow;
 
 // ─── Side nav ──────────────────────────────────────────────────────────────
 
-type SeccionId = "cuenta" | "consultorio" | "equipo" | "horarios" | "servicios" | "integraciones" | "plan";
+type SeccionId = "cuenta" | "perfil-publico" | "consultorio" | "equipo" | "horarios" | "servicios" | "integraciones" | "plan";
 
-function SideNav({ active, setActive, showEquipo }: { active: SeccionId; setActive: (s: SeccionId) => void; showEquipo: boolean }) {
+function SideNav({ active, setActive, showEquipo, showPerfilPublico }: { active: SeccionId; setActive: (s: SeccionId) => void; showEquipo: boolean; showPerfilPublico: boolean }) {
   const items: { id: SeccionId; label: string; icon: ReactNode }[] = [
     { id: "cuenta",        label: "Cuenta",         icon: <I.Users size={14} /> },
+    ...(showPerfilPublico
+      ? [{ id: "perfil-publico" as const, label: "Perfil público", icon: <I.User size={14} /> }]
+      : []),
     { id: "consultorio",   label: "Consultorio",    icon: <I.Calendar size={14} /> },
     ...(showEquipo
       ? [{ id: "equipo" as const, label: "Equipo", icon: <I.Users size={14} /> }]
@@ -192,6 +200,117 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
     >
       <span className="cfg-switch-thumb" />
     </button>
+  );
+}
+
+// ─── Sección: Perfil público (M62) ─────────────────────────────────────────
+
+interface PerfilPublicoData {
+  fotoUrl: string | null;
+  bioPublica: string | null;
+  mostrarMatricula: boolean;
+}
+
+/**
+ * Perfil público del profesional para la landing /book/[slug]: foto, bio y
+ * visibilidad de la matrícula. Persisten ON-CHANGE vía server actions propias
+ * (como el toggle de auto-confirmar / margen), no por la save-bar.
+ */
+function SecPerfilPublico({ initial, matricula }: { initial: PerfilPublicoData; matricula: string }) {
+  const [fotoUrl, setFotoUrl] = useState<string | null>(initial.fotoUrl);
+  const [bio, setBio] = useState(initial.bioPublica ?? "");
+  const [bioSaved, setBioSaved] = useState(initial.bioPublica ?? "");
+  const [mostrar, setMostrar] = useState(initial.mostrarMatricula);
+  const [err, setErr] = useState<string | null>(null);
+  const [, startTransition] = useTransition();
+  const bioCounterId = useId();
+
+  const onBioBlur = () => {
+    if (bio.trim() === bioSaved.trim()) return;
+    startTransition(async () => {
+      const r = await saveBioPublica(bio);
+      if (!r.ok) {
+        setErr(r.error ?? "No pude guardar la bio.");
+        return;
+      }
+      setBioSaved(bio);
+      setErr(null);
+    });
+  };
+
+  const onToggleMatricula = (v: boolean) => {
+    const prev = mostrar;
+    setMostrar(v); // optimista
+    setErr(null);
+    startTransition(async () => {
+      const r = await setMostrarMatricula(v);
+      if (!r.ok) {
+        setMostrar(prev); // revertir
+        setErr(r.error ?? "No pude guardar el cambio.");
+      }
+    });
+  };
+
+  return (
+    <Section title="Perfil público" sub="Lo que el paciente ve de vos en tu página de reservas.">
+      <Row label="Foto" sub="Una foto tuya genera confianza. JPG, PNG o WebP, hasta 500 KB." vertical>
+        <PhotoUpload
+          currentPhotoUrl={fotoUrl}
+          onUploaded={(url) => {
+            setFotoUrl(url);
+            setErr(null);
+          }}
+          onRemoved={() => setFotoUrl(null)}
+        />
+      </Row>
+      <Row label="Bio pública" sub="Breve, en primera persona." vertical>
+        <textarea
+          aria-label="Bio pública"
+          aria-describedby={bioCounterId}
+          value={bio}
+          maxLength={400}
+          rows={4}
+          onChange={(e) => setBio(e.target.value)}
+          onBlur={onBioBlur}
+          placeholder="Ej: Kinesiólogo deportivo, 12 años acompañando la recuperación de lesiones."
+          style={{
+            width: "100%",
+            minHeight: 90,
+            padding: "10px 12px",
+            background: "var(--surface)",
+            border: "1px solid var(--line)",
+            borderRadius: "var(--r-sm)",
+            color: "var(--ink)",
+            font: "inherit",
+            fontSize: "var(--fs-body, 14px)",
+            lineHeight: 1.5,
+            resize: "vertical",
+          }}
+        />
+        <p
+          id={bioCounterId}
+          aria-live="polite"
+          style={{ margin: "6px 0 0", fontSize: "var(--fs-xs, 11px)", color: "var(--ink-3)" }}
+        >
+          {bio.length}/400
+        </p>
+      </Row>
+      <Row
+        label="Mostrar mi matrícula"
+        sub={
+          matricula.trim()
+            ? `Se mostrará "M.P. ${matricula.trim()}" en tu página pública.`
+            : "Cargá tu matrícula en la sección Cuenta para poder mostrarla."
+        }
+      >
+        <Toggle value={mostrar} onChange={onToggleMatricula} />
+      </Row>
+      {err ? (
+        <p className="au-err" role="alert" style={{ marginTop: 8 }}>
+          {err}
+        </p>
+      ) : null}
+    </Section>
   );
 }
 
@@ -1496,6 +1615,10 @@ interface ConfiguracionProps {
    * canManageTeam ve la sección reducida a su propia especialidad.
    */
   equipoSelf: EquipoSelf | null;
+  /** M62 · ¿el member de la sesión es colegiado? Gatea la sección Perfil público. */
+  esColegiado: boolean;
+  /** M62 · perfil público propio (foto/bio/matrícula visible); null si no aplica. */
+  initialPerfilPublico: PerfilPublicoData | null;
 }
 
 interface DirtyState {
@@ -1522,6 +1645,8 @@ export function Configuracion({
   equipoMembers,
   equipoInvitations,
   equipoSelf,
+  esColegiado,
+  initialPerfilPublico,
 }: ConfiguracionProps) {
   const [seccion, setSeccion] = useState<SeccionId>("consultorio");
   const [consultorio, setConsultorio] = useState<ConsultorioData>(initialConsultorio);
@@ -1633,9 +1758,17 @@ export function Configuracion({
       />
 
       <div className="cfg-grid">
-        <SideNav active={seccion} setActive={setSeccion} showEquipo={canManageTeam || equipoSelf != null} />
+        <SideNav
+          active={seccion}
+          setActive={setSeccion}
+          showEquipo={canManageTeam || equipoSelf != null}
+          showPerfilPublico={esColegiado && initialPerfilPublico != null}
+        />
         <div className="cfg-pane">
           {seccion === "cuenta"        ? <SecCuenta c={consultorio} set={setC} /> : null}
+          {seccion === "perfil-publico" && initialPerfilPublico ? (
+            <SecPerfilPublico initial={initialPerfilPublico} matricula={consultorio.matricula} />
+          ) : null}
           {seccion === "consultorio"   ? (
             <SecConsultorio
               c={consultorio}

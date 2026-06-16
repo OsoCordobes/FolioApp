@@ -65,6 +65,22 @@ export default function BookPreviewDevPage() {
           color: null,
         },
       ]}
+      profesionales={[
+        {
+          id: "p1",
+          displayName: "Lic. Lorenzo Martínez",
+          fotoUrl: null,
+          bioPublica: "Kinesiólogo deportivo. 12 años acompañando la vuelta a la actividad.",
+          matricula: "12.345",
+        },
+        {
+          id: "p2",
+          displayName: "Lic. Sofía Núñez",
+          fotoUrl: null,
+          bioPublica: "Especialista en rehabilitación post-quirúrgica y RPG.",
+          matricula: "18.902",
+        },
+      ]}
     />
   );
 }

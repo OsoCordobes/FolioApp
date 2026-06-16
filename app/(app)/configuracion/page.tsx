@@ -17,8 +17,10 @@ import { getActiveContext } from "@/lib/db/active-context";
 import { getConfiguracionData } from "@/lib/db/configuracion";
 import {
   getOwnEspecialidad,
+  getOwnPerfilPublico,
   listInvitations,
   listMembers,
+  type OwnPerfilPublico,
   type TeamInvitationRow,
   type TeamMemberRow,
 } from "@/lib/db/members";
@@ -63,6 +65,15 @@ export default async function ConfiguracionPage() {
     }
   }
 
+  // M62 · Perfil público (foto/bio/matrícula visible) — solo para colegiados
+  // (son los únicos que aparecen en la landing /book/[slug]). Cada profesional
+  // edita el suyo.
+  let perfilPublico: OwnPerfilPublico | null = null;
+  if (ctx.data.session.esColegiado) {
+    const res = await getOwnPerfilPublico();
+    if (res.ok) perfilPublico = res.data;
+  }
+
   return (
     <Configuracion
       orgSlug={ctx.data.organization.slug}
@@ -80,6 +91,8 @@ export default async function ConfiguracionPage() {
       equipoMembers={equipoMembers}
       equipoInvitations={equipoInvitations}
       equipoSelf={equipoSelf}
+      esColegiado={ctx.data.session.esColegiado}
+      initialPerfilPublico={perfilPublico}
     />
   );
 }

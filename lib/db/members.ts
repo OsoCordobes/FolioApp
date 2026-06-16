@@ -332,6 +332,100 @@ async function listProfesionalesLiteCore(
   );
 }
 
+// ─── listProfesionalesPublico (M62 · perfil público rico) ───────────────────
+
+/**
+ * Perfil público RICO de un colegiado para la landing /book/[slug] (M62):
+ * además del display name, expone foto, bio y (opt-in) matrícula. Paralelo a
+ * listProfesionalesLitePublico (que NO se toca — alimenta el selector del
+ * wizard y la agenda, que deben quedar en {id, displayName}).
+ *
+ * Mismo contrato de seguridad que el lite: el caller validó la org (slug → org
+ * viva, no deslistada); service client (sin sesión); mismo predicado
+ * (es_colegiado + deleted_at IS NULL, ORDER BY created_at ASC) que
+ * resolveProfesionalPublico. Decrypt del nombre SIN fallback a email. La
+ * matrícula (profile.matricula) SOLO se emite cuando member.mostrar_matricula
+ * === true (opt-in del profesional); jamás email ni columnas cifradas.
+ */
+export interface ProfesionalPerfilPublico {
+  /** member.id — uuid opaco. */
+  id: string;
+  /** "Nombre Apellido" descifrado server-side, fallback "Profesional". */
+  displayName: string;
+  /** member.foto_publica_url o null → la landing renderea iniciales. */
+  fotoUrl: string | null;
+  /** member.bio_publica o null. */
+  bioPublica: string | null;
+  /** profile.matricula SOLO si member.mostrar_matricula; si no, null. */
+  matricula: string | null;
+}
+
+export async function listProfesionalesPublico(
+  organizationId: string,
+): Promise<Result<ProfesionalPerfilPublico[]>> {
+  const service = createSupabaseServiceClient();
+
+  const { data, error } = await service
+    .from("member")
+    .select("id, profile_id, foto_publica_url, bio_publica, mostrar_matricula")
+    .eq("organization_id", organizationId)
+    .eq("es_colegiado", true)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    const mapped = mapSupabaseError(error);
+    return err(mapped.code, mapped.message, error.message);
+  }
+
+  const rows = (data ?? []) as Array<{
+    id: string;
+    profile_id: string;
+    foto_publica_url: string | null;
+    bio_publica: string | null;
+    mostrar_matricula: boolean;
+  }>;
+  if (rows.length === 0) return ok([]);
+
+  // PII de display + matrícula vía service client ANGOSTO (ver header del módulo).
+  const profilesById = new Map<string, { displayName: string; matricula: string | null }>();
+  const { data: profiles, error: profErr } = await service
+    .from("profile")
+    .select("id, nombre_cifrado, apellido_cifrado, matricula")
+    .in(
+      "id",
+      rows.map((m) => m.profile_id),
+    );
+  if (profErr) {
+    return err("db_error", "Error leyendo los profesionales.", profErr.message);
+  }
+  for (const p of (profiles ?? []) as Array<{
+    id: string;
+    nombre_cifrado: string | null;
+    apellido_cifrado: string | null;
+    matricula: string | null;
+  }>) {
+    const nombre = tryDecrypt(p.nombre_cifrado, "profile.nombre_cifrado");
+    const apellido = tryDecrypt(p.apellido_cifrado, "profile.apellido_cifrado");
+    const displayName = [nombre, apellido].filter(Boolean).join(" ").trim() || "Profesional";
+    profilesById.set(p.id, { displayName, matricula: p.matricula });
+  }
+
+  return ok(
+    rows.map((m) => {
+      const p = profilesById.get(m.profile_id);
+      return {
+        id: m.id,
+        displayName: p?.displayName ?? "Profesional",
+        fotoUrl: m.foto_publica_url,
+        bioPublica: m.bio_publica,
+        // Opt-in: la matrícula cruza a lo público SOLO si el pro lo activó.
+        matricula: m.mostrar_matricula ? (p?.matricula ?? null) : null,
+      };
+    }),
+  );
+}
+
 // ─── listInvitations ───────────────────────────────────────────────────────
 
 export async function listInvitations(): Promise<Result<TeamInvitationRow[]>> {
@@ -835,6 +929,50 @@ export async function getOwnEspecialidad(): Promise<Result<EspecialidadSlug | nu
   // Slug fuera del registry de este deploy (CHECK futuro más amplio) → null:
   // la UI muestra "hereda de la clínica", igual que resolveEspecialidadEfectiva.
   return ok(esp !== null && isEspecialidadSlug(esp) ? esp : null);
+}
+
+// ─── getOwnPerfilPublico (M62) ──────────────────────────────────────────────
+
+/** Perfil público del member de la sesión, para la sección Configuración. */
+export interface OwnPerfilPublico {
+  fotoUrl: string | null;
+  bioPublica: string | null;
+  mostrarMatricula: boolean;
+}
+
+/**
+ * M62 · foto/bio/visibilidad-de-matrícula del member de la sesión activa, para
+ * la sección "Perfil público" de /configuracion. Lectura RLS-aware de la
+ * PROPIA fila (member_select_same_org), sin gate canManageTeam: cada
+ * profesional edita su propio perfil. El VALOR de la matrícula no se lee acá
+ * (vive en profile.matricula, ya cargado por getConfiguracionData). Sin PII.
+ */
+export async function getOwnPerfilPublico(): Promise<Result<OwnPerfilPublico>> {
+  const ctx = await getActiveContext();
+  if (!ctx.ok) return ctx;
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("member")
+    .select("foto_publica_url, bio_publica, mostrar_matricula")
+    .eq("id", ctx.data.session.memberId)
+    .eq("organization_id", ctx.data.organization.id)
+    .maybeSingle();
+  if (error) {
+    const mapped = mapSupabaseError(error);
+    return err(mapped.code, mapped.message, error.message);
+  }
+
+  const m = (data ?? {}) as {
+    foto_publica_url?: string | null;
+    bio_publica?: string | null;
+    mostrar_matricula?: boolean;
+  };
+  return ok({
+    fotoUrl: m.foto_publica_url ?? null,
+    bioPublica: m.bio_publica ?? null,
+    mostrarMatricula: m.mostrar_matricula ?? false,
+  });
 }
 
 /**

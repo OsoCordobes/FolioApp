@@ -13045,6 +13045,11 @@ input:focus { outline: none; }
   transform: scale(0.92);
   animation: fpc-logo-drop-enter var(--dur-moderate) var(--ease-overshoot) forwards;
 }
+/* M62 · headshot del profesional: preview redondo recortado (vs logo cuadrado). */
+.fpc-dropzone-preview--round {
+  object-fit: cover;
+  border-radius: 50%;
+}
 
 .fpc-dropzone-headline {
   font-weight: 600;
@@ -17701,31 +17706,42 @@ input:focus { outline: none; }
   letter-spacing: 0.02em;
 }
 
-/* "Atienden acá" — degradación de la futura sección Equipo (multi-prof). */
-.bl-team-lite {
-  padding: 18px 20px;
-  margin: 0 0 8px;
+/* Matrícula del hero (orgs solo). */
+.bl-hero-matricula {
+  display: inline-block;
+  margin: 0 0 14px;
+  font-size: var(--fs-xs, 11px);
+  color: var(--accent-2);
+  background: var(--accent-soft);
+  padding: 3px 9px;
+  border-radius: var(--r-pill, 99px);
+  letter-spacing: 0.02em;
+}
+
+/* Nuestro equipo (multi-prof) — grid con foto/matrícula/bio (M62). */
+.bl-team { padding: clamp(20px, 4vw, 36px) 0; }
+.bl-team-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+}
+.bl-team-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 18px;
   background: var(--surface);
   border: 1px solid var(--line-soft);
   border-radius: var(--r-lg);
 }
-.bl-section-eyebrow {
-  font-size: var(--fs-xs, 11px);
-  font-weight: 600;
+.bl-team-info { min-width: 0; }
+.bl-team-name { font-weight: 500; font-size: var(--fs-md, 15px); color: var(--ink); margin: 0; }
+.bl-team-matricula { font-size: var(--fs-xs, 11px); color: var(--ink-3); margin: 2px 0 0; letter-spacing: 0.02em; }
+.bl-team-bio {
+  font-size: var(--fs-sm, 12.5px);
   color: var(--ink-2);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  margin: 0 0 10px;
-}
-.bl-team-lite-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 18px;
-  font-size: var(--fs-body, 14px);
-  color: var(--ink);
+  line-height: 1.5;
+  margin: 8px 0 0;
 }
 
 /* Reserva enfocada — el wizard intacto, en columna centrada. */

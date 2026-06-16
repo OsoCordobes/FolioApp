@@ -43,6 +43,14 @@ test.describe("/dev/book-preview · BookLanding + booking flow", () => {
     await expect(page.locator(".bl-powered-cta")).toContainText(/creá la tuya/i);
   });
 
+  test("equipo: el grid de profesionales muestra nombre + matrícula (M62)", async ({ page }) => {
+    await page.goto("/dev/book-preview");
+    const cards = page.locator(".bl-team .bl-team-card");
+    await expect(cards).toHaveCount(2);
+    await expect(cards.first().locator(".bl-team-name")).toContainText("Lorenzo Martínez");
+    await expect(cards.first().locator(".bl-team-matricula")).toContainText(/M\.P\./);
+  });
+
   test("desktop: sticky mobile CTA is hidden", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/dev/book-preview");
