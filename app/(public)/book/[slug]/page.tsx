@@ -19,7 +19,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 
-import { BookingWizard } from "@/components/booking/booking-wizard";
+import { BookLanding } from "@/components/book-landing/book-landing";
 import { listProfesionalesLitePublico } from "@/lib/db/members";
 import { formatRubro } from "@/lib/format/identity";
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
@@ -57,6 +57,8 @@ interface OrgPublicRow {
   telefono_publico: string | null;
   direccion_completa: string | null;
   instagram_handle: string | null;
+  especialidad: string | null;
+  auto_confirmar_reservas: boolean;
 }
 
 /**
@@ -69,7 +71,7 @@ const getOrgPublica = cache(async (slug: string): Promise<OrgPublicRow | null> =
   const { data: org } = await service
     .from("organization")
     .select(
-      "id, slug, nombre, ciudad, provincia, acento_hex, rubro, opt_out_public_listing, logo_url, card_mood, bio, telefono_publico, direccion_completa, instagram_handle",
+      "id, slug, nombre, ciudad, provincia, acento_hex, rubro, opt_out_public_listing, logo_url, card_mood, bio, telefono_publico, direccion_completa, instagram_handle, especialidad, auto_confirmar_reservas",
     )
     .eq("slug", slug)
     .is("deleted_at", null)
@@ -111,13 +113,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       siteName: "Folio",
       locale: "es_AR",
       type: "website",
-      ...(org.logo_url ? { images: [{ url: org.logo_url }] } : {}),
     },
     twitter: {
-      card: "summary",
+      card: "summary_large_image",
       title,
       description,
-      ...(org.logo_url ? { images: [org.logo_url] } : {}),
     },
   };
 }
@@ -149,13 +149,14 @@ export default async function BookPage({ params }: PageProps) {
   ]);
 
   return (
-    <BookingWizard
+    <BookLanding
       org={{
         slug: org.slug,
         nombre: org.nombre,
         ciudad: org.ciudad,
         provincia: org.provincia,
         rubro: org.rubro,
+        especialidad: org.especialidad,
         acentoHex: org.acento_hex,
         logoUrl: org.logo_url,
         cardMood: (org.card_mood ?? "editorial") as
@@ -167,6 +168,7 @@ export default async function BookPage({ params }: PageProps) {
         telefonoPublico: org.telefono_publico,
         direccionCompleta: org.direccion_completa,
         instagramHandle: org.instagram_handle,
+        autoConfirmar: org.auto_confirmar_reservas,
       }}
       servicios={servicios ?? []}
       profesionales={profesionalesRes.ok ? profesionalesRes.data : []}

@@ -1,13 +1,13 @@
 import { notFound } from "next/navigation";
 
-import { BookingWizard } from "@/components/booking/booking-wizard";
+import { BookLanding } from "@/components/book-landing/book-landing";
 
 /**
  * Folio · /dev/book-preview · dev-only preview of /book/[slug].
  *
- * Mounts <BookingWizard> with deterministic mock org + servicios so
- * Playwright + the F7 visual gate can verify the public-card hero and
- * sticky mini-header without needing a seeded DB. The production route
+ * Mounts <BookLanding> with deterministic mock org + servicios so Playwright +
+ * the F7 visual gate can verify the doctor-first landing (hero, reserva
+ * enfocada, powered-by) without needing a seeded DB. The production route
  * /book/[slug] fetches the same data shape from Supabase.
  *
  * 404 in production via notFound().
@@ -22,13 +22,14 @@ export default function BookPreviewDevPage() {
   }
 
   return (
-    <BookingWizard
+    <BookLanding
       org={{
         slug: "lorenzo-martinez",
         nombre: "Atelier Kinesiología",
         ciudad: "Córdoba",
         provincia: "Córdoba",
         rubro: "Kinesiología deportiva",
+        especialidad: null,
         acentoHex: "#8A6722",
         logoUrl: null,
         cardMood: "editorial",
@@ -36,6 +37,7 @@ export default function BookPreviewDevPage() {
         telefonoPublico: "+54 9 351 411-2233",
         direccionCompleta: "Av. Colón 1234 · Nueva Córdoba",
         instagramHandle: "loremartinez.kine",
+        autoConfirmar: true,
       }}
       servicios={[
         {
