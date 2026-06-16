@@ -36,10 +36,12 @@ const PUBLIC_PATHS = [
   "/api/analytics/refresh", // cron diario (validado por CRON_SECRET bearer)
   "/sitemap.xml",           // SEO — generado por app/sitemap.ts; los crawlers no tienen sesión
   "/robots.txt",            // SEO — generado por app/robots.ts; ídem
+  "/profesionales",         // directorio público (Fase 3) — índice; los hubs van por PUBLIC_PREFIXES
 ];
 
 const PUBLIC_PREFIXES = [
   "/book/",              // booking público F7
+  "/profesionales/",     // directorio público (Fase 3) — hubs por especialidad/provincia
   "/invitacion/",        // aceptación de invitación de equipo (M49/M51) — la página maneja ambos estados (con y sin sesión)
   "/api/auth/",          // OAuth callbacks Supabase
   "/api/cron/",          // Vercel Cron (validado por CRON_SECRET bearer)

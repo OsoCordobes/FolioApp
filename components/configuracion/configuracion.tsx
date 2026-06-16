@@ -28,6 +28,7 @@ import {
   saveServiciosAction,
   updateMemberEspecialidadAction,
 } from "@/app/(app)/configuracion/actions";
+import { setListarEnDirectorioAction } from "@/app/(app)/configuracion/directorio-actions";
 import {
   saveBioPublica,
   setMostrarMatricula,
@@ -424,6 +425,7 @@ function SecConsultorio({
   orgTipo,
   canEdit,
   orgSlug,
+  initialListarEnDirectorio,
 }: {
   c: ConsultorioData;
   set: (patch: Partial<ConsultorioData>) => void;
@@ -433,6 +435,8 @@ function SecConsultorio({
   canEdit: boolean;
   /** Slug real de la org (organization.slug) para el link público copiable. */
   orgSlug: string;
+  /** M64 · opt-in al directorio público (toggle "Presencia online"). */
+  initialListarEnDirectorio: boolean;
 }) {
   // M50 · count de sesiones cargadas con la herramienta de OTRA especialidad.
   // Se consulta server-side al cambiar el selector; si hay, mostramos la
@@ -554,11 +558,57 @@ function SecConsultorio({
         <Row label="Link público de reservas" sub="Compartilo con tus pacientes — abre tu página de reservas">
           <PublicLinkRow slug={orgSlug} />
         </Row>
+        <Row
+          label="Aparecer en el directorio de Folio"
+          sub="Si lo activás, tu consultorio aparece en el directorio público de Folio (folio/profesionales), buscable por especialidad y ciudad e indexable en Google. Se muestran solo tus datos públicos (nombre, especialidad, ciudad, foto, bio) — nunca datos de pacientes. Podés desactivarlo cuando quieras."
+        >
+          <DirectorioToggleRow initialListar={initialListarEnDirectorio} canEdit={canEdit} />
+        </Row>
         <Row label="Instagram">
           <TextInput prefix="@" value={c.instagram} onChange={(v) => set({ instagram: v })} />
         </Row>
       </Section>
     </>
+  );
+}
+
+/**
+ * M64 · toggle del directorio público. Persiste on-change (optimista con
+ * revert en error) vía setListarEnDirectorioAction. Aparecer requiere además
+ * NO tener el link en opt-out — eso lo enforce el predicado del directorio
+ * server-side, no este toggle.
+ */
+function DirectorioToggleRow({ initialListar, canEdit }: { initialListar: boolean; canEdit: boolean }) {
+  const [listar, setListar] = useState(initialListar);
+  const [errMsg, setErrMsg] = useState<string | null>(null);
+  const [, startTransition] = useTransition();
+
+  const onToggle = (v: boolean) => {
+    if (!canEdit) return;
+    const prev = listar;
+    setListar(v); // optimista
+    setErrMsg(null);
+    startTransition(async () => {
+      const r = await setListarEnDirectorioAction({ listar: v });
+      if (!r.ok) {
+        setListar(prev); // revertir
+        setErrMsg(r.error.message);
+      }
+    });
+  };
+
+  return (
+    <div
+      aria-disabled={!canEdit || undefined}
+      style={!canEdit ? { opacity: 0.5, pointerEvents: "none" } : undefined}
+    >
+      <Toggle value={listar} onChange={onToggle} />
+      {errMsg ? (
+        <p className="au-err" role="alert" style={{ marginTop: 6 }}>
+          {errMsg}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -1619,6 +1669,8 @@ interface ConfiguracionProps {
   esColegiado: boolean;
   /** M62 · perfil público propio (foto/bio/matrícula visible); null si no aplica. */
   initialPerfilPublico: PerfilPublicoData | null;
+  /** M64 · opt-in al directorio público (toggle "Presencia online"). */
+  initialListarEnDirectorio: boolean;
 }
 
 interface DirtyState {
@@ -1647,6 +1699,7 @@ export function Configuracion({
   equipoSelf,
   esColegiado,
   initialPerfilPublico,
+  initialListarEnDirectorio,
 }: ConfiguracionProps) {
   const [seccion, setSeccion] = useState<SeccionId>("consultorio");
   const [consultorio, setConsultorio] = useState<ConsultorioData>(initialConsultorio);
@@ -1777,6 +1830,7 @@ export function Configuracion({
               orgTipo={orgTipo}
               canEdit={canEdit}
               orgSlug={orgSlug}
+              initialListarEnDirectorio={initialListarEnDirectorio}
             />
           ) : null}
           {seccion === "equipo" && (canManageTeam || equipoSelf != null) ? (

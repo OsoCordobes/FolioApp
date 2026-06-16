@@ -15,6 +15,7 @@ import { Configuracion } from "@/components/configuracion/configuracion";
 import { capabilitiesFor } from "@/lib/auth/capabilities";
 import { getActiveContext } from "@/lib/db/active-context";
 import { getConfiguracionData } from "@/lib/db/configuracion";
+import { isOrgListedInDirectory } from "@/lib/db/directorio";
 import {
   getOwnEspecialidad,
   getOwnPerfilPublico,
@@ -74,6 +75,10 @@ export default async function ConfiguracionPage() {
     if (res.ok) perfilPublico = res.data;
   }
 
+  // M64 · opt-in al directorio público (toggle "Presencia online"). GUARDED →
+  // false si M64 no está aplicada todavía (no rompe la página de config).
+  const listarEnDirectorio = await isOrgListedInDirectory(ctx.data.organization.slug);
+
   return (
     <Configuracion
       orgSlug={ctx.data.organization.slug}
@@ -93,6 +98,7 @@ export default async function ConfiguracionPage() {
       equipoSelf={equipoSelf}
       esColegiado={ctx.data.session.esColegiado}
       initialPerfilPublico={perfilPublico}
+      initialListarEnDirectorio={listarEnDirectorio}
     />
   );
 }
