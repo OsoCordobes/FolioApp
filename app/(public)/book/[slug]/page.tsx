@@ -113,13 +113,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       siteName: "Folio",
       locale: "es_AR",
       type: "website",
-      ...(org.logo_url ? { images: [{ url: org.logo_url }] } : {}),
     },
     twitter: {
-      card: "summary",
+      card: "summary_large_image",
       title,
       description,
-      ...(org.logo_url ? { images: [org.logo_url] } : {}),
     },
   };
 }

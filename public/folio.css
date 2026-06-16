@@ -17635,12 +17635,29 @@ input:focus { outline: none; }
 }
 .bl-service-cta:hover { background: var(--accent-soft); }
 
-/* Seguridad / confianza */
+/* Seguridad / confianza — panel oscuro premium en AMBOS modos (técnica
+   .fl-vault): redeclara los tokens [data-theme="dark"] localmente (cero hex
+   inventado). Sobreescribe el acento del consultorio a propósito: la capa de
+   seguridad es de Folio, no del consultorio. */
 .bl-trust {
-  background: var(--surface);
-  border: 1px solid var(--line-soft);
+  --bg:          #14130F;
+  --surface:     #1B1A14;
+  --surface-2:   #232017;
+  --line:        #2F2B1F;
+  --line-soft:   #252118;
+  --ink:         #E8E2D2;
+  --ink-2:       #B5AE99;
+  --ink-3:       #847E69;
+  --accent:      #C29553;
+  --accent-soft: rgba(194, 149, 83, .14);
+  --shadow-2:    0 8px 24px rgba(0, 0, 0, .4), 0 2px 6px rgba(0, 0, 0, .25);
+
+  background: var(--bg);
+  color: var(--ink);
+  color-scheme: dark;
+  border: 1px solid var(--line);
   border-radius: var(--r-xl);
-  padding: clamp(24px, 4vw, 36px);
+  padding: clamp(28px, 4vw, 40px);
   margin: clamp(16px, 3vw, 24px) 0;
 }
 .bl-trust-lead {
@@ -17665,7 +17682,7 @@ input:focus { outline: none; }
   height: 38px;
   border-radius: var(--r-md);
   background: var(--accent-soft);
-  color: var(--accent-2);
+  color: var(--accent);
 }
 .bl-trust-item-title { font-weight: 500; font-size: var(--fs-body, 14px); color: var(--ink); margin: 0 0 3px; }
 .bl-trust-item-text { font-size: var(--fs-sm, 12.5px); color: var(--ink-3); line-height: 1.5; margin: 0; }
