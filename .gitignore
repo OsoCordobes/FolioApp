@@ -62,3 +62,6 @@ next-env.d.ts
 # Exception: .claude/skills/ IS versioned (shared design/UX skills for the team).
 /.claude/*
 !/.claude/skills/
+
+# Launch video production scratch (not deployed)
+video-build/
