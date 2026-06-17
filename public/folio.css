@@ -15145,7 +15145,9 @@ input:focus { outline: none; }
 @media (min-width: 768px) and (prefers-reduced-motion: no-preference) {
   @supports (animation-timeline: view()) {
     .fl-day {
-      height: 320vh;
+      /* 220vh (antes 320): el scrub de las 3 escenas queda más ágil — dos de
+         tres sub-animaban y no justificaban el largo. */
+      height: 220vh;
       max-width: none;
       padding: 0;
       view-timeline: --fl-day block;
@@ -15541,6 +15543,48 @@ input:focus { outline: none; }
   color: var(--ink);
   text-wrap: balance;
   margin: 0 0 var(--space-10);
+}
+
+/* Tira de especialidades — banda calma "esto es para mí" (proof inventory-free)
+   entre el día y la bóveda. Padding compacto (no usa .fl-section). */
+.fl-specialties {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: var(--space-12) var(--space-6);
+  text-align: center;
+}
+.fl-specialties-lead {
+  margin: 0 0 var(--space-5);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  letter-spacing: var(--track-loose-3);
+  text-transform: uppercase;
+  color: var(--accent-2);
+}
+.fl-specialties-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: baseline;
+  gap: var(--space-3) var(--space-6);
+}
+.fl-specialties-item {
+  position: relative;
+  font-family: var(--font-display);
+  font-size: clamp(1.1rem, 2vw, 1.55rem);
+  font-weight: 500;
+  color: var(--ink-2);
+}
+/* Punto separador centrado en el gap horizontal (no aparece al envolver línea
+   porque se ancla al item, a la izquierda del gap). */
+.fl-specialties-item + .fl-specialties-item::before {
+  content: "·";
+  position: absolute;
+  right: calc(100% + var(--space-6) / 2);
+  color: var(--ink-4);
 }
 
 .fl-bento-grid {

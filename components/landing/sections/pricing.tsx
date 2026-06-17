@@ -38,6 +38,11 @@ export function Pricing() {
   const soloPrice = formatArsFromCents(MP_PLAN_PRICE_CENTS);
   const clinicBase = formatArsFromCents(resolveClinicBasePriceCents());
   const clinicSeat = formatArsFromCents(resolveClinicSeatPriceCents());
+  // Ejemplo trabajado: la base incluye al titular (lib/billing/pricing.ts), así
+  // que 4 profesionales = base + 3 asientos adicionales.
+  const clinicFourTotal = formatArsFromCents(
+    resolveClinicBasePriceCents() + 3 * resolveClinicSeatPriceCents(),
+  );
 
   return (
     <section id="precios" className="fl-section fl-pricing" data-fl-section="pricing">
@@ -75,12 +80,16 @@ export function Pricing() {
         <article className="fl-price-card fl-reveal" style={revealRange(1)}>
           <header className="fl-price-head">
             <h3 className="fl-price-plan">Clínica</h3>
+            <span className="fl-price-badge">Para equipos</span>
           </header>
           <p className="fl-price-amount">
             <span className="fl-price-figure">{clinicBase}</span>
             <span className="fl-price-per">/mes</span>
           </p>
-          <p className="fl-price-note">+ {clinicSeat} por profesional adicional.</p>
+          <p className="fl-price-note">
+            La base incluye al titular; + {clinicSeat}/mes por profesional. Una clínica
+            de 4: {clinicFourTotal}/mes.
+          </p>
           <ul className="fl-price-list">
             {CLINIC_BULLETS.map((b) => (
               <li key={b} className="fl-price-item">
@@ -93,7 +102,7 @@ export function Pricing() {
           </ul>
           <div className="fl-price-cta">
             <a className="fi-btn fi-btn-secondary" href="/onboarding" data-fl-cta="pricing_clinic">
-              Empezá gratis
+              Empezá con Clínica
             </a>
           </div>
         </article>

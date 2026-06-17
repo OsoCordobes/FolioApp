@@ -24,6 +24,7 @@ import { Faq } from "@/components/landing/sections/faq";
 import { FinalCta } from "@/components/landing/sections/final-cta";
 import { Hero } from "@/components/landing/sections/hero";
 import { Pricing } from "@/components/landing/sections/pricing";
+import { SpecialtyStrip } from "@/components/landing/sections/specialty-strip";
 import { Vault } from "@/components/landing/sections/vault";
 import { StickyCta } from "@/components/landing/sticky-cta";
 import { getBaseUrl } from "@/lib/base-url";
@@ -96,6 +97,7 @@ export default function LandingPage() {
       />
       <Hero />
       <DayTimeline />
+      <SpecialtyStrip />
       <Vault />
       <Bento />
       <Pricing />

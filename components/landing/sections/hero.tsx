@@ -124,6 +124,14 @@ export function Hero() {
           </div>
           <p className="fl-mock-caption">6 turnos, 6 fichas precargadas. Armado a las 06:14.</p>
         </div>
+
+        {/* Resumen accesible del mockup decorativo (aria-hidden): da a lectores
+            de pantalla y crawlers el contenido que el mock comunica en pantalla. */}
+        <p className="sr-only">
+          Vista de la agenda de Folio: los turnos del día ya confirmados, con
+          recordatorios por WhatsApp enviados automáticamente y cada historia
+          clínica cifrada.
+        </p>
       </div>
     </section>
   );
