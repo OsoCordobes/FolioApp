@@ -17,7 +17,7 @@ export function FinalCta() {
         <p className="fl-cta-eyebrow">Mañana · 08:00</p>
         <h2 className="fl-cta-title">Tu agenda ya está armada.</h2>
         <p className="fl-cta-sub">
-          Configurarla hoy te lleva 10 minutos. Sin tarjeta, sin permanencia.
+          Diez minutos hoy, y mañana ya te espera armada.
         </p>
         <div className="fl-cta-actions">
           <Link className="fi-btn fi-btn-primary fl-btn-lg" href="/onboarding" data-fl-cta="final">

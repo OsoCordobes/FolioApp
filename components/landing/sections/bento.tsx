@@ -29,7 +29,7 @@ const SLOTS: { time: string; fill?: 1 | 2 | 3 }[] = [
 export function Bento() {
   return (
     <section id="producto" className="fl-section fl-bento" data-fl-section="bento">
-      <h2 className="fl-bento-title fl-reveal">Todo lo demás, también.</h2>
+      <h2 className="fl-bento-title fl-reveal">Todo tu consultorio, en un solo lugar.</h2>
 
       <div className="fl-bento-grid">
         {/* 1 · Reservas online — celda grande (4×2) */}

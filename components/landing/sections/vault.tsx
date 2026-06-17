@@ -29,11 +29,11 @@ const ITEMS: VaultItem[] = [
   },
   {
     num: "25.326",
-    desc: "La ley argentina de protección de datos personales, cumplida desde el diseño.",
+    desc: "Construido sobre la Ley 25.326 de datos personales: privacidad por diseño, no como agregado.",
   },
   {
     num: "AES-256",
-    desc: "El mismo cifrado que usan los bancos: en la base de datos, cada nota es ilegible. Solo tu equipo la ve en pantalla.",
+    desc: "Cada nota se cifra antes de llegar a la base de datos. Aunque alguien accediera a la base, vería texto ilegible — solo tu equipo la lee.",
   },
   {
     num: "Solo tu equipo",
@@ -54,7 +54,8 @@ export function Vault() {
         </p>
         <h2 className="fl-vault-title fl-reveal">Diseñado para la ley argentina.</h2>
         <p className="fl-vault-sub fl-reveal">
-          La parte técnica corre por nuestra cuenta. Esto es lo único que tenés que saber:
+          Muchas plataformas alojan los datos de tus pacientes fuera de la región. Nosotros los
+          ciframos y los mantenemos en Sudamérica. Esto es lo que eso significa:
         </p>
         <dl className="fl-vault-grid">
           {ITEMS.map((item, i) => (
@@ -67,7 +68,8 @@ export function Vault() {
           ))}
         </dl>
         <p className="fl-vault-foot fl-reveal">
-          Tus datos viven en servidores de Sudamérica, y son tuyos: te los llevás cuando quieras.
+          Tus datos se alojan en un datacenter de São Paulo, en Sudamérica — no en Estados Unidos
+          ni en Europa. Son tuyos: los exportás en CSV cuando quieras.
         </p>
       </div>
     </section>

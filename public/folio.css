@@ -13679,7 +13679,7 @@ input:focus { outline: none; }
 /* fl-anchors · offset para navegación por ancla (#producto, #precios, …)
  * bajo el header sticky que llega en Fase B */
 .fl-main [id] {
-  scroll-margin-top: 80px;
+  scroll-margin-top: 76px;
 }
 
 /* fl-hero-title · headline display gigante (escena 08:00 del día) */
@@ -13888,9 +13888,10 @@ input:focus { outline: none; }
 }
 .fl-eyebrow {
   margin: 0 0 var(--space-4);
+  font-family: var(--font-mono);
   font-size: var(--fs-sm);
-  font-weight: 600;
-  letter-spacing: 0.08em;
+  font-weight: 500;
+  letter-spacing: var(--track-loose-3);
   text-transform: uppercase;
   color: var(--accent-2);
 }
@@ -13941,7 +13942,7 @@ input:focus { outline: none; }
   font-family: var(--font-mono);
   font-size: var(--fs-sm);
   letter-spacing: 0.01em;
-  color: var(--ink-3);
+  color: var(--ink-2);
 }
 .fl-hero-stats li { white-space: nowrap; }
 .fl-hero-stats li + li::before {
@@ -13987,8 +13988,8 @@ input:focus { outline: none; }
   to   { transform: translateY(0); }
 }
 .fl-hero-head   { animation: fl-rise-pos var(--dur-cinematic) var(--ease-emphasized) both; }
-.fl-hero-copy   { animation: fl-rise var(--dur-cinematic) var(--ease-emphasized) 80ms both; }
-.fl-hero-visual { animation: fl-rise var(--dur-cinematic) var(--ease-emphasized) 160ms both; }
+.fl-hero-copy   { animation: fl-rise var(--dur-cinematic) var(--ease-emphasized) 120ms both; }
+.fl-hero-visual { animation: fl-rise var(--dur-cinematic) var(--ease-emphasized) 240ms both; }
 
 /* fl-mock · agenda del día en capas (estático; parallax solo con view()) */
 .fl-hero-visual { position: relative; }
@@ -14132,17 +14133,20 @@ input:focus { outline: none; }
 }
 
 /* Parallax sutil scroll-driven de las capas del mock (fallback: estático) */
+/* Parallax comprimido y simétrico (front<back<chip) — amplitudes grandes y
+   asimétricas daban sensación flotante/desincronizada. Sigue linear (el
+   parallax debe ser lineal al scroll). */
 @keyframes fl-par-front {
-  from { transform: translateY(14px); }
-  to   { transform: translateY(-14px); }
+  from { transform: translateY(10px); }
+  to   { transform: translateY(-10px); }
 }
 @keyframes fl-par-back {
-  from { transform: translateY(28px); }
-  to   { transform: translateY(-30px); }
+  from { transform: translateY(18px); }
+  to   { transform: translateY(-18px); }
 }
 @keyframes fl-par-chip {
-  from { transform: translateY(36px); }
-  to   { transform: translateY(-42px); }
+  from { transform: translateY(26px); }
+  to   { transform: translateY(-26px); }
 }
 @supports (animation-timeline: view()) {
   .fl-mock-front {
@@ -14170,11 +14174,11 @@ input:focus { outline: none; }
   .fl-reveal {
     animation: fl-reveal-in var(--ease-emphasized-out) both;
     animation-timeline: view();
-    animation-range: entry var(--fl-reveal-range, 0%) entry 55%;
+    animation-range: entry var(--fl-reveal-range, 0%) entry 80%;
   }
 }
 @keyframes fl-reveal-in {
-  from { opacity: 0; transform: translateY(var(--motion-dist-lg)); }
+  from { opacity: 0; transform: translateY(var(--motion-dist-md)); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
@@ -14228,7 +14232,7 @@ input:focus { outline: none; }
   font-family: var(--font-mono);
   font-size: var(--fs-sm);
   font-weight: 500;
-  letter-spacing: 0.22em;
+  letter-spacing: var(--track-loose-3);
   text-transform: uppercase;
   color: var(--accent);
 }
@@ -15144,7 +15148,9 @@ input:focus { outline: none; }
 @media (min-width: 768px) and (prefers-reduced-motion: no-preference) {
   @supports (animation-timeline: view()) {
     .fl-day {
-      height: 320vh;
+      /* 340vh: el scrub de las 3 escenas se reparte sobre más scroll → cada
+         beat respira y la transición se lee más deliberada (premium > veloz). */
+      height: 340vh;
       max-width: none;
       padding: 0;
       view-timeline: --fl-day block;
@@ -15173,7 +15179,9 @@ input:focus { outline: none; }
       inset: 0;
       margin: 0;
       opacity: 0;
-      animation-timing-function: linear;
+      /* curva simétrica entrada/salida del fade — redondea el borde mecánico
+         del scrub lineal (solo el crossfade; rail y sweeps siguen linear) */
+      animation-timing-function: var(--motion-ease-in-out);
       animation-fill-mode: both;
       animation-timeline: --fl-day;
       animation-range: contain 0% contain 100%;
@@ -15236,20 +15244,24 @@ input:focus { outline: none; }
       opacity: 0;
       transform: scale(0.4);
       animation-name: fl-cipher-lock-pop;
-      animation-timing-function: var(--spring-soft);
+      /* overshoot por cubic-bezier (no linear() spring): popea intencional sin
+         glitchear al scrollear hacia atrás */
+      animation-timing-function: var(--ease-overshoot);
       animation-fill-mode: both;
       animation-timeline: --fl-day;
-      animation-range: contain 56% contain 61%;
+      animation-range: contain 54% contain 62%;
     }
 
     /* escena c · las barras del cierre crecen al entrar la escena */
     .fl-close-bar {
       transform: scaleY(0.25);
       animation-name: fl-close-bar-up;
-      animation-timing-function: var(--spring-soft);
+      /* decelerada monótona (sin overshoot): crecimiento limpio en ambas
+         direcciones de scroll, sin "rebote al revés" */
+      animation-timing-function: var(--ease-standard-out);
       animation-fill-mode: both;
       animation-timeline: --fl-day;
-      animation-range: contain 70% contain 86%;
+      animation-range: contain 70% contain 90%;
     }
   }
 }
@@ -15274,42 +15286,47 @@ input:focus { outline: none; }
 /* keyframes de las escenas — scrubbed por --fl-day; fill both deja el primer/
    último keyframe aplicado fuera del range (la sección entra con la escena a
    ya visible y sale con la c). Custom props de motion del :root. */
+/* Crossfades con ventana ancha (~18% de scroll) y solape real entre escenas:
+   cada salida cruza en cross-opacity con la entrada siguiente, sin salto. El
+   translateY baja a --motion-dist-sm (8px) — el desplazamiento grande durante
+   un fade es lo que más acentuaba el "brusco". El hold de la escena b
+   (40%→62%) preserva la ventana del sweep/candado de cifrado. */
 @keyframes fl-scene-a {
-  0%, 30% {
+  0%, 22% {
     opacity: 1;
     transform: none;
     filter: none;
   }
-  38%, 100% {
+  40%, 100% {
     opacity: 0;
-    transform: translateY(calc(var(--motion-dist-md) * -1));
-    filter: blur(var(--motion-blur-soft));
+    transform: translateY(calc(var(--motion-dist-sm) * -1));
+    filter: none;
   }
 }
 @keyframes fl-scene-b {
-  0%, 30% {
+  0%, 22% {
     opacity: 0;
-    transform: translateY(var(--motion-dist-md));
-    filter: blur(var(--motion-blur-soft));
+    transform: translateY(var(--motion-dist-sm));
+    filter: none;
   }
-  38%, 62% {
+  40%, 62% {
     opacity: 1;
     transform: none;
     filter: none;
   }
-  70%, 100% {
+  80%, 100% {
     opacity: 0;
-    transform: translateY(calc(var(--motion-dist-md) * -1));
-    filter: blur(var(--motion-blur-soft));
+    transform: translateY(calc(var(--motion-dist-sm) * -1));
+    filter: none;
   }
 }
 @keyframes fl-scene-c {
   0%, 62% {
     opacity: 0;
-    transform: translateY(var(--motion-dist-md));
-    filter: blur(var(--motion-blur-soft));
+    transform: translateY(var(--motion-dist-sm));
+    filter: none;
   }
-  70%, 100% {
+  80%, 100% {
     opacity: 1;
     transform: none;
     filter: none;
@@ -15419,7 +15436,7 @@ input:focus { outline: none; }
   font-family: var(--font-mono);
   font-size: var(--fs-sm);
   font-weight: 500;
-  letter-spacing: 0.22em;
+  letter-spacing: var(--track-loose-3);
   text-transform: uppercase;
   color: var(--accent);
 }
@@ -15540,6 +15557,442 @@ input:focus { outline: none; }
   color: var(--ink);
   text-wrap: balance;
   margin: 0 0 var(--space-10);
+}
+
+/* Tira de especialidades — banda calma "esto es para mí" (proof inventory-free)
+   entre el día y la bóveda. Padding compacto (no usa .fl-section). */
+.fl-specialties {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: var(--space-12) var(--space-6);
+  text-align: center;
+}
+.fl-specialties-lead {
+  margin: 0 0 var(--space-5);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  letter-spacing: var(--track-loose-3);
+  text-transform: uppercase;
+  color: var(--accent-2);
+}
+.fl-specialties-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: baseline;
+  gap: var(--space-3) var(--space-6);
+}
+.fl-specialties-item {
+  position: relative;
+  font-family: var(--font-display);
+  font-size: clamp(1.1rem, 2vw, 1.55rem);
+  font-weight: 500;
+  color: var(--ink-2);
+}
+/* Punto separador centrado en el gap horizontal (no aparece al envolver línea
+   porque se ancla al item, a la izquierda del gap). */
+.fl-specialties-item + .fl-specialties-item::before {
+  content: "·";
+  position: absolute;
+  right: calc(100% + var(--space-6) / 2);
+  color: var(--ink-4);
+}
+/* Segunda línea menor: roadmap con badge "Próximamente" (pill brass, clona el
+   patrón accent-soft). Solo verdades — estas especialidades aún no tienen ficha. */
+.fl-specialties-soon {
+  margin: var(--space-5) 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--ink-3);
+}
+.fl-specialties-soon-badge {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: var(--track-loose-2);
+  text-transform: uppercase;
+  color: var(--accent-2);
+  background: var(--accent-soft);
+  border-radius: var(--r-sm);
+  padding: 2px 8px;
+}
+
+/* ── Sección #ficha · la historia clínica por especialidad (interactivo) ────
+   El contenido clínico REUSA las clases reales de la app (pc-card / fi-pill /
+   fi-wi-field / fm-modal-check / pc-legend-*) para verse idéntico a la ficha
+   real; solo el marco exterior usa .fl-ficha-*. Tokens existentes, cero hex
+   off-theme. */
+.fl-ficha-intro {
+  max-width: 42rem;
+  margin: 0 auto var(--space-10);
+  text-align: center;
+}
+.fl-ficha-h2 {
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-display);
+  font-size: var(--fl-display-lg);
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  text-wrap: balance;
+}
+.fl-ficha-lead {
+  margin: 0;
+  font-size: var(--fs-md);
+  line-height: 1.55;
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+.fl-ficha-stage {
+  display: flex;
+  justify-content: center;
+}
+.fl-ficha {
+  width: min(560px, 100%);
+}
+
+/* Selector de especialidad — control segmentado real (role=tablist). */
+.fl-ficha-tabbar {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+.fl-ficha-tab {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.02em;
+  color: var(--ink-3);
+  padding: 6px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  cursor: pointer;
+  transition:
+    color var(--dur-quick) var(--ease-standard),
+    background var(--dur-quick) var(--ease-standard),
+    border-color var(--dur-quick) var(--ease-standard);
+}
+.fl-ficha-tab:hover {
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+}
+.fl-ficha-tab.is-active {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--line));
+  background: var(--accent-soft);
+}
+
+.fl-ficha-card {
+  padding: var(--space-5);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-2);
+  overflow: clip;
+}
+/* Cuerpo que se intercambia al cambiar de especialidad (key=active → remount):
+   fade + leve subida. */
+.fl-ficha-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  animation: fl-ficha-in var(--dur-moderate) var(--ease-emphasized-out) both;
+}
+@keyframes fl-ficha-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.fl-ficha-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.fl-ficha-avatar {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-pill);
+  background: var(--accent-soft);
+  color: var(--accent-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+.fl-ficha-id {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.fl-ficha-name {
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--ink);
+}
+.fl-ficha-age {
+  color: var(--ink-3);
+  font-weight: 400;
+}
+.fl-ficha-submeta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--ink-3);
+}
+.fl-ficha-module {
+  margin-left: auto;
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--track-loose-2);
+  color: var(--accent-2);
+  white-space: nowrap;
+}
+.fl-ficha-module svg {
+  color: var(--accent);
+}
+
+/* Sub-pestañas del paciente (Resumen · Plan · …) — decorativas. */
+.fl-ficha-subtabs {
+  display: flex;
+  gap: var(--space-4);
+  border-bottom: 1px solid var(--line-soft);
+  font-size: var(--fs-sm);
+  color: var(--ink-3);
+}
+.fl-ficha-subtabs span {
+  position: relative;
+  padding-bottom: var(--space-2);
+}
+.fl-ficha-subtabs .is-active {
+  color: var(--ink);
+  font-weight: 600;
+}
+.fl-ficha-subtabs .is-active::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+}
+
+.fl-ficha-grid3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-3);
+}
+.fl-ficha-grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2) var(--space-4);
+}
+.fl-ficha-fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.fl-ficha-fieldset legend {
+  padding: 0;
+  margin-bottom: var(--space-1);
+}
+
+/* Sparkline multi-métrica (eco del CardioSparkline / PsicoSparkline reales). */
+.fl-ficha-spark-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.fl-ficha-spark {
+  width: 100%;
+  height: 84px;
+}
+.fl-ficha-spark line {
+  stroke: var(--line-soft);
+  stroke-width: 1;
+}
+.fl-ficha-spark polyline {
+  fill: none;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.fl-ficha-spark .is-red { stroke: var(--red); }
+.fl-ficha-spark .is-amber { stroke: var(--amber); }
+.fl-ficha-spark .is-slate { stroke: var(--slate); }
+.fl-ficha-spark .is-accent { stroke: var(--accent); }
+.fl-ficha-spark circle.is-red { fill: var(--red); stroke: none; }
+.fl-ficha-spark circle.is-amber { fill: var(--amber); stroke: none; }
+.fl-ficha-spark circle.is-slate { fill: var(--slate); stroke: none; }
+.fl-ficha-spark circle.is-accent { fill: var(--accent); stroke: none; }
+.fl-ficha-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+}
+.fl-ficha-legend-keys {
+  display: inline-flex;
+  gap: var(--space-3);
+}
+.fl-ficha-legend-range {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--ink-4);
+}
+.fl-ficha-legend-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* Filas de estudios (cardio), escalas y objetivos (psico). */
+.fl-ficha-study,
+.fl-ficha-goal {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--line-soft);
+}
+.fl-ficha-study b { color: var(--ink); }
+.fl-ficha-study .fi-pill,
+.fl-ficha-goal .fi-pill {
+  margin-left: auto;
+}
+.fl-ficha-goal span:first-child {
+  flex: 1;
+  color: var(--ink);
+}
+.fl-ficha-dim {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--ink-3);
+}
+.fl-ficha-scales {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-6);
+}
+.fl-ficha-scale {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-sm);
+  color: var(--ink);
+}
+
+/* Quiropraxia · columna vertebral (vista posterior, simplificada) + evaluación. */
+.fl-ficha-quiro {
+  display: grid;
+  grid-template-columns: 132px 1fr;
+  gap: var(--space-4);
+  align-items: start;
+}
+.fl-ficha-spine {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: var(--space-2) 0;
+}
+.fl-ficha-vert {
+  position: relative;
+  height: 7px;
+  border-radius: var(--r-pill);
+  background: var(--ink-4);
+  opacity: 0.55;
+}
+.fl-ficha-vert--c { width: 22px; }
+.fl-ficha-vert--d { width: 34px; }
+.fl-ficha-vert--l { width: 46px; }
+.fl-ficha-vert.is-leve { background: var(--amber); opacity: 1; }
+.fl-ficha-vert.is-moderado {
+  background: color-mix(in oklab, var(--amber) 60%, var(--ink-2));
+  opacity: 1;
+}
+.fl-ficha-vert.is-ajustada { background: var(--green); opacity: 1; }
+.fl-ficha-vert-tag {
+  position: absolute;
+  left: calc(100% + 6px);
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.02em;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.fl-ficha-quiro-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.fl-ficha-foot {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line-soft);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--ink-3);
+}
+.fl-ficha-foot svg {
+  color: var(--accent);
+}
+.fl-ficha-caption {
+  margin: var(--space-5) 0 0;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
+}
+
+/* Cuerpo del slot del paciente es solo lectura en el mock: campos sin foco ni
+   cursor de edición; los checkboxes de factores se ven marcados, no clickeables. */
+.fl-ficha-body .fi-wi-field input,
+.fl-ficha-body .fm-modal-check input {
+  cursor: default;
+  pointer-events: none;
+}
+
+@media (max-width: 540px) {
+  .fl-ficha-quiro { grid-template-columns: 110px 1fr; }
+  .fl-ficha-grid3 { grid-template-columns: repeat(3, 1fr); gap: var(--space-2); }
+  .fl-ficha-head { flex-wrap: wrap; }
+  .fl-ficha-module { margin-left: 52px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fl-ficha-body { animation: none; }
 }
 
 .fl-bento-grid {
@@ -17090,7 +17543,7 @@ input:focus { outline: none; }
        la línea sube (backwards: arranca transparente durante el delay) ──── */
 @media (prefers-reduced-motion: no-preference) {
   .fl-hero-accent {
-    animation: fl-accent-settle var(--dur-cinematic) var(--ease-standard-out) 420ms backwards;
+    animation: fl-accent-settle var(--dur-cinematic) var(--ease-standard-out) 620ms backwards;
   }
 }
 @keyframes fl-accent-settle {
@@ -17128,6 +17581,59 @@ input:focus { outline: none; }
   .fl-footer-link {
     transition: none !important;
   }
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * LANDING · Fragmento R4 — material depth + paridad (Fase 1/2 del upgrade)
+ * Grano de papel (técnica feTurbulence ya usada en las cards boutique),
+ * bóveda como superficie ILUMINADA ESTÁTICA (sin sweep — la quietud es la
+ * señal de confianza; el barrido de los numerales ya lo da fl-vault-wipe),
+ * nav activo (scroll-spy) y piso mobile. Solo tokens var()/color-mix;
+ * todo scopeado .fl-*; no toca la app.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+/* 1 · Grano de papel ~1.5% — el wrapper lleva la textura detrás del contenido;
+   las secciones crema transparentes la dejan pasar. Apagado bajo
+   prefers-reduced-transparency. */
+.fl-root {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><filter id='flg'><feTurbulence baseFrequency='0.85' numOctaves='2' seed='5'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.015 0'/></filter><rect width='100%25' height='100%25' filter='url(%23flg)'/></svg>");
+}
+
+/* 2 · Bóveda · superficie iluminada estática: luz brass anclada arriba +
+   grano oscuro, en una sola declaración (dos capas). var(--accent) acá = brass
+   dark. Los numerales gigantes quedan apenas "encendidos por la sala" (glow
+   atmosférico bajo, NO neón). */
+.fl-vault {
+  background-image:
+    radial-gradient(120% 80% at 50% 0%, color-mix(in oklab, var(--accent) 9%, transparent), transparent 60%),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><filter id='flgd'><feTurbulence baseFrequency='0.8' numOctaves='2' seed='7'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.05 0'/></filter><rect width='100%25' height='100%25' filter='url(%23flgd)'/></svg>");
+}
+.fl-vault-num {
+  text-shadow: 0 0 24px color-mix(in oklab, var(--accent) 12%, transparent);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .fl-root { background-image: none; }
+  .fl-vault {
+    background-image: radial-gradient(120% 80% at 50% 0%, color-mix(in oklab, var(--accent) 9%, transparent), transparent 60%);
+  }
+}
+
+/* 3 · Nav activo (isla LandingScrollspy): subrayado persistente reusando la
+   geometría ::after del hover. */
+.fl-nav-link.is-active { color: var(--ink); }
+.fl-nav-link.is-active::after {
+  transform: scaleX(1);
+  transform-origin: 0 50%;
+}
+
+/* 4 · Piso mobile — target táctil 44px en los CTA del landing (sin tocar el
+   .fi-btn compartido) + headline sub-480 que no quede apretado en Android. */
+@media (max-width: 768px) {
+  .fl-root .fi-btn { min-height: 44px; }
+}
+@media (max-width: 480px) {
+  .fl-root { --fl-display-xl: clamp(2.35rem, 9.5vw, 2.9rem); }
+  .fl-hero-title { letter-spacing: -0.02em; line-height: 1.06; }
 }
 
 /* ════════════════════════════════════════════════════════════════════════

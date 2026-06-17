@@ -3,8 +3,8 @@
  *
  * Footer de marketing: 4 columnas (Producto · Legal · Cuenta · Contacto)
  * sobre --surface con borde superior, y línea final de marca + tagline.
- * Las anclas de Producto espejan la nav del header (#dia, #producto,
- * #seguridad, #precios, #faq).
+ * Las anclas de Producto espejan la nav del header en el MISMO orden que el
+ * DOM (#dia, #seguridad, #producto, #precios, #faq).
  */
 
 import Link from "next/link";
@@ -16,8 +16,8 @@ const COLUMNAS = [
     titulo: "Producto",
     links: [
       { href: "#dia", label: "El día" },
-      { href: "#producto", label: "Capacidades" },
       { href: "#seguridad", label: "Seguridad" },
+      { href: "#producto", label: "Funciones" },
       { href: "#precios", label: "Precios" },
       { href: "#faq", label: "Preguntas frecuentes" },
     ],

@@ -21,9 +21,11 @@ import { LandingAnalytics } from "@/components/landing/landing-analytics";
 import { Bento } from "@/components/landing/sections/bento";
 import { DayTimeline } from "@/components/landing/sections/day-timeline";
 import { Faq } from "@/components/landing/sections/faq";
+import { Ficha } from "@/components/landing/sections/ficha";
 import { FinalCta } from "@/components/landing/sections/final-cta";
 import { Hero } from "@/components/landing/sections/hero";
 import { Pricing } from "@/components/landing/sections/pricing";
+import { SpecialtyStrip } from "@/components/landing/sections/specialty-strip";
 import { Vault } from "@/components/landing/sections/vault";
 import { StickyCta } from "@/components/landing/sticky-cta";
 import { getBaseUrl } from "@/lib/base-url";
@@ -37,12 +39,21 @@ function buildJsonLd(): string {
     "@context": "https://schema.org",
     "@graph": [
       {
-        "@type": "SoftwareApplication",
+        "@type": "Organization",
+        "@id": `${BASE_URL}#org`,
         name: "Folio",
-        applicationCategory: "Medical",
+        url: BASE_URL,
+        areaServed: "AR",
+      },
+      {
+        "@type": "SoftwareApplication",
+        "@id": `${BASE_URL}#software`,
+        name: "Folio",
+        applicationCategory: "BusinessApplication",
         operatingSystem: "Web",
         inLanguage: "es-AR",
         url: BASE_URL,
+        publisher: { "@id": `${BASE_URL}#org` },
         description:
           "El día de tu consultorio, armado solo: turnos, reservas online, recordatorios por WhatsApp e historias clínicas cifradas. Para profesionales de la salud en Argentina.",
         offers: [
@@ -51,12 +62,16 @@ function buildJsonLd(): string {
             name: "Plan Solo",
             price: Math.round(MP_PLAN_PRICE_CENTS / 100),
             priceCurrency: "ARS",
+            url: `${BASE_URL}/onboarding`,
+            availability: "https://schema.org/InStock",
           },
           {
             "@type": "Offer",
             name: "Plan Clínica",
             price: Math.round(resolveClinicBasePriceCents() / 100),
             priceCurrency: "ARS",
+            url: `${BASE_URL}/onboarding`,
+            availability: "https://schema.org/InStock",
           },
         ],
       },
@@ -83,6 +98,8 @@ export default function LandingPage() {
       />
       <Hero />
       <DayTimeline />
+      <SpecialtyStrip />
+      <Ficha />
       <Vault />
       <Bento />
       <Pricing />
