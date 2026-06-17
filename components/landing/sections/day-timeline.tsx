@@ -36,19 +36,19 @@ const SCENES: DayScene[] = [
   {
     id: "a",
     hour: "10:30",
-    text: "Belén reservó sola desde tu página. El WhatsApp de confirmación ya salió.",
+    text: "Estás en sesión. Belén reserva sola y el WhatsApp sale sin que la toques.",
     visual: <SceneReserva />,
   },
   {
     id: "b",
     hour: "14:00",
-    text: "Cerrás la nota. Se cifra antes de tocar la base de datos.",
+    text: "Cerrás la nota. Nadie más puede leerla — ni nosotros.",
     visual: <SceneCifrado />,
   },
   {
     id: "c",
     hour: "20:00",
-    text: "Día cerrado: 6 pacientes, $96.000 registrados, 0 planillas.",
+    text: "Son las 20:00 y ya está todo cerrado: cobros al día, fichas guardadas, cero planillas. Te vas a tu casa.",
     visual: <SceneCierre />,
   },
 ];

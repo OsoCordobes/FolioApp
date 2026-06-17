@@ -2,8 +2,9 @@
  * Folio · Landing · LandingHeader (Fase B1 · server component)
  *
  * Header sticky con efecto glass (color-mix sobre --bg + backdrop blur).
- * Izquierda: marca. Centro: anclas (#dia, #producto, #seguridad, #precios,
- * #faq — #dia lo monta el scroll story "Un día con Folio").
+ * Izquierda: marca. Centro: anclas en orden de scroll del DOM (#dia,
+ * #seguridad, #producto, #precios, #faq — #dia lo monta el scroll story
+ * "Un día con Folio").
  * Derecha: Ingresar (ghost) + CTA primario. En mobile la navegación colapsa
  * en un panel (#fl-mobile-nav) accionado por <LandingNavToggle/> — único
  * client component del shell.
@@ -14,10 +15,13 @@ import Link from "next/link";
 import { FolioMark } from "@/components/folio-mark";
 import { LandingNavToggle } from "@/components/landing/landing-nav-toggle";
 
+// El orden DEBE igualar el orden de render del DOM en app/(marketing)/page.tsx
+// (Hero → Day → Vault/#seguridad → Bento/#producto → Pricing → FAQ) para que
+// los saltos de ancla solo avancen, nunca retrocedan.
 const NAV_LINKS = [
   { href: "#dia", label: "El día" },
-  { href: "#producto", label: "Capacidades" },
   { href: "#seguridad", label: "Seguridad" },
+  { href: "#producto", label: "Funciones" },
   { href: "#precios", label: "Precios" },
   { href: "#faq", label: "FAQ" },
 ] as const;

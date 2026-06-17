@@ -15283,14 +15283,14 @@ input:focus { outline: none; }
   38%, 100% {
     opacity: 0;
     transform: translateY(calc(var(--motion-dist-md) * -1));
-    filter: blur(var(--motion-blur-soft));
+    filter: none;
   }
 }
 @keyframes fl-scene-b {
   0%, 30% {
     opacity: 0;
     transform: translateY(var(--motion-dist-md));
-    filter: blur(var(--motion-blur-soft));
+    filter: none;
   }
   38%, 62% {
     opacity: 1;
@@ -15300,14 +15300,14 @@ input:focus { outline: none; }
   70%, 100% {
     opacity: 0;
     transform: translateY(calc(var(--motion-dist-md) * -1));
-    filter: blur(var(--motion-blur-soft));
+    filter: none;
   }
 }
 @keyframes fl-scene-c {
   0%, 62% {
     opacity: 0;
     transform: translateY(var(--motion-dist-md));
-    filter: blur(var(--motion-blur-soft));
+    filter: none;
   }
   70%, 100% {
     opacity: 1;
