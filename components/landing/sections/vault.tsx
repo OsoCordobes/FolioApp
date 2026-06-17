@@ -54,8 +54,8 @@ export function Vault() {
         </p>
         <h2 className="fl-vault-title fl-reveal">Diseñado para la ley argentina.</h2>
         <p className="fl-vault-sub fl-reveal">
-          Otros mandan los datos de tus pacientes afuera. Nosotros los ciframos y los dejamos
-          en Argentina. Esto es lo que eso significa:
+          Muchas plataformas alojan los datos de tus pacientes fuera de la región. Nosotros los
+          ciframos y los mantenemos en Sudamérica. Esto es lo que eso significa:
         </p>
         <dl className="fl-vault-grid">
           {ITEMS.map((item, i) => (
@@ -68,8 +68,8 @@ export function Vault() {
           ))}
         </dl>
         <p className="fl-vault-foot fl-reveal">
-          Tus datos viven en un datacenter en São Paulo, no en Estados Unidos ni en Europa.
-          Son tuyos: los exportás en CSV cuando quieras. Y nunca los vendemos.
+          Tus datos se alojan en un datacenter de São Paulo, en Sudamérica — no en Estados Unidos
+          ni en Europa. Son tuyos: los exportás en CSV cuando quieras.
         </p>
       </div>
     </section>

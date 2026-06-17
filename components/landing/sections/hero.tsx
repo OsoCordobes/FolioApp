@@ -46,7 +46,7 @@ export function Hero() {
           <ul className="fl-hero-stats" aria-label="Compromisos de Folio">
             <li>Cifrado AES-256</li>
             <li>Ley de datos 25.326</li>
-            <li>Datos en Argentina</li>
+            <li>Datos en Sudamérica</li>
             <li>Hecho acá</li>
           </ul>
           <a className="fl-hero-cue" href="#dia">

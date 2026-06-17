@@ -13988,8 +13988,8 @@ input:focus { outline: none; }
   to   { transform: translateY(0); }
 }
 .fl-hero-head   { animation: fl-rise-pos var(--dur-cinematic) var(--ease-emphasized) both; }
-.fl-hero-copy   { animation: fl-rise var(--dur-cinematic) var(--ease-emphasized) 80ms both; }
-.fl-hero-visual { animation: fl-rise var(--dur-cinematic) var(--ease-emphasized) 160ms both; }
+.fl-hero-copy   { animation: fl-rise var(--dur-cinematic) var(--ease-emphasized) 120ms both; }
+.fl-hero-visual { animation: fl-rise var(--dur-cinematic) var(--ease-emphasized) 240ms both; }
 
 /* fl-mock · agenda del día en capas (estático; parallax solo con view()) */
 .fl-hero-visual { position: relative; }
@@ -14133,17 +14133,20 @@ input:focus { outline: none; }
 }
 
 /* Parallax sutil scroll-driven de las capas del mock (fallback: estático) */
+/* Parallax comprimido y simétrico (front<back<chip) — amplitudes grandes y
+   asimétricas daban sensación flotante/desincronizada. Sigue linear (el
+   parallax debe ser lineal al scroll). */
 @keyframes fl-par-front {
-  from { transform: translateY(14px); }
-  to   { transform: translateY(-14px); }
+  from { transform: translateY(10px); }
+  to   { transform: translateY(-10px); }
 }
 @keyframes fl-par-back {
-  from { transform: translateY(28px); }
-  to   { transform: translateY(-30px); }
+  from { transform: translateY(18px); }
+  to   { transform: translateY(-18px); }
 }
 @keyframes fl-par-chip {
-  from { transform: translateY(36px); }
-  to   { transform: translateY(-42px); }
+  from { transform: translateY(26px); }
+  to   { transform: translateY(-26px); }
 }
 @supports (animation-timeline: view()) {
   .fl-mock-front {
@@ -14171,11 +14174,11 @@ input:focus { outline: none; }
   .fl-reveal {
     animation: fl-reveal-in var(--ease-emphasized-out) both;
     animation-timeline: view();
-    animation-range: entry var(--fl-reveal-range, 0%) entry 55%;
+    animation-range: entry var(--fl-reveal-range, 0%) entry 80%;
   }
 }
 @keyframes fl-reveal-in {
-  from { opacity: 0; transform: translateY(var(--motion-dist-lg)); }
+  from { opacity: 0; transform: translateY(var(--motion-dist-md)); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
@@ -15176,7 +15179,9 @@ input:focus { outline: none; }
       inset: 0;
       margin: 0;
       opacity: 0;
-      animation-timing-function: linear;
+      /* curva simétrica entrada/salida del fade — redondea el borde mecánico
+         del scrub lineal (solo el crossfade; rail y sweeps siguen linear) */
+      animation-timing-function: var(--motion-ease-in-out);
       animation-fill-mode: both;
       animation-timeline: --fl-day;
       animation-range: contain 0% contain 100%;
@@ -15239,20 +15244,24 @@ input:focus { outline: none; }
       opacity: 0;
       transform: scale(0.4);
       animation-name: fl-cipher-lock-pop;
-      animation-timing-function: var(--spring-soft);
+      /* overshoot por cubic-bezier (no linear() spring): popea intencional sin
+         glitchear al scrollear hacia atrás */
+      animation-timing-function: var(--ease-overshoot);
       animation-fill-mode: both;
       animation-timeline: --fl-day;
-      animation-range: contain 56% contain 61%;
+      animation-range: contain 54% contain 62%;
     }
 
     /* escena c · las barras del cierre crecen al entrar la escena */
     .fl-close-bar {
       transform: scaleY(0.25);
       animation-name: fl-close-bar-up;
-      animation-timing-function: var(--spring-soft);
+      /* decelerada monótona (sin overshoot): crecimiento limpio en ambas
+         direcciones de scroll, sin "rebote al revés" */
+      animation-timing-function: var(--ease-standard-out);
       animation-fill-mode: both;
       animation-timeline: --fl-day;
-      animation-range: contain 70% contain 86%;
+      animation-range: contain 70% contain 90%;
     }
   }
 }
@@ -15277,42 +15286,47 @@ input:focus { outline: none; }
 /* keyframes de las escenas — scrubbed por --fl-day; fill both deja el primer/
    último keyframe aplicado fuera del range (la sección entra con la escena a
    ya visible y sale con la c). Custom props de motion del :root. */
+/* Crossfades con ventana ancha (~18% de scroll) y solape real entre escenas:
+   cada salida cruza en cross-opacity con la entrada siguiente, sin salto. El
+   translateY baja a --motion-dist-sm (8px) — el desplazamiento grande durante
+   un fade es lo que más acentuaba el "brusco". El hold de la escena b
+   (40%→62%) preserva la ventana del sweep/candado de cifrado. */
 @keyframes fl-scene-a {
-  0%, 30% {
+  0%, 22% {
     opacity: 1;
     transform: none;
     filter: none;
   }
-  38%, 100% {
+  40%, 100% {
     opacity: 0;
-    transform: translateY(calc(var(--motion-dist-md) * -1));
+    transform: translateY(calc(var(--motion-dist-sm) * -1));
     filter: none;
   }
 }
 @keyframes fl-scene-b {
-  0%, 30% {
+  0%, 22% {
     opacity: 0;
-    transform: translateY(var(--motion-dist-md));
+    transform: translateY(var(--motion-dist-sm));
     filter: none;
   }
-  38%, 62% {
+  40%, 62% {
     opacity: 1;
     transform: none;
     filter: none;
   }
-  70%, 100% {
+  80%, 100% {
     opacity: 0;
-    transform: translateY(calc(var(--motion-dist-md) * -1));
+    transform: translateY(calc(var(--motion-dist-sm) * -1));
     filter: none;
   }
 }
 @keyframes fl-scene-c {
   0%, 62% {
     opacity: 0;
-    transform: translateY(var(--motion-dist-md));
+    transform: translateY(var(--motion-dist-sm));
     filter: none;
   }
-  70%, 100% {
+  80%, 100% {
     opacity: 1;
     transform: none;
     filter: none;
@@ -15585,6 +15599,30 @@ input:focus { outline: none; }
   position: absolute;
   right: calc(100% + var(--space-6) / 2);
   color: var(--ink-4);
+}
+/* Segunda línea menor: roadmap con badge "Próximamente" (pill brass, clona el
+   patrón accent-soft). Solo verdades — estas especialidades aún no tienen ficha. */
+.fl-specialties-soon {
+  margin: var(--space-5) 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--ink-3);
+}
+.fl-specialties-soon-badge {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: var(--track-loose-2);
+  text-transform: uppercase;
+  color: var(--accent-2);
+  background: var(--accent-soft);
+  border-radius: var(--r-sm);
+  padding: 2px 8px;
 }
 
 .fl-bento-grid {
@@ -17135,7 +17173,7 @@ input:focus { outline: none; }
        la línea sube (backwards: arranca transparente durante el delay) ──── */
 @media (prefers-reduced-motion: no-preference) {
   .fl-hero-accent {
-    animation: fl-accent-settle var(--dur-cinematic) var(--ease-standard-out) 420ms backwards;
+    animation: fl-accent-settle var(--dur-cinematic) var(--ease-standard-out) 620ms backwards;
   }
 }
 @keyframes fl-accent-settle {
