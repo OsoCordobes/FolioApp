@@ -21,6 +21,7 @@ import { LandingAnalytics } from "@/components/landing/landing-analytics";
 import { Bento } from "@/components/landing/sections/bento";
 import { DayTimeline } from "@/components/landing/sections/day-timeline";
 import { Faq } from "@/components/landing/sections/faq";
+import { Ficha } from "@/components/landing/sections/ficha";
 import { FinalCta } from "@/components/landing/sections/final-cta";
 import { Hero } from "@/components/landing/sections/hero";
 import { Pricing } from "@/components/landing/sections/pricing";
@@ -98,6 +99,7 @@ export default function LandingPage() {
       <Hero />
       <DayTimeline />
       <SpecialtyStrip />
+      <Ficha />
       <Vault />
       <Bento />
       <Pricing />

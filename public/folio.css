@@ -15625,6 +15625,299 @@ input:focus { outline: none; }
   padding: 2px 8px;
 }
 
+/* ── Sección #ficha · mock de la historia clínica por especialidad ─────────
+   Auto-contenido (.fl-ficha-*), mismo criterio que el mock del hero/cipher:
+   parece la app real con los mismos tokens, sin depender de las clases de la
+   app. Cero hex off-theme. */
+.fl-ficha-intro {
+  max-width: 40rem;
+  margin: 0 auto var(--space-10);
+  text-align: center;
+}
+.fl-ficha-h2 {
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-display);
+  font-size: var(--fl-display-lg);
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  text-wrap: balance;
+}
+.fl-ficha-lead {
+  margin: 0;
+  font-size: var(--fs-md);
+  line-height: 1.55;
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+.fl-ficha-stage {
+  display: flex;
+  justify-content: center;
+}
+.fl-ficha {
+  width: min(540px, 100%);
+}
+.fl-ficha-specs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+.fl-ficha-spec {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.02em;
+  color: var(--ink-3);
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+}
+.fl-ficha-spec.is-active {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  background: var(--accent-soft);
+}
+.fl-ficha-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-2);
+}
+.fl-ficha-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.fl-ficha-avatar {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-pill);
+  background: var(--accent-soft);
+  color: var(--accent-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+.fl-ficha-id {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.fl-ficha-name {
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--ink);
+}
+.fl-ficha-age {
+  color: var(--ink-3);
+  font-weight: 400;
+}
+.fl-ficha-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--ink-3);
+}
+.fl-ficha-module {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--track-loose-2);
+  color: var(--accent-2);
+  white-space: nowrap;
+}
+.fl-ficha-module svg {
+  color: var(--accent);
+}
+.fl-ficha-tabs {
+  display: flex;
+  gap: var(--space-4);
+  border-bottom: 1px solid var(--line-soft);
+  font-size: var(--fs-sm);
+  color: var(--ink-3);
+}
+.fl-ficha-tabs span {
+  position: relative;
+  padding-bottom: var(--space-2);
+}
+.fl-ficha-tabs .is-active {
+  color: var(--ink);
+  font-weight: 600;
+}
+.fl-ficha-tabs .is-active::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+}
+.fl-ficha-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--bg);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-lg);
+}
+.fl-ficha-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.fl-ficha-panel-title {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--ink);
+}
+.fl-ficha-risk {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--amber);
+  background: var(--amber-soft);
+  padding: 2px 8px;
+  border-radius: var(--r-sm);
+  white-space: nowrap;
+}
+.fl-ficha-vitals {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-3);
+}
+.fl-ficha-vital {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.fl-ficha-vital b {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xl);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.fl-ficha-vital i {
+  font-style: normal;
+  font-size: var(--fs-xs);
+  color: var(--ink-3);
+}
+.fl-ficha-spark {
+  width: 100%;
+  height: 40px;
+}
+.fl-ficha-spark polyline {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.fl-ficha-spark circle {
+  fill: var(--accent);
+}
+.fl-ficha-factors {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.fl-ficha-factors li {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--fs-xs);
+  color: var(--ink-3);
+  padding: 3px 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+}
+.fl-ficha-factors li.is-on {
+  color: var(--green);
+  border-color: color-mix(in srgb, var(--green) 30%, var(--line-soft));
+  background: var(--green-soft);
+}
+.fl-ficha-studies {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.fl-ficha-studies li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
+}
+.fl-ficha-study-name {
+  font-weight: 500;
+  color: var(--ink);
+}
+.fl-ficha-studies li .fl-ficha-tag {
+  margin-left: auto;
+}
+.fl-ficha-tag {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--ink-3);
+  background: var(--surface-2);
+  padding: 2px 8px;
+  border-radius: var(--r-sm);
+  white-space: nowrap;
+}
+.fl-ficha-tag--green {
+  color: var(--green);
+  background: var(--green-soft);
+}
+.fl-ficha-tag--amber {
+  color: var(--amber);
+  background: var(--amber-soft);
+}
+.fl-ficha-foot {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--ink-3);
+}
+.fl-ficha-foot svg {
+  color: var(--accent);
+}
+.fl-ficha-caption {
+  margin: var(--space-5) 0 0;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
+}
+
 .fl-bento-grid {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
