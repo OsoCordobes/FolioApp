@@ -14,6 +14,7 @@ import Link from "next/link";
 
 import { FolioMark } from "@/components/folio-mark";
 import { LandingNavToggle } from "@/components/landing/landing-nav-toggle";
+import { LandingScrollspy } from "@/components/landing/landing-scrollspy";
 
 // El orden DEBE igualar el orden de render del DOM en app/(marketing)/page.tsx
 // (Hero → Day → Vault/#seguridad → Bento/#producto → Pricing → FAQ) para que
@@ -77,6 +78,8 @@ export function LandingHeader() {
           </Link>
         </div>
       </div>
+
+      <LandingScrollspy />
     </header>
   );
 }

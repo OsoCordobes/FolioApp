@@ -38,6 +38,9 @@ export function Hero() {
             <Link className="fi-btn fi-btn-primary fl-btn-lg" href="/onboarding" data-fl-cta="hero">
               Empezá gratis · 7 días
             </Link>
+            <a className="fi-btn fi-btn-secondary fl-btn-lg" href="#dia" data-fl-cta="hero_demo">
+              Ver cómo funciona
+            </a>
           </div>
           <p className="fl-hero-note">Listo en 10 minutos. Sin tarjeta.</p>
           <ul className="fl-hero-stats" aria-label="Compromisos de Folio">

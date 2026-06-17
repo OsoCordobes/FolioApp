@@ -13679,7 +13679,7 @@ input:focus { outline: none; }
 /* fl-anchors · offset para navegación por ancla (#producto, #precios, …)
  * bajo el header sticky que llega en Fase B */
 .fl-main [id] {
-  scroll-margin-top: 80px;
+  scroll-margin-top: 76px;
 }
 
 /* fl-hero-title · headline display gigante (escena 08:00 del día) */
@@ -13888,9 +13888,10 @@ input:focus { outline: none; }
 }
 .fl-eyebrow {
   margin: 0 0 var(--space-4);
+  font-family: var(--font-mono);
   font-size: var(--fs-sm);
-  font-weight: 600;
-  letter-spacing: 0.08em;
+  font-weight: 500;
+  letter-spacing: var(--track-loose-3);
   text-transform: uppercase;
   color: var(--accent-2);
 }
@@ -13941,7 +13942,7 @@ input:focus { outline: none; }
   font-family: var(--font-mono);
   font-size: var(--fs-sm);
   letter-spacing: 0.01em;
-  color: var(--ink-3);
+  color: var(--ink-2);
 }
 .fl-hero-stats li { white-space: nowrap; }
 .fl-hero-stats li + li::before {
@@ -14228,7 +14229,7 @@ input:focus { outline: none; }
   font-family: var(--font-mono);
   font-size: var(--fs-sm);
   font-weight: 500;
-  letter-spacing: 0.22em;
+  letter-spacing: var(--track-loose-3);
   text-transform: uppercase;
   color: var(--accent);
 }
@@ -15419,7 +15420,7 @@ input:focus { outline: none; }
   font-family: var(--font-mono);
   font-size: var(--fs-sm);
   font-weight: 500;
-  letter-spacing: 0.22em;
+  letter-spacing: var(--track-loose-3);
   text-transform: uppercase;
   color: var(--accent);
 }
@@ -17128,6 +17129,59 @@ input:focus { outline: none; }
   .fl-footer-link {
     transition: none !important;
   }
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * LANDING · Fragmento R4 — material depth + paridad (Fase 1/2 del upgrade)
+ * Grano de papel (técnica feTurbulence ya usada en las cards boutique),
+ * bóveda como superficie ILUMINADA ESTÁTICA (sin sweep — la quietud es la
+ * señal de confianza; el barrido de los numerales ya lo da fl-vault-wipe),
+ * nav activo (scroll-spy) y piso mobile. Solo tokens var()/color-mix;
+ * todo scopeado .fl-*; no toca la app.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+/* 1 · Grano de papel ~1.5% — el wrapper lleva la textura detrás del contenido;
+   las secciones crema transparentes la dejan pasar. Apagado bajo
+   prefers-reduced-transparency. */
+.fl-root {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><filter id='flg'><feTurbulence baseFrequency='0.85' numOctaves='2' seed='5'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.015 0'/></filter><rect width='100%25' height='100%25' filter='url(%23flg)'/></svg>");
+}
+
+/* 2 · Bóveda · superficie iluminada estática: luz brass anclada arriba +
+   grano oscuro, en una sola declaración (dos capas). var(--accent) acá = brass
+   dark. Los numerales gigantes quedan apenas "encendidos por la sala" (glow
+   atmosférico bajo, NO neón). */
+.fl-vault {
+  background-image:
+    radial-gradient(120% 80% at 50% 0%, color-mix(in oklab, var(--accent) 9%, transparent), transparent 60%),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><filter id='flgd'><feTurbulence baseFrequency='0.8' numOctaves='2' seed='7'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.05 0'/></filter><rect width='100%25' height='100%25' filter='url(%23flgd)'/></svg>");
+}
+.fl-vault-num {
+  text-shadow: 0 0 24px color-mix(in oklab, var(--accent) 12%, transparent);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .fl-root { background-image: none; }
+  .fl-vault {
+    background-image: radial-gradient(120% 80% at 50% 0%, color-mix(in oklab, var(--accent) 9%, transparent), transparent 60%);
+  }
+}
+
+/* 3 · Nav activo (isla LandingScrollspy): subrayado persistente reusando la
+   geometría ::after del hover. */
+.fl-nav-link.is-active { color: var(--ink); }
+.fl-nav-link.is-active::after {
+  transform: scaleX(1);
+  transform-origin: 0 50%;
+}
+
+/* 4 · Piso mobile — target táctil 44px en los CTA del landing (sin tocar el
+   .fi-btn compartido) + headline sub-480 que no quede apretado en Android. */
+@media (max-width: 768px) {
+  .fl-root .fi-btn { min-height: 44px; }
+}
+@media (max-width: 480px) {
+  .fl-root { --fl-display-xl: clamp(2.35rem, 9.5vw, 2.9rem); }
+  .fl-hero-title { letter-spacing: -0.02em; line-height: 1.06; }
 }
 
 /* ════════════════════════════════════════════════════════════════════════
