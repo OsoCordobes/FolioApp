@@ -15148,9 +15148,9 @@ input:focus { outline: none; }
 @media (min-width: 768px) and (prefers-reduced-motion: no-preference) {
   @supports (animation-timeline: view()) {
     .fl-day {
-      /* 220vh (antes 320): el scrub de las 3 escenas queda más ágil — dos de
-         tres sub-animaban y no justificaban el largo. */
-      height: 220vh;
+      /* 340vh: el scrub de las 3 escenas se reparte sobre más scroll → cada
+         beat respira y la transición se lee más deliberada (premium > veloz). */
+      height: 340vh;
       max-width: none;
       padding: 0;
       view-timeline: --fl-day block;
@@ -15625,12 +15625,13 @@ input:focus { outline: none; }
   padding: 2px 8px;
 }
 
-/* ── Sección #ficha · mock de la historia clínica por especialidad ─────────
-   Auto-contenido (.fl-ficha-*), mismo criterio que el mock del hero/cipher:
-   parece la app real con los mismos tokens, sin depender de las clases de la
-   app. Cero hex off-theme. */
+/* ── Sección #ficha · la historia clínica por especialidad (interactivo) ────
+   El contenido clínico REUSA las clases reales de la app (pc-card / fi-pill /
+   fi-wi-field / fm-modal-check / pc-legend-*) para verse idéntico a la ficha
+   real; solo el marco exterior usa .fl-ficha-*. Tokens existentes, cero hex
+   off-theme. */
 .fl-ficha-intro {
-  max-width: 40rem;
+  max-width: 42rem;
   margin: 0 auto var(--space-10);
   text-align: center;
 }
@@ -15656,39 +15657,61 @@ input:focus { outline: none; }
   justify-content: center;
 }
 .fl-ficha {
-  width: min(540px, 100%);
+  width: min(560px, 100%);
 }
-.fl-ficha-specs {
+
+/* Selector de especialidad — control segmentado real (role=tablist). */
+.fl-ficha-tabbar {
   display: flex;
-  flex-wrap: wrap;
   gap: var(--space-2);
   margin-bottom: var(--space-3);
 }
-.fl-ficha-spec {
+.fl-ficha-tab {
   font-family: var(--font-mono);
   font-size: var(--fs-xs);
   letter-spacing: 0.02em;
   color: var(--ink-3);
-  padding: 5px 12px;
+  padding: 6px 14px;
   border: 1px solid var(--line);
   border-radius: var(--r-pill);
   background: var(--surface);
+  cursor: pointer;
+  transition:
+    color var(--dur-quick) var(--ease-standard),
+    background var(--dur-quick) var(--ease-standard),
+    border-color var(--dur-quick) var(--ease-standard);
 }
-.fl-ficha-spec.is-active {
+.fl-ficha-tab:hover {
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+}
+.fl-ficha-tab.is-active {
   color: var(--accent);
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--line));
   background: var(--accent-soft);
 }
+
 .fl-ficha-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
   padding: var(--space-5);
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r-xl);
   box-shadow: var(--shadow-2);
+  overflow: clip;
 }
+/* Cuerpo que se intercambia al cambiar de especialidad (key=active → remount):
+   fade + leve subida. */
+.fl-ficha-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  animation: fl-ficha-in var(--dur-moderate) var(--ease-emphasized-out) both;
+}
+@keyframes fl-ficha-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 .fl-ficha-head {
   display: flex;
   align-items: center;
@@ -15722,7 +15745,7 @@ input:focus { outline: none; }
   color: var(--ink-3);
   font-weight: 400;
 }
-.fl-ficha-meta {
+.fl-ficha-submeta {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
@@ -15732,6 +15755,7 @@ input:focus { outline: none; }
 }
 .fl-ficha-module {
   margin-left: auto;
+  align-self: flex-start;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -15745,22 +15769,24 @@ input:focus { outline: none; }
 .fl-ficha-module svg {
   color: var(--accent);
 }
-.fl-ficha-tabs {
+
+/* Sub-pestañas del paciente (Resumen · Plan · …) — decorativas. */
+.fl-ficha-subtabs {
   display: flex;
   gap: var(--space-4);
   border-bottom: 1px solid var(--line-soft);
   font-size: var(--fs-sm);
   color: var(--ink-3);
 }
-.fl-ficha-tabs span {
+.fl-ficha-subtabs span {
   position: relative;
   padding-bottom: var(--space-2);
 }
-.fl-ficha-tabs .is-active {
+.fl-ficha-subtabs .is-active {
   color: var(--ink);
   font-weight: 600;
 }
-.fl-ficha-tabs .is-active::after {
+.fl-ficha-subtabs .is-active::after {
   content: "";
   position: absolute;
   left: 0;
@@ -15770,139 +15796,172 @@ input:focus { outline: none; }
   border-radius: var(--r-pill);
   background: var(--accent);
 }
-.fl-ficha-panel {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-4);
-  background: var(--bg);
-  border: 1px solid var(--line-soft);
-  border-radius: var(--r-lg);
-}
-.fl-ficha-panel-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-.fl-ficha-panel-title {
-  font-size: var(--fs-sm);
-  font-weight: 600;
-  color: var(--ink);
-}
-.fl-ficha-risk {
-  font-family: var(--font-mono);
-  font-size: var(--fs-xs);
-  color: var(--amber);
-  background: var(--amber-soft);
-  padding: 2px 8px;
-  border-radius: var(--r-sm);
-  white-space: nowrap;
-}
-.fl-ficha-vitals {
+
+.fl-ficha-grid3 {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: var(--space-3);
 }
-.fl-ficha-vital {
+.fl-ficha-grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2) var(--space-4);
+}
+.fl-ficha-fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-2);
 }
-.fl-ficha-vital b {
-  font-family: var(--font-mono);
-  font-size: var(--fs-xl);
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  color: var(--ink);
-  font-variant-numeric: tabular-nums;
+.fl-ficha-fieldset legend {
+  padding: 0;
+  margin-bottom: var(--space-1);
 }
-.fl-ficha-vital i {
-  font-style: normal;
-  font-size: var(--fs-xs);
-  color: var(--ink-3);
+
+/* Sparkline multi-métrica (eco del CardioSparkline / PsicoSparkline reales). */
+.fl-ficha-spark-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 .fl-ficha-spark {
   width: 100%;
-  height: 40px;
+  height: 84px;
+}
+.fl-ficha-spark line {
+  stroke: var(--line-soft);
+  stroke-width: 1;
 }
 .fl-ficha-spark polyline {
   fill: none;
-  stroke: var(--accent);
-  stroke-width: 2;
+  stroke-width: 1.75;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.fl-ficha-spark circle {
-  fill: var(--accent);
-}
-.fl-ficha-factors {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.fl-ficha-spark .is-red { stroke: var(--red); }
+.fl-ficha-spark .is-amber { stroke: var(--amber); }
+.fl-ficha-spark .is-slate { stroke: var(--slate); }
+.fl-ficha-spark .is-accent { stroke: var(--accent); }
+.fl-ficha-spark circle.is-red { fill: var(--red); stroke: none; }
+.fl-ficha-spark circle.is-amber { fill: var(--amber); stroke: none; }
+.fl-ficha-spark circle.is-slate { fill: var(--slate); stroke: none; }
+.fl-ficha-spark circle.is-accent { fill: var(--accent); stroke: none; }
+.fl-ficha-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
-}
-.fl-ficha-factors li {
-  display: inline-flex;
   align-items: center;
-  gap: 4px;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+}
+.fl-ficha-legend-keys {
+  display: inline-flex;
+  gap: var(--space-3);
+}
+.fl-ficha-legend-range {
+  font-family: var(--font-mono);
   font-size: var(--fs-xs);
-  color: var(--ink-3);
-  padding: 3px 10px;
-  border: 1px solid var(--line-soft);
-  border-radius: var(--r-pill);
-  background: var(--surface);
+  color: var(--ink-4);
 }
-.fl-ficha-factors li.is-on {
-  color: var(--green);
-  border-color: color-mix(in srgb, var(--green) 30%, var(--line-soft));
-  background: var(--green-soft);
-}
-.fl-ficha-studies {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.fl-ficha-legend-col {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
 }
-.fl-ficha-studies li {
+
+/* Filas de estudios (cardio), escalas y objetivos (psico). */
+.fl-ficha-study,
+.fl-ficha-goal {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   font-size: var(--fs-sm);
   color: var(--ink-2);
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--line-soft);
 }
-.fl-ficha-study-name {
-  font-weight: 500;
-  color: var(--ink);
-}
-.fl-ficha-studies li .fl-ficha-tag {
+.fl-ficha-study b { color: var(--ink); }
+.fl-ficha-study .fi-pill,
+.fl-ficha-goal .fi-pill {
   margin-left: auto;
 }
-.fl-ficha-tag {
+.fl-ficha-goal span:first-child {
+  flex: 1;
+  color: var(--ink);
+}
+.fl-ficha-dim {
   font-family: var(--font-mono);
   font-size: var(--fs-xs);
   color: var(--ink-3);
-  background: var(--surface-2);
-  padding: 2px 8px;
-  border-radius: var(--r-sm);
+}
+.fl-ficha-scales {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-6);
+}
+.fl-ficha-scale {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-sm);
+  color: var(--ink);
+}
+
+/* Quiropraxia · columna vertebral (vista posterior, simplificada) + evaluación. */
+.fl-ficha-quiro {
+  display: grid;
+  grid-template-columns: 132px 1fr;
+  gap: var(--space-4);
+  align-items: start;
+}
+.fl-ficha-spine {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: var(--space-2) 0;
+}
+.fl-ficha-vert {
+  position: relative;
+  height: 7px;
+  border-radius: var(--r-pill);
+  background: var(--ink-4);
+  opacity: 0.55;
+}
+.fl-ficha-vert--c { width: 22px; }
+.fl-ficha-vert--d { width: 34px; }
+.fl-ficha-vert--l { width: 46px; }
+.fl-ficha-vert.is-leve { background: var(--amber); opacity: 1; }
+.fl-ficha-vert.is-moderado {
+  background: color-mix(in oklab, var(--amber) 60%, var(--ink-2));
+  opacity: 1;
+}
+.fl-ficha-vert.is-ajustada { background: var(--green); opacity: 1; }
+.fl-ficha-vert-tag {
+  position: absolute;
+  left: calc(100% + 6px);
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.02em;
+  color: var(--ink-3);
   white-space: nowrap;
 }
-.fl-ficha-tag--green {
-  color: var(--green);
-  background: var(--green-soft);
+.fl-ficha-quiro-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
 }
-.fl-ficha-tag--amber {
-  color: var(--amber);
-  background: var(--amber-soft);
-}
+
 .fl-ficha-foot {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line-soft);
   font-family: var(--font-mono);
   font-size: var(--fs-xs);
   color: var(--ink-3);
@@ -15916,6 +15975,24 @@ input:focus { outline: none; }
   font-family: var(--font-mono);
   font-size: var(--fs-sm);
   color: var(--ink-2);
+}
+
+/* Cuerpo del slot del paciente es solo lectura en el mock: campos sin foco ni
+   cursor de edición; los checkboxes de factores se ven marcados, no clickeables. */
+.fl-ficha-body .fi-wi-field input,
+.fl-ficha-body .fm-modal-check input {
+  cursor: default;
+  pointer-events: none;
+}
+
+@media (max-width: 540px) {
+  .fl-ficha-quiro { grid-template-columns: 110px 1fr; }
+  .fl-ficha-grid3 { grid-template-columns: repeat(3, 1fr); gap: var(--space-2); }
+  .fl-ficha-head { flex-wrap: wrap; }
+  .fl-ficha-module { margin-left: 52px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fl-ficha-body { animation: none; }
 }
 
 .fl-bento-grid {
