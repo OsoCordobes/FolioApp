@@ -26,7 +26,6 @@ const SCREENS: Screen[] = [
   { name: "paciente", file: "Folio · Paciente.html" },
   { name: "finanzas", file: "Folio · Finanzas.html" },
   { name: "configuracion", file: "Folio · Configuración.html" },
-  { name: "focus", file: "Folio · Focus.html" },
   { name: "brand", file: "Folio · Brand.html" },
   { name: "login", file: "Folio · Login.html" },
   { name: "onboarding", file: "Folio · Onboarding.html" },
