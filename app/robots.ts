@@ -26,7 +26,6 @@ export default function robots(): MetadataRoute.Robots {
           "/calendario",
           "/finanzas",
           "/configuracion",
-          "/focus",
           "/admin",
         ],
       },

@@ -29,7 +29,6 @@ const SCREENS: Screen[] = [
   { name: "hoy", route: "/hoy" },
   { name: "pacientes", route: "/pacientes" },
   { name: "paciente", route: "/pacientes/2" },
-  { name: "focus", route: "/focus/3" },
   { name: "finanzas", route: "/finanzas" },
   { name: "configuracion", route: "/configuracion" },
   { name: "calendario", route: "/calendario" },
@@ -85,7 +84,7 @@ async function loadAppScreen(page: Page, route: string, theme: Theme) {
 
   // Forzamos `data-theme` AL FINAL, después de que TweaksProvider haya
   // corrido sus useEffect (mounting + localStorage read). Es la defensa
-  // para que rutas dinámicas (ssr:false como /focus) y rutas SSR'd
+  // para que rutas dinámicas (ssr:false) y rutas SSR'd
   // converjan al mismo theme antes del screenshot.
   await page.evaluate((t) => {
     document.documentElement.setAttribute("data-theme", t);
