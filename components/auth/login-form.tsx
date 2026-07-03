@@ -23,10 +23,12 @@ const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
 
 import {
   requestPasswordReset,
+  resendSignupConfirmation,
   signInWithGoogle,
   signInWithPassword,
 } from "@/app/(public)/login/actions";
 import { signUpAndInitOrganization } from "@/app/(public)/onboarding/actions";
+import { CheckEmailPanel } from "@/components/auth/check-email-panel";
 import { safeRedirect } from "@/lib/security/safe-redirect";
 import { supportMailto } from "@/lib/support";
 
@@ -96,7 +98,9 @@ interface LoginProps extends SubViewProps {
 const OAUTH_ERROR_MESSAGES: Record<string, string> = {
   oauth_failed:  "No pude completar el ingreso con Google. Reintentá.",
   rate_limited:  "Demasiados intentos seguidos. Esperá un minuto y reintentá.",
-  code_expired:  "El link de Google expiró. Volvé a apretar 'Ingresar con Google'.",
+  // Neutral: este código ahora también lo emiten los links de confirmación
+  // de email (otp_expired / verifyOtp), no solo el exchange de Google.
+  code_expired:  "El link expiró o ya fue usado. Pedí uno nuevo.",
   code_invalid:  "El código de Google no es válido. Reintentá el ingreso.",
   network:       "Hubo un problema de red al validar tu ingreso. Reintentá.",
 };
@@ -108,6 +112,9 @@ function Login({ setVista, prefilledEmail, notice, clearNotice }: LoginProps) {
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [err, setErr] = useState("");
+  // Ítem 1.5: código machine-readable del error de login. Con
+  // "email_not_confirmed" mostramos el botón "Reenviar link" bajo el error.
+  const [errCode, setErrCode] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   // Si la URL trae ?error=<code> (típicamente desde el OAuth callback),
@@ -134,10 +141,12 @@ function Login({ setVista, prefilledEmail, notice, clearNotice }: LoginProps) {
       return;
     }
     setErr("");
+    setErrCode(null);
     startTransition(async () => {
       const result = await signInWithPassword(email, password);
       if (!result.ok) {
         setErr(result.error ?? "Error al entrar");
+        setErrCode(result.code ?? null);
         return;
       }
       // Mitigate open-redirect (Ley 25.326 + OWASP A01). Only same-origin
@@ -206,6 +215,7 @@ function Login({ setVista, prefilledEmail, notice, clearNotice }: LoginProps) {
             onChange={(e) => {
               setEmail(e.target.value);
               setErr("");
+              setErrCode(null);
               clearNotice?.();
             }}
             disabled={pending}
@@ -230,6 +240,7 @@ function Login({ setVista, prefilledEmail, notice, clearNotice }: LoginProps) {
               onChange={(e) => {
                 setPassword(e.target.value);
                 setErr("");
+                setErrCode(null);
               }}
               disabled={pending}
             />
@@ -245,6 +256,9 @@ function Login({ setVista, prefilledEmail, notice, clearNotice }: LoginProps) {
         </label>
 
         {err ? <p className="au-err">{err}</p> : null}
+        {errCode === "email_not_confirmed" ? (
+          <ResendConfirmationInline email={email} />
+        ) : null}
 
         <button type="submit" className="fi-btn fi-btn-primary au-submit" disabled={pending}>
           {pending ? "Entrando..." : "Entrar"}
@@ -252,6 +266,61 @@ function Login({ setVista, prefilledEmail, notice, clearNotice }: LoginProps) {
         </button>
       </form>
     </AuthShell>
+  );
+}
+
+/**
+ * Ítem 1.5 · Botón inline "Reenviar link" bajo el error de login cuando la
+ * cuenta existe pero el email no está confirmado. Cooldown local de 60s para
+ * no martillar la action (que además tiene rate-limit server-side).
+ */
+function ResendConfirmationInline({ email }: { email: string }) {
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  // Tick para que el disabled expire solo.
+  const [, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!cooldownUntil) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [cooldownUntil]);
+
+  const coolingDown = Boolean(cooldownUntil && cooldownUntil > Date.now());
+
+  const onResend = () => {
+    if (pending || coolingDown) return;
+    setError(null);
+    startTransition(async () => {
+      const result = await resendSignupConfirmation(email);
+      if (!result.ok) {
+        setError(result.error ?? "No pude reenviar el link. Probá de nuevo.");
+        return;
+      }
+      setSent(true);
+      setCooldownUntil(Date.now() + 60_000);
+    });
+  };
+
+  return (
+    <div style={{ fontSize: 13, lineHeight: 1.5 }}>
+      {error ? <p className="au-err">{error}</p> : null}
+      {sent && !error ? (
+        <p role="status" style={{ margin: "0 0 4px", color: "var(--ink-2)" }}>
+          Link enviado a <b>{email}</b>. Revisá tu casilla.
+        </p>
+      ) : null}
+      <button
+        type="button"
+        className="au-link"
+        onClick={onResend}
+        disabled={pending || coolingDown}
+      >
+        {pending ? "Reenviando…" : coolingDown ? "Link enviado (esperá un minuto)" : "Reenviar link de confirmación"}
+      </button>
+    </div>
   );
 }
 
@@ -271,6 +340,9 @@ function Signup({ setVista, switchToLoginWith }: SignupProps) {
   const [err, setErr] = useState("");
   const [consent, setConsent] = useState(false);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  // Ítem 1.5: email esperando confirmación (Confirm email ON). Mientras esté
+  // set, reemplazamos el form por el CheckEmailPanel.
+  const [awaitingEmail, setAwaitingEmail] = useState<string | null>(null);
   const captchaContainerRef = useRef<HTMLDivElement | null>(null);
   const captchaWidgetIdRef = useRef<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -278,7 +350,14 @@ function Signup({ setVista, switchToLoginWith }: SignupProps) {
   // Render Turnstile when the Signup view mounts. Site-key absence
   // (dev / visual regression) skips the widget; verifyTurnstile()
   // server-side returns true under the same env condition.
+  //
+  // Deps [awaitingEmail]: mientras el CheckEmailPanel está visible el
+  // container del captcha no existe (cleanup remueve el widget); al volver
+  // con "Usar otro email" el effect re-corre y renderiza un widget fresco
+  // (los tokens de Turnstile son de un solo uso — el anterior ya se consumió
+  // en el intento de signup).
   useEffect(() => {
+    if (awaitingEmail) return;
     if (!TURNSTILE_SITE_KEY) return;
     if (!captchaContainerRef.current) return;
     // El Script de Cloudflare puede no haber cargado aún cuando este effect
@@ -312,7 +391,7 @@ function Signup({ setVista, switchToLoginWith }: SignupProps) {
         captchaWidgetIdRef.current = null;
       }
     };
-  }, []);
+  }, [awaitingEmail]);
 
   // Signup desde /login crea la auth.user + organization placeholder + member
   // OWNER en una sola server-action atomica. El password se consume server-side;
@@ -365,6 +444,13 @@ function Signup({ setVista, switchToLoginWith }: SignupProps) {
         setErr(msg || "No pude crear la cuenta. Probá de nuevo.");
         return;
       }
+      if (result.needsConfirmation) {
+        // Confirm email ON: cuenta creada sin sesión. Mostramos "Revisá tu
+        // email"; el user sigue por el link → /api/auth/callback → /onboarding.
+        setErr("");
+        setAwaitingEmail(email);
+        return;
+      }
       // Account created + cookie set. Pass nombre via URL so Step 2 can prefill.
       const params = new URLSearchParams(nombre ? { nombre } : {});
       const qs = params.toString();
@@ -391,6 +477,22 @@ function Signup({ setVista, switchToLoginWith }: SignupProps) {
     return Math.min(s, 4);
   }, [password]);
   const pwLbl = ["Muy débil", "Débil", "Aceptable", "Buena", "Excelente"][pwStrength];
+
+  // Ítem 1.5: post-signup con Confirm email ON — panel "Revisá tu email".
+  // (Después de TODOS los hooks para no romper las reglas de hooks.)
+  if (awaitingEmail) {
+    return (
+      <CheckEmailPanel
+        email={awaitingEmail}
+        onBack={() => {
+          // Token de Turnstile ya consumido en el intento de signup; el
+          // effect (deps [awaitingEmail]) renderiza un widget fresco.
+          setCaptchaToken(null);
+          setAwaitingEmail(null);
+        }}
+      />
+    );
+  }
 
   return (
     <AuthShell

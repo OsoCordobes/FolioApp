@@ -10,9 +10,11 @@
  */
 
 import { captureException } from "@sentry/nextjs";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { getAppUrl } from "@/lib/config/app-url";
+import { formatResetMessage, limitByIp, limitByKey } from "@/lib/security/rate-limit";
 import {
   createSupabaseServerClient,
   createSupabaseServiceClient,
@@ -21,6 +23,12 @@ import {
 export interface AuthResult {
   ok: boolean;
   error?: string;
+  /**
+   * Código machine-readable opcional para que la UI ramifique sin regex
+   * sobre el mensaje (ítem 1.5: "email_not_confirmed" muestra el botón de
+   * reenviar link).
+   */
+  code?: string;
 }
 
 export async function signInWithPassword(
@@ -42,6 +50,18 @@ export async function signInWithPassword(
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
+    // Ítem 1.5: cuenta creada con "Confirm email" ON que todavía no confirmó.
+    // GoTrue ya distingue este caso en su propio error ("Email not confirmed"),
+    // así que mapearlo no agrega enumeración que GoTrue no filtre igual —
+    // decisión consciente pro-UX (spec 1.5, riesgo #4). La UI muestra un
+    // botón "Reenviar link" cuando code === "email_not_confirmed".
+    if (/email not confirmed/i.test(error.message)) {
+      return {
+        ok: false,
+        error: "Tu email todavía no está confirmado. Revisá tu casilla o reenviá el link.",
+        code: "email_not_confirmed",
+      };
+    }
     // Default: generic error to avoid user enumeration ("no decir 'user not
     // found'"). Mantenemos ese default por seguridad.
     //
@@ -141,6 +161,57 @@ export async function requestPasswordReset(email: string): Promise<AuthResult> {
 }
 
 /**
+ * Ítem 1.5 · Reenvía el link de confirmación de signup SIN requerir sesión.
+ *
+ * Con "Confirm email" ON el user recién registrado NO tiene sesión hasta
+ * confirmar — el resend W9 (`requestEmailVerification`, que exige sesión)
+ * es inútil para él. Esta action cubre ese gap: la llama el CheckEmailPanel
+ * ("Revisá tu email") y el botón "Reenviar link" del login cuando la cuenta
+ * existe pero no está confirmada.
+ *
+ * Anti-enumeración: siempre devuelve `{ ok: true }` aunque Supabase falle o
+ * el email no exista/ya esté confirmado — el caller no puede distinguir.
+ * Abuso: rate-limit doble server-side (10/h por IP + 5/h por email) +
+ * cooldown de 60s por email propio de GoTrue como backstop + cooldown
+ * client-side del panel. Con Upstash sin provisionar (F0.4) los límites son
+ * fail-open por diseño (lib/security/rate-limit.ts).
+ */
+export async function resendSignupConfirmation(email: string): Promise<AuthResult> {
+  if (!email || !email.match(/^[^@\s]+@[^@\s]+\.[^@\s]+$/)) {
+    return { ok: false, error: "Email inválido." };
+  }
+
+  const reqHeaders = await headers();
+  const ipRaw = reqHeaders.get("x-forwarded-for") ?? reqHeaders.get("x-real-ip") ?? null;
+  const ip = ipRaw ? ipRaw.split(",")[0].trim() : null;
+  const ipLimit = await limitByIp("resend-confirm", ip, 10);
+  if (!ipLimit.ok) {
+    return {
+      ok: false,
+      error: `Demasiados reenvíos. ${formatResetMessage(ipLimit.resetIn)}`,
+    };
+  }
+  const emailLimit = await limitByKey("resend-confirm-email", email, 5);
+  if (!emailLimit.ok) {
+    return {
+      ok: false,
+      error: `Demasiados reenvíos. ${formatResetMessage(emailLimit.resetIn)}`,
+    };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const appUrl = getAppUrl();
+  await supabase.auth.resend({
+    type: "signup",
+    email,
+    options: { emailRedirectTo: `${appUrl}/api/auth/callback` },
+  });
+  // Uniforme incluso ante error de Supabase (anti-enumeración; GoTrue tiene
+  // su propio cooldown 60s/email como backstop del abuso).
+  return { ok: true };
+}
+
+/**
  * W9 · Resend the email-confirmation link for the current user.
  *
  * Background: signup currently uses `admin.createUser({ email_confirm: true })`
@@ -180,9 +251,24 @@ export async function requestEmailVerification(): Promise<AuthResult> {
     return { ok: false, error: "Tu cuenta no tiene email asociado." };
   }
 
+  // Ítem 1.5: rate-limit server-side (antes solo había cooldown client-side
+  // en sessionStorage del banner — trivialmente bypasseable). Mismo scope
+  // que resendSignupConfirmation para que ambos paths compartan la ventana.
+  const emailLimit = await limitByKey("resend-confirm-email", user.email, 5);
+  if (!emailLimit.ok) {
+    return {
+      ok: false,
+      error: `Demasiados reenvíos. ${formatResetMessage(emailLimit.resetIn)}`,
+    };
+  }
+
   const { error } = await supabase.auth.resend({
     type: "signup",
     email: user.email,
+    // Ítem 1.5: sin emailRedirectTo el link caía al Site URL default de
+    // Supabase; ahora aterriza en el callback que rutea según el estado del
+    // onboarding (mismo destino que el link original de signup).
+    options: { emailRedirectTo: `${getAppUrl()}/api/auth/callback` },
   });
   if (error) {
     // Generic message: don't expose Supabase rate-limit windows or internal

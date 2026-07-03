@@ -202,3 +202,40 @@ UTC−3). Si `CRON_SECRET` falta, todos devuelven 401 y no hacen nada.
 > gateado por `ACCOUNT_PURGE_ENABLED=1`** (no hay borrados solicitados todavía
 > y se quiere un trial en staging primero). Si se quiere activar: agregarlo a
 > `vercel.json` (sugerido diario 03:00 UTC) **y** setear `ACCOUNT_PURGE_ENABLED=1`.
+
+---
+
+## 7. F0.6 — Activar verificación de email en signup (procedimiento)
+
+El código (ítem 1.5) es **adaptativo**: el signup usa `supabase.auth.signUp`,
+así que con el toggle **Confirm email OFF** (estado actual) el flujo es el de
+siempre (autoconfirm, sesión inmediata, cero emails) y con **ON** el signup
+devuelve "Revisá tu email" y el onboarding se retoma tras confirmar
+(callback → `/onboarding` → consent → steps con autosave). **No hay deploy
+involucrado en el flip** — pero los 4 pasos van juntos, en este orden:
+
+1. **SMTP custom primero** (Supabase → Auth → SMTP Settings; Resend ya está
+   como proveedor de emails de la app). El email service built-in de Supabase
+   tiene cuota de ~2-4 mails/hora POR PROYECTO — con confirm ON y sin SMTP,
+   el signup queda inusable para todos.
+2. **Template "Confirm signup" → link SSR** (Supabase → Auth → Email
+   Templates): cambiar el href a
+   `{{ .SiteURL }}/api/auth/callback?token_hash={{ .TokenHash }}&type=signup`.
+   El default `{{ .ConfirmationURL }}` redirige con `?code=` (PKCE), que solo
+   canjea en el **mismo browser** que inició el signup (cookie
+   `code_verifier`) — un user que se registra en el celular y abre el mail en
+   la PC vería "link inválido". El callback soporta ambos formatos.
+3. **Redirect URLs allow-list** (Supabase → Auth → URL Configuration):
+   agregar la URL de prod + `/api/auth/callback` (y verificar que Site URL
+   apunte al dominio de prod).
+4. **Recién entonces** activar **Confirm email** (Auth → Sign In / Up →
+   Email). Verificar en el mismo panel que **Enable email signups** siga ON y
+   que **Captcha protection de Supabase Auth** siga OFF (nuestro Turnstile es
+   app-side; el token no se reenvía a GoTrue — activar el captcha de Supabase
+   rompería el signup server-side).
+
+Smoke post-flip: signup nuevo ⇒ pantalla "Revisá tu email" + mail recibido ⇒
+click en el link desde OTRO browser ⇒ aterriza en `/onboarding` (consent) y
+el wizard continúa. Login con cuenta sin confirmar ⇒ mensaje + botón
+"Reenviar link". Rollback: apagar Confirm email — el signup vuelve al flujo
+autoconfirm sin tocar código.

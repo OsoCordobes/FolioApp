@@ -21,25 +21,15 @@
  * (/onboarding) que el flow original chequeaba con un query extra inútil.
  */
 
+import type { EmailOtpType } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 
+// mapAuthError vivía acá; se extrajo a lib/auth/auth-error-map.ts (ítem 1.5)
+// para testearlo con node:test y sumarle los errores de links de email
+// (otp_expired / token has expired).
+import { mapAuthError, parseAuthCallbackError } from "@/lib/auth/auth-error-map";
 import { safeRedirect } from "@/lib/security/safe-redirect";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-
-/**
- * Mapea errores de Supabase OAuth exchange a códigos amigables.
- * El loginPage muestra el código tal cual; cualquier cosa fuera del catálogo
- * cae a "oauth_failed" para no leak internals (rate-limit windows, internal
- * IDs, hints) al URL público.
- */
-function mapAuthError(message: string): string {
-  const lower = message.toLowerCase();
-  if (lower.includes("rate limit") || lower.includes("too many")) return "rate_limited";
-  if (lower.includes("expired") || lower.includes("invalid_grant")) return "code_expired";
-  if (lower.includes("network") || lower.includes("timeout")) return "network";
-  if (lower.includes("invalid") && lower.includes("code")) return "code_invalid";
-  return "oauth_failed";
-}
 
 interface MemberWithOrg {
   organization_id: string | null;
@@ -51,8 +41,38 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get("code");
   const redirectTo = searchParams.get("redirect") ?? null;
 
+  // Ítem 1.5 (a): GoTrue redirige con ?error=...&error_code=otp_expired (sin
+  // code ni token_hash) cuando el link de email venció o ya fue usado. Cortar
+  // acá con código amigable — sin esto caía al redirect genérico a /login.
+  const callbackErr = parseAuthCallbackError(searchParams);
+  if (callbackErr) {
+    return NextResponse.redirect(`${origin}/login?error=${encodeURIComponent(callbackErr)}`);
+  }
+
+  const supabase = await createSupabaseServerClient();
+
+  // Ítem 1.5 (b): template SSR de confirmación — ?token_hash=...&type=signup.
+  // A diferencia del flujo PKCE (?code=), verifyOtp NO depende de la cookie
+  // code_verifier del browser que inició el signup ⇒ funciona cross-device
+  // (registrarse en el celular, abrir el mail en la PC). Requiere que F0.6
+  // cambie el template "Confirm signup" a {{ .TokenHash }} (ver
+  // docs/LAUNCH-RUNBOOK.md §7); mientras tanto el default {{ .ConfirmationURL }}
+  // sigue entrando por el branch ?code= de abajo.
+  const tokenHash = searchParams.get("token_hash");
+  const type = searchParams.get("type");
+  if (tokenHash && type) {
+    const { error } = await supabase.auth.verifyOtp({
+      token_hash: tokenHash,
+      type: type as EmailOtpType,
+    });
+    if (error) {
+      return NextResponse.redirect(
+        `${origin}/login?error=${encodeURIComponent(mapAuthError(error.message))}`,
+      );
+    }
+  }
+
   if (code) {
-    const supabase = await createSupabaseServerClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (error) {
       // Sanitize error: Supabase error.message can leak internals (rate-limit
@@ -64,7 +84,6 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const supabase = await createSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
