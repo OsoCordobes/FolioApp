@@ -6,9 +6,15 @@
  *   - `limitByUser(scope, userId, ...)`: limit por user authenticated.
  *   - `limitByOrg(scope, orgId, ...)`: limit por org (analytics queries).
  *
- * Algoritmo: sliding window con `INCR` + `EXPIRE`. Si Upstash no está
- * configurado (dev), retorna `{ ok: true, remaining: Infinity }` para no
- * romper el flow local. En producción la falta de env vars hace `ok: false`.
+ * Algoritmo: sliding window con `INCR` + `EXPIRE`. Matriz ante fallo (la
+ * versión completa vive en el catch de `rateLimit`):
+ *   - Keys AUSENTES: fail-open (`ok: true`, `remaining: options.maxRequests`).
+ *     En producción loguea un console.error UNA vez por proceso;
+ *     UPSTASH_FAIL_CLOSED="true" fuerza fail-closed.
+ *   - Keys PRESENTES pero Upstash falla (HTTP/red/timeout): fail-CLOSED en
+ *     producción (`ok: false`), salvo UPSTASH_FAIL_CLOSED="false" (escape
+ *     hatch fail-open).
+ *   - Fuera de producción: siempre fail-open.
  *
  * Env vars (Upstash dashboard → REST URL & Token):
  *   - UPSTASH_REDIS_REST_URL
@@ -40,6 +46,9 @@ async function upstashCommand(args: (string | number)[]): Promise<unknown> {
     },
     body: JSON.stringify(args),
     cache: "no-store",
+    // Un Upstash colgado no debe colgar la server action: el timeout convierte
+    // el cuelgue en un error catcheable (branch (b) del catch de rateLimit).
+    signal: AbortSignal.timeout(2000),
   });
   if (!res.ok) {
     throw new Error(`upstash HTTP ${res.status}: ${await res.text()}`);
@@ -47,6 +56,15 @@ async function upstashCommand(args: (string | number)[]): Promise<unknown> {
   const data = (await res.json()) as UpstashCommandResponse;
   if (data.error) throw new Error(`upstash error: ${data.error}`);
   return data.result;
+}
+
+const isProd = () => process.env.NODE_ENV === "production";
+
+let warnedMissingEnvs = false;
+
+/** Solo para tests: resetea el estado de log-once. */
+export function __resetRateLimitLogState() {
+  warnedMissingEnvs = false;
 }
 
 /**
@@ -71,48 +89,50 @@ export async function rateLimit(
       resetIn: typeof ttl === "number" && ttl > 0 ? ttl : options.windowSec,
     };
   } catch (e) {
-    // ─── upstash_not_configured ────────────────────────────────────────────
-    // Triggered when UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN is
-    // missing at request time. Behavior is gated by `UPSTASH_FAIL_CLOSED`:
+    // ─── Matriz de fallo (gateada por UPSTASH_FAIL_CLOSED) ────────────────
     //
-    //   - Default (env unset, or "false"): fail-open with a loud warning in
-    //     production. This preserves availability during the demo phase
-    //     while Upstash is being provisioned. Earlier history: fail-closed
-    //     here bricked signups in production because Upstash was never
-    //     wired (audit 2026-05-25 + hotfix f69cd1b).
+    //   Situación (en producción)        | unset (default) | "true"  | "false"
+    //   keys AUSENTES (not_configured)   | open + error 1× | CLOSED  | open
+    //   keys PRESENTES + Upstash falla   | CLOSED          | CLOSED  | open
     //
-    //   - UPSTASH_FAIL_CLOSED=true: fail-closed in production. Operators
-    //     should flip this AFTER Upstash is provisioned and the /api/health
-    //     `integrations.upstash_redis` flag reads true. From that point on
-    //     this branch is unreachable in normal operation — if it ever fires,
-    //     someone removed the keys, and we want to fail-closed to avoid a
-    //     silent regression of the rate-limit defense. The captured exception
-    //     pages on-call (assuming Sentry is wired).
+    // Fuera de producción: siempre fail-open (dev/test no se endurecen).
     //
-    // This dual mode lets the code merge today (safe defaults) and lets the
-    // operator opt into fail-closed AFTER Upstash + Sentry are verified
-    // live, with a single env flip and no code change.
+    //   - unset: default por situación. Keys ausentes → fail-open (F0.4
+    //     pendiente: Upstash puede no estar provisionado en prod; fail-closed
+    //     acá brickeó signups — audit 2026-05-25 + hotfix f69cd1b), con un
+    //     console.error una vez por proceso para visibilidad en Vercel logs.
+    //     Keys presentes + error → fail-CLOSED: la infra existe; que falle no
+    //     debe apagar la defensa en silencio.
+    //   - "true": fail-closed también con keys ausentes. Flip recién cuando
+    //     /api/health reporte integrations.upstash_redis=true.
+    //   - "false": escape hatch operativo — fail-open total ante un incidente
+    //     de Upstash que esté denegando booking/signup (env flip, sin deploy).
     if (e instanceof Error && e.message === "upstash_not_configured") {
-      const failClosed =
-        process.env.NODE_ENV === "production" &&
-        process.env.UPSTASH_FAIL_CLOSED === "true";
-      if (failClosed) {
+      // (a) Envs AUSENTES. Default: fail-open (F0.4 pendiente — Upstash puede
+      // no estar provisionado en prod). UPSTASH_FAIL_CLOSED="true" fuerza closed.
+      if (isProd() && process.env.UPSTASH_FAIL_CLOSED === "true") {
         console.error(
-          `[rate-limit] Upstash keys missing in production AND UPSTASH_FAIL_CLOSED=true — failing closed for scope="${scope}". Restore UPSTASH_REDIS_REST_URL/TOKEN or unset UPSTASH_FAIL_CLOSED.`,
+          `[rate-limit] Upstash keys ausentes en producción con UPSTASH_FAIL_CLOSED=true — fail-closed para scope="${scope}".`,
         );
         return { ok: false, remaining: 0, resetIn: options.windowSec };
       }
-      if (process.env.NODE_ENV === "production") {
-        console.warn(
-          `[rate-limit] Upstash no configurado en producción — fail-open para scope="${scope}". Configurar UPSTASH_REDIS_REST_URL/TOKEN y setear UPSTASH_FAIL_CLOSED=true para defensa completa.`,
+      if (isProd() && !warnedMissingEnvs) {
+        warnedMissingEnvs = true;
+        console.error(
+          `[rate-limit] UPSTASH_REDIS_REST_URL/TOKEN ausentes en producción — rate limiting DESACTIVADO (fail-open). Provisionar Upstash (F0.4) cuanto antes.`,
         );
       }
       return { ok: true, remaining: options.maxRequests, resetIn: 0 };
     }
-    // Cualquier otro error: log + fail-open (preferimos disponibilidad sobre
-    // bloqueo cuando Upstash mismo está caído — Upstash dropping connections
-    // shouldn't take signup down). Sentry capturará en F11.
-    console.error("[rate-limit] error", e);
+    // (b) Envs PRESENTES pero Upstash tiró error/timeout. NUEVO default en prod:
+    // fail-closed (la infra existe; que falle no debe apagar la defensa en
+    // silencio). Escape hatch operativo: UPSTASH_FAIL_CLOSED="false" fuerza
+    // fail-open. Nota: el AbortError/TimeoutError de AbortSignal.timeout cae
+    // acá (no matchea el message del branch (a)).
+    console.error(`[rate-limit] Upstash error para scope="${scope}"`, e);
+    if (isProd() && process.env.UPSTASH_FAIL_CLOSED !== "false") {
+      return { ok: false, remaining: 0, resetIn: options.windowSec };
+    }
     return { ok: true, remaining: 0, resetIn: 0 };
   }
 }
