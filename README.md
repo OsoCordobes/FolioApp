@@ -1,10 +1,10 @@
 # Folio
 
-SaaS vertical para gestión de turnos, agenda clínica y finanzas para profesionales independientes de la salud en Argentina (quiropraxia, kinesiología, fonoaudiología, psicología, nutrición, terapia ocupacional, fono).
+SaaS vertical para gestión de turnos, agenda clínica y finanzas para profesionales independientes de la salud en Argentina (hoy: quiropraxia, cardiología y psicología — registry extensible en `lib/especialidades/`).
 
 Multi-tenant + clinic-ready desde día 1. Cumple Ley 25.326 (Habeas Data) y Ley 26.529 (Historia Clínica AR). Encriptación columnar AES-256-GCM app-side con blind indexes HMAC-SHA256.
 
-> **Estado canónico del proyecto:** [`docs/audit/pre-audit-self-assessment.md`](./docs/audit/pre-audit-self-assessment.md). Este README es entrada al repo; el assessment es la fuente de verdad de qué cumple Folio hoy.
+> **Snapshot pre-audit (2026-05-21):** [`docs/audit/pre-audit-self-assessment.md`](./docs/audit/pre-audit-self-assessment.md). El estado VIVO de gaps y excepciones es [`docs/audit/known-gaps.md`](./docs/audit/known-gaps.md).
 
 ## Stack
 
@@ -34,7 +34,7 @@ Las envs críticas (sin las cuales el server hace hard-fail al boot via `instrum
 | `FOLIO_ENC_KEY` | `openssl rand -base64 32` | sí |
 | `FOLIO_ENC_HMAC_KEY` | `openssl rand -base64 32` | sí |
 | `CRON_SECRET` | `openssl rand -base64 32` | runtime — los crons fallan sin él |
-| `UPSTASH_REDIS_REST_URL` / `_TOKEN` | Upstash dashboard | runtime — signup fail-closed sin él |
+| `UPSTASH_REDIS_REST_URL` / `_TOKEN` | Upstash dashboard | runtime — sin él el rate-limit es **fail-open** en prod (fail-closed solo con `UPSTASH_FAIL_CLOSED=true`); con las keys presentes pero Upstash caído, el default en prod es fail-closed |
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` | Cloudflare Turnstile dashboard | runtime — sin él el captcha es no-op (dev OK, prod riesgo) |
 | `MP_ACCESS_TOKEN` / `MP_WEBHOOK_SECRET` | MercadoPago Developers panel | runtime — billing roto sin él |
 | `WHATSAPP_*` | Meta WhatsApp Business | runtime — recordatorios fail sin él |
@@ -68,24 +68,24 @@ El plan maestro original (`docs/superpowers/plans/...`) divide el trabajo en 12 
 - [x] **F2** Migrations M01–M35 (schema + RLS `FORCE`d + encriptación columnar + audit + pseudonimización)
 - [x] **F3** Auth + multi-tenancy + onboarding wizard 9 pasos
 - [x] **F4** Data layer + Server Actions (split PII/PHI)
-- [x] **F5** Google Calendar bidireccional (one-way push + OAuth + watch-renew)
+- [x] **F5** Google Calendar (OAuth + push Folio→Google + inbound Google→Folio como bloqueos espejo, `lib/google/inbound.ts` + watch-renew)
 - [x] **F6** WhatsApp Cloud API (inbound webhook + signed)
 - [x] **F7** Booking público con Turnstile
 - [x] **F8** Analytics anonimizada (k-anonymity + materialized views)
 - [x] **F9** Cron jobs (recordatorios + analytics refresh + Google watch renew + maintenance)
 - [x] **F10** Compliance (consentimientos + audit_log particionado + ARCO data rights + AFIP WSFEv1)
-- [x] **F11** Polish + observability (Sentry + PostHog + hard-fail al boot + rate limiting fail-closed)
+- [x] **F11** Polish + observability (Sentry + PostHog + hard-fail al boot + rate limiting vía Upstash — matriz de falla en `lib/security/rate-limit.ts`; fail-open sin Upstash, ver M3 en LAUNCH-RUNBOOK §5)
 - [x] **Audit-prep sprint** (mayo 2026) — M22 RLS hardening, M24 account deletion, M25 pseudo audit, cookie banner, CSP, deploy checklist
 - [x] **Post-audit Sprint 0** (2026-05-24) — gates duales en endpoints admin (C1, C3), CSP enforcing (C2), paginated user lookup (A3), rate limit calibrado (A4)
-- [ ] **F12** UI específica de Clínicas (selector multi-profesional, dashboard del Director, splits de comisión) — backlog post-MVP, schema ya lo soporta
+- [x] **F12 (parcial)** UI Clínicas — equipo/roles/invitaciones (M49/M51), selector multi-profesional en calendario y alta de turno; pendiente: splits de comisión
 - [ ] **Sprint 1** post-audit (en curso) — README, 404/500 styled, HMAC salt per-tenant (A2), 1.6 olvidé email, audit cleanup
-- [ ] **Sprint 2** post-audit — auth callback consolidation, PostHog events tipados, pgTAP CI, bundle reduction, Prisma cleanup
+- [x] **Sprint 2 (parcial)** post-audit — auth callback perf, PostHog events tipados (`lib/observability/events.ts`), pgTAP CI (`.github/workflows/pgtap.yml`), Prisma cleanup (commit 06df9fe); pendiente: bundle reduction
 
-Plan ultra-detallado en uso por el agente: `C:\Users\amiun\.claude\plans\si-hagamaos-un-plan-dazzling-wirth.md`.
-
-## Migrations (M01–M35)
+## Migrations (M01–M35 · fundación)
 
 Aplican en orden lexicográfico. Todas con RLS `FORCE`d en la misma migration que crea la tabla (regla inviolable #4). Header de cada SQL documenta propósito + dependencias + reversibilidad.
+
+Desde M36 en adelante (hardening, multi-especialidad M50/M55, clínica M49/M51, booking M53, pseudonimización M61/M63, ...) la lista completa vive en `supabase/migrations/`; el diff canónico contra prod se controla con `scripts/diff-migrations.mjs`.
 
 | ID | Propósito |
 |---|---|
@@ -139,9 +139,9 @@ Folio implementa los mecanismos exigidos por la legislación argentina de protec
 
 ## Pixel-perfect (regla inviolable)
 
-El diseño viene del prototipo Claude Design en `C:\Users\amiun\Desktop\Folio\` y es **intocable**. `folio.css` (~12k líneas) se sirve byte-perfect como static asset desde `/public/folio.css`.
+El diseño nació del prototipo Claude Design. `folio.css` (~17.7k líneas) es hecho a mano, se sirve como static asset desde `/public/folio.css` y evoluciona con el producto; los cambios reusan los tokens de `:root` (no hex off-theme).
 
-Cada PR/commit corre `pnpm test:visual` y compara contra los baselines de los 10 HTML originales. Cualquier diff > 0.1% bloquea merge.
+La suite visual (`pnpm test:visual`) compara contra baselines y se corre manualmente; el CI de PRs corre typecheck + lint + unit (`.github/workflows/app-ci.yml`).
 
 Baselines: `tests/visual/baseline.spec.ts-snapshots/` (PNGs light/dark a 1440×900).
 
@@ -154,7 +154,7 @@ Health: https://folio-app-ten.vercel.app/api/health (público, sin auth, safe)
 
 ## Reglas inviolables
 
-1. NO tocar `folio.css` (intacto desde el prototipo). Pixel-perfect rules.
+1. `folio.css` se edita SOLO reusando tokens de `:root`; no introducir hex off-theme. Los baselines visuales se regeneran únicamente con cambio legítimo.
 2. NO emojis en código, commits ni archivos productivos.
 3. Una tarea a la vez, premium standard antes de avanzar.
 4. RLS habilitada (y `FORCE`d) en la misma migration que crea cada tabla. Nunca activar a posteriori.

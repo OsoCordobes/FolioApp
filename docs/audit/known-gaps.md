@@ -12,54 +12,39 @@ Tracked here so auditors see explicit ownership + planned remediation. Each entr
 
 ## Deferred to post-audit (DEFER)
 
-### Turno CRUD UI surface · CREATE + REAGENDAR
-
-- **Status**: state-machine + server actions in place (`lib/db/turnos.ts` `createTurno`, `transitionTurno`); the **interactive UI** for creating a turno from `/hoy` or `/calendario` (modal: paciente picker, servicio, datetime) is deferred. **CANCEL** ships in Phase 5 (button on every non-terminal row, audit-logged via the M12 trigger).
-- **Mitigation during audit window**:
-  - Founder Lautaro creates turnos manually via `/admin/migrate`-style scripts or directly in Supabase Studio.
-  - Existing patients book through `/book/<slug>` (public booking flow F7).
-  - Auditors verify the audit_log captures every state transition correctly via `/admin/audit`.
-- **Closes in**: post-audit Week 1, separate UI sprint. Scope: modal-driven CREATE form + REAGENDAR modal + paciente typeahead by `nombre_hash`.
-
 ### Sesion_enmienda UI
 
-- **Status**: table + RLS + append-only triggers exist (M10). No UI to record an enmienda from `/focus/[turnoId]` or `/pacientes/[id]`.
+- **Status**: table + RLS + append-only triggers exist (M10), y el data layer también (`lib/db/sesiones.ts`). No UI to record an enmienda desde la ficha del paciente (`/pacientes/[id]`). (La ruta demo `/focus` fue eliminada del producto — commit f292b9c.)
 - **Mitigation**: during the audit window, clinicians use the `sesion` editor pre-lock. Post-lock corrections are paused (rare in 2-week window).
 - **Closes in**: post-audit Week 2.
 
 ### WhatsApp outbound compose UI
 
 - **Status**: inbound webhook works (M18 + `/api/whatsapp/webhook`). No UI to compose + send outbound templates.
-- **Mitigation**: reminders ship via the cron-job pipeline (`recordatorio_job` table); manual compose is deferred.
+- **Mitigation**: reminders YA corren vía el pipeline de cron (`/api/cron/dispatch-recordatorios`, registrado en `vercel.json` y disparado cada 15 min por GitHub Actions — ver LAUNCH-RUNBOOK §6); para contacto manual hay deep-links wa.me (`components/paciente/paciente-detalle.tsx` `PacienteWhatsAppButton`). Compose de templates desde la UI sigue deferred.
 - **Closes in**: F11 of the canonical plan.
 
 ### Google Calendar bidirectional sync · conflict resolution
 
-- **Status**: OAuth + watch-renew exist. One-way push from Folio → Google works (turno create writes `gcal_event_id`). The reverse (Google → Folio) is partially wired but conflict resolution (turno deleted in Google: what does Folio do?) is undefined.
-- **Mitigation**: integration ships in one-way mode for the audit window. Auditor sees a known-limitation note in `docs/audit/known-gaps.md` referencing this entry.
+- **Status**: OAuth + watch-renew + push Folio→Google funcionan. El inbound Google→Folio está implementado (`lib/google/inbound.ts`): los eventos ocupados de Google se espejan como `bloqueo` origen='google' (ventana 30 días, reconciliación por `gcal_event_id`, M52); los eventos creados por Folio se excluyen del espejo. La política de conflicto quedó DEFINIDA por diseño: el sync inbound nunca modifica turnos — un turno de Folio borrado en Google permanece intacto en Folio (fail-safe).
+- **Mitigation**: no hay two-way sync de turnos (borrar/mover en Google no reagenda en Folio) — by design. Auditor sees a known-limitation note in `docs/audit/known-gaps.md` referencing this entry.
 - **Closes in**: F10 of the canonical plan.
 
 ### Email fallback for turno reminders
 
-- **Status**: Resend env vars present in `.env.local.example`, no integration code.
-- **Mitigation**: reminders use WhatsApp only. Pacientes without WhatsApp get an SMS-stub or fall through silently. Documented as known limitation in `/configuracion/billing` help text.
+- **Status**: la integración Resend existe (`lib/email/client.ts` + templates de invitación de equipo y confirmación de booking; fail-safe a log sin API key). Lo pendiente es específicamente el fallback de email en el pipeline de RECORDATORIOS: `/api/cron/dispatch-recordatorios` es WhatsApp-only.
+- **Mitigation**: reminders use WhatsApp only. Pacientes without WhatsApp fall through silently (no hay SMS). Documented as known limitation in `/configuracion/billing` help text.
 - **Closes in**: F11.
-
-### AFIP WSFEv1 invoicing
-
-- **Status**: Migration M11 has `certificado_arca_cifrado` column on org. No code path uses it. Per canonical plan, F12.
-- **Mitigation**: Folio does not issue facturas during the audit window. Manual invoicing through external software.
-- **Closes in**: F12 (post-MVP, ~5-7 days after launch).
 
 ### F12 · Multi-tenant clinic UI
 
-- **Status**: schema + RLS clinic-ready since day 1 (per canonical plan §2.4bis). UI for clinic-specific role hierarchy (DIRECTOR view of multiple PROFESIONALes) deferred.
-- **Mitigation**: first cohort of paying clients are 1-professional consultorios. Clinic-mode is F12.
-- **Closes in**: F12.
+- **Status**: UI de clínica operativa: sección Equipo (roles DIRECTOR/PROFESIONAL/ASISTENTE, invitaciones M49/M51 — `components/configuracion/configuracion.tsx` + `app/(public)/invitacion/[token]`), selector multi-profesional en calendario (`components/calendario/calendario.tsx`) y en alta de turno (CLINICA-3, `components/hoy/turno-create-modal.tsx`), billing por seats (`lib/billing/pricing.ts`). Pendiente del scope F12 original: splits de comisión por profesional.
+- **Mitigation**: first cohort of paying clients are 1-professional consultorios; los splits de comisión se liquidan fuera de Folio mientras tanto.
+- **Closes in**: post-MVP (solo comisiones quedan pendientes).
 
 ### Patient clinical consent UI (Phase 6c · clinical signature)
 
-- **Status**: `consentimiento` table exists (M07) with append-only triggers. No UI to capture canvas signature before SOAP entry.
+- **Status**: `consentimiento` table (M07) + data layer completo (`lib/db/consentimientos.ts`: create/revoke, path de firma en Storage, inmutabilidad por trigger). Falta exclusivamente la UI que capture la firma canvas y llame a `createConsentimiento` (0 callers hoy).
 - **Mitigation during audit window**:
   - A text-only consent checkbox is captured at first SOAP write (planned for Phase 6b; if 6c slips entirely, this falls back to a manual `consentimiento` row inserted by Lautaro on first contact).
   - Auditors are told the canvas-signature flow ships in post-audit Week 1.
@@ -68,7 +53,7 @@ Tracked here so auditors see explicit ownership + planned remediation. Each entr
 
 ### PostHog full instrumentation beyond business events
 
-- **Status**: `FolioPostHogProvider` set up. Phase 8 wires `signup`, `turno_created`, `turno_state_changed`, `sesion_signed`, `subscription_started` events.
+- **Status**: catálogo tipado de business events en `lib/observability/events.ts` (Sprint 2 T2.2) + funnel de landing gateado por cookie consent. Wired hoy: `paciente.created`, `booking_public.completed`, `landing.*`. Definidos sin call sites aún: `signup.completed`, `onboarding.completed`, `turno.created`, `turno.closed`, `soap.autosaved`, `documento.uploaded`.
 - **Mitigation**: zero analytics during audit window is acceptable (no public users yet); Sentry handles error events.
 - **Closes in**: Phase 8 of this sprint + ongoing.
 
@@ -103,13 +88,12 @@ These are accepted by-design choices, defensible at audit. Full rationale lives 
 
 ### `audit_log` partition retention enforcement
 
-- **Status**: 10-year retention is a Ley 26.529 obligation. No automated cron yet to archive partitions older than 120 months to `audit-archive` Storage bucket. Phase 7 designs the cron; if it doesn't ship by Day 12, the operational procedure is documented + manual.
+- **Status**: 10-year retention is a Ley 26.529 obligation. No automated cron yet to archive partitions older than 120 months to `audit-archive` Storage bucket (la CREACIÓN de particiones futuras sí está automatizada: cron mensual `/api/cron/maintenance` en `vercel.json` → `audit_log_run_maintenance(6)`); el archival sigue siendo procedimiento manual documentado en `retention.md`.
 - **Mitigation**: at current volumes (4 auth users), `audit_log` will not reach the 10-year boundary for several years. Manual archival in 2027+ is acceptable interim.
 
 ### Pseudonimización audit trail (DNI SHA-256 preservation)
 
-- **Status**: Phase 7 adds `pseudonimizacion_event` table to preserve a SHA-256 hash of the original DNI for dispute resolution. Until landed, pseudonymization deletes `paciente_identidad` fully.
-- **Mitigation**: no pseudonymizations have run yet (zero paying clients during audit window).
+- **Status**: Landed — M25 (`supabase/migrations/20260521000025_M25_pseudonimizacion_audit.sql`) crea `pseudonimizacion_event` con el SHA-256 del DNI original; integrado al flujo de pseudonimización (M61/M63).
 
 ---
 
@@ -131,6 +115,8 @@ These are accepted by-design choices, defensible at audit. Full rationale lives 
 | H6 integration RLS | n/a | Pre-existing (FP from Explore) — already in M11 |
 | H7 consentimiento DELETE prevention | n/a | Pre-existing (FP from Explore) — already in M07 |
 | Phase 5 turno CANCEL UI | 5 | Closed — explicit cancel button on every non-terminal turno row, audit_log captures the UPDATE via the M12 trigger |
+| Turno CREATE + REAGENDAR UI | post-audit | Closed — `components/hoy/turno-create-modal.tsx` (typeahead paciente + picker profesional CLINICA-3) + `turno-reagendar-modal.tsx`; server actions en `app/(app)/hoy/actions.ts` |
+| AFIP WSFEv1 invoicing | post-MVP | Closed — `lib/afip/wsfev1.ts` + `lib/afip/comprobantes.ts` usan `organization.certificado_arca_cifrado`; emisión desde `app/(app)/finanzas/actions.ts`; `AFIP_ENV` selecciona homologación/producción |
 
 ---
 

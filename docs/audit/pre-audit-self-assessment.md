@@ -1,5 +1,7 @@
 # Folio · Pre-Audit Self-Assessment
 
+> **Documento histórico — snapshot 2026-05-21 (pre-audit).** Varias afirmaciones de estado (turno CREATE UI, PostHog events, clinical-signature) fueron cerradas o avanzadas después; el estado vigente vive en [`known-gaps.md`](./known-gaps.md).
+
 **Prepared for the external auditor team scanning Folio before paying medical clients (kinesiologists, psychologists, nutritionists) begin writing clinical records.**
 
 **Scope of regulation**: Argentine **Ley 25.326 (Habeas Data)** + **Ley 26.529 (informed consent + 10-year clinical retention)** + **Ley 26.743 (gender identity in healthcare records)**.

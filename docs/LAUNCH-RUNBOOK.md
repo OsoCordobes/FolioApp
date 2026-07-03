@@ -26,7 +26,7 @@ funciona; **DEGRADA** = sigue andando con capacidad reducida.
 | `SUPABASE_SERVICE_ROLE_KEY` | Cliente service-role (BYPASSRLS) para ops privilegiadas, crones, health. | **ROMPE** — `requireEnv` tira en `lib/supabase/server.ts`; crones, health-check DB, onboarding, webhooks caen. |
 | `FOLIO_ENC_KEY` | AES-256-GCM de columnas `*_cifrado` (PII/PHI app-side). 32 bytes base64. | **ROMPE** — toda lectura/escritura de PII/PHI cifrada tira; `/api/health` reporta `checks.env.ok=false` → 503. |
 | `FOLIO_ENC_HMAC_KEY` | HMAC-SHA256 de blind indexes (`nombre_hash`/`dni_hash`/`telefono`). 32 bytes base64. | **ROMPE** — búsqueda por nombre/DNI/teléfono y alta de paciente fallan al derivar el índice. |
-| `NEXT_PUBLIC_APP_URL` | URL canónica (`https://...`). Back-URLs de MP, links de invitación, password-reset. | **DEGRADA fuerte** — hay fallback a `VERCEL_URL` y por último `localhost:3010`; sin setearla, los links de invitación/reset y el back de MP pueden apuntar mal. Setearla a la URL real de prod. |
+| `NEXT_PUBLIC_APP_URL` | URL canónica (`https://...`). Back-URLs de MP, links de invitación, password-reset. Centralizada en `lib/config/app-url.ts` (`getAppUrl()`). | **DEGRADA** — sin setearla, el helper cae a `window.location.origin` en browser y, en server, a `VERCEL_PROJECT_PRODUCTION_URL` → `VERCEL_URL` → `localhost:3010`. Setearla igual a la URL real de prod para que los links generados server-side no dependan de las system envs de Vercel. |
 | `MP_ACCESS_TOKEN` | Token de Folio (merchant directo) para crear preapproval y resolver pagos. | **ROMPE billing** — `requireEnv` tira al activar suscripción o procesar webhook de cobro. |
 | `MP_WEBHOOK_SECRET` | Secreto de firma HMAC de los webhooks de MP. | **ROMPE activación** — en prod el webhook se rechaza sin firma válida → la suscripción nunca pasa a ACTIVA automáticamente. |
 | `CRON_SECRET` | Bearer que autentica los Vercel Crons. | **ROMPE crones** — todo `/api/cron/*` responde 401; recordatorios, reconciliación de billing, mantenimiento de particiones de `audit_log` y renovación de watches de Google no corren. |
@@ -45,16 +45,19 @@ funciona; **DEGRADA** = sigue andando con capacidad reducida.
 | `RESEND_API_KEY` | Envío real de emails (invitación de equipo, confirmación de turno). | **DEGRADA** — `sendEmail` loguea en vez de enviar (fail-safe). La UI da link copiable. **Recomendado setear** (ver §3). |
 | `EMAIL_FROM` | Remitente de los emails (Resend). | **DEGRADA** — sin remitente válido el envío de Resend falla aunque haya API key. |
 | `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | Backend del rate-limit (signup/login/booking/invitación). | **DEGRADA (riesgo)** — sin Upstash el rate-limit es **fail-open** en prod (M3). Mitigado parcialmente por Turnstile + rate-limits propios de Supabase Auth. **Recomendado provisionar** (ver §3). |
-| `UPSTASH_FAIL_CLOSED` | Opt-in: `=true` hace que la falta de Upstash en prod bloquee (fail-closed) en vez de fail-open. | Sin ella, default fail-open. Setear a `true` **solo después** de provisionar Upstash y verificar `/api/health`. |
+| `UPSTASH_FAIL_CLOSED` | Tri-state que gatea el modo de falla del rate-limit en prod (`lib/security/rate-limit.ts`). | Sin ella (default): keys AUSENTES → fail-open con `console.error` en logs; keys PRESENTES pero Upstash falla (HTTP/red/timeout) → **fail-closed**. `="true"`: fail-closed también con keys ausentes — setear **solo después** de provisionar Upstash y verificar `/api/health`. `="false"`: escape hatch fail-open total ante un incidente de Upstash. |
 | `PAYMENT_PROVIDER` | Selector del proveedor de pagos (`lib/payments`). | **DEGRADA nula** — default `mercadopago`. Dejar sin setear o en `mercadopago`. |
 | `MP_PLAN_PRICE_CENTS` | Precio del plan Solo (INDEPENDIENTE) en centavos. | **DEGRADA nula** — default 3.000.000 (30.000 ARS). |
 | `CLINIC_BASE_PRICE_CENTS` / `CLINIC_SEAT_PRICE_CENTS` | Pricing de tier Clínica (base + por seat) en centavos. | **DEGRADA nula** — defaults 10.000.000 / 2.500.000 (100k base + 25k por seat). |
 | `META_APP_SECRET` | Firma HMAC de webhooks de WhatsApp. | **DEGRADA/ROMPE WhatsApp** — en prod, sin él el webhook de WhatsApp se bloquea. Si no usás WhatsApp el día 1, no aplica. |
+| `WHATSAPP_ACCESS_TOKEN` / `WHATSAPP_PHONE_NUMBER_ID` | Envío outbound de templates de WhatsApp (recordatorios del cron). | **ROMPE recordatorios** — `lib/whatsapp/client.ts` hace `requireEnv` de ambas; sin ellas `dispatch-recordatorios` falla al enviar. `WHATSAPP_WEBHOOK_VERIFY_TOKEN` se necesita además para el handshake del webhook inbound. |
+| `ACCOUNT_PURGE_ENABLED` | Habilita el hard-delete del cron `account-purge`. | Sin `="1"`, el cron corre en modo listing-only (no borra nada). Setear recién después del trial en staging. |
 | `GOOGLE_OAUTH_CLIENT_ID` / `_SECRET` / `_REDIRECT_URI` | Integración Google Calendar (OAuth + sync). | **DEGRADA** — sin las tres, la conexión de Google Calendar no funciona; el resto de la app sí. |
 | `MP_PUBLIC_KEY` | Reservado para SDK frontend de MP (futuro). | Sin uso hoy. |
 | `SENTRY_DSN` | Fallback server/edge del DSN de Sentry. | **DEGRADA nula** — `NEXT_PUBLIC_SENTRY_DSN` ya cubre los tres runtimes. |
 | `SENTRY_AUTH_TOKEN` | Subida de source maps (build-time, plugin de Sentry). | **DEGRADA** — stack traces sin símbolos. El runtime NO lo lee. |
-| `NEXT_PUBLIC_POSTHOG_KEY` / `_HOST` | Analytics de producto (PostHog). | **DEGRADA** — sin métricas de producto; la app anda. |
+| `NEXT_PUBLIC_POSTHOG_KEY` / `_HOST` | Analytics de producto (PostHog, cliente browser). | **DEGRADA** — sin métricas de producto; la app anda. |
+| `POSTHOG_KEY` / `POSTHOG_HOST` | Business events SERVER-side (`lib/observability/posthog.ts` — `trackEvent.*`). `NEXT_PUBLIC_POSTHOG_KEY` solo cubre el cliente browser. | **DEGRADA** — sin `POSTHOG_KEY` los eventos server (`paciente.created`, `booking_public.completed`) son no-op silencioso. |
 | `AFIP_ENV` | `homologacion` | `produccion` para facturación AFIP. | **DEGRADA** — solo afecta facturación electrónica. |
 | `TZ` | Zona horaria del runtime (`America/Argentina/Cordoba`). | **DEGRADA** — fechas en UTC si no se setea; conviene fijarla. |
 
@@ -107,6 +110,7 @@ logs de Vercel/Sentry antes de continuar.
 
 Los route handlers pesados tienen `export const maxDuration = 60`:
 `mercadopago/webhook`, `me/export`, `cron/account-purge`, `google/callback`,
+`google/webhook`,
 más los crones (`maintenance`, `dispatch-recordatorios`, `reconcile-suscripciones`,
 `analytics/refresh`, `google-watch-renew`) y `admin/migrate` (300s).
 
@@ -174,7 +178,7 @@ mitigación vigente y plan de cierre post-launch.
 
 | Gap | Riesgo | Mitigación (vigente) | Cuándo se cierra |
 |-----|--------|----------------------|------------------|
-| **M3** — rate-limit fail-open sin Upstash | Brute-force/credential-stuffing en signup/login mientras no haya Upstash. | Turnstile obligatorio en prod + rate-limits propios de Supabase Auth. | Al provisionar Upstash + `UPSTASH_FAIL_CLOSED=true` (ver §3). Idealmente antes del go-live. |
+| **M3** — rate-limit fail-open sin Upstash | Brute-force/credential-stuffing en signup/login mientras no haya Upstash. | Turnstile obligatorio en prod + rate-limits propios de Supabase Auth. Además, desde a4ac36c (jul-2026), con Upstash **presente** pero fallando (HTTP/red/timeout 2 s) el default en prod ya es **fail-closed**; el fail-open queda acotado a keys ausentes. | Al provisionar Upstash + `UPSTASH_FAIL_CLOSED=true` (ver §3). Idealmente antes del go-live. |
 | **M4** — `signOut()` no revoca el JWT ya emitido | Si un JWT activo se filtra, sigue válido hasta expirar aunque el user cierre sesión. | `signOut()` usa scope global (revoca refresh tokens de todos los devices) + access token de **vida corta (1h)** → ventana de exposición acotada + RLS bloquea sin JWT válido. | Post-launch, si se requiere revocación inmediata: tabla de revocación / `session_version` en `profile` validado en `getActiveSession()`. |
 | **M8** — helpers `SECURITY DEFINER` ejecutables por `authenticated` vía RPC | Un user logueado podría llamar `user_org_ids`/`can_read_clinical` por `/rest/v1/rpc/*` y aprender su propio scope (info disclosure, NO datos de otros). | Las funciones filtran por `auth.uid()` → solo devuelven el scope del propio usuario; retornan tipos simples (bool/uuid/text), nunca filas. La app NO las invoca por RPC. En prod ya no las puede ejecutar `anon`/PUBLIC. | ⚠️ **NO revocar EXECUTE a `authenticated`** — las policies RLS evalúan estos helpers CON el rol del usuario que consulta; revocárselo rompería todos los chequeos RLS de la app (verificado en re-auditoría 2026-06-11). El cierre correcto es sacarlos de la superficie RPC de PostgREST (moverlos fuera del schema expuesto o filtrarlos en la config de la API), manteniendo EXECUTE para `authenticated`. `anon`/PUBLIC ya están revocados. Riesgo residual aceptado: un user autenticado solo aprende su propio scope. |
 | **M9** — `pg_trgm` / `btree_gist` en schema `public` | Higiene de seguridad: extensiones visibles/callable en `public`; sienta precedente para extensiones futuras peligrosas. | Extensiones no sensibles; las tablas que las usan requieren `auth.uid() IS NOT NULL`. Sin bypass de auth ni fuga de PHI. | Migración post-launch: mover a schema `extensions` dedicado. |
@@ -191,14 +195,16 @@ UTC−3). Si `CRON_SECRET` falta, todos devuelven 401 y no hacen nada.
 
 | Path | Schedule (UTC) | Qué hace | Criticidad |
 |------|----------------|----------|------------|
-| `/api/cron/dispatch-recordatorios` | `0 5 * * *` (02:00 AR) | Procesa la cola `recordatorio_job`: hidrata turno+paciente+org y manda el template de WhatsApp; marca enviado/reintenta. | Recordatorios de turno — degrada UX si no corre. |
+| `/api/cron/dispatch-recordatorios` | `0 5 * * *` (02:00 AR) | Procesa la cola `recordatorio_job`: hidrata turno+paciente+org y manda el template de WhatsApp; marca enviado/reintenta. **OJO**: además del cron diario de `vercel.json`, GitHub Actions lo dispara **cada 15 minutos** (`.github/workflows/dispatch-recordatorios.yml`) — el plan Hobby de Vercel rechaza schedules sub-diarios y la cola descarta jobs con >6h de atraso; el cron diario queda como backstop idempotente. Si la cuenta sube a Pro, mover `*/15` a `vercel.json` y borrar el workflow. Las invocaciones solapadas están mitigadas con un claim CAS antes de enviar (a8ca994): el solape queda acotado a ≤1 mensaje in-flight por job (el residual requiere lease con migración; diferido a propósito). | Recordatorios de turno — degrada UX si no corre. |
 | `/api/analytics/refresh` | `0 6 * * *` (03:00 AR) | `analytics.refresh_all(periodo)`: recalcula métricas mensuales + benchmarks + cache de insights del mes anterior. | Solo dashboards de analytics. |
 | `/api/cron/maintenance` | `0 3 1 * *` (1° de mes, 00:00 AR) | `audit_log_run_maintenance(6)`: crea las próximas particiones mensuales de `audit_log`. **Crítico a mediano plazo**: sin esto, a los ~12 meses los INSERT a tablas auditadas fallan (M28 deja una partición DEFAULT como red). | **Alta** (diferida) — la app se brickea sin particiones futuras. |
 | `/api/cron/google-watch-renew` | `0 7 * * *` (04:00 AR) | Renueva los watch channels de Google Calendar que expiran en <48h (Google los corta a los ~7 días). | Solo sync de Google Calendar. |
 | `/api/cron/reconcile-suscripciones` | `30 8 * * *` (05:30 AR) | Red de seguridad de billing (A2): para suscripciones en estado no terminal con `mp_preapproval_id`, hace GET preapproval contra MP y aplica el estado real; además corre `syncSubscriptionAmount` (repara PUTs de monto perdidos en Clínica). | **Alta** — repara divergencia local↔MP (cliente pagando sin acceso). |
+| `/api/cron/account-purge` | `0 3 * * *` (00:00 AR) | Purga ARCO: hard-delete de cuentas con baja solicitada hace >30 días. El borrado está gateado por `ACCOUNT_PURGE_ENABLED=1` — sin la env, el cron corre en modo **listing-only** y no borra nada (`route.ts`). | Media — sin la env es no-op de borrado. |
 
-> **No registrado en `vercel.json`**: `/api/cron/account-purge` (purga ARCO a
-> los 30 días). Existe el route con su auth, pero **no está en `crons[]` y está
-> gateado por `ACCOUNT_PURGE_ENABLED=1`** (no hay borrados solicitados todavía
-> y se quiere un trial en staging primero). Si se quiere activar: agregarlo a
+> `/api/cron/account-purge` **ya está registrado en `crons[]`** (diario
+> `0 3 * * *`), pero el hard-delete sigue gateado: sin `ACCOUNT_PURGE_ENABLED=1`
+> el endpoint solo lista candidatos y no borra nada — trial en staging
+> pendiente; para la purga real solo falta setear la env en Vercel Production.
+> La activación completa siempre fue doble: tenerlo en
 > `vercel.json` (sugerido diario 03:00 UTC) **y** setear `ACCOUNT_PURGE_ENABLED=1`.
