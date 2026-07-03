@@ -45,6 +45,24 @@ test("getAppUrl: env con trailing slash → lo stripea", () => {
   });
 });
 
+test("getAppUrl: env vacía → cae al fallback (caso vercel env pull con \"\")", () => {
+  withEnv({ NEXT_PUBLIC_APP_URL: "", VERCEL_PROJECT_PRODUCTION_URL: "folio-app-ten.vercel.app" }, () => {
+    assert.equal(getAppUrl(), "https://folio-app-ten.vercel.app");
+  });
+});
+
+test("getAppUrl: env solo whitespace → cae al fallback (new URL('   ') explota)", () => {
+  withEnv({ NEXT_PUBLIC_APP_URL: "   ", VERCEL_PROJECT_PRODUCTION_URL: "folio-app-ten.vercel.app" }, () => {
+    assert.equal(getAppUrl(), "https://folio-app-ten.vercel.app");
+  });
+});
+
+test("getAppUrl: env con espacios alrededor → la trimea (y el strip del slash aplica)", () => {
+  withEnv({ NEXT_PUBLIC_APP_URL: "  https://folio.app/  " }, () => {
+    assert.equal(getAppUrl(), "https://folio.app");
+  });
+});
+
 test("getAppUrl: sin env, con window → window.location.origin", () => {
   withEnv({}, () => {
     (globalThis as Record<string, unknown>).window = {
