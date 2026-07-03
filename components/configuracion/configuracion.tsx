@@ -34,6 +34,7 @@ import {
   setMostrarMatricula,
 } from "@/app/(app)/configuracion/perfil-publico-actions";
 import { roleLabel } from "@/lib/auth/capabilities";
+import { getAppUrl } from "@/lib/config/app-url";
 import type {
   CreateInvitationInput,
   InvitableRole,
@@ -616,7 +617,9 @@ function PublicLinkRow({ slug }: { slug: string }) {
   const [copied, setCopied] = useState(false);
   // Slug REAL de la org (organization.slug, pasado por el Server Component).
   // Antes se derivaba del nombre del consultorio y el link copiado era un 404.
-  const origin = typeof window !== "undefined" ? window.location.origin : "https://folio-app-ten.vercel.app";
+  // getAppUrl() prioriza NEXT_PUBLIC_APP_URL: el link copiado es el canónico
+  // (no el origin del preview) y SSR/browser renderizan lo mismo.
+  const origin = getAppUrl();
   const url = `${origin}/book/${slug}`;
   const display = url.replace(/^https?:\/\//, "");
 

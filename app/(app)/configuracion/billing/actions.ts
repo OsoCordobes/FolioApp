@@ -17,6 +17,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { getAppUrl } from "@/lib/config/app-url";
 import { getActiveContext } from "@/lib/db/active-context";
 import { err, ok, type Result } from "@/lib/db/errors";
 import {
@@ -26,15 +27,6 @@ import {
   syncSubscriptionAmount,
 } from "@/lib/db/suscripcion";
 import { getPaymentProvider } from "@/lib/payments";
-
-function appUrlFromEnv(): string {
-  const fromEnv = process.env.NEXT_PUBLIC_APP_URL;
-  if (fromEnv) return fromEnv.replace(/\/+$/, "");
-  // Fallback: en Vercel preview/prod podemos derivar del VERCEL_URL.
-  const vercel = process.env.VERCEL_URL;
-  if (vercel) return `https://${vercel}`;
-  return "http://localhost:3010";
-}
 
 /**
  * Inicia la activación: crea preapproval en MP y redirige al usuario al init_point.
@@ -51,7 +43,7 @@ export async function activateSubscriptionAction(): Promise<Result<{ initPoint: 
   const res = await createOrRenewPendingSubscription({
     organizationId: ctx.data.organization.id,
     payerEmail: ctx.data.profile.email,
-    appUrl: appUrlFromEnv(),
+    appUrl: getAppUrl(),
   });
   if (!res.ok) return res;
 

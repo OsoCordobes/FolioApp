@@ -23,6 +23,7 @@ import {
   PublicCard,
   type PublicCardData,
 } from "@/components/public-card/public-card";
+import { getAppHost } from "@/lib/config/app-url";
 
 export const ONB_TOTAL = 9;
 
@@ -39,15 +40,14 @@ interface StepShellProps {
   isFinal?: boolean;
   /** Datos para el <PublicCardLive />. Si no hay → no se muestra preview. */
   previewData?: PublicCardData;
-  /** URL base (folio-app-ten.vercel.app) para el link del preview. */
+  /** Host base (getAppHost(), sin protocolo) para el link del preview. */
   appUrl?: string;
   /** Slug actual de la org (sirve también para el link del preview). */
   slug?: string;
   children: ReactNode;
 }
 
-const APP_URL_DEFAULT =
-  typeof window !== "undefined" ? window.location.host : "folio-app-ten.vercel.app";
+const APP_URL_DEFAULT = getAppHost();
 
 export function StepShell({
   stepIdx,

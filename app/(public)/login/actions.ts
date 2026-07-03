@@ -12,6 +12,7 @@
 import { captureException } from "@sentry/nextjs";
 import { redirect } from "next/navigation";
 
+import { getAppUrl } from "@/lib/config/app-url";
 import {
   createSupabaseServerClient,
   createSupabaseServiceClient,
@@ -100,7 +101,7 @@ async function maybeProviderSpecificError(email: string): Promise<string | null>
 
 export async function signInWithGoogle(): Promise<AuthResult> {
   const supabase = await createSupabaseServerClient();
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3010";
+  const appUrl = getAppUrl();
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
@@ -124,7 +125,7 @@ export async function requestPasswordReset(email: string): Promise<AuthResult> {
   }
 
   const supabase = await createSupabaseServerClient();
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3010";
+  const appUrl = getAppUrl();
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
     // Phase 4 fix · /reset-password is the canonical landing.
     // /api/auth/reset stays as a 302 shim for any in-flight emails from

@@ -31,6 +31,7 @@ import { z } from "zod";
 
 import type { ProfesionalLite } from "@/lib/agenda/profesional";
 import { capabilitiesFor, type Role } from "@/lib/auth/capabilities";
+import { getAppUrl } from "@/lib/config/app-url";
 import { decryptColumn } from "@/lib/crypto";
 import {
   ESPECIALIDAD_SLUGS,
@@ -127,10 +128,6 @@ async function requireTeamManager(): Promise<Result<ActiveContext>> {
     return err("forbidden", "Solo dirección puede gestionar el equipo.");
   }
   return ctx;
-}
-
-function appUrl(): string {
-  return process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3010";
 }
 
 // ─── listMembers ───────────────────────────────────────────────────────────
@@ -635,7 +632,7 @@ export async function createInvitation(
       expiresAt: row.expires_at,
       createdAt: row.created_at,
     },
-    acceptUrl: `${appUrl()}/invitacion/${token}`,
+    acceptUrl: `${getAppUrl()}/invitacion/${token}`,
     organizationNombre: ctx.data.organization.nombre,
     organizationTimezone: ctx.data.organization.timezone || null,
     invitedByNombre,
