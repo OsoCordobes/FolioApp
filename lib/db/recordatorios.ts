@@ -7,9 +7,10 @@
  * evita duplicados.
  *
  * El dispatcher F9 (/api/cron/dispatch-recordatorios) levanta los `enviado_ts
- * IS NULL AND scheduled_ts <= now() AND intentos < 5` y los envía via
- * WhatsApp Cloud (templates aprobados en F6). Marca enviado_ts en éxito o
- * incrementa intentos + error_msg en falla.
+ * IS NULL AND scheduled_ts <= now() AND intentos < 5`, claimea cada job con
+ * un CAS sobre `intentos` (incrementa al INICIAR el intento — ver
+ * `decideClaimRecordatorio`) y los envía via WhatsApp Cloud (templates
+ * aprobados en F6). Marca enviado_ts en éxito o error_msg en falla.
  *
  * POST_VISITA se schedulea aparte: cuando un turno transiciona a CERRADO,
  * scheduled_ts = closed_ts + 2h.
@@ -20,6 +21,26 @@ import { createSupabaseServiceClient } from "@/lib/supabase/server";
 import { err, ok, type Result } from "./errors";
 
 type RecordatorioTipo = "CONFIRMACION_24H" | "RECORDATORIO_2H" | "POST_VISITA";
+
+/**
+ * Decisión pura del claim CAS del dispatcher (espejo de `decidePedidoCas`
+ * en lib/db/pedidos.ts). El claim se hace con un UPDATE guardado
+ * (`.is('enviado_ts', null).eq('intentos', <valor leído>)`) que devuelve las
+ * filas afectadas. Esta función traduce ese resultado a una decisión
+ * testeable sin DB:
+ *   - error de DB        → "db_error"
+ *   - 0 filas            → "skip" (otra invocación lo claimeó o ya se envió)
+ *   - exactamente 1 fila → "claimed"
+ *   - >1 fila            → "claimed" (no debería pasar; el id es PK único)
+ */
+export function decideClaimRecordatorio(
+  rowsAffected: number,
+  hadError: boolean,
+): "claimed" | "skip" | "db_error" {
+  if (hadError) return "db_error";
+  if (rowsAffected < 1) return "skip";
+  return "claimed";
+}
 
 interface ScheduleInput {
   organizationId: string;

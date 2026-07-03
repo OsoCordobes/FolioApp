@@ -9,15 +9,30 @@
  *   - Filtra: enviado_ts IS NULL AND scheduled_ts <= now() AND intentos < 5
  *     AND scheduled_ts > now() - 6h (no enviamos recordatorios viejos
  *     que el cron no procesó por downtime — alerta al user en su lugar)
- *   - Para cada job: hidrata turno + paciente (PII descifrada) + organization
- *     + servicio. Envia template WhatsApp.
+ *   - Para cada job: claim CAS sobre `intentos` (UPDATE guardado por
+ *     enviado_ts IS NULL + intentos = <valor leído>) ANTES de enviar; recién
+ *     después hidrata turno + paciente (PII descifrada) + organization
+ *     + servicio y envía el template WhatsApp.
  *   - Éxito: enviado_ts = now()
- *   - Falla: intentos += 1, error_msg = mensaje (5 intentos máx)
+ *   - Falla: error_msg = mensaje (el claim ya incrementó intentos; 5 máx)
+ *
+ * Semántica de `intentos`: cuenta intentos INICIADOS (el claim incrementa
+ * antes de enviar, éxitos incluidos), no fallas. El presupuesto efectivo
+ * sigue siendo 5: el pick filtra intentos < 5 ANTES del claim y el éxito
+ * setea enviado_ts.
  *
  * Seguridad:
  *   - Authorization: Bearer ${CRON_SECRET} requerido.
- *   - Idempotente: si corre dos veces seguidas, el segundo no envía porque
- *     enviado_ts ya está set.
+ *   - Concurrencia: el claim CAS dedupea invocaciones solapadas que pickearon
+ *     el mismo snapshot — el perdedor cuenta `skipped` y no envía. Residuales
+ *     at-least-once (aceptados; eliminarlos requiere estado 'enviando'/lease
+ *     con migración):
+ *       (a) job in-flight: si otra invocación pickea DESPUÉS del claim (lee
+ *           intentos=1) y ANTES del set de enviado_ts, su claim con token 1
+ *           pasa y puede duplicar ESE único job (≤1 por solape, vs batch
+ *           entero sin claim);
+ *       (b) crash/timeout entre el envío WhatsApp exitoso y el update de
+ *           enviado_ts puede duplicar en la corrida siguiente.
  *
  * Performance:
  *   - Batch de 25 jobs por invocación (cap para mantener latencia <30s
@@ -29,6 +44,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { decryptColumn } from "@/lib/crypto";
+import { decideClaimRecordatorio } from "@/lib/db/recordatorios";
 import { toWhatsappE164 } from "@/lib/format/phone";
 import { verifyBearer } from "@/lib/security/verify-bearer";
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
@@ -82,10 +98,33 @@ async function runDispatch(): Promise<NextResponse> {
     processed: 0,
     succeeded: 0,
     failed: 0,
+    skipped: 0,
     errors: [] as string[],
   };
 
   for (const job of jobs as RecordatorioRow[]) {
+    // Claim CAS: un solo UPDATE guardado (atómico en Postgres). `intentos`
+    // actúa de token de concurrencia optimista — si otra invocación ya lo
+    // claimeó (o ya lo envió), afecta 0 filas y salteamos sin enviar.
+    const { data: claimRows, error: claimErr } = await service
+      .from("recordatorio_job")
+      .update({ intentos: job.intentos + 1 })
+      .eq("id", job.id)
+      .is("enviado_ts", null)
+      .eq("intentos", job.intentos)
+      .select("id");
+
+    const claim = decideClaimRecordatorio(claimRows?.length ?? 0, Boolean(claimErr));
+    if (claim === "db_error") {
+      results.failed += 1;
+      results.errors.push(`${job.id}: claim: ${claimErr?.message}`);
+      continue;
+    }
+    if (claim === "skip") {
+      results.skipped += 1;
+      continue;
+    }
+
     results.processed += 1;
     try {
       await processJob(service, job);
@@ -94,9 +133,11 @@ async function runDispatch(): Promise<NextResponse> {
       results.failed += 1;
       const msg = e instanceof Error ? e.message : String(e);
       results.errors.push(`${job.id}: ${msg}`);
+      // El claim ya incrementó `intentos`; acá solo registramos el error.
+      // (Escribir job.intentos + 1 de nuevo sería un lost-update stale.)
       await service
         .from("recordatorio_job")
-        .update({ intentos: job.intentos + 1, error_msg: msg.slice(0, 500) })
+        .update({ error_msg: msg.slice(0, 500) })
         .eq("id", job.id);
     }
   }
