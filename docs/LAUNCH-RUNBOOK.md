@@ -208,11 +208,40 @@ UTC−3). Si `CRON_SECRET` falta, todos devuelven 401 y no hacen nada.
 ## 7. F0.6 — Activar verificación de email en signup (procedimiento)
 
 El código (ítem 1.5) es **adaptativo**: el signup usa `supabase.auth.signUp`,
-así que con el toggle **Confirm email OFF** (estado actual) el flujo es el de
-siempre (autoconfirm, sesión inmediata, cero emails) y con **ON** el signup
-devuelve "Revisá tu email" y el onboarding se retoma tras confirmar
-(callback → `/onboarding` → consent → steps con autosave). **No hay deploy
-involucrado en el flip** — pero los 4 pasos van juntos, en este orden:
+así que con el toggle **Confirm email OFF** el flujo es el de siempre
+(autoconfirm, sesión inmediata, cero emails) y con **ON** el signup devuelve
+"Revisá tu email" y el onboarding se retoma tras confirmar (callback →
+`/onboarding` → consent → steps con autosave). **No hay deploy involucrado en
+el flip** — pero los 4 pasos van juntos, en este orden:
+
+> ### ⛔ Gate de merge del ítem 1.5 (verificado 2026-07-03)
+>
+> **Prod tiene "Confirm email" ON hoy** (`mailer_autoconfirm: false`), aunque
+> nunca importó porque el signup viejo usaba
+> `admin.createUser({ email_confirm: true })`, que bypasea el toggle.
+> `auth.signUp` **deja de bypasearlo**: si el PR del ítem 1.5 se mergea con el
+> toggle así, TODO signup de prod cae al path `needsConfirmation` con el SMTP
+> built-in (~2-4 mails/h por proyecto) y el template default `?code=` (PKCE,
+> cross-device roto) — **signup público roto en silencio**.
+>
+> Antes de mergear, elegí UNA de dos:
+> 1. **Apagar "Confirm email"** (Auth → Sign In / Up → Email) — preserva el
+>    flujo actual; los pasos 1-4 de abajo quedan para cuando se active F0.6
+>    de verdad; **o**
+> 2. Completar los pasos 1-3 de abajo (SMTP custom + template `token_hash` +
+>    allow-list) y dejar el toggle ON.
+>
+> Re-verificar con el endpoint público de settings (la key publishable está
+> en `.env.local` como `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`):
+>
+> ```sh
+> curl -s -H "apikey: $NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY" \
+>   https://grkpayhxndztlfwxobnt.supabase.co/auth/v1/settings
+> ```
+>
+> Con la opción 1, `mailer_autoconfirm` debe devolver `true` — **recién
+> entonces mergear**. De paso confirmar `disable_signup: false` (Enable email
+> signups ON) y que el captcha de Supabase Auth siga OFF.
 
 1. **SMTP custom primero** (Supabase → Auth → SMTP Settings; Resend ya está
    como proveedor de emails de la app). El email service built-in de Supabase
