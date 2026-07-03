@@ -139,7 +139,7 @@ Folio implementa los mecanismos exigidos por la legislación argentina de protec
 
 ## Pixel-perfect (regla inviolable)
 
-El diseño nació del prototipo Claude Design. `folio.css` (~13.6k líneas) es hecho a mano, se sirve como static asset desde `/public/folio.css` y evoluciona con el producto; los cambios reusan los tokens de `:root` (no hex off-theme).
+El diseño nació del prototipo Claude Design. `folio.css` (~17.7k líneas) es hecho a mano, se sirve como static asset desde `/public/folio.css` y evoluciona con el producto; los cambios reusan los tokens de `:root` (no hex off-theme).
 
 La suite visual (`pnpm test:visual`) compara contra baselines y se corre manualmente; el CI de PRs corre typecheck + lint + unit (`.github/workflows/app-ci.yml`).
 
