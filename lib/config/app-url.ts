@@ -21,7 +21,9 @@ function stripTrailingSlash(u: string): string {
 
 /** URL absoluta con protocolo, sin trailing slash. Server-safe y client-safe. */
 export function getAppUrl(): string {
-  const fromEnv = process.env.NEXT_PUBLIC_APP_URL;
+  // .trim(): un `vercel env pull` puede materializar la var como "" (o con
+  // whitespace) — sin trim, "   " es truthy y new URL("   ") rompe el build.
+  const fromEnv = process.env.NEXT_PUBLIC_APP_URL?.trim();
   if (fromEnv) return stripTrailingSlash(fromEnv);
   if (typeof window !== "undefined") return window.location.origin;
   // Las VERCEL_* no llevan protocolo (Vercel las expone como host). En el
