@@ -8,9 +8,9 @@ import type { MetadataRoute } from "next";
  * y `/book/` también (páginas públicas de reserva de cada profesional).
  */
 
-import { getBaseUrl } from "@/lib/base-url";
+import { getAppUrl } from "@/lib/config/app-url";
 
-const BASE_URL = getBaseUrl();
+const BASE_URL = getAppUrl();
 
 export default function robots(): MetadataRoute.Robots {
   return {

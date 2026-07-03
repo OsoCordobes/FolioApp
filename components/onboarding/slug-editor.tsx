@@ -24,6 +24,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { getAppHost } from "@/lib/config/app-url";
 import { checkSlugAvailability } from "@/lib/onboarding/slug-actions";
 import {
   slugify,
@@ -48,7 +49,7 @@ interface SlugEditorProps {
   baseSuggestion?: string;
   /** OrgId actual — para excluir de la verificación de disponibilidad. */
   currentOrgId?: string;
-  /** URL base mostrada como prefix (ej. "folio-app-ten.vercel.app"). */
+  /** Host base mostrado como prefix (default: getAppHost(), sin protocolo). */
   prefix?: string;
   /** Disabled state. */
   disabled?: boolean;
@@ -59,7 +60,7 @@ export function SlugEditor({
   onChange,
   baseSuggestion = "",
   currentOrgId,
-  prefix = "folio-app-ten.vercel.app",
+  prefix = getAppHost(),
   disabled = false,
 }: SlugEditorProps) {
   const [local, setLocal] = useState(value);

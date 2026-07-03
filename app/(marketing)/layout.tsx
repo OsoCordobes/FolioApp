@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 import { LandingFooter } from "@/components/landing/landing-footer";
 import { LandingHeader } from "@/components/landing/landing-header";
-import { getBaseUrl } from "@/lib/base-url";
+import { getAppUrl } from "@/lib/config/app-url";
 
 /**
  * Folio · Layout del grupo (marketing) — landing pública.
@@ -18,7 +18,7 @@ const DESCRIPTION =
   "El día de tu consultorio, armado solo: turnos, reservas online, recordatorios por WhatsApp e historias clínicas cifradas. Para profesionales de la salud en Argentina.";
 
 export const metadata: Metadata = {
-  metadataBase: new URL(getBaseUrl()),
+  metadataBase: new URL(getAppUrl()),
   // `absolute` opta fuera del template "%s · Folio" del root layout — el
   // título del landing ya lleva la marca adelante.
   title: { absolute: TITLE },

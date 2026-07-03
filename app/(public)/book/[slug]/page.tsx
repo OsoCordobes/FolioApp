@@ -20,6 +20,7 @@ import { notFound } from "next/navigation";
 import { cache } from "react";
 
 import { BookLanding } from "@/components/book-landing/book-landing";
+import { getAppUrl } from "@/lib/config/app-url";
 import { isOrgListedInDirectory } from "@/lib/db/directorio";
 import { listProfesionalesPublico } from "@/lib/db/members";
 import { getEspecialidadMeta, isEspecialidadSlug } from "@/lib/especialidades/meta";
@@ -90,7 +91,7 @@ const getOrgPublica = cache(async (slug: string): Promise<OrgPublicRow | null> =
  */
 const getOrgListado = cache((slug: string) => isOrgListedInDirectory(slug));
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://folio-app-ten.vercel.app";
+const APP_URL = getAppUrl();
 
 /**
  * JSON-LD MedicalBusiness para /book/[slug]. Solo se emite cuando la org está

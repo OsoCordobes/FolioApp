@@ -29,6 +29,7 @@ import {
   type PublicCardData,
 } from "@/components/public-card/public-card";
 import { FolioMark } from "@/components/folio-mark";
+import { getAppUrl } from "@/lib/config/app-url";
 import { listRubros } from "@/lib/onboarding/templates";
 import type { OnboardingDataState } from "@/components/onboarding/steps";
 
@@ -45,8 +46,7 @@ interface Step9MomentProps {
   error?: string | null;
 }
 
-const APP_URL =
-  typeof window !== "undefined" ? window.location.origin : "https://folio-app-ten.vercel.app";
+const APP_URL = getAppUrl();
 
 export function Step9Moment({
   data,

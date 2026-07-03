@@ -26,11 +26,11 @@ import { Hero } from "@/components/landing/sections/hero";
 import { Pricing } from "@/components/landing/sections/pricing";
 import { Vault } from "@/components/landing/sections/vault";
 import { StickyCta } from "@/components/landing/sticky-cta";
-import { getBaseUrl } from "@/lib/base-url";
+import { getAppUrl } from "@/lib/config/app-url";
 import { resolveClinicBasePriceCents } from "@/lib/billing/pricing";
 import { MP_PLAN_PRICE_CENTS } from "@/lib/mercadopago/client";
 
-const BASE_URL = getBaseUrl();
+const BASE_URL = getAppUrl();
 
 function buildJsonLd(): string {
   const graph = {

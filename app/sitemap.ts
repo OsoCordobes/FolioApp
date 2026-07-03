@@ -11,11 +11,11 @@ import type { MetadataRoute } from "next";
  * sitemap solo trae las estáticas + hubs.
  */
 
-import { getBaseUrl } from "@/lib/base-url";
+import { getAppUrl } from "@/lib/config/app-url";
 import { listDirectorioOrgs } from "@/lib/db/directorio";
 import { ESPECIALIDAD_SLUGS } from "@/lib/especialidades/meta";
 
-const BASE_URL = getBaseUrl();
+const BASE_URL = getAppUrl();
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const lastModified = new Date();
