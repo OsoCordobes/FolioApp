@@ -202,7 +202,9 @@ UTC−3). Si `CRON_SECRET` falta, todos devuelven 401 y no hacen nada.
 | `/api/cron/reconcile-suscripciones` | `30 8 * * *` (05:30 AR) | Red de seguridad de billing (A2): para suscripciones en estado no terminal con `mp_preapproval_id`, hace GET preapproval contra MP y aplica el estado real; además corre `syncSubscriptionAmount` (repara PUTs de monto perdidos en Clínica). | **Alta** — repara divergencia local↔MP (cliente pagando sin acceso). |
 | `/api/cron/account-purge` | `0 3 * * *` (00:00 AR) | Purga ARCO: hard-delete de cuentas con baja solicitada hace >30 días. El borrado está gateado por `ACCOUNT_PURGE_ENABLED=1` — sin la env, el cron corre en modo **listing-only** y no borra nada (`route.ts`). | Media — sin la env es no-op de borrado. |
 
-> `/api/cron/account-purge` **YA está registrado en `vercel.json`** (diario
-> 03:00 UTC), pero el hard-delete sigue gateado por `ACCOUNT_PURGE_ENABLED=1`:
-> sin esa env el endpoint solo lista candidatos y no borra (trial en staging
-> pendiente). Para activar la purga real: setear la env en Vercel Production.
+> `/api/cron/account-purge` **ya está registrado en `crons[]`** (diario
+> `0 3 * * *`), pero el hard-delete sigue gateado: sin `ACCOUNT_PURGE_ENABLED=1`
+> el endpoint solo lista candidatos y no borra nada — trial en staging
+> pendiente; para la purga real solo falta setear la env en Vercel Production.
+> La activación completa siempre fue doble: tenerlo en
+> `vercel.json` (sugerido diario 03:00 UTC) **y** setear `ACCOUNT_PURGE_ENABLED=1`.
