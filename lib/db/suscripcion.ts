@@ -28,6 +28,8 @@ import {
 
 import { err, isUniqueViolation, ok, type Result } from "./errors";
 
+type ServiceClient = ReturnType<typeof createSupabaseServiceClient>;
+
 // ─── Tipos públicos ────────────────────────────────────────────────────────
 
 export type EstadoSuscripcion =
@@ -103,7 +105,7 @@ export interface AccessGate {
   graceDaysLeft: number | null;
 }
 
-const GRACE_PERIOD_DAYS = 7;
+export const GRACE_PERIOD_DAYS = 7;
 
 // ─── Row mapper ────────────────────────────────────────────────────────────
 
@@ -452,24 +454,80 @@ export function validateChargeAmount(input: {
 }
 
 /**
+ * Resultado de `recordChargeAttempt`. Además de la fila del cargo expone la
+ * TRANSICIÓN de estado que el cargo provocó (o no) — el webhook decide los
+ * emails de lifecycle (PR 1.2) mirando `isNewCharge` + `estadoAntes/Despues`
+ * sin re-consultar la DB.
+ */
+export interface ChargeAttemptOutcome {
+  /**
+   * Fila del cargo registrada (o la existente en una re-entrega). null si el
+   * intento no tenía payment asociado (scheduled) o si la relectura
+   * post-INSERT falló (el cargo quedó registrado igual).
+   */
+  cargo: CargoRow | null;
+  /**
+   * true SOLO la primera vez que vemos este mp_payment_id. Una re-entrega del
+   * webhook (23505 en el INSERT) reporta false y NO muta estado ni debe
+   * disparar emails.
+   */
+  isNewCharge: boolean;
+  /** Estado de la suscripción ANTES de procesar este cargo. */
+  estadoAntes: EstadoSuscripcion;
+  /**
+   * Estado DESPUÉS de aplicar la transición. Igual a `estadoAntes` si no hubo
+   * transición (re-entrega, cargo con warning de monto, o UPDATE que falló —
+   * solo reportamos transiciones que efectivamente se escribieron).
+   */
+  estadoDespues: EstadoSuscripcion;
+  /** Org dueña de la suscripción (para los emails de lifecycle). */
+  organizationId: string;
+  /** payer_email del OWNER (destinatario de los emails de lifecycle). */
+  payerEmail: string;
+  /** Monto mensual esperado de la suscripción (`suscripcion.monto_cents`). */
+  montoMensualCents: number;
+  mpPreapprovalId: string;
+  /**
+   * `morosa_desde` ANTES de la mutación: el episodio que una recuperación
+   * MOROSA→ACTIVA cierra. Discriminador de dedupe de
+   * notifySuscripcionReactivada. null si no había episodio abierto (o la fila
+   * es pre-M65 y el episodio empezó antes del wiring).
+   */
+  morosaDesdeAntes: string | null;
+}
+
+/**
  * Registra un intento de cobro recibido por webhook.
  * Idempotente vía UNIQUE(mp_payment_id) — INSERT que choca por conflict
- * se ignora silenciosamente y devolvemos la fila existente.
+ * se ignora silenciosamente y devolvemos la fila existente con
+ * `isNewCharge: false` (la re-entrega NO muta estado — CR-4).
+ *
+ * Episodios de morosidad (M65): al transicionar a MOROSA setea
+ * `morosa_desde = now()` SOLO si estaba null (un episodio ya abierto no se
+ * re-abre con cada rechazo subsiguiente); al recuperar MOROSA→ACTIVA la
+ * limpia (null) — el episodio quedó cerrado.
+ *
+ * El parámetro `client` existe para inyectar un mock en tests
+ * (patrón recordEmailOnce / findUserByEmail).
  */
-export async function recordChargeAttempt(input: {
-  charge: ChargeAttemptInfo;
-  rawPayload: unknown;
-}): Promise<Result<CargoRow | null>> {
-  const supabase = createSupabaseServiceClient();
+export async function recordChargeAttempt(
+  input: {
+    charge: ChargeAttemptInfo;
+    rawPayload: unknown;
+  },
+  client?: ServiceClient,
+): Promise<Result<ChargeAttemptOutcome>> {
+  const supabase = client ?? createSupabaseServiceClient();
 
   const charge = input.charge;
 
   // Resolver suscripcion local por el ID de suscripción del proveedor.
   // monto_cents viene en el mismo SELECT: es el monto esperado de ESA org
-  // (M-BILL-2 per-org, Fase E · E2).
+  // (M-BILL-2 per-org, Fase E · E2). organization_id / payer_email /
+  // morosa_desde alimentan el outcome para los emails de lifecycle.
   const { data: sus, error: susErr } = await supabase
     .from("suscripcion")
-    .select("id, estado, monto_cents")
+    .select("id, organization_id, payer_email, estado, monto_cents, morosa_desde")
     .eq("mp_preapproval_id", charge.providerSubscriptionId)
     .maybeSingle();
   if (susErr) return err("db_error", "Error buscando suscripción.", susErr.message);
@@ -479,11 +537,29 @@ export async function recordChargeAttempt(input: {
   if (!sus) return err("not_found", `Suscripción no existe para preapproval ${charge.providerSubscriptionId}.`);
 
   const currentEstado = (sus as { estado: EstadoSuscripcion }).estado;
+  const morosaDesdeAntes = ((sus as { morosa_desde?: string | null }).morosa_desde as string | null) ?? null;
+
+  // Guard defensivo: una fila legacy con monto_cents NULL (no debería existir —
+  // M19 lo crea NOT NULL y createOrRenewPendingSubscription siempre lo setea)
+  // cae al precio del plan Solo: toda fila legacy es pre-tiers y por lo tanto
+  // INDEPENDIENTE.
+  const expectedMontoCents =
+    (sus as { monto_cents: number | null }).monto_cents ??
+    computeMonthlyPriceCents("INDEPENDIENTE", 1);
+
+  const outcomeBase = {
+    estadoAntes: currentEstado,
+    organizationId: (sus as { organization_id: string }).organization_id,
+    payerEmail: (sus as { payer_email: string }).payer_email,
+    montoMensualCents: expectedMontoCents,
+    mpPreapprovalId: charge.providerSubscriptionId,
+    morosaDesdeAntes,
+  };
 
   // Solo registramos cargos que ya tienen payment asociado. Los "scheduled" sin payment
   // todavía no son cobros — los ignoramos.
   if (!charge.payment) {
-    return ok(null);
+    return ok({ ...outcomeBase, cargo: null, isNewCharge: false, estadoDespues: currentEstado });
   }
 
   const mpPaymentId = charge.payment.paymentId;
@@ -496,13 +572,6 @@ export async function recordChargeAttempt(input: {
   // centavo del esperado, NO debe activar/recuperar la suscripción: lo
   // registramos pero marcamos warning para revisión manual.
   const montoCents = charge.amountCents;
-  // Guard defensivo: una fila legacy con monto_cents NULL (no debería existir —
-  // M19 lo crea NOT NULL y createOrRenewPendingSubscription siempre lo setea)
-  // cae al precio del plan Solo: toda fila legacy es pre-tiers y por lo tanto
-  // INDEPENDIENTE.
-  const expectedMontoCents =
-    (sus as { monto_cents: number | null }).monto_cents ??
-    computeMonthlyPriceCents("INDEPENDIENTE", 1);
   const montoWarning = validateChargeAmount({
     amountCents: montoCents,
     currency: charge.currency,
@@ -546,46 +615,73 @@ export async function recordChargeAttempt(input: {
   // re-entrega (duplicado) no tocamos nada — evita que un "rejected" reenviado
   // tire a MOROSA una org ya recuperada, o que un "approved" reenviado limpie un
   // ultimo_error legítimo.
+  //
+  // `estadoDespues` refleja SOLO transiciones efectivamente escritas: si el
+  // UPDATE falla queda igual a `estadoAntes` (un email de "reactivada" sobre
+  // una transición que no se persistió sería mentirle al cliente).
+  let estadoDespues: EstadoSuscripcion = currentEstado;
   if (isNewCharge && estado === "APROBADO") {
     if (montoWarning) {
       // Cargo aprobado pero sospechoso: registramos el warning y NO marcamos ACTIVA.
       console.warn(`[mp] cargo ${mpPaymentId} aprobado pero ${montoWarning}`);
-      await supabase
+      const { error: updErr } = await supabase
         .from("suscripcion")
         .update({
           ultimo_cobro_ts: new Date().toISOString(),
           ultimo_error: montoWarning,
         })
         .eq("id", sus.id);
+      if (updErr) {
+        console.warn(`[mp] cargo ${mpPaymentId}: update de suscripción falló: ${updErr.message}`);
+      }
     } else if (currentEstado === "MOROSA" || currentEstado === "PENDIENTE_ACTIVACION") {
       // Solo recuperación MOROSA->ACTIVA y activación pending->ACTIVA. NO forzamos
-      // ACTIVA si la suscripción está CANCELADA o PAUSADA (CR-4).
-      await supabase
+      // ACTIVA si la suscripción está CANCELADA o PAUSADA (CR-4). La
+      // recuperación cierra el episodio de morosidad → morosa_desde = null.
+      const { error: updErr } = await supabase
         .from("suscripcion")
         .update({
           ultimo_cobro_ts: new Date().toISOString(),
           estado: "ACTIVA",
           ultimo_error: null,
+          morosa_desde: null,
         })
         .eq("id", sus.id);
+      if (updErr) {
+        console.warn(`[mp] cargo ${mpPaymentId}: update de suscripción falló: ${updErr.message}`);
+      } else {
+        estadoDespues = "ACTIVA";
+      }
     } else {
       // ACTIVA u otro estado terminal: solo registramos el cobro, sin forzar estado.
-      await supabase
+      const { error: updErr } = await supabase
         .from("suscripcion")
         .update({
           ultimo_cobro_ts: new Date().toISOString(),
           ultimo_error: null,
         })
         .eq("id", sus.id);
+      if (updErr) {
+        console.warn(`[mp] cargo ${mpPaymentId}: update de suscripción falló: ${updErr.message}`);
+      }
     }
   } else if (isNewCharge && estado === "RECHAZADO") {
-    await supabase
-      .from("suscripcion")
-      .update({
-        estado: "MOROSA",
-        ultimo_error: charge.payment.statusDetail ?? "Cobro rechazado por Mercado Pago.",
-      })
-      .eq("id", sus.id);
+    const patch: Record<string, unknown> = {
+      estado: "MOROSA",
+      ultimo_error: charge.payment.statusDetail ?? "Cobro rechazado por Mercado Pago.",
+    };
+    // Abrir episodio de morosidad SOLO si no había uno abierto: rechazos
+    // subsiguientes del mismo episodio no re-abren (el dedupe de los emails
+    // de suspensión/reactivación depende de que el ISO sea estable).
+    if (morosaDesdeAntes === null) {
+      patch.morosa_desde = new Date().toISOString();
+    }
+    const { error: updErr } = await supabase.from("suscripcion").update(patch).eq("id", sus.id);
+    if (updErr) {
+      console.warn(`[mp] cargo ${mpPaymentId}: update de suscripción falló: ${updErr.message}`);
+    } else {
+      estadoDespues = "MOROSA";
+    }
   }
 
   const { data: cargoRow } = await supabase
@@ -594,15 +690,18 @@ export async function recordChargeAttempt(input: {
     .eq("mp_payment_id", mpPaymentId)
     .single();
 
-  if (!cargoRow) return ok(null);
-  return ok({
-    id: cargoRow.id as string,
-    mpPaymentId: cargoRow.mp_payment_id as string,
-    montoCents: cargoRow.monto_cents as number,
-    estado: cargoRow.estado as EstadoCargo,
-    fechaIntento: cargoRow.fecha_intento as string,
-    fechaAcreditacion: (cargoRow.fecha_acreditacion as string | null) ?? null,
-  });
+  const cargo: CargoRow | null = cargoRow
+    ? {
+        id: cargoRow.id as string,
+        mpPaymentId: cargoRow.mp_payment_id as string,
+        montoCents: cargoRow.monto_cents as number,
+        estado: cargoRow.estado as EstadoCargo,
+        fechaIntento: cargoRow.fecha_intento as string,
+        fechaAcreditacion: (cargoRow.fecha_acreditacion as string | null) ?? null,
+      }
+    : null;
+
+  return ok({ ...outcomeBase, cargo, isNewCharge, estadoDespues });
 }
 
 // ─── Sync de monto por seats (Fase E · E2) ─────────────────────────────────
@@ -786,7 +885,11 @@ export function syncSubscriptionAmountInBackground(organizationId: string, trigg
  */
 export function computeAccessGate(
   organizationCreatedAt: string,
-  subscription: SuscripcionRow | null,
+  // Pick<> deliberado: la decisión solo lee estado + proximaCobro. Permite que
+  // el cron de lifecycle (PR 1.2) evalúe el gate desde picks SQL angostos sin
+  // fabricar SuscripcionRow completas. Los callers con la fila entera siguen
+  // compilando sin cambios.
+  subscription: Pick<SuscripcionRow, "estado" | "proximaCobro"> | null,
   now: Date = new Date(),
 ): AccessGate {
   // Caso 1: activa.
