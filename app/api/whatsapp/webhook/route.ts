@@ -18,7 +18,9 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 
+import { runAfterResponse } from "@/lib/after-response";
 import { encryptColumn } from "@/lib/crypto";
+import { notifyPedidoNuevo } from "@/lib/email/notify";
 import { timingSafeEqualStrings } from "@/lib/security/verify-bearer";
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
 import { resolveOrgByPhoneNumberId } from "@/lib/whatsapp/resolve-org";
@@ -120,21 +122,48 @@ export async function POST(request: NextRequest) {
 
         // Inserción de pedido vía service client (RLS bypass — el remitente
         // no tiene sesión user).
-        const { error: pedErr } = await supabase.from("pedido").insert({
-          organization_id: org.id,
-          canal: "WHATSAPP",
-          estado: "PENDIENTE",
-          nombre_cifrado: encryptColumn(nombre)!,
-          telefono_cifrado: encryptColumn(telefono)!,
-          email_cifrado: null,
-          fecha_propuesta: null,
-          duracion_min: 45,
-          servicio_id: null,
-          motivo_cifrado: encryptColumn(motivo),
-          precio_cents: null,
-        });
-        if (pedErr) {
-          console.warn(`[whatsapp] error creando pedido inbound: ${pedErr.message}`);
+        const { data: pedidoCreado, error: pedErr } = await supabase
+          .from("pedido")
+          .insert({
+            organization_id: org.id,
+            canal: "WHATSAPP",
+            estado: "PENDIENTE",
+            nombre_cifrado: encryptColumn(nombre)!,
+            telefono_cifrado: encryptColumn(telefono)!,
+            email_cifrado: null,
+            fecha_propuesta: null,
+            duracion_min: 45,
+            servicio_id: null,
+            motivo_cifrado: encryptColumn(motivo),
+            precio_cents: null,
+          })
+          .select("id")
+          .single();
+        if (pedErr || !pedidoCreado) {
+          console.warn(`[whatsapp] error creando pedido inbound: ${pedErr?.message}`);
+        } else {
+          // Aviso al profesional (owner de la org — el pedido de WhatsApp no
+          // trae profesional destino). Post-respuesta vía after(), fail-safe:
+          // notifyPedidoNuevo ya es no-throw; el .catch defensivo replica el
+          // patrón Sentry del resto de los wirings de email.
+          const pedidoId = pedidoCreado.id as string;
+          runAfterResponse(() =>
+            notifyPedidoNuevo({
+              client: supabase,
+              organizationId: org.id,
+              pedidoId,
+              pacienteNombre: nombre,
+              canal: "WHATSAPP",
+              fechaPropuestaIso: null,
+              profesionalId: null,
+            }).catch(async (e) => {
+              const { captureException } = await import("@sentry/nextjs");
+              captureException(e, {
+                tags: { component: "whatsapp-webhook", op: "notifyPedidoNuevo" },
+                extra: { pedidoId, organizationId: org.id },
+              });
+            }),
+          );
         }
       }
 

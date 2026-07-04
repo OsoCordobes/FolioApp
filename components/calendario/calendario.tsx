@@ -971,6 +971,10 @@ export function Calendario({
   const [selectedPedido, setSelectedPedido] = useState<Pedido | null>(null);
   const [selectedTurno, setSelectedTurno] = useState<TurnoSemana | null>(null);
   const [agendarOpen, setAgendarOpen] = useState(false);
+  // "Crear turno manual" desde el PedidoModal: abre el TurnoCreateModal CON el
+  // pedido vinculado — al crear el turno, el server marca el pedido CONFIRMADO
+  // (cierra el dead-end en que quedaba PENDIENTE para siempre).
+  const [agendarDesdePedido, setAgendarDesdePedido] = useState<Pedido | null>(null);
 
   // Href de cada chip del selector de profesional: preserva la vista activa
   // (semana ?w= / mes ?mes=) — SSR puro, mismo patrón que la navegación.
@@ -1055,6 +1059,10 @@ export function Calendario({
           colegiados={colegiados}
           sessionMemberId={sessionMemberId}
           profActivo={profActivo}
+          onCrearTurnoManual={() => {
+            setAgendarDesdePedido(selectedPedido);
+            setSelectedPedido(null);
+          }}
           onClose={() => setSelectedPedido(null)}
           onResolved={() => setSelectedPedido(null)}
         />
@@ -1096,6 +1104,24 @@ export function Calendario({
           onClose={() => setAgendarOpen(false)}
           onCreated={() => {
             setAgendarOpen(false);
+            router.refresh();
+          }}
+        />
+      ) : null}
+
+      {/* "Crear turno manual" desde un pedido: mismo modal de agendar, pero
+          con pedidoId — createTurnoAction confirma el pedido al crear el
+          turno. preselectPacienteId solo si el pedido ya referencia paciente
+          (los de WhatsApp suelen ser nuevos: se cargan a mano en el modal). */}
+      {agendarDesdePedido ? (
+        <TurnoCreateModal
+          origen="MANUAL"
+          defaultProfesionalId={agendarDesdePedido.profesionalId ?? profActivo}
+          preselectPacienteId={agendarDesdePedido.pacienteId}
+          pedidoId={agendarDesdePedido.id}
+          onClose={() => setAgendarDesdePedido(null)}
+          onCreated={() => {
+            setAgendarDesdePedido(null);
             router.refresh();
           }}
         />
