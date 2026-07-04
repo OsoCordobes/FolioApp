@@ -21,7 +21,7 @@ export function Hero() {
       <div className="fl-hero-head">
         <p className="fl-eyebrow">Para profesionales de la salud en Argentina</p>
         <h1 className="fl-hero-title">
-          <span className="fl-hero-line">El día se arma solo.</span>{" "}
+          <span className="fl-hero-line">Tu agenda se arma sola.</span>{" "}
           <span className="fl-hero-line">
             La historia, <span className="fl-hero-accent">cifrada.</span>
           </span>
@@ -31,23 +31,26 @@ export function Hero() {
       <div className="fl-hero-body">
         <div className="fl-hero-copy">
           <p className="fl-hero-sub">
-            Turnos, reservas online, recordatorios por WhatsApp y tus números — y cada
-            historia clínica guardada bajo llave, que solo tu consultorio puede leer.
+            Turnos, reservas online y recordatorios por WhatsApp, listos cada mañana.
+            Y cada historia clínica, cifrada de punta a punta.
           </p>
           <div className="fl-hero-ctas">
             <Link className="fi-btn fi-btn-primary fl-btn-lg" href="/onboarding" data-fl-cta="hero">
               Empezá gratis · 7 días
             </Link>
+            <a className="fi-btn fi-btn-secondary fl-btn-lg" href="#ficha" data-fl-cta="hero_demo">
+              Ver la ficha del paciente
+            </a>
           </div>
-          <p className="fl-hero-note">Sin tarjeta. Cancelás cuando quieras.</p>
+          <p className="fl-hero-note">Listo en 10 minutos. Sin tarjeta.</p>
           <ul className="fl-hero-stats" aria-label="Compromisos de Folio">
-            <li>Historias cifradas</li>
-            <li>Ley 25.326</li>
-            <li>7 días gratis</li>
-            <li>Hecho en Argentina</li>
+            <li>Cifrado AES-256</li>
+            <li>Ley de datos 25.326</li>
+            <li>Datos en Sudamérica</li>
+            <li>Hecho acá</li>
           </ul>
           <a className="fl-hero-cue" href="#dia">
-            El día sigue a las 10:30
+            Mirá cómo se arma tu día
             <ChevronDown size={14} aria-hidden />
           </a>
         </div>
@@ -121,6 +124,14 @@ export function Hero() {
           </div>
           <p className="fl-mock-caption">6 turnos, 6 fichas precargadas. Armado a las 06:14.</p>
         </div>
+
+        {/* Resumen accesible del mockup decorativo (aria-hidden): da a lectores
+            de pantalla y crawlers el contenido que el mock comunica en pantalla. */}
+        <p className="sr-only">
+          Vista de la agenda de Folio: los turnos del día ya confirmados, con
+          recordatorios por WhatsApp enviados automáticamente y cada historia
+          clínica cifrada.
+        </p>
       </div>
     </section>
   );

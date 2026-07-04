@@ -36,19 +36,19 @@ const SCENES: DayScene[] = [
   {
     id: "a",
     hour: "10:30",
-    text: "Belén reservó sola desde tu página. El WhatsApp de confirmación ya salió.",
+    text: "Estás en sesión. Belén reserva su turno y la confirmación por WhatsApp sale automáticamente.",
     visual: <SceneReserva />,
   },
   {
     id: "b",
     hour: "14:00",
-    text: "Cerrás la nota. Se cifra antes de tocar la base de datos.",
+    text: "Cerrás la nota y queda cifrada. Solo tu equipo puede leerla; ni siquiera nosotros.",
     visual: <SceneCifrado />,
   },
   {
     id: "c",
     hour: "20:00",
-    text: "Día cerrado: 6 pacientes, $96.000 registrados, 0 planillas.",
+    text: "Son las 20:00 y el día quedó cerrado: cobros al día, fichas guardadas, cero planillas.",
     visual: <SceneCierre />,
   },
 ];
@@ -58,7 +58,9 @@ export function DayTimeline() {
     <section id="dia" className="fl-day" data-fl-section="day">
       <div className="fl-day-stage">
         <header className="fl-day-head fl-reveal">
-          <h2 className="fl-day-eyebrow">Un día con Folio</h2>
+          {/* H2 con beneficio para el outline/SEO; el eyebrow mantiene el visual. */}
+          <h2 className="sr-only">Tu consultorio, hora por hora, sin que lo toques</h2>
+          <p className="fl-day-eyebrow">Un día con Folio</p>
           <span className="fl-day-rail" aria-hidden="true">
             <span className="fl-day-rail-fill" />
           </span>
