@@ -1,11 +1,11 @@
 /**
  * Folio · Política de Cookies.
  *
- * Versión 2026-05-21. Folio usa solo cookies estrictamente necesarias y
- * de seguridad; no usa cookies publicitarias ni de rastreo cross-site, por
- * lo cual NO requiere banner de consentimiento bajo la Disposición AAIP
- * 4/2019 ni equivalentes. Esta página existe para transparencia y para que
- * el visitante pueda decidir informadamente.
+ * Versión 2026-07-04. Folio usa cookies estrictamente necesarias y de
+ * seguridad (sin consentimiento) y una cookie de analítica de producto
+ * (PostHog) que SOLO se instala con consentimiento explícito vía el
+ * banner de cookies (components/cookie-banner.tsx) y respetando la señal
+ * Do-Not-Track. No usa cookies publicitarias ni de rastreo cross-site.
  */
 
 import Link from "next/link";
@@ -28,7 +28,7 @@ export default function CookiesPage() {
 
       <h1 style={{ marginBottom: 8 }}>Política de Cookies</h1>
       <p style={{ color: "var(--ink-3)", marginBottom: 32 }}>
-        Versión {COOKIES_VERSION} · Última actualización: 21 de mayo de 2026
+        Versión {COOKIES_VERSION} · Última actualización: 4 de julio de 2026
       </p>
 
       <section style={{ marginBottom: 32 }}>
@@ -36,7 +36,7 @@ export default function CookiesPage() {
         <p>
           Una cookie es un pequeño archivo de texto que un sitio web guarda
           en el navegador para recordar información entre visitas (por
-          ejemplo, que usted inició sesión). Folio también puede usar
+          ejemplo, que iniciaste sesión). Folio también puede usar
           tecnologías equivalentes como <i>localStorage</i> o{" "}
           <i>sessionStorage</i> para el mismo propósito; las llamamos cookies
           por simplicidad.
@@ -46,8 +46,9 @@ export default function CookiesPage() {
       <section style={{ marginBottom: 32 }}>
         <h2>2. Qué cookies usa Folio</h2>
         <p>
-          Folio usa <b>únicamente cookies estrictamente necesarias y de
-          seguridad</b>. No usamos cookies publicitarias, de marketing ni de
+          Folio usa <b>cookies estrictamente necesarias y de seguridad</b> y,
+          únicamente si las aceptás, una cookie de <b>analítica de producto</b>{" "}
+          (PostHog). No usamos cookies publicitarias, de marketing ni de
           rastreo entre sitios.
         </p>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, marginTop: 16 }}>
@@ -80,7 +81,7 @@ export default function CookiesPage() {
             </tr>
             <tr>
               <td style={{ padding: 8 }}><code>ph_*</code></td>
-              <td style={{ padding: 8 }}>PostHog (analytics agregadas de producto). No se setea si su navegador envía Do-Not-Track o si usted deshabilitó analytics en Configuración → Privacidad.</td>
+              <td style={{ padding: 8 }}>PostHog (analytics agregadas de producto). Solo se setea si aceptás analytics en el aviso de cookies. Tampoco se setea si tu navegador envía Do-Not-Track o si deshabilitaste analytics en Configuración → Privacidad.</td>
               <td style={{ padding: 8 }}>Hasta 1 año</td>
               <td style={{ padding: 8 }}>Analítica de producto</td>
             </tr>
@@ -95,30 +96,32 @@ export default function CookiesPage() {
       </section>
 
       <section style={{ marginBottom: 32 }}>
-        <h2>3. ¿Por qué no hay banner de cookies?</h2>
+        <h2>3. Consentimiento</h2>
         <p>
-          Folio no muestra un banner de consentimiento de cookies porque
-          todas las cookies que setea son <b>estrictamente necesarias</b>{" "}
-          para prestar el Servicio o de <b>seguridad</b>. La normativa
-          argentina (Ley 25.326 y guías AAIP) y los estándares
-          internacionales aplicables exigen consentimiento previo únicamente
-          para cookies no esenciales (publicidad, perfilado, rastreo
-          cross-site), que Folio no utiliza.
+          Las cookies <b>estrictamente necesarias</b> y de <b>seguridad</b> no
+          requieren consentimiento previo: sin ellas el Servicio no funciona
+          (no podrías iniciar sesión). La normativa argentina (Ley 25.326 y
+          guías AAIP) exige consentimiento únicamente para cookies no
+          esenciales.
         </p>
         <p>
-          La cookie de analytics de producto (<code>ph_*</code>) respeta la
-          señal Do-Not-Track del navegador y puede desactivarse desde{" "}
-          <i>Configuración → Privacidad → Opt-out analytics</i> sin afectar
-          la funcionalidad del Servicio.
+          Por eso, la cookie de analítica de producto (<code>ph_*</code>) es{" "}
+          <b>opt-in</b>: la primera vez que visitás Folio te mostramos un aviso
+          de cookies y la analítica solo se activa si elegís{" "}
+          <i>&quot;Aceptar analytics&quot;</i>. Si elegís{" "}
+          <i>&quot;Solo esenciales&quot;</i>, no se instala. Además respeta la
+          señal Do-Not-Track del navegador y puede desactivarse en cualquier
+          momento desde <i>Configuración → Privacidad → Opt-out analytics</i>,
+          sin afectar la funcionalidad del Servicio.
         </p>
       </section>
 
       <section style={{ marginBottom: 32 }}>
         <h2>4. Cómo deshabilitar cookies</h2>
         <p>
-          Puede deshabilitar cookies desde la configuración de su navegador.
-          Tenga en cuenta que deshabilitar las cookies estrictamente
-          necesarias impedirá el funcionamiento del Servicio (no podrá
+          Podés deshabilitar cookies desde la configuración de tu navegador.
+          Tené en cuenta que deshabilitar las cookies estrictamente
+          necesarias impedirá el funcionamiento del Servicio (no vas a poder
           iniciar sesión).
         </p>
         <p>

@@ -1,9 +1,11 @@
 /**
  * Folio · Política de Privacidad.
  *
- * Plantilla razonable para MVP. ANTES DE LANZAR PRODUCCIÓN REAL: revisar
- * con abogado especializado en datos personales argentinos (Ley 25.326)
- * y normativa de profesiones de la salud (Ley 26.529).
+ * Versión 2026-07-04. §4 lista TODOS los encargados de tratamiento reales
+ * (Supabase, Vercel, Mercado Pago, Resend, Sentry, PostHog, Meta, Google)
+ * con su finalidad — Ley 25.326. Los datos se alojan en São Paulo, Brasil
+ * (región sa-east-1, Sudamérica). Bump lib/legal/versions.ts
+ * (PRIVACY_VERSION) ante cambios materiales.
  */
 
 import Link from "next/link";
@@ -24,16 +26,16 @@ export default function PrivacidadPage() {
 
       <h1 style={{ marginBottom: 8 }}>Política de Privacidad</h1>
       <p style={{ color: "var(--ink-3)", marginBottom: 32 }}>
-        Última actualización: 19 de mayo de 2026
+        Última actualización: 4 de julio de 2026
       </p>
 
       <section style={{ marginBottom: 32 }}>
         <h2>1. Responsable del tratamiento</h2>
         <p>
-          Folio (el &quot;Servicio&quot;) es responsable del tratamiento de sus
+          Folio (el &quot;Servicio&quot;) es responsable del tratamiento de tus
           datos personales bajo la Ley 25.326 de Protección de Datos Personales
-          (Argentina). Si usted es un profesional cliente del Servicio, usted es
-          el responsable de los datos de sus pacientes; Folio actúa como
+          (Argentina). Si sos un profesional cliente del Servicio, vos sos el
+          responsable de los datos de tus pacientes; Folio actúa como
           encargado del tratamiento (data processor).
         </p>
       </section>
@@ -50,6 +52,12 @@ export default function PrivacidadPage() {
             identificación (nombre, DNI, contacto, domicilio) y datos de salud
             (motivo de consulta, diagnósticos, notas clínicas, alergias,
             medicación, vértebras ajustadas, etc.).
+          </li>
+          <li>
+            <b>Datos de facturación de la suscripción:</b> plan contratado,
+            estado de los cobros y email del pagador. Los datos del medio de
+            pago (tarjeta, cuenta) los gestiona Mercado Pago; Folio nunca los
+            ve ni los almacena.
           </li>
           <li>
             <b>Datos técnicos:</b> logs de acceso, IP, navegador, eventos de la
@@ -86,24 +94,49 @@ export default function PrivacidadPage() {
       <section style={{ marginBottom: 32 }}>
         <h2>4. Con quién compartimos los datos</h2>
         <p>
-          Folio NO vende sus datos. Compartimos con:
+          Folio NO vende tus datos. Para prestar el Servicio utilizamos los
+          siguientes encargados de tratamiento (procesadores), cada uno
+          limitado a su finalidad:
         </p>
         <ul>
           <li>
-            <b>Supabase</b> (hosting de la base de datos, en São Paulo, Brasil).
-            Datos cifrados in-transit (TLS) y at-rest.
+            <b>Supabase</b> (hosting de la base de datos, en São Paulo, Brasil
+            — región Sudamérica). Datos cifrados in-transit (TLS) y at-rest.
           </li>
           <li>
             <b>Vercel</b> (hosting de la app web, edge global). Solo recibe
             requests, no almacena PHI persistente.
           </li>
           <li>
-            <b>Meta WhatsApp</b> (mensajes a pacientes que usted autorice).
+            <b>Mercado Pago</b> (procesamiento de los pagos de la suscripción).
+            Recibe los datos del pagador (nombre, email, medio de pago) para
+            gestionar el débito automático mensual. <b>Jamás</b> recibe datos
+            clínicos ni datos de pacientes.
+          </li>
+          <li>
+            <b>Resend</b> (envío de emails transaccionales: confirmaciones y
+            recordatorios de turno, invitaciones de equipo, avisos de
+            facturación). Recibe únicamente el nombre y la dirección de email
+            del destinatario y el contenido del aviso; nunca PHI clínica.
+          </li>
+          <li>
+            <b>Sentry</b> (monitoreo de errores de la aplicación). Los reportes
+            de error se depuran antes de enviarse (scrubbing automático de
+            datos de request) para que no incluyan PHI ni datos sensibles.
+          </li>
+          <li>
+            <b>PostHog</b> (analytics de producto). Solo se activa si aceptás
+            analytics en el aviso de cookies (opt-in); registra eventos de uso
+            de la aplicación sin PHI ni datos de pacientes. Ver la{" "}
+            <Link href="/cookies">Política de Cookies</Link>.
+          </li>
+          <li>
+            <b>Meta WhatsApp</b> (mensajes a pacientes que vos autorices).
             Los mensajes contienen solo nombre y datos del turno, NUNCA PHI
             clínica.
           </li>
           <li>
-            <b>Google Calendar</b> (sincronización de turnos si usted la activa).
+            <b>Google Calendar</b> (sincronización de turnos si la activás).
             Folio envía solo título genérico + hora; nunca diagnóstico ni motivo.
           </li>
         </ul>
@@ -119,25 +152,25 @@ export default function PrivacidadPage() {
           permitan identificar a un consultorio o paciente individual.
         </p>
         <p>
-          Usted puede desactivar la contribución a analytics agregados desde{" "}
+          Podés desactivar la contribución a analytics agregados desde{" "}
           <i>Configuración → Privacidad → Opt-out analytics</i>.
         </p>
       </section>
 
       <section style={{ marginBottom: 32 }}>
         <h2>6. Derechos del titular</h2>
-        <p>Como titular de datos personales, usted tiene derecho a:</p>
+        <p>Como titular de datos personales, tenés derecho a:</p>
         <ul>
-          <li>Acceder a sus datos (Ley 25.326 art. 14).</li>
+          <li>Acceder a tus datos (Ley 25.326 art. 14).</li>
           <li>Rectificar datos inexactos.</li>
           <li>
-            Solicitar supresión de sus datos. En el caso de datos clínicos,
+            Solicitar supresión de tus datos. En el caso de datos clínicos,
             la supresión se hace por <b>pseudonimización</b>: identidad
             removida pero datos clínicos retenidos (Ley 26.529 art. 18 exige
             10 años de retención).
           </li>
-          <li>Portar sus datos a otro proveedor (en formato CSV/JSON).</li>
-          <li>Oponerse al tratamiento para analytics (opt-out).</li>
+          <li>Portar tus datos a otro proveedor (en formato CSV/JSON).</li>
+          <li>Oponerte al tratamiento para analytics (opt-out).</li>
         </ul>
         <p>
           Para ejercer estos derechos:{" "}
@@ -163,12 +196,18 @@ export default function PrivacidadPage() {
             (Ley 25.326).
           </li>
         </ul>
+        <p>
+          La cancelación de la suscripción o la falta de pago NO eliminan tus
+          datos: se conservan según estos mismos plazos y podés recuperar el
+          acceso reactivando la suscripción (ver{" "}
+          <Link href="/terminos">Términos y Condiciones</Link>, secciones 6 y 7).
+        </p>
       </section>
 
       <section style={{ marginBottom: 32 }}>
         <h2>8. Cambios</h2>
         <p>
-          Si cambiamos esta política, le avisaremos por email con al menos 30
+          Si cambiamos esta política, te avisaremos por email con al menos 30
           días de antelación.
         </p>
       </section>
@@ -186,11 +225,6 @@ export default function PrivacidadPage() {
           </a>
         </p>
       </section>
-
-      <p style={{ marginTop: 48, padding: 16, background: "var(--surface-2)", borderRadius: 8, color: "var(--ink-3)", fontSize: 13 }}>
-        <b>Nota MVP:</b> Plantilla razonable redactada por software engineer.
-        ANTES de lanzamiento real, revisar con abogado especializado.
-      </p>
     </main>
   );
 }

@@ -4,12 +4,22 @@
  * Folio · /configuracion/datos · Habeas Data actions (Ley 25.326 art. 14-16).
  *
  * Two flows:
- *   1. exportMyDataAction — assemble all of the user's data + their orgs'
- *      paciente data + sesion/turno history into a JSON blob, return it
- *      as a download. Implements art. 15 (right of access + portability).
+ *   1. exportMyDataAction — assemble the user's OWN personal data (profile,
+ *      memberships, org settings, subscription) into a JSON blob, return it
+ *      as a download. Implements art. 14 (right of access) + art. 16
+ *      (portability).
  *   2. requestAccountDeletionAction — set profile.deletion_requested_at.
  *      The /api/cron/account-purge cron processes profiles >30 days
- *      since the request. Implements art. 16 (right of erasure).
+ *      since the request. Implements the right of erasure.
+ *
+ * Scope del export — MISMO criterio que /api/me/export (route canónica):
+ *   - PHI de pacientes NO se exporta: los datos clínicos no son datos
+ *     personales *del profesional* titular ARCO — son del paciente, cuyo
+ *     responsable (data controller) es el profesional tratante. El paciente
+ *     ejerce su derecho de acceso vía el profesional (o soporte).
+ *   - Columnas *_cifrado NUNCA se dumpean crudas (bytes AES inútiles y
+ *     riesgosos): la PII propia se descifra app-side; los secretos
+ *     (certificado AFIP, tokens) se omiten directamente.
  *
  * Both gated on `auth.getUser()` — the user can only export / delete
  * THEIR OWN data, never another user's.
@@ -22,6 +32,7 @@ import {
   createSupabaseServerClient,
   createSupabaseServiceClient,
 } from "@/lib/supabase/server";
+import { SUPPORT_EMAIL } from "@/lib/support";
 
 import type { Result } from "@/lib/db/errors";
 
@@ -32,6 +43,18 @@ interface ExportResult {
   error?: string;
 }
 
+/**
+ * Columnas explícitas de `organization` para el export: configuración y datos
+ * del negocio del titular. Deliberadamente EXCLUYE `certificado_arca_cifrado`
+ * (secreto AFIP — mismo criterio que /api/me/export: los secretos no se
+ * exportan) y columnas internas sin valor para el titular.
+ */
+const ORGANIZATION_EXPORT_COLUMNS =
+  "id, slug, nombre, tipo, rubro, ciudad, provincia, timezone, moneda, " +
+  "cuit, razon_social, condicion_iva, telefono_publico, direccion_completa, " +
+  "instagram_handle, bio, opt_out_analytics, opt_out_public_listing, " +
+  "listar_en_directorio, created_at, updated_at";
+
 export async function exportMyDataAction(): Promise<ExportResult> {
   const supabase = await createSupabaseServerClient();
   const {
@@ -41,7 +64,7 @@ export async function exportMyDataAction(): Promise<ExportResult> {
 
   const service = createSupabaseServiceClient();
 
-  // Profile (decrypted)
+  // Profile (PII propia, descifrada para el titular)
   const { data: profile } = await service
     .from("profile")
     .select(
@@ -50,48 +73,42 @@ export async function exportMyDataAction(): Promise<ExportResult> {
     .eq("id", user.id)
     .maybeSingle();
 
-  // Member rows + the orgs the user is OWNER of
+  // Memberships + configuración de cada org (columnas explícitas: sin
+  // certificado AFIP cifrado ni otros secretos).
   const { data: members } = await service
     .from("member")
-    .select("id, organization_id, role, es_colegiado, accepted_at, deleted_at, created_at, organization(*)")
+    .select(
+      `id, organization_id, role, es_colegiado, accepted_at, deleted_at, created_at, organization(${ORGANIZATION_EXPORT_COLUMNS})`,
+    )
     .eq("profile_id", user.id);
 
-  // For each org I own, dump pacientes + their sesiones + turnos.
-  const ownerOrgIds = (members ?? [])
-    .filter((m: { role: string; deleted_at: unknown }) => m.role === "OWNER" && m.deleted_at === null)
-    .map((m: { organization_id: string }) => m.organization_id);
-
-  const orgsData: Record<string, unknown> = {};
-  for (const orgId of ownerOrgIds) {
-    const { data: pacientes } = await service
-      .from("paciente_identidad")
-      .select("*")
-      .eq("organization_id", orgId);
-    const { data: turnos } = await service
-      .from("turno")
-      .select("*")
-      .eq("organization_id", orgId);
-    const { data: sesiones } = await service
-      .from("sesion")
-      .select("*")
-      .eq("organization_id", orgId);
-    orgsData[orgId] = {
-      pacientes: decryptPacienteRows(pacientes ?? []),
-      turnos,
-      sesiones: decryptSesionRows(sesiones ?? []),
-    };
-  }
+  // Suscripción de las orgs del titular (datos de facturación propios).
+  const { data: suscripciones } = await service
+    .from("suscripcion")
+    .select(
+      "id, organization_id, estado, monto_cents, moneda, fecha_alta, proxima_cobro, fecha_cancelacion, created_at",
+    )
+    .in(
+      "organization_id",
+      (members ?? []).map((m: { organization_id: string }) => m.organization_id),
+    );
 
   return {
     ok: true,
     filename: `folio-export-${user.id}-${new Date().toISOString().slice(0, 10)}.json`,
     data: {
       exported_at: new Date().toISOString(),
+      ley_25326_basis: "art. 14 (derecho de acceso) — art. 16 (portabilidad implícita)",
       user_id: user.id,
       profile: profile ? decryptProfileRow(profile) : null,
       members: members ?? [],
-      orgs: orgsData,
-      note: "Ley 25.326 art. 15 — Export of personal data + clinical history of orgs you own. PII fields are decrypted.",
+      suscripciones: suscripciones ?? [],
+      notas: [
+        "Este export contiene los datos personales del titular del profile y la configuración de sus organizaciones.",
+        `Los datos clínicos de pacientes (PHI) NO están incluidos porque no son datos personales del profesional titular ARCO: el responsable de esos datos es el profesional tratante en su rol de data controller bajo Ley 25.326. Los pacientes pueden ejercer su derecho de acceso solicitándolo al profesional o, subsidiariamente, a ${SUPPORT_EMAIL}.`,
+        "Tokens OAuth, certificados AFIP y secretos se omiten por seguridad.",
+        "Para ejercer derecho de rectificación: Configuración → Cuenta. Para supresión: Configuración → Eliminar cuenta.",
+      ],
     },
   };
 }
@@ -154,9 +171,9 @@ export async function cancelAccountDeletionAction(): Promise<Result<void>> {
 
 // ─── helpers ────────────────────────────────────────────────────────────
 //
-// tryDecrypt en vez de decryptColumn crudo: este export itera TODAS las filas
-// de las orgs del titular; un solo ciphertext corrupto no debe abortar el
-// export Habeas Data completo — degrada ese campo a null (queda en Sentry).
+// tryDecrypt en vez de decryptColumn crudo: un ciphertext corrupto no debe
+// abortar el export Habeas Data completo — degrada ese campo a null (queda
+// en Sentry).
 
 function decryptProfileRow(row: Record<string, unknown>): Record<string, unknown> {
   return {
@@ -166,40 +183,4 @@ function decryptProfileRow(row: Record<string, unknown>): Record<string, unknown
     nombre_cifrado: undefined,
     apellido_cifrado: undefined,
   };
-}
-
-function decryptPacienteRows(rows: Record<string, unknown>[]): Record<string, unknown>[] {
-  return rows.map((row) => ({
-    ...row,
-    nombre: tryDecrypt(row.nombre_cifrado as Buffer | string | null, "export.paciente.nombre"),
-    apellido: tryDecrypt(row.apellido_cifrado as Buffer | string | null, "export.paciente.apellido"),
-    numero_doc: tryDecrypt(row.numero_doc_cifrado as Buffer | string | null, "export.paciente.numero_doc"),
-    email: tryDecrypt(row.email_cifrado as Buffer | string | null, "export.paciente.email"),
-    telefono: tryDecrypt(row.telefono_cifrado as Buffer | string | null, "export.paciente.telefono"),
-    domicilio_calle: tryDecrypt(row.domicilio_calle_cifrado as Buffer | string | null, "export.paciente.domicilio_calle"),
-    domicilio_numero: tryDecrypt(row.domicilio_numero_cifrado as Buffer | string | null, "export.paciente.domicilio_numero"),
-    nombre_cifrado: undefined,
-    apellido_cifrado: undefined,
-    numero_doc_cifrado: undefined,
-    email_cifrado: undefined,
-    telefono_cifrado: undefined,
-    domicilio_calle_cifrado: undefined,
-    domicilio_numero_cifrado: undefined,
-  }));
-}
-
-function decryptSesionRows(rows: Record<string, unknown>[]): Record<string, unknown>[] {
-  return rows.map((row) => ({
-    ...row,
-    soap_s: tryDecrypt(row.soap_s_cifrado as Buffer | string | null, "export.sesion.soap_s"),
-    soap_o: tryDecrypt(row.soap_o_cifrado as Buffer | string | null, "export.sesion.soap_o"),
-    soap_a: tryDecrypt(row.soap_a_cifrado as Buffer | string | null, "export.sesion.soap_a"),
-    soap_p: tryDecrypt(row.soap_p_cifrado as Buffer | string | null, "export.sesion.soap_p"),
-    notas: tryDecrypt(row.notas_cifrado as Buffer | string | null, "export.sesion.notas"),
-    soap_s_cifrado: undefined,
-    soap_o_cifrado: undefined,
-    soap_a_cifrado: undefined,
-    soap_p_cifrado: undefined,
-    notas_cifrado: undefined,
-  }));
 }

@@ -102,9 +102,10 @@ export function DatosClient({
       <section className="fi-card" style={{ padding: 24 }}>
         <h2 style={{ marginTop: 0, fontSize: 18 }}>Descargar mis datos</h2>
         <p style={{ color: "var(--ink-3)", margin: "4px 0 16px" }}>
-          Ley 25.326 art. 15. Descargás un JSON con tu perfil, tus orgs, tus pacientes
-          (con PII descifrada), turnos y sesiones SOAP. Útil para auditoría
-          personal o portabilidad a otra plataforma.
+          Ley 25.326 art. 14. Descargás un JSON con tus datos personales: perfil,
+          membresías, configuración de tus organizaciones y suscripción. Los datos
+          clínicos de pacientes no se incluyen (son datos personales de cada
+          paciente, no del titular de la cuenta) — se consultan desde la app.
         </p>
         <button
           type="button"

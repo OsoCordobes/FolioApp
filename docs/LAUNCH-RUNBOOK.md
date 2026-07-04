@@ -165,9 +165,11 @@ más los crones (`maintenance`, `dispatch-recordatorios`, `reconcile-suscripcion
    peligroso: NUNCA mergees código que usa una columna/RPC que no esté ya en
    prod (el cliente `<any>` no avisa; falla en runtime con `42703`, como el
    outage de M49 del 9-jun). **Antes de cualquier deploy con migración: aplicar
-   la migración a prod primero** (vía Supabase MCP `apply_migration` o
-   `scripts/push-pending-migrations.mjs`, registrando la versión canónica en
-   `supabase_migrations.schema_migrations`).
+   la migración a prod primero.** La **ÚNICA vía válida** para aplicar
+   migraciones a prod es `scripts/push-pending-migrations.mjs` (registra la
+   versión canónica en `supabase_migrations.schema_migrations`). **NO usar
+   Supabase MCP `apply_migration`**: registra una versión no canónica y deja
+   ciego a `scripts/diff-migrations.mjs` — así se gestó el incidente M49.
 
 ---
 
