@@ -79,6 +79,13 @@ export default async function ConfiguracionPage() {
   // false si M64 no está aplicada todavía (no rompe la página de config).
   const listarEnDirectorio = await isOrgListedInDirectory(ctx.data.organization.slug);
 
+  // Card WhatsApp de Integraciones: solo se muestra si el envío por WhatsApp
+  // Cloud está operativo en este deploy (mismas envs que chequea /api/health).
+  // Server-side: presencia booleana, nunca los valores.
+  const whatsappConfigured = Boolean(
+    process.env.WHATSAPP_ACCESS_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID,
+  );
+
   return (
     <Configuracion
       orgSlug={ctx.data.organization.slug}
@@ -99,6 +106,8 @@ export default async function ConfiguracionPage() {
       esColegiado={ctx.data.session.esColegiado}
       initialPerfilPublico={perfilPublico}
       initialListarEnDirectorio={listarEnDirectorio}
+      suscripcionEstado={ctx.data.subscription.estado}
+      whatsappConfigured={whatsappConfigured}
     />
   );
 }

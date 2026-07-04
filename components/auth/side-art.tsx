@@ -10,13 +10,13 @@
  * Diferencias clave vs v1:
  *   1. Transición direction-aware con crossfade + scale + blur + spring x
  *      (vía SideArtStage + framer-motion). Forward y backward son
- *      visualmente distintos. Wraparound 4→0 es forward.
+ *      visualmente distintos. Wraparound último→0 es forward.
  *   2. Entry animation propia del SideArt al montar (translate desde la
  *      izquierda + fade del glow).
  *   3. Pause indicator visible con debounce 240ms en hover (NO flickerea
  *      en passes rápidos).
  *   4. Dots con progress fill animado CSS-only (var --slide-dur).
- *   5. Lazy mount [prev, current, next] reduce 5 → 3 slides montados.
+ *   5. Lazy mount [prev, current, next] reduce el carousel a 3 slides montados.
  *
  * Pausa por hover sostenido + tab visibility. Auto-rotation con dur por slide.
  */
@@ -31,7 +31,6 @@ import { tintClassFor } from "@/components/auth/side-art-tints";
 import { SlideAgenda } from "@/components/auth/slide-agenda";
 import { SlideCalendario } from "@/components/auth/slide-calendario";
 import { SlideFinanzas } from "@/components/auth/slide-finanzas";
-import { SlideIA } from "@/components/auth/slide-ia";
 import { SlideReagenda } from "@/components/auth/slide-reagenda";
 
 const SLIDE_MS = 5000;
@@ -46,7 +45,6 @@ interface SlideDef {
   subtitle: string;
   comp: ComponentType<{ active: boolean }>;
   dur: number;
-  plus?: boolean;
 }
 
 const CAROUSEL: SlideDef[] = [
@@ -82,15 +80,6 @@ const CAROUSEL: SlideDef[] = [
     comp: SlideReagenda,
     dur: SLIDE_MS_LONG,
   },
-  {
-    id: "ia",
-    eyebrow: "durante toda tu jornada · próximamente",
-    title: "Tu copiloto clínico",
-    subtitle: "Conoce a cada paciente, te avisa lo importante y te ayuda a crecer.",
-    comp: SlideIA,
-    dur: 7000, // C11: comprimido de 15000 a 7000 — 7 beats con FM stagger en bullets
-    plus: true,
-  },
 ];
 
 export function SideArt() {
@@ -123,7 +112,7 @@ export function SideArt() {
     if (paused || hidden) return;
     const dur = CAROUSEL[idx]?.dur ?? SLIDE_MS;
     const id = setTimeout(() => {
-      // auto-rotate: siempre forward (incluso wraparound 4→0)
+      // auto-rotate: siempre forward (incluso wraparound último→0)
       setDirection(1);
       setIdx((i) => (i + 1) % CAROUSEL.length);
     }, dur);
@@ -168,7 +157,7 @@ export function SideArt() {
     setIdx((i) => (i + 1) % CAROUSEL.length);
   };
 
-  // Lazy mount: solo renderizamos [prev, current, next] (3 de 5)
+  // Lazy mount: solo renderizamos [prev, current, next] (3 de 4)
   const visibleSet = useMemo(() => {
     const n = CAROUSEL.length;
     return new Set([(idx - 1 + n) % n, idx, (idx + 1) % n]);
@@ -222,10 +211,7 @@ export function SideArt() {
           <div className="au2-slide-inner">
             <header className="au2-slide-head">
               <span className="au2-slide-eyebrow">{current.eyebrow}</span>
-              <h3 className="au2-slide-title">
-                {current.title}
-                {current.plus ? <span className="au2-plus-badge au2-plus-badge--title">Plus</span> : null}
-              </h3>
+              <h3 className="au2-slide-title">{current.title}</h3>
               <p className="au2-slide-sub">{current.subtitle}</p>
             </header>
             <div className="au2-slide-mockup">

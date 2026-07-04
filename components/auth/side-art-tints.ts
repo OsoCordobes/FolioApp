@@ -13,7 +13,6 @@
  *   - calendario → +verdoso (productivo, "todo trabaja")
  *   - finanzas   → +ámbar cálido (cierre del día)
  *   - reagenda   → +slate frío (decision moment)
- *   - ia         → +púrpura sutil (IA brand)
  *
  * Las reglas CSS viven en public/folio.css cerca del bloque .au2-art-glow.
  * Este archivo solo exporta las constantes para el componente que las aplica.
@@ -28,7 +27,6 @@ export const TINT_CLASSES = [
   "au2-art--tint-calendario",
   "au2-art--tint-finanzas",
   "au2-art--tint-reagenda",
-  "au2-art--tint-ia",
 ] as const;
 
 export type TintClass = (typeof TINT_CLASSES)[number];

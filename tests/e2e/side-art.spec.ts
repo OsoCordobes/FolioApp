@@ -25,11 +25,11 @@ test.beforeEach(async ({ context }) => {
 });
 
 test.describe("SideArt v2", () => {
-  test("auto-rotate cycles through the 5 slides", async ({ page }) => {
+  test("auto-rotate cycles through the 4 slides", async ({ page }) => {
     await page.goto("/login");
 
-    // 5 dots renderizados, 1 activo
-    await expect(page.locator(".au2-dot")).toHaveCount(5);
+    // 4 dots renderizados, 1 activo
+    await expect(page.locator(".au2-dot")).toHaveCount(4);
     await expect(page.locator(".au2-dot.is-active")).toHaveCount(1);
 
     const firstActive = await page.locator(".au2-dot.is-active").getAttribute("aria-label");
