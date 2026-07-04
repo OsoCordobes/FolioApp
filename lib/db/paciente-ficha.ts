@@ -85,10 +85,28 @@ export interface SesionPlan {
   vertebras: string[];
 }
 
-/** Turno en curso del paciente — ancla del guardado de sesión desde la ficha. */
+/**
+ * Modo del ancla de guardado de la ficha (feedback quiro jul-2026: la ficha se
+ * puede editar SIEMPRE que exista una visita contra la cual guardar):
+ *   - "en_curso":    turno EN_SALA/ATENDIENDO — comportamiento histórico.
+ *   - "por_iniciar": turno de HOY (tz de la org) AGENDADO/CONFIRMADO — la
+ *                    ficha edita ya; al guardar, la action inicia la atención
+ *                    (AGENDADO/CONFIRMADO → EN_SALA → ATENDIENDO).
+ *   - "retroactivo": sin turno en curso ni de hoy — se edita la sesión del
+ *                    último turno CERRADO (completar/corregir la ficha después
+ *                    de la visita; Ley 26.529: editable mientras la sesión no
+ *                    esté lockeada).
+ */
+export type TurnoAnclaModo = "en_curso" | "por_iniciar" | "retroactivo";
+
+/** Turno ANCLA del guardado de sesión desde la ficha (ver TurnoAnclaModo). */
 export interface TurnoActivoFicha {
   id: string;
-  estado: "EN_SALA" | "ATENDIENDO";
+  estado: "EN_SALA" | "ATENDIENDO" | "AGENDADO" | "CONFIRMADO" | "CERRADO";
+  /** Cómo se eligió este ancla — decide el copy del aviso del tab Plan. */
+  modo: TurnoAnclaModo;
+  /** turno.inicio (ISO) — la ficha muestra fecha/hora en por_iniciar/retroactivo. */
+  inicio: string;
   /**
    * M55 · especialidad EFECTIVA del profesional del turno
    * (member.especialidad ?? organization.especialidad). Es la herramienta que
@@ -164,9 +182,11 @@ export interface PlanData {
    */
   toolHistorial: ToolHistorialEntry[];
   /**
-   * Turno en curso (EN_SALA/ATENDIENDO, el más reciente) o null. Habilita
-   * "Guardar sesión" en el tab Plan: la sesión se upsertea 1:1 contra este
-   * turno (sesion.turno_id UNIQUE, M10) vía saveSesionFichaAction.
+   * Turno ANCLA del guardado (elegirTurnoAncla: en curso ?? de hoy por iniciar
+   * ?? último cerrado editable) o null si el paciente no tiene ninguna visita
+   * contra la cual guardar. Habilita "Guardar sesión" en el tab Plan: la
+   * sesión se upsertea 1:1 contra este turno (sesion.turno_id UNIQUE, M10)
+   * vía saveSesionFichaAction.
    */
   turnoActivo: TurnoActivoFicha | null;
   /**
@@ -249,6 +269,8 @@ interface SesionRow {
   tool_data_cifrado: string | null;
   notas_cifrado: string | null;
   created_at: string;
+  /** Ancla retroactiva: una sesión lockeada NO se puede re-editar (M10). */
+  locked_at: string | null;
 }
 
 interface TurnoExtRow {
@@ -274,6 +296,83 @@ interface PlanTratamientoRow {
   notas_cifrado: string | null;
 }
 
+// ─── Ancla de guardado (pura, testeable) ───────────────────────────────────
+
+const TZ_DEFAULT = "America/Argentina/Buenos_Aires";
+
+/** Subset de turno que necesita la elección del ancla (turno_extendido). */
+export interface TurnoAnclaCandidato {
+  id: string;
+  estado: string;
+  inicio: string;
+}
+
+/**
+ * Elige el turno ANCLA del guardado de la ficha (feedback quiro jul-2026: la
+ * ficha ya no se bloquea sin turno en curso). Cascada:
+ *
+ *   1. en_curso    — EN_SALA/ATENDIENDO más reciente (comportamiento histórico).
+ *   2. por_iniciar — turno AGENDADO/CONFIRMADO cuyo `inicio` cae HOY en la tz
+ *                    de la org (el más cercano a ahora si hay varios). Evita la
+ *                    trampa de escribir la visita de hoy sobre la sesión de la
+ *                    semana pasada cuando el profesional no pasó por /hoy.
+ *   3. retroactivo — el CERRADO más reciente cuya sesión no está lockeada (o
+ *                    sin sesión todavía): completar/corregir la ficha después
+ *                    de la visita. Si la sesión está lockeada NO se cae a un
+ *                    turno más viejo (editar una visita anterior a la última
+ *                    sería confuso) — la ficha queda read-only.
+ *
+ * null = ningún turno editable → la ficha queda read-only con CTA de sacar
+ * turno. Pura a propósito (sin I/O): invariantes en tests/unit/turno-ancla.
+ *
+ * `turnos` DEBE venir DESC por inicio (así lo lee getPacienteFicha).
+ */
+export function elegirTurnoAncla<T extends TurnoAnclaCandidato>(
+  turnos: T[],
+  sesiones: Array<{ turno_id: string; locked_at: string | null }>,
+  ahora: Date,
+  timezone: string,
+): { turno: T; modo: TurnoAnclaModo } | null {
+  const enCurso = turnos.find((t) => t.estado === "ATENDIENDO" || t.estado === "EN_SALA");
+  if (enCurso) return { turno: enCurso, modo: "en_curso" };
+
+  // "en-CA" formatea YYYY-MM-DD; una tz inválida cae al default AR (defensivo,
+  // mismo criterio que horaEnTz en lib/db/hoy.ts).
+  let fmt: Intl.DateTimeFormat;
+  try {
+    fmt = new Intl.DateTimeFormat("en-CA", { timeZone: timezone || TZ_DEFAULT });
+  } catch {
+    fmt = new Intl.DateTimeFormat("en-CA", { timeZone: TZ_DEFAULT });
+  }
+  const fechaOrg = (iso: string): string => {
+    const d = new Date(iso);
+    return isNaN(d.getTime()) ? "" : fmt.format(d);
+  };
+  const hoy = fmt.format(ahora);
+
+  const deHoy = turnos.filter(
+    (t) => (t.estado === "AGENDADO" || t.estado === "CONFIRMADO") && fechaOrg(t.inicio) === hoy,
+  );
+  if (deHoy.length > 0) {
+    // Varios turnos del mismo paciente en el día es raro; gana el más cercano
+    // a ahora para que la ficha edite la visita que está pasando.
+    const masCercano = deHoy.reduce((a, b) =>
+      Math.abs(new Date(a.inicio).getTime() - ahora.getTime()) <=
+      Math.abs(new Date(b.inicio).getTime() - ahora.getTime())
+        ? a
+        : b,
+    );
+    return { turno: masCercano, modo: "por_iniciar" };
+  }
+
+  const cerrado = turnos.find((t) => t.estado === "CERRADO");
+  if (cerrado) {
+    const sesion = sesiones.find((s) => s.turno_id === cerrado.id);
+    if (!sesion || sesion.locked_at == null) return { turno: cerrado, modo: "retroactivo" };
+  }
+  return null;
+}
+
 // ─── Fetcher principal ─────────────────────────────────────────────────────
 
 export async function getPacienteFicha(
@@ -292,6 +391,12 @@ export async function getPacienteFicha(
    * normal (turno en curso ?? org).
    */
   especialidadOverride?: EspecialidadSlug | null,
+  /**
+   * IANA timezone de la org (ActiveContext.organization.timezone). Decide qué
+   * turnos AGENDADO/CONFIRMADO cuentan como "de hoy" para el ancla por_iniciar.
+   * Ausente/inválida → America/Argentina/Buenos_Aires (default del producto).
+   */
+  orgTimezone?: string,
 ): Promise<Result<PacienteFichaData>> {
   if (!/^[0-9a-f-]{36}$/i.test(pacienteId)) {
     return err("validation", "ID de paciente inválido.");
@@ -311,7 +416,7 @@ export async function getPacienteFicha(
     // tool_data por ficha (vs 10) — aceptable para una sola ficha por request.
     supabase
       .from("sesion")
-      .select("id, turno_id, paciente_id, soap_s_cifrado, soap_o_cifrado, soap_a_cifrado, soap_p_cifrado, vertebras_json, tool_id, tool_data_cifrado, notas_cifrado, created_at")
+      .select("id, turno_id, paciente_id, soap_s_cifrado, soap_o_cifrado, soap_a_cifrado, soap_p_cifrado, vertebras_json, tool_id, tool_data_cifrado, notas_cifrado, created_at, locked_at")
       .eq("paciente_id", pacienteId)
       .eq("organization_id", organizationId)
       .order("created_at", { ascending: false })
@@ -442,36 +547,37 @@ export async function getPacienteFicha(
     new Date(t.inicio).getTime() > Date.now(),
   );
 
-  // Turno en curso (el más reciente EN_SALA/ATENDIENDO — `turnos` ya viene
-  // DESC por inicio): ancla del guardado de la sesión desde la ficha.
+  // Turno ANCLA del guardado (feedback quiro jul-2026): en curso ?? de hoy por
+  // iniciar ?? último cerrado editable — `turnos` ya viene DESC por inicio.
   // toolDraft = toolData ya persistido para ese turno, para re-hidratar el
   // borrador del slot (guardados sucesivos no pisan la herramienta).
-  const turnoEnCurso =
-    turnos.find((t) => t.estado === "ATENDIENDO" || t.estado === "EN_SALA") ?? null;
-  const sesionTurnoEnCurso = turnoEnCurso
-    ? sesiones.find((s) => s.turno_id === turnoEnCurso.id) ?? null
+  const ancla = elegirTurnoAncla(turnos, sesiones, new Date(), orgTimezone ?? TZ_DEFAULT);
+  const turnoAncla = ancla?.turno ?? null;
+  const sesionTurnoAncla = turnoAncla
+    ? sesiones.find((s) => s.turno_id === turnoAncla.id) ?? null
     : null;
 
-  // M55 · especialidad EFECTIVA del slot: la del PROFESIONAL del turno activo
+  // M55 · especialidad EFECTIVA del slot: la del PROFESIONAL del turno ANCLA
   // (member.especialidad ?? org), espejo exacto de la derivación server-side
-  // del writer (upsertSesion). Sin turno activo no hay guardado posible y la
-  // ficha rinde la herramienta de la org, como siempre. Si la lectura del
-  // member falla, degradamos a la org (display-only: ante un mismatch el zod
-  // .strict() del writer rechaza el guardado con error visible, sin
-  // corrupción). El lookup NO filtra deleted_at a propósito: el turno sigue
-  // siendo de ese profesional aunque esté de baja — su especialidad sigue
-  // decidiendo la herramienta (mismo criterio que el writer).
+  // del writer (upsertSesion) — vale igual para el ancla retroactiva: la
+  // herramienta que se edita es la del profesional de ESA visita. Sin ancla no
+  // hay guardado posible y la ficha rinde la herramienta de la org, como
+  // siempre. Si la lectura del member falla, degradamos a la org (display-only:
+  // ante un mismatch el zod .strict() del writer rechaza el guardado con error
+  // visible, sin corrupción). El lookup NO filtra deleted_at a propósito: el
+  // turno sigue siendo de ese profesional aunque esté de baja — su especialidad
+  // sigue decidiendo la herramienta (mismo criterio que el writer).
   let especialidadActiva: EspecialidadSlug = orgEspecialidad;
   if (especialidadOverride) {
     // Cuenta interna previsualizando otra ficha: el override manda sobre todo
     // (intake, radiografías, herramienta). Display-only; el writer igual valida
     // con zod .strict() al guardar.
     especialidadActiva = especialidadOverride;
-  } else if (turnoEnCurso?.profesional_id) {
+  } else if (turnoAncla?.profesional_id) {
     const { data: profRow } = await supabase
       .from("member")
       .select("especialidad")
-      .eq("id", turnoEnCurso.profesional_id)
+      .eq("id", turnoAncla.profesional_id)
       .maybeSingle();
     especialidadActiva = resolveEspecialidadEfectiva(
       (profRow as { especialidad: string | null } | null)?.especialidad ?? null,
@@ -490,16 +596,18 @@ export async function getPacienteFicha(
     ? { especialidad: especialidadActiva, datos: parseIntakeDatos(intakeRow.datos_cifrado) }
     : null;
 
-  const turnoActivo: TurnoActivoFicha | null = turnoEnCurso
+  const turnoActivo: TurnoActivoFicha | null = turnoAncla
     ? {
-        id: turnoEnCurso.id,
-        estado: turnoEnCurso.estado as TurnoActivoFicha["estado"],
+        id: turnoAncla.id,
+        estado: turnoAncla.estado as TurnoActivoFicha["estado"],
+        modo: ancla!.modo,
+        inicio: turnoAncla.inicio,
         especialidad: especialidadActiva,
-        atendiendoDesde: turnoEnCurso.atendiendo_desde ?? null,
+        atendiendoDesde: turnoAncla.atendiendo_desde ?? null,
         // Workstream 6 · ¿ya hay una sesion para este turno? (sesiones ya está
         // en memoria — sin query extra). Habilita radiografías + gatea el
         // carry-forward de la Tool quiro.
-        tieneSesionGuardada: sesiones.some((s) => s.turno_id === turnoEnCurso.id),
+        tieneSesionGuardada: sesiones.some((s) => s.turno_id === turnoAncla.id),
         toolDraft:
           // M55 · re-hidratar SOLO si el tool_id persistido es el de la
           // especialidad activa: un draft cross-tool re-enviado al writer
@@ -508,10 +616,10 @@ export async function getPacienteFicha(
           // la otra herramienta: el writer detecta el guardado solo-SOAP
           // sobre una fila no re-hidratable y PRESERVA las columnas tool
           // (debePreservarToolData, lib/db/sesiones.ts).
-          sesionTurnoEnCurso &&
-          sesionTurnoEnCurso.tool_data_cifrado != null &&
-          toolPerteneceAEspecialidad(sesionTurnoEnCurso.tool_id, especialidadActiva)
-            ? sesionToolData(sesionTurnoEnCurso)
+          sesionTurnoAncla &&
+          sesionTurnoAncla.tool_data_cifrado != null &&
+          toolPerteneceAEspecialidad(sesionTurnoAncla.tool_id, especialidadActiva)
+            ? sesionToolData(sesionTurnoAncla)
             : null,
       }
     : null;

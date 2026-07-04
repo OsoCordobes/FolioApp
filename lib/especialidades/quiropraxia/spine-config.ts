@@ -84,8 +84,12 @@ export interface PosteriorVertebra {
   h: number;
 }
 
-export const POSTERIOR_CX = 76;          // centro horizontal del viewBox (152 ancho)
-export const POSTERIOR_VIEWBOX_W = 152;
+// Feedback quiro (jul-2026): el viewBox posterior se ensanchó 152 → 170 para
+// que entren las alas ilíacas a los costados del sacro sin pisar la columna de
+// etiquetas del margen izquierdo. El display (.pc-quiro-svg max-width) escala
+// en proporción, así que el tamaño visual de los glifos vertebrales no cambia.
+export const POSTERIOR_CX = 85;          // centro horizontal del viewBox (170 ancho)
+export const POSTERIOR_VIEWBOX_W = 170;
 export const POSTERIOR_VIEWBOX_H = 660;
 
 // Construcción top→bottom con pasos y anchos por región (anatómicos). El paso es
@@ -125,6 +129,39 @@ export const POSTERIOR_VERTEBRAS: PosteriorVertebra[] = (() => {
   }
   return out;
 })();
+
+// ─── Ilíacos (feedback Lorenzo jul-2026) ─────────────────────────────────────
+//
+// Los quiroprácticos ajustan también los ilíacos (huesos de la pelvis que se
+// articulan con el sacro en la sacroilíaca). Se marcan igual que una vértebra:
+// click → panel técnica/listado. El id viaja en el MISMO array `vertebras` del
+// toolData v2 (el schema acepta ids libres y el espejo legacy los trata como
+// una zona más) — NO requiere migración de datos.
+//
+// Vista posterior: el paciente está DE ESPALDAS, así que su ilíaco izquierdo
+// queda a la IZQUIERDA del viewBox (side -1). Solo se dibujan en la vista
+// posterior — en la lateral los ilíacos taparían la columna (misma asimetría
+// que Sacro/Cóccix, que tampoco existen en la lateral).
+
+export interface PosteriorIliaco {
+  /** Id persistido en toolData.vertebras (estable, NO renombrar). */
+  id: "ILI" | "ILD";
+  /** Etiqueta corta sobre el glifo. */
+  label: string;
+  /** Nombre completo para el panel de notas y aria-label. */
+  nombre: string;
+  /** -1 = izquierda del viewBox (ilíaco izquierdo del paciente), 1 = derecha. */
+  side: -1 | 1;
+}
+
+export const POSTERIOR_ILIACOS: PosteriorIliaco[] = [
+  { id: "ILI", label: "IL", nombre: "Ilíaco izquierdo", side: -1 },
+  { id: "ILD", label: "IL", nombre: "Ilíaco derecho", side: 1 },
+];
+
+/** Centro vertical de las alas ilíacas: el del sacro (se flanquean). */
+export const POSTERIOR_SACRO_Y: number =
+  POSTERIOR_VERTEBRAS.find((v) => v.region === "sacro")?.y ?? 0;
 
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 

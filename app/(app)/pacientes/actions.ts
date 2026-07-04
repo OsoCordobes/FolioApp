@@ -176,6 +176,49 @@ export async function saveSesionFichaAction(
   const ctx = await getActiveContext();
   if (!ctx.ok) return ctx;
 
+  // Feedback quiro (jul-2026): la ficha también guarda con el turno de hoy aún
+  // no iniciado (ancla por_iniciar de elegirTurnoAncla). Guardar ES empezar a
+  // atender: si el turno está AGENDADO/CONFIRMADO/EN_SALA se lo lleva a
+  // ATENDIENDO (matriz M09: AGENDADO|CONFIRMADO → EN_SALA → ATENDIENDO) ANTES
+  // del upsert, así atendiendo_desde marca el inicio real de la escritura y
+  // "Guardar y cerrar" puede derivar la duración. Best-effort deliberado: si
+  // una transición falla (el estado cambió en el medio / la matriz la
+  // rechaza), la sesión se guarda IGUAL — los datos clínicos mandan; el estado
+  // se corrige desde /hoy y el fallo queda en Sentry. El SELECT es org-scoped
+  // (un turno ajeno da estado null y no se transiciona; el guard IDOR real
+  // vive en upsertSesion).
+  const supabase = await createSupabaseServerClient();
+  const { data: turnoEstadoRow } = await supabase
+    .from("turno")
+    .select("estado")
+    .eq("id", parsed.data.turnoId)
+    .eq("organization_id", ctx.data.session.organizationId)
+    .maybeSingle();
+  const estadoTurno = (turnoEstadoRow as { estado: string } | null)?.estado ?? null;
+
+  let huboTransicion = false;
+  if (estadoTurno === "AGENDADO" || estadoTurno === "CONFIRMADO" || estadoTurno === "EN_SALA") {
+    const pasos: Array<"EN_SALA" | "ATENDIENDO"> =
+      estadoTurno === "EN_SALA" ? ["ATENDIENDO"] : ["EN_SALA", "ATENDIENDO"];
+    for (const to of pasos) {
+      const trans = await transitionTurno({ turnoId: parsed.data.turnoId, to });
+      if (!trans.ok) {
+        const { captureException } = await import("@sentry/nextjs");
+        captureException(
+          new Error(
+            `saveSesionFicha: no se pudo iniciar la atención (→${to}): ${trans.error.message}`,
+          ),
+          { tags: { component: "pacientes-actions", op: "iniciarAtencionAlGuardar" } },
+        );
+        break;
+      }
+      huboTransicion = true;
+    }
+  }
+  // El turno cambió de estado → /hoy debe dejar de mostrarlo como pendiente,
+  // haya salido bien o no el guardado de abajo.
+  if (huboTransicion) revalidatePath("/hoy");
+
   // F-AUTH (IDOR): turnoId/pacienteId vienen del cliente. El guard cross-org
   // (turno ∈ org activa + turno.paciente_id == pacienteId) vive ahora en
   // upsertSesion (lib/db/sesiones.ts), así protege a cualquier caller y evita
