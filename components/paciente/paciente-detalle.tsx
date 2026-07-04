@@ -40,6 +40,22 @@ function fmtFecha(iso: string): string {
   return `${d.getDate()} ${MESES[d.getMonth()]}`;
 }
 
+// Fecha/hora del turno ancla en la tz del producto (AR). Intl con timeZone
+// explícita: el output es idéntico en server y cliente (sin hydration
+// mismatch), a diferencia de toLocaleTimeString sin tz que usaría la del
+// runtime (UTC en Vercel vs AR en el browser).
+const TZ_AR = "America/Argentina/Buenos_Aires";
+
+function fmtTurnoAncla(iso: string, opts: Intl.DateTimeFormatOptions): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "—";
+  try {
+    return new Intl.DateTimeFormat("es-AR", { timeZone: TZ_AR, ...opts }).format(d);
+  } catch {
+    return "—";
+  }
+}
+
 function iniciales(nombre: string): string {
   return nombre.split(" ").map((p) => p[0]).filter(Boolean).join("").slice(0, 2).toUpperCase();
 }
@@ -63,19 +79,23 @@ function SoapStacked({
   soap,
   setSoap,
   saveBadge,
+  eyebrow,
 }: {
   soap: SoapState;
   setSoap: (s: SoapState) => void;
-  /** Indicador de guardado (lo pasa TabPlan cuando hay turno en curso). */
+  /** Indicador de guardado (lo pasa TabPlan cuando hay turno ancla). */
   saveBadge?: ReactNode;
+  /** Título del header — TabPlan lo ajusta si se edita una visita pasada. */
+  eyebrow?: string;
 }) {
   // El borrador se persiste con "Guardar sesión" (TabPlan) cuando el paciente
-  // tiene un turno en curso. Sin turno en curso no hay sesión contra la cual
-  // guardar (sesion.turno_id UNIQUE) — etiqueta honesta "Borrador local".
+  // tiene un turno ancla (en curso / de hoy / última visita). Sin ancla no hay
+  // sesión contra la cual guardar (sesion.turno_id UNIQUE) — etiqueta honesta
+  // "Borrador local".
   return (
     <div className="pc-soap">
       <header className="pc-soap-head">
-        <span className="fi-eyebrow">Nota SOAP · sesión de {TURNO_HOY_HORA}</span>
+        <span className="fi-eyebrow">{eyebrow ?? `Nota SOAP · sesión de ${TURNO_HOY_HORA}`}</span>
         {saveBadge ?? (
           <span
             className="fm-save"
@@ -313,7 +333,7 @@ function TabPlan() {
     ) : (
       <span
         className="fm-save"
-        title="El borrador se persiste con «Guardar sesión» mientras el turno está en curso."
+        title="El borrador se persiste con «Guardar sesión» en la visita indicada arriba."
       >
         Borrador sin guardar
       </span>
@@ -327,17 +347,38 @@ function TabPlan() {
         <span>{def.badgeLabel}</span>
       </div>
 
-      {/* Sin turno en curso no hay sesión contra la cual guardar (sesion.turno_id
-          UNIQUE): la herramienta se rinde en modo lectura y un aviso honesto
-          explica el porqué + cómo habilitar el guardado. Genérico para todas las
-          especialidades (la Tool respeta `readOnly` vía SpecialtyToolProps). */}
+      {/* Feedback quiro (jul-2026): la ficha se edita SIEMPRE que exista una
+          visita contra la cual guardar (elegirTurnoAncla: en curso ?? de hoy
+          por iniciar ?? última cerrada editable). Solo sin NINGÚN ancla queda
+          read-only, con CTA honesto. En por_iniciar/retroactivo un aviso dice
+          contra qué visita se guarda — transparencia clínica, no bloqueo. */}
       {!turnoActivo ? (
         <div className="pc-sin-turno" role="note">
           <I.Lock size={14} aria-hidden />
           <p>
-            No hay un turno en curso para este paciente. Iniciá la atención desde{" "}
+            Este paciente todavía no tiene visitas para registrar. Sacá un turno
+            (botón «Sacar turno», arriba) o iniciá la atención desde{" "}
             <Link href="/hoy" className="pc-link">/hoy</Link>{" "}
-            (o sacá un turno) para registrar y guardar la sesión.
+            para escribir y guardar la ficha.
+          </p>
+        </div>
+      ) : turnoActivo.modo === "por_iniciar" ? (
+        <div className="pc-sin-turno pc-sin-turno--info" role="note">
+          <I.Calendar size={14} aria-hidden />
+          <p>
+            Turno de hoy a las{" "}
+            {fmtTurnoAncla(turnoActivo.inicio, { hour: "2-digit", minute: "2-digit", hour12: false })}{" "}
+            hs, todavía sin iniciar — podés escribir la ficha ya: al guardar, el
+            turno pasa a «Atendiendo» automáticamente.
+          </p>
+        </div>
+      ) : turnoActivo.modo === "retroactivo" ? (
+        <div className="pc-sin-turno pc-sin-turno--info" role="note">
+          <I.History size={14} aria-hidden />
+          <p>
+            No hay un turno en curso: estás completando la ficha de la última
+            visita ({fmtTurnoAncla(turnoActivo.inicio, { day: "numeric", month: "short" })}).
+            Para registrar una visita nueva, sacá un turno.
           </p>
         </div>
       ) : null}
@@ -346,8 +387,8 @@ function TabPlan() {
           cuenta como quiropraxia): en fichas mixtas (cardio + psico) cada
           herramienta ve sus propias sesiones. El resumen por sesión de
           HistorialReciente/TabSesiones sigue siendo por tool_id persistido.
-          readOnly cuando no hay turno activo: editar un borrador que no se
-          puede guardar sería engañoso.
+          readOnly solo sin turno ANCLA (paciente sin visitas editables):
+          editar un borrador que no se puede guardar sería engañoso.
           Workstream 6 · quiropraxia (hideSoap) rinde la Tool a ancho completo y
           omite el SOAP; el resto conserva la grilla 380px + SOAP. */}
       {hideSoap ? (
@@ -367,7 +408,16 @@ function TabPlan() {
             historial={filtrarToolHistorial(plan.toolHistorial, especialidad)}
             {...toolExtras}
           />
-          <SoapStacked soap={soap} setSoap={setSoap} saveBadge={saveBadge} />
+          <SoapStacked
+            soap={soap}
+            setSoap={setSoap}
+            saveBadge={saveBadge}
+            eyebrow={
+              turnoActivo?.modo === "retroactivo"
+                ? `Nota SOAP · visita del ${fmtTurnoAncla(turnoActivo.inicio, { day: "numeric", month: "short" })}`
+                : undefined
+            }
+          />
         </div>
       )}
 

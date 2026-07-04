@@ -23,9 +23,12 @@ import { useEffect, useRef, useState } from "react";
 
 import * as I from "@/components/icons";
 import {
+  POSTERIOR_ILIACOS,
+  POSTERIOR_SACRO_Y,
   POSTERIOR_VERTEBRAS,
   POSTERIOR_VIEWBOX_W,
   SPINE_VERTEBRAS,
+  type PosteriorIliaco,
   type PosteriorVertebra,
   type RegionVert,
 } from "@/lib/especialidades/quiropraxia/spine-config";
@@ -71,6 +74,14 @@ export function SpineMap({ data, onChange, readOnly }: SpineMapProps) {
     return () => document.removeEventListener("keydown", onKey);
   }, [selected]);
 
+  // El panel vive DEBAJO de la ilustración dentro de la columna sticky
+  // scrolleable (.pc-quiro-col-spine): al tocar una vértebra alta, sin este
+  // scroll el panel quedaba fuera de vista y parecía que el click no hizo nada.
+  useEffect(() => {
+    if (selected == null) return;
+    panelRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [selected]);
+
   const setVista = (next: VistaQuiro) => {
     if (readOnly) return;
     onChange({ ...data, vista: next });
@@ -95,9 +106,17 @@ export function SpineMap({ data, onChange, readOnly }: SpineMapProps) {
   };
 
   const selectedNota = selected ? notaDe(data, selected) : undefined;
+  // El seleccionado puede ser una vértebra o un ilíaco (feedback jul-2026):
+  // el panel titula "Vértebra C4" o "Ilíaco izquierdo" según corresponda.
+  const selectedIliaco = selected
+    ? POSTERIOR_ILIACOS.find((i) => i.id === selected)
+    : undefined;
   const selectedLabel = selected
     ? POSTERIOR_VERTEBRAS.find((v) => v.id === selected)?.label ?? selected
     : "";
+  const selectedTitulo = selectedIliaco
+    ? selectedIliaco.nombre
+    : `Vértebra ${selectedLabel}`;
 
   return (
     <section className="pc-quiro-spine">
@@ -130,7 +149,7 @@ export function SpineMap({ data, onChange, readOnly }: SpineMapProps) {
       {selected ? (
         <div className="pc-quiro-vert-panel" ref={panelRef}>
           <div className="pc-quiro-vert-panel-head">
-            <b>Vértebra {selectedLabel}</b>
+            <b>{selectedTitulo}</b>
             <button
               type="button"
               className="pc-quiro-icon-btn"
@@ -161,13 +180,13 @@ export function SpineMap({ data, onChange, readOnly }: SpineMapProps) {
               value={selectedNota?.listado ?? ""}
               onChange={(e) => updateNota(selected, { listado: e.target.value })}
               readOnly={readOnly}
-              placeholder="Ej. PLI, PRS, ASRP…"
+              placeholder={selectedIliaco ? "Ej. PI, AS, In, Ex…" : "Ej. PLI, PRS, ASRP…"}
             />
           </label>
         </div>
       ) : (
         <p className="pc-quiro-muted pc-quiro-spine-hint">
-          Tocá una vértebra para cargar su técnica de ajuste y listado.
+          Tocá una vértebra o un ilíaco para cargar su técnica de ajuste y listado.
         </p>
       )}
     </section>
@@ -211,6 +230,19 @@ function PosteriorSvg({
           />
         );
       })()}
+      {/* Ilíacos (capa VISUAL): se pintan ANTES de las vértebras para que el
+          sacro, el cóccix y sus etiquetas del margen queden por encima de las
+          alas. El click lo captura la capa de hit de abajo (IliacoHit), que va
+          DESPUÉS de las vértebras — sin ella, los rects de hit a ancho completo
+          de cada fila vertebral se tragarían el click sobre el ala. */}
+      {POSTERIOR_ILIACOS.map((il) => (
+        <IliacoVisual
+          key={il.id}
+          iliaco={il}
+          filled={tieneContenido(notaDe(data, il.id))}
+          selected={selected === il.id}
+        />
+      ))}
       {POSTERIOR_VERTEBRAS.map((v) => {
         const filled = tieneContenido(notaDe(data, v.id));
         const isSelected = selected === v.id;
@@ -254,7 +286,114 @@ function PosteriorSvg({
           </g>
         );
       })}
+      {/* Ilíacos (capa de HIT): transparente, al final del SVG para ganarle el
+          hit-test a los rects a ancho completo de las filas vertebrales. Lleva
+          el foco/teclado y el aria-label. */}
+      {POSTERIOR_ILIACOS.map((il) => (
+        <IliacoHit key={il.id} iliaco={il} onPick={onPick} />
+      ))}
     </svg>
+  );
+}
+
+// ─── Ilíacos · vista posterior (feedback Lorenzo jul-2026) ───────────────────
+//
+// Ala ilíaca vista de atrás: cresta que sube y se abre por ENCIMA del borde
+// superior del sacro, borde lateral descendente y lóbulo inferior (isquion)
+// que se recoge hacia medial. El path se dibuja para el lado DERECHO (+x) y se
+// espeja con scale(-1,1) para el izquierdo. Cerca de la altura de la etiqueta
+// "Sacro" del margen (y ≈ 0) el ala se mantiene angosta a propósito para no
+// pisar el texto del gutter izquierdo.
+const ILIACO_PATH = `
+  M 15 -12
+  C 18 -23, 28 -31, 42 -33
+  C 55 -35, 65 -29, 67 -18
+  C 68 -10, 62 -4, 52 0
+  C 45 3, 40 8, 37 15
+  C 34 24, 30 32, 24 36
+  C 18 40, 13 36, 13 28
+  C 13 16, 14 2, 15 -12
+  Z`;
+
+function IliacoVisual({
+  iliaco,
+  filled,
+  selected,
+}: {
+  iliaco: PosteriorIliaco;
+  filled: boolean;
+  selected: boolean;
+}) {
+  const fill = filled ? "var(--accent)" : "var(--surface)";
+  const stroke = selected ? "var(--ink)" : filled ? "var(--accent)" : "var(--ink-4)";
+  const detail = filled ? "rgba(255,255,255,.5)" : "var(--line)";
+  return (
+    <g transform={`translate(${POSTERIOR_VIEWBOX_W / 2} ${POSTERIOR_SACRO_Y})`}>
+      <g transform={`scale(${iliaco.side} 1)`}>
+        <path
+          d={ILIACO_PATH}
+          fill={fill}
+          stroke={stroke}
+          strokeWidth={selected ? 1.6 : 1}
+          strokeLinejoin="round"
+          style={{ transition: "fill 200ms var(--ease-in), stroke 120ms var(--ease-in)" }}
+        />
+        {/* Línea interna de la cresta ilíaca + fosita del EIPS. */}
+        <path
+          d="M 20 -14 C 26 -22, 36 -27, 47 -28"
+          fill="none"
+          stroke={detail}
+          strokeWidth={1.2}
+          strokeLinecap="round"
+        />
+        <circle cx={22} cy={-4} r={1.7} fill={detail} stroke="none" />
+      </g>
+      {/* Etiqueta fuera del grupo espejado (un scale(-1,1) invertiría el texto). */}
+      <text
+        x={iliaco.side * 40}
+        y={-9}
+        textAnchor="middle"
+        fontSize="8"
+        fontWeight={selected ? 700 : 500}
+        fill={selected ? "var(--ink)" : "var(--ink-3)"}
+        style={{ pointerEvents: "none" }}
+      >
+        {iliaco.label}
+      </text>
+    </g>
+  );
+}
+
+function IliacoHit({
+  iliaco,
+  onPick,
+}: {
+  iliaco: PosteriorIliaco;
+  onPick: (id: string) => void;
+}) {
+  return (
+    <g
+      data-vert={iliaco.id}
+      transform={`translate(${POSTERIOR_VIEWBOX_W / 2} ${POSTERIOR_SACRO_Y}) scale(${iliaco.side} 1)`}
+      onClick={() => onPick(iliaco.id)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onPick(iliaco.id);
+        }
+      }}
+      tabIndex={0}
+      style={{ cursor: "pointer" }}
+      role="button"
+      aria-label={iliaco.nombre}
+    >
+      <path
+        d={ILIACO_PATH}
+        fill="transparent"
+        stroke="transparent"
+        strokeWidth={8}
+      />
+    </g>
   );
 }
 

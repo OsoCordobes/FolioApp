@@ -64,6 +64,9 @@ export default async function PacientePage({ params }: PageProps) {
     ctx.data.organization.id,
     ctx.data.organization.especialidad,
     especialidadOverride,
+    // tz de la org: decide qué turnos AGENDADO/CONFIRMADO cuentan como "de
+    // hoy" para el ancla por_iniciar de la ficha (elegirTurnoAncla).
+    ctx.data.organization.timezone,
   );
 
   if (!data.ok) {
