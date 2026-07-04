@@ -1,4 +1,4 @@
-name: App CI (typecheck + lint + unit)
+name: App CI (typecheck + lint + unit + build)
 
 on:
   push:
@@ -46,3 +46,17 @@ jobs:
 
       - name: Unit tests
         run: pnpm test:unit
+
+      # Gate de build: una regresión de `next build` no debe descubrirse en
+      # Vercel post-merge (master auto-deploya a prod). El build NO exige
+      # envs de Supabase hoy (los accesos son lazy y las páginas SSG están
+      # guarded), pero se inyectan dummies para paridad con el build de
+      # Vercel (donde existen): así un futuro prerender que las lea no
+      # rompe CI por `requireEnv` cuando en prod buildearía bien.
+      # Valores dummy — nunca apuntan a un proyecto real.
+      - name: Build
+        run: pnpm build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: "https://dummy.supabase.co"
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: "dummy"
+          SUPABASE_SERVICE_ROLE_KEY: "dummy"
