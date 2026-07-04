@@ -16,7 +16,6 @@
  *   - pointer-events: none + user-select: none (decorativo puro)
  *
  * Usado en:
- *   - slide-ia.tsx: <GhostSidebar /> (la nav del app real, columna izq)
  *   - slide-reagenda.tsx: <GhostCalendar /> (vista semana fantasma)
  */
 
@@ -32,41 +31,6 @@ const ghostStyle: CSSProperties = {
   userSelect: "none",
   overflow: "hidden",
 };
-
-/**
- * Silueta de un sidebar tipo Linear/Notion: avatar arriba, lista de items
- * agrupada, indicator del item activo. Usa accent_soft para que tinte con
- * el slide actual (--accent var).
- */
-export function GhostSidebar() {
-  return (
-    <svg
-      style={ghostStyle}
-      className="au2-fg-ghost au2-fg-ghost-sidebar"
-      viewBox="0 0 480 360"
-      preserveAspectRatio="xMidYMid slice"
-      aria-hidden
-    >
-      {/* Sidebar column (left 80px) */}
-      <rect x="0" y="0" width="80" height="360" fill="var(--surface-2, #f5f3ee)" />
-      <rect x="80" y="0" width="1" height="360" fill="var(--line, #e8e2d2)" />
-      {/* Avatar circle top */}
-      <circle cx="40" cy="40" r="14" fill="var(--accent)" opacity="0.4" />
-      {/* Nav items */}
-      {[80, 120, 160, 200, 240].map((y, i) => (
-        <g key={y}>
-          <rect x="14" y={y - 6} width="52" height="12" rx="3"
-            fill={i === 1 ? "var(--accent)" : "var(--surface-2, #f5f3ee)"}
-            opacity={i === 1 ? "0.5" : "0.8"} />
-        </g>
-      ))}
-      {/* Right area: cards skeleton */}
-      <rect x="120" y="40" width="280" height="56" rx="8" fill="var(--surface, #fff)" stroke="var(--line, #e8e2d2)" />
-      <rect x="120" y="116" width="280" height="56" rx="8" fill="var(--surface, #fff)" stroke="var(--line, #e8e2d2)" />
-      <rect x="120" y="192" width="280" height="56" rx="8" fill="var(--surface, #fff)" stroke="var(--line, #e8e2d2)" />
-    </svg>
-  );
-}
 
 /**
  * Silueta de una vista calendario semanal: 7 columnas, algunos slots

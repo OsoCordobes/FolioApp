@@ -7,7 +7,8 @@
  * Consultorio (default activa), Horarios, Servicios, Integraciones, Plan.
  *
  * En F4 cada sección persiste vía Server Action propia con audit logging.
- * En F5/F6 los toggles de Google/WhatsApp ejecutan el flow OAuth real.
+ * Integraciones muestra estado real: Google Calendar (OAuth por org), Mercado
+ * Pago (estado de la suscripción) y WhatsApp (solo si el deploy lo tiene operativo).
  */
 
 import { useId, useState, useTransition, type ReactNode } from "react";
@@ -54,6 +55,7 @@ import type {
   IntegrationStatus,
   ServicioRow,
 } from "@/lib/db/configuracion";
+import type { EstadoSuscripcion } from "@/lib/db/suscripcion";
 
 // Re-export tipos para mantener compat con sub-componentes locales.
 export type { ConsultorioData };
@@ -344,31 +346,9 @@ function SecCuenta({ c, set }: { c: ConsultorioData; set: (patch: Partial<Consul
         <Row label="Contraseña" sub="Te enviaremos un email con un link de reset">
           <CambiarPasswordButton email={c.email} />
         </Row>
-        <Row label="Autenticación de dos factores" sub="Recomendado para datos clínicos">
-          <button
-            type="button"
-            className="fi-btn fi-btn-secondary"
-            disabled
-            title="Próximamente — F11 polish"
-            style={{ opacity: 0.5, cursor: "not-allowed" }}
-          >
-            Activar MFA
-          </button>
-        </Row>
-        <Row label="Sesiones activas" sub="Dispositivos donde tu cuenta está abierta">
-          <div className="cfg-sesiones">
-            <div className="cfg-sesion">
-              <div>
-                <b>Este navegador</b>
-                <span className="muted">Sesión activa ahora</span>
-              </div>
-              <span className="cfg-tag-now">Este dispositivo</span>
-            </div>
-          </div>
-          <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
-            Listado de otros dispositivos en F11 polish. Mientras tanto, usá &quot;Cerrar sesión&quot; del sidebar para cerrar esta sesión.
-          </p>
-        </Row>
+        {/* MFA y listado de sesiones activas: sin backend todavía — no mostramos
+            UI de seguridad que recomiende algo que no existe. Ambos viven en
+            docs/BACKLOG-POST-LAUNCH.md; restaurar las filas cuando haya feature real. */}
       </Section>
 
       <Section title="Tus datos y derechos" sub="Habeas Data (Ley 25.326): exportar tus datos o solicitar eliminación de cuenta.">
@@ -886,8 +866,8 @@ function IntegrationCard({ icon, name, desc, status, statusKind, action }: {
   name: string;
   desc: string;
   status: string;
-  statusKind: "ok" | "warn" | "soon";
-  action: ReactNode;
+  statusKind: "ok" | "warn";
+  action?: ReactNode;
 }) {
   return (
     <div className="cfg-integration">
@@ -902,12 +882,37 @@ function IntegrationCard({ icon, name, desc, status, statusKind, action }: {
         </div>
         <p>{desc}</p>
       </div>
-      <div className="cfg-int-action">{action}</div>
+      {action ? <div className="cfg-int-action">{action}</div> : null}
     </div>
   );
 }
 
-function SecIntegraciones({ googleCalendar }: { googleCalendar: IntegrationStatus }) {
+/**
+ * Estado honesto de la suscripción MP para la card de Integraciones.
+ * El estado real vive en /configuracion/billing — acá solo un resumen.
+ */
+function suscripcionStatusLabel(estado: EstadoSuscripcion | null): { label: string; kind: "ok" | "warn" } {
+  switch (estado) {
+    case "ACTIVA":                return { label: "Conectado · suscripción activa", kind: "ok" };
+    case "PENDIENTE_ACTIVACION":  return { label: "Suscripción pendiente de activación", kind: "warn" };
+    case "PAUSADA":               return { label: "Suscripción pausada", kind: "warn" };
+    case "MOROSA":                return { label: "Suscripción con pago pendiente", kind: "warn" };
+    case "CANCELADA":             return { label: "Suscripción cancelada", kind: "warn" };
+    case null:                    return { label: "Sin suscripción", kind: "warn" };
+  }
+}
+
+function SecIntegraciones({
+  googleCalendar,
+  suscripcionEstado,
+  whatsappConfigured,
+  isOwner,
+}: {
+  googleCalendar: IntegrationStatus;
+  suscripcionEstado: EstadoSuscripcion | null;
+  whatsappConfigured: boolean;
+  isOwner: boolean;
+}) {
   const [pending, startTransition] = useTransition();
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -1015,31 +1020,37 @@ function SecIntegraciones({ googleCalendar }: { googleCalendar: IntegrationStatu
       <IntegrationCard
         icon={<div className="cfg-mp-ico">MP</div>}
         name="Mercado Pago"
-        desc="Cobros a pacientes via Mercado Pago. Tu suscripción a Folio se gestiona aparte en Configuración → Plan."
-        status="Disponible próximamente"
-        statusKind="soon"
+        desc="El cobro mensual de tu suscripción a Folio se procesa vía Mercado Pago."
+        status={suscripcionStatusLabel(suscripcionEstado).label}
+        statusKind={suscripcionStatusLabel(suscripcionEstado).kind}
         action={
-          <button type="button" className="fi-btn fi-btn-ghost" disabled title="Próximamente">
-            Conectar
-          </button>
+          isOwner ? (
+            // /configuracion/billing hace notFound() salvo OWNER — el link solo
+            // se muestra al titular (mismo criterio que SecPlan).
+            <a href="/configuracion/billing" className="fi-btn fi-btn-ghost">
+              Gestionar en Plan y facturación
+            </a>
+          ) : (
+            <span className="muted">La gestiona el titular de la cuenta.</span>
+          )
         }
       />
-      <IntegrationCard
-        icon={
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="#25D366">
-            <path d="M3 21l1.65-4.8A8 8 0 1 1 8 19.6L3 21z" />
-          </svg>
-        }
-        name="WhatsApp Business API"
-        desc="Envío automático de confirmaciones, recordatorios y mensajes templados. Hoy se abre wa.me manualmente."
-        status="Disponible próximamente"
-        statusKind="soon"
-        action={
-          <button type="button" className="fi-btn fi-btn-ghost" disabled>
-            Avisarme
-          </button>
-        }
-      />
+      {/* WhatsApp: la card solo existe si el envío está operativo en este deploy
+          (envs de WhatsApp Cloud presentes, server-side). Sin config, mejor
+          ausente que una promesa — el envío es de Folio, no lo activa el usuario. */}
+      {whatsappConfigured ? (
+        <IntegrationCard
+          icon={
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="#25D366">
+              <path d="M3 21l1.65-4.8A8 8 0 1 1 8 19.6L3 21z" />
+            </svg>
+          }
+          name="WhatsApp"
+          desc="Confirmaciones y recordatorios de turnos se envían automáticamente por WhatsApp desde el número de Folio. No requiere configuración de tu parte."
+          status="Conectado"
+          statusKind="ok"
+        />
+      ) : null}
     </Section>
   );
 }
@@ -1568,7 +1579,7 @@ function SecPlan({ isOwner }: { isOwner: boolean }) {
         </div>
       </Section>
 
-      <Section title="Facturación" sub="Comprobantes y datos para emisión de facturas.">
+      <Section title="Facturación" sub="Datos de tu plan y método de pago.">
         <Row label="Datos de facturación" sub="CUIT, razón social y condición frente al IVA">
           <span className="muted">Editables desde la sección Consultorio.</span>
         </Row>
@@ -1674,6 +1685,10 @@ interface ConfiguracionProps {
   initialPerfilPublico: PerfilPublicoData | null;
   /** M64 · opt-in al directorio público (toggle "Presencia online"). */
   initialListarEnDirectorio: boolean;
+  /** Estado real de la suscripción MP de la org (getActiveContext) — card de Integraciones. */
+  suscripcionEstado: EstadoSuscripcion | null;
+  /** ¿El envío por WhatsApp Cloud está operativo en este deploy? (check server-side de envs). */
+  whatsappConfigured: boolean;
 }
 
 interface DirtyState {
@@ -1703,6 +1718,8 @@ export function Configuracion({
   esColegiado,
   initialPerfilPublico,
   initialListarEnDirectorio,
+  suscripcionEstado,
+  whatsappConfigured,
 }: ConfiguracionProps) {
   const [seccion, setSeccion] = useState<SeccionId>("consultorio");
   const [consultorio, setConsultorio] = useState<ConsultorioData>(initialConsultorio);
@@ -1867,7 +1884,14 @@ export function Configuracion({
               setServicios={(s) => { setServicios(s); setDirty((dd) => ({ ...dd, servicios: true })); }}
             />
           ) : null}
-          {seccion === "integraciones" ? <SecIntegraciones googleCalendar={googleCalendar} /> : null}
+          {seccion === "integraciones" ? (
+            <SecIntegraciones
+              googleCalendar={googleCalendar}
+              suscripcionEstado={suscripcionEstado}
+              whatsappConfigured={whatsappConfigured}
+              isOwner={isOwner}
+            />
+          ) : null}
           {seccion === "plan"          ? <SecPlan isOwner={isOwner} /> : null}
         </div>
       </div>
