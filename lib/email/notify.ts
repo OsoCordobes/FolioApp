@@ -10,13 +10,18 @@
  * testeables sin dependencia de entorno.
  */
 
-import type { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getAppUrl } from "@/lib/config/app-url";
+import {
+  createSupabaseServiceClient,
+  type createSupabaseServerClient,
+} from "@/lib/supabase/server";
 import { SUPPORT_EMAIL } from "@/lib/support";
 
 import { sendEmail } from "./client";
 import { buildBookingConfirmadaEmail } from "./templates/booking-confirmada";
 import { buildBookingRecibidaEmail } from "./templates/booking-recibida";
 import { buildMemberInvitationEmail } from "./templates/member-invitation";
+import { buildPedidoNuevoEmail, canalPedidoLabel } from "./templates/pedido-nuevo";
 
 type ServerClient = Awaited<ReturnType<typeof createSupabaseServerClient>>;
 
@@ -171,6 +176,106 @@ export async function notifyBookingRecibida(input: {
     captureException(e, {
       tags: { component: "email", op: "notifyBookingRecibida" },
       extra: { organizationId },
+    });
+  }
+}
+
+// ─── Pedido nuevo: aviso al profesional (bandeja de pedidos) ────────────────
+
+/**
+ * Avisa al PROFESIONAL que entró un pedido de turno que quedó PENDIENTE.
+ * Callers: webhook de WhatsApp (siempre) y booking público (solo cuando NO
+ * hubo auto-confirmación — si el pedido se convirtió en turno, el flujo de
+ * confirmación ya cubre el aviso).
+ *
+ * Destinatario: el profesional destino del pedido (pedido.profesional_id →
+ * member → profile.email) o, sin profesional asignado, el OWNER de la org.
+ * La lectura de `member` usa el client del caller (ambos call sites pasan el
+ * SERVICE client — no hay sesión en webhook/booking); la de `profile` va por
+ * service client ANGOSTO (profile_select_self impide leer profiles ajenos
+ * vía RLS — mismo patrón que listMembers en lib/db/members.ts).
+ *
+ * PHI mínima deliberada: nombre del solicitante y canal — sin motivo/notas
+ * clínicas ni contacto del paciente. Fail-safe como el resto del módulo:
+ * try/catch + captureException, jamás re-lanza ni rompe la creación del
+ * pedido. Sin destinatario resoluble → return silencioso.
+ */
+export async function notifyPedidoNuevo(input: {
+  client: ServerClient;
+  organizationId: string;
+  pedidoId: string;
+  pacienteNombre: string;
+  /** canal_pedido crudo de DB: WEB | WHATSAPP | INSTAGRAM | TELEFONO. */
+  canal: string;
+  /** fecha_propuesta ISO, o null (WhatsApp: pedido sin horario). */
+  fechaPropuestaIso: string | null;
+  /** member.id destino si el pedido lo trae; null → owner de la org. */
+  profesionalId?: string | null;
+}): Promise<void> {
+  const { client, organizationId, pedidoId, pacienteNombre, canal, fechaPropuestaIso } = input;
+
+  try {
+    // 1. Resolver el profile destinatario: profesional del pedido, o OWNER.
+    let profileId: string | null = null;
+    if (input.profesionalId) {
+      const { data: prof } = await client
+        .from("member")
+        .select("profile_id")
+        .eq("id", input.profesionalId)
+        .eq("organization_id", organizationId)
+        .is("deleted_at", null)
+        .maybeSingle();
+      profileId = (prof?.profile_id as string | undefined) ?? null;
+    }
+    if (!profileId) {
+      const { data: owner } = await client
+        .from("member")
+        .select("profile_id")
+        .eq("organization_id", organizationId)
+        .eq("role", "OWNER")
+        .is("deleted_at", null)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      profileId = (owner?.profile_id as string | undefined) ?? null;
+    }
+    if (!profileId) return;
+
+    // 2. Email del profile — lectura angosta vía service client (ver doc).
+    const service = createSupabaseServiceClient();
+    const { data: profile } = await service
+      .from("profile")
+      .select("email")
+      .eq("id", profileId)
+      .maybeSingle();
+    const to = (profile?.email as string | undefined) ?? null;
+    if (!to) return;
+
+    // 3. Datos de display + template puro.
+    const { data: org } = await client
+      .from("organization")
+      .select("nombre, timezone")
+      .eq("id", organizationId)
+      .maybeSingle();
+
+    const { subject, html } = buildPedidoNuevoEmail({
+      organizationNombre: org?.nombre ?? "Folio",
+      pacienteNombre,
+      canalLabel: canalPedidoLabel(canal),
+      fechaHoraLabel: fechaPropuestaIso
+        ? formatFechaHora(fechaPropuestaIso, org?.timezone ?? null)
+        : null,
+      calendarioUrl: `${getAppUrl()}/calendario`,
+    });
+
+    // Reply-To soporte: el destinatario es un profesional (mismo criterio que
+    // notifyMemberInvitation — los emails a pacientes no llevan replyTo).
+    await sendEmail({ to, subject, html, replyTo: SUPPORT_EMAIL });
+  } catch (e) {
+    const { captureException } = await import("@sentry/nextjs");
+    captureException(e, {
+      tags: { component: "email", op: "notifyPedidoNuevo" },
+      extra: { pedidoId, organizationId },
     });
   }
 }

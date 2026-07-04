@@ -8,27 +8,35 @@
  * fecha/hora propuesta, motivo) y deja al profesional:
  *   - Aceptar → crea paciente si hace falta + crea turno CONFIRMADO + marca
  *     el pedido como CONFIRMADO. Server action: aceptarPedidoAction.
+ *   - Aceptar con OTRO horario → para pedidos sin fecha propuesta (WhatsApp/
+ *     teléfono), sin servicio, o cuyo horario se ocupó: picker de fecha+hora
+ *     (+servicio si falta) y aceptarPedidoConHorarioAction — el pedido queda
+ *     CONFIRMADO y el turno se crea con el origen del canal preservado.
+ *   - Crear turno manual (escape hatch dentro de "otro horario") → delega en
+ *     el TurnoCreateModal del caller CON pedido.id vinculado: al crear el
+ *     turno, el server confirma el pedido (antes quedaba PENDIENTE eterno).
  *   - Rechazar → pide un motivo y marca el pedido como RECHAZADO. Server
  *     action: rechazarPedidoAction.
- *
- * Si el pedido no tiene fecha_propuesta, el accept devuelve error y la UI
- * sugiere crear turno manual desde el calendario (post P0 #4).
  *
  * CLINICA-3: si el pedido NO trae profesional asignado (booking sin
  * preferencia / WhatsApp), con >1 colegiado se muestra el picker de
  * profesional (mismo patrón que TurnoCreateModal); con 1 solo colegiado se
- * manda ese sin picker. El server (aceptarPedido) valida el destino como
- * colegiado activo — se eliminó el fallback silencioso a la sesión, que
- * convertía a la secretaria en "profesional" del turno.
+ * manda ese sin picker. El server (aceptarPedido / aceptarPedidoConHorario)
+ * valida el destino como colegiado activo — se eliminó el fallback silencioso
+ * a la sesión, que convertía a la secretaria en "profesional" del turno.
  */
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 import {
   aceptarPedidoAction,
+  aceptarPedidoConHorarioAction,
+  listServiciosActivosAction,
   rechazarPedidoAction,
+  type ServicioPedidoPickerRow,
 } from "@/app/(app)/calendario/actions";
 import { resolvePickerProfesional, type ProfesionalLite } from "@/lib/agenda/profesional";
+import { isoToLocalDatetime, localDatetimeToIso } from "@/lib/datetime-local";
 import type { Pedido } from "@/lib/types";
 import { useModalA11y } from "@/lib/use-modal-a11y";
 
@@ -43,6 +51,12 @@ interface PedidoModalProps {
   sessionMemberId?: string | null;
   /** Filtro `?prof=` activo en la agenda — preferencia del default. */
   profActivo?: string | null;
+  /**
+   * Escape hatch "crear turno manual": el caller cierra este modal y abre el
+   * TurnoCreateModal con pedido.id vinculado (el server confirma el pedido al
+   * crear el turno). Sin callback, el link no se renderiza.
+   */
+  onCrearTurnoManual?: () => void;
   onClose: () => void;
   onResolved: () => void;
 }
@@ -52,13 +66,42 @@ export function PedidoModal({
   colegiados = [],
   sessionMemberId = null,
   profActivo = null,
+  onCrearTurnoManual,
   onClose,
   onResolved,
 }: PedidoModalProps) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [mode, setMode] = useState<"view" | "reject">("view");
+  const [mode, setMode] = useState<"view" | "reject" | "horario">("view");
   const [motivo, setMotivo] = useState("");
+
+  // "Aceptar con otro horario": fecha+hora elegidas (datetime-local, misma
+  // semántica que TurnoCreateModal) y servicio si el pedido no trae uno
+  // (pedidos de WhatsApp llegan con servicio_id null). Los servicios se
+  // cargan lazy al entrar al modo.
+  const necesitaServicio = pedido.servicioId == null;
+  const [inicioLocal, setInicioLocal] = useState<string>(() => isoToLocalDatetime());
+  const [servicios, setServicios] = useState<ServicioPedidoPickerRow[] | null>(null);
+  const [servicioSel, setServicioSel] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (mode !== "horario" || !necesitaServicio || servicios != null) return;
+    let cancelled = false;
+    (async () => {
+      const res = await listServiciosActivosAction();
+      if (cancelled) return;
+      if (!res.ok) {
+        setError(res.error.message);
+        setServicios([]);
+        return;
+      }
+      setServicios(res.data);
+      if (res.data.length > 0) setServicioSel(res.data[0].id);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, necesitaServicio, servicios]);
 
   // Picker de profesional: solo cuando el pedido no trae uno asignado. El
   // default (decisión pura) prioriza filtro activo > sesión colegiada >
@@ -106,6 +149,34 @@ export function PedidoModal({
     }
     startTransition(async () => {
       const result = await rechazarPedidoAction(pedido.id, motivo.trim());
+      if (!result.ok) {
+        setError(result.error.message);
+        return;
+      }
+      onResolved();
+    });
+  };
+
+  // Submit de "aceptar con otro horario". El server (aceptarPedidoConHorario)
+  // re-valida todo: solapamiento del slot nuevo, servicio activo de la org y
+  // profesional colegiado — los guards de acá son solo UX.
+  const canSubmitHorario =
+    !pending &&
+    inicioLocal.length > 0 &&
+    (!necesitaServicio || servicioSel != null) &&
+    (!necesitaProfesional || !picker.pickerVisible || profesionalSel != null);
+
+  const handleAcceptConHorario = () => {
+    setError(null);
+    if (!canSubmitHorario) return;
+    startTransition(async () => {
+      const result = await aceptarPedidoConHorarioAction(pedido.id, {
+        fechaHora: localDatetimeToIso(inicioLocal),
+        // El servicio solo viaja cuando el pedido no trae uno propio.
+        servicioId: necesitaServicio ? servicioSel ?? undefined : undefined,
+        // Ídem profesional: solo cuando el pedido no trae destino.
+        profesionalId: necesitaProfesional ? profesionalSel ?? undefined : undefined,
+      });
       if (!result.ok) {
         setError(result.error.message);
         return;
@@ -223,8 +294,9 @@ export function PedidoModal({
         </dl>
 
         {/* Picker de profesional (CLINICA-3): el pedido vino sin preferencia
-            y la org tiene >1 colegiado — hay que decidir QUIÉN lo atiende. */}
-        {mode === "view" && necesitaProfesional && picker.pickerVisible ? (
+            y la org tiene >1 colegiado — hay que decidir QUIÉN lo atiende.
+            Visible también en "otro horario" (mismo destino, otra fecha). */}
+        {(mode === "view" || mode === "horario") && necesitaProfesional && picker.pickerVisible ? (
           <label style={{ display: "block", marginBottom: 14 }}>
             <span
               style={{ display: "block", fontSize: 13, color: "var(--ink-3)", marginBottom: 4 }}
@@ -284,7 +356,7 @@ export function PedidoModal({
         ) : null}
 
         {mode === "view" ? (
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
             <button
               type="button"
               className="fi-btn fi-btn-ghost"
@@ -301,23 +373,162 @@ export function PedidoModal({
             >
               Rechazar
             </button>
-            <button
-              type="button"
-              className="fi-btn fi-btn-primary"
-              onClick={handleAccept}
-              disabled={
-                pending ||
-                !pedido.fecha ||
-                (necesitaProfesional && picker.pickerVisible && !profesionalSel)
-              }
-              title={
-                !pedido.fecha
-                  ? "Sin fecha propuesta — el aceptar necesita fecha y hora"
-                  : undefined
-              }
+            {pedido.fecha ? (
+              <>
+                <button
+                  type="button"
+                  className="fi-btn fi-btn-ghost"
+                  onClick={() => {
+                    setError(null);
+                    setMode("horario");
+                  }}
+                  disabled={pending}
+                  title="Aceptar el pedido en un horario distinto al propuesto"
+                >
+                  Otro horario
+                </button>
+                <button
+                  type="button"
+                  className="fi-btn fi-btn-primary"
+                  onClick={handleAccept}
+                  disabled={
+                    pending ||
+                    (necesitaProfesional && picker.pickerVisible && !profesionalSel)
+                  }
+                >
+                  {pending ? "Aceptando…" : "Aceptar y crear turno"}
+                </button>
+              </>
+            ) : (
+              // Sin fecha propuesta (WhatsApp/teléfono): el acepte directo no
+              // existe — el camino es elegir horario (y servicio si falta).
+              <button
+                type="button"
+                className="fi-btn fi-btn-primary"
+                onClick={() => {
+                  setError(null);
+                  setMode("horario");
+                }}
+                disabled={pending}
+              >
+                Elegir horario y aceptar
+              </button>
+            )}
+          </div>
+        ) : mode === "horario" ? (
+          <div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: necesitaServicio ? "1fr 1fr" : "1fr",
+                gap: 8,
+              }}
             >
-              {pending ? "Aceptando…" : "Aceptar y crear turno"}
-            </button>
+              <label style={{ display: "block", marginBottom: 10 }}>
+                <span
+                  style={{ display: "block", fontSize: 13, color: "var(--ink-3)", marginBottom: 4 }}
+                >
+                  Fecha y hora del turno
+                </span>
+                <input
+                  type="datetime-local"
+                  value={inicioLocal}
+                  onChange={(e) => setInicioLocal(e.target.value)}
+                  disabled={pending}
+                  autoFocus
+                  style={{
+                    width: "100%",
+                    padding: "8px 10px",
+                    fontSize: 14,
+                    border: "1px solid var(--line)",
+                    borderRadius: 6,
+                    background: "var(--surface)",
+                    font: "inherit",
+                  }}
+                />
+              </label>
+              {necesitaServicio ? (
+                <label style={{ display: "block", marginBottom: 10 }}>
+                  <span
+                    style={{ display: "block", fontSize: 13, color: "var(--ink-3)", marginBottom: 4 }}
+                  >
+                    Servicio
+                  </span>
+                  {servicios == null ? (
+                    <p style={{ margin: 0, fontSize: 13, color: "var(--ink-3)" }}>Cargando…</p>
+                  ) : servicios.length === 0 ? (
+                    <p style={{ margin: 0, fontSize: 13, color: "var(--ink-3)" }}>
+                      No tenés servicios activos. Crealos desde Configuración.
+                    </p>
+                  ) : (
+                    <select
+                      value={servicioSel ?? ""}
+                      onChange={(e) => setServicioSel(e.target.value || null)}
+                      disabled={pending}
+                      style={{
+                        width: "100%",
+                        padding: "8px 10px",
+                        fontSize: 14,
+                        border: "1px solid var(--line)",
+                        borderRadius: 6,
+                        background: "var(--surface)",
+                        font: "inherit",
+                      }}
+                    >
+                      {servicios.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.nombre} · {s.duracionMin} min
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </label>
+              ) : null}
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 10 }}>
+              <button
+                type="button"
+                className="fi-btn fi-btn-ghost"
+                onClick={() => {
+                  setError(null);
+                  setMode("view");
+                }}
+                disabled={pending}
+              >
+                Volver
+              </button>
+              <button
+                type="button"
+                className="fi-btn fi-btn-primary"
+                onClick={handleAcceptConHorario}
+                disabled={!canSubmitHorario}
+              >
+                {pending ? "Aceptando…" : "Aceptar y crear turno"}
+              </button>
+            </div>
+            {onCrearTurnoManual ? (
+              <p style={{ margin: "10px 0 0", fontSize: 13, color: "var(--ink-3)", textAlign: "right" }}>
+                ¿Preferís cargar todo a mano?{" "}
+                <button
+                  type="button"
+                  onClick={onCrearTurnoManual}
+                  disabled={pending}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    padding: 0,
+                    font: "inherit",
+                    fontSize: 13,
+                    color: "var(--accent, #8A6722)",
+                    textDecoration: "underline",
+                    cursor: "pointer",
+                  }}
+                >
+                  Crear turno manual
+                </button>{" "}
+                (el pedido queda confirmado al crearlo).
+              </p>
+            ) : null}
           </div>
         ) : (
           <div>

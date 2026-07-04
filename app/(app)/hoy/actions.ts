@@ -203,6 +203,13 @@ const createTurnoActionSchema = z
     inicio: z.string().datetime({ offset: true }),
     duracionMin: z.number().int().min(5).max(480),
     origen: z.enum(["MANUAL", "WALK_IN"]).default("MANUAL"),
+    /**
+     * Pedido de origen cuando el turno manual nace desde el PedidoModal
+     * ("crear turno manual" para un pedido de la bandeja). Si viene, tras
+     * crear el turno el pedido se marca CONFIRMADO — antes quedaba PENDIENTE
+     * para siempre (dead-end del flujo de pedidos entrantes).
+     */
+    pedidoId: z.string().uuid().optional(),
   })
   .refine((d) => d.pacienteId != null || d.pacienteNuevo != null, {
     message: "Hay que elegir un paciente existente o crear uno nuevo.",
@@ -312,6 +319,37 @@ export async function createTurnoAction(
   });
 
   if (!result.ok) return result;
+
+  // 4. Vincular el pedido de origen (si vino): CAS PENDIENTE→CONFIRMADO con
+  //    confirmado_ts + paciente_id, org-scoped. NO-fatal deliberado: el turno
+  //    ya existe y es válido — si el pedido fue resuelto por otro en el medio
+  //    (0 filas) o el update falla, warn + Sentry y el action devuelve ok.
+  if (d.pedidoId) {
+    const { data: casRows, error: casErr } = await supabase
+      .from("pedido")
+      .update({
+        estado: "CONFIRMADO",
+        confirmado_ts: new Date().toISOString(),
+        paciente_id: pacienteId,
+      })
+      .eq("id", d.pedidoId)
+      .eq("organization_id", session.data.organizationId)
+      .eq("estado", "PENDIENTE")
+      .select("id");
+    if (casErr || !casRows || casRows.length === 0) {
+      console.warn(
+        `[hoy] createTurnoAction: no se pudo confirmar el pedido ${d.pedidoId} vinculado al turno ${result.data.id}: ${casErr?.message ?? "0 filas (ya resuelto?)"}`,
+      );
+      const { captureException } = await import("@sentry/nextjs");
+      captureException(
+        new Error(`pedido vinculado no confirmado: ${casErr?.message ?? "0 filas"}`),
+        {
+          tags: { component: "turno-create", op: "confirmarPedidoVinculado" },
+          extra: { pedidoId: d.pedidoId, turnoId: result.data.id },
+        },
+      );
+    }
+  }
 
   revalidatePath("/hoy");
   revalidatePath("/calendario");

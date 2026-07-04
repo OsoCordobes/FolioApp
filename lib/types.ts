@@ -140,6 +140,12 @@ export interface Pedido {
    * antes de aceptar (CLINICA-3).
    */
   profesionalId?: string | null;
+  /**
+   * servicio.id del pedido (pedido.servicio_id). null/undefined = sin
+   * servicio (WhatsApp/teléfono) — "aceptar con otro horario" exige elegir
+   * uno en el picker del PedidoModal.
+   */
+  servicioId?: string | null;
   fecha: string | null;
   hora: string | null;
   dur: number;

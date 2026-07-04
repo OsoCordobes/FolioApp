@@ -44,6 +44,13 @@ interface TurnoCreateModalProps {
    * filtrada cree el turno EN esa agenda y no en la del usuario de sesión.
    */
   defaultProfesionalId?: string | null;
+  /**
+   * Pedido de origen cuando el modal se abre desde el PedidoModal ("crear
+   * turno manual" para un pedido de la bandeja): al crear el turno, el server
+   * marca ese pedido como CONFIRMADO — cierra el dead-end en que el pedido
+   * quedaba PENDIENTE para siempre.
+   */
+  pedidoId?: string | null;
   onClose: () => void;
   onCreated: (turnoId: string) => void;
 }
@@ -62,6 +69,7 @@ export function TurnoCreateModal({
   origen = "MANUAL",
   preselectPacienteId,
   defaultProfesionalId,
+  pedidoId = null,
   onClose,
   onCreated,
 }: TurnoCreateModalProps) {
@@ -194,6 +202,8 @@ export function TurnoCreateModal({
         inicio: isoInicio,
         duracionMin: duracion,
         origen,
+        // Pedido de origen (bandeja): el server lo marca CONFIRMADO al crear.
+        pedidoId: pedidoId ?? undefined,
         ...(mode === "existente"
           ? { pacienteId: pacienteId ?? undefined }
           : { pacienteNuevo: nuevo }),
