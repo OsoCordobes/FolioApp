@@ -10,7 +10,9 @@
  * IS NULL AND scheduled_ts <= now() AND intentos < 5`, claimea cada job con
  * un CAS sobre `intentos` (incrementa al INICIAR el intento — ver
  * `decideClaimRecordatorio`) y los envía via WhatsApp Cloud (templates
- * aprobados en F6). Marca enviado_ts en éxito o error_msg en falla.
+ * aprobados en F6), con fallback a email cuando WhatsApp no está disponible
+ * (ver `decideCanalRecordatorio` + columna `canal` de M67). Marca enviado_ts
+ * en éxito o error_msg en falla.
  *
  * POST_VISITA se schedulea aparte: cuando un turno transiciona a CERRADO,
  * scheduled_ts = closed_ts + 2h.
@@ -40,6 +42,37 @@ export function decideClaimRecordatorio(
   if (hadError) return "db_error";
   if (rowsAffected < 1) return "skip";
   return "claimed";
+}
+
+/** Canal efectivo de un recordatorio — espejo del CHECK de M67. */
+export type CanalRecordatorio = "whatsapp" | "email" | "ninguno";
+
+/**
+ * Decisión pura del canal de envío de un recordatorio (M67). Sin I/O — el
+ * dispatcher la consulta en dos momentos:
+ *
+ *   1. ANTES de enviar (sin `resultadoWhatsApp`): con teléfono normalizable
+ *      a E.164 la respuesta es "whatsapp" (canal primario); sin teléfono
+ *      utilizable cae directo a "email" si hay email, o "ninguno".
+ *   2. DESPUÉS de un envío WhatsApp fallido (`resultadoWhatsApp: "fallo"`):
+ *      "email" si hay email para el fallback, "ninguno" si tampoco hay.
+ *
+ * Reglas:
+ *   - WhatsApp OK → "whatsapp" (el fallback nunca pisa un éxito).
+ *   - Sin teléfono válido, `resultadoWhatsApp` se ignora (no se pudo haber
+ *     intentado WhatsApp sin destino) → email/ninguno según `emailPresente`.
+ *   - "ninguno" = sin canal de contacto; el caller registra el error
+ *     definitivo y consume presupuesto de intentos como siempre.
+ */
+export function decideCanalRecordatorio(input: {
+  telefonoValido: boolean;
+  emailPresente: boolean;
+  resultadoWhatsApp?: "ok" | "fallo";
+}): CanalRecordatorio {
+  if (input.telefonoValido && input.resultadoWhatsApp !== "fallo") {
+    return "whatsapp";
+  }
+  return input.emailPresente ? "email" : "ninguno";
 }
 
 interface ScheduleInput {

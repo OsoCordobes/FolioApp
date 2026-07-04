@@ -20,7 +20,7 @@ import { encryptColumn } from "@/lib/crypto";
 import { err, ok, type Result } from "@/lib/db/errors";
 import { buildAutoConfirmDecision, promotePedidoToTurno } from "@/lib/db/pedidos";
 import { resolveProfesionalPublico } from "@/lib/db/profesional-destino";
-import { notifyBookingRecibida } from "@/lib/email/notify";
+import { notifyBookingRecibida, notifyPedidoNuevo } from "@/lib/email/notify";
 import {
   AvailabilityDbError,
   getSlotsDisponibles,
@@ -418,6 +418,31 @@ export async function createPedidoPublico(
     );
   };
 
+  // Aviso al PROFESIONAL de que entró un pedido pendiente (post-respuesta,
+  // fail-safe). SOLO en los caminos donde el pedido queda PENDIENTE — con
+  // auto-confirm el pedido ya es turno y el profesional lo ve en su agenda
+  // (+ gcal). Destinatario: el profesional destino del pedido, con fallback
+  // al owner (lo resuelve notifyPedidoNuevo).
+  const notifyPedidoNuevoFireAndForget = (): void => {
+    runAfterResponse(() =>
+      notifyPedidoNuevo({
+        client: service,
+        organizationId: org.id,
+        pedidoId: pedido.id,
+        pacienteNombre: parsed.data.nombre,
+        canal: "WEB",
+        fechaPropuestaIso: parsed.data.inicio,
+        profesionalId,
+      }).catch(async (e) => {
+        const { captureException } = await import("@sentry/nextjs");
+        captureException(e, {
+          tags: { component: "book-public", op: "notifyPedidoNuevo" },
+          extra: { pedidoId: pedido.id, organizationId: org.id },
+        });
+      }),
+    );
+  };
+
   if (decision.shouldAutoConfirm && decision.profesionalId) {
     const promote = await promotePedidoToTurno(service, {
       pedidoId: pedido.id,
@@ -455,9 +480,11 @@ export async function createPedidoPublico(
       }),
     );
     notifyBookingRecibidaFireAndForget();
+    notifyPedidoNuevoFireAndForget();
     return ok({ id: pedido.id, autoConfirmado: false });
   }
 
   notifyBookingRecibidaFireAndForget();
+  notifyPedidoNuevoFireAndForget();
   return ok({ id: pedido.id, autoConfirmado: false });
 }

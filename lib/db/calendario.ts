@@ -381,6 +381,7 @@ export async function getCalendarioSemana(input: FetcherInput): Promise<Result<C
       nuevo: row.paciente_id == null,
       pacienteId: row.paciente_id ?? undefined,
       profesionalId: row.profesional_id ?? null,
+      servicioId: row.servicio_id ?? null,
       fecha: row.fecha_propuesta ? ymdInTz(row.fecha_propuesta, tz) : null,
       hora: row.fecha_propuesta ? hhmmInTz(row.fecha_propuesta, tz) : null,
       dur: row.duracion_min,

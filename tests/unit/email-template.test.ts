@@ -4,6 +4,7 @@ import test from "node:test";
 import { buildBookingConfirmadaEmail } from "../../lib/email/templates/booking-confirmada";
 import { buildBookingRecibidaEmail } from "../../lib/email/templates/booking-recibida";
 import { buildMemberInvitationEmail } from "../../lib/email/templates/member-invitation";
+import { buildPedidoNuevoEmail, canalPedidoLabel } from "../../lib/email/templates/pedido-nuevo";
 
 const base = {
   pacienteNombre: "Carlos Vega",
@@ -84,4 +85,55 @@ test("member-invitation: escapa HTML en el nombre de la organización", () => {
   });
   assert.ok(!html.includes("<script>"));
   assert.ok(html.includes("&lt;script&gt;"));
+});
+
+// ─── pedido-nuevo (aviso al profesional) ─────────────────────────────────
+
+const pedidoNuevoBase = {
+  organizationNombre: "Consultorio Lorenzo",
+  pacienteNombre: "Carlos Vega",
+  canalLabel: "WhatsApp",
+  fechaHoraLabel: "viernes, 10 de julio de 2026, 14:00",
+  calendarioUrl: "https://folio.app/calendario",
+};
+
+test("pedido-nuevo: subject y html contienen paciente, canal, fecha y link", () => {
+  const { subject, html } = buildPedidoNuevoEmail(pedidoNuevoBase);
+  assert.ok(subject.includes(pedidoNuevoBase.pacienteNombre));
+  assert.ok(html.includes(pedidoNuevoBase.pacienteNombre));
+  assert.ok(html.includes(pedidoNuevoBase.canalLabel));
+  assert.ok(html.includes(pedidoNuevoBase.fechaHoraLabel));
+  assert.ok(html.includes(pedidoNuevoBase.calendarioUrl));
+  assert.ok(html.includes(pedidoNuevoBase.organizationNombre));
+});
+
+test("pedido-nuevo: sin fecha propuesta muestra el aviso de coordinar horario", () => {
+  const { html } = buildPedidoNuevoEmail({ ...pedidoNuevoBase, fechaHoraLabel: null });
+  assert.ok(html.includes("Sin horario propuesto"));
+  assert.ok(!html.includes("Horario propuesto:"));
+});
+
+test("pedido-nuevo: escapa HTML en el nombre del paciente", () => {
+  const { html } = buildPedidoNuevoEmail({
+    ...pedidoNuevoBase,
+    pacienteNombre: '<img src=x onerror=alert("x")>',
+  });
+  assert.ok(!html.includes("<img"));
+  assert.ok(html.includes("&lt;img"));
+});
+
+test("pedido-nuevo: no incluye motivo/notas clínicas (PHI mínima por diseño)", () => {
+  // El input del template NI SIQUIERA acepta motivo — este test fija el
+  // contrato: si alguien lo agrega, que sea una decisión consciente.
+  const keys = Object.keys(pedidoNuevoBase);
+  assert.ok(!keys.includes("motivo"));
+  assert.ok(!keys.includes("notas"));
+});
+
+test("canalPedidoLabel: mapea los 4 canales y degrada el desconocido", () => {
+  assert.equal(canalPedidoLabel("WEB"), "reserva web");
+  assert.equal(canalPedidoLabel("WHATSAPP"), "WhatsApp");
+  assert.equal(canalPedidoLabel("INSTAGRAM"), "Instagram");
+  assert.equal(canalPedidoLabel("TELEFONO"), "teléfono");
+  assert.equal(canalPedidoLabel("TELEGRAM"), "TELEGRAM");
 });

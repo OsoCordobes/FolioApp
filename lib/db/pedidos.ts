@@ -443,19 +443,6 @@ export async function createPedido(input: CreatePedidoInput): Promise<Result<{ i
   return ok({ id: data.id });
 }
 
-// ─── Confirmar pedido con otro horario (TODO, sin implementación) ─────
-//
-// Acá vivía `confirmarPedido`: dead code sin callers que reintroducía el bug
-// B1 (canal→origen crudo: INSTAGRAM/TELEFONO no existen en origen_turno → el
-// INSERT reventaba) y quedó fuera de los hooks de gcal/email del core. Se
-// borró en CLINICA-3 (auditoría 2026-06-12, hallazgo D).
-//
-// TODO("aceptar con otro horario"): cuando la bandeja ofrezca aceptar un
-// pedido en una hora distinta a la propuesta, implementarlo como wrapper FINO
-// de `promotePedidoToTurno` con override de `fechaPropuesta` — el core ya
-// hace slot check + CAS + mapeo canal→origen (B1) + recordatorios + push
-// gcal + email. NO reimplementar el flujo a mano.
-
 // ─── Rechazar pedido ──────────────────────────────────────────────────
 
 export async function rechazarPedido(pedidoId: string, motivo: string): Promise<Result<void>> {
@@ -486,8 +473,9 @@ export async function rechazarPedido(pedidoId: string, motivo: string): Promise<
 //
 // Requiere `fecha_propuesta` y `servicio_id` en el pedido (siempre los
 // trae el flujo /book/<slug>). Para pedidos sin estructura (WhatsApp /
-// teléfono sin hora) este action falla; ese caso entra por P0 #4 (crear
-// turno manual).
+// teléfono sin hora) este action falla; ese caso entra por
+// `aceptarPedidoConHorario` (fecha elegida + servicio del picker) o por el
+// turno manual vinculado (createTurnoAction con pedidoId).
 
 interface PedidoConfirmRow {
   id: string;
@@ -520,6 +508,69 @@ export function pedidoIlegibleParaAceptar(input: {
   pacienteId: string | null;
 }): boolean {
   return input.nombre == null && input.telefono == null && input.pacienteId == null;
+}
+
+/**
+ * Resolución del profesional destino de un pedido — compartida por
+ * `aceptarPedido` y `aceptarPedidoConHorario` (extraída sin cambios de
+ * comportamiento).
+ *
+ * Profesional destino (CLINICA-3, hallazgo B): manda el del pedido (booking
+ * público con preferencia). Si el pedido no trae profesional, se usa el
+ * elegido en el picker (validado como colegiado activo de la org) o, sin
+ * picker, el member de la sesión SOLO si es colegiado. Una sesión no
+ * colegiada (secretaria) sin elección explícita → err("validation") — se
+ * eliminó el fallback silencioso a session.memberId, que asignaba el turno
+ * a la secretaria: invisible para el médico (RLS), fuera de su EXCLUDE M40
+ * y con push de gcal al calendar equivocado.
+ *
+ * CLINICA-4 (review #52): el profesional PRE-SETEADO también se re-valida —
+ * entre el booking y el acepte pudo haberse dado de baja (soft-delete) o
+ * des-colegiado. Si quedó inválido: con elección explícita del picker se
+ * reasigna (validada abajo); sin elección, err accionable en vez de crear
+ * un turno cuya agenda/gcal/finanzas apuntan a un member muerto.
+ */
+async function resolverProfesionalDelPedido(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  session: { organizationId: string; memberId: string; esColegiado: boolean },
+  pedidoProfesionalId: string | null,
+  pickerProfesionalId: string | null,
+): Promise<Result<string>> {
+  let profesionalId: string | null = null;
+  if (pedidoProfesionalId) {
+    const preset = await resolveProfesionalDestino(supabase, {
+      organizationId: session.organizationId,
+      profesionalId: pedidoProfesionalId,
+      sessionMemberId: session.memberId,
+      sessionEsColegiado: session.esColegiado,
+    });
+    if (preset.ok) {
+      profesionalId = preset.data;
+    } else if (preset.error.code !== "validation") {
+      // Error de infraestructura (DB caída, RLS, etc.): propagarlo tal cual —
+      // disfrazarlo de "profesional dado de baja" mandaría a reasignar un
+      // turno por un fallo transitorio.
+      return preset;
+    } else if (!pickerProfesionalId) {
+      return err(
+        "validation",
+        "El profesional asignado a este pedido ya no está activo. Elegí qué profesional va a atender el turno (o creá el turno manual desde «Agendar»).",
+      );
+    }
+    // preset inválido + picker → cae a la resolución de abajo (reasignación
+    // explícita, misma validación de colegiado activo).
+  }
+  if (!profesionalId) {
+    const profRes = await resolveProfesionalDestino(supabase, {
+      organizationId: session.organizationId,
+      profesionalId: pickerProfesionalId,
+      sessionMemberId: session.memberId,
+      sessionEsColegiado: session.esColegiado,
+    });
+    if (!profRes.ok) return profRes;
+    profesionalId = profRes.data;
+  }
+  return ok(profesionalId);
 }
 
 export async function aceptarPedido(
@@ -561,13 +612,13 @@ export async function aceptarPedido(
   if (!pedidoRaw.fecha_propuesta) {
     return err(
       "validation",
-      "Este pedido no tiene fecha propuesta. Creá un turno manual y enlazá el pedido después.",
+      "Este pedido no tiene fecha propuesta. Usá «Elegir horario y aceptar» para fijar una.",
     );
   }
   if (!pedidoRaw.servicio_id) {
     return err(
       "validation",
-      "Este pedido no tiene servicio. Creá un turno manual desde /calendario.",
+      "Este pedido no tiene servicio. Usá «Otro horario» para elegir uno al aceptar.",
     );
   }
 
@@ -596,54 +647,16 @@ export async function aceptarPedido(
   const nombre = nombreDec ?? "Sin nombre";
   const telefono = telefonoDec ?? "";
 
-  // Profesional destino (CLINICA-3, hallazgo B): manda el del pedido (booking
-  // público con preferencia). Si el pedido no trae profesional, se usa el
-  // elegido en el picker (validado como colegiado activo de la org) o, sin
-  // picker, el member de la sesión SOLO si es colegiado. Una sesión no
-  // colegiada (secretaria) sin elección explícita → err("validation") — se
-  // eliminó el fallback silencioso a session.memberId, que asignaba el turno
-  // a la secretaria: invisible para el médico (RLS), fuera de su EXCLUDE M40
-  // y con push de gcal al calendar equivocado.
-  //
-  // CLINICA-4 (review #52): el profesional PRE-SETEADO también se re-valida —
-  // entre el booking y el acepte pudo haberse dado de baja (soft-delete) o
-  // des-colegiado. Si quedó inválido: con elección explícita del picker se
-  // reasigna (validada abajo); sin elección, err accionable en vez de crear
-  // un turno cuya agenda/gcal/finanzas apuntan a un member muerto.
-  let profesionalId: string | null = null;
-  if (pedidoRaw.profesional_id) {
-    const preset = await resolveProfesionalDestino(supabase, {
-      organizationId: session.data.organizationId,
-      profesionalId: pedidoRaw.profesional_id,
-      sessionMemberId: session.data.memberId,
-      sessionEsColegiado: session.data.esColegiado,
-    });
-    if (preset.ok) {
-      profesionalId = preset.data;
-    } else if (preset.error.code !== "validation") {
-      // Error de infraestructura (DB caída, RLS, etc.): propagarlo tal cual —
-      // disfrazarlo de "profesional dado de baja" mandaría a reasignar un
-      // turno por un fallo transitorio.
-      return preset;
-    } else if (!opts?.profesionalId) {
-      return err(
-        "validation",
-        "El profesional asignado a este pedido ya no está activo. Elegí qué profesional va a atender el turno (o creá el turno manual desde «Agendar»).",
-      );
-    }
-    // preset inválido + picker → cae a la resolución de abajo (reasignación
-    // explícita, misma validación de colegiado activo).
-  }
-  if (!profesionalId) {
-    const profRes = await resolveProfesionalDestino(supabase, {
-      organizationId: session.data.organizationId,
-      profesionalId: opts?.profesionalId ?? null,
-      sessionMemberId: session.data.memberId,
-      sessionEsColegiado: session.data.esColegiado,
-    });
-    if (!profRes.ok) return profRes;
-    profesionalId = profRes.data;
-  }
+  // Profesional destino — regla compartida (CLINICA-3/CLINICA-4), ver doc de
+  // resolverProfesionalDelPedido.
+  const profRes = await resolverProfesionalDelPedido(
+    supabase,
+    session.data,
+    pedidoRaw.profesional_id,
+    opts?.profesionalId ?? null,
+  );
+  if (!profRes.ok) return profRes;
+  const profesionalId = profRes.data;
 
   // Delegamos en el core compartido `promotePedidoToTurno`: re-chequeo de slot,
   // resolución/creación del paciente (con dedup 23505), CAS PENDIENTE→CONFIRMADO,
@@ -658,6 +671,167 @@ export async function aceptarPedido(
     fechaPropuesta: pedidoRaw.fecha_propuesta,
     duracionMin: pedidoRaw.duracion_min,
     precioCents: pedidoRaw.precio_cents,
+    canal: pedidoRaw.canal,
+    pacienteId: pedidoRaw.paciente_id,
+    nombre,
+    telefono,
+    email,
+    motivo,
+  });
+}
+
+// ─── Aceptar pedido con OTRO horario (y servicio si falta) ────────────
+//
+// Cierra el dead-end de los pedidos sin estructura (WhatsApp/teléfono sin
+// hora, o con horario que se ocupó): la bandeja ofrece elegir fecha+hora
+// (+servicio si el pedido no trae) y esto delega en `promotePedidoToTurno`
+// con la fecha elegida — el core ya hace slot check + CAS + mapeo
+// canal→origen (B1) + recordatorios + push gcal + email de confirmación.
+// Wrapper FINO deliberado (era el TODO de CLINICA-3, hallazgo D): NO
+// reimplementa el flujo a mano.
+
+/**
+ * Decisión pura del servicio a usar al aceptar con otro horario:
+ *   - `servicioId`: el override del picker si vino, sino el del pedido;
+ *     null = no hay con qué crear el turno → err de validación en el caller.
+ *   - `usarDatosDelServicio`: true cuando el servicio elegido NO es el del
+ *     pedido (pedido sin servicio, o reasignación) → duración y precio salen
+ *     de la fila de `servicio` (validada org+activo). false → se preservan
+ *     duracion_min/precio_cents del pedido (fijados por el booking original),
+ *     misma semántica que `aceptarPedido`.
+ */
+export function decideServicioParaAceptar(
+  pedidoServicioId: string | null,
+  overrideServicioId: string | null,
+): { servicioId: string | null; usarDatosDelServicio: boolean } {
+  const servicioId = overrideServicioId ?? pedidoServicioId;
+  return {
+    servicioId,
+    usarDatosDelServicio: overrideServicioId != null && overrideServicioId !== pedidoServicioId,
+  };
+}
+
+export interface AceptarConHorarioInput {
+  /** Fecha/hora elegida (ISO con offset) — override de pedido.fecha_propuesta. */
+  fechaHora: string;
+  /** Servicio elegido cuando el pedido no trae servicio_id (o para reasignar). */
+  servicioId?: string | null;
+  /** Igual que en aceptarPedido: picker del PedidoModal, validado server-side. */
+  profesionalId?: string | null;
+}
+
+const aceptarConHorarioSchema = z.object({
+  fechaHora: z.string().datetime({ offset: true }),
+  servicioId: z.string().uuid().nullish(),
+  profesionalId: z.string().uuid().nullish(),
+});
+
+export async function aceptarPedidoConHorario(
+  pedidoId: string,
+  input: AceptarConHorarioInput,
+): Promise<Result<{ turnoId: string; pacienteId: string }>> {
+  if (!z.string().uuid().safeParse(pedidoId).success) {
+    return err("validation", "ID de pedido inválido.");
+  }
+  const parsed = aceptarConHorarioSchema.safeParse(input);
+  if (!parsed.success) {
+    return err("validation", "Datos del horario inválidos.", parsed.error.message);
+  }
+  const session = await getActiveSession();
+  if (!session.ok) return session;
+
+  const supabase = await createSupabaseServerClient();
+
+  const { data: pedidoRaw, error: pedErr } = await supabase
+    .from("pedido")
+    .select(
+      "id, organization_id, paciente_id, profesional_id, servicio_id, fecha_propuesta, duracion_min, precio_cents, canal, estado, nombre_cifrado, telefono_cifrado, email_cifrado, motivo_cifrado",
+    )
+    .eq("id", pedidoId)
+    .eq("organization_id", session.data.organizationId)
+    .maybeSingle<PedidoConfirmRow>();
+
+  if (pedErr) return err(mapSupabaseError(pedErr).code, mapSupabaseError(pedErr).message, pedErr.message);
+  if (!pedidoRaw) return err("not_found", "Pedido no encontrado.");
+  if (pedidoRaw.estado !== "PENDIENTE") {
+    return err("validation", `El pedido ya está en estado ${pedidoRaw.estado.toLowerCase()}.`);
+  }
+
+  // Servicio: el del pedido, u override del picker (pedidos de WhatsApp
+  // llegan con servicio_id null). El override SIEMPRE se valida contra la
+  // org (activo, no borrado) — de ahí salen duración y precio; el servicio
+  // propio del pedido se usa tal cual, igual que en aceptarPedido.
+  const servicioDec = decideServicioParaAceptar(
+    pedidoRaw.servicio_id,
+    parsed.data.servicioId ?? null,
+  );
+  if (!servicioDec.servicioId) {
+    return err("validation", "Este pedido no tiene servicio. Elegí uno para crear el turno.");
+  }
+  let duracionMin = pedidoRaw.duracion_min;
+  let precioCents = pedidoRaw.precio_cents;
+  if (servicioDec.usarDatosDelServicio) {
+    const { data: servicio, error: servErr } = await supabase
+      .from("servicio")
+      .select("id, duracion_min, precio_cents")
+      .eq("id", servicioDec.servicioId)
+      .eq("organization_id", session.data.organizationId)
+      .eq("activo", true)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (servErr) {
+      return err(mapSupabaseError(servErr).code, mapSupabaseError(servErr).message, servErr.message);
+    }
+    if (!servicio) {
+      return err("validation", "El servicio elegido no está disponible.");
+    }
+    duracionMin = servicio.duracion_min as number;
+    precioCents = (servicio.precio_cents as number | null) ?? null;
+  }
+
+  // Descifrado + guard de ilegibilidad: mismo contrato que aceptarPedido.
+  const nombreDec = tryDecrypt(pedidoRaw.nombre_cifrado, "pedido.nombre_cifrado");
+  const telefonoDec = tryDecrypt(pedidoRaw.telefono_cifrado, "pedido.telefono_cifrado");
+  const email = tryDecrypt(pedidoRaw.email_cifrado, "pedido.email_cifrado");
+  const motivo = tryDecrypt(pedidoRaw.motivo_cifrado, "pedido.motivo_cifrado");
+
+  if (
+    pedidoIlegibleParaAceptar({
+      nombre: nombreDec,
+      telefono: telefonoDec,
+      pacienteId: pedidoRaw.paciente_id,
+    })
+  ) {
+    return err(
+      "validation",
+      "El pedido tiene datos ilegibles (nombre y teléfono no se pudieron descifrar). Rechazalo y creá el turno manual desde «Agendar».",
+    );
+  }
+  const nombre = nombreDec ?? "Sin nombre";
+  const telefono = telefonoDec ?? "";
+
+  // Profesional destino — regla compartida (CLINICA-3/CLINICA-4).
+  const profRes = await resolverProfesionalDelPedido(
+    supabase,
+    session.data,
+    pedidoRaw.profesional_id,
+    parsed.data.profesionalId ?? null,
+  );
+  if (!profRes.ok) return profRes;
+
+  // Core compartido con la fecha ELEGIDA: re-chequea el slot nuevo (mismo
+  // checkSlotOcupado que createTurno, excluyendo este pedido para que su
+  // fecha_propuesta vieja no se auto-conflictúe), CAS PENDIENTE→CONFIRMADO,
+  // turno CONFIRMADO con origen vía CANAL_TO_ORIGEN (B1), recordatorios,
+  // push gcal y email de confirmación al paciente.
+  return await promotePedidoToTurno(supabase, {
+    pedidoId,
+    organizationId: session.data.organizationId,
+    profesionalId: profRes.data,
+    servicioId: servicioDec.servicioId,
+    fechaPropuesta: parsed.data.fechaHora,
+    duracionMin,
+    precioCents,
     canal: pedidoRaw.canal,
     pacienteId: pedidoRaw.paciente_id,
     nombre,
