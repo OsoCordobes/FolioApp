@@ -26,7 +26,8 @@ import { verifyTurnstile } from "@/lib/security/turnstile";
 
 import { z } from "zod";
 
-import { findUserByEmail } from "@/lib/auth/find-user-by-email";
+import { classifySignUpOutcome } from "@/lib/auth/signup-outcome";
+import { getAppUrl } from "@/lib/config/app-url";
 import { encryptColumn } from "@/lib/crypto";
 import { ESPECIALIDAD_SLUGS } from "@/lib/especialidades/meta";
 import { signUpSchema } from "@/lib/onboarding/schemas";
@@ -146,58 +147,78 @@ export async function signUpAndInitOrganization(
 
   const service = createSupabaseServiceClient();
 
-  // 1. Crear o resolver auth.user. `wasExisting` recuerda si el user ya existía
-  //    para diferenciar mensajes downstream cuando signInWithPassword falla.
-  let userId: string;
-  let wasExisting = false;
-  const { data: created, error: createErr } = await service.auth.admin.createUser({
+  // 1-2. Registro vía GoTrue signUp (ítem 1.5 · verificación adaptativa).
+  //
+  // Antes: admin.createUser({ email_confirm: true }) + signInWithPassword.
+  // Ese path auto-confirmaba SIEMPRE, así que activar "Confirm email" en el
+  // dashboard no tenía efecto. Con auth.signUp el comportamiento se adapta
+  // al toggle en runtime:
+  //
+  //   - Confirm OFF (prod HOY): signUp devuelve session y el ssr client
+  //     setea las cookies — byte-a-byte el flujo anterior, sin email.
+  //     `emailRedirectTo` es inerte en este modo.
+  //   - Confirm ON (cuando F0.6 lo active): signUp devuelve user sin session
+  //     → respondemos { ok: true, needsConfirmation: true } y la UI muestra
+  //     "Revisá tu email". El bootstrap de la org se difiere al retorno por
+  //     /api/auth/callback → /onboarding → Step1Consent (mismo path que
+  //     Google OAuth), que re-pide consent + captcha.
+  //
+  // Anti-enumeración (M2, docs/AUDIT.md): con confirm ON un email existente
+  // confirmado devuelve un user ofuscado con identities:[] — probamos
+  // signInWithPassword y, si no abre sesión, respondemos el MISMO
+  // needsConfirmation que para un email fresco (respuesta uniforme).
+  const supabase = await createSupabaseServerClient();
+  const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
     email,
     password,
-    email_confirm: true,
+    options: { emailRedirectTo: `${getAppUrl()}/api/auth/callback` },
+  });
+  const outcome = classifySignUpOutcome({
+    error: signUpErr,
+    user: signUpData?.user ?? null,
+    session: signUpData?.session ?? null,
   });
 
-  if (createErr) {
-    if (createErr.message.toLowerCase().includes("already") || createErr.message.toLowerCase().includes("registered")) {
-      // El user ya existe en auth.users. Buscarlo por email vía paginated
-      // listUsers (M33 fix: el old code hardcodeaba perPage:200 → se rompía
-      // a partir del usuario 201). Helper extraído a lib/auth (Sprint 0 T0.2).
-      const existing = await findUserByEmail(service, email);
-      if (!existing) {
-        // M2 (docs/AUDIT.md): mensaje condicional idéntico al del branch de
-        // signIn fallido — no confirma si la cuenta existe (anti-enumeración).
-        return {
-          ok: false,
-          error: SIGNUP_GENERIC_ERROR,
-        };
-      }
-      if (!existing.email_confirmed_at) {
-        await service.auth.admin.updateUserById(existing.id, { email_confirm: true });
-      }
-      userId = existing.id;
-      wasExisting = true;
-    } else {
-      return { ok: false, error: createErr.message };
-    }
+  let userId: string;
+  if (outcome.kind === "error") {
+    return { ok: false, error: outcome.message };
+  } else if (outcome.kind === "session") {
+    // Confirm OFF + email nuevo: sesión abierta (cookies ya seteadas por el
+    // ssr client). No hace falta signInWithPassword.
+    userId = signUpData!.user!.id;
   } else {
-    userId = created.user.id;
-  }
-
-  // 2. Abrir sesión cookie-based (necesaria para los siguientes Server Actions)
-  const supabase = await createSupabaseServerClient();
-  const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
-  if (signInErr) {
-    // Si el user ya existía y signInWithPassword falla, lo más probable es
-    // que: a) escribió mal su password vieja, b) la cuenta es de Google OAuth
-    // sin password, o c) password reset pendiente. Mensaje específico para
-    // que sepa qué hacer.
-    if (wasExisting) {
-      // M2: mismo mensaje que arriba — no revela si el email está registrado.
-      return {
-        ok: false,
-        error: SIGNUP_GENERIC_ERROR,
-      };
+    // existing_try_password (confirm OFF + email existente) o
+    // needs_confirmation (confirm ON). En ambos casos con posible cuenta
+    // preexistente intentamos abrir sesión con la password recibida —
+    // "re-signup con la password correcta = login" (flujo histórico).
+    const shouldTryPassword =
+      outcome.kind === "existing_try_password" ||
+      (outcome.kind === "needs_confirmation" && outcome.maybeExisting);
+    if (shouldTryPassword) {
+      const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
+      if (!signInErr) {
+        const {
+          data: { user: signedIn },
+        } = await supabase.auth.getUser();
+        if (!signedIn) {
+          return { ok: false, error: SIGNUP_GENERIC_ERROR };
+        }
+        userId = signedIn.id;
+      } else if (outcome.kind === "existing_try_password") {
+        // M2: mensaje condicional — no revela si el email está registrado.
+        // La heurística del login-form matchea "sesión" y salta a la vista
+        // login con banner.
+        return { ok: false, error: SIGNUP_GENERIC_ERROR };
+      } else {
+        // Confirm ON + user ofuscado + password no abre sesión: respuesta
+        // uniforme con el signup fresco (anti-enumeración). GoTrue NO manda
+        // email en este caso, pero el atacante no puede distinguirlo.
+        return { ok: true, needsConfirmation: true };
+      }
+    } else {
+      // Confirm ON + signup fresco: GoTrue mandó el email de confirmación.
+      return { ok: true, needsConfirmation: true };
     }
-    return { ok: false, error: `Cuenta creada pero no pude entrar: ${signInErr.message}` };
   }
 
   // 3. Bootstrap atómico vía M33 RPC.
@@ -239,7 +260,6 @@ export async function signUpAndInitOrganization(
   }
 
   const result = bootstrapped as { organization_id: string; member_id: string; slug: string; created: boolean };
-  void created;
   return { ok: true, organizationId: result.organization_id, slug: result.slug };
 }
 

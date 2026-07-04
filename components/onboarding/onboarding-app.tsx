@@ -29,6 +29,7 @@ import {
   signUpAndInitOrganization,
   updateOnboardingStep,
 } from "@/app/(public)/onboarding/actions";
+import { CheckEmailPanel } from "@/components/auth/check-email-panel";
 import { SideArt } from "@/components/auth/side-art";
 import { FolioMark } from "@/components/folio-mark";
 import { Step1Consent } from "@/components/onboarding/step1-consent";
@@ -144,6 +145,10 @@ export function OnboardingApp({
   const [error, setError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>({ status: "idle" });
   const [direction, setDirection] = useState<"forward" | "back">("forward");
+  // Ítem 1.5: con "Confirm email" ON, signUpAndInitOrganization devuelve
+  // needsConfirmation (sin sesión ni org). Guardamos el email para mostrar
+  // el panel "Revisá tu email" en lugar del form de registro.
+  const [awaitingEmail, setAwaitingEmail] = useState<string | null>(null);
 
   // ─── Auto-save refs declarados antes del useEffect de hidratación porque
   //     la hidratación los inicializa para evitar un auto-save espurio
@@ -395,6 +400,14 @@ export function OnboardingApp({
         setError(result.error ?? "Error en signup");
         return;
       }
+      if (result.needsConfirmation) {
+        // Confirm email ON: la cuenta quedó creada pero sin sesión. El user
+        // confirma por email → /api/auth/callback → /onboarding (Step1Consent)
+        // y el bootstrap ocurre ahí. Mostramos el panel "Revisá tu email".
+        setError(null);
+        setAwaitingEmail(data.email);
+        return;
+      }
       setError(null);
       if (result.organizationId) setOrgId(result.organizationId);
       if (result.slug) setOrgSlug(result.slug);
@@ -460,6 +473,11 @@ export function OnboardingApp({
                   onSubmit={handleStep1Submit}
                   loading={signingUp}
                   error={error}
+                />
+              ) : awaitingEmail ? (
+                <CheckEmailPanel
+                  email={awaitingEmail}
+                  onBack={() => setAwaitingEmail(null)}
                 />
               ) : (
                 <Step1Registro

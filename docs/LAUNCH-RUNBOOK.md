@@ -208,3 +208,69 @@ UTC−3). Si `CRON_SECRET` falta, todos devuelven 401 y no hacen nada.
 > pendiente; para la purga real solo falta setear la env en Vercel Production.
 > La activación completa siempre fue doble: tenerlo en
 > `vercel.json` (sugerido diario 03:00 UTC) **y** setear `ACCOUNT_PURGE_ENABLED=1`.
+
+---
+
+## 7. F0.6 — Activar verificación de email en signup (procedimiento)
+
+El código (ítem 1.5) es **adaptativo**: el signup usa `supabase.auth.signUp`,
+así que con el toggle **Confirm email OFF** el flujo es el de siempre
+(autoconfirm, sesión inmediata, cero emails) y con **ON** el signup devuelve
+"Revisá tu email" y el onboarding se retoma tras confirmar (callback →
+`/onboarding` → consent → steps con autosave). **No hay deploy involucrado en
+el flip** — pero los 4 pasos van juntos, en este orden:
+
+> ### ⛔ Gate de merge del ítem 1.5 (verificado 2026-07-03)
+>
+> **Prod tiene "Confirm email" ON hoy** (`mailer_autoconfirm: false`), aunque
+> nunca importó porque el signup viejo usaba
+> `admin.createUser({ email_confirm: true })`, que bypasea el toggle.
+> `auth.signUp` **deja de bypasearlo**: si el PR del ítem 1.5 se mergea con el
+> toggle así, TODO signup de prod cae al path `needsConfirmation` con el SMTP
+> built-in (~2-4 mails/h por proyecto) y el template default `?code=` (PKCE,
+> cross-device roto) — **signup público roto en silencio**.
+>
+> Antes de mergear, elegí UNA de dos:
+> 1. **Apagar "Confirm email"** (Auth → Sign In / Up → Email) — preserva el
+>    flujo actual; los pasos 1-4 de abajo quedan para cuando se active F0.6
+>    de verdad; **o**
+> 2. Completar los pasos 1-3 de abajo (SMTP custom + template `token_hash` +
+>    allow-list) y dejar el toggle ON.
+>
+> Re-verificar con el endpoint público de settings (la key publishable está
+> en `.env.local` como `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`):
+>
+> ```sh
+> curl -s -H "apikey: $NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY" \
+>   https://grkpayhxndztlfwxobnt.supabase.co/auth/v1/settings
+> ```
+>
+> Con la opción 1, `mailer_autoconfirm` debe devolver `true` — **recién
+> entonces mergear**. De paso confirmar `disable_signup: false` (Enable email
+> signups ON) y que el captcha de Supabase Auth siga OFF.
+
+1. **SMTP custom primero** (Supabase → Auth → SMTP Settings; Resend ya está
+   como proveedor de emails de la app). El email service built-in de Supabase
+   tiene cuota de ~2-4 mails/hora POR PROYECTO — con confirm ON y sin SMTP,
+   el signup queda inusable para todos.
+2. **Template "Confirm signup" → link SSR** (Supabase → Auth → Email
+   Templates): cambiar el href a
+   `{{ .SiteURL }}/api/auth/callback?token_hash={{ .TokenHash }}&type=signup`.
+   El default `{{ .ConfirmationURL }}` redirige con `?code=` (PKCE), que solo
+   canjea en el **mismo browser** que inició el signup (cookie
+   `code_verifier`) — un user que se registra en el celular y abre el mail en
+   la PC vería "link inválido". El callback soporta ambos formatos.
+3. **Redirect URLs allow-list** (Supabase → Auth → URL Configuration):
+   agregar la URL de prod + `/api/auth/callback` (y verificar que Site URL
+   apunte al dominio de prod).
+4. **Recién entonces** activar **Confirm email** (Auth → Sign In / Up →
+   Email). Verificar en el mismo panel que **Enable email signups** siga ON y
+   que **Captcha protection de Supabase Auth** siga OFF (nuestro Turnstile es
+   app-side; el token no se reenvía a GoTrue — activar el captcha de Supabase
+   rompería el signup server-side).
+
+Smoke post-flip: signup nuevo ⇒ pantalla "Revisá tu email" + mail recibido ⇒
+click en el link desde OTRO browser ⇒ aterriza en `/onboarding` (consent) y
+el wizard continúa. Login con cuenta sin confirmar ⇒ mensaje + botón
+"Reenviar link". Rollback: apagar Confirm email — el signup vuelve al flujo
+autoconfirm sin tocar código.
