@@ -19,6 +19,7 @@ import { useState, type ReactNode } from "react";
 import * as I from "@/components/icons";
 import { saveSesionFichaAction, saveSesionYCerrarAction } from "@/app/(app)/pacientes/actions";
 import { TurnoCreateModal } from "@/components/hoy/turno-create-modal";
+import { ConsentimientosCard } from "@/components/paciente/consentimientos-card";
 import { PacienteFichaProvider, usePacienteFicha } from "@/components/paciente/contexto";
 import { IntakeAvanzadoModal } from "@/components/paciente/intake-avanzado-modal";
 import { PlanTratamientoModal } from "@/components/paciente/plan-tratamiento-modal";
@@ -529,6 +530,7 @@ function TabInformacion() {
         </p>
       </section>
       <InfoAvanzada />
+      <ConsentimientosCard pacienteId={paciente.id} pacienteNombre={paciente.nombre} />
     </div>
   );
 }

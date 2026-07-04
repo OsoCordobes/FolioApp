@@ -16,7 +16,25 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import {
+  buildFirmaStoragePath,
+  elegirPlantillasVigentes,
+  mapConsentimientoRow,
+  pathSinBucket,
+  tutorVigente,
+  type ConsentimientoListItem,
+  type PlantillaConsentimientoRow,
+  type PlantillaVigente,
+  type TutorOption,
+} from "@/lib/consentimientos/helpers";
+import { tryDecrypt } from "@/lib/crypto";
 import { getActiveContext } from "@/lib/db/active-context";
+import {
+  createConsentimiento,
+  getSignedFirmaUrl,
+  listConsentimientosPaciente,
+  revokeConsentimiento,
+} from "@/lib/db/consentimientos";
 import {
   buildDocumentoStoragePath,
   createDocumentoClinico,
@@ -25,12 +43,16 @@ import {
 import { savePacienteIntakeAvanzado } from "@/lib/db/paciente-intake";
 import { createPaciente } from "@/lib/db/pacientes";
 import { savePlanTratamiento } from "@/lib/db/plan-tratamiento";
+import { getActiveSession } from "@/lib/db/session";
 import { upsertSesion } from "@/lib/db/sesiones";
 import { transitionTurno } from "@/lib/db/turnos";
 import { err, ok, type Result } from "@/lib/db/errors";
 import { buildUpsertSesionInput } from "@/lib/especialidades/draft";
 import { ESPECIALIDAD_SLUGS } from "@/lib/especialidades/meta";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  createSupabaseServerClient,
+  createSupabaseServiceClient,
+} from "@/lib/supabase/server";
 
 const createPacienteActionSchema = z.object({
   nombre: z.string().min(1).max(80),
@@ -502,4 +524,327 @@ export async function refreshRadiografiaUrlAction(
   const result = await refreshSignedUrl(documentoId);
   if (!result.ok) return result;
   return ok({ signedUrl: result.data });
+}
+
+// ─── Consentimiento informado con firma (Ley 26.529) ─────────────────────────
+//
+// Primer caller de lib/db/consentimientos.ts. La firma se dibuja en canvas
+// (components/paciente/firma-canvas-modal.tsx), viaja como PNG en FormData y
+// se sube SERVER-SIDE al bucket privado `consentimientos-firmados` (mismo
+// patrón que uploadRadiografiaAction: el browser nunca habla con Storage).
+// El path canónico consentimientos-firmados/{org}/{paciente}/{uuid}.png lo
+// arma buildFirmaStoragePath con ids de la SESIÓN — nunca del cliente — y
+// respeta el CHECK consentimiento_path_format (M07).
+//
+// PHI: nunca se loguean nombres ni contenido; los identificadores de los
+// mensajes de error son uuids.
+
+const CONSENT_BUCKET = "consentimientos-firmados";
+// La firma de un canvas pesa decenas de KB; 5 MB es holgado y queda por debajo
+// del file_size_limit del bucket (10 MB, M27).
+const FIRMA_MAX_BYTES = 5 * 1024 * 1024;
+
+/**
+ * Espejo app-side de public.can_read_clinical (M01): OWNER, PROFESIONAL o
+ * DIRECTOR colegiado. La RLS de M07/M27 es la barrera real — esto solo da un
+ * error claro antes de subir bytes.
+ */
+function puedeFirmarConsentimientos(session: {
+  role: "OWNER" | "DIRECTOR" | "PROFESIONAL" | "COORDINADOR" | "ASISTENTE";
+  esColegiado: boolean;
+}): boolean {
+  return (
+    session.role === "OWNER" ||
+    session.role === "PROFESIONAL" ||
+    (session.role === "DIRECTOR" && session.esColegiado)
+  );
+}
+
+/**
+ * Lista los consentimientos del paciente (vigentes + revocados) mapeados al
+ * item plano de la card. Tenancy: listConsentimientosPaciente ya es org-scoped
+ * (organizationId de la sesión) + RLS consentimiento_select_clinical.
+ */
+export async function listConsentimientosPacienteAction(
+  pacienteId: string,
+): Promise<Result<ConsentimientoListItem[]>> {
+  if (!z.string().uuid().safeParse(pacienteId).success) {
+    return err("validation", "ID de paciente inválido.");
+  }
+  const result = await listConsentimientosPaciente(pacienteId);
+  if (!result.ok) return result;
+  return ok(result.data.map(mapConsentimientoRow));
+}
+
+/**
+ * Plantillas de consentimiento elegibles para firmar: globales (M68 seed) +
+ * custom de la org, ya resueltas a UNA por tipo (custom > global, mayor
+ * versión). RLS plantilla_select_global_or_own limita la visibilidad.
+ */
+export async function listPlantillasConsentimientoAction(): Promise<Result<PlantillaVigente[]>> {
+  const session = await getActiveSession();
+  if (!session.ok) return session;
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("plantilla_consentimiento")
+    .select("id, organization_id, tipo, version, titulo, texto_markdown")
+    .is("reemplazado_por", null)
+    .or(`organization_id.is.null,organization_id.eq.${session.data.organizationId}`);
+  if (error) {
+    return err("db_error", "No pudimos cargar las plantillas de consentimiento.", error.message);
+  }
+
+  const vigentes = elegirPlantillasVigentes((data ?? []) as PlantillaConsentimientoRow[]);
+  if (vigentes.length === 0) {
+    return err(
+      "not_found",
+      "No hay plantillas de consentimiento disponibles. Contactá a soporte.",
+    );
+  }
+  return ok(vigentes);
+}
+
+/**
+ * Tutores legales VIGENTES del paciente para el selector de firmante (Ley
+ * 26.061: menores firman vía representante legal). El nombre está cifrado
+ * app-side (M06) — se desencripta server-side con tryDecrypt (una fila
+ * corrupta no rompe el selector).
+ */
+export async function listTutoresConsentimientoAction(
+  pacienteId: string,
+): Promise<Result<TutorOption[]>> {
+  if (!z.string().uuid().safeParse(pacienteId).success) {
+    return err("validation", "ID de paciente inválido.");
+  }
+  const session = await getActiveSession();
+  if (!session.ok) return session;
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("tutor_legal")
+    .select("id, vinculo, es_principal, nombre_cifrado, vigencia_desde, vigencia_hasta")
+    .eq("organization_id", session.data.organizationId)
+    .eq("paciente_id", pacienteId)
+    .order("es_principal", { ascending: false });
+  if (error) {
+    return err("db_error", "No pudimos cargar los tutores del paciente.", error.message);
+  }
+
+  const hoy = new Date().toISOString().slice(0, 10);
+  const tutores = ((data ?? []) as Array<{
+    id: string;
+    vinculo: string;
+    es_principal: boolean;
+    nombre_cifrado: string | null;
+    vigencia_desde: string | null;
+    vigencia_hasta: string | null;
+  }>)
+    .filter((t) =>
+      tutorVigente({ vigenciaDesde: t.vigencia_desde, vigenciaHasta: t.vigencia_hasta }, hoy),
+    )
+    .map((t) => ({
+      id: t.id,
+      nombre: tryDecrypt(t.nombre_cifrado, "tutor_legal.nombre") ?? "Tutor legal",
+      vinculo: t.vinculo,
+      esPrincipal: t.es_principal,
+    }));
+  return ok(tutores);
+}
+
+/**
+ * Registra un consentimiento firmado: sube el PNG del canvas al bucket privado
+ * y crea la fila vía createConsentimiento (que resuelve tipo desde la
+ * plantilla y registra ip/user_agent para el audit AAIP).
+ *
+ * Upload + create van JUNTOS en esta action (no separados) para que el
+ * firma_storage_path NUNCA viaje del cliente: un path client-supplied con el
+ * org de OTRO tenant pasaría el regex del writer aunque la firma no sea
+ * legible cross-org (la RLS de storage lo impide). Server-built path cierra
+ * la clase entera.
+ *
+ * FormData: file (PNG), pacienteId, plantillaId, tutorId (opcional, "" = firma
+ * el paciente). Guards:
+ *   - rol clínico (espejo de can_read_clinical) — la RLS es la barrera real;
+ *   - IDOR: paciente ∈ org activa (SELECT org-scoped);
+ *   - tutorId ∈ tutores del MISMO paciente y org (el trigger
+ *     consentimiento_tutor_guard de M07 re-valida en DB).
+ *
+ * Si el INSERT falla después del upload, se borra el PNG huérfano best-effort
+ * con el service client (el bucket no tiene DELETE policy para usuarios —
+ * inmutabilidad M27).
+ */
+export async function uploadFirmaConsentimientoAction(
+  formData: FormData,
+): Promise<Result<{ consentimientoId: string }>> {
+  const file = formData.get("file");
+  const pacienteId = String(formData.get("pacienteId") ?? "");
+  const plantillaId = String(formData.get("plantillaId") ?? "");
+  const tutorIdRaw = String(formData.get("tutorId") ?? "");
+  const tutorId = tutorIdRaw.trim() === "" ? null : tutorIdRaw;
+
+  if (!(file instanceof Blob) || file.size === 0) {
+    return err("validation", "La firma llegó vacía. Dibujala de nuevo e intentá otra vez.");
+  }
+  if (file.size > FIRMA_MAX_BYTES) {
+    return err("validation", "La firma supera el límite de 5 MB.");
+  }
+  if (file.type !== "image/png") {
+    return err("validation", "La firma debe ser una imagen PNG.");
+  }
+  if (
+    !z.string().uuid().safeParse(pacienteId).success ||
+    !z.string().uuid().safeParse(plantillaId).success ||
+    (tutorId !== null && !z.string().uuid().safeParse(tutorId).success)
+  ) {
+    return err("validation", "Datos del consentimiento inválidos.");
+  }
+
+  const session = await getActiveSession();
+  if (!session.ok) return session;
+  if (!puedeFirmarConsentimientos(session.data)) {
+    return err("forbidden", "Tu rol no puede registrar consentimientos.");
+  }
+  const organizationId = session.data.organizationId;
+
+  const supabase = await createSupabaseServerClient();
+
+  // F-AUTH (IDOR): paciente ∈ org activa. Mismo guard que los vecinos — no se
+  // confía en ids del cliente. La RLS de paciente es la última línea.
+  const { data: pacienteRow, error: pacienteErr } = await supabase
+    .from("paciente")
+    .select("id")
+    .eq("id", pacienteId)
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+  if (pacienteErr) {
+    return err("db_error", "No pudimos validar el paciente.", pacienteErr.message);
+  }
+  if (!pacienteRow) {
+    return err("forbidden", "Ese paciente no pertenece a tu organización.");
+  }
+
+  // Firmante tutor: debe ser tutor del MISMO paciente en la MISMA org (el
+  // trigger consentimiento_tutor_guard re-valida en DB; acá damos error claro).
+  if (tutorId !== null) {
+    const { data: tutorRow, error: tutorErr } = await supabase
+      .from("tutor_legal")
+      .select("id")
+      .eq("id", tutorId)
+      .eq("paciente_id", pacienteId)
+      .eq("organization_id", organizationId)
+      .maybeSingle();
+    if (tutorErr) {
+      return err("db_error", "No pudimos validar el tutor.", tutorErr.message);
+    }
+    if (!tutorRow) {
+      return err("validation", "El tutor seleccionado no corresponde a este paciente.");
+    }
+  }
+
+  // Path canónico server-built (CHECK M07). El upload va SIN el prefijo del
+  // bucket (storage.objects.name no lo incluye — M27).
+  const firmaStoragePath = buildFirmaStoragePath({
+    organizationId,
+    pacienteId,
+    archivoUuid: crypto.randomUUID(),
+  });
+  const pathEnBucket = pathSinBucket(firmaStoragePath);
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const { error: uploadErr } = await supabase.storage
+    .from(CONSENT_BUCKET)
+    .upload(pathEnBucket, bytes, { contentType: "image/png" });
+  if (uploadErr) {
+    return err("db_error", "No pudimos subir la firma.", uploadErr.message);
+  }
+
+  const created = await createConsentimiento({
+    pacienteId,
+    plantillaId,
+    firmaStoragePath,
+    firmadoPorTutorId: tutorId,
+  });
+  if (!created.ok) {
+    // El PNG quedó huérfano y los usuarios no tienen DELETE en este bucket
+    // (M27): limpieza best-effort con service client. Si también falla, el
+    // archivo huérfano es benigno (uuid sin fila que lo referencie).
+    try {
+      const service = createSupabaseServiceClient();
+      await service.storage.from(CONSENT_BUCKET).remove([pathEnBucket]);
+    } catch {
+      // best-effort: nunca enmascarar el error real del INSERT
+    }
+    return created;
+  }
+
+  // La vuelta: la card de la ficha muestra el consentimiento nuevo.
+  revalidatePath(`/pacientes/${pacienteId}`);
+  return ok({ consentimientoId: created.data.id });
+}
+
+const revokeConsentimientoActionSchema = z.object({
+  consentimientoId: z.string().uuid(),
+  /** Solo para revalidatePath — la tenancy del UPDATE la resuelve el writer. */
+  pacienteId: z.string().uuid(),
+  motivo: z.string().min(5, "Contá el motivo en al menos 5 caracteres.").max(500),
+});
+
+export type RevokeConsentimientoActionInput = z.infer<typeof revokeConsentimientoActionSchema>;
+
+/**
+ * Revoca un consentimiento (Ley 26.529 art. 11: revocable en cualquier
+ * momento). Solo marca revocado_en + motivo — el archivo de la firma se
+ * conserva por compliance (retención 10 años). Org-scoped en el writer.
+ */
+export async function revokeConsentimientoAction(
+  input: RevokeConsentimientoActionInput,
+): Promise<Result<void>> {
+  const parsed = revokeConsentimientoActionSchema.safeParse(input);
+  if (!parsed.success) {
+    return err("validation", "Datos de la revocación inválidos.", parsed.error.message);
+  }
+
+  const result = await revokeConsentimiento({
+    consentimientoId: parsed.data.consentimientoId,
+    motivo: parsed.data.motivo,
+  });
+  if (!result.ok) return result;
+
+  revalidatePath(`/pacientes/${parsed.data.pacienteId}`);
+  return ok(undefined);
+}
+
+/**
+ * Signed URL temporal (5 min) para ver la firma. Recibe el ID del
+ * consentimiento — NUNCA un storage path del cliente: el path se lee de la
+ * fila org-scoped y recién ahí se firma (IDOR-proof por construcción; la RLS
+ * de storage además exige rol clínico de la org del path).
+ */
+export async function getFirmaConsentimientoUrlAction(
+  consentimientoId: string,
+): Promise<Result<{ signedUrl: string }>> {
+  if (!z.string().uuid().safeParse(consentimientoId).success) {
+    return err("validation", "ID inválido.");
+  }
+  const session = await getActiveSession();
+  if (!session.ok) return session;
+
+  const supabase = await createSupabaseServerClient();
+  const { data: row, error } = await supabase
+    .from("consentimiento")
+    .select("firma_storage_path")
+    .eq("id", consentimientoId)
+    .eq("organization_id", session.data.organizationId)
+    .maybeSingle();
+  if (error) {
+    return err("db_error", "No pudimos buscar el consentimiento.", error.message);
+  }
+  const path = (row as { firma_storage_path: string } | null)?.firma_storage_path;
+  if (!path) {
+    return err("not_found", "No encontramos ese consentimiento.");
+  }
+
+  const url = await getSignedFirmaUrl(path);
+  if (!url.ok) return url;
+  return ok({ signedUrl: url.data });
 }
