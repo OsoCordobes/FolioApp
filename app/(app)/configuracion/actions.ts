@@ -31,11 +31,19 @@ import {
 } from "@/lib/db/members";
 import type { EspecialidadSlug } from "@/lib/especialidades/meta";
 import { getActiveSession } from "@/lib/db/session";
-import { err, type Result } from "@/lib/db/errors";
+import { err, ok, type Result } from "@/lib/db/errors";
 import { roleLabel } from "@/lib/auth/capabilities";
+import { decideUpgradeTipo } from "@/lib/billing/upgrade";
+import {
+  syncSubscriptionAmountInBackground,
+  type EstadoSuscripcion,
+} from "@/lib/db/suscripcion";
 import { notifyMemberInvitation } from "@/lib/email/notify";
 import { getAuthUrl as getGoogleAuthUrl } from "@/lib/google/oauth";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  createSupabaseServerClient,
+  createSupabaseServiceClient,
+} from "@/lib/supabase/server";
 
 /**
  * Revalida la página pública /book/<slug> de la org activa (ISR de 5 min en
@@ -193,6 +201,142 @@ export async function countSesionesOtraEspecialidadMemberAction(
   nuevaEspecialidad: EspecialidadSlug | null,
 ): Promise<Result<number>> {
   return countSesionesOtraEspecialidadMember(memberId, nuevaEspecialidad);
+}
+
+// ─── Upgrade de tier (PR 1.4 · self-serve a Clínica, sin proration) ─────────
+
+export interface UpgradeOrgTipoResult {
+  /** Monto mensual (centavos ARS) antes del cambio, según pricing.ts. */
+  montoAntesCents: number;
+  /** Monto mensual (centavos ARS) después (CLINICA con seats actuales). */
+  montoDespuesCents: number;
+}
+
+/**
+ * PR 1.4 · pasa la org de INDEPENDIENTE a CLINICA (upgrade self-serve, SIN
+ * proration). El monto nuevo aplica al PRÓXIMO débito del preapproval — no hay
+ * cargo retroactivo.
+ *
+ * Guard: solo el OWNER (patrón removeMember, lib/db/members.ts). La validación
+ * de negocio (tipo/rol/downgrade) vive en la decisión pura `decideUpgradeTipo`.
+ * Defense-in-depth: la policy org_update_owner (M02) también exige OWNER, así
+ * que un no-OWNER que saltee el guard afectaría 0 filas en el UPDATE.
+ *
+ * Orden de persistencia (ver plan): primero el estado + el registro de
+ * auditoría, DESPUÉS el sync del monto — el PUT de MP es idempotente y el cron
+ * reconcile repara si el sync falla, así que nunca bloqueamos el flujo por él.
+ *
+ *   1. UPDATE organization.tipo = 'CLINICA' (server client, RLS-aware: la
+ *      policy org_update_owner de M02 exige OWNER — el guard de arriba ya lo
+ *      restringió).
+ *   2. INSERT en organization_tipo_cambio con SERVICE client — M66 no tiene
+ *      policy de INSERT (solo service_role escribe). Es el audit trail
+ *      append-only del cambio de plan (quién, cuándo, impacto de precio).
+ *   3. syncSubscriptionAmountInBackground(org, 'upgrade_tipo') fire-and-forget:
+ *      ajusta el preapproval al monto de Clínica si la suscripción está
+ *      ACTIVA/MOROSA; en cualquier otro estado es un skip inocuo (el próximo
+ *      alta/reactivación toma el monto del tier actual).
+ */
+export async function upgradeOrgTipoAction(): Promise<Result<UpgradeOrgTipoResult>> {
+  const session = await getActiveSession();
+  if (!session.ok) return session;
+
+  // Guard duro de rol (defense-in-depth con la policy organization_update):
+  // solo el OWNER paga y cambia el plan.
+  if (session.data.role !== "OWNER") {
+    return err("forbidden", "Solo el titular de la cuenta puede cambiar el plan.");
+  }
+
+  const supabase = await createSupabaseServerClient();
+
+  // Snapshot del estado actual: tipo + seats activos + estado de suscripción.
+  const { data: orgRow, error: orgErr } = await supabase
+    .from("organization")
+    .select("id, tipo")
+    .eq("id", session.data.organizationId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (orgErr) return err("db_error", "Error leyendo la organización.", orgErr.message);
+  if (!orgRow) return err("not_found", "Organización no encontrada.");
+  const tipoActual = (orgRow as { tipo: "INDEPENDIENTE" | "CLINICA" }).tipo;
+
+  // Head-count de members activos (incluye al OWNER) — define los seats que
+  // cobra Clínica. `head: true` no trae filas, solo el count.
+  const { count: membersCount, error: cntErr } = await supabase
+    .from("member")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", session.data.organizationId)
+    .is("deleted_at", null);
+  if (cntErr) return err("db_error", "Error contando miembros activos.", cntErr.message);
+  const membersActivos = membersCount ?? 1;
+
+  const { data: subRow, error: subErr } = await supabase
+    .from("suscripcion")
+    .select("estado")
+    .eq("organization_id", session.data.organizationId)
+    .maybeSingle();
+  if (subErr) return err("db_error", "Error leyendo la suscripción.", subErr.message);
+  const estadoSuscripcion =
+    (subRow as { estado: EstadoSuscripcion } | null)?.estado ?? null;
+
+  const decision = decideUpgradeTipo({
+    tipoActual,
+    rol: session.data.role,
+    membersActivos,
+    estadoSuscripcion,
+  });
+  if (!decision.elegible) {
+    return err("conflict", decision.motivo ?? "El plan no se puede cambiar desde acá.");
+  }
+
+  // 1. Persistir el tipo. RLS-aware (server client): la policy org_update_owner
+  // (M02) exige OWNER — el guard de arriba ya lo restringió.
+  const { data: updated, error: updErr } = await supabase
+    .from("organization")
+    .update({ tipo: "CLINICA" })
+    .eq("id", session.data.organizationId)
+    .eq("tipo", "INDEPENDIENTE") // guard optimista contra doble-click / carrera
+    .is("deleted_at", null)
+    .select("id");
+  if (updErr) return err("db_error", "No se pudo cambiar el plan.", updErr.message);
+  if (!updated || updated.length === 0) {
+    // 0 filas: o ya era CLINICA (carrera) o la policy bloqueó el UPDATE.
+    return err("conflict", "El plan ya está actualizado o no tenés permiso para cambiarlo.");
+  }
+
+  // 2. Audit trail append-only (M66). SERVICE client obligatorio: la tabla no
+  // tiene policy de INSERT, solo service_role (BYPASSRLS) escribe. changed_by
+  // = auth.users.id del actor (= profile.id = session.userId en Folio).
+  const service = createSupabaseServiceClient();
+  const { error: cambioErr } = await service.from("organization_tipo_cambio").insert({
+    organization_id: session.data.organizationId,
+    de_tipo: "INDEPENDIENTE",
+    a_tipo: "CLINICA",
+    changed_by: session.data.userId,
+    monto_antes_cents: decision.montoAntes,
+    monto_despues_cents: decision.montoDespues,
+  });
+  if (cambioErr) {
+    // El tipo ya se cambió (paso 1). No revertimos: el cambio de plan es válido
+    // y el registro de auditoría es best-effort — logueamos para reconciliar a
+    // mano si hiciera falta, pero no le fallamos al usuario un upgrade que ya
+    // ocurrió. (Sin PII: solo ids internos y montos.)
+    console.warn(
+      `[billing] upgrade_tipo org=${session.data.organizationId}: INSERT organization_tipo_cambio falló: ${cambioErr.message}`,
+    );
+  }
+
+  // 3. Sync del monto — fire-and-forget, JAMÁS bloquea el upgrade. El PUT a MP
+  // es idempotente y el cron reconcile repara divergencias.
+  syncSubscriptionAmountInBackground(session.data.organizationId, "upgrade_tipo");
+
+  revalidatePath("/configuracion");
+  revalidatePath("/", "layout");
+
+  return ok({
+    montoAntesCents: decision.montoAntes,
+    montoDespuesCents: decision.montoDespues,
+  });
 }
 
 export async function connectGoogleCalendar(): Promise<Result<void>> {
