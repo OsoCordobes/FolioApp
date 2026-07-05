@@ -13,8 +13,10 @@
 
 import { Configuracion } from "@/components/configuracion/configuracion";
 import { capabilitiesFor } from "@/lib/auth/capabilities";
+import { computeMonthlyPriceCents } from "@/lib/billing/pricing";
 import { getActiveContext } from "@/lib/db/active-context";
 import { getConfiguracionData } from "@/lib/db/configuracion";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isOrgListedInDirectory } from "@/lib/db/directorio";
 import {
   getOwnEspecialidad,
@@ -86,6 +88,21 @@ export default async function ConfiguracionPage() {
     process.env.WHATSAPP_ACCESS_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID,
   );
 
+  // PR 1.4 · datos para el upgrade self-serve a Clínica (card "Tipo de
+  // organización"). membersActivos = head-count de members activos (incluye al
+  // titular) → define los seats que cobraría Clínica. RLS-aware (server client);
+  // best-effort: si el count falla, asumimos 1 (solo el titular) para no romper
+  // la página — el monto real lo re-computa el action al confirmar.
+  const supabase = await createSupabaseServerClient();
+  const { count: membersCount } = await supabase
+    .from("member")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", ctx.data.organization.id)
+    .is("deleted_at", null);
+  const membersActivos = membersCount ?? 1;
+  const montoActualCents = computeMonthlyPriceCents(data.data.tipo, membersActivos);
+  const montoClinicaCents = computeMonthlyPriceCents("CLINICA", membersActivos);
+
   return (
     <Configuracion
       orgSlug={ctx.data.organization.slug}
@@ -98,6 +115,9 @@ export default async function ConfiguracionPage() {
       googleCalendar={data.data.googleCalendar}
       orgTipo={data.data.tipo}
       canEdit={canEdit}
+      membersActivos={membersActivos}
+      montoActualCents={montoActualCents}
+      montoClinicaCents={montoClinicaCents}
       canManageTeam={caps.canManageTeam}
       isOwner={ctx.data.session.role === "OWNER"}
       equipoMembers={equipoMembers}
