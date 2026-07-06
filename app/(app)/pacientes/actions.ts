@@ -40,6 +40,7 @@ import {
   createDocumentoClinico,
   refreshSignedUrl,
 } from "@/lib/db/documentos";
+import { saveRespuesta } from "@/lib/db/instrumentos";
 import { savePacienteIntakeAvanzado } from "@/lib/db/paciente-intake";
 import { createPaciente } from "@/lib/db/pacientes";
 import { savePlanTratamiento } from "@/lib/db/plan-tratamiento";
@@ -49,6 +50,10 @@ import { transitionTurno } from "@/lib/db/turnos";
 import { err, ok, type Result } from "@/lib/db/errors";
 import { buildUpsertSesionInput } from "@/lib/especialidades/draft";
 import { ESPECIALIDAD_SLUGS } from "@/lib/especialidades/meta";
+import {
+  CSSRS_INSTRUMENTO_ID,
+  CSSRS_ITEMS_LEN,
+} from "@/lib/especialidades/psicologia/schema";
 import {
   createSupabaseServerClient,
   createSupabaseServiceClient,
@@ -154,6 +159,97 @@ export async function savePacienteIntakeAvanzadoAction(
   // La vuelta: la ficha re-renderiza la sección avanzada con los valores nuevos.
   revalidatePath("/pacientes/[id]");
   revalidatePath(`/pacientes/${parsed.data.pacienteId}`);
+  return ok({ id: result.data.id });
+}
+
+// ─── Registrar el screener C-SSRS en el historial de riesgo (C7) ─────────────
+//
+// El workflow de riesgo suicida de psicología (Tool, tab Plan) documenta el
+// plan de crisis en el toolData de la sesión (cifrado, viaja con el SOAP). Este
+// action, ADEMÁS, registra el screener C-SSRS en instrumento_respuesta (C2) para
+// el TRACKING LONGITUDINAL del riesgo — una serie de bandas independiente del
+// SOAP, base del dashboard de outcomes (C8). Se persiste una fila POR aplicación
+// (append-only): el profesional lo dispara explícitamente al completar el
+// screener, no en cada guardado de la sesión (evita duplicados por re-save).
+//
+// El scoring canónico se recomputa server-side en saveRespuesta (nunca se
+// confía en un score del cliente); acá solo se validan pacienteId/turnoId y las
+// 6 respuestas 0/1. Tenancy: paciente ∈ org activa (guard IDOR) + RLS +
+// trigger same-org de instrumento_respuesta (M73).
+
+const registrarCssrsSchema = z.object({
+  pacienteId: z.string().uuid(),
+  /** Turno en curso (opcional): resuelve la sesion_id para atar la aplicación. */
+  turnoId: z.string().uuid().optional().nullable(),
+  /** Screener C-SSRS completo: 6 respuestas 0 (No) / 1 (Sí). */
+  cssrs: z.array(z.number().int().min(0).max(1)).length(CSSRS_ITEMS_LEN),
+});
+
+export type RegistrarCssrsActionInput = z.infer<typeof registrarCssrsSchema>;
+
+/**
+ * Registra una aplicación del screener C-SSRS en instrumento_respuesta (C2) para
+ * el tracking longitudinal del riesgo. Si hay un turno en curso con sesión
+ * guardada, la aplicación se ata a esa sesión; si no, se guarda como aplicación
+ * suelta (sesion_id NULL) — sigue siendo parte de la HC del paciente.
+ */
+export async function registrarCssrsAction(
+  input: RegistrarCssrsActionInput,
+): Promise<Result<{ id: string }>> {
+  const parsed = registrarCssrsSchema.safeParse(input);
+  if (!parsed.success) {
+    return err("validation", "Datos del C-SSRS inválidos.", parsed.error.message);
+  }
+  const d = parsed.data;
+
+  const session = await getActiveSession();
+  if (!session.ok) return session;
+  const organizationId = session.data.organizationId;
+
+  const supabase = await createSupabaseServerClient();
+
+  // F-AUTH (IDOR): paciente ∈ org activa. Mismo guard que los vecinos — no se
+  // confía en ids del cliente. La RLS de instrumento_respuesta + el trigger
+  // same-org (M73) son la última línea.
+  const { data: pacienteRow, error: pacienteErr } = await supabase
+    .from("paciente")
+    .select("id")
+    .eq("id", d.pacienteId)
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+  if (pacienteErr) {
+    return err("db_error", "No pudimos validar el paciente.", pacienteErr.message);
+  }
+  if (!pacienteRow) {
+    return err("forbidden", "Ese paciente no pertenece a tu organización.");
+  }
+
+  // Resuelve la sesion del turno en curso (best-effort): la aplicación se ata a
+  // ella si existe. El SELECT es org-scoped + valida turno↔paciente para que un
+  // turno ajeno no ate la respuesta a una sesión de otro paciente/tenant.
+  let sesionId: string | null = null;
+  if (d.turnoId) {
+    const { data: sesionRow } = await supabase
+      .from("sesion")
+      .select("id")
+      .eq("turno_id", d.turnoId)
+      .eq("organization_id", organizationId)
+      .eq("paciente_id", d.pacienteId)
+      .maybeSingle();
+    sesionId = (sesionRow as { id: string } | null)?.id ?? null;
+  }
+
+  const result = await saveRespuesta({
+    pacienteId: d.pacienteId,
+    sesionId,
+    instrumentoId: CSSRS_INSTRUMENTO_ID,
+    respuestas: d.cssrs,
+    completadoPor: "profesional",
+  });
+  if (!result.ok) return result;
+
+  // La vuelta: la serie longitudinal de riesgo de la ficha trae la aplicación nueva.
+  revalidatePath(`/pacientes/${d.pacienteId}`);
   return ok({ id: result.data.id });
 }
 

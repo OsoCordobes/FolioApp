@@ -22,7 +22,7 @@ import {
 } from "@/lib/especialidades/cardiologia/schema";
 import { intakeAvanzadoCardiologia } from "@/lib/especialidades/cardiologia/intake";
 import {
-  psicologiaToolDataSchema,
+  psicologiaToolDataV2Schema,
   resumenSesionPsicologia,
 } from "@/lib/especialidades/psicologia/schema";
 import { intakeAvanzadoPsicologia } from "@/lib/especialidades/psicologia/intake";
@@ -301,9 +301,12 @@ export const ESPECIALIDADES_META: Record<EspecialidadSlug, EspecialidadMeta> = {
     slug: "psicologia",
     nombre: "Psicología",
     badgeLabel: "Módulo · Psicología",
-    toolId: "psicologia.escalas.v1",
-    toolIds: ["psicologia.escalas.v1"],
-    schema: psicologiaToolDataSchema,
+    // C7 · el writer estampa v2 (escalas + registro + objetivos + plan de crisis
+    // opcional); v1 (psicologia.escalas.v1) se sigue LEYENDO (sesiones viejas)
+    // vía toolIds — no queda huérfana (patrón dos-ids de quiropraxia).
+    toolId: "psicologia.escalas.v2",
+    toolIds: ["psicologia.escalas.v2", "psicologia.escalas.v1"],
+    schema: psicologiaToolDataV2Schema,
     resumenSesion: resumenSesionPsicologia,
     intakeAvanzado: intakeAvanzadoPsicologia,
     soapGuia: SOAP_GUIA_PSICOLOGIA,

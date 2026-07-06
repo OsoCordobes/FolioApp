@@ -1,10 +1,13 @@
 /**
  * Folio · especialidades · psicología · schema + derivaciones (server-safe).
  *
- * Todo lo que NO es React de la herramienta de psicología (Fase D):
- *   - Schema zod versionado del toolData (`{ v: 1, phq9?, gad7?, registro?,
- *     objetivos? }`) — tool_id `psicologia.escalas.v1`, cifrado app-side en
- *     sesion.tool_data_cifrado.
+ * Todo lo que NO es React de la herramienta de psicología (Fase D + C7):
+ *   - Schema zod versionado del toolData. El shape de ESCRITURA es v2
+ *     (`psicologia.escalas.v2`, C7): sobre v1 AGREGA un bloque `crisisPlan`
+ *     OPCIONAL (C-SSRS estructurado + plan de seguridad documentado). El shape v1
+ *     (`psicologia.escalas.v1`, escalas + registro + objetivos) se conserva
+ *     INTACTO para LEER sesiones viejas (patrón de dos-ids de quiropraxia — acá
+ *     DOS ids). Ambos cifrados app-side en sesion.tool_data_cifrado.
  *   - Ítems es-AR de PHQ-9 y GAD-7 + `scorePhq9` / `scoreGad7` — desde C4
  *     TOMADOS DE LA BIBLIOTECA `lib/instrumentos` (defs `phq9.v1`/`gad7.v1`):
  *     los enunciados, la consigna, las opciones y los cortes de banda tienen
@@ -16,21 +19,29 @@
  *     curva longitudinal del Tool.
  *   - `resumenSesionPsicologia(toolData)` — string de resumen para
  *     HistorialReciente / TabSesiones ("PHQ-9 12 (moderada) · GAD-7 8 (leve)").
+ *   - C7 · `deteccionRiesgo(toolData)` — trigger PURO que decide si abrir el
+ *     workflow de riesgo suicida (PHQ-9 ítem 9 > 0 O registro.riesgo in
+ *     {ideacion, plan}); `scoreCssrsCrisis` / `resumenCrisisPlan` para el
+ *     tracking longitudinal del riesgo vía instrumento_respuesta (C2).
  *
  * Opcional-friendly: una sesión puede cargar solo una escala, solo el registro
- * de estado mental o solo objetivos — todos los campos son opcionales salvo
- * `v`. Server-safe: lo importan lib/db/* (writer valida antes de cifrar) y el
- * Tool client. PHI: este módulo nunca loguea contenido clínico.
+ * de estado mental, solo objetivos o solo el plan de crisis — todos los campos
+ * son opcionales salvo `v`. Server-safe: lo importan lib/db/* (writer valida
+ * antes de cifrar) y el Tool client. PHI: este módulo nunca loguea contenido
+ * clínico.
  *
- * Estabilidad (C4): el tool_id `psicologia.escalas.v1` y el schema NO cambian
- * — no hay migración de datos. Solo cambia DE DÓNDE salen las definiciones de
- * escala (biblioteca en vez de literales duplicados acá).
+ * Estabilidad (C4→C7): las definiciones de escala tienen una sola fuente de
+ * verdad en `lib/instrumentos`; C7 SUBE la versión de escritura a v2 de forma
+ * ADITIVA (crisisPlan opcional) — las sesiones v1 se siguen leyendo sin
+ * migración de datos.
  */
 
 import { z } from "zod";
 
-import { gad7 as gad7Def, phq9 as phq9Def } from "@/lib/instrumentos";
+import { cssrs as cssrsDef, gad7 as gad7Def, phq9 as phq9Def } from "@/lib/instrumentos";
+import { CSSRS_LEN } from "@/lib/instrumentos/scoring/cssrs";
 import { PHQ9_ITEM_IDEACION as PHQ9_ITEM_IDEACION_LIB } from "@/lib/instrumentos/scoring/phq9";
+import type { ScoreInstrumento } from "@/lib/instrumentos";
 import type { ToolHistorialEntry } from "@/lib/especialidades/types";
 
 // ─── Escalas: ítems es-AR y opciones de frecuencia (desde lib/instrumentos) ──
@@ -157,11 +168,82 @@ const objetivoSchema = z.object({
   estado: z.enum(ESTADOS_OBJETIVO),
 });
 
+// ─── Plan de crisis / riesgo suicida (v2 · C7) ───────────────────────────────
+//
+// Cuando el trigger de riesgo (deteccionRiesgo) se dispara — PHQ-9 ítem 9 > 0 O
+// registro.riesgo in {ideacion, plan} — la Tool abre un workflow ESTRUCTURADO en
+// vez del banner role=alert histórico: un screener C-SSRS de 6 ítems sí/no (de
+// lib/instrumentos) + un plan de seguridad documentado (acceso a medios,
+// factores protectores, texto del plan). Todo el bloque es OPCIONAL — el
+// profesional puede documentar solo el plan sin completar el screener, o al
+// revés — y persiste en el toolData (cifrado) como parte de la sesión.
+//
+// Longitudinal (C2): además del toolData, el screener C-SSRS se registra en
+// instrumento_respuesta (lib/db/instrumentos.ts) para el tracking del riesgo a
+// lo largo del tratamiento (serie de bandas), independiente del SOAP. La
+// serialización del screener es number[] de 6 con 0/1 (mismo shape que consume
+// scoreCssrs y el PlanillaRenderer en modo binario).
+
+/** Longitud del screener C-SSRS (re-export de la def de la biblioteca). */
+export const CSSRS_ITEMS_LEN = CSSRS_LEN;
+
+/** Enunciados es-AR del C-SSRS (fuente de verdad única: la def de la biblioteca). */
+export const CSSRS_ITEMS: readonly string[] = cssrsDef.items.map((i) => i.enunciado);
+
+/** Id versionado del instrumento C-SSRS que se persiste en instrumento_respuesta. */
+export const CSSRS_INSTRUMENTO_ID = cssrsDef.id;
+
 /**
- * Las escalas persisten SOLO completas (longitud exacta, todos los ítems
- * respondidos) — el scoring estándar de PHQ-9/GAD-7 exige el instrumento
- * entero. El borrador del Tool puede tener respuestas parciales en memoria;
- * la UI avisa que una escala incompleta no se puede guardar.
+ * Una respuesta del screener C-SSRS: entero 0 (No) o 1 (Sí). Se guarda como
+ * número (no boolean) para alinear con la serialización de instrumento_respuesta
+ * y con el PlanillaRenderer binario, que emite `number | null`. scoreCssrs
+ * acepta ambos (boolean[] y (0|1)[]).
+ */
+const itemCssrsSchema = z.number().int().min(0).max(1);
+
+/**
+ * Plan de crisis / seguridad. Todos los campos OPCIONALES (el bloque entero
+ * también): documentar el plan no exige el screener y viceversa. `.strict()`
+ * igual que el resto: una clave desconocida RECHAZA (no se stripea) — mantiene
+ * la garantía cross-tool del toolData.
+ */
+const crisisPlanSchema = z.object({
+  /**
+   * Screener C-SSRS (6 respuestas 0/1, completo). Persiste SOLO completo (mismo
+   * criterio que PHQ-9/GAD-7: el scoring estándar exige el instrumento entero);
+   * el borrador puede tener respuestas parciales en memoria.
+   */
+  cssrs: z.array(itemCssrsSchema).length(CSSRS_LEN).optional(),
+  /** Acceso a medios letales y su restricción (texto libre, PHI). */
+  accesoMedios: z.string().max(2000).optional(),
+  /** Factores protectores identificados (texto libre, PHI). */
+  factoresProtectores: z.string().max(2000).optional(),
+  /** Texto del plan de seguridad acordado (texto libre, PHI). */
+  planTexto: z.string().max(4000).optional(),
+}).strict();
+
+/**
+ * Campos comunes v1/v2 del toolData de psicología. El shape v1 los usa tal cual;
+ * v2 le AGREGA `crisisPlan`. Las escalas persisten SOLO completas (longitud
+ * exacta, todos los ítems respondidos) — el scoring estándar de PHQ-9/GAD-7
+ * exige el instrumento entero. El borrador del Tool puede tener respuestas
+ * parciales en memoria; la UI avisa que una escala incompleta no se puede
+ * guardar.
+ */
+const camposComunes = {
+  phq9: z.array(itemEscalaSchema).length(PHQ9_LEN).optional(),
+  gad7: z.array(itemEscalaSchema).length(GAD7_LEN).optional(),
+  registro: registroSchema.optional(),
+  objetivos: z.array(objetivoSchema).max(20).optional(),
+} as const;
+
+/**
+ * toolData v1 (LEGACY · tool_id = psicologia.escalas.v1).
+ *
+ * Shape ORIGINAL: escalas + registro de estado mental + objetivos. YA NO es el
+ * shape de escritura (lo es v2), pero se conserva INTACTO para LEER las sesiones
+ * de psicología pre-C7. No se edita ni se borra (regla aditiva / patrón dos-ids
+ * de quiro).
  *
  * .strict(): claves desconocidas RECHAZAN en vez de stripearse. Como todos
  * los campos de contenido son .optional(), sin strict un payload de OTRA
@@ -172,15 +254,47 @@ const objetivoSchema = z.object({
  */
 export const psicologiaToolDataSchema = z.object({
   v: z.literal(1),
-  phq9: z.array(itemEscalaSchema).length(PHQ9_LEN).optional(),
-  gad7: z.array(itemEscalaSchema).length(GAD7_LEN).optional(),
-  registro: registroSchema.optional(),
-  objetivos: z.array(objetivoSchema).max(20).optional(),
+  ...camposComunes,
+}).strict();
+
+/**
+ * toolData v2 (ACTIVO · tool_id = psicologia.escalas.v2, C7).
+ *
+ * ADITIVO sobre v1: agrega el bloque `crisisPlan` (C-SSRS + plan de seguridad).
+ * Escalas, registro y objetivos NO cambian. `v: z.literal(2)` + .strict() igual
+ * que v1: un payload de OTRA herramienta (o v1 pelado) RECHAZA — el writer
+ * depende de esto para no persistir PHI ajena con el tool_id de psicología.
+ */
+export const psicologiaToolDataV2Schema = z.object({
+  v: z.literal(2),
+  ...camposComunes,
+  crisisPlan: crisisPlanSchema.optional(),
 }).strict();
 
 export type PsicologiaToolData = z.infer<typeof psicologiaToolDataSchema>;
+export type PsicologiaToolDataV2 = z.infer<typeof psicologiaToolDataV2Schema>;
 export type RegistroSesion = z.infer<typeof registroSchema>;
 export type Objetivo = z.infer<typeof objetivoSchema>;
+export type CrisisPlan = z.infer<typeof crisisPlanSchema>;
+
+/**
+ * Discrimina un toolData psico persistido (descifrado + JSON.parse) entre v2, v1
+ * o vacío. Intenta v2 primero (shape de escritura actual, C7), luego v1
+ * (legacy); si ninguno parsea devuelve `{ kind: "empty" }` (sesión sin tool / de
+ * otra herramienta). Espejo de `parseCardiologiaToolData`.
+ */
+export function parsePsicologiaToolData(
+  value: unknown,
+):
+  | { kind: "v2"; data: PsicologiaToolDataV2 }
+  | { kind: "v1"; data: PsicologiaToolData }
+  | { kind: "empty" } {
+  const asV2 = psicologiaToolDataV2Schema.safeParse(value);
+  if (asV2.success) return { kind: "v2", data: asV2.data };
+  const asV1 = psicologiaToolDataSchema.safeParse(value);
+  if (asV1.success) return { kind: "v1", data: asV1.data };
+  return { kind: "empty" };
+}
 
 // ─── Scoring (delega en lib/instrumentos, adapta a la forma corta de psico) ──
 //
@@ -295,6 +409,99 @@ export function extractObjetivos(toolData: unknown): Objetivo[] {
   return out;
 }
 
+// ─── Detección de riesgo suicida (C7 · trigger del workflow) ─────────────────
+//
+// El disparador del workflow de riesgo. PURO y testeable: decide si la Tool debe
+// abrir el C-SSRS + plan de seguridad en vez del banner role=alert histórico.
+
+/** Motivo del disparo del workflow (para la copy/UX de la Tool). */
+export type MotivoRiesgo = "phq9_item9" | "registro_riesgo";
+
+export interface DeteccionRiesgo {
+  /** true = corresponde abrir el workflow de riesgo (C-SSRS + plan de seguridad). */
+  activo: boolean;
+  /** Motivos concretos que dispararon el workflow (uno o ambos). */
+  motivos: MotivoRiesgo[];
+}
+
+/**
+ * Decide si el workflow de riesgo suicida debe abrirse a partir de las señales
+ * ya presentes en el borrador/toolData:
+ *
+ *   - PHQ-9 ítem 9 (ideación de muerte/autolesión) > 0, O
+ *   - registro.riesgo in {ideacion, plan}.
+ *
+ * Contrato LAXO (acepta borradores parciales y shapes ajenos): lee el ítem 9 del
+ * PHQ-9 aunque la escala esté incompleta (basta ese ítem para el trigger clínico)
+ * y el enum de riesgo del registro. Función pura, sin side effects, sin logging.
+ */
+export function deteccionRiesgo(toolData: unknown): DeteccionRiesgo {
+  const motivos: MotivoRiesgo[] = [];
+
+  const phq9 = rawCampo(toolData, "phq9");
+  if (Array.isArray(phq9)) {
+    const item9 = phq9[PHQ9_ITEM_IDEACION];
+    if (typeof item9 === "number" && Number.isInteger(item9) && item9 > 0) {
+      motivos.push("phq9_item9");
+    }
+  }
+
+  const registro = rawCampo(toolData, "registro");
+  if (registro !== null && typeof registro === "object") {
+    const riesgo = (registro as Record<string, unknown>).riesgo;
+    if (riesgo === "ideacion" || riesgo === "plan") motivos.push("registro_riesgo");
+  }
+
+  return { activo: motivos.length > 0, motivos };
+}
+
+// ─── Plan de crisis: extracción laxa + scoring del C-SSRS ────────────────────
+
+/**
+ * Bloque `crisisPlan` de un toolData desconocido, validado como un todo (un
+ * shape inválido → null). Tolera v1 (sin crisisPlan) y ajenos. El historial
+ * nunca rompe la ficha.
+ */
+export function extractCrisisPlan(toolData: unknown): CrisisPlan | null {
+  const raw = rawCampo(toolData, "crisisPlan");
+  const parsed = crisisPlanSchema.safeParse(raw);
+  return parsed.success ? parsed.data : null;
+}
+
+/**
+ * Puntúa el screener C-SSRS del plan de crisis con la def canónica de la
+ * biblioteca (misma fuente que instrumento_respuesta usa server-side). Contrato
+ * laxo: null si el screener está incompleto/inválido (no seis respuestas 0/1).
+ * scoreCssrs acepta (0|1)[] — el shape persistido del crisisPlan.
+ */
+export function scoreCssrsCrisis(respuestas: unknown): ScoreInstrumento | null {
+  return cssrsDef.score(respuestas);
+}
+
+/**
+ * Resumen es-AR corto de un plan de crisis para el historial. Solo enum/estado
+ * (banda del C-SSRS + si hay plan documentado); NUNCA respuestas crudas ni el
+ * texto libre del plan. Devuelve null si el bloque no aporta nada.
+ */
+export function resumenCrisisPlan(crisisPlan: CrisisPlan | null | undefined): string | null {
+  if (!crisisPlan) return null;
+  const partes: string[] = [];
+  const score = scoreCssrsCrisis(crisisPlan.cssrs);
+  if (score) partes.push(`C-SSRS ${cssrsBandaLabel(score.banda)}`);
+  const tienePlan =
+    (crisisPlan.planTexto?.trim().length ?? 0) > 0 ||
+    (crisisPlan.accesoMedios?.trim().length ?? 0) > 0 ||
+    (crisisPlan.factoresProtectores?.trim().length ?? 0) > 0;
+  if (tienePlan) partes.push("plan de seguridad");
+  return partes.length > 0 ? partes.join(" · ") : null;
+}
+
+/** Label es-AR de una banda del C-SSRS (de la def de la biblioteca). */
+export function cssrsBandaLabel(banda: string): string {
+  const b = cssrsDef.bandas.find((x) => x.id === banda);
+  return (b?.label ?? banda).toLowerCase();
+}
+
 // ─── Serie longitudinal de puntajes ─────────────────────────────────────────
 
 export interface PsicoSeriesPoint {
@@ -329,15 +536,18 @@ export function deriveScoreSeries(historial: ToolHistorialEntry[]): PsicoSeriesP
 /**
  * Resumen es-AR de una sesión de psicología para el historial:
  *   "PHQ-9 12 (moderada) · GAD-7 8 (leve)"
- *   "PHQ-9 21 (severa) · riesgo: plan"
+ *   "PHQ-9 21 (severa) · riesgo: plan · C-SSRS alto · plan de seguridad"
  *   "Registro de sesión"
- * Shapes desconocidos/vacíos degradan a "Sesión registrada" (mismo copy que
- * el resto del registry — el historial nunca rompe). El puntaje detallado
- * (ítem por ítem) NO viaja al resumen.
+ * Lee v1 y v2 (parsePsicologiaToolData): escalas, registro y objetivos son
+ * comunes a ambos shapes; el plan de crisis (C-SSRS + plan de seguridad, C7)
+ * sólo aparece en v2 si está presente. Shapes desconocidos/vacíos degradan a
+ * "Sesión registrada" (mismo copy que el resto del registry — el historial nunca
+ * rompe). El puntaje detallado (ítem por ítem) y el texto libre del plan NO
+ * viajan al resumen.
  */
 export function resumenSesionPsicologia(toolData: unknown): string {
-  const parsed = psicologiaToolDataSchema.safeParse(toolData);
-  if (!parsed.success) return "Sesión registrada";
+  const parsed = parsePsicologiaToolData(toolData);
+  if (parsed.kind === "empty") return "Sesión registrada";
 
   const { phq9, gad7, registro, objetivos } = parsed.data;
   const partes: string[] = [];
@@ -347,19 +557,30 @@ export function resumenSesionPsicologia(toolData: unknown): string {
   const sGad7 = scoreGad7(gad7);
   if (sGad7) partes.push(`GAD-7 ${sGad7.total} (${sGad7.etiqueta})`);
 
+  const crisisPlan = parsed.kind === "v2" ? parsed.data.crisisPlan ?? null : null;
+
   const hayRegistro = registro !== undefined && Object.values(registro).some((v) => v !== undefined);
   const hayObjetivos = objetivos !== undefined && objetivos.length > 0;
-  if (partes.length === 0 && (hayRegistro || hayObjetivos)) partes.push("Registro de sesión");
+  const hayCrisis = resumenCrisisPlan(crisisPlan) !== null;
+  if (partes.length === 0 && (hayRegistro || hayObjetivos || hayCrisis)) {
+    partes.push("Registro de sesión");
+  }
 
-  // Decisión clínica/UX deliberada (documentada en docs/PLAN.md, Fase D):
-  // el flag categórico de riesgo se destaca en el resumen del historial por
-  // continuidad de cuidado — esconder un indicador de riesgo suicida tras
-  // navegación extra aumenta el riesgo de pasarlo por alto. Solo viaja el
-  // enum (nunca ítems de escala ni texto libre) y el historial de la ficha
-  // solo lo ven roles clínicos (gate server-side en pacientes/[id]/page.tsx
-  // + RLS can_read_clinical). Revisitar si el resumen sale de la ficha.
+  // Decisión clínica/UX deliberada (documentada en docs/PLAN.md, Fase D; C7
+  // preserva el comportamiento): el flag categórico de riesgo se destaca en el
+  // resumen del historial por continuidad de cuidado — esconder un indicador de
+  // riesgo suicida tras navegación extra aumenta el riesgo de pasarlo por alto.
+  // Solo viaja el enum/banda (nunca ítems de escala ni texto libre) y el
+  // historial de la ficha solo lo ven roles clínicos (gate server-side en
+  // pacientes/[id]/page.tsx + RLS can_read_clinical). Revisitar si el resumen
+  // sale de la ficha.
   if (registro?.riesgo === "ideacion") partes.push("riesgo: ideación");
   else if (registro?.riesgo === "plan") partes.push("riesgo: plan");
+
+  // C7 · el plan de crisis (banda del C-SSRS + si hay plan documentado) se suma
+  // al resumen por la misma razón de continuidad de cuidado. Solo enum/estado.
+  const sCrisis = resumenCrisisPlan(crisisPlan);
+  if (sCrisis) partes.push(sCrisis);
 
   return partes.length > 0 ? partes.join(" · ") : "Sesión registrada";
 }
