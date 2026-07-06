@@ -43,6 +43,12 @@ export default async function PortalHomePage() {
         </form>
       </header>
 
+      {hasLinks ? (
+        <nav style={{ marginTop: 20, display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <a href="/portal/turnos" className="fi-btn fi-btn-secondary">Ver mis turnos</a>
+        </nav>
+      ) : null}
+
       <section style={{ marginTop: 28 }}>
         <h2 style={{ fontSize: "var(--fs-lg)", margin: "0 0 12px" }}>Tus consultorios</h2>
         {hasLinks ? (
