@@ -40,7 +40,7 @@ import {
   createDocumentoClinico,
   refreshSignedUrl,
 } from "@/lib/db/documentos";
-import { saveRespuesta } from "@/lib/db/instrumentos";
+import { listRespuestasPaciente, saveRespuesta } from "@/lib/db/instrumentos";
 import { savePacienteIntakeAvanzado } from "@/lib/db/paciente-intake";
 import { createPaciente } from "@/lib/db/pacientes";
 import { savePlanTratamiento } from "@/lib/db/plan-tratamiento";
@@ -251,6 +251,55 @@ export async function registrarCssrsAction(
   // La vuelta: la serie longitudinal de riesgo de la ficha trae la aplicación nueva.
   revalidatePath(`/pacientes/${d.pacienteId}`);
   return ok({ id: result.data.id });
+}
+
+// ─── Dashboard de outcomes de psicología (C8) ────────────────────────────────
+//
+// El dashboard de la Tool de psicología (psicologia/dashboard.tsx) grafica las
+// series de instrumento_respuesta (PHQ-9/GAD-7/DASS-21/PCL-5 en el tiempo). Esta
+// action expone SOLO el snapshot no-PHI que el dashboard necesita
+// (instrumentoId + scoreTotal + createdAt) — NUNCA las respuestas crudas
+// descifradas. La tenancy la cubre listRespuestasPaciente, que ya filtra por la
+// org activa (organization_id de la sesión) además de la RLS + rol clínico.
+
+/** Punto de serie de un instrumento para el dashboard (score en claro, no-PHI). */
+export interface OutcomeSeriePunto {
+  instrumentoId: string;
+  scoreTotal: number | null;
+  createdAt: string;
+}
+
+/**
+ * Serie de instrumentos de un paciente para el dashboard de outcomes: devuelve
+ * solo { instrumentoId, scoreTotal, createdAt } — el score ya viene en claro del
+ * snapshot (C2), así que no se descifra ni viaja PHI al cliente. Filtra al set de
+ * salud mental del dashboard (PHQ-9/GAD-7/DASS-21/PCL-5) server-side para no
+ * mandar filas de otros dominios (p. ej. el C-SSRS de riesgo, que tiene su propia
+ * vista). RLS + rol clínico son la barrera real.
+ */
+export async function listOutcomeSeriesAction(
+  pacienteId: string,
+): Promise<Result<OutcomeSeriePunto[]>> {
+  if (!z.string().uuid().safeParse(pacienteId).success) {
+    return err("validation", "ID de paciente inválido.");
+  }
+
+  const { OUTCOME_INSTRUMENTOS, familiaInstrumento } = await import(
+    "@/lib/especialidades/psicologia/schema"
+  );
+  const familias = new Set(OUTCOME_INSTRUMENTOS.map((o) => o.key));
+
+  const result = await listRespuestasPaciente(pacienteId);
+  if (!result.ok) return result;
+
+  const puntos: OutcomeSeriePunto[] = result.data
+    .filter((r) => familias.has(familiaInstrumento(r.instrumentoId)))
+    .map((r) => ({
+      instrumentoId: r.instrumentoId,
+      scoreTotal: r.scoreTotal,
+      createdAt: r.createdAt,
+    }));
+  return ok(puntos);
 }
 
 // ─── Guardar sesión desde la ficha (tab Plan) ───────────────────────────────

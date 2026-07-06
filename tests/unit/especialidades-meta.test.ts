@@ -79,12 +79,12 @@ test("slugs y toolIds: registry consistente (Workstream 6 · write id v2)", () =
     [...ESPECIALIDADES_META.cardiologia.toolIds],
     ["cardiologia.cv.v3", "cardiologia.cv.v2", "cardiologia.cv.v1"],
   );
-  // C7 · el id de ESCRITURA de psicología es v2 (agrega crisisPlan); v1 se sigue
-  // LEYENDO vía toolIds.
-  assert.equal(ESPECIALIDADES_META.psicologia.toolId, "psicologia.escalas.v2");
+  // C8 · el id de ESCRITURA de psicología es v3 (agrega procesoNota + MSE
+  // completo); v2/v1 se siguen LEYENDO vía toolIds.
+  assert.equal(ESPECIALIDADES_META.psicologia.toolId, "psicologia.escalas.v3");
   assert.deepEqual(
     [...ESPECIALIDADES_META.psicologia.toolIds],
-    ["psicologia.escalas.v2", "psicologia.escalas.v1"],
+    ["psicologia.escalas.v3", "psicologia.escalas.v2", "psicologia.escalas.v1"],
   );
 });
 
@@ -139,7 +139,8 @@ test("getEspecialidadMetaByToolId: resuelve por MEMBRESÍA (v1 + v2), null para 
   assert.equal(getEspecialidadMetaByToolId("cardiologia.cv.v3")?.slug, "cardiologia");
   assert.equal(getEspecialidadMetaByToolId("cardiologia.cv.v2")?.slug, "cardiologia");
   assert.equal(getEspecialidadMetaByToolId("cardiologia.cv.v1")?.slug, "cardiologia");
-  // C7 · el v2 de escritura Y el v1 legacy de psico resuelven a psicología.
+  // C8 · el v3 de escritura Y el v2/v1 legacy de psico resuelven a psicología.
+  assert.equal(getEspecialidadMetaByToolId("psicologia.escalas.v3")?.slug, "psicologia");
   assert.equal(getEspecialidadMetaByToolId("psicologia.escalas.v2")?.slug, "psicologia");
   assert.equal(getEspecialidadMetaByToolId("psicologia.escalas.v1")?.slug, "psicologia");
   // Los toolIds placeholder pre-Fase D ya no existen en el registry.
@@ -185,15 +186,25 @@ const PAYLOADS_VALIDOS = {
     derivacion: { motivo: "Interconsulta electrofisiología.", urgencia: "programada" },
   },
   psicologia: {
-    // C7 · el schema del registry es v2 (agrega crisisPlan opcional).
-    v: 2,
+    // C8 · el schema del registry es v3 (agrega procesoNota + MSE completo).
+    v: 3,
     phq9: [0, 1, 2, 3, 0, 1, 2, 3, 0],
     gad7: [0, 1, 2, 3, 0, 1, 2],
-    registro: { animo: "ansioso", riesgo: "sin_riesgo" },
+    registro: {
+      animo: "ansioso",
+      riesgo: "sin_riesgo",
+      // Dominios del MSE completo (C8): parte del shape de escritura.
+      orientacion: "orientado",
+      insight: "parcial",
+    },
     objetivos: [{ texto: "Reducir evitación social", estado: "en_curso" }],
     crisisPlan: {
       cssrs: [0, 0, 0, 0, 0, 0],
       planTexto: "Estrategias de afrontamiento y contactos de emergencia.",
+    },
+    procesoNota: {
+      formato: "soap",
+      campos: { subjetivo: "Refiere mejoría anímica.", plan: "Continuar TCC." },
     },
   },
 } as const;
@@ -220,10 +231,11 @@ test("cross-tool: el rechazo es por .strict(), no por casualidad — sin claves 
   assert.equal(ESPECIALIDADES_META.cardiologia.schema.safeParse({ v: 1 }).success, false);
   assert.equal(ESPECIALIDADES_META.cardiologia.schema.safeParse({ v: 2 }).success, false);
   assert.equal(ESPECIALIDADES_META.cardiologia.schema.safeParse({ v: 3 }).success, true);
-  // C7 · psico escribe v2: {v:2} pelado válido; {v:1} (legacy) ya no es el shape
-  // de escritura, así que rechaza contra el schema del registry.
+  // C8 · psico escribe v3: {v:3} pelado válido; {v:1}/{v:2} (legacy) ya no son el
+  // shape de escritura, así que rechazan contra el schema del registry.
   assert.equal(ESPECIALIDADES_META.psicologia.schema.safeParse({ v: 1 }).success, false);
-  assert.equal(ESPECIALIDADES_META.psicologia.schema.safeParse({ v: 2 }).success, true);
+  assert.equal(ESPECIALIDADES_META.psicologia.schema.safeParse({ v: 2 }).success, false);
+  assert.equal(ESPECIALIDADES_META.psicologia.schema.safeParse({ v: 3 }).success, true);
   assert.equal(ESPECIALIDADES_META.quiropraxia.schema.safeParse({ v: 1 }).success, false);
   assert.equal(ESPECIALIDADES_META.quiropraxia.schema.safeParse({ v: 2 }).success, true);
 });
@@ -265,12 +277,13 @@ test("schemas: las tres especialidades validan estricto (v literal, shape propio
   assert.equal(ESPECIALIDADES_META.cardiologia.schema.safeParse({ v: 2 }).success, false);
   assert.equal(ESPECIALIDADES_META.cardiologia.schema.safeParse({ v: 1 }).success, false);
   assert.equal(ESPECIALIDADES_META.psicologia.schema.safeParse(null).success, false);
-  // C7 · psico escribe v2: {v:2} pelado válido; {v:1} (legacy) ya no; escala mal
-  // formada rechaza.
-  assert.equal(ESPECIALIDADES_META.psicologia.schema.safeParse({ v: 2 }).success, true);
+  // C8 · psico escribe v3: {v:3} pelado válido; {v:1}/{v:2} (legacy) ya no; escala
+  // mal formada rechaza.
+  assert.equal(ESPECIALIDADES_META.psicologia.schema.safeParse({ v: 3 }).success, true);
+  assert.equal(ESPECIALIDADES_META.psicologia.schema.safeParse({ v: 2 }).success, false);
   assert.equal(ESPECIALIDADES_META.psicologia.schema.safeParse({ v: 1 }).success, false);
   assert.equal(
-    ESPECIALIDADES_META.psicologia.schema.safeParse({ v: 2, phq9: [0, 0, 0] }).success,
+    ESPECIALIDADES_META.psicologia.schema.safeParse({ v: 3, phq9: [0, 0, 0] }).success,
     false,
   );
 });

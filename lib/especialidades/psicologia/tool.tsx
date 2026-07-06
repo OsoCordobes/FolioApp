@@ -36,6 +36,7 @@ import { cssrs as cssrsDef } from "@/lib/instrumentos";
 import { PlanillaRenderer, ResultadoBadge } from "@/lib/instrumentos/components";
 import { SerieEvolucion, type MetricaSerie, type PuntoSerie } from "@/lib/instrumentos/components";
 import type { SpecialtyToolProps } from "@/lib/especialidades/types";
+import { OutcomesDashboard } from "@/lib/especialidades/psicologia/dashboard";
 import {
   AFECTO_LABELS,
   AFECTOS,
@@ -43,7 +44,11 @@ import {
   ANIMOS,
   APARIENCIA_LABELS,
   APARIENCIAS,
+  ATENCION_LABELS,
+  ATENCIONES,
   CONSIGNA_ESCALAS,
+  CONTENIDO_PENSAMIENTO_LABELS,
+  CONTENIDOS_PENSAMIENTO,
   CSSRS_ITEMS_LEN,
   cssrsBandaLabel,
   deriveScoreSeries,
@@ -52,23 +57,42 @@ import {
   ESTADOS_OBJETIVO,
   extractCrisisPlan,
   extractObjetivos,
+  extractProcesoNota,
   extractRegistro,
   extractRespuestasEscala,
   GAD7_ITEMS,
   GAD7_LEN,
+  INSIGHT_LABELS,
+  INSIGHTS,
+  JUICIO_LABELS,
+  JUICIOS,
+  LENGUAJE_LABELS,
+  LENGUAJES,
+  MEMORIA_LABELS,
+  MEMORIAS,
+  NOTA_FORMATO_LABELS,
+  NOTA_FORMATO_SECCIONES,
+  NOTA_FORMATOS,
   OPCIONES_FRECUENCIA,
+  ORIENTACION_LABELS,
+  ORIENTACIONES,
   PENSAMIENTO_LABELS,
   PENSAMIENTOS,
   PHQ9_ITEM_IDEACION,
   PHQ9_ITEMS,
   PHQ9_LEN,
+  PSICOMOTRICIDAD_LABELS,
+  PSICOMOTRICIDADES,
   RIESGO_LABELS,
   RIESGOS,
   scoreCssrsCrisis,
   scoreGad7,
   scorePhq9,
+  SENSOPERCEPCION_LABELS,
+  SENSOPERCEPCIONES,
   type BandaPhq9,
   type EstadoObjetivo,
+  type NotaFormato,
   type Objetivo,
   type PsicoSeriesPoint,
   type RegistroSesion,
@@ -138,18 +162,25 @@ interface CrisisPlanDraft {
   planTexto?: string;
 }
 
+/** Sub-borrador de la nota de proceso (C8): formato + textos por sección. */
+interface ProcesoNotaDraft {
+  formato?: NotaFormato;
+  campos?: Record<string, string>;
+}
+
 interface PsicologiaDraft {
-  v: 2;
+  v: 3;
   phq9?: Array<number | null>;
   gad7?: Array<number | null>;
   registro?: RegistroSesion;
   objetivos?: Objetivo[];
   crisisPlan?: CrisisPlanDraft;
+  procesoNota?: ProcesoNotaDraft;
 }
 
-/** Parse LAXO del borrador: tolera shapes parciales/ajenos re-hidratados (v1 y v2). */
+/** Parse LAXO del borrador: tolera shapes parciales/ajenos re-hidratados (v1/v2/v3). */
 function parseDraft(value: unknown): PsicologiaDraft {
-  const out: PsicologiaDraft = { v: 2 };
+  const out: PsicologiaDraft = { v: 3 };
   if (value === null || typeof value !== "object") return out;
   const v = value as Record<string, unknown>;
 
@@ -173,6 +204,24 @@ function parseDraft(value: unknown): PsicologiaDraft {
     if (crisis.factoresProtectores) draft.factoresProtectores = crisis.factoresProtectores;
     if (crisis.planTexto) draft.planTexto = crisis.planTexto;
     if (Object.keys(draft).length > 0) out.crisisPlan = draft;
+  }
+
+  // C8 · nota de proceso (v3). Re-hidrata formato + textos por sección tal cual.
+  // En una sesión v1/v2 (sin procesoNota) queda undefined.
+  const nota = extractProcesoNota(value);
+  if (nota) {
+    const draft: ProcesoNotaDraft = {};
+    if (nota.formato) draft.formato = nota.formato;
+    if (nota.campos) {
+      // El record del schema es Partial<Record<…>> (valores string | undefined);
+      // el borrador guarda solo las claves con texto real (Record<string, string>).
+      const campos: Record<string, string> = {};
+      for (const [k, v2] of Object.entries(nota.campos)) {
+        if (typeof v2 === "string") campos[k] = v2;
+      }
+      if (Object.keys(campos).length > 0) draft.campos = campos;
+    }
+    if (Object.keys(draft).length > 0) out.procesoNota = draft;
   }
   return out;
 }
@@ -211,13 +260,32 @@ function limpiarCrisisPlan(next: CrisisPlanDraft | undefined): CrisisPlanDraft |
 }
 
 /**
+ * Limpia el sub-borrador de la nota de proceso (C8); null si no aporta nada. El
+ * formato solo persiste si hay al menos un texto (elegir formato sin escribir no
+ * ensucia el toolData). Las secciones vacías se descartan; solo se guardan las
+ * del formato elegido.
+ */
+function limpiarProcesoNota(next: ProcesoNotaDraft | undefined): ProcesoNotaDraft | null {
+  if (!next || !next.formato) return null;
+  const secciones = NOTA_FORMATO_SECCIONES[next.formato];
+  const campos: Record<string, string> = {};
+  for (const s of secciones) {
+    const raw = next.campos?.[s.key];
+    const t = typeof raw === "string" ? raw.trim() : "";
+    if (t !== "") campos[s.key] = t.slice(0, 5000);
+  }
+  if (Object.keys(campos).length === 0) return null;
+  return { formato: next.formato, campos };
+}
+
+/**
  * Normaliza el borrador antes de emitirlo: escala sin ninguna respuesta →
  * fuera; registro sin campos → fuera; objetivos vacíos → fuera; plan de crisis
- * sin contenido → fuera; todo vacío → null (el writer guarda tool_data NULL, no
- * un `{ v: 2 }` cifrado sin contenido).
+ * sin contenido → fuera; nota de proceso sin texto → fuera; todo vacío → null
+ * (el writer guarda tool_data NULL, no un `{ v: 3 }` cifrado sin contenido).
  */
 function limpiarDraft(next: PsicologiaDraft): PsicologiaDraft | null {
-  const out: PsicologiaDraft = { v: 2 };
+  const out: PsicologiaDraft = { v: 3 };
   if (next.phq9 && next.phq9.some((r) => r !== null)) out.phq9 = next.phq9;
   if (next.gad7 && next.gad7.some((r) => r !== null)) out.gad7 = next.gad7;
   if (next.registro) {
@@ -230,7 +298,11 @@ function limpiarDraft(next: PsicologiaDraft): PsicologiaDraft | null {
   if (next.objetivos && next.objetivos.length > 0) out.objetivos = next.objetivos;
   const crisis = limpiarCrisisPlan(next.crisisPlan);
   if (crisis) out.crisisPlan = crisis;
-  return out.phq9 || out.gad7 || out.registro || out.objetivos || out.crisisPlan ? out : null;
+  const nota = limpiarProcesoNota(next.procesoNota);
+  if (nota) out.procesoNota = nota;
+  return out.phq9 || out.gad7 || out.registro || out.objetivos || out.crisisPlan || out.procesoNota
+    ? out
+    : null;
 }
 
 // ─── Serie longitudinal PHQ-9 / GAD-7 ───────────────────────────────────────
@@ -396,11 +468,35 @@ function EscalaBlock({
 
 // ─── Tool ───────────────────────────────────────────────────────────────────
 
-const CAMPOS_ESTADO_MENTAL = [
-  { campo: "apariencia" as const, label: "Apariencia", opciones: APARIENCIAS, labels: APARIENCIA_LABELS as Record<string, string> },
-  { campo: "animo" as const, label: "Ánimo", opciones: ANIMOS, labels: ANIMO_LABELS as Record<string, string> },
-  { campo: "afecto" as const, label: "Afecto", opciones: AFECTOS, labels: AFECTO_LABELS as Record<string, string> },
-  { campo: "pensamiento" as const, label: "Curso del pensamiento", opciones: PENSAMIENTOS, labels: PENSAMIENTO_LABELS as Record<string, string> },
+interface CampoMSE {
+  campo: keyof RegistroSesion;
+  label: string;
+  opciones: readonly string[];
+  labels: Record<string, string>;
+}
+
+/** Dominios básicos del MSE — siempre visibles (los 4 originales, v1). */
+const CAMPOS_ESTADO_MENTAL_BASE: readonly CampoMSE[] = [
+  { campo: "apariencia", label: "Apariencia", opciones: APARIENCIAS, labels: APARIENCIA_LABELS as Record<string, string> },
+  { campo: "animo", label: "Ánimo", opciones: ANIMOS, labels: ANIMO_LABELS as Record<string, string> },
+  { campo: "afecto", label: "Afecto", opciones: AFECTOS, labels: AFECTO_LABELS as Record<string, string> },
+  { campo: "pensamiento", label: "Curso del pensamiento", opciones: PENSAMIENTOS, labels: PENSAMIENTO_LABELS as Record<string, string> },
+];
+
+/**
+ * Dominios ampliados del MSE (C8) — se muestran al expandir "MSE completo". Todos
+ * opcionales; completá solo los que aporten valor a la sesión.
+ */
+const CAMPOS_ESTADO_MENTAL_EXT: readonly CampoMSE[] = [
+  { campo: "psicomotricidad", label: "Psicomotricidad", opciones: PSICOMOTRICIDADES, labels: PSICOMOTRICIDAD_LABELS as Record<string, string> },
+  { campo: "lenguaje", label: "Lenguaje", opciones: LENGUAJES, labels: LENGUAJE_LABELS as Record<string, string> },
+  { campo: "orientacion", label: "Orientación", opciones: ORIENTACIONES, labels: ORIENTACION_LABELS as Record<string, string> },
+  { campo: "atencion", label: "Atención", opciones: ATENCIONES, labels: ATENCION_LABELS as Record<string, string> },
+  { campo: "memoria", label: "Memoria", opciones: MEMORIAS, labels: MEMORIA_LABELS as Record<string, string> },
+  { campo: "sensopercepcion", label: "Sensopercepción", opciones: SENSOPERCEPCIONES, labels: SENSOPERCEPCION_LABELS as Record<string, string> },
+  { campo: "contenidoPensamiento", label: "Contenido del pensamiento", opciones: CONTENIDOS_PENSAMIENTO, labels: CONTENIDO_PENSAMIENTO_LABELS as Record<string, string> },
+  { campo: "juicio", label: "Juicio", opciones: JUICIOS, labels: JUICIO_LABELS as Record<string, string> },
+  { campo: "insight", label: "Insight", opciones: INSIGHTS, labels: INSIGHT_LABELS as Record<string, string> },
 ];
 
 // ─── Workflow de riesgo suicida: C-SSRS + plan de seguridad (C7) ─────────────
@@ -605,6 +701,98 @@ function CrisisWorkflow({
   );
 }
 
+// ─── Nota de proceso guiada: SOAP / DAP / BIRP (C8) ──────────────────────────
+//
+// Nota de proceso ESTRUCTURADA de la sesión, apoyada en el SOAP guiado de Fase 0:
+// el profesional elige el formato (SOAP/DAP/BIRP) y redacta cada sección con un
+// prompt orientador. Persiste en el toolData (procesoNota, v3, cifrado). El SOAP
+// de texto libre de la ficha NO cambia — esto es una nota clínica adicional.
+
+function NotaProcesoBlock({
+  nota,
+  onChange,
+  readOnly,
+}: {
+  nota: ProcesoNotaDraft | undefined;
+  onChange(next: ProcesoNotaDraft | undefined): void;
+  readOnly?: boolean;
+}) {
+  const formato = nota?.formato;
+  const campos = nota?.campos ?? {};
+
+  const setFormato = (f: NotaFormato | "") => {
+    if (readOnly) return;
+    if (f === "") {
+      onChange(undefined);
+      return;
+    }
+    onChange({ formato: f, campos: nota?.campos });
+  };
+
+  const setCampo = (key: string, valor: string) => {
+    if (readOnly || !formato) return;
+    onChange({ formato, campos: { ...campos, [key]: valor } });
+  };
+
+  return (
+    <section className="pc-card">
+      <header className="pc-card-head" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <span className="fi-eyebrow">Nota de proceso</span>
+        {formato ? (
+          <span className="fi-pill" style={{ color: "var(--slate)", background: "var(--slate-soft)", borderColor: "transparent" }}>
+            {NOTA_FORMATO_LABELS[formato]}
+          </span>
+        ) : null}
+      </header>
+
+      <label className="fi-wi-field">
+        <span>Formato de nota</span>
+        <select
+          style={SELECT_STYLE}
+          value={formato ?? ""}
+          onChange={(e) => setFormato(e.target.value as NotaFormato | "")}
+          disabled={readOnly}
+          aria-label="Formato de la nota de proceso"
+        >
+          <option value="">— Sin nota de proceso</option>
+          {NOTA_FORMATOS.map((f) => (
+            <option key={f} value={f}>
+              {NOTA_FORMATO_LABELS[f]}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      {formato ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {NOTA_FORMATO_SECCIONES[formato].map((s) => (
+            <label key={s.key} className="fi-wi-field">
+              <span>{s.label}</span>
+              <p className="muted" style={{ margin: "0 0 4px", fontSize: 11, lineHeight: 1.5 }}>
+                {s.guia}
+              </p>
+              <textarea
+                value={campos[s.key] ?? ""}
+                maxLength={5000}
+                onChange={(e) => setCampo(s.key, e.target.value)}
+                placeholder={`Escribí ${s.label.toLowerCase()}…`}
+                rows={3}
+                spellCheck={false}
+                disabled={readOnly}
+              />
+            </label>
+          ))}
+        </div>
+      ) : (
+        <p className="muted" style={{ margin: 0, fontSize: 11.5, lineHeight: 1.5 }}>
+          Elegí un formato para redactar la nota de proceso de la sesión (SOAP,
+          DAP o BIRP). Es una nota clínica adicional al SOAP de la ficha.
+        </p>
+      )}
+    </section>
+  );
+}
+
 export function PsicologiaTool({
   value,
   onChange,
@@ -626,6 +814,11 @@ export function PsicologiaTool({
 
   // Form local de alta de objetivo (el resto del borrador vive en `value`).
   const [nuevoObjetivo, setNuevoObjetivo] = useState("");
+  // MSE completo (C8): los dominios ampliados arrancan abiertos si la sesión ya
+  // cargó alguno; el profesional puede expandirlos siempre.
+  const tieneMseExt = CAMPOS_ESTADO_MENTAL_EXT.some((c) => draft.registro?.[c.campo] != null);
+  const [mseExpandido, setMseExpandido] = useState(tieneMseExt);
+  const mseAbierto = mseExpandido || tieneMseExt;
 
   const emit = (next: PsicologiaDraft) => {
     if (readOnly) return;
@@ -645,6 +838,11 @@ export function PsicologiaTool({
 
   const setCrisisPlan = (next: CrisisPlanDraft | undefined) => {
     emit({ ...draft, crisisPlan: next });
+  };
+
+  // ── Nota de proceso (C8) ──
+  const setProcesoNota = (next: ProcesoNotaDraft | undefined) => {
+    emit({ ...draft, procesoNota: next });
   };
 
   const setItemEscala = (escala: "phq9" | "gad7", len: number) => (idx: number, valor: number) => {
@@ -748,10 +946,10 @@ export function PsicologiaTool({
         </div>
       </section>
 
-      {/* ── Registro de sesión (estado mental) ── */}
+      {/* ── Registro de sesión: examen del estado mental (MSE completo · C8) ── */}
       <section className="pc-card">
         <header className="pc-card-head">
-          <span className="fi-eyebrow">Registro de sesión</span>
+          <span className="fi-eyebrow">Examen del estado mental</span>
           {riesgo && riesgo !== "sin_riesgo" ? (
             <span
               className="fi-pill"
@@ -763,7 +961,7 @@ export function PsicologiaTool({
         </header>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          {CAMPOS_ESTADO_MENTAL.map(({ campo, label, opciones, labels }) => (
+          {CAMPOS_ESTADO_MENTAL_BASE.map(({ campo, label, opciones, labels }) => (
             <label key={campo} className="fi-wi-field">
               <span>{label}</span>
               <select
@@ -780,6 +978,38 @@ export function PsicologiaTool({
             </label>
           ))}
         </div>
+
+        {/* Dominios ampliados del MSE (C8) — opcionales, detrás de un toggle. */}
+        {mseAbierto ? (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            {CAMPOS_ESTADO_MENTAL_EXT.map(({ campo, label, opciones, labels }) => (
+              <label key={campo} className="fi-wi-field">
+                <span>{label}</span>
+                <select
+                  style={SELECT_STYLE}
+                  value={registro[campo] ?? ""}
+                  onChange={(e) => setCampoRegistro(campo, e.target.value)}
+                  disabled={readOnly}
+                >
+                  <option value="">—</option>
+                  {opciones.map((o) => (
+                    <option key={o} value={o}>{labels[o]}</option>
+                  ))}
+                </select>
+              </label>
+            ))}
+          </div>
+        ) : !readOnly ? (
+          <button
+            type="button"
+            className="pc-link"
+            onClick={() => setMseExpandido(true)}
+            style={{ alignSelf: "flex-start" }}
+            title="Agrega orientación, atención, memoria, sensopercepción, contenido del pensamiento, juicio, insight, lenguaje y psicomotricidad"
+          >
+            + MSE completo (dominios adicionales)
+          </button>
+        ) : null}
 
         <label className="fi-wi-field">
           <span>Riesgo</span>
@@ -804,6 +1034,16 @@ export function PsicologiaTool({
           </p>
         ) : null}
       </section>
+
+      {/* ── Nota de proceso guiada: SOAP / DAP / BIRP (C8) ── */}
+      <NotaProcesoBlock
+        nota={draft.procesoNota}
+        onChange={setProcesoNota}
+        readOnly={readOnly}
+      />
+
+      {/* ── Dashboard de outcomes (C8) ── */}
+      <OutcomesDashboard historial={historial} pacienteId={pacienteId} />
 
       {/* ── Protocolo de riesgo suicida (C7) ── */}
       {deteccion.activo ? (
