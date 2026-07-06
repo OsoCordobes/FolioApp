@@ -5639,6 +5639,15 @@ input:focus { outline: none; }
   background: var(--ink); color: var(--surface); border-color: var(--ink); font-weight: 600;
 }
 
+/* Theme toggle (X5) — segmented light/dark control reusing cfg-radio-btn.
+   Adds icon+label layout and a real pointer cursor (it IS interactive, unlike
+   the slot-duration group above). Selected state inherits .is-on tokens. */
+.cfg-theme-opt {
+  display: inline-flex; align-items: center; gap: 7px;
+  cursor: pointer;
+}
+.cfg-theme-opt svg { flex-shrink: 0; }
+
 .cfg-switch {
   width: 36px; height: 20px; border-radius: 99px;
   background: var(--surface-2); border: 1px solid var(--line);

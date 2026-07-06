@@ -15,6 +15,7 @@ import { useId, useState, useTransition, type ReactNode } from "react";
 
 import * as I from "@/components/icons";
 import { PhotoUpload } from "@/components/configuracion/photo-upload";
+import { ThemeToggle } from "@/components/theme-toggle";
 import {
   connectGoogleCalendar,
   countSesionesOtraEspecialidadAction,
@@ -349,6 +350,12 @@ function SecCuenta({ c, set }: { c: ConsultorioData; set: (patch: Partial<Consul
         {/* MFA y listado de sesiones activas: sin backend todavía — no mostramos
             UI de seguridad que recomiende algo que no existe. Ambos viven en
             docs/BACKLOG-POST-LAUNCH.md; restaurar las filas cuando haya feature real. */}
+      </Section>
+
+      <Section title="Apariencia" sub="Preferencia visual de la interfaz. Se guarda en este dispositivo.">
+        <Row label="Tema" sub="Claro para consultorios luminosos; oscuro para trabajar de noche o descansar la vista.">
+          <ThemeToggle />
+        </Row>
       </Section>
 
       <Section title="Tus datos y derechos" sub="Habeas Data (Ley 25.326): exportar tus datos o solicitar eliminación de cuenta.">
