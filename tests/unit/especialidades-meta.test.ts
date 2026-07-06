@@ -63,10 +63,41 @@ test("resumenSesion fallbacks: shapes desconocidos degradan al copy genérico", 
     ESPECIALIDADES_META.psicologia.resumenSesion({ v: 1, gad7: [1, 1, 1, 0, 0, 1, 1] }),
     "GAD-7 5 (leve)",
   );
+  // N1 · kinesiología: shapes desconocidos degradan al copy genérico; un payload
+  // v1 real resume dolor EVA + conteos.
+  assert.equal(ESPECIALIDADES_META.kinesiologia.resumenSesion({ cualquier: "cosa" }), "Sesión registrada");
+  assert.equal(ESPECIALIDADES_META.kinesiologia.resumenSesion(null), "Sesión registrada");
+  assert.equal(
+    ESPECIALIDADES_META.kinesiologia.resumenSesion({
+      v: 1,
+      dolorEva: 6,
+      tests: [
+        { nombre: "Neer", resultado: "positivo" },
+        { nombre: "Hawkins", resultado: "negativo" },
+      ],
+    }),
+    "EVA 6/10 · 2 tests",
+  );
+  // NDI completo (10 ítems 0–5) → score crudo en el resumen; motivo solo cuenta
+  // si no hay nada más que resumir.
+  assert.equal(
+    ESPECIALIDADES_META.kinesiologia.resumenSesion({
+      v: 1,
+      ndi: [2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+    }),
+    "NDI 20",
+  );
+  assert.equal(
+    ESPECIALIDADES_META.kinesiologia.resumenSesion({ v: 1, motivo: "Cervicalgia" }),
+    "Motivo registrado",
+  );
 });
 
 test("slugs y toolIds: registry consistente (Workstream 6 · write id v2)", () => {
-  assert.deepEqual([...ESPECIALIDAD_SLUGS], ["quiropraxia", "cardiologia", "psicologia"]);
+  assert.deepEqual(
+    [...ESPECIALIDAD_SLUGS],
+    ["quiropraxia", "cardiologia", "psicologia", "kinesiologia"],
+  );
   // El id de ESCRITURA de quiropraxia es v2; v1 se sigue LEYENDO via toolIds.
   assert.equal(ESPECIALIDADES_META.quiropraxia.toolId, "quiropraxia.ficha.v2");
   assert.deepEqual(
@@ -85,6 +116,12 @@ test("slugs y toolIds: registry consistente (Workstream 6 · write id v2)", () =
   assert.deepEqual(
     [...ESPECIALIDADES_META.psicologia.toolIds],
     ["psicologia.escalas.v3", "psicologia.escalas.v2", "psicologia.escalas.v1"],
+  );
+  // N1 · kinesiología escribe v1 (única versión por ahora).
+  assert.equal(ESPECIALIDADES_META.kinesiologia.toolId, "kinesiologia.ficha.v1");
+  assert.deepEqual(
+    [...ESPECIALIDADES_META.kinesiologia.toolIds],
+    ["kinesiologia.ficha.v1"],
   );
 });
 
@@ -143,6 +180,8 @@ test("getEspecialidadMetaByToolId: resuelve por MEMBRESÍA (v1 + v2), null para 
   assert.equal(getEspecialidadMetaByToolId("psicologia.escalas.v3")?.slug, "psicologia");
   assert.equal(getEspecialidadMetaByToolId("psicologia.escalas.v2")?.slug, "psicologia");
   assert.equal(getEspecialidadMetaByToolId("psicologia.escalas.v1")?.slug, "psicologia");
+  // N1 · el id v1 de kinesiología resuelve a kinesiología.
+  assert.equal(getEspecialidadMetaByToolId("kinesiologia.ficha.v1")?.slug, "kinesiologia");
   // Los toolIds placeholder pre-Fase D ya no existen en el registry.
   assert.equal(getEspecialidadMetaByToolId("cardiologia.placeholder"), null);
   assert.equal(getEspecialidadMetaByToolId("psicologia.placeholder"), null);
@@ -207,9 +246,22 @@ const PAYLOADS_VALIDOS = {
       campos: { subjetivo: "Refiere mejoría anímica.", plan: "Continuar TCC." },
     },
   },
+  kinesiologia: {
+    // N1 · el schema del registry es v1 (ROM + tests + objetivos + dolor EVA +
+    // instrumentos de outcome embebidos NDI/ODI/Borg completos).
+    v: 1,
+    motivo: "Cervicalgia mecánica post-esfuerzo.",
+    dolorEva: 6,
+    rom: [{ region: "cervical", grados: 40, nota: "Dolor al final del rango." }],
+    tests: [{ nombre: "Spurling", resultado: "positivo" }],
+    objetivos: [{ texto: "Recuperar rotación cervical completa", estado: "en_curso" }],
+    ndi: [1, 2, 1, 0, 2, 1, 1, 0, 1, 2],
+    odi: [0, 1, 0, 1, 1, 0, 1, 0, 0, 1],
+    borg: 13,
+  },
 } as const;
 
-test("cross-tool: cada payload RECHAZA contra los schemas de las otras dos especialidades (6 direcciones)", () => {
+test("cross-tool: cada payload RECHAZA contra los schemas de las otras tres especialidades (12 direcciones)", () => {
   for (const origen of ESPECIALIDAD_SLUGS) {
     for (const destino of ESPECIALIDAD_SLUGS) {
       const parsed = ESPECIALIDADES_META[destino].schema.safeParse(PAYLOADS_VALIDOS[origen]);
@@ -238,6 +290,11 @@ test("cross-tool: el rechazo es por .strict(), no por casualidad — sin claves 
   assert.equal(ESPECIALIDADES_META.psicologia.schema.safeParse({ v: 3 }).success, true);
   assert.equal(ESPECIALIDADES_META.quiropraxia.schema.safeParse({ v: 1 }).success, false);
   assert.equal(ESPECIALIDADES_META.quiropraxia.schema.safeParse({ v: 2 }).success, true);
+  // N1 · kinesiología escribe v1: {v:1} pelado válido; {v:2}/{v:3} (no son su
+  // shape) rechazan.
+  assert.equal(ESPECIALIDADES_META.kinesiologia.schema.safeParse({ v: 1 }).success, true);
+  assert.equal(ESPECIALIDADES_META.kinesiologia.schema.safeParse({ v: 2 }).success, false);
+  assert.equal(ESPECIALIDADES_META.kinesiologia.schema.safeParse({ v: 3 }).success, false);
 });
 
 test("re-hidratación: lo que el writer persistió (schema.parse(...).data) re-parsea idéntico con .strict()", () => {
@@ -256,7 +313,7 @@ test("re-hidratación: lo que el writer persistió (schema.parse(...).data) re-p
   }
 });
 
-test("schemas: las tres especialidades validan estricto (v literal, shape propio)", () => {
+test("schemas: las cuatro especialidades validan estricto (v literal, shape propio)", () => {
   // Workstream 6 · quiro escribe v2: {v:2} pelado válido; {v:1} y sin `v` no.
   assert.equal(
     ESPECIALIDADES_META.quiropraxia.schema.safeParse({ v: 2, vista: "posterior" }).success,
@@ -284,6 +341,18 @@ test("schemas: las tres especialidades validan estricto (v literal, shape propio
   assert.equal(ESPECIALIDADES_META.psicologia.schema.safeParse({ v: 1 }).success, false);
   assert.equal(
     ESPECIALIDADES_META.psicologia.schema.safeParse({ v: 3, phq9: [0, 0, 0] }).success,
+    false,
+  );
+  // N1 · kinesiología escribe v1: {v:1} pelado válido; clave ajena rechaza; un
+  // instrumento embebido incompleto (NDI parcial) rechaza (sólo persiste completo).
+  assert.equal(ESPECIALIDADES_META.kinesiologia.schema.safeParse({ v: 1 }).success, true);
+  assert.equal(ESPECIALIDADES_META.kinesiologia.schema.safeParse({ v: 1, x: 1 }).success, false);
+  assert.equal(
+    ESPECIALIDADES_META.kinesiologia.schema.safeParse({ v: 1, ndi: [1, 2, 3] }).success,
+    false,
+  );
+  assert.equal(
+    ESPECIALIDADES_META.kinesiologia.schema.safeParse({ v: 1, dolorEva: 20 }).success,
     false,
   );
 });

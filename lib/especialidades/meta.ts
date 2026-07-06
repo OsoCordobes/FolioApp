@@ -31,11 +31,21 @@ import {
   resumenSesionQuiropraxia,
 } from "@/lib/especialidades/quiropraxia/schema";
 import { intakeAvanzadoQuiropraxia } from "@/lib/especialidades/quiropraxia/intake";
+import {
+  kinesiologiaToolDataSchema,
+  resumenSesionKinesiologia,
+} from "@/lib/especialidades/kinesiologia/schema";
+import { intakeAvanzadoKinesiologia } from "@/lib/especialidades/kinesiologia/intake";
 import type { IntakeAvanzadoConfig, SoapGuia } from "@/lib/especialidades/types";
 
 // ─── Slugs ──────────────────────────────────────────────────────────────────
 
-export const ESPECIALIDAD_SLUGS = ["quiropraxia", "cardiologia", "psicologia"] as const;
+export const ESPECIALIDAD_SLUGS = [
+  "quiropraxia",
+  "cardiologia",
+  "psicologia",
+  "kinesiologia",
+] as const;
 
 export type EspecialidadSlug = (typeof ESPECIALIDAD_SLUGS)[number];
 
@@ -269,6 +279,43 @@ const SOAP_GUIA_PSICOLOGIA: SoapGuia = {
   },
 };
 
+const SOAP_GUIA_KINESIOLOGIA: SoapGuia = {
+  subjetivo: {
+    prompt: "Motivo de consulta, dolor y evolución funcional desde la última sesión.",
+    checklist: [
+      "Localización, tipo e intensidad del dolor (EVA 0–10)",
+      "Factores que agravan o alivian (movimiento, carga, reposo)",
+      "Limitación funcional: actividades de la vida diaria, trabajo, deporte",
+      "Respuesta al tratamiento previo (mejoría, sin cambios, exacerbación)",
+    ],
+  },
+  objetivo: {
+    prompt: "Hallazgos de la evaluación física: postura, rango de movilidad y tests.",
+    checklist: [
+      "Rango de movilidad activo/pasivo por región (ROM en grados)",
+      "Fuerza muscular, tono y trofismo",
+      "Tests ortopédicos y neurológicos con su resultado",
+      "Índices de outcome aplicados (NDI / ODI / Borg)",
+    ],
+  },
+  analisis: {
+    prompt: "Diagnóstico kinésico funcional y correlato con el cuadro.",
+    checklist: [
+      "Estructuras y funciones comprometidas",
+      "Banderas rojas descartadas / criterios de derivación",
+      "Progreso frente a los objetivos funcionales",
+    ],
+  },
+  plan: {
+    prompt: "Tratamiento realizado, dosificación y pautas domiciliarias.",
+    checklist: [
+      "Técnicas y ejercicios aplicados esta sesión, con dosis",
+      "Ejercicios y pautas para el domicilio",
+      "Frecuencia, próxima sesión y objetivos de corto plazo",
+    ],
+  },
+};
+
 export const ESPECIALIDADES_META: Record<EspecialidadSlug, EspecialidadMeta> = {
   quiropraxia: {
     slug: "quiropraxia",
@@ -311,6 +358,19 @@ export const ESPECIALIDADES_META: Record<EspecialidadSlug, EspecialidadMeta> = {
     resumenSesion: resumenSesionPsicologia,
     intakeAvanzado: intakeAvanzadoPsicologia,
     soapGuia: SOAP_GUIA_PSICOLOGIA,
+  },
+  kinesiologia: {
+    slug: "kinesiologia",
+    nombre: "Kinesiología",
+    badgeLabel: "Módulo · Kinesiología",
+    // N1 · el writer estampa v1 (única versión por ahora). Instrumentos de
+    // outcome embebidos de lib/instrumentos (NDI/ODI/Borg) + dolor EVA/VAS.
+    toolId: "kinesiologia.ficha.v1",
+    toolIds: ["kinesiologia.ficha.v1"],
+    schema: kinesiologiaToolDataSchema,
+    resumenSesion: resumenSesionKinesiologia,
+    intakeAvanzado: intakeAvanzadoKinesiologia,
+    soapGuia: SOAP_GUIA_KINESIOLOGIA,
   },
 };
 

@@ -48,6 +48,13 @@ const ESP_CONTENT: Record<EspecialidadSlug, BookLandingContent> = {
     trustFraming: "Lo que hablás queda entre vos y tu profesional. Cifrado de punta a punta.",
     motif: "mind",
   },
+  kinesiologia: {
+    heroEyebrow: "Kinesiología",
+    heroValueLine: "Rehabilitación y seguimiento funcional, sesión a sesión.",
+    reservarCtaLabel: "Reservar sesión",
+    trustFraming: "Tu evolución funcional, cifrada y siempre a mano.",
+    motif: "spine",
+  },
 };
 
 export function resolveBookLandingContent(
