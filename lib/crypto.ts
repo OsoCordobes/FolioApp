@@ -221,8 +221,109 @@ export function blindIndexPhone(
 }
 
 /**
+ * Telemetría de fallos silenciosos de desencriptación (PR S3).
+ *
+ * Cada fallo de `tryDecrypt` es señal de corrupción de datos / key drift /
+ * restore parcial — no un caso esperado. Debe quedar en Sentry, no sólo en
+ * stdout. Pero `tryDecrypt` se usa en `.map()` sobre listados: sin throttle,
+ * un solo restore corrupto dispara N eventos de Sentry por render de pantalla.
+ *
+ * Solución (espejo del throttle de blind-index-legacy-fallback en
+ * `lib/db/pacientes.ts`): dedupe por `label` con una ventana de tiempo. Se
+ * emite a lo sumo UN `captureMessage` por label por ventana; los fallos
+ * intermedios se cuentan y viajan en el próximo evento (`suppressed`).
+ *
+ * NUNCA se envía ciphertext ni PHI a Sentry: el payload es un mensaje fijo, el
+ * label del campo (arg 2, ej. "paciente.nombre" — nombre de columna, no valor)
+ * y una razón categórica derivada de la clase de error. El `err.message` crudo
+ * NO se adjunta (contiene sólo metadata de tamaño hoy, pero lo omitimos para
+ * que ningún cambio futuro filtre bytes del ciphertext).
+ */
+const DECRYPT_TELEMETRY_WINDOW_MS = 5 * 60 * 1000; // 5 min por label
+
+type DecryptTelemetryState = { lastSentAt: number; suppressed: number };
+const decryptTelemetryByLabel = new Map<string, DecryptTelemetryState>();
+
+/**
+ * Clasifica el error de desencriptación en una razón categórica SIN PHI ni
+ * detalle de bytes. Sólo distingue causas operativas (corto / auth-tag / otro)
+ * para triaje en Sentry; nunca incluye el valor ni el ciphertext.
+ */
+function decryptFailureReason(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (msg.includes("demasiado corto")) return "too_short";
+  // node:crypto GCM auth failure al llamar decipher.final() con tag/ct adulterado.
+  if (/auth|tag|unable to authenticate|bad decrypt/i.test(msg)) return "auth_tag_mismatch";
+  return "other";
+}
+
+/**
+ * Decide si un fallo para `label` debe emitirse ahora o suprimirse por la
+ * ventana de throttle. Actualiza el estado in-memory. Devuelve `null` si el
+ * evento fue suprimido, o `{ suppressed }` (fallos ocultados desde el último
+ * emitido) si corresponde emitir. Puro respecto de Sentry — no toca la red, así
+ * que es testeable de forma determinística.
+ */
+function shouldReportDecryptFailure(label: string): { suppressed: number } | null {
+  const now = Date.now();
+  const prev = decryptTelemetryByLabel.get(label);
+  if (prev && now - prev.lastSentAt < DECRYPT_TELEMETRY_WINDOW_MS) {
+    prev.suppressed += 1;
+    return null;
+  }
+  const suppressed = prev ? prev.suppressed : 0;
+  decryptTelemetryByLabel.set(label, { lastSentAt: now, suppressed: 0 });
+  return { suppressed };
+}
+
+/**
+ * Emite (rate-limited por label) un `captureMessage` de warning a Sentry. Sólo
+ * mensaje fijo + tag de campo + razón categórica: cero ciphertext, cero PHI.
+ * Fire-and-forget + `.catch`: el capture nunca rompe al caller (y en unit tests
+ * sin Sentry inicializado es un no-op silencioso). Devuelve `true` si emitió,
+ * `false` si fue suprimido por la ventana (útil para tests).
+ */
+function reportDecryptFailure(label: string, reason: string): boolean {
+  const decision = shouldReportDecryptFailure(label);
+  if (!decision) return false;
+  const { suppressed } = decision;
+  void import("@sentry/nextjs")
+    .then(({ captureMessage }) =>
+      captureMessage("[crypto] silent decrypt failure", {
+        level: "warning",
+        tags: { component: "crypto", op: "tryDecrypt", field: label, reason },
+        // Sólo metadata operativa. `suppressed` = fallos del mismo label
+        // ocultados por el throttle desde el último evento emitido.
+        extra: { field: label, reason, suppressed },
+      }),
+    )
+    .catch(() => {});
+  return true;
+}
+
+/**
+ * Superficie SOLO para tests: expone el throttle y el clasificador de razón sin
+ * disparar Sentry, más un reset del estado in-memory para empezar limpio. No se
+ * usa en producción (el runtime pasa por `tryDecrypt` → `reportDecryptFailure`).
+ */
+export const __cryptoTelemetryTestHooks = {
+  reset(): void {
+    decryptTelemetryByLabel.clear();
+  },
+  /** true si un fallo para `label` emitiría ahora; false si el throttle lo suprime. */
+  wouldReport(label: string): boolean {
+    return shouldReportDecryptFailure(label) !== null;
+  },
+  reason(err: unknown): string {
+    return decryptFailureReason(err);
+  },
+  windowMs: DECRYPT_TELEMETRY_WINDOW_MS,
+};
+
+/**
  * Try-decrypt: igual que decryptColumn pero captura excepciones y devuelve
- * null en su lugar (loggeando warning con un label opcional + Sentry con tag).
+ * null en su lugar (loggeando warning con un label opcional + Sentry con tag,
+ * rate-limited por label — ver `reportDecryptFailure`).
  * Útil cuando un solo ciphertext corrupto no debe romper toda la pantalla —
  * defensa operativa post key-rotation o restore parcial.
  *
@@ -239,19 +340,12 @@ export function tryDecrypt(
   try {
     return decryptColumn(value);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.warn(`[crypto] decrypt failed on ${label}:`, msg);
-    // Observabilidad: un ciphertext corrupto es señal de corrupción de datos /
-    // key drift, no un caso esperado — que quede en Sentry con tag, no solo en
-    // stdout. Fire-and-forget + .catch: el capture nunca rompe al caller (y en
-    // unit tests sin Sentry inicializado es un no-op silencioso).
-    void import("@sentry/nextjs")
-      .then(({ captureException }) =>
-        captureException(err, {
-          tags: { component: "crypto", op: "tryDecrypt", field: label },
-        }),
-      )
-      .catch(() => {});
+    // NUNCA logueamos el ciphertext ni el valor: sólo el label del campo y la
+    // razón categórica. `err.message` de decryptColumn/node:crypto no contiene
+    // plaintext, pero lo omitimos del payload de Sentry por precaución.
+    const reason = decryptFailureReason(err);
+    console.warn(`[crypto] decrypt failed on ${label} (${reason})`);
+    reportDecryptFailure(label, reason);
     return null;
   }
 }

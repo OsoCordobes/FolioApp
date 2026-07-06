@@ -30,6 +30,7 @@ import {
   encryptFields,
   generateKeyBase64,
   tryDecrypt,
+  __cryptoTelemetryTestHooks,
 } from "../../lib/crypto";
 
 test("encryptColumn → decryptColumn round-trip preserves content", () => {
@@ -98,6 +99,74 @@ test("tryDecrypt: null/undefined/vacío pasan a null como decryptColumn", () => 
   assert.equal(tryDecrypt(null, "test.null"), null);
   assert.equal(tryDecrypt(undefined, "test.undefined"), null);
   assert.equal(tryDecrypt("", "test.vacio"), null);
+});
+
+// ─── S3: telemetría de fallos silenciosos de desencriptación ──────────────
+
+test("tryDecrypt: buffer corrupto → null SIN throw y no rompe un .map() de listado", () => {
+  __cryptoTelemetryTestHooks.reset();
+  const rows = [
+    encryptColumn("fila sana 1")!,
+    "\\x00112233", // demasiado corto → corrupto
+    encryptColumn("fila sana 2")!,
+  ];
+  // Un ciphertext corrupto en el medio no debe tumbar el mapeo del listado.
+  let decoded: (string | null)[] = [];
+  assert.doesNotThrow(() => {
+    decoded = rows.map((r) => tryDecrypt(r, "paciente.nombre"));
+  });
+  assert.deepEqual(decoded, ["fila sana 1", null, "fila sana 2"]);
+});
+
+test("tryDecrypt: clasifica la razón del fallo sin exponer PHI ni ciphertext", () => {
+  // "demasiado corto" → too_short
+  let reasonShort = "";
+  try {
+    decryptColumn("\\x00112233");
+  } catch (e) {
+    reasonShort = __cryptoTelemetryTestHooks.reason(e);
+  }
+  assert.equal(reasonShort, "too_short");
+
+  // GCM auth tag adulterado → auth_tag_mismatch
+  const cipher = encryptColumn("dato sano")!;
+  const tampered = cipher.slice(0, -8) + "00000000";
+  let reasonTag = "";
+  try {
+    decryptColumn(tampered);
+  } catch (e) {
+    reasonTag = __cryptoTelemetryTestHooks.reason(e);
+  }
+  assert.equal(reasonTag, "auth_tag_mismatch");
+});
+
+test("tryDecrypt telemetry: rate-limit/dedupe por label dentro de la ventana", () => {
+  __cryptoTelemetryTestHooks.reset();
+  const label = "paciente.telefono";
+  // Primer fallo del label → emite.
+  assert.equal(__cryptoTelemetryTestHooks.wouldReport(label), true);
+  // Siguientes fallos del MISMO label dentro de la ventana → suprimidos.
+  assert.equal(__cryptoTelemetryTestHooks.wouldReport(label), false);
+  assert.equal(__cryptoTelemetryTestHooks.wouldReport(label), false);
+  // Un label distinto emite su propio primer evento (dedupe es por label).
+  assert.equal(__cryptoTelemetryTestHooks.wouldReport("paciente.email"), true);
+  assert.equal(__cryptoTelemetryTestHooks.wouldReport("paciente.email"), false);
+});
+
+test("tryDecrypt telemetry: N filas corruptas del mismo label NO producen N eventos", () => {
+  __cryptoTelemetryTestHooks.reset();
+  const label = "sesion.soap";
+  let emitted = 0;
+  // 50 filas corruptas del mismo campo (peor caso: un restore parcial).
+  for (let i = 0; i < 50; i++) {
+    if (__cryptoTelemetryTestHooks.wouldReport(label)) emitted += 1;
+  }
+  // Sólo el primero emite; el throttle suprime los otros 49.
+  assert.equal(emitted, 1);
+});
+
+test("tryDecrypt telemetry: la ventana es de 5 minutos", () => {
+  assert.equal(__cryptoTelemetryTestHooks.windowMs, 5 * 60 * 1000);
 });
 
 test("blindIndex is deterministic for the same input (case + space normalized)", () => {
