@@ -14,6 +14,7 @@
 import { useId, useState, useTransition, type ReactNode } from "react";
 
 import * as I from "@/components/icons";
+import { PermissionMatrix } from "@/components/configuracion/permission-matrix";
 import { PhotoUpload } from "@/components/configuracion/photo-upload";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
@@ -1553,6 +1554,10 @@ function SecEquipo({
           </table>
         )}
       </Section>
+
+      {/* X4 · matriz rol × capacidad (vista) — solo en el camino de gestión de
+          equipo (canManageTeam). Derivada de capabilitiesFor; sin overrides. */}
+      <PermissionMatrix />
     </>
   );
 }

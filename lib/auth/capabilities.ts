@@ -116,3 +116,188 @@ export function roleLabel(role: Role, esColegiado: boolean): string {
       return "Secretaría";
   }
 }
+
+// ─── Matriz rol × capacidad (vista legible, X4) ─────────────────────────────
+
+/**
+ * Una columna de la matriz: un rol de la organización. DIRECTOR se desdobla en
+ * dos columnas (colegiado / administrativo) porque `esColegiado` cambia su
+ * acceso clínico — mostrar solo una escondería justo esa diferencia, que es lo
+ * más importante de explicarle a quien dirige una clínica.
+ */
+export interface MatrixColumn {
+  /** Clave estable (para React keys / tests). */
+  key: string;
+  role: Role;
+  esColegiado: boolean;
+  /** Encabezado corto de la columna (roleLabel). */
+  label: string;
+  /** Descripción de una línea del alcance del rol. */
+  descripcion: string;
+}
+
+/**
+ * Las columnas de la matriz, en orden jerárquico (mayor → menor alcance). Es la
+ * misma jerarquía del docstring de `Role`, con DIRECTOR desdoblado.
+ */
+export const PERMISSION_MATRIX_COLUMNS: readonly MatrixColumn[] = [
+  {
+    key: "OWNER",
+    role: "OWNER",
+    esColegiado: true,
+    label: roleLabel("OWNER", true),
+    descripcion: "Titular de la cuenta — acceso total.",
+  },
+  {
+    key: "DIRECTOR_colegiado",
+    role: "DIRECTOR",
+    esColegiado: true,
+    label: roleLabel("DIRECTOR", true),
+    descripcion: "Dirige y además atiende: gestión clínica y administrativa.",
+  },
+  {
+    key: "DIRECTOR_admin",
+    role: "DIRECTOR",
+    esColegiado: false,
+    label: roleLabel("DIRECTOR", false),
+    descripcion: "Dirección administrativa: equipo y finanzas, sin datos clínicos.",
+  },
+  {
+    key: "PROFESIONAL",
+    role: "PROFESIONAL",
+    esColegiado: true,
+    label: roleLabel("PROFESIONAL", false),
+    descripcion: "Su agenda, sus pacientes y sus finanzas.",
+  },
+  {
+    key: "COORDINADOR",
+    role: "COORDINADOR",
+    esColegiado: false,
+    label: roleLabel("COORDINADOR", false),
+    descripcion: "Coordinación de agendas, sin datos clínicos ni finanzas.",
+  },
+  {
+    key: "ASISTENTE",
+    role: "ASISTENTE",
+    esColegiado: false,
+    label: roleLabel("ASISTENTE", false),
+    descripcion: "Recepción: agenda, contacto del paciente y cobros.",
+  },
+] as const;
+
+/**
+ * Una fila de la matriz: una capacidad legible por humanos y el selector puro
+ * que la lee de `Capabilities`. El `select` es la ÚNICA fuente de verdad de cada
+ * celda — así la matriz nunca puede divergir de `capabilitiesFor` (ni de la RLS
+ * que esta espeja). Las filas se agrupan por área para que se lea de un vistazo.
+ */
+export interface MatrixRow {
+  key: keyof Capabilities;
+  label: string;
+  /** Aclaración corta de qué significa poder hacer esto. */
+  detalle: string;
+  select: (c: Capabilities) => boolean;
+}
+
+export interface MatrixGroup {
+  titulo: string;
+  filas: readonly MatrixRow[];
+}
+
+/**
+ * Las capacidades agrupadas por área funcional, en el orden en que se muestran.
+ * Se eligen las que le importan a quien compra/gestiona (qué ve y qué toca cada
+ * rol); se omiten los flags derivados o puramente internos (`canSeeFinanzas` =
+ * All||Own, `actsAcrossProfessionals`, `isReception`) que no aportan a la lectura.
+ */
+export const PERMISSION_MATRIX_GROUPS: readonly MatrixGroup[] = [
+  {
+    titulo: "Datos clínicos",
+    filas: [
+      {
+        key: "canReadClinical",
+        label: "Ver ficha clínica (PHI)",
+        detalle: "Sesiones, diagnósticos e historia clínica del paciente.",
+        select: (c) => c.canReadClinical,
+      },
+      {
+        key: "canCreatePacienteClinical",
+        label: "Crear ficha clínica",
+        detalle: "Dar de alta un paciente con datos clínicos.",
+        select: (c) => c.canCreatePacienteClinical,
+      },
+    ],
+  },
+  {
+    titulo: "Pacientes y agenda",
+    filas: [
+      {
+        key: "canReadAdmin",
+        label: "Ver agenda y turnos",
+        detalle: "Calendario, turnos y contacto administrativo.",
+        select: (c) => c.canReadAdmin,
+      },
+      {
+        key: "canManagePacienteContact",
+        label: "Editar contacto del paciente",
+        detalle: "Datos de contacto (nombre, teléfono) — PII.",
+        select: (c) => c.canManagePacienteContact,
+      },
+    ],
+  },
+  {
+    titulo: "Finanzas",
+    filas: [
+      {
+        key: "canSeeFinanzasAll",
+        label: "Ver finanzas de la organización",
+        detalle: "Ingresos de todo el equipo.",
+        select: (c) => c.canSeeFinanzasAll,
+      },
+      {
+        key: "canSeeFinanzasOwn",
+        label: "Ver finanzas propias",
+        detalle: "Solo los ingresos generados por uno mismo.",
+        select: (c) => c.canSeeFinanzasOwn,
+      },
+      {
+        key: "canRegistrarCobro",
+        label: "Registrar cobros",
+        detalle: "Cobrar al cerrar un turno.",
+        select: (c) => c.canRegistrarCobro,
+      },
+    ],
+  },
+  {
+    titulo: "Administración",
+    filas: [
+      {
+        key: "canManageTeam",
+        label: "Gestionar el equipo",
+        detalle: "Invitar, cambiar rol y dar de baja miembros.",
+        select: (c) => c.canManageTeam,
+      },
+      {
+        key: "canManageOrgSettings",
+        label: "Editar la configuración",
+        detalle: "Datos de la organización, identidad e integraciones.",
+        select: (c) => c.canManageOrgSettings,
+      },
+      {
+        key: "canSeeAudit",
+        label: "Ver el registro de auditoría",
+        detalle: "Bitácora de accesos y cambios (10 años).",
+        select: (c) => c.canSeeAudit,
+      },
+    ],
+  },
+] as const;
+
+/**
+ * Resuelve una celda de la matriz (fila × columna) a un booleano, evaluando el
+ * selector de la fila contra las capacidades reales de esa columna. Función pura
+ * y testeable: es el puente entre la tabla de presentación y `capabilitiesFor`.
+ */
+export function matrixCell(row: MatrixRow, col: MatrixColumn): boolean {
+  return row.select(capabilitiesFor(col.role, col.esColegiado));
+}
