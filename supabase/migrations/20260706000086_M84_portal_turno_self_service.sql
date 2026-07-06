@@ -198,7 +198,7 @@ BEGIN
   -- No es member. Sólo endurecemos si es el DUEÑO paciente de la fila (portal).
   -- Si no es dueño, la RLS ya lo habría bloqueado; devolvemos NEW y dejamos que
   -- el resto de las capas actúen (no es nuestro rol acá).
-  IF NOT public.paciente_owns(OLD.id) THEN
+  IF NOT public.paciente_owns(OLD.paciente_id) THEN
     RETURN NEW;
   END IF;
 

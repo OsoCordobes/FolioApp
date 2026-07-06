@@ -90,7 +90,9 @@ BEGIN
   --   f2 = CERCANO (+2 horas, dentro del cutoff) · CONFIRMADO → NO cancelable.
   --   f4 = LEJANO (+4 días) pero EN_SALA → NO cancelable (origen no permitido).
   -- Turno de Y:
-  --   f3 = LEJANO · CONFIRMADO (X no debe poder tocarlo).
+  --   f3 = LEJANO (+5 días) · CONFIRMADO (X no debe poder tocarlo). Horario distinto
+  --        de f1 (+3d) para NO colisionar con el EXCLUDE M40 (turno_no_overlap_excl es
+  --        per-profesional e ignora el paciente; f1 y f3 comparten profesional …8a5).
   INSERT INTO turno (id, organization_id, paciente_id, servicio_id, profesional_id, inicio, duracion_min, precio_cents, estado) VALUES
     ('f1840000-0000-4000-8000-0000000008f1', 'a1840000-0000-4000-8000-0000000008a1',
      'd1840000-0000-4000-8000-0000000008d1', 'a1840000-0000-4000-8000-0000000008e5',
@@ -103,17 +105,23 @@ BEGIN
      'a1840000-0000-4000-8000-0000000008a5', now() + interval '4 day', 30, 100000, 'EN_SALA'),
     ('f1840000-0000-4000-8000-0000000008f3', 'a1840000-0000-4000-8000-0000000008a1',
      'd1840000-0000-4000-8000-0000000008d3', 'a1840000-0000-4000-8000-0000000008e5',
-     'a1840000-0000-4000-8000-0000000008a5', now() + interval '3 day', 30, 100000, 'CONFIRMADO')
+     'a1840000-0000-4000-8000-0000000008a5', now() + interval '5 day', 30, 100000, 'CONFIRMADO')
   ON CONFLICT (id) DO NOTHING;
 
   RAISE NOTICE 'M84 spec · fixtures listos';
 END $$;
 
 -- ─── Grants mínimos para ejercer RLS como `authenticated` ───────────────────
+-- En prod, Supabase concede SELECT sobre todo `public` a authenticated por default;
+-- el CI vanilla no, así que acá replicamos los grants que el path del portal toca.
 GRANT USAGE ON SCHEMA public TO authenticated;
 GRANT SELECT, UPDATE ON turno TO authenticated;
 GRANT SELECT, INSERT ON pedido TO authenticated;
 GRANT SELECT ON paciente TO authenticated;
+-- pedido.profesional_id es FK → member(id): al insertar un pedido con profesional,
+-- la validación de la FK corre como el que inserta y necesita SELECT sobre member
+-- (la verificación de FK no atraviesa RLS; sólo requiere el privilegio de tabla).
+GRANT SELECT ON member TO authenticated;
 
 -- ════════════════════════════════════════════════════════════════════════════
 -- PACIENTE X (auth.uid() = cuenta X)
@@ -220,6 +228,12 @@ BEGIN
 END $$;
 
 -- ── P2. X inserta un pedido PENDIENTE (reagenda) para SU ficha ──────────────
+-- Verificamos con GET DIAGNOSTICS (ROW_COUNT del propio INSERT), NO con un SELECT:
+-- el paciente NO tiene policy de lectura sobre `pedido` (por diseño — ver M84 §3),
+-- así que un `SELECT count(*)` acá devolvería 0 aunque el INSERT sí haya entrado.
+-- El ROW_COUNT refleja la escritura efectiva del propio actor sin tocar la RLS de
+-- lectura. Si el WITH CHECK de pedido_insert_portal fallara, el INSERT abortaría con
+-- 42501 (no llegaríamos a la aserción).
 DO $$
 DECLARE v int;
 BEGIN
@@ -229,9 +243,8 @@ BEGIN
           'd1840000-0000-4000-8000-0000000008d1', '\x07'::bytea,
           now() + interval '5 day', 30, 'a1840000-0000-4000-8000-0000000008e5',
           'a1840000-0000-4000-8000-0000000008a5');
-  SELECT count(*) INTO v FROM pedido
-   WHERE paciente_id = 'd1840000-0000-4000-8000-0000000008d1' AND canal = 'PORTAL';
-  IF v <> 1 THEN RAISE EXCEPTION 'M84 FAIL P2: no se insertó el pedido del portal (count=%)', v; END IF;
+  GET DIAGNOSTICS v = ROW_COUNT;
+  IF v <> 1 THEN RAISE EXCEPTION 'M84 FAIL P2: no se insertó el pedido del portal (rows=%)', v; END IF;
   RAISE NOTICE 'M84 spec · P2 OK: X encoló un pedido PORTAL para su ficha';
 END $$;
 
