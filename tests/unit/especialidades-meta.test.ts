@@ -79,6 +79,40 @@ test("slugs y toolIds: registry consistente (Workstream 6 · write id v2)", () =
   assert.deepEqual([...ESPECIALIDADES_META.psicologia.toolIds], ["psicologia.escalas.v1"]);
 });
 
+test("soapGuia (C9): las tres especialidades traen guía para las 4 secciones SOAP", () => {
+  const SECCIONES = ["subjetivo", "objetivo", "analisis", "plan"] as const;
+  for (const slug of ESPECIALIDAD_SLUGS) {
+    const guia = ESPECIALIDADES_META[slug].soapGuia;
+    assert.ok(guia, `${slug}: soapGuia definido`);
+    for (const sec of SECCIONES) {
+      const g = guia?.[sec];
+      assert.ok(g, `${slug}.${sec}: sección presente`);
+      // Cada sección aporta al menos un prompt no vacío o un checklist con items.
+      const tienePrompt = typeof g?.prompt === "string" && g.prompt.trim().length > 0;
+      const tieneChecklist = Array.isArray(g?.checklist) && g!.checklist!.length > 0;
+      assert.ok(tienePrompt || tieneChecklist, `${slug}.${sec}: prompt o checklist con contenido`);
+      // Ningún item de checklist vacío (sería un bullet fantasma en la UI).
+      for (const item of g?.checklist ?? []) {
+        assert.ok(item.trim().length > 0, `${slug}.${sec}: item de checklist no vacío`);
+      }
+    }
+  }
+});
+
+test("soapGuia (C9): es andamiaje estático, no toca schema/toolData (claves esperadas por sección)", () => {
+  // La guía es metadata visual: cada sección solo puede tener prompt/checklist.
+  // Un typo de clave la volvería silenciosamente inerte en la ficha.
+  const CLAVES_OK = new Set(["prompt", "checklist"]);
+  for (const slug of ESPECIALIDAD_SLUGS) {
+    const guia = ESPECIALIDADES_META[slug].soapGuia ?? {};
+    for (const [sec, g] of Object.entries(guia)) {
+      for (const k of Object.keys(g ?? {})) {
+        assert.ok(CLAVES_OK.has(k), `${slug}.${sec}: clave inesperada "${k}" en la guía SOAP`);
+      }
+    }
+  }
+});
+
 test("getEspecialidadMeta: fallback a quiropraxia para slugs desconocidos", () => {
   assert.equal(getEspecialidadMeta("cardiologia").slug, "cardiologia");
   assert.equal(getEspecialidadMeta("odontologia").slug, "quiropraxia");

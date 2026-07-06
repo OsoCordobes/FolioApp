@@ -75,6 +75,9 @@ export type {
   IntakeAvanzadoConfig,
   IntakeCampo,
   IntakeCampoTipo,
+  SoapGuia,
+  SoapSeccionGuia,
+  SoapSeccionId,
   SpecialtyToolProps,
   ToolHistorialEntry,
 } from "@/lib/especialidades/types";

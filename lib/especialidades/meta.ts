@@ -31,7 +31,7 @@ import {
   resumenSesionQuiropraxia,
 } from "@/lib/especialidades/quiropraxia/schema";
 import { intakeAvanzadoQuiropraxia } from "@/lib/especialidades/quiropraxia/intake";
-import type { IntakeAvanzadoConfig } from "@/lib/especialidades/types";
+import type { IntakeAvanzadoConfig, SoapGuia } from "@/lib/especialidades/types";
 
 // ─── Slugs ──────────────────────────────────────────────────────────────────
 
@@ -145,7 +145,129 @@ export interface EspecialidadMeta {
    * en paciente_intake_avanzado (M60). Vive en lib/especialidades/<slug>/intake.ts.
    */
   intakeAvanzado: IntakeAvanzadoConfig;
+  /**
+   * C9 · guía SOAP opcional por especialidad: prompts/checklists por sección
+   * (S/O/A/P) que la ficha (SoapStacked) renderiza como andamiaje VISUAL arriba
+   * de cada textarea. ADITIVO: el texto libre no cambia; ausente = SOAP genérico
+   * sin guía (comportamiento histórico). No persiste — no es PHI ni toolData.
+   */
+  soapGuia?: SoapGuia;
 }
+
+// ─── Guías SOAP por especialidad (C9) ─────────────────────────────────────────
+//
+// Andamiaje visual es-AR sobre las 4 secciones del SOAP. Redactadas con lenguaje
+// clínico profesional propio de cada práctica; opcionales sección por sección.
+// El texto libre del SOAP no cambia — esto solo orienta qué registrar.
+
+const SOAP_GUIA_QUIROPRAXIA: SoapGuia = {
+  subjetivo: {
+    prompt: "Motivo de consulta, dolor y su evolución desde la última visita.",
+    checklist: [
+      "Localización, tipo e intensidad del dolor (EVA 0–10)",
+      "Factores que agravan o alivian (posturas, actividad, reposo)",
+      "Impacto funcional: sueño, trabajo, actividad física",
+      "Respuesta al último ajuste (mejoría, sin cambios, exacerbación)",
+    ],
+  },
+  objetivo: {
+    prompt: "Hallazgos de la evaluación postural, palpatoria y de movilidad.",
+    checklist: [
+      "Postura y análisis de la marcha",
+      "Palpación estática y por movimiento (segmentos restringidos)",
+      "Rango de movilidad activo/pasivo por región",
+      "Tests ortopédicos y neurológicos relevantes",
+    ],
+  },
+  analisis: {
+    prompt: "Impresión clínica: subluxaciones/disfunciones y su correlato con el cuadro.",
+    checklist: [
+      "Segmentos a ajustar y técnica indicada",
+      "Diagnóstico diferencial y banderas rojas descartadas",
+      "Correlación con estudios de imagen si los hay",
+    ],
+  },
+  plan: {
+    prompt: "Ajuste realizado, indicaciones y frecuencia del tratamiento.",
+    checklist: [
+      "Segmentos ajustados y técnica aplicada esta sesión",
+      "Ejercicios, higiene postural y pautas domiciliarias",
+      "Frecuencia y próxima visita; criterios de derivación",
+    ],
+  },
+};
+
+const SOAP_GUIA_CARDIOLOGIA: SoapGuia = {
+  subjetivo: {
+    prompt: "Síntomas cardiovasculares actuales y adherencia al tratamiento.",
+    checklist: [
+      "Dolor torácico, disnea, palpitaciones, síncope, edemas",
+      "Clase funcional (NYHA) y tolerancia al esfuerzo",
+      "Adherencia a medicación y efectos adversos",
+      "Factores de riesgo: tabaquismo, dieta, actividad física",
+    ],
+  },
+  objetivo: {
+    prompt: "Signos vitales, examen cardiovascular y resultados de estudios.",
+    checklist: [
+      "TA, FC y ritmo; peso e IMC",
+      "Auscultación cardíaca y pulmonar; ingurgitación yugular, edemas",
+      "ECG, laboratorio (perfil lipídico, función renal) y estudios por imagen",
+    ],
+  },
+  analisis: {
+    prompt: "Estratificación de riesgo cardiovascular e impresión diagnóstica.",
+    checklist: [
+      "Score de riesgo CV y control de factores modificables",
+      "Diagnóstico principal y comorbilidades relevantes",
+      "Necesidad de estudios complementarios o interconsulta",
+    ],
+  },
+  plan: {
+    prompt: "Ajustes farmacológicos, metas y seguimiento.",
+    checklist: [
+      "Cambios en medicación con dosis y justificación",
+      "Metas de TA, LDL y estilo de vida",
+      "Estudios a solicitar y fecha de control",
+    ],
+  },
+};
+
+const SOAP_GUIA_PSICOLOGIA: SoapGuia = {
+  subjetivo: {
+    prompt: "Relato del paciente: estado anímico, eventos y motivo de esta sesión.",
+    checklist: [
+      "Estado de ánimo y sueño desde la última sesión",
+      "Eventos vitales o estresores recientes",
+      "Ideación de riesgo (autolesión / heteroagresión) — indagar explícitamente",
+      "Adherencia a pautas y a medicación psiquiátrica si corresponde",
+    ],
+  },
+  objetivo: {
+    prompt: "Examen del estado mental y resultados de escalas aplicadas.",
+    checklist: [
+      "Presentación, afecto, discurso y contenido del pensamiento",
+      "Atención, orientación e insight",
+      "Puntajes de escalas (PHQ-9 / GAD-7) y su tendencia",
+    ],
+  },
+  analisis: {
+    prompt: "Formulación clínica y evolución respecto de los objetivos terapéuticos.",
+    checklist: [
+      "Impresión diagnóstica y evolución del cuadro",
+      "Nivel de riesgo actual y factores protectores",
+      "Progreso frente a los objetivos del tratamiento",
+    ],
+  },
+  plan: {
+    prompt: "Intervenciones, tareas y encuadre de la próxima sesión.",
+    checklist: [
+      "Técnicas trabajadas y tareas entre sesiones",
+      "Plan de seguridad si hay riesgo; derivación si corresponde",
+      "Frecuencia y foco de la próxima sesión",
+    ],
+  },
+};
 
 export const ESPECIALIDADES_META: Record<EspecialidadSlug, EspecialidadMeta> = {
   quiropraxia: {
@@ -159,6 +281,7 @@ export const ESPECIALIDADES_META: Record<EspecialidadSlug, EspecialidadMeta> = {
     schema: quiropraxiaToolDataV2Schema,
     resumenSesion: resumenSesionQuiropraxia,
     intakeAvanzado: intakeAvanzadoQuiropraxia,
+    soapGuia: SOAP_GUIA_QUIROPRAXIA,
   },
   cardiologia: {
     slug: "cardiologia",
@@ -169,6 +292,7 @@ export const ESPECIALIDADES_META: Record<EspecialidadSlug, EspecialidadMeta> = {
     schema: cardiologiaToolDataSchema,
     resumenSesion: resumenSesionCardiologia,
     intakeAvanzado: intakeAvanzadoCardiologia,
+    soapGuia: SOAP_GUIA_CARDIOLOGIA,
   },
   psicologia: {
     slug: "psicologia",
@@ -179,6 +303,7 @@ export const ESPECIALIDADES_META: Record<EspecialidadSlug, EspecialidadMeta> = {
     schema: psicologiaToolDataSchema,
     resumenSesion: resumenSesionPsicologia,
     intakeAvanzado: intakeAvanzadoPsicologia,
+    soapGuia: SOAP_GUIA_PSICOLOGIA,
   },
 };
 

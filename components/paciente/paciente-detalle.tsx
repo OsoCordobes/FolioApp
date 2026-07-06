@@ -28,6 +28,7 @@ import {
   getEspecialidad,
   getIntakeAvanzadoConfig,
   type EspecialidadSlug,
+  type SoapGuia,
 } from "@/lib/especialidades/registry";
 import { toWhatsappE164 } from "@/lib/format/phone";
 import type { IntakeAvanzadoFicha, PacienteFichaInfo, PlanData } from "@/lib/db/paciente-ficha";
@@ -81,6 +82,7 @@ function SoapStacked({
   setSoap,
   saveBadge,
   eyebrow,
+  guia,
 }: {
   soap: SoapState;
   setSoap: (s: SoapState) => void;
@@ -88,6 +90,12 @@ function SoapStacked({
   saveBadge?: ReactNode;
   /** Título del header — TabPlan lo ajusta si se edita una visita pasada. */
   eyebrow?: string;
+  /**
+   * C9 · guía SOAP de la especialidad (prompts/checklists por sección). Andamiaje
+   * VISUAL opcional arriba de cada textarea; el texto libre no cambia. Ausente =
+   * SOAP genérico sin guía (comportamiento histórico de cardio/psico pre-C9).
+   */
+  guia?: SoapGuia;
 }) {
   // El borrador se persiste con "Guardar sesión" (TabPlan) cuando el paciente
   // tiene un turno ancla (en curso / de hoy / última visita). Sin ancla no hay
@@ -106,23 +114,40 @@ function SoapStacked({
           </span>
         )}
       </header>
-      {SOAP_SECTIONS.map((s) => (
-        <div key={s.id} className="pc-soap-section">
-          <div className="pc-soap-section-head">
-            <b>{s.label}</b>
-            <span className="pc-soap-section-hint">{s.hint}</span>
+      {SOAP_SECTIONS.map((s) => {
+        const g = guia?.[s.id];
+        return (
+          <div key={s.id} className="pc-soap-section">
+            <div className="pc-soap-section-head">
+              <b>{s.label}</b>
+              <span className="pc-soap-section-hint">{s.hint}</span>
+            </div>
+            {/* C9 · andamiaje visual de la especialidad. Aditivo: no altera el
+                textarea de texto libre; solo orienta qué registrar. */}
+            {g && (g.prompt || g.checklist?.length) ? (
+              <div className="pc-soap-guia">
+                {g.prompt ? <p className="pc-soap-guia-prompt">{g.prompt}</p> : null}
+                {g.checklist?.length ? (
+                  <ul className="pc-soap-guia-list">
+                    {g.checklist.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            ) : null}
+            <textarea
+              className="pc-soap-textarea"
+              value={soap[s.id]}
+              onChange={(e) => setSoap({ ...soap, [s.id]: e.target.value })}
+              placeholder={`Escribí el ${s.label.toLowerCase()}…`}
+              aria-label={`${s.label} — nota SOAP. ${s.hint}`}
+              spellCheck={false}
+              rows={Math.max(3, Math.ceil((soap[s.id]?.length ?? 0) / 60))}
+            />
           </div>
-          <textarea
-            className="pc-soap-textarea"
-            value={soap[s.id]}
-            onChange={(e) => setSoap({ ...soap, [s.id]: e.target.value })}
-            placeholder={`Escribí el ${s.label.toLowerCase()}…`}
-            aria-label={`${s.label} — nota SOAP. ${s.hint}`}
-            spellCheck={false}
-            rows={Math.max(3, Math.ceil((soap[s.id]?.length ?? 0) / 60))}
-          />
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -413,6 +438,7 @@ function TabPlan() {
             soap={soap}
             setSoap={setSoap}
             saveBadge={saveBadge}
+            guia={def.soapGuia}
             eyebrow={
               turnoActivo?.modo === "retroactivo"
                 ? `Nota SOAP · visita del ${fmtTurnoAncla(turnoActivo.inicio, { day: "numeric", month: "short" })}`

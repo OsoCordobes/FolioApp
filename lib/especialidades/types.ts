@@ -100,3 +100,41 @@ export interface IntakeAvanzadoConfig {
   /** Campos a renderizar, en orden. */
   campos: readonly IntakeCampo[];
 }
+
+// ─── SOAP guiado por especialidad (C9) ────────────────────────────────────────
+//
+// Andamiaje VISUAL, opcional, sobre las 4 secciones del SOAP (Subjetivo /
+// Objetivo / Análisis / Plan) de la ficha del paciente (SoapStacked en
+// components/paciente/paciente-detalle.tsx). ADITIVO: el texto libre del SOAP no
+// cambia — la guía solo agrega un prompt y/o un checklist de recordatorios
+// arriba de cada textarea, adaptados a la práctica de la especialidad.
+//
+// No persiste nada: es metadata estática de la especialidad, no PHI ni parte del
+// toolData. Cada especialidad completa las secciones que quiera (todas
+// opcionales); las que omite quedan sin guía y muestran solo el textarea, igual
+// que hoy.
+
+/** Ids de las secciones del SOAP — deben coincidir con SOAP_SECTIONS de la ficha. */
+export type SoapSeccionId = "subjetivo" | "objetivo" | "analisis" | "plan";
+
+/** Guía de una sección del SOAP: un prompt y/o un checklist de recordatorios. */
+export interface SoapSeccionGuia {
+  /**
+   * Frase orientadora es-AR, un renglón, que enmarca qué registrar en esta
+   * sección para la especialidad (ej. "Motivo de consulta y síntomas
+   * cardiovasculares actuales"). Se muestra debajo del hint genérico.
+   */
+  prompt?: string;
+  /**
+   * Recordatorios accionables (checklist visual, no interactivo) de qué no
+   * olvidar en esta sección. Andamiaje: el profesional escribe libre igual.
+   */
+  checklist?: readonly string[];
+}
+
+/**
+ * Guía SOAP de una especialidad: mapa parcial sección → guía. Todas las
+ * secciones son opcionales; una especialidad puede guiar solo las que aporten
+ * valor. Sin `soapGuia` en el meta, la ficha renderiza el SOAP como siempre.
+ */
+export type SoapGuia = Partial<Record<SoapSeccionId, SoapSeccionGuia>>;

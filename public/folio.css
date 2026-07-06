@@ -3772,6 +3772,25 @@ input:focus { outline: none; }
   font-size: 14px; font-weight: 600; color: var(--ink); letter-spacing: -.005em;
 }
 .pc-soap-section-hint { font-size: 11.5px; color: var(--ink-3); }
+/* C9 · guía SOAP por especialidad — andamiaje visual sobre el textarea. */
+.pc-soap-guia {
+  display: flex; flex-direction: column; gap: 6px;
+  margin-bottom: 8px; padding: 10px 12px;
+  background: var(--accent-soft);
+  border: 1px solid var(--line-soft);
+  border-left: 2px solid var(--accent);
+  border-radius: var(--r-sm);
+}
+.pc-soap-guia-prompt {
+  margin: 0; font-size: 12.5px; line-height: 1.45;
+  color: var(--ink-2); font-weight: 500;
+}
+.pc-soap-guia-list {
+  margin: 0; padding-left: 16px;
+  display: flex; flex-direction: column; gap: 3px;
+  font-size: 11.5px; line-height: 1.4; color: var(--ink-3);
+}
+.pc-soap-guia-list li { padding-left: 2px; }
 .pc-soap-textarea {
   width: 100%;
   resize: vertical;
