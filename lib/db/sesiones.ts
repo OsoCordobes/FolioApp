@@ -108,6 +108,23 @@ export function checkTurnoOwnership(
   return { ok: true };
 }
 
+// ─── Sesión ↔ paciente (puro, testeable) ───────────────────────────────
+//
+// getSesionCompleta scopea por org (no por paciente). Un caller que resuelve
+// una sesión a partir de un id del cliente (p.ej. el export PDF con
+// ?sesion=<uuid>) DEBE confirmar que esa sesión pertenece al paciente que está
+// exportando: sin este check, un actor con acceso clínico podría combinar el
+// membrete/identidad del paciente A con el SOAP del paciente B (ambos de su
+// org, ambos legibles bajo RLS) y producir una historia clínica legal
+// mislabeled. No es fuga cross-tenant; es un documento con datos del paciente
+// equivocado. Puro a propósito — invariante fijada en test unitario sin I/O.
+export function sesionPerteneceAPaciente(
+  sesionPacienteId: unknown,
+  pacienteId: string,
+): boolean {
+  return sesionPacienteId === pacienteId;
+}
+
 // ─── Preservación de tool data en guardados solo-SOAP (puro, testeable) ─
 
 /**

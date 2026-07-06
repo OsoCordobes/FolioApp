@@ -30,7 +30,7 @@ import { NextResponse } from "next/server";
 import { writeAuditEntry } from "@/lib/db/audit";
 import { getActiveContext } from "@/lib/db/active-context";
 import { getPacienteFicha } from "@/lib/db/paciente-ficha";
-import { getSesionCompleta } from "@/lib/db/sesiones";
+import { getSesionCompleta, sesionPerteneceAPaciente } from "@/lib/db/sesiones";
 import {
   ESPECIALIDADES_META,
   getEspecialidadMetaByToolId,
@@ -122,7 +122,15 @@ export async function GET(
   const sesionId = url.searchParams.get("sesion");
   if (sesionId && UUID_RE.test(sesionId)) {
     const sesionRes = await getSesionCompleta(sesionId);
-    if (sesionRes.ok) {
+    // La sesión debe pertenecer al MISMO paciente de la URL. getSesionCompleta
+    // scopea por org (no por paciente): sin este check, un actor con acceso
+    // clínico podría pedir ?sesion=<uuid-de-otro-paciente-de-su-org> y obtener
+    // un PDF con el membrete/identidad del paciente A pero el SOAP del paciente
+    // B — una HC legal mislabeled. No es fuga cross-tenant (ambos son de la org
+    // y ya son legibles bajo RLS), pero sí un documento clínico con datos del
+    // paciente equivocado. Si no coincide, se descarta la sesión y cae al SOAP
+    // de la ficha (mismo comportamiento que "sesión no encontrada").
+    if (sesionRes.ok && sesionPerteneceAPaciente(sesionRes.data.paciente_id, pacienteId)) {
       const row = sesionRes.data;
       const soapRow = row.soap as { s: string | null; o: string | null; a: string | null; p: string | null } | undefined;
       soap = {
@@ -135,7 +143,8 @@ export async function GET(
       fechaSesion = typeof createdAt === "string" ? createdAt.slice(0, 10) : null;
     }
     // Una sesión no encontrada / de otra org (getSesionCompleta scopea por org)
-    // NO rompe el export: cae al SOAP de la ficha. No se filtra nada cross-tenant.
+    // / de OTRO paciente de la misma org NO rompe el export: cae al SOAP de la
+    // ficha. No se filtra nada cross-tenant ni se mislabela la HC.
   }
 
   const profesionalNombre =
