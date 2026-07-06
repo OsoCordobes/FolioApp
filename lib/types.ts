@@ -19,6 +19,24 @@ export type EstadoTurno =
 
 export type OrigenTurno = "google" | "manual" | "whatsapp" | "instagram" | "web" | "walk_in";
 
+/**
+ * M72 · modalidad del turno. `presencial` es el default histórico (todo turno
+ * previo a telemedicina es presencial). `telemedicina` habilita la sala de
+ * videollamada (campos sala_* en turno, poblados por el proveedor en T2).
+ */
+export type ModalidadTurno = "presencial" | "telemedicina";
+
+/**
+ * M72 · normaliza turno.modalidad (lowercase en DB: 'presencial' |
+ * 'telemedicina') al tipo UI. Cualquier valor ausente/inesperado cae a
+ * 'presencial' (el default histórico) en vez de romper el render. Vive en
+ * types.ts (módulo puro, sin imports runtime) para ser testeable sin arrastrar
+ * el server client / crypto de los fetchers que la usan.
+ */
+export function normalizeModalidad(value: string | null | undefined): ModalidadTurno {
+  return value === "telemedicina" ? "telemedicina" : "presencial";
+}
+
 export type ActorTurno = "lorenzo" | "sistema" | "profesional";
 export type TriggerTurno = "manual" | "auto" | "webhook";
 
@@ -61,6 +79,12 @@ export interface Turno {
   postVisita: PostVisita;
   gcal?: boolean;
   origen?: OrigenTurno;
+  /**
+   * M72 · modalidad del turno (presencial | telemedicina). Default
+   * `presencial` cuando la vista no la trae (turnos previos a telemedicina),
+   * preservando el comportamiento histórico.
+   */
+  modalidad?: ModalidadTurno;
   transiciones?: TransicionTurno[];
   cobro?: Cobro;
   /** member.id del profesional asignado (turno.profesional_id, vista M14). */
@@ -90,6 +114,8 @@ export interface TurnoSemana {
   servicio: string;
   estado: EstadoTurno;
   origen?: OrigenTurno;
+  /** M72 · modalidad (presencial | telemedicina). Default presencial. */
+  modalidad?: ModalidadTurno;
   /** member.id del profesional asignado (turno.profesional_id, vista M14). */
   profesionalId?: string | null;
   /** Display name — solo seteado en vista "Todos" con >1 colegiado (ver Turno). */
