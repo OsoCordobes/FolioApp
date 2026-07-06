@@ -2,9 +2,12 @@
  * Folio · unit tests del linkage matcher del portal (Fase 3 · P3).
  *
  * Prueba la LÓGICA PURA de `matchAccount` (sin DB, sin crypto): alta confianza
- * (DNI, o teléfono+email en la misma fila) vs ambiguo (sólo teléfono, sólo email,
- * o varios candidatos en una org → claim). Los booleans por-candidato simulan lo
- * que el orchestrator recomputa por org con los blind indexes salteados.
+ * (DOS identificadores en la misma fila — DNI+teléfono, DNI+email, o
+ * teléfono+email) vs ambiguo (UN solo identificador — incluido DNI solo —, o
+ * varios candidatos en una org → claim). El DNI-solo NO auto-linkea
+ * [fase3-P3-adversarial-auth-review]: es no-secreto/enumerable/auto-declarado.
+ * Los booleans por-candidato simulan lo que el orchestrator recomputa por org
+ * con los blind indexes salteados.
  */
 
 import assert from "node:assert/strict";
@@ -24,16 +27,25 @@ function candidate(over: Partial<MatchCandidate> & { pacienteId: string; organiz
   };
 }
 
-// ─── Alta confianza → auto-link ──────────────────────────────────────────────
+// ─── Alta confianza (DOS identificadores) → auto-link ────────────────────────
 
-test("DNI exacto (único en la org) → auto-link con reason dni", () => {
+test("DNI + teléfono en la misma fila (única en la org) → auto-link reason dni_telefono", () => {
   const out = matchAccount([
-    candidate({ pacienteId: "p1", organizationId: ORG_A, dniMatch: true }),
+    candidate({ pacienteId: "p1", organizationId: ORG_A, dniMatch: true, telefonoMatch: true }),
   ]);
   assert.equal(out.autoLinks.length, 1);
   assert.equal(out.claims.length, 0);
   assert.equal(out.autoLinks[0].pacienteId, "p1");
-  assert.equal(out.autoLinks[0].reason, "dni");
+  assert.equal(out.autoLinks[0].reason, "dni_telefono");
+});
+
+test("DNI + email en la misma fila (única en la org) → auto-link reason dni_email", () => {
+  const out = matchAccount([
+    candidate({ pacienteId: "p1", organizationId: ORG_A, dniMatch: true, emailMatch: true }),
+  ]);
+  assert.equal(out.autoLinks.length, 1);
+  assert.equal(out.claims.length, 0);
+  assert.equal(out.autoLinks[0].reason, "dni_email");
 });
 
 test("teléfono + email en la misma fila (única en la org) → auto-link reason telefono_email", () => {
@@ -45,17 +57,17 @@ test("teléfono + email en la misma fila (única en la org) → auto-link reason
   assert.equal(out.autoLinks[0].reason, "telefono_email");
 });
 
-test("DNI gana a teléfono+email en la elección de reason (DNI primero)", () => {
+test("DNI+teléfono gana a DNI+email en la elección de reason (dni_telefono primero)", () => {
   const out = matchAccount([
     candidate({ pacienteId: "p1", organizationId: ORG_A, dniMatch: true, telefonoMatch: true, emailMatch: true }),
   ]);
   assert.equal(out.autoLinks.length, 1);
-  assert.equal(out.autoLinks[0].reason, "dni");
+  assert.equal(out.autoLinks[0].reason, "dni_telefono");
 });
 
 test("auto-link independiente por org (una fila de alta confianza en cada org)", () => {
   const out = matchAccount([
-    candidate({ pacienteId: "pA", organizationId: ORG_A, dniMatch: true }),
+    candidate({ pacienteId: "pA", organizationId: ORG_A, dniMatch: true, emailMatch: true }),
     candidate({ pacienteId: "pB", organizationId: ORG_B, telefonoMatch: true, emailMatch: true }),
   ]);
   assert.equal(out.autoLinks.length, 2);
@@ -64,7 +76,19 @@ test("auto-link independiente por org (una fila de alta confianza en cada org)",
   assert.deepEqual(ids, ["pA", "pB"]);
 });
 
-// ─── Ambiguo → claim ─────────────────────────────────────────────────────────
+// ─── Ambiguo (un solo identificador, incl. DNI solo) → claim ─────────────────
+
+test("sólo DNI (sin teléfono/email) → claim, NO auto-link [anti-impersonación]", () => {
+  // El DNI es no-secreto, enumerable y auto-declarado sin prueba de posesión:
+  // un match DNI-solo NO auto-linkea, va a la cola de claim (aprobada por el
+  // clínico, P9).
+  const out = matchAccount([
+    candidate({ pacienteId: "p1", organizationId: ORG_A, dniMatch: true }),
+  ]);
+  assert.equal(out.autoLinks.length, 0);
+  assert.equal(out.claims.length, 1);
+  assert.deepEqual(out.claims[0].matched, { dni: true, telefono: false, email: false });
+});
 
 test("sólo teléfono (sin email/DNI) → claim, NO auto-link", () => {
   const out = matchAccount([
@@ -88,7 +112,7 @@ test("DOS candidatos en la MISMA org (aunque uno sea alta confianza) → ambos a
   // Anti-impersonación: con ambigüedad intra-org NO arriesgamos linkear la ficha
   // equivocada; decide el clínico (P9).
   const out = matchAccount([
-    candidate({ pacienteId: "p1", organizationId: ORG_A, dniMatch: true }),
+    candidate({ pacienteId: "p1", organizationId: ORG_A, dniMatch: true, telefonoMatch: true }),
     candidate({ pacienteId: "p2", organizationId: ORG_A, emailMatch: true }),
   ]);
   assert.equal(out.autoLinks.length, 0);
@@ -107,7 +131,7 @@ test("candidato SIN ninguna coincidencia se descarta (ni link ni claim)", () => 
 
 test("mezcla: org A alta confianza (auto-link) + org B sólo teléfono (claim)", () => {
   const out = matchAccount([
-    candidate({ pacienteId: "pA", organizationId: ORG_A, dniMatch: true }),
+    candidate({ pacienteId: "pA", organizationId: ORG_A, dniMatch: true, telefonoMatch: true }),
     candidate({ pacienteId: "pB", organizationId: ORG_B, telefonoMatch: true }),
   ]);
   assert.equal(out.autoLinks.length, 1);

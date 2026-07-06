@@ -26,6 +26,9 @@ import {
 const linkageInput = z.object({
   dni: z.string().trim().max(40).optional(),
   telefono: z.string().trim().max(40).optional(),
+  /** Token de Turnstile del widget del portal. Obligatorio (fail-closed en prod)
+   * cuando se aportan DNI/teléfono — el path que puede auto-linkear. */
+  captchaToken: z.string().max(4096).optional(),
 });
 
 export async function runPortalLinkage(
@@ -38,5 +41,6 @@ export async function runPortalLinkage(
   return runLinkageForCurrentAccount({
     dni: parsed.data.dni ?? null,
     telefono: parsed.data.telefono ?? null,
+    captchaToken: parsed.data.captchaToken ?? null,
   });
 }

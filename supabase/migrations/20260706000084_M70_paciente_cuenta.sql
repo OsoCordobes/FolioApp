@@ -119,10 +119,27 @@ CREATE TRIGGER paciente_cuenta_set_updated_at
   BEFORE UPDATE ON paciente_cuenta
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
+-- ─── Audit: SIN trigger genérico (paciente_cuenta es cross-org, NO tiene
+--     organization_id) ──────────────────────────────────────────────────────
+-- NO se cuelga el `audit_log_trigger()` genérico de M12 acá: ese trigger lee
+-- NEW.organization_id, y paciente_cuenta NO tiene esa columna (es cross-org por
+-- diseño · decisión bloqueada #3). Colgarlo abortaría TODO insert/update/delete
+-- de la tabla con SQLSTATE 42703 'record "new" has no field "organization_id"'
+-- — el MISMO bug que M48 documentó para `pago` ('registrar un cobro era imposible
+-- desde el día uno') y que M37/M39/M48 resolvieron con variantes bespoke del
+-- trigger que resuelven la org por otra vía.
+--
+-- Acá NO hay "otra vía": paciente_cuenta es genuinamente cross-org y audit_log.
+-- organization_id es NOT NULL, así que NINGUNA variante del trigger genérico
+-- puede escribir una fila válida (no existe un organization_id que ponerle). Por
+-- eso NO se audita la tabla vía trigger. El ciclo de vida de la cuenta portal
+-- (create / verificación de email-teléfono / soft-delete) se audita APP-SIDE en
+-- el path service_role de P3 (lib/portal/link-actions.ts → writeAuditEntry), que
+-- SÍ conoce la org relevante de cada decisión (el link se materializa sobre
+-- `paciente`, que sí tiene organization_id y sí está cubierto por el trigger
+-- genérico M12 `paciente_audit`). paciente_claim (que SÍ tiene organization_id)
+-- conserva su trigger genérico más abajo, sin cambios.
 DROP TRIGGER IF EXISTS paciente_cuenta_audit ON paciente_cuenta;
-CREATE TRIGGER paciente_cuenta_audit
-  AFTER INSERT OR UPDATE OR DELETE ON paciente_cuenta
-  FOR EACH ROW EXECUTE FUNCTION audit_log_trigger();
 
 -- RLS ENABLE+FORCE, CERRADA acá. Las policies de auto-lectura del paciente
 -- (self-scoped por cuenta) llegan en P2/M71. Sin policies ⇒ ningún rol non-BYPASS

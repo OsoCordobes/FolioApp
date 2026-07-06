@@ -7,14 +7,22 @@
  * pacientes de varias orgs. Este módulo decide, para una cuenta que acaba de
  * verificarse, a QUÉ filas `paciente` se la puede LINKEAR — y con qué confianza.
  *
- * ─── Decisión de arquitectura (plan Fase 3, decisión bloqueada #3) ────────────
- *   · Auto-link SÓLO alta confianza:
- *       (a) DNI: el titular aportó un documento y su blind index (salteado por
- *           org) matchea EXACTAMENTE UNA fila viva de esa org; o
- *       (b) teléfono + email: AMBOS blind indexes (salteados por org) matchean
- *           la MISMA fila de una org.
- *   · Todo lo demás (sólo teléfono, sólo email, o varios candidatos) es AMBIGUO
- *     → va a la cola `paciente_claim`, aprobada por el clínico (P9). NUNCA se
+ * ─── Decisión de arquitectura (plan Fase 3 #3 + endurecimiento anti-impersonación) ─
+ *   · Auto-link SÓLO alta confianza, y alta confianza EXIGE DOS identificadores
+ *     independientes matcheando la MISMA fila viva de una org:
+ *       (a) DNI + teléfono, o
+ *       (b) DNI + email, o
+ *       (c) teléfono + email.
+ *   · Endurecimiento sobre el plan original [fase3-P3-adversarial-auth-review]:
+ *     el DNI SOLO ya NO auto-linkea. El DNI argentino es un keyspace denso,
+ *     no-secreto y enumerable (familiares, ex-parejas, empleadores, cualquiera
+ *     que haya visto el documento lo conocen), y en el portal se tipea como texto
+ *     libre SIN prueba de posesión → un match DNI-solo es confianza insuficiente
+ *     para otorgar acceso a PHI. Un match DNI-solo va a la cola de claim (aprobada
+ *     por el clínico, P9), no auto-linkea. Se conserva el DNI como identificador
+ *     FUERTE: combinado con un segundo (teléfono o email) sí alcanza el umbral.
+ *   · Todo lo demás (un solo identificador — DNI/teléfono/email solo —, o varios
+ *     candidatos en una org) es AMBIGUO → cola `paciente_claim`. NUNCA se
  *     auto-linkea un ambiguo (gate anti-impersonación por construcción).
  *   · NUNCA se mergean filas `paciente`; el matcher sólo produce decisiones de
  *     LINK (setear cuenta_id) o de CLAIM (encolar). El caller service_role las
@@ -53,8 +61,12 @@ export interface AutoLinkDecision {
   kind: "auto_link";
   pacienteId: string;
   organizationId: string;
-  /** Por qué fue alta confianza (para el audit): 'dni' | 'telefono_email'. */
-  reason: "dni" | "telefono_email";
+  /**
+   * Por qué fue alta confianza (para el audit). SIEMPRE incluye DOS
+   * identificadores — un match de un solo identificador NUNCA auto-linkea
+   * (ver `highConfidenceReason`): 'dni_telefono' | 'dni_email' | 'telefono_email'.
+   */
+  reason: "dni_telefono" | "dni_email" | "telefono_email";
 }
 
 /** El candidato es ambiguo → se encola un claim para aprobación del clínico. */
@@ -75,14 +87,20 @@ export interface MatchOutcome {
 
 /**
  * ¿Este candidato califica para auto-link de alta confianza?
- *   · DNI exacto, o
- *   · teléfono + email ambos en la MISMA fila.
+ * Requiere DOS identificadores independientes en la MISMA fila (nunca uno solo):
+ *   · DNI + teléfono, o
+ *   · DNI + email, o
+ *   · teléfono + email.
+ * El DNI SOLO NO alcanza [fase3-P3-adversarial-auth-review]: es no-secreto,
+ * enumerable y auto-declarado sin prueba de posesión → un match DNI-solo cae a
+ * claim (aprobado por el clínico), no auto-linkea.
  * (La unicidad — "exactamente una fila de la org" — la resuelve `matchAccount`
- * agrupando por org: si dos filas de la misma org empatan en DNI, ninguna es
- * alta confianza y ambas caen a claim.)
+ * agrupando por org: si dos filas de la misma org empatan, ninguna es alta
+ * confianza y ambas caen a claim.)
  */
 function highConfidenceReason(c: MatchCandidate): AutoLinkDecision["reason"] | null {
-  if (c.dniMatch) return "dni";
+  if (c.dniMatch && c.telefonoMatch) return "dni_telefono";
+  if (c.dniMatch && c.emailMatch) return "dni_email";
   if (c.telefonoMatch && c.emailMatch) return "telefono_email";
   return null;
 }

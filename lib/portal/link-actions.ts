@@ -11,7 +11,9 @@
  *   2. Busca filas `paciente` VIVAS y SIN cuenta (cuenta_id IS NULL) cuyos hashes
  *      coincidan, en CUALQUIER org.
  *   3. Corre el matcher PURO (`lib/portal/matcher.ts`): auto-link alta confianza
- *      (DNI, o teléfono+email en la misma fila) vs claim (ambiguo).
+ *      (DOS identificadores en la misma fila: DNI+teléfono, DNI+email, o
+ *      teléfono+email) vs claim (ambiguo — incluido el DNI solo). El DNI-solo NO
+ *      auto-linkea [fase3-P3-adversarial-auth-review].
  *   4. Aplica: auto-links setean `paciente.cuenta_id`; ambiguos se encolan en
  *      `paciente_claim` (estado 'pendiente', aprobados por el clínico en P9).
  *   5. AUDITA cada decisión en `audit_log` (Ley 26.529 art. 18): quién (la
@@ -30,17 +32,23 @@
  * Las LECTURAS del paciente en el resto del portal usan el cliente anon
  * RLS-enforced; service_role queda acotado a este matcher (y al export, P7).
  *
- * ─── Alta confianza requiere DNI o teléfono aportados ─────────────────────────
+ * ─── Alta confianza requiere DOS identificadores aportados ────────────────────
  * La cuenta guarda email (claro) y telefono_hash (SIN salt). Para recomputar los
  * hashes salteados por org necesito el RAW. El email lo tengo (claro). El
  * teléfono/DNI el titular los aporta en el flujo de linkage (pantalla del portal)
  * — sin ellos, sólo hay match por email ⇒ jamás alcanza el umbral de auto-link
- * (que exige DNI o teléfono+email), así que cae a claim: seguro por default.
+ * (que exige DOS identificadores: DNI+teléfono, DNI+email o teléfono+email), así
+ * que cae a claim: seguro por default. El DNI SOLO tampoco alcanza el umbral
+ * [fase3-P3-adversarial-auth-review]: es no-secreto y auto-declarado.
  */
+
+import { headers } from "next/headers";
 
 import { blindIndex, blindIndexPhone } from "@/lib/crypto";
 import { err, ok, type Result } from "@/lib/db/errors";
 import { writeAuditEntry } from "@/lib/db/audit";
+import { formatResetMessage, limitByKey } from "@/lib/security/rate-limit";
+import { verifyTurnstile } from "@/lib/security/turnstile";
 import { createSupabaseServerClient, createSupabaseServiceClient } from "@/lib/supabase/server";
 
 import { matchAccount, type MatchCandidate, type MatchOutcome } from "./matcher";
@@ -53,7 +61,19 @@ export interface LinkageIdentifiers {
   telefono?: string | null;
   /** Si se omite, se usa el email verificado de la cuenta. */
   email?: string | null;
+  /** Token de Turnstile del widget del portal. OBLIGATORIO (fail-closed en prod)
+   * cuando se aportan DNI/teléfono (el path que puede AUTO-LINKEAR y el vector de
+   * fuerza bruta de DNIs). El auto-run email-only no lo necesita (no auto-linkea)
+   * pero igual consume el rate-limit por cuenta. */
+  captchaToken?: string | null;
 }
+
+/** Límite de corridas del matcher por cuenta y por hora. Frena la fuerza bruta
+ * de DNIs (keyspace denso, no-secreto, enumerable) desde una cuenta de portal
+ * autenticada: cada corrida recomputa blind indexes contra todas las orgs vivas.
+ * Generoso para el uso legítimo (una persona vincula sus 2-3 fichas), letal para
+ * el scripting. */
+const LINKAGE_MAX_PER_HOUR = 8;
 
 export interface LinkageResult {
   autoLinked: number;
@@ -66,6 +86,19 @@ interface IdentidadCandidateRow {
   dni_hash: string | null;
   telefono_hash: string | null;
   email_hash: string | null;
+}
+
+/** IP del cliente (primer hop de x-forwarded-for) para pasarle a Turnstile.
+ * Best-effort: si no hay headers de request, null (Turnstile igual valida el
+ * token sin remoteip). */
+async function clientIpForLinkage(): Promise<string | null> {
+  try {
+    const h = await headers();
+    const raw = h.get("x-forwarded-for") ?? h.get("x-real-ip") ?? null;
+    return raw ? raw.split(",")[0]?.trim() ?? null : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -99,6 +132,40 @@ export async function runLinkageForCurrentAccount(
   const email = (identifiers.email ?? user.email ?? "").trim().toLowerCase() || null;
   const dni = identifiers.dni?.trim() || null;
   const telefono = identifiers.telefono?.trim() || null;
+
+  // El path PELIGROSO es el que aporta DNI/teléfono: es el único que puede
+  // AUTO-LINKEAR y el vector de fuerza bruta de DNIs (keyspace denso, no-secreto,
+  // enumerable). El auto-run email-only NO puede variar nada (el email está atado
+  // a la cuenta) → correrlo N veces da el MISMO resultado, no cosecha nada; por
+  // eso NO se le aplica ni rate-limit ni captcha (evita falsos lockouts al
+  // recargar el portal). Rate-limit + Turnstile SÓLO cuando hay identificadores.
+  const hasIdentifiers = Boolean(dni || telefono);
+
+  if (hasIdentifiers) {
+    // 1b. Rate-limit por CUENTA (no por IP: la cuenta es la identidad estable, no
+    // se puede spoofear — sale de auth.uid()). Cada corrida recomputa blind
+    // indexes contra TODAS las orgs vivas y auto-linkea si dos identificadores
+    // matchean una ficha sin cuenta. Fail-closed en prod cuando Upstash está
+    // provisionado (UPSTASH_FAIL_CLOSED).
+    const rl = await limitByKey("portal-linkage", pacienteCuentaId, LINKAGE_MAX_PER_HOUR);
+    if (!rl.ok) {
+      return err(
+        "forbidden",
+        `Demasiados intentos de vinculación. ${formatResetMessage(rl.resetIn)}`,
+      );
+    }
+
+    // 2b. Turnstile OBLIGATORIO. Fail-closed en prod (sin secret o token inválido
+    // → deniega); permisivo en dev (verifyTurnstile devuelve true sin secret).
+    const ip = await clientIpForLinkage();
+    const captchaOk = await verifyTurnstile(identifiers.captchaToken, ip);
+    if (!captchaOk) {
+      return err(
+        "forbidden",
+        "Verificación anti-robot fallida. Recargá la página e intentá de nuevo.",
+      );
+    }
+  }
 
   // 3. Buscar candidatos: filas paciente VIVAS y SIN cuenta linkeada. Recorremos
   // por org para poder recomputar el salt correcto. En lugar de escanear todo el

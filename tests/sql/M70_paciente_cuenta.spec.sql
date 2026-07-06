@@ -14,6 +14,9 @@
 --      rechaza.
 --   5. RLS FORCE + CERRADA: paciente_cuenta y paciente_claim tienen RLS
 --      ENABLE+FORCE y CERO policies (P2/M71 las agrega).
+--   5b. paciente_cuenta NO tiene audit trigger (es cross-org, sin
+--      organization_id → el trigger genérico de M12 abortaría con 42703, el bug
+--      de M48/`pago`). paciente_claim SÍ lo tiene (tiene organization_id).
 --   6. Helper paciente_cuenta_actual() existe, es SECURITY DEFINER + STABLE, y
 --      devuelve NULL cuando auth.uid() es NULL (CI sin JWT).
 --   7. Erasure: pseudonimizar_paciente (service_role) DESVINCULA cuenta_id (lo
@@ -220,6 +223,51 @@ BEGIN
   END IF;
 
   RAISE NOTICE 'M70 spec OK (6/7): RLS FORCE + cerrada + helper DEFINER/STABLE';
+END $$;
+
+-- ─── 6b. paciente_cuenta NO tiene audit trigger; el ciclo de vida no aborta ───
+-- Regresión del bug [fase3-P1-review]: el trigger genérico audit_log_trigger()
+-- lee NEW.organization_id, que paciente_cuenta NO tiene (cross-org) → 42703 en
+-- cada INSERT/UPDATE/DELETE (el bug de M48/`pago`). El fix es NO colgar el
+-- trigger genérico. Verificamos: (a) paciente_cuenta no tiene trigger de audit;
+-- (b) INSERT + UPDATE + DELETE completos NO abortan; (c) paciente_claim SÍ tiene
+-- su trigger (tiene organization_id, es org-scoped).
+DO $$
+DECLARE
+  v_uid  uuid := gen_random_uuid();
+  v_cnt  int;
+BEGIN
+  -- (a) ningún trigger que ejecute audit_log_trigger() sobre paciente_cuenta.
+  SELECT count(*) INTO v_cnt
+    FROM pg_trigger tg
+    JOIN pg_class c   ON c.oid = tg.tgrelid
+    JOIN pg_proc  p   ON p.oid = tg.tgfoid
+   WHERE c.relname = 'paciente_cuenta'
+     AND NOT tg.tgisinternal
+     AND p.proname = 'audit_log_trigger';
+  IF v_cnt <> 0 THEN
+    RAISE EXCEPTION 'M70 spec FAIL (6b): paciente_cuenta tiene el trigger genérico audit_log_trigger() (% ) — abortaría con 42703 (bug M48)', v_cnt;
+  END IF;
+
+  -- (b) el ciclo de vida completo NO aborta (sin el trigger no hay 42703).
+  INSERT INTO auth.users (id, email) VALUES (v_uid, 'm70-audit@example.com');
+  INSERT INTO paciente_cuenta (auth_user_id, email) VALUES (v_uid, 'm70-audit@example.com');
+  UPDATE paciente_cuenta SET email_verificado_en = now() WHERE auth_user_id = v_uid;
+  DELETE FROM paciente_cuenta WHERE auth_user_id = v_uid;
+
+  -- (c) paciente_claim SÍ conserva su trigger genérico (tiene organization_id).
+  SELECT count(*) INTO v_cnt
+    FROM pg_trigger tg
+    JOIN pg_class c   ON c.oid = tg.tgrelid
+    JOIN pg_proc  p   ON p.oid = tg.tgfoid
+   WHERE c.relname = 'paciente_claim'
+     AND NOT tg.tgisinternal
+     AND p.proname = 'audit_log_trigger';
+  IF v_cnt < 1 THEN
+    RAISE EXCEPTION 'M70 spec FAIL (6b): paciente_claim perdió su trigger de audit (tiene organization_id, debe auditarse)';
+  END IF;
+
+  RAISE NOTICE 'M70 spec OK (6b): paciente_cuenta sin audit trigger (ciclo de vida no aborta); paciente_claim conserva el suyo';
 END $$;
 
 -- ─── 7. erasure: pseudonimizar_paciente DESVINCULA cuenta_id ──────────────────
