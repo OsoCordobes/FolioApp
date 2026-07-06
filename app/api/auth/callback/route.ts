@@ -92,6 +92,27 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/login`);
   }
 
+  // ─── Portal del paciente (Fase 3 · P3) ──────────────────────────────────────
+  // Un magic-link del portal llega con ?redirect=/portal. Los pacientes NO son
+  // `member` (M70): la lógica de staff de abajo los mandaría a /onboarding (un
+  // dead-end para un paciente). Si la sesión corresponde a una `paciente_cuenta`
+  // viva, ruteamos al portal ANTES del flujo de staff. El helper
+  // paciente_cuenta_actual() (M70) filtra por auth.uid() ⇒ no impersona.
+  //
+  // Precedencia (humano que es paciente Y staff): sólo desviamos al portal
+  // cuando el link PIDIÓ el portal (redirect empieza con /portal). Un usuario
+  // que además es staff y entró por el login normal sigue el flujo de staff.
+  if (redirectTo && redirectTo.startsWith("/portal")) {
+    const { data: cuentaId } = await supabase.rpc("paciente_cuenta_actual");
+    if (cuentaId) {
+      const safePortal = safeRedirect(redirectTo, "/portal");
+      return NextResponse.redirect(`${origin}${safePortal}`);
+    }
+    // Pidió portal pero no tiene cuenta de portal: no lo mandamos a /onboarding
+    // de staff. Al login del portal con un aviso neutro.
+    return NextResponse.redirect(`${origin}/portal/login?error=sin_cuenta`);
+  }
+
   // Consolidated lookup: member + organization en 1 query con inner join.
   // Reemplaza 3 queries seriales (profile, member, organization) del flow
   // anterior. El select usa la FK `organization` (PostgREST detecta el FK

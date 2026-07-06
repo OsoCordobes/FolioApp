@@ -18883,3 +18883,30 @@ input:focus { outline: none; }
     text-decoration: none !important;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Portal del paciente (Fase 3 · P3) — shell liviano sobre tokens brass/cream.
+   Reusa .au-* de la pantalla de auth para el login; estas clases visten la
+   landing (/portal) y el panel de vinculación. Sin nuevos hex off-theme.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.pt-app {
+  min-height: 100vh;
+  background: var(--surface);
+  color: var(--ink);
+}
+.pt-main h1 { font-size: var(--fs-2xl, 1.6rem); letter-spacing: -0.01em; }
+.pt-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+  padding: 18px 20px;
+}
+.pt-org-list .pt-card { transition: border-color .15s ease, box-shadow .15s ease; }
+.pt-org-list .pt-card:hover { border-color: var(--accent); box-shadow: var(--shadow-2); }
+.pt-empty {
+  padding: 16px 18px;
+  background: var(--surface-2);
+  border: 1px dashed var(--line);
+  border-radius: var(--r-md);
+}
