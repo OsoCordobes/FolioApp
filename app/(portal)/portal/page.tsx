@@ -48,6 +48,7 @@ export default async function PortalHomePage() {
           <a href="/portal/turnos" className="fi-btn fi-btn-secondary">Ver mis turnos</a>
           <a href="/portal/resumen" className="fi-btn fi-btn-secondary">Ver mi resumen</a>
           <a href="/portal/consentimientos" className="fi-btn fi-btn-secondary">Mis consentimientos</a>
+          <a href="/portal/perfil" className="fi-btn fi-btn-secondary">Mis datos</a>
         </nav>
       ) : null}
 
