@@ -18575,3 +18575,73 @@ input:focus { outline: none; }
   .pm-legend { padding: 14px; }
   .pm-foot { padding: 12px 16px 16px; }
 }
+
+/* ═════════════ SKELETONS · loading.tsx (PR X6) ═════════════
+ * Bloques de carga con shimmer sutil. Construidos sobre `--surface-*` para
+ * adaptarse a light/dark sin reglas duplicadas (los tokens se redefinen en
+ * [data-theme="dark"]). El barrido usa un gradiente que corre sobre la base
+ * `--surface-2`; el highlight es `--surface-3` (un paso más claro en light,
+ * un paso más cálido en dark). Puramente decorativo → los elementos son
+ * `aria-hidden` desde el componente `<Skeleton />`.
+ * ─────────────────────────────────────────────────────────── */
+.fi-skeleton {
+  display: block;
+  width: 100%;
+  height: 1em;
+  border-radius: var(--r-sm);
+  background-color: var(--surface-2);
+  background-image: linear-gradient(
+    100deg,
+    transparent 0%,
+    transparent 35%,
+    var(--surface-3) 50%,
+    transparent 65%,
+    transparent 100%
+  );
+  background-size: 220% 100%;
+  background-repeat: no-repeat;
+  background-position: 180% 0;
+  animation: fi-skeleton-shimmer 1.4s var(--ease-standard) infinite;
+  /* Nunca es interactivo ni seleccionable. */
+  pointer-events: none;
+  user-select: none;
+}
+.fi-skeleton-text { border-radius: var(--r-sm); }
+.fi-skeleton-block { border-radius: var(--r-md); }
+.fi-skeleton-circle { border-radius: 50%; }
+
+@keyframes fi-skeleton-shimmer {
+  from { background-position: 180% 0; }
+  to   { background-position: -80% 0; }
+}
+
+/* Contenedor de filas (listas/tablas en carga). Espeja el ritmo vertical de
+ * las tablas densas (turnos, transacciones, directorio) sin cargar datos. */
+.fi-skeleton-list {
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  background: var(--surface);
+}
+.fi-skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.fi-skeleton-row:last-child { border-bottom: none; }
+.fi-skeleton-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+/* Reduced-motion: el shimmer es una animación decorativa infinita → OFF
+ * (política Folio v2, punto 2). El bloque permanece visible con su base
+ * `--surface-2` para que el layout de carga siga leyéndose. */
+@media (prefers-reduced-motion: reduce) {
+  .fi-skeleton { animation: none !important; background-image: none; }
+}
