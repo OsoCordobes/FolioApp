@@ -322,7 +322,15 @@ function SecPerfilPublico({ initial, matricula }: { initial: PerfilPublicoData; 
 
 // ─── Sección: Cuenta ───────────────────────────────────────────────────────
 
-function SecCuenta({ c, set }: { c: ConsultorioData; set: (patch: Partial<ConsultorioData>) => void }) {
+function SecCuenta({
+  c,
+  set,
+  showVinculaciones,
+}: {
+  c: ConsultorioData;
+  set: (patch: Partial<ConsultorioData>) => void;
+  showVinculaciones: boolean;
+}) {
   return (
     <>
       <Section title="Datos personales" sub="Lo que ve el paciente en tu link público.">
@@ -366,6 +374,25 @@ function SecCuenta({ c, set }: { c: ConsultorioData; set: (patch: Partial<Consul
           </a>
         </Row>
       </Section>
+
+      {/* P9 · acceso a la cola de aprobación de vinculaciones del portal del
+          paciente. Sólo rol clínico (showVinculaciones lo decide en el server,
+          espejo de can_read_clinical). La página destino igual role-gatea. */}
+      {showVinculaciones ? (
+        <Section
+          title="Portal del paciente"
+          sub="Solicitudes de vinculación de cuentas de pacientes que requieren tu confirmación."
+        >
+          <Row
+            label="Solicitudes de vinculación"
+            sub="Cuando el vínculo automático de una cuenta del portal con su ficha no es concluyente, se aprueba o rechaza acá."
+          >
+            <a href="/configuracion/vinculaciones" className="fi-btn fi-btn-ghost">
+              Ver solicitudes →
+            </a>
+          </Row>
+        </Section>
+      ) : null}
     </>
   );
 }
@@ -1701,6 +1728,10 @@ interface ConfiguracionProps {
   suscripcionEstado: EstadoSuscripcion | null;
   /** ¿El envío por WhatsApp Cloud está operativo en este deploy? (check server-side de envs). */
   whatsappConfigured: boolean;
+  /** P9 · ¿mostrar el acceso a "Solicitudes de vinculación" del portal? Sólo para
+   * rol clínico (OWNER/PROFESIONAL/DIRECTOR colegiado — espeja can_read_clinical).
+   * La página destino igual role-gatea (redirige a /configuracion); esto es UX. */
+  showVinculaciones: boolean;
 }
 
 interface DirtyState {
@@ -1732,6 +1763,7 @@ export function Configuracion({
   initialListarEnDirectorio,
   suscripcionEstado,
   whatsappConfigured,
+  showVinculaciones,
 }: ConfiguracionProps) {
   const [seccion, setSeccion] = useState<SeccionId>("consultorio");
   const [consultorio, setConsultorio] = useState<ConsultorioData>(initialConsultorio);
@@ -1850,7 +1882,7 @@ export function Configuracion({
           showPerfilPublico={esColegiado && initialPerfilPublico != null}
         />
         <div className="cfg-pane">
-          {seccion === "cuenta"        ? <SecCuenta c={consultorio} set={setC} /> : null}
+          {seccion === "cuenta"        ? <SecCuenta c={consultorio} set={setC} showVinculaciones={showVinculaciones} /> : null}
           {seccion === "perfil-publico" && initialPerfilPublico ? (
             <SecPerfilPublico initial={initialPerfilPublico} matricula={consultorio.matricula} />
           ) : null}

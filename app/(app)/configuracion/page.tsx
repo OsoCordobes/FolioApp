@@ -15,6 +15,7 @@ import { Configuracion } from "@/components/configuracion/configuracion";
 import { capabilitiesFor } from "@/lib/auth/capabilities";
 import { getActiveContext } from "@/lib/db/active-context";
 import { getConfiguracionData } from "@/lib/db/configuracion";
+import { puedeResolverClaims } from "@/lib/db/paciente-claims";
 import { isOrgListedInDirectory } from "@/lib/db/directorio";
 import {
   getOwnEspecialidad,
@@ -108,6 +109,10 @@ export default async function ConfiguracionPage() {
       initialListarEnDirectorio={listarEnDirectorio}
       suscripcionEstado={ctx.data.subscription.estado}
       whatsappConfigured={whatsappConfigured}
+      showVinculaciones={puedeResolverClaims(
+        ctx.data.session.role,
+        ctx.data.session.esColegiado,
+      )}
     />
   );
 }
