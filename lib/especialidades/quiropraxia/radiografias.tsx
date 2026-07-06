@@ -117,6 +117,11 @@ export function Radiografias({ pacienteId, turno, radiografias, readOnly }: Radi
                   className="pc-quiro-radio-thumb"
                 >
                   {esImagen(url) ? (
+                    // Raw <img> on purpose (X8 skips it): `url` is a rotating
+                    // signed Storage URL (`/object/sign/**`, PHI) with no fixed
+                    // dimensions and an onError→re-sign recovery path. next/image
+                    // caching keyed on an expiring token is a footgun and the
+                    // signed host is deliberately absent from images.remotePatterns.
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={url}

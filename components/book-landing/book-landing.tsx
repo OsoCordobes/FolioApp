@@ -16,6 +16,7 @@
  * foto/bio/matrícula por profesional — member.perfil_publico (M62).
  */
 
+import Image from "next/image";
 import type { ReactNode } from "react";
 
 import { AvatarIniciales } from "@/components/avatar-iniciales";
@@ -108,15 +109,13 @@ export function BookLanding({
       <header className="bl-header">
         <div className="bl-header-brand">
           {org.logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <Image
               src={org.logoUrl}
               alt={`Logo de ${org.nombre}`}
               className="bl-header-logo"
               width={32}
               height={32}
-              loading="eager"
-              decoding="async"
+              priority
             />
           ) : (
             <AvatarIniciales fullName={org.nombre} acentoHex={acento} size="sm" />
@@ -156,15 +155,13 @@ export function BookLanding({
           </div>
           <div className="bl-hero-figure">
             {org.logoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
+              <Image
                 src={org.logoUrl}
                 alt={`Logo de ${org.nombre}`}
                 className="bl-hero-logo"
                 width={160}
                 height={160}
-                loading="eager"
-                decoding="async"
+                priority
               />
             ) : heroFotoProfesional && profesionalSolo ? (
               // Solo sin logo: foto del profesional como avatar redondo grande.

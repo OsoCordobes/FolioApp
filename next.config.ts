@@ -89,6 +89,29 @@ const nextConfig: NextConfig = {
    * en pantallas full-screen sin chrome (Focus). En producción no aparece.
    */
   devIndicators: false,
+  /**
+   * next/image — remote patterns.
+   *
+   * Los logos de org (`org-logos`) y las fotos del profesional
+   * (`professional-photos`) se sirven como objetos públicos de Supabase
+   * Storage bajo `/storage/v1/object/public/**`. `next/image` sólo optimiza
+   * hosts explícitamente permitidos, así que habilitamos el host del proyecto
+   * (mismo derivado que usa la CSP, `SUPABASE_HOST`) acotado a ese pathname
+   * público — nunca `/object/sign/**` (URLs firmadas rotativas de PHI: se
+   * siguen sirviendo con `<img>` crudo, no por acá).
+   *
+   * El fallback `*.supabase.co` cubre entornos sin `NEXT_PUBLIC_SUPABASE_URL`
+   * en build (mismo comportamiento que la CSP).
+   */
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: SUPABASE_HOST,
+        pathname: "/storage/v1/object/public/**",
+      },
+    ],
+  },
   outputFileTracingIncludes: {
     "/api/admin/migrate": ["./supabase/migrations/*.sql", "./supabase/seed/*.sql"],
   },

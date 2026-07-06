@@ -124,9 +124,13 @@ export function PublicCard({
     >
       <header className="fpc-hero">
         {data.logoUrl ? (
-          // Public-card logo: <img> on purpose. The src is a Supabase public
-          // URL with a cache-bust query; next/image would not optimise it
-          // further and would block server rendering on data URLs.
+          // Public-card logo: raw <img> on purpose (X8 keeps it). The src is
+          // frequently a `data:` URL — the onboarding live-preview, the
+          // /dev/card + /dev/identidad-visual harnesses and the Playwright
+          // specs (public-card / identidad-visual assert `img.fpc-logo` with a
+          // data-URL src) all feed data URLs, which next/image rejects without
+          // `unoptimized`. Converting here would break those flows, so the
+          // logo/avatar next/image migration skips this component.
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={data.logoUrl}
