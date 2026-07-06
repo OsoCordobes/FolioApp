@@ -46,6 +46,7 @@ export default async function PortalHomePage() {
       {hasLinks ? (
         <nav style={{ marginTop: 20, display: "flex", gap: 8, flexWrap: "wrap" }}>
           <a href="/portal/turnos" className="fi-btn fi-btn-secondary">Ver mis turnos</a>
+          <a href="/portal/resumen" className="fi-btn fi-btn-secondary">Ver mi resumen</a>
         </nav>
       ) : null}
 
