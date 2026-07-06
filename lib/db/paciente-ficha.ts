@@ -198,6 +198,15 @@ export interface PlanData {
    */
   radiografias: RadiografiaFicha[];
   /**
+   * C6 · adjuntos de estudios del paciente (documento_clinico tipo
+   * INFORME_EXTERNO — ECG/Holter/ergometría escaneados/PDF) para la Tool cardio,
+   * con signed URLs de vida corta. Generaliza el bloque de radiografías: solo se
+   * llena cuando la especialidad ACTIVA es cardiología (otras orgs: []). Mismo
+   * shape que `radiografias` (documento por sesión). La Tool los ABRE por signed
+   * URL — Folio NO renderiza señal ECG.
+   */
+  estudiosAdjuntos: RadiografiaFicha[];
+  /**
    * M58 · valores CRUDOS del plan persistido (plan_tratamiento, 1:1 por
    * paciente) para prefillear el modal de edición. Todos null cuando no hay
    * fila todavía — el card sigue mostrando los valores derivados de arriba.
@@ -624,22 +633,36 @@ export async function getPacienteFicha(
       }
     : null;
 
-  // Workstream 6 · radiografías para la galería de la Tool quiro. Solo se
-  // consultan cuando la especialidad ACTIVA es quiropraxia: una org cardio/psico
-  // no paga la query extra (la Tool igual ignora el campo). Un error de lectura
+  // Workstream 6 / C6 · adjuntos clínicos por sesión para la Tool activa. Solo
+  // se consultan para la especialidad que los usa (una org de otra especialidad
+  // no paga la query extra; la Tool igual ignora el campo). Un error de lectura
   // degrada a [] (la galería se muestra vacía, la ficha no se rompe).
+  //   - quiropraxia → radiografías (documento_clinico tipo RADIOGRAFIA).
+  //   - cardiología → estudios adjuntos (tipo INFORME_EXTERNO: ECG/Holter/
+  //     ergometría escaneados o en PDF). Mismo mapeo doc → RadiografiaFicha.
+  const mapDocFicha = (doc: {
+    id: string;
+    fecha_estudio: string | null;
+    created_at: string;
+    descripcion: string | null;
+    signedUrl: string;
+    sesion_id: string | null;
+  }): RadiografiaFicha => ({
+    id: doc.id,
+    fecha: (doc.fecha_estudio ?? doc.created_at).slice(0, 10),
+    descripcion: doc.descripcion,
+    signedUrl: doc.signedUrl,
+    sesionId: doc.sesion_id,
+  });
+
   let radiografias: RadiografiaFicha[] = [];
+  let estudiosAdjuntos: RadiografiaFicha[] = [];
   if (especialidadActiva === "quiropraxia") {
     const radRes = await listDocumentosPaciente({ pacienteId, tipo: "RADIOGRAFIA" });
-    if (radRes.ok) {
-      radiografias = radRes.data.map((doc) => ({
-        id: doc.id,
-        fecha: (doc.fecha_estudio ?? doc.created_at).slice(0, 10),
-        descripcion: doc.descripcion,
-        signedUrl: doc.signedUrl,
-        sesionId: doc.sesion_id,
-      }));
-    }
+    if (radRes.ok) radiografias = radRes.data.map(mapDocFicha);
+  } else if (especialidadActiva === "cardiologia") {
+    const estRes = await listDocumentosPaciente({ pacienteId, tipo: "INFORME_EXTERNO" });
+    if (estRes.ok) estudiosAdjuntos = estRes.data.map(mapDocFicha);
   }
 
   // M58 · valores derivados (de los turnos) usados como fallback cuando el
@@ -666,6 +689,7 @@ export async function getPacienteFicha(
     toolHistorial,
     turnoActivo,
     radiografias,
+    estudiosAdjuntos,
     // Valores CRUDOS para prefillear el modal (null cuando no hay fila).
     planEditable: {
       sesionesObjetivo: planRow?.sesiones_objetivo ?? null,

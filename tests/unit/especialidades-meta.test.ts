@@ -73,11 +73,11 @@ test("slugs y toolIds: registry consistente (Workstream 6 · write id v2)", () =
     [...ESPECIALIDADES_META.quiropraxia.toolIds],
     ["quiropraxia.ficha.v2", "quiropraxia.spine.v1"],
   );
-  // C5 · el id de ESCRITURA de cardiología es v2; v1 se sigue LEYENDO via toolIds.
-  assert.equal(ESPECIALIDADES_META.cardiologia.toolId, "cardiologia.cv.v2");
+  // C6 · el id de ESCRITURA de cardiología es v3; v2/v1 se siguen LEYENDO via toolIds.
+  assert.equal(ESPECIALIDADES_META.cardiologia.toolId, "cardiologia.cv.v3");
   assert.deepEqual(
     [...ESPECIALIDADES_META.cardiologia.toolIds],
-    ["cardiologia.cv.v2", "cardiologia.cv.v1"],
+    ["cardiologia.cv.v3", "cardiologia.cv.v2", "cardiologia.cv.v1"],
   );
   assert.equal(ESPECIALIDADES_META.psicologia.toolId, "psicologia.escalas.v1");
   assert.deepEqual([...ESPECIALIDADES_META.psicologia.toolIds], ["psicologia.escalas.v1"]);
@@ -130,6 +130,9 @@ test("getEspecialidadMetaByToolId: resuelve por MEMBRESÍA (v1 + v2), null para 
   // quiropraxia — las sesiones viejas no quedan huérfanas al bumpear el shape.
   assert.equal(getEspecialidadMetaByToolId("quiropraxia.ficha.v2")?.slug, "quiropraxia");
   assert.equal(getEspecialidadMetaByToolId("quiropraxia.spine.v1")?.slug, "quiropraxia");
+  // C6 · el v3 de escritura Y el v2/v1 legacy de cardio resuelven a cardiología.
+  assert.equal(getEspecialidadMetaByToolId("cardiologia.cv.v3")?.slug, "cardiologia");
+  assert.equal(getEspecialidadMetaByToolId("cardiologia.cv.v2")?.slug, "cardiologia");
   assert.equal(getEspecialidadMetaByToolId("cardiologia.cv.v1")?.slug, "cardiologia");
   assert.equal(getEspecialidadMetaByToolId("psicologia.escalas.v1")?.slug, "psicologia");
   // Los toolIds placeholder pre-Fase D ya no existen en el registry.
@@ -157,8 +160,9 @@ const PAYLOADS_VALIDOS = {
     palpacionEstatica: "Hipertonía paravertebral C4-C6.",
   },
   cardiologia: {
-    // C5 · el schema del registry es v2 (panel con vitales extra).
-    v: 2,
+    // C6 · el schema del registry es v3 (panel con vitales extra + medicación +
+    // derivación).
+    v: 3,
     panel: {
       taSistolica: 130,
       taDiastolica: 85,
@@ -170,6 +174,8 @@ const PAYLOADS_VALIDOS = {
       factores: { hta: true },
     },
     estudios: [{ tipo: "ECG", fecha: "2026-06-01", hallazgos: "RS.", conclusion: "normal" }],
+    medicacion: [{ droga: "Enalapril", dosis: "10 mg", estado: "activa" }],
+    derivacion: { motivo: "Interconsulta electrofisiología.", urgencia: "programada" },
   },
   psicologia: {
     v: 1,
@@ -196,11 +202,12 @@ test("cross-tool: cada payload RECHAZA contra los schemas de las otras dos espec
 test("cross-tool: el rechazo es por .strict(), no por casualidad — sin claves ajenas {v:1}/{v:2} pelado donde corresponde", () => {
   // Documenta el mecanismo: psico acepta {v:1} pelado (campos de contenido
   // opcionales) — el peligro era exactamente que un payload ajeno degradara a
-  // eso. Quiro (v2) y cardio (v2, C5) exigen `v: 2`, así que ni {v:1} ni {v:2}
-  // pelado de otra tool le parsean por el literal + .strict(); {v:2} pelado SÍ
-  // (panel/vértebras/secciones opcionales).
+  // eso. Quiro (v2) exige `v: 2` y cardio (v3, C6) exige `v: 3`, así que
+  // {v:1}/{v:2} pelado de otra tool no le parsean por el literal + .strict();
+  // {v:3} pelado SÍ (panel/medicación/derivación opcionales).
   assert.equal(ESPECIALIDADES_META.cardiologia.schema.safeParse({ v: 1 }).success, false);
-  assert.equal(ESPECIALIDADES_META.cardiologia.schema.safeParse({ v: 2 }).success, true);
+  assert.equal(ESPECIALIDADES_META.cardiologia.schema.safeParse({ v: 2 }).success, false);
+  assert.equal(ESPECIALIDADES_META.cardiologia.schema.safeParse({ v: 3 }).success, true);
   assert.equal(ESPECIALIDADES_META.psicologia.schema.safeParse({ v: 1 }).success, true);
   assert.equal(ESPECIALIDADES_META.quiropraxia.schema.safeParse({ v: 1 }).success, false);
   assert.equal(ESPECIALIDADES_META.quiropraxia.schema.safeParse({ v: 2 }).success, true);
@@ -237,9 +244,10 @@ test("schemas: las tres especialidades validan estricto (v literal, shape propio
     false,
   );
   assert.equal(ESPECIALIDADES_META.cardiologia.schema.safeParse({ x: 1 }).success, false);
-  // C5 · cardio escribe v2: {v:2} pelado válido; {v:1} (legacy) ya no es el
-  // shape de escritura, así que rechaza contra el schema del registry.
-  assert.equal(ESPECIALIDADES_META.cardiologia.schema.safeParse({ v: 2 }).success, true);
+  // C6 · cardio escribe v3: {v:3} pelado válido; {v:2}/{v:1} (legacy) ya no son
+  // el shape de escritura, así que rechazan contra el schema del registry.
+  assert.equal(ESPECIALIDADES_META.cardiologia.schema.safeParse({ v: 3 }).success, true);
+  assert.equal(ESPECIALIDADES_META.cardiologia.schema.safeParse({ v: 2 }).success, false);
   assert.equal(ESPECIALIDADES_META.cardiologia.schema.safeParse({ v: 1 }).success, false);
   assert.equal(ESPECIALIDADES_META.psicologia.schema.safeParse(null).success, false);
   assert.equal(ESPECIALIDADES_META.psicologia.schema.safeParse({ v: 1 }).success, true);

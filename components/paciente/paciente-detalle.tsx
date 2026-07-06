@@ -279,6 +279,8 @@ function TabPlan() {
     pacienteId: paciente.id,
     turno: turnoActivo ? { id: turnoActivo.id, tieneSesionGuardada: turnoActivo.tieneSesionGuardada } : null,
     radiografias: plan.radiografias,
+    // C6 · adjuntos de estudios de la Tool cardio (ECG/Holter/ergometría); quiro/psico los ignoran.
+    estudiosAdjuntos: plan.estudiosAdjuntos,
     // Cardiología la usa en el score de riesgo CV (≥60 suma); quiro/psico la ignoran.
     edad: paciente.edad > 0 ? paciente.edad : undefined,
   };

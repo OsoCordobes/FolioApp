@@ -17,7 +17,7 @@
 import { z } from "zod";
 
 import {
-  cardiologiaToolDataV2Schema,
+  cardiologiaToolDataV3Schema,
   resumenSesionCardiologia,
 } from "@/lib/especialidades/cardiologia/schema";
 import { intakeAvanzadoCardiologia } from "@/lib/especialidades/cardiologia/intake";
@@ -287,12 +287,12 @@ export const ESPECIALIDADES_META: Record<EspecialidadSlug, EspecialidadMeta> = {
     slug: "cardiologia",
     nombre: "Cardiología",
     badgeLabel: "Módulo · Cardiología",
-    // C5 · el writer estampa v2 (panel con vitales extra); v1
-    // (cardiologia.cv.v1) se sigue LEYENDO (sesiones viejas) vía toolIds — no
-    // queda huérfana (patrón dos-ids de quiropraxia).
-    toolId: "cardiologia.cv.v2",
-    toolIds: ["cardiologia.cv.v2", "cardiologia.cv.v1"],
-    schema: cardiologiaToolDataV2Schema,
+    // C6 · el writer estampa v3 (panel + medicación + derivación); v2 y v1
+    // (cardiologia.cv.v2/v1) se siguen LEYENDO (sesiones viejas) vía toolIds —
+    // no quedan huérfanas (patrón dos-ids de quiropraxia, acá tres).
+    toolId: "cardiologia.cv.v3",
+    toolIds: ["cardiologia.cv.v3", "cardiologia.cv.v2", "cardiologia.cv.v1"],
+    schema: cardiologiaToolDataV3Schema,
     resumenSesion: resumenSesionCardiologia,
     intakeAvanzado: intakeAvanzadoCardiologia,
     soapGuia: SOAP_GUIA_CARDIOLOGIA,

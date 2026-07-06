@@ -54,6 +54,21 @@ export interface SpecialtyToolProps {
     sesionId: string | null;
   }>;
   /**
+   * C6 · adjuntos de estudios del paciente (documento_clinico, signed URLs de
+   * vida corta) para cardiología: ECG/Holter/ergometría escaneados o en PDF.
+   * Mismo shape que `radiografias` (ambos generalizan el bloque de documentos
+   * clínicos por sesión). Solo lo llena la ficha cuando la especialidad ACTIVA
+   * es cardiología; quiro/psico lo ignoran. Waveform: el archivo se ABRE por
+   * signed URL — Folio NO renderiza la señal ECG.
+   */
+  estudiosAdjuntos?: ReadonlyArray<{
+    id: string;
+    fecha: string;
+    descripcion: string | null;
+    signedUrl: string;
+    sesionId: string | null;
+  }>;
+  /**
    * Edad del paciente (años). La usa cardiología en el score de riesgo CV
    * (scoreRiesgoCV suma riesgo si edad ≥ 60); quiro/psico la ignoran.
    */

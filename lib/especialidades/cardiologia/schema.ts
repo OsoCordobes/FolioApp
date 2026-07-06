@@ -2,11 +2,14 @@
  * Folio · especialidades · cardiología · schema + derivaciones (server-safe).
  *
  * Todo lo que NO es React de la herramienta cardiológica (Fase D + C5):
- *   - Schema zod versionado del toolData. El shape de ESCRITURA es v2
- *     (`cardiologia.cv.v2`): panel con vitales extra (peso/talla/SatO₂/glucemia)
- *     además de TA/FC/factores. El shape v1 (`cardiologia.cv.v1`) se conserva
- *     INTACTO para LEER sesiones viejas (patrón de dos-ids de quiropraxia).
- *     Ambos cifrados app-side en sesion.tool_data_cifrado.
+ *   - Schema zod versionado del toolData. El shape de ESCRITURA es v3
+ *     (`cardiologia.cv.v3`, C6): sobre v2 AGREGA tracking de medicación y una
+ *     derivación estructurada (imprimible). El shape v2 (`cardiologia.cv.v2`,
+ *     panel con vitales extra) y v1 (`cardiologia.cv.v1`, panel base) se
+ *     conservan INTACTOS para LEER sesiones viejas (patrón de dos-ids de
+ *     quiropraxia — acá TRES ids). Todos cifrados app-side en
+ *     sesion.tool_data_cifrado. El trend de TA/FC no suma campos: se deriva por
+ *     nombre de campo del panel (deriveCardioSeries), común a v1/v2/v3.
  *   - `scoreRiesgoCV(factores, edad?)` — clasificación ORIENTATIVA de riesgo
  *     cardiovascular por conteo de factores (simplificación de las tablas
  *     OMS/OPS). No es diagnóstico ni reemplaza el criterio clínico. Los scores
@@ -18,7 +21,8 @@
  *
  * Opcional-friendly: una sesión puede cargar solo TA, solo factores o solo un
  * estudio — todos los campos del payload son opcionales salvo `v`. Aditivo: v2
- * sólo AGREGA vitales; nada de v1 se retira ni se afloja (.strict() intacto).
+ * sólo AGREGA vitales y v3 sólo AGREGA medicación + derivación; nada de v1/v2 se
+ * retira ni se afloja (.strict() intacto en cada versión).
  * Server-safe: lo importan lib/db/* (writer valida antes de cifrar) y el Tool
  * client. PHI: este módulo nunca loguea contenido clínico.
  */
@@ -182,25 +186,111 @@ export const cardiologiaToolDataV2Schema = z.object({
   estudios: z.array(estudioSchema).max(30).optional(),
 }).strict();
 
+// ─── Medicación (v3 · C6) ────────────────────────────────────────────────────
+//
+// Tracking de medicación cardiológica como campo ESTRUCTURADO (no texto libre):
+// habilita la serie de adherencia y la impresión de un esquema de tratamiento.
+// Solo `droga` es requerida por ítem; el resto es opcional (una indicación en
+// curso puede no tener aún dosis/frecuencia detalladas). `estado` distingue la
+// medicación vigente de la suspendida sin perder el registro histórico.
+
+export const ESTADOS_MEDICACION = ["activa", "suspendida"] as const;
+
+export type EstadoMedicacion = (typeof ESTADOS_MEDICACION)[number];
+
+/** Labels es-AR para chips/selects (el value persiste como enum del schema). */
+export const ESTADO_MEDICACION_LABELS: Record<EstadoMedicacion, string> = {
+  activa: "Activa",
+  suspendida: "Suspendida",
+};
+
+const medicamentoSchema = z.object({
+  /** Droga / nombre comercial (texto libre; el vademécum full se difiere). */
+  droga: z.string().min(1).max(120),
+  /** Dosis (ej. "50 mg"). Opcional: puede registrarse recién en el control. */
+  dosis: z.string().max(80).optional(),
+  /** Frecuencia (ej. "1 comp/día", "cada 12 h"). Opcional. */
+  frecuencia: z.string().max(80).optional(),
+  /** Vigente o suspendida — para la vista de medicación activa y la impresión. */
+  estado: z.enum(ESTADOS_MEDICACION),
+  /** Inicio de la indicación (YYYY-MM-DD). Opcional. */
+  desde: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
+
+// ─── Derivación (v3 · C6) ────────────────────────────────────────────────────
+//
+// Derivación / interconsulta estructurada e IMPRIMIBLE. `motivo` es lo único
+// requerido; destinatario y especialidad son opcionales (una derivación puede
+// ser genérica "a cardiología intervencionista" sin nombre propio). La urgencia
+// ordena la lectura y se imprime destacada.
+
+export const URGENCIAS_DERIVACION = ["programada", "preferente", "urgente"] as const;
+
+export type UrgenciaDerivacion = (typeof URGENCIAS_DERIVACION)[number];
+
+/** Labels es-AR para el select / la impresión (el value persiste como enum). */
+export const URGENCIA_DERIVACION_LABELS: Record<UrgenciaDerivacion, string> = {
+  programada: "Programada",
+  preferente: "Preferente",
+  urgente: "Urgente",
+};
+
+const derivacionSchema = z.object({
+  /** Profesional/servicio destinatario (opcional — puede ser genérica). */
+  destinatario: z.string().max(160).optional(),
+  /** Especialidad/servicio de destino (ej. "Electrofisiología"). Opcional. */
+  especialidad: z.string().max(120).optional(),
+  /** Motivo de la derivación — requerido (es el cuerpo del documento). */
+  motivo: z.string().min(1).max(2000),
+  /** Prioridad — ordena la lectura y se imprime destacada. */
+  urgencia: z.enum(URGENCIAS_DERIVACION),
+  /** Fecha de emisión de la derivación (YYYY-MM-DD). Opcional. */
+  fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
+
+// ─── toolData v3 (ACTIVO · tool_id = cardiologia.cv.v3, C6) ──────────────────
+//
+// ADITIVO sobre v2: agrega `medicacion` (tracking estructurado) y `derivacion`
+// (interconsulta imprimible). El panel y los estudios NO cambian respecto de v2.
+// `v: z.literal(3)` + .strict() igual que v1/v2: un payload de OTRA herramienta
+// (o v1/v2 pelado) RECHAZA — el writer depende de esto para no persistir PHI
+// ajena con el tool_id de cardiología.
+
+const panelV3Schema = panelV2Schema;
+
+export const cardiologiaToolDataV3Schema = z.object({
+  v: z.literal(3),
+  panel: panelV3Schema.optional(),
+  estudios: z.array(estudioSchema).max(30).optional(),
+  medicacion: z.array(medicamentoSchema).max(40).optional(),
+  derivacion: derivacionSchema.optional(),
+}).strict();
+
 export type CardiologiaToolData = z.infer<typeof cardiologiaToolDataSchema>;
 export type CardiologiaToolDataV2 = z.infer<typeof cardiologiaToolDataV2Schema>;
+export type CardiologiaToolDataV3 = z.infer<typeof cardiologiaToolDataV3Schema>;
 export type PanelCV = z.infer<typeof panelV2Schema>;
 export type FactoresCV = z.infer<typeof factoresSchema>;
 export type EstudioCardio = z.infer<typeof estudioSchema>;
+export type MedicamentoCardio = z.infer<typeof medicamentoSchema>;
+export type DerivacionCardio = z.infer<typeof derivacionSchema>;
 
 /**
- * Discrimina un toolData cardio persistido (descifrado + JSON.parse) entre v2,
- * v1 o vacío. Intenta v2 primero (shape de escritura actual), luego v1 (legacy);
- * si ninguno parsea devuelve `{ kind: "empty" }` (sesión sin tool / de otra
- * herramienta — el caller arranca un borrador v2 limpio). Espejo del patrón de
- * `parseQuiropraxiaToolData`.
+ * Discrimina un toolData cardio persistido (descifrado + JSON.parse) entre v3,
+ * v2, v1 o vacío. Intenta v3 primero (shape de escritura actual, C6), luego v2 y
+ * v1 (legacy); si ninguno parsea devuelve `{ kind: "empty" }` (sesión sin tool /
+ * de otra herramienta — el caller arranca un borrador v3 limpio). Espejo del
+ * patrón de `parseQuiropraxiaToolData`.
  */
 export function parseCardiologiaToolData(
   value: unknown,
 ):
+  | { kind: "v3"; data: CardiologiaToolDataV3 }
   | { kind: "v2"; data: CardiologiaToolDataV2 }
   | { kind: "v1"; data: CardiologiaToolData }
   | { kind: "empty" } {
+  const asV3 = cardiologiaToolDataV3Schema.safeParse(value);
+  if (asV3.success) return { kind: "v3", data: asV3.data };
   const asV2 = cardiologiaToolDataV2Schema.safeParse(value);
   if (asV2.success) return { kind: "v2", data: asV2.data };
   const asV1 = cardiologiaToolDataSchema.safeParse(value);
@@ -286,6 +376,34 @@ export function extractEstudios(toolData: unknown): EstudioCardio[] {
   return out;
 }
 
+/**
+ * Medicación (v3, C6) de un toolData desconocido, validada item a item (los
+ * inválidos se descartan en silencio). Tolera shapes v1/v2 (sin `medicacion`) y
+ * ajenos → []. El historial nunca rompe la ficha.
+ */
+export function extractMedicacion(toolData: unknown): MedicamentoCardio[] {
+  if (toolData === null || typeof toolData !== "object") return [];
+  const meds = (toolData as { medicacion?: unknown }).medicacion;
+  if (!Array.isArray(meds)) return [];
+  const out: MedicamentoCardio[] = [];
+  for (const m of meds) {
+    const parsed = medicamentoSchema.safeParse(m);
+    if (parsed.success) out.push(parsed.data);
+  }
+  return out;
+}
+
+/**
+ * Derivación (v3, C6) de un toolData desconocido, validada como bloque (un
+ * shape inválido → null). Tolera v1/v2 (sin `derivacion`) y ajenos.
+ */
+export function extractDerivacion(toolData: unknown): DerivacionCardio | null {
+  if (toolData === null || typeof toolData !== "object") return null;
+  const deriv = (toolData as { derivacion?: unknown }).derivacion;
+  const parsed = derivacionSchema.safeParse(deriv);
+  return parsed.success ? parsed.data : null;
+}
+
 // ─── Serie de evolución TA/FC ───────────────────────────────────────────────
 
 export interface CardioSeriesPoint {
@@ -321,10 +439,10 @@ export function deriveCardioSeries(historial: ToolHistorialEntry[]): CardioSerie
  * Resumen es-AR de una sesión cardiológica para el historial:
  *   "TA 130/85 · FC 72 · riesgo moderado"
  *   "Ergometría: requiere seguimiento"
- *   "TA 130/85 · 3 estudios"
- * Lee v1 y v2 (parseCardiologiaToolData): los campos del resumen (TA/FC,
- * factores, estudios) son comunes a ambos shapes, así que el copy no cambia
- * entre versiones. Shapes desconocidos/vacíos degradan a "Sesión registrada"
+ *   "TA 130/85 · 3 estudios · 2 fármacos · derivación"
+ * Lee v1, v2 y v3 (parseCardiologiaToolData): TA/FC, factores y estudios son
+ * comunes a los tres shapes; medicación y derivación (v3, C6) sólo aparecen si
+ * están presentes. Shapes desconocidos/vacíos degradan a "Sesión registrada"
  * (mismo copy que el placeholder pre-Fase D — el historial nunca rompe).
  */
 export function resumenSesionCardiologia(toolData: unknown): string {
@@ -354,6 +472,16 @@ export function resumenSesionCardiologia(toolData: unknown): string {
   } else if (estudios && estudios.length > 1) {
     partes.push(`${estudios.length} estudios`);
   }
+
+  // v3 (C6): medicación activa + derivación. extractMedicacion/extractDerivacion
+  // toleran v1/v2 (sin esos campos) → no agregan nada; sólo suman en v3.
+  const medsActivas = extractMedicacion(parsed.data).filter((m) => m.estado === "activa");
+  if (medsActivas.length === 1) {
+    partes.push(`1 fármaco`);
+  } else if (medsActivas.length > 1) {
+    partes.push(`${medsActivas.length} fármacos`);
+  }
+  if (extractDerivacion(parsed.data)) partes.push("derivación");
 
   return partes.length > 0 ? partes.join(" · ") : "Sesión registrada";
 }

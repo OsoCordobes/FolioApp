@@ -393,58 +393,63 @@ export async function savePlanTratamientoAction(
   return ok({ id: result.data.id });
 }
 
-// ─── Radiografías de la Tool quiropraxia (Workstream 6) ──────────────────────
+// ─── Adjuntos clínicos por sesión (documento_clinico, M08) ───────────────────
+//
+// Un solo core (uploadDocumentoSesion) que sube los bytes server-side al bucket
+// privado y registra la fila atada a la sesion del turno en curso. Lo usan:
+//   - Radiografías de la Tool quiropraxia (tipo RADIOGRAFIA, Workstream 6).
+//   - C6 · adjuntos de estudios de la Tool cardio (tipo INFORME_EXTERNO:
+//     ECG/Holter/ergometría escaneados o en PDF).
+// El waveform NO se renderiza: el archivo se ABRE por signed URL en la galería.
 
-const RADIO_BUCKET = "documentos-clinicos";
-const RADIO_MAX_BYTES = 50 * 1024 * 1024; // espeja el CHECK documento_tamanio_limite (M08)
+const DOC_BUCKET = "documentos-clinicos";
+const DOC_MAX_BYTES = 50 * 1024 * 1024; // espeja el CHECK documento_tamanio_limite (M08)
 // image/* | pdf | dicom. El set fino lo re-valida createDocumentoClinico contra
 // ALLOWED_MIME; acá hacemos un primer filtro barato antes de subir bytes.
-function radioMimeOk(mime: string): boolean {
+function docMimeOk(mime: string): boolean {
   return mime.startsWith("image/") || mime === "application/pdf" || mime === "application/dicom";
 }
 
 /**
- * Adjunta una radiografía a la sesión del turno en curso (documento_clinico
- * tipo RADIOGRAFIA, M08). Sube los bytes server-side al bucket privado y
- * registra la fila con el storage_path canónico.
+ * Core compartido: adjunta un documento a la sesión del turno en curso.
  *
- * Reglas:
+ * Reglas (idénticas para radiografías y estudios cardio):
  *   - turno ∈ org activa Y turno.paciente_id == pacienteId (mismo guard IDOR
  *     que upsertSesion — no se confía en IDs del cliente).
- *   - debe existir una sesion para el turno (la radiografía cuelga de ella):
- *     sino se pide "Guardá la sesión antes de adjuntar radiografías." — así el
- *     documento siempre queda atado a una visita.
+ *   - debe existir una sesion para el turno (el documento cuelga de ella): sino
+ *     se pide guardar la sesión primero, así el documento queda atado a la visita.
  *   - mime image/* | pdf | dicom y tamaño <= 50 MB.
  *
  * PHI: el nombre/descripción no se loguean; el blob vive en el bucket privado y
  * la fila la lee la ficha con signed URLs de vida corta.
  */
-export async function uploadRadiografiaAction(
-  formData: FormData,
-): Promise<Result<{ documentoId: string }>> {
-  const file = formData.get("file");
-  const pacienteId = String(formData.get("pacienteId") ?? "");
-  const turnoId = String(formData.get("turnoId") ?? "");
-  const descripcionRaw = formData.get("descripcion");
-  const descripcion =
-    typeof descripcionRaw === "string" && descripcionRaw.trim() !== ""
-      ? descripcionRaw.trim().slice(0, 2000)
-      : undefined;
+async function uploadDocumentoSesion(params: {
+  file: unknown;
+  pacienteId: string;
+  turnoId: string;
+  descripcion?: string;
+  tipo: "RADIOGRAFIA" | "INFORME_EXTERNO";
+  /** Nombre de la entidad para los mensajes de error ("radiografía"/"estudio"). */
+  etiqueta: string;
+  /** Filename por defecto si el Blob no trae nombre. */
+  fallbackFilename: string;
+}): Promise<Result<{ documentoId: string }>> {
+  const { file, pacienteId, turnoId, descripcion, tipo, etiqueta, fallbackFilename } = params;
 
   if (!(file instanceof Blob) || file.size === 0) {
     return err("validation", "Adjuntá un archivo válido.");
   }
   if (!z.string().uuid().safeParse(pacienteId).success || !z.string().uuid().safeParse(turnoId).success) {
-    return err("validation", "Datos de la radiografía inválidos.");
+    return err("validation", `Datos del ${etiqueta} inválidos.`);
   }
-  if (file.size > RADIO_MAX_BYTES) {
+  if (file.size > DOC_MAX_BYTES) {
     return err("validation", "El archivo supera el límite de 50 MB.");
   }
   const mimeType = file.type || "application/octet-stream";
-  if (!radioMimeOk(mimeType)) {
+  if (!docMimeOk(mimeType)) {
     return err("validation", `Tipo de archivo no permitido: ${mimeType}.`);
   }
-  const filename = file instanceof File && file.name ? file.name : "radiografia.bin";
+  const filename = file instanceof File && file.name ? file.name : fallbackFilename;
 
   const ctx = await getActiveContext();
   if (!ctx.ok) return ctx;
@@ -468,7 +473,7 @@ export async function uploadRadiografiaAction(
     return err("forbidden", "El turno no corresponde a ese paciente.");
   }
 
-  // La radiografía cuelga de la sesion del turno: si todavía no hay sesión, se
+  // El documento cuelga de la sesion del turno: si todavía no hay sesión, se
   // pide guardarla primero (el documento siempre queda atado a una visita).
   const { data: sesionRow } = await supabase
     .from("sesion")
@@ -478,7 +483,7 @@ export async function uploadRadiografiaAction(
     .maybeSingle();
   const sesionId = (sesionRow as { id: string } | null)?.id ?? null;
   if (!sesionId) {
-    return err("validation", "Guardá la sesión antes de adjuntar radiografías.");
+    return err("validation", `Guardá la sesión antes de adjuntar el ${etiqueta}.`);
   }
 
   // Subida server-side de los bytes al bucket privado. El storage_path canónico
@@ -488,7 +493,7 @@ export async function uploadRadiografiaAction(
   const pathInBucket = storagePath.replace(/^documentos-clinicos\//, "");
   const bytes = new Uint8Array(await file.arrayBuffer());
   const { error: uploadErr } = await supabase.storage
-    .from(RADIO_BUCKET)
+    .from(DOC_BUCKET)
     .upload(pathInBucket, bytes, { contentType: mimeType });
   if (uploadErr) {
     return err("db_error", "No pudimos subir el archivo.", uploadErr.message);
@@ -497,7 +502,7 @@ export async function uploadRadiografiaAction(
   const created = await createDocumentoClinico({
     pacienteId,
     sesionId,
-    tipo: "RADIOGRAFIA",
+    tipo,
     storagePath,
     mimeType,
     tamanioBytes: file.size,
@@ -505,15 +510,64 @@ export async function uploadRadiografiaAction(
   });
   if (!created.ok) return created;
 
-  // La vuelta: la galería de la Tool quiro trae la radiografía nueva.
+  // La vuelta: la galería de la Tool trae el documento nuevo.
   revalidatePath(`/pacientes/${pacienteId}`);
   return ok({ documentoId: created.data.id });
 }
 
 /**
- * Refresca el signed URL de una radiografía (los URLs de la galería expiran a
- * los 5 min). Wrapper fino sobre refreshSignedUrl — la tenancy la cubre el
- * propio reader (org-scoped).
+ * Adjunta una radiografía a la sesión del turno en curso (documento_clinico
+ * tipo RADIOGRAFIA, M08). Delega en uploadDocumentoSesion (core compartido).
+ */
+export async function uploadRadiografiaAction(
+  formData: FormData,
+): Promise<Result<{ documentoId: string }>> {
+  const descripcionRaw = formData.get("descripcion");
+  return uploadDocumentoSesion({
+    file: formData.get("file"),
+    pacienteId: String(formData.get("pacienteId") ?? ""),
+    turnoId: String(formData.get("turnoId") ?? ""),
+    descripcion:
+      typeof descripcionRaw === "string" && descripcionRaw.trim() !== ""
+        ? descripcionRaw.trim().slice(0, 2000)
+        : undefined,
+    tipo: "RADIOGRAFIA",
+    etiqueta: "radiografía",
+    fallbackFilename: "radiografia.bin",
+  });
+}
+
+/**
+ * C6 · adjunta un estudio cardiológico (ECG/Holter/ergometría escaneado o en
+ * PDF) a la sesión del turno en curso, como documento_clinico tipo
+ * INFORME_EXTERNO (el enum tipo_documento de M08 no tiene ECG/HOLTER; la
+ * categoría clínica fina la lleva el campo `estudios[].tipo` del panel cardio).
+ * Delega en uploadDocumentoSesion (mismo core + guards que las radiografías).
+ * Waveform: el archivo se ABRE por signed URL — Folio NO renderiza la señal.
+ */
+export async function uploadEstudioCardioAction(
+  formData: FormData,
+): Promise<Result<{ documentoId: string }>> {
+  const descripcionRaw = formData.get("descripcion");
+  return uploadDocumentoSesion({
+    file: formData.get("file"),
+    pacienteId: String(formData.get("pacienteId") ?? ""),
+    turnoId: String(formData.get("turnoId") ?? ""),
+    descripcion:
+      typeof descripcionRaw === "string" && descripcionRaw.trim() !== ""
+        ? descripcionRaw.trim().slice(0, 2000)
+        : undefined,
+    tipo: "INFORME_EXTERNO",
+    etiqueta: "estudio",
+    fallbackFilename: "estudio.bin",
+  });
+}
+
+/**
+ * Refresca el signed URL de un documento clínico (los URLs de la galería
+ * expiran a los 5 min). Wrapper fino sobre refreshSignedUrl — la tenancy la
+ * cubre el propio reader (org-scoped). Lo usan tanto la galería de radiografías
+ * (quiro) como la de estudios adjuntos (cardio).
  */
 export async function refreshRadiografiaUrlAction(
   documentoId: string,
