@@ -259,19 +259,28 @@ async function loadInstrumentosBestEffort(
     const supabase = await createSupabaseServerClient();
     const { data, error } = await supabase
       .from("instrumento_respuesta")
-      .select("instrumento_id, score_total, banda, banda_etiqueta, created_at")
+      .select("instrumento_id, score_total, banda, created_at")
       .eq("paciente_id", pacienteId)
       .eq("organization_id", organizationId)
       .order("created_at", { ascending: false })
       .limit(20);
-    // Tabla ausente / cualquier error → sección vacía (no rompe el export).
-    if (error || !data) return [];
+    if (error || !data) {
+      // 42P01 = tabla aún no aplicada en este entorno (degradación esperada,
+      // silenciosa). Cualquier OTRO código es un bug real (p. ej. drift de
+      // columna) y NO debe pasar desapercibido → se loguea [audit-fixes · ALTO-2].
+      if (error && error.code !== "42P01") {
+        console.warn(
+          `[ficha-pdf] instrumento_respuesta query falló (code=${error.code}); sección omitida`,
+        );
+      }
+      return [];
+    }
     return (data as InstrumentoRespuestaRow[]).map((r) => {
       const meta = getInstrumentoNombre(r.instrumento_id);
       return {
         nombre: meta,
         total: r.score_total != null ? String(r.score_total) : "—",
-        banda: r.banda_etiqueta ?? r.banda ?? null,
+        banda: r.banda ?? null,
         fecha: typeof r.created_at === "string" ? r.created_at.slice(0, 10) : null,
       };
     });
@@ -285,7 +294,6 @@ interface InstrumentoRespuestaRow {
   instrumento_id: string;
   score_total: number | null;
   banda: string | null;
-  banda_etiqueta: string | null;
   created_at: string;
 }
 

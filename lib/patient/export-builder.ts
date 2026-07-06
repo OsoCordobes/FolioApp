@@ -237,18 +237,28 @@ export async function buildPatientExport(
   }
   const p = pacienteRaw as unknown as PacienteCompletoRow;
 
+  // NOTA [audit-fixes · ALTO-3]: este es un documento con VALOR LEGAL (Ley 25.326
+  // art. 14). Un fallo de DB en cualquiera de las secciones NO puede degradar a
+  // "vacío" y presentarse como completo — sería entregar un export incompleto
+  // como si fuera el paquete total del titular. Por eso cada query chequea `error`
+  // y aborta con err(): mejor un fallo explícito que un documento legal mudo.
+
   // 2. Turnos del paciente (scopeados por org + paciente_id). Sin PHI: sólo
   //    fecha, duración, estado, modalidad — metadata de la atención.
-  const { data: turnosRaw } = await supabase
+  const { data: turnosRaw, error: turnosErr } = await supabase
     .from("turno")
     .select("id, inicio, duracion_min, estado, modalidad")
     .eq("organization_id", organizationId)
     .eq("paciente_id", pacienteId)
     .order("inicio", { ascending: false });
+  if (turnosErr) {
+    const mapped = mapSupabaseError(turnosErr);
+    return err(mapped.code, mapped.message, turnosErr.message);
+  }
 
   // 3. Consentimientos firmados (scopeados por org + paciente_id). El archivo de
   //    firma NO se incluye (es un binario en Storage); sí su metadata legal.
-  const { data: consentimientosRaw } = await supabase
+  const { data: consentimientosRaw, error: consentErr } = await supabase
     .from("consentimiento")
     .select(
       "id, tipo, firmado_en, revocado_en, plantilla:plantilla_consentimiento(titulo, version)",
@@ -256,22 +266,34 @@ export async function buildPatientExport(
     .eq("organization_id", organizationId)
     .eq("paciente_id", pacienteId)
     .order("firmado_en", { ascending: false });
+  if (consentErr) {
+    const mapped = mapSupabaseError(consentErr);
+    return err(mapped.code, mapped.message, consentErr.message);
+  }
 
   // 4. Metadata de intake avanzado (qué especialidades tienen ficha cargada — NO
   //    el contenido cifrado). Scope por org + paciente_id.
-  const { data: intakeRaw } = await supabase
+  const { data: intakeRaw, error: intakeErr } = await supabase
     .from("paciente_intake_avanzado")
     .select("especialidad")
     .eq("organization_id", organizationId)
     .eq("paciente_id", pacienteId);
+  if (intakeErr) {
+    const mapped = mapSupabaseError(intakeErr);
+    return err(mapped.code, mapped.message, intakeErr.message);
+  }
 
   // 5. Conteo de sesiones registradas (metadata; el contenido SOAP NUNCA se
   //    exporta). count exact + head → no trae filas ni PHI.
-  const { count: sesionesCount } = await supabase
+  const { count: sesionesCount, error: sesionesErr } = await supabase
     .from("sesion")
     .select("id", { count: "exact", head: true })
     .eq("organization_id", organizationId)
     .eq("paciente_id", pacienteId);
+  if (sesionesErr) {
+    const mapped = mapSupabaseError(sesionesErr);
+    return err(mapped.code, mapped.message, sesionesErr.message);
+  }
 
   const identidad: PatientExportIdentidad = {
     nombre: tryDecrypt(p.nombre_cifrado, "patient-export.nombre"),

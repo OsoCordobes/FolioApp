@@ -8,20 +8,19 @@
  * verificarse, a QUÉ filas `paciente` se la puede LINKEAR — y con qué confianza.
  *
  * ─── Decisión de arquitectura (plan Fase 3 #3 + endurecimiento anti-impersonación) ─
- *   · Auto-link SÓLO alta confianza, y alta confianza EXIGE DOS identificadores
- *     independientes matcheando la MISMA fila viva de una org:
- *       (a) DNI + teléfono, o
- *       (b) DNI + email, o
- *       (c) teléfono + email.
- *   · Endurecimiento sobre el plan original [fase3-P3-adversarial-auth-review]:
- *     el DNI SOLO ya NO auto-linkea. El DNI argentino es un keyspace denso,
- *     no-secreto y enumerable (familiares, ex-parejas, empleadores, cualquiera
- *     que haya visto el documento lo conocen), y en el portal se tipea como texto
- *     libre SIN prueba de posesión → un match DNI-solo es confianza insuficiente
- *     para otorgar acceso a PHI. Un match DNI-solo va a la cola de claim (aprobada
- *     por el clínico, P9), no auto-linkea. Se conserva el DNI como identificador
- *     FUERTE: combinado con un segundo (teléfono o email) sí alcanza el umbral.
- *   · Todo lo demás (un solo identificador — DNI/teléfono/email solo —, o varios
+ *   · Auto-link SÓLO alta confianza, y alta confianza EXIGE emailMatch (el único
+ *     identificador VERIFICADO — la cuenta lo probó por el magic-link) MÁS un
+ *     segundo identificador matcheando la MISMA fila viva de una org:
+ *       (a) email + DNI, o
+ *       (b) email + teléfono.
+ *   · Endurecimiento [audit-fixes · ALTO-1] sobre [fase3-P3-adversarial-auth-review]:
+ *     ni el DNI ni el teléfono tienen prueba de posesión (se tipean libres en el
+ *     portal) y ambos son no-secretos y conocibles por terceros (familiares,
+ *     ex-parejas, empleadores). Por eso DNI+teléfono (dos factores no-verificados)
+ *     NO alcanza para otorgar acceso a PHI ajena: cae a la cola de claim (aprobada
+ *     por el clínico, P9). Sólo una combinación que incluya el email verificado
+ *     ata la cuenta a esa ficha con confianza suficiente para auto-linkear.
+ *   · Todo lo demás (un solo identificador — DNI/teléfono/email solo —, DNI+teléfono, o varios
  *     candidatos en una org) es AMBIGUO → cola `paciente_claim`. NUNCA se
  *     auto-linkea un ambiguo (gate anti-impersonación por construcción).
  *   · NUNCA se mergean filas `paciente`; el matcher sólo produce decisiones de
@@ -62,11 +61,11 @@ export interface AutoLinkDecision {
   pacienteId: string;
   organizationId: string;
   /**
-   * Por qué fue alta confianza (para el audit). SIEMPRE incluye DOS
-   * identificadores — un match de un solo identificador NUNCA auto-linkea
-   * (ver `highConfidenceReason`): 'dni_telefono' | 'dni_email' | 'telefono_email'.
+   * Por qué fue alta confianza (para el audit). SIEMPRE incluye emailMatch (el
+   * único identificador verificado) + un segundo: 'dni_email' | 'telefono_email'.
+   * DNI+teléfono (dos factores no-verificados) NO auto-linkea [audit-fixes · ALTO-1].
    */
-  reason: "dni_telefono" | "dni_email" | "telefono_email";
+  reason: "dni_email" | "telefono_email";
 }
 
 /** El candidato es ambiguo → se encola un claim para aprobación del clínico. */
@@ -87,21 +86,27 @@ export interface MatchOutcome {
 
 /**
  * ¿Este candidato califica para auto-link de alta confianza?
- * Requiere DOS identificadores independientes en la MISMA fila (nunca uno solo):
- *   · DNI + teléfono, o
- *   · DNI + email, o
- *   · teléfono + email.
- * El DNI SOLO NO alcanza [fase3-P3-adversarial-auth-review]: es no-secreto,
- * enumerable y auto-declarado sin prueba de posesión → un match DNI-solo cae a
- * claim (aprobado por el clínico), no auto-linkea.
+ * Requiere emailMatch (identificador VERIFICADO) + un segundo en la MISMA fila:
+ *   · email + DNI, o
+ *   · email + teléfono.
+ * Sin emailMatch NO hay alta confianza [audit-fixes · ALTO-1]: el DNI y el
+ * teléfono son no-secretos, enumerables y auto-declarados sin prueba de posesión,
+ * así que DNI+teléfono (o cualquiera solo) cae a claim (aprobado por el clínico).
  * (La unicidad — "exactamente una fila de la org" — la resuelve `matchAccount`
  * agrupando por org: si dos filas de la misma org empatan, ninguna es alta
  * confianza y ambas caen a claim.)
  */
 function highConfidenceReason(c: MatchCandidate): AutoLinkDecision["reason"] | null {
-  if (c.dniMatch && c.telefonoMatch) return "dni_telefono";
-  if (c.dniMatch && c.emailMatch) return "dni_email";
-  if (c.telefonoMatch && c.emailMatch) return "telefono_email";
+  // El email es el ÚNICO identificador con PRUEBA DE POSESIÓN: la cuenta lo
+  // verificó por el magic-link (M70/P3). El DNI y el teléfono se tipean como
+  // texto libre en el portal, sin prueba, y ambos son conocibles por terceros
+  // (familiares, ex-parejas, empleadores) — dos identificadores no-verificados
+  // (DNI + teléfono) NO alcanzan para otorgar acceso a PHI ajena
+  // [audit-fixes · ALTO-1]. Alta confianza EXIGE emailMatch + un segundo
+  // identificador que ate la cuenta a ESA fila. Sin emailMatch → claim (P9).
+  if (!c.emailMatch) return null;
+  if (c.dniMatch) return "dni_email";
+  if (c.telefonoMatch) return "telefono_email";
   return null;
 }
 

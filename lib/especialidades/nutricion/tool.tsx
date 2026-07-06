@@ -125,10 +125,17 @@ function parseDraft(value: unknown): NutriDraft {
   if (value === null || typeof value !== "object") return out;
   const v = value as Record<string, unknown>;
 
-  if (typeof v.peso === "number" && Number.isFinite(v.peso) && v.peso >= PESO_KG_MIN && v.peso <= PESO_KG_MAX) {
+  // Parse LAXO [audit-fixes · ALTO-4]: NO se clampea el rango acá. El input está
+  // controlado desde `value` (cada tecla hace emit→onChange→value→parseDraft); si
+  // parseDraft descartara valores fuera de rango, tipear "175" pasaría por "1" y
+  // "17" (< mínimo), que se descartarían y RESETEARÍAN el input en cada render →
+  // el campo sería imposible de tipear dígito a dígito. Se tolera cualquier número
+  // finito mientras se escribe; la validación estricta de rango la aplica el writer
+  // (nutricionToolDataSchema) antes de cifrar. Mismo patrón que cardiología.
+  if (typeof v.peso === "number" && Number.isFinite(v.peso)) {
     out.peso = v.peso;
   }
-  if (typeof v.talla === "number" && Number.isFinite(v.talla) && v.talla >= TALLA_CM_MIN && v.talla <= TALLA_CM_MAX) {
+  if (typeof v.talla === "number" && Number.isFinite(v.talla)) {
     out.talla = v.talla;
   }
 

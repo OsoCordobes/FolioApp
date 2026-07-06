@@ -2,10 +2,10 @@
  * Folio · unit tests del linkage matcher del portal (Fase 3 · P3).
  *
  * Prueba la LÓGICA PURA de `matchAccount` (sin DB, sin crypto): alta confianza
- * (DOS identificadores en la misma fila — DNI+teléfono, DNI+email, o
- * teléfono+email) vs ambiguo (UN solo identificador — incluido DNI solo —, o
- * varios candidatos en una org → claim). El DNI-solo NO auto-linkea
- * [fase3-P3-adversarial-auth-review]: es no-secreto/enumerable/auto-declarado.
+ * (emailMatch VERIFICADO + un segundo — email+DNI o email+teléfono) vs ambiguo
+ * (sin email, un solo identificador, DNI+teléfono, o varios candidatos en una org
+ * → claim). Ni DNI ni teléfono tienen prueba de posesión, así que sin el email
+ * verificado NO se auto-linkea [audit-fixes · ALTO-1 / fase3-P3-adversarial-auth-review].
  * Los booleans por-candidato simulan lo que el orchestrator recomputa por org
  * con los blind indexes salteados.
  */
@@ -29,14 +29,15 @@ function candidate(over: Partial<MatchCandidate> & { pacienteId: string; organiz
 
 // ─── Alta confianza (DOS identificadores) → auto-link ────────────────────────
 
-test("DNI + teléfono en la misma fila (única en la org) → auto-link reason dni_telefono", () => {
+test("DNI + teléfono SIN email (dos factores no-verificados) → claim, NO auto-link [audit-fixes · ALTO-1]", () => {
+  // Ni el DNI ni el teléfono tienen prueba de posesión: dos factores
+  // no-verificados no alcanzan para auto-linkear PHI ajena. Cae a claim (P9).
   const out = matchAccount([
     candidate({ pacienteId: "p1", organizationId: ORG_A, dniMatch: true, telefonoMatch: true }),
   ]);
-  assert.equal(out.autoLinks.length, 1);
-  assert.equal(out.claims.length, 0);
-  assert.equal(out.autoLinks[0].pacienteId, "p1");
-  assert.equal(out.autoLinks[0].reason, "dni_telefono");
+  assert.equal(out.autoLinks.length, 0);
+  assert.equal(out.claims.length, 1);
+  assert.deepEqual(out.claims[0].matched, { dni: true, telefono: true, email: false });
 });
 
 test("DNI + email en la misma fila (única en la org) → auto-link reason dni_email", () => {
@@ -57,12 +58,12 @@ test("teléfono + email en la misma fila (única en la org) → auto-link reason
   assert.equal(out.autoLinks[0].reason, "telefono_email");
 });
 
-test("DNI+teléfono gana a DNI+email en la elección de reason (dni_telefono primero)", () => {
+test("email + DNI + teléfono los tres → auto-link, reason dni_email (DNI antes que teléfono)", () => {
   const out = matchAccount([
     candidate({ pacienteId: "p1", organizationId: ORG_A, dniMatch: true, telefonoMatch: true, emailMatch: true }),
   ]);
   assert.equal(out.autoLinks.length, 1);
-  assert.equal(out.autoLinks[0].reason, "dni_telefono");
+  assert.equal(out.autoLinks[0].reason, "dni_email");
 });
 
 test("auto-link independiente por org (una fila de alta confianza en cada org)", () => {
@@ -112,7 +113,7 @@ test("DOS candidatos en la MISMA org (aunque uno sea alta confianza) → ambos a
   // Anti-impersonación: con ambigüedad intra-org NO arriesgamos linkear la ficha
   // equivocada; decide el clínico (P9).
   const out = matchAccount([
-    candidate({ pacienteId: "p1", organizationId: ORG_A, dniMatch: true, telefonoMatch: true }),
+    candidate({ pacienteId: "p1", organizationId: ORG_A, dniMatch: true, emailMatch: true }),
     candidate({ pacienteId: "p2", organizationId: ORG_A, emailMatch: true }),
   ]);
   assert.equal(out.autoLinks.length, 0);
@@ -129,9 +130,9 @@ test("candidato SIN ninguna coincidencia se descarta (ni link ni claim)", () => 
   assert.equal(out.claims.length, 0);
 });
 
-test("mezcla: org A alta confianza (auto-link) + org B sólo teléfono (claim)", () => {
+test("mezcla: org A alta confianza (email+DNI → auto-link) + org B sólo teléfono (claim)", () => {
   const out = matchAccount([
-    candidate({ pacienteId: "pA", organizationId: ORG_A, dniMatch: true, telefonoMatch: true }),
+    candidate({ pacienteId: "pA", organizationId: ORG_A, dniMatch: true, emailMatch: true }),
     candidate({ pacienteId: "pB", organizationId: ORG_B, telefonoMatch: true }),
   ]);
   assert.equal(out.autoLinks.length, 1);
