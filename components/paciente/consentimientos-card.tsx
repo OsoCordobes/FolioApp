@@ -163,17 +163,31 @@ export function ConsentimientosCard({ pacienteId, pacienteNombre }: Consentimien
       <header className="pc-card-head">
         <span className="fi-eyebrow">Consentimientos</span>
         {items && items.length > 0 ? (
-          <button
-            type="button"
-            className="pc-link"
-            onClick={() => {
-              void abrirModal();
-            }}
-            disabled={abriendoModal}
-            title="Registrar un nuevo consentimiento informado con firma"
-          >
-            {abriendoModal ? "Abriendo…" : "Registrar"}
-          </button>
+          <div className="pc-consent-head-actions">
+            {/* X7 · Imprimir la ficha (con el listado de consentimientos). Los
+                estilos @media print ocultan el chrome y refluyen a A4; el botón
+                mismo lleva `.no-print` para no salir en el papel. La imagen de
+                cada firma se ve/imprime aparte vía "Ver firma" (signed URL). */}
+            <button
+              type="button"
+              className="pc-link no-print"
+              onClick={() => window.print()}
+              title="Imprimir o guardar como PDF esta ficha con el listado de consentimientos"
+            >
+              Imprimir
+            </button>
+            <button
+              type="button"
+              className="pc-link"
+              onClick={() => {
+                void abrirModal();
+              }}
+              disabled={abriendoModal}
+              title="Registrar un nuevo consentimiento informado con firma"
+            >
+              {abriendoModal ? "Abriendo…" : "Registrar"}
+            </button>
+          </div>
         ) : null}
       </header>
 

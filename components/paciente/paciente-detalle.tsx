@@ -710,6 +710,60 @@ function TabDocumentos() {
   );
 }
 
+// ─── X7 · membrete de impresión + botón imprimir ───────────────────────────
+
+/**
+ * Encabezado que SOLO aparece al imprimir (clase `.print-only`, oculta en
+ * pantalla vía @media print). Estampa consultorio · paciente · sección · fecha
+ * para que la hoja impresa sea un documento auto-identificable. No hay PHI de
+ * OTROS pacientes: la ruta /pacientes/[id] renderiza un único paciente.
+ */
+function FichaPrintHeader({
+  organizacionNombre,
+  pacienteNombre,
+  seccion,
+}: {
+  organizacionNombre: string;
+  pacienteNombre: string;
+  seccion: string;
+}) {
+  const hoy = new Intl.DateTimeFormat("es-AR", {
+    timeZone: TZ_AR,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(new Date());
+  return (
+    <header className="fi-print-header print-only" aria-hidden>
+      <div className="fi-print-header-brand">
+        <b>{organizacionNombre || "Folio"}</b>
+        <span className="fi-print-header-meta">Impreso el {hoy}</span>
+      </div>
+      <p className="fi-print-header-doc">
+        Ficha clínica — <b>{pacienteNombre}</b> · {seccion}
+      </p>
+    </header>
+  );
+}
+
+/**
+ * Botón "Imprimir" de la ficha. Dispara el diálogo de impresión del navegador;
+ * los estilos `@media print` (folio.css) ocultan el chrome y refluyen a A4.
+ * `.no-print` para que no aparezca en el propio papel.
+ */
+function ImprimirFichaButton() {
+  return (
+    <button
+      type="button"
+      className="fi-btn fi-btn-ghost no-print"
+      onClick={() => window.print()}
+      title="Imprimir o guardar como PDF la sección visible de la ficha"
+    >
+      <I.Printer size={13} /> Imprimir
+    </button>
+  );
+}
+
 // ─── Header del paciente ──────────────────────────────────────────────────
 
 function PacienteWhatsAppButton({ telefono, nombre }: { telefono: string; nombre: string }) {
@@ -778,6 +832,7 @@ function PacienteHeader() {
         </div>
         <div className="pc-actions">
           <PacienteWhatsAppButton telefono={paciente.tel} nombre={paciente.nombre} />
+          <ImprimirFichaButton />
           <button
             type="button"
             className="fi-btn fi-btn-secondary"
@@ -816,6 +871,8 @@ interface PacienteDetalleProps {
   especialidad: EspecialidadSlug;
   /** Workstream 5 · intake avanzado de la especialidad activa (M60) o null. */
   intakeAvanzado: IntakeAvanzadoFicha | null;
+  /** X7 · nombre del consultorio/clínica para el membrete de impresión. */
+  organizacionNombre: string;
 }
 
 export function PacienteDetalle({
@@ -824,16 +881,19 @@ export function PacienteDetalle({
   cumple,
   especialidad,
   intakeAvanzado,
+  organizacionNombre,
 }: PacienteDetalleProps) {
   return (
-    <PacienteFichaProvider value={{ paciente, plan, cumple, especialidad, intakeAvanzado }}>
+    <PacienteFichaProvider
+      value={{ paciente, plan, cumple, especialidad, intakeAvanzado, organizacionNombre }}
+    >
       <PacienteDetalleInner />
     </PacienteFichaProvider>
   );
 }
 
 function PacienteDetalleInner() {
-  const { plan } = usePacienteFicha();
+  const { plan, paciente, organizacionNombre } = usePacienteFicha();
   const [tab, setTab] = useState<TabId>("plan");
 
   const tabs: [TabId, string, boolean?][] = [
@@ -867,8 +927,18 @@ function PacienteDetalleInner() {
     tabIndex: 0,
   });
 
+  const tabLabel = tabs.find(([id]) => id === tab)?.[1] ?? "Ficha";
+
   return (
-    <div className="fi-content pc-content">
+    <div className="fi-content pc-content" data-printable>
+      {/* X7 · encabezado membretado sólo-impresión. En pantalla está oculto
+          (`.print-only`); en papel identifica consultorio · paciente · fecha
+          para que una hoja suelta no sea PHI anónima. */}
+      <FichaPrintHeader
+        organizacionNombre={organizacionNombre}
+        pacienteNombre={paciente.nombre}
+        seccion={tabLabel}
+      />
       <PacienteHeader />
 
       <nav className="pc-tabs" role="tablist" aria-label="Secciones de la ficha">

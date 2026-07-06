@@ -18248,6 +18248,13 @@ input:focus { outline: none; }
 
 .pc-consent-card { grid-column: 1 / -1; }
 
+/* X7 · agrupador de acciones del header de la card (Imprimir · Registrar). */
+.pc-consent-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+}
+
 .pc-consent-empty {
   display: flex; flex-direction: column; align-items: flex-start; gap: 12px;
 }
@@ -18644,4 +18651,235 @@ input:focus { outline: none; }
  * `--surface-2` para que el layout de carga siga leyéndose. */
 @media (prefers-reduced-motion: reduce) {
   .fi-skeleton { animation: none !important; background-image: none; }
+}
+
+/* X7 · `.print-only` existe en el DOM siempre pero SOLO se ve en papel: en
+ * pantalla queda oculto para no ensuciar la ficha con el membrete. Regla base
+ * (fuera de @media print); el bloque print de abajo lo revela. */
+.print-only { display: none !important; }
+
+/* ═════════════ PRINT · documentos clínicos (PR X7) ═════════════
+ * Estilos @media print para imprimir/guardar-como-PDF documentos clínicos
+ * desde el navegador: la ficha del paciente y los consentimientos. La
+ * arquitectura de impresión es OPT-IN, no opt-out, por una razón de PHI: la
+ * app puede tener otras rutas (agenda, finanzas) con datos de MÚLTIPLES
+ * pacientes en pantalla. Imprimir "lo que sea que esté visible" filtraría PHI
+ * de terceros a un papel suelto. Por eso:
+ *
+ *   1. Por defecto, en print NO se imprime NADA del cuerpo de la app
+ *      (`.fi-main > * { display: none }`). El papel sale en blanco salvo que
+ *      la página se marque explícitamente como imprimible.
+ *   2. Una pantalla imprimible pone `data-printable` en su contenedor raíz
+ *      (`.fi-content[data-printable]`). Hoy sólo la ficha de UN paciente lo
+ *      hace — la ruta /pacientes/[id] renderiza un único paciente, así que no
+ *      hay PHI cruzada estructuralmente posible.
+ *   3. Dentro de lo imprimible, el chrome (sidebar, nav, tabs, botones,
+ *      badges, modales) se oculta; el contenido se refluye a A4 vertical.
+ *   4. Cualquier elemento marcado `.no-print` desaparece; `.print-only`
+ *      aparece SÓLO en papel (encabezados membretados que identifican el
+ *      documento — sin ellos una hoja suelta sería PHI anónima).
+ *
+ * Se fuerzan los tokens claros aunque el usuario tenga dark-mode activo: la
+ * tinta oscura sobre papel es derroche de tóner y un documento legal debe
+ * verse como documento, no como captura de pantalla nocturna.
+ * ─────────────────────────────────────────────────────────── */
+@media print {
+  /* Página A4 con márgenes clínicos (membrete arriba, aire a los lados). */
+  @page {
+    size: A4 portrait;
+    margin: 16mm 14mm 18mm;
+  }
+
+  /* Tokens claros forzados: dark-mode nunca llega al papel. Redefinimos sobre
+   * la raíz (donde `data-theme` vive, en <html>) para ganarle a `[data-theme]`. */
+  :root,
+  html[data-theme="dark"] {
+    --bg:        #FFFFFF;
+    --surface:   #FFFFFF;
+    --surface-2: #FFFFFF;
+    --surface-3: #F4F1EA;
+    --line:      #C9C2AE;
+    --line-soft: #DDD5C0;
+    --ink:       #111111;
+    --ink-2:     #2A271E;
+    --ink-3:     #4A4636;
+    --ink-4:     #6B6553;
+    --accent:    #6E5119;
+    --accent-2:  #5A4214;
+    --accent-soft:   #EFE6CE;
+    --accent-soft-2: #E4D6AE;
+    --green:     #235730;
+    --red:       #7E2E21;
+    --amber:     #8F6A22;
+  }
+
+  html,
+  body,
+  html[data-theme="dark"],
+  html[data-theme="dark"] body {
+    background: #FFFFFF !important;
+    background-color: #FFFFFF !important;
+    color: #111111 !important;
+    /* Fuerza la impresión de fondos/colores de acento (membrete, pills). */
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* El shell deja de ser grilla: una sola columna a ancho de página. */
+  .fi-app {
+    display: block !important;
+    min-height: 0 !important;
+  }
+
+  /* Chrome que nunca va al papel. El sidebar es sticky/100vh: fuera. Banners
+   * de verificación, skeletons de carga y modales tampoco. */
+  .fi-sidebar,
+  .fi-nav,
+  .pc-tabs,
+  .fi-email-verify-banner,
+  .fi-skeleton,
+  .fi-skeleton-list,
+  .a11y-modal-root,
+  .fi-ficha-backdrop,
+  .no-print {
+    display: none !important;
+  }
+
+  .fi-main {
+    display: block !important;
+  }
+
+  /* Por defecto, el cuerpo de la app NO se imprime (evita fuga de PHI de otras
+   * rutas). Sólo el contenedor marcado imprimible reaparece. */
+  .fi-main > * {
+    display: none !important;
+  }
+  .fi-main > .fi-content[data-printable],
+  .fi-main > [data-printable] {
+    display: block !important;
+  }
+
+  /* El contenedor imprimible ocupa toda la caja de página, sin max-width ni
+   * padding de pantalla (los márgenes los pone @page). */
+  .fi-content[data-printable],
+  [data-printable] {
+    max-width: none !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Dentro de lo imprimible: fuera todo control interactivo. Los botones de
+   * acción, los "Ver firma"/"Revocar"/"Editar", los badges de guardado y los
+   * indicadores de foco no tienen sentido en papel. */
+  [data-printable] .fi-btn,
+  [data-printable] .pc-link,
+  [data-printable] .pc-actions,
+  [data-printable] .pc-back,
+  [data-printable] .pc-card-head .pc-link,
+  [data-printable] .fm-save,
+  [data-printable] .pc-consent-row-actions,
+  [data-printable] .pc-consent-revoke-box,
+  [data-printable] button,
+  [data-printable] .no-print {
+    display: none !important;
+  }
+
+  /* Encabezado membretado sólo-papel: identifica el documento (org · paciente ·
+   * fecha) para que una hoja suelta no sea PHI anónima. La regla base lo oculta
+   * en pantalla (`.print-only { display:none !important }`); acá lo revelamos
+   * dentro del contenedor imprimible con mayor especificidad. */
+  [data-printable] .print-only,
+  .print-only.fi-print-header {
+    display: block !important;
+  }
+  .fi-print-header {
+    margin: 0 0 14px;
+    padding: 0 0 12px;
+    border-bottom: 1.5px solid var(--accent);
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+  .fi-print-header-brand {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .fi-print-header-brand b {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+  }
+  .fi-print-header-meta {
+    font-size: 10.5px;
+    color: var(--ink-3);
+    font-variant-numeric: tabular-nums;
+  }
+  .fi-print-header-doc {
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--ink-2);
+  }
+  .fi-print-header-doc b { color: var(--ink); }
+
+  /* Tarjetas como bloques de papel: borde fino, sin sombra ni radios grandes,
+   * y sin cortarlas a mitad de página cuando se puede evitar. */
+  [data-printable] .pc-card,
+  [data-printable] .pc-spine-wrap {
+    border: 1px solid var(--line) !important;
+    border-radius: 4px !important;
+    box-shadow: none !important;
+    background: #FFFFFF !important;
+    padding: 14px 16px !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Reflow de grillas de la ficha a una sola columna (el papel es angosto). */
+  [data-printable] .pc-info-grid,
+  [data-printable] .pc-plan-grid,
+  [data-printable] .pc-bottom-grid {
+    display: block !important;
+  }
+  [data-printable] .pc-info-grid > *,
+  [data-printable] .pc-bottom-grid > * {
+    margin-bottom: 12px;
+  }
+
+  /* Los textareas del SOAP se imprimen como texto plano, no como campos. */
+  [data-printable] textarea,
+  [data-printable] .pc-soap-textarea {
+    border: none !important;
+    padding: 0 !important;
+    resize: none !important;
+    background: transparent !important;
+    color: var(--ink) !important;
+    font-family: inherit;
+    white-space: pre-wrap;
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  /* Tipografía base de documento: negro nítido, sin arrastrar títulos solos. */
+  [data-printable] h1,
+  [data-printable] h2,
+  [data-printable] h3,
+  [data-printable] .fi-eyebrow,
+  [data-printable] b {
+    color: var(--ink) !important;
+  }
+  [data-printable] h1,
+  [data-printable] h2,
+  [data-printable] h3 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  /* Los links imprimibles no muestran su URL (los internos no sirven en papel). */
+  [data-printable] a[href] {
+    color: var(--ink) !important;
+    text-decoration: none !important;
+  }
 }
