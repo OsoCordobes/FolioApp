@@ -29,6 +29,7 @@
 import { useId, useMemo, useState, type CSSProperties } from "react";
 
 import * as I from "@/components/icons";
+import { SerieEvolucion, type MetricaSerie, type PuntoSerie } from "@/lib/instrumentos/components";
 import type { SpecialtyToolProps } from "@/lib/especialidades/types";
 import {
   AFECTO_LABELS,
@@ -164,99 +165,24 @@ function limpiarDraft(next: PsicologiaDraft): PsicologiaDraft | null {
   return out.phq9 || out.gad7 || out.registro || out.objetivos ? out : null;
 }
 
-// ─── Sparkline longitudinal PHQ-9 / GAD-7 ───────────────────────────────────
+// ─── Serie longitudinal PHQ-9 / GAD-7 ───────────────────────────────────────
+//
+// C4: el sparkline propio (PsicoSparkline) se reemplaza por <SerieEvolucion> de
+// la biblioteca (C3), que unifica los sparklines duplicados de cardio/psico.
+// Solo hay que aportar las métricas (colores/labels) y adaptar la serie de
+// psico ({ fecha, phq9, gad7 }) al punto genérico ({ fecha, valores: {…} }).
 
-const METRICAS_SERIE = [
-  { key: "phq9" as const, label: "PHQ-9", color: "var(--accent)" },
-  { key: "gad7" as const, label: "GAD-7", color: "var(--slate)" },
+const METRICAS_SERIE: MetricaSerie[] = [
+  { key: "phq9", label: "PHQ-9", color: "var(--accent)" },
+  { key: "gad7", label: "GAD-7", color: "var(--slate)" },
 ];
 
-function PsicoSparkline({ series }: { series: PsicoSeriesPoint[] }) {
-  const W = 320;
-  const H = 110;
-  const PX = 8;
-  const PY = 12;
-
-  const valores = series
-    .flatMap((p) => [p.phq9, p.gad7])
-    .filter((n): n is number => n !== null);
-
-  if (series.length === 0 || valores.length === 0) {
-    return (
-      <p className="pc-card-text muted" style={{ fontSize: 12.5 }}>
-        Sin escalas completas en el historial todavía. La curva aparece al
-        guardar sesiones con PHQ-9 o GAD-7 completos.
-      </p>
-    );
-  }
-
-  // Piso 0 (los puntajes arrancan ahí); techo con margen para que no pegue.
-  const min = 0;
-  const max = Math.max(...valores, 10) + 2;
-  const x = (i: number) =>
-    series.length === 1 ? W / 2 : PX + (i * (W - 2 * PX)) / (series.length - 1);
-  const y = (v: number) => H - PY - ((v - min) * (H - 2 * PY)) / (max - min);
-
-  const metricas = METRICAS_SERIE.map((m) => ({
-    ...m,
-    puntos: series
-      .map((p, i) => ({ i, v: p[m.key] }))
-      .filter((p): p is { i: number; v: number } => p.v !== null),
-  })).filter((m) => m.puntos.length > 0);
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        preserveAspectRatio="xMidYMid meet"
-        role="img"
-        aria-label={`Evolución de puntajes PHQ-9 y GAD-7 en ${series.length} ${series.length === 1 ? "sesión" : "sesiones"}`}
-        style={{ width: "100%", display: "block" }}
-      >
-        <line
-          x1={PX} y1={H - PY} x2={W - PX} y2={H - PY}
-          stroke="var(--line-soft)" strokeWidth="1"
-        />
-        {metricas.map((m) => (
-          <g key={m.key}>
-            {m.puntos.length > 1 ? (
-              <polyline
-                points={m.puntos.map((p) => `${x(p.i)},${y(p.v)}`).join(" ")}
-                fill="none"
-                stroke={m.color}
-                strokeWidth="1.5"
-                strokeLinejoin="round"
-                strokeLinecap="round"
-              />
-            ) : null}
-            {m.puntos.map((p, idx) => (
-              <circle
-                key={p.i}
-                cx={x(p.i)}
-                cy={y(p.v)}
-                r={idx === m.puntos.length - 1 ? 3 : 2}
-                fill={m.color}
-              />
-            ))}
-          </g>
-        ))}
-      </svg>
-      <div className="pc-spine-legend" style={{ marginTop: 0, justifyContent: "space-between" }}>
-        <span style={{ display: "inline-flex", gap: 12 }}>
-          {metricas.map((m) => (
-            <span key={m.key} className="pc-legend-item">
-              <span className="pc-legend-swatch" style={{ background: m.color }} />
-              <span>{m.label}</span>
-            </span>
-          ))}
-        </span>
-        <span className="fm-mono muted" style={{ fontSize: 10 }}>
-          {fmtFecha(series[0].fecha)}
-          {series.length > 1 ? ` → ${fmtFecha(series[series.length - 1].fecha)}` : ""}
-        </span>
-      </div>
-    </div>
-  );
+/** Adapta la serie tipada de psico al punto genérico de <SerieEvolucion>. */
+function aPuntosSerie(series: PsicoSeriesPoint[]): PuntoSerie[] {
+  return series.map((p) => ({
+    fecha: p.fecha,
+    valores: { phq9: p.phq9, gad7: p.gad7 },
+  }));
 }
 
 // ─── Bloque de escala (PHQ-9 / GAD-7) ───────────────────────────────────────
@@ -525,7 +451,13 @@ export function PsicologiaTool({ value, onChange, readOnly, historial }: Special
 
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <span className="fi-eyebrow">Evolución de puntajes</span>
-          <PsicoSparkline series={series} />
+          <SerieEvolucion
+            serie={aPuntosSerie(series)}
+            metricas={METRICAS_SERIE}
+            pisoCero
+            ariaLabel={`Evolución de puntajes PHQ-9 y GAD-7 en ${series.length} ${series.length === 1 ? "sesión" : "sesiones"}`}
+            vacio="Sin escalas completas en el historial todavía. La curva aparece al guardar sesiones con PHQ-9 o GAD-7 completos."
+          />
         </div>
       </section>
 

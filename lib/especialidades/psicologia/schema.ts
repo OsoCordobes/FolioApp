@@ -5,10 +5,13 @@
  *   - Schema zod versionado del toolData (`{ v: 1, phq9?, gad7?, registro?,
  *     objetivos? }`) — tool_id `psicologia.escalas.v1`, cifrado app-side en
  *     sesion.tool_data_cifrado.
- *   - Ítems es-AR de PHQ-9 y GAD-7 (traducción estándar adaptada al voseo) +
- *     `scorePhq9` / `scoreGad7` — funciones puras que puntúan SOLO escalas
- *     completas, con las bandas de severidad estándar de cada instrumento.
- *     Son herramientas de tamizaje: el puntaje NO es diagnóstico.
+ *   - Ítems es-AR de PHQ-9 y GAD-7 + `scorePhq9` / `scoreGad7` — desde C4
+ *     TOMADOS DE LA BIBLIOTECA `lib/instrumentos` (defs `phq9.v1`/`gad7.v1`):
+ *     los enunciados, la consigna, las opciones y los cortes de banda tienen
+ *     una única fuente de verdad allí. Este módulo re-exporta esas constantes y
+ *     adapta el score de la biblioteca (`ScoreInstrumento`) a la forma corta
+ *     que consumen el resumen y las series (`{ total, banda, etiqueta }`).
+ *     Siguen siendo tamizaje: el puntaje NO es diagnóstico.
  *   - `deriveScoreSeries(historial)` — serie cronológica de puntajes para la
  *     curva longitudinal del Tool.
  *   - `resumenSesionPsicologia(toolData)` — string de resumen para
@@ -18,53 +21,50 @@
  * de estado mental o solo objetivos — todos los campos son opcionales salvo
  * `v`. Server-safe: lo importan lib/db/* (writer valida antes de cifrar) y el
  * Tool client. PHI: este módulo nunca loguea contenido clínico.
+ *
+ * Estabilidad (C4): el tool_id `psicologia.escalas.v1` y el schema NO cambian
+ * — no hay migración de datos. Solo cambia DE DÓNDE salen las definiciones de
+ * escala (biblioteca en vez de literales duplicados acá).
  */
 
 import { z } from "zod";
 
+import { gad7 as gad7Def, phq9 as phq9Def } from "@/lib/instrumentos";
+import { PHQ9_ITEM_IDEACION as PHQ9_ITEM_IDEACION_LIB } from "@/lib/instrumentos/scoring/phq9";
 import type { ToolHistorialEntry } from "@/lib/especialidades/types";
 
-// ─── Escalas: ítems es-AR y opciones de frecuencia ──────────────────────────
+// ─── Escalas: ítems es-AR y opciones de frecuencia (desde lib/instrumentos) ──
+//
+// Fuente de verdad única: las defs `phq9.v1` / `gad7.v1` de la biblioteca. Este
+// módulo solo las re-exporta con los nombres históricos de psicología para no
+// tocar el Tool ni los tests que ya los importan.
 
-export const PHQ9_LEN = 9;
-export const GAD7_LEN = 7;
+export const PHQ9_LEN = phq9Def.items.length;
+export const GAD7_LEN = gad7Def.items.length;
 
-/** Consigna compartida por ambas escalas (encabezado del bloque en la UI). */
+/**
+ * Consigna compartida por ambas escalas (encabezado del bloque en la UI). Las
+ * dos defs comparten la misma consigna; se toma la de PHQ-9.
+ */
 export const CONSIGNA_ESCALAS =
+  phq9Def.consigna ??
   "En las últimas 2 semanas, ¿con qué frecuencia te molestó cada uno de estos problemas?";
 
-/** Opciones 0–3 (mismas para PHQ-9 y GAD-7). El índice ES el puntaje. */
-export const OPCIONES_FRECUENCIA = [
-  "Para nada",
-  "Varios días",
-  "Más de la mitad de los días",
-  "Casi todos los días",
-] as const;
+/**
+ * Opciones 0–3 (mismas para PHQ-9 y GAD-7). El índice ES el puntaje (Likert
+ * clásico: `valor` coincide con la posición). Se derivan de las opciones de la
+ * def de PHQ-9.
+ */
+export const OPCIONES_FRECUENCIA: readonly string[] = (phq9Def.opciones ?? []).map(
+  (o) => o.label,
+);
 
-export const PHQ9_ITEMS = [
-  "Poco interés o placer en hacer las cosas",
-  "Sentirte decaído/a, deprimido/a o sin esperanza",
-  "Problemas para dormirte, para seguir durmiendo o dormir demasiado",
-  "Sentirte cansado/a o con poca energía",
-  "Poco apetito o comer en exceso",
-  "Sentirte mal con vos mismo/a — o sentir que sos un fracaso o que les fallaste a tu familia o a vos mismo/a",
-  "Dificultad para concentrarte en cosas como leer el diario o mirar televisión",
-  "Moverte o hablar tan lento que otras personas lo pudieron haber notado — o lo contrario: estar tan inquieto/a o agitado/a que te moviste mucho más de lo habitual",
-  "Pensar que estarías mejor muerto/a o en lastimarte de alguna manera",
-] as const;
+export const PHQ9_ITEMS: readonly string[] = phq9Def.items.map((i) => i.enunciado);
 
-export const GAD7_ITEMS = [
-  "Sentirte nervioso/a, ansioso/a o muy alterado/a",
-  "No poder dejar de preocuparte o no poder controlar la preocupación",
-  "Preocuparte demasiado por diferentes cosas",
-  "Dificultad para relajarte",
-  "Estar tan inquieto/a que te cuesta quedarte quieto/a",
-  "Enojarte o irritarte con facilidad",
-  "Sentir miedo, como si algo terrible fuera a pasar",
-] as const;
+export const GAD7_ITEMS: readonly string[] = gad7Def.items.map((i) => i.enunciado);
 
 /** Índice (0-based) del ítem 9 del PHQ-9 (ideación) — aviso clínico si > 0. */
-export const PHQ9_ITEM_IDEACION = 8;
+export const PHQ9_ITEM_IDEACION = PHQ9_ITEM_IDEACION_LIB;
 
 // ─── Registro estructurado: estado mental (selects cortos) ──────────────────
 
@@ -182,18 +182,25 @@ export type PsicologiaToolData = z.infer<typeof psicologiaToolDataSchema>;
 export type RegistroSesion = z.infer<typeof registroSchema>;
 export type Objetivo = z.infer<typeof objetivoSchema>;
 
-// ─── Scoring (puro, solo escalas completas) ─────────────────────────────────
+// ─── Scoring (delega en lib/instrumentos, adapta a la forma corta de psico) ──
+//
+// Desde C4 el scoring canónico de PHQ-9/GAD-7 vive en las defs de la biblioteca
+// (`phq9.v1` / `gad7.v1`): mismos cortes de banda, misma flag de ideación. Acá
+// solo se ADAPTA su `ScoreInstrumento` ({ total, banda, interpretacion, flags? })
+// a la forma corta que el resumen y las series de psicología ya consumen
+// ({ total, banda, etiqueta }). Sin duplicar cutoffs: una sola fuente de verdad.
 
 export type BandaPhq9 = "minima" | "leve" | "moderada" | "moderadamente_severa" | "severa";
 export type BandaGad7 = "minima" | "leve" | "moderada" | "severa";
 
-export const BANDA_LABELS: Record<BandaPhq9, string> = {
-  minima: "mínima",
-  leve: "leve",
-  moderada: "moderada",
-  moderadamente_severa: "moderadamente severa",
-  severa: "severa",
-};
+/**
+ * Labels es-AR de las bandas. Se derivan de la def de PHQ-9 (que incluye las 4
+ * bandas de GAD-7 más "moderadamente severa"), en minúscula para el resumen
+ * ("PHQ-9 12 (moderada)"). Es la única banda extra respecto de GAD-7.
+ */
+export const BANDA_LABELS: Record<BandaPhq9, string> = Object.fromEntries(
+  phq9Def.bandas.map((b) => [b.id, b.label.toLowerCase()]),
+) as Record<BandaPhq9, string>;
 
 export interface ScorePhq9 {
   total: number;
@@ -208,45 +215,30 @@ export interface ScoreGad7 {
   etiqueta: string;
 }
 
-/** Suma laxa: null salvo array de longitud exacta con TODOS enteros 0–3. */
-function totalEscala(items: unknown, len: number): number | null {
-  if (!Array.isArray(items) || items.length !== len) return null;
-  let total = 0;
-  for (const item of items) {
-    if (typeof item !== "number" || !Number.isInteger(item) || item < 0 || item > 3) return null;
-    total += item;
-  }
-  return total;
-}
-
 /**
- * Puntaje PHQ-9 (0–27) con bandas estándar: 0–4 mínima, 5–9 leve, 10–14
- * moderada, 15–19 moderadamente severa, 20–27 severa. Acepta input
- * desconocido (historial puede traer shapes ajenos): devuelve null si la
- * escala no está completa o no es válida. Tamizaje, NO diagnóstico.
+ * Puntaje PHQ-9 (0–27) con bandas estándar (0–4 mínima, 5–9 leve, 10–14
+ * moderada, 15–19 moderadamente severa, 20–27 severa). Delega en la def de la
+ * biblioteca: acepta input desconocido (el historial trae shapes ajenos) y
+ * devuelve null si la escala no está completa o no es válida. Tamizaje, NO
+ * diagnóstico.
  */
 export function scorePhq9(items: unknown): ScorePhq9 | null {
-  const total = totalEscala(items, PHQ9_LEN);
-  if (total === null) return null;
-  const banda: BandaPhq9 =
-    total <= 4 ? "minima"
-    : total <= 9 ? "leve"
-    : total <= 14 ? "moderada"
-    : total <= 19 ? "moderadamente_severa"
-    : "severa";
-  return { total, banda, etiqueta: BANDA_LABELS[banda] };
+  const r = phq9Def.score(items);
+  if (r === null) return null;
+  const banda = r.banda as BandaPhq9;
+  return { total: r.total, banda, etiqueta: BANDA_LABELS[banda] };
 }
 
 /**
- * Puntaje GAD-7 (0–21) con bandas estándar: 0–4 mínima, 5–9 leve, 10–14
- * moderada, 15–21 severa. Mismo contrato laxo que scorePhq9.
+ * Puntaje GAD-7 (0–21) con bandas estándar (0–4 mínima, 5–9 leve, 10–14
+ * moderada, 15–21 severa). Mismo contrato laxo que scorePhq9 (delega en la def
+ * de la biblioteca).
  */
 export function scoreGad7(items: unknown): ScoreGad7 | null {
-  const total = totalEscala(items, GAD7_LEN);
-  if (total === null) return null;
-  const banda: BandaGad7 =
-    total <= 4 ? "minima" : total <= 9 ? "leve" : total <= 14 ? "moderada" : "severa";
-  return { total, banda, etiqueta: BANDA_LABELS[banda] };
+  const r = gad7Def.score(items);
+  if (r === null) return null;
+  const banda = r.banda as BandaGad7;
+  return { total: r.total, banda, etiqueta: BANDA_LABELS[banda] };
 }
 
 // ─── Extracciones laxas (historial puede traer shapes viejos/ajenos) ────────
