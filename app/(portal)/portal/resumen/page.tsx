@@ -53,10 +53,35 @@ export default async function PortalResumenPage() {
         )}
       </section>
 
-      <p style={{ marginTop: 28, color: "var(--ink-3)", fontSize: "var(--fs-xs, .78rem)", lineHeight: 1.5 }}>
+      <section
+        style={{
+          marginTop: 28,
+          paddingTop: 20,
+          borderTop: "1px solid var(--surface-border, rgba(0,0,0,.08))",
+        }}
+      >
+        <h2 style={{ fontSize: "var(--fs-lg)", margin: "0 0 6px" }}>Tus datos</h2>
+        <p style={{ margin: "0 0 12px", color: "var(--ink-2)", fontSize: "var(--fs-sm)", lineHeight: 1.5 }}>
+          Descargá una copia de tus datos personales (identidad, turnos y
+          consentimientos) de todos los consultorios vinculados a tu cuenta, en un
+          archivo portable (JSON). Es tu derecho de acceso bajo la Ley 25.326.
+        </p>
+        {/* Descarga directa: la ruta valida la sesión de portal y responde
+            attachment. download hint para nombrar el archivo del lado cliente. */}
+        <a
+          href="/api/portal/export"
+          className="fi-btn fi-btn-secondary"
+          download
+          rel="nofollow"
+        >
+          Descargar mis datos
+        </a>
+      </section>
+
+      <p style={{ marginTop: 24, color: "var(--ink-3)", fontSize: "var(--fs-xs, .78rem)", lineHeight: 1.5 }}>
         La historia clínica narrativa (evolución/SOAP) la conserva tu profesional
-        tratante y no se muestra acá. Si necesitás una copia de tus datos, pedila
-        desde tu profesional o exportá tu información desde el portal.
+        tratante y no se muestra acá ni se incluye en la descarga. Si necesitás una
+        copia certificada, pedila a tu profesional tratante.
       </p>
     </main>
   );
