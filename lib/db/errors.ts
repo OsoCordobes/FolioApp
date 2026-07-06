@@ -47,25 +47,48 @@ export function isUniqueViolation(
 /**
  * Mapea un error de Supabase/PostgREST a un FolioError. Detecta códigos
  * conocidos (Postgres SQLSTATE) y los traduce a códigos del dominio.
+ *
+ * Regla de precedencia: **SQLSTATE (`error.code`) primero, substring del
+ * mensaje sólo como fallback** para drivers/versiones que no propagan `code`
+ * (M5, AUDIT.md). El código es lo único estable entre versiones e idiomas de
+ * Postgres; el texto del mensaje puede cambiar y no debe ser la vía principal.
  */
 export function mapSupabaseError(error: { message: string; code?: string; details?: string }): FolioError {
   const msg = error.message ?? "";
   const code = error.code ?? "";
 
-  // RLS primero: PostgREST reporta las violaciones de RLS con SQLSTATE 42501
-  // (insufficient_privilege) — si chequeáramos 42501 antes, un problema de
-  // permisos se disfrazaría de sesión vencida ("Volvé a iniciar sesión").
-  if (msg.includes("violates row-level security")) {
+  // ─── Permisos: RLS / insufficient_privilege (SQLSTATE 42501) ──────────────
+  // PostgREST reporta violaciones de RLS y de GRANT con 42501
+  // (insufficient_privilege). Es un problema de PERMISO, no de sesión: mapea a
+  // `forbidden`. OJO: antes esta rama vivía en el branch JWT (`code === "42501"
+  // ⇒ auth_required`), lo que disfrazaba de "sesión vencida" cualquier 42501
+  // que NO dijera "violates row-level security" (ej. la policy M51 que deniega
+  // invitar equipo cuando la org no es CLINICA). Ahora el SQLSTATE manda; el
+  // substring queda de fallback para drivers que dropean `code`.
+  if (code === "42501" || msg.includes("violates row-level security")) {
     return { code: "forbidden", message: "No tenés permiso para esa acción.", detail: msg };
   }
-  if (msg.includes("JWT") || code === "42501") {
+  // ─── Auth: JWT vencido / no autenticado ───────────────────────────────────
+  // PostgREST usa PGRST301 (JWT expirado/inválido) y PGRST302 (no autenticado)
+  // para fallas de credenciales. `code` primero; el substring "JWT" queda de
+  // fallback. Ya NO se incluye 42501 acá (ver rama de permisos arriba).
+  if (code === "PGRST301" || code === "PGRST302" || msg.includes("JWT")) {
     return { code: "auth_required", message: "Volvé a iniciar sesión.", detail: msg };
   }
-  if (msg.includes("Sesión bloqueada")) {
-    return { code: "locked", message: "La sesión está bloqueada. Usá una enmienda para corregir.", detail: msg };
-  }
-  if (msg.includes("Invalid turno transition")) {
-    return { code: "transition_invalid", message: "Esa transición no está permitida.", detail: msg };
+  // ─── Excepciones de dominio levantadas por triggers (SQLSTATE P0001) ───────
+  // `RAISE EXCEPTION` sin `USING ERRCODE` cae en P0001 (raise_exception), que es
+  // COMPARTIDO por todas las excepciones custom — no discrimina por sí solo.
+  // Por eso, dentro de P0001, el substring del mensaje es el único discriminador
+  // confiable (sesión lockeada vs transición inválida). Cuando el driver dropea
+  // `code`, el substring igual matchea (fallback). El guard de P0001 evita que
+  // un mensaje ajeno que casualmente contenga estas frases se malinterprete.
+  if (code === "P0001" || code === "") {
+    if (msg.includes("Sesión bloqueada")) {
+      return { code: "locked", message: "La sesión está bloqueada. Usá una enmienda para corregir.", detail: msg };
+    }
+    if (msg.includes("Invalid turno transition")) {
+      return { code: "transition_invalid", message: "Esa transición no está permitida.", detail: msg };
+    }
   }
   if (code === "23505") {
     // M30: violaciones específicas de partial UNIQUE de paciente.

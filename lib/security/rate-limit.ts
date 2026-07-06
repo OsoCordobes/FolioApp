@@ -60,6 +60,19 @@ async function upstashCommand(args: (string | number)[]): Promise<unknown> {
 
 const isProd = () => process.env.NODE_ENV === "production";
 
+/**
+ * TRUE si ambas envs de Upstash (REST URL + token) están presentes, o sea si el
+ * rate limiting está efectivamente provisionado. Fuente de verdad única para
+ * `upstashCommand` (que tira `upstash_not_configured` si falta alguna) y para
+ * el health check (`/api/health`), que assert-ea esto en producción. Sin leak
+ * de valores: sólo booleano.
+ */
+export function isUpstashConfigured(): boolean {
+  return Boolean(
+    process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN,
+  );
+}
+
 let warnedMissingEnvs = false;
 
 /** Solo para tests: resetea el estado de log-once. */
