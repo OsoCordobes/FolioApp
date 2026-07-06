@@ -91,12 +91,32 @@ test("resumenSesion fallbacks: shapes desconocidos degradan al copy genérico", 
     ESPECIALIDADES_META.kinesiologia.resumenSesion({ v: 1, motivo: "Cervicalgia" }),
     "Motivo registrado",
   );
+  // N2 · nutrición: shapes desconocidos degradan al copy genérico; un payload v1
+  // real resume peso + IMC derivado + cintura. El IMC se deriva de peso+talla de
+  // LA MISMA sesión (72 kg / 1.72 m² ≈ 24.3).
+  assert.equal(ESPECIALIDADES_META.nutricion.resumenSesion({ cualquier: "cosa" }), "Sesión registrada");
+  assert.equal(ESPECIALIDADES_META.nutricion.resumenSesion(null), "Sesión registrada");
+  assert.equal(
+    ESPECIALIDADES_META.nutricion.resumenSesion({
+      v: 1,
+      peso: 72,
+      talla: 172,
+      circunferencias: [{ sitio: "cintura", cm: 84 }],
+    }),
+    "72 kg · IMC 24.3 · Cintura 84 cm",
+  );
+  // Sin talla en la sesión no hay IMC en el resumen (es por-sesión); el plan solo
+  // aporta un flag "Plan actualizado".
+  assert.equal(
+    ESPECIALIDADES_META.nutricion.resumenSesion({ v: 1, peso: 80, planAlimentario: "Dieta 1800 kcal" }),
+    "80 kg · Plan actualizado",
+  );
 });
 
 test("slugs y toolIds: registry consistente (Workstream 6 · write id v2)", () => {
   assert.deepEqual(
     [...ESPECIALIDAD_SLUGS],
-    ["quiropraxia", "cardiologia", "psicologia", "kinesiologia"],
+    ["quiropraxia", "cardiologia", "psicologia", "kinesiologia", "nutricion"],
   );
   // El id de ESCRITURA de quiropraxia es v2; v1 se sigue LEYENDO via toolIds.
   assert.equal(ESPECIALIDADES_META.quiropraxia.toolId, "quiropraxia.ficha.v2");
@@ -122,6 +142,12 @@ test("slugs y toolIds: registry consistente (Workstream 6 · write id v2)", () =
   assert.deepEqual(
     [...ESPECIALIDADES_META.kinesiologia.toolIds],
     ["kinesiologia.ficha.v1"],
+  );
+  // N2 · nutrición escribe v1 (única versión por ahora).
+  assert.equal(ESPECIALIDADES_META.nutricion.toolId, "nutricion.ficha.v1");
+  assert.deepEqual(
+    [...ESPECIALIDADES_META.nutricion.toolIds],
+    ["nutricion.ficha.v1"],
   );
 });
 
@@ -182,6 +208,8 @@ test("getEspecialidadMetaByToolId: resuelve por MEMBRESÍA (v1 + v2), null para 
   assert.equal(getEspecialidadMetaByToolId("psicologia.escalas.v1")?.slug, "psicologia");
   // N1 · el id v1 de kinesiología resuelve a kinesiología.
   assert.equal(getEspecialidadMetaByToolId("kinesiologia.ficha.v1")?.slug, "kinesiologia");
+  // N2 · el id v1 de nutrición resuelve a nutrición.
+  assert.equal(getEspecialidadMetaByToolId("nutricion.ficha.v1")?.slug, "nutricion");
   // Los toolIds placeholder pre-Fase D ya no existen en el registry.
   assert.equal(getEspecialidadMetaByToolId("cardiologia.placeholder"), null);
   assert.equal(getEspecialidadMetaByToolId("psicologia.placeholder"), null);
@@ -259,6 +287,21 @@ const PAYLOADS_VALIDOS = {
     odi: [0, 1, 0, 1, 1, 0, 1, 0, 0, 1],
     borg: 13,
   },
+  nutricion: {
+    // N2 · el schema del registry es v1 (antropometría + circunferencias +
+    // pliegues + plan alimentario + objetivos; IMC derivado, no persistido).
+    v: 1,
+    peso: 78,
+    talla: 172,
+    circunferencias: [
+      { sitio: "cintura", cm: 88 },
+      { sitio: "cadera", cm: 102 },
+    ],
+    pliegues: [{ sitio: "tricipital", mm: 14 }],
+    planAlimentario: "Plan hipocalórico 1800 kcal, 4 comidas.",
+    observaciones: "Buena adherencia al plan anterior.",
+    objetivos: [{ texto: "Bajar 4 kg en 3 meses", estado: "en_curso" }],
+  },
 } as const;
 
 test("cross-tool: cada payload RECHAZA contra los schemas de las otras tres especialidades (12 direcciones)", () => {
@@ -295,6 +338,10 @@ test("cross-tool: el rechazo es por .strict(), no por casualidad — sin claves 
   assert.equal(ESPECIALIDADES_META.kinesiologia.schema.safeParse({ v: 1 }).success, true);
   assert.equal(ESPECIALIDADES_META.kinesiologia.schema.safeParse({ v: 2 }).success, false);
   assert.equal(ESPECIALIDADES_META.kinesiologia.schema.safeParse({ v: 3 }).success, false);
+  // N2 · nutrición escribe v1: {v:1} pelado válido; {v:2}/{v:3} rechazan.
+  assert.equal(ESPECIALIDADES_META.nutricion.schema.safeParse({ v: 1 }).success, true);
+  assert.equal(ESPECIALIDADES_META.nutricion.schema.safeParse({ v: 2 }).success, false);
+  assert.equal(ESPECIALIDADES_META.nutricion.schema.safeParse({ v: 3 }).success, false);
 });
 
 test("re-hidratación: lo que el writer persistió (schema.parse(...).data) re-parsea idéntico con .strict()", () => {
@@ -353,6 +400,21 @@ test("schemas: las cuatro especialidades validan estricto (v literal, shape prop
   );
   assert.equal(
     ESPECIALIDADES_META.kinesiologia.schema.safeParse({ v: 1, dolorEva: 20 }).success,
+    false,
+  );
+  // N2 · nutrición escribe v1: {v:1} pelado válido; clave ajena rechaza; peso/
+  // circunferencia fuera de rango plausible rechaza.
+  assert.equal(ESPECIALIDADES_META.nutricion.schema.safeParse({ v: 1 }).success, true);
+  assert.equal(ESPECIALIDADES_META.nutricion.schema.safeParse({ v: 1, x: 1 }).success, false);
+  assert.equal(
+    ESPECIALIDADES_META.nutricion.schema.safeParse({ v: 1, peso: 9000 }).success,
+    false,
+  );
+  assert.equal(
+    ESPECIALIDADES_META.nutricion.schema.safeParse({
+      v: 1,
+      circunferencias: [{ sitio: "muñeca", cm: 20 }],
+    }).success,
     false,
   );
 });

@@ -27,6 +27,7 @@ import { QuiropraxiaTool } from "@/lib/especialidades/quiropraxia/tool";
 import { CardiologiaTool } from "@/lib/especialidades/cardiologia/tool";
 import { PsicologiaTool } from "@/lib/especialidades/psicologia/tool";
 import { KinesiologiaTool } from "@/lib/especialidades/kinesiologia/tool";
+import { NutricionTool } from "@/lib/especialidades/nutricion/tool";
 
 export interface EspecialidadDef extends EspecialidadMeta {
   /** Herramienta clínica del slot (tab Plan de la ficha del paciente). */
@@ -55,6 +56,11 @@ export const ESPECIALIDADES: Record<EspecialidadSlug, EspecialidadDef> = {
     ...ESPECIALIDADES_META.kinesiologia,
     Tool: KinesiologiaTool,
     Icon: I.Stethoscope,
+  },
+  nutricion: {
+    ...ESPECIALIDADES_META.nutricion,
+    Tool: NutricionTool,
+    Icon: I.Apple,
   },
 };
 

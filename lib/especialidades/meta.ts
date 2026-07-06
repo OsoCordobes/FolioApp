@@ -36,6 +36,11 @@ import {
   resumenSesionKinesiologia,
 } from "@/lib/especialidades/kinesiologia/schema";
 import { intakeAvanzadoKinesiologia } from "@/lib/especialidades/kinesiologia/intake";
+import {
+  nutricionToolDataSchema,
+  resumenSesionNutricion,
+} from "@/lib/especialidades/nutricion/schema";
+import { intakeAvanzadoNutricion } from "@/lib/especialidades/nutricion/intake";
 import type { IntakeAvanzadoConfig, SoapGuia } from "@/lib/especialidades/types";
 
 // ─── Slugs ──────────────────────────────────────────────────────────────────
@@ -45,6 +50,7 @@ export const ESPECIALIDAD_SLUGS = [
   "cardiologia",
   "psicologia",
   "kinesiologia",
+  "nutricion",
 ] as const;
 
 export type EspecialidadSlug = (typeof ESPECIALIDAD_SLUGS)[number];
@@ -316,6 +322,43 @@ const SOAP_GUIA_KINESIOLOGIA: SoapGuia = {
   },
 };
 
+const SOAP_GUIA_NUTRICION: SoapGuia = {
+  subjetivo: {
+    prompt: "Relato del paciente: hábitos, adherencia al plan y evolución desde el último control.",
+    checklist: [
+      "Motivo de consulta y objetivo nutricional",
+      "Adherencia al plan anterior y dificultades encontradas",
+      "Recordatorio alimentario y horarios de comida",
+      "Actividad física, sueño y estado general",
+    ],
+  },
+  objetivo: {
+    prompt: "Mediciones antropométricas y datos objetivos del control.",
+    checklist: [
+      "Peso, talla e IMC derivado",
+      "Circunferencias (cintura, cadera) y pliegues cutáneos",
+      "Laboratorio relevante (glucemia, perfil lipídico) si lo hay",
+      "Composición corporal y su tendencia",
+    ],
+  },
+  analisis: {
+    prompt: "Diagnóstico nutricional y evolución respecto de los objetivos.",
+    checklist: [
+      "Estado nutricional según IMC y composición corporal",
+      "Riesgo asociado (obesidad, desnutrición, comorbilidades)",
+      "Progreso frente a las metas de peso y hábitos",
+    ],
+  },
+  plan: {
+    prompt: "Plan alimentario indicado, metas y seguimiento.",
+    checklist: [
+      "Plan alimentario: distribución, calorías y macronutrientes",
+      "Metas de peso, hábitos y actividad física",
+      "Suplementación si corresponde y próxima fecha de control",
+    ],
+  },
+};
+
 export const ESPECIALIDADES_META: Record<EspecialidadSlug, EspecialidadMeta> = {
   quiropraxia: {
     slug: "quiropraxia",
@@ -371,6 +414,20 @@ export const ESPECIALIDADES_META: Record<EspecialidadSlug, EspecialidadMeta> = {
     resumenSesion: resumenSesionKinesiologia,
     intakeAvanzado: intakeAvanzadoKinesiologia,
     soapGuia: SOAP_GUIA_KINESIOLOGIA,
+  },
+  nutricion: {
+    slug: "nutricion",
+    nombre: "Nutrición",
+    badgeLabel: "Módulo · Nutrición",
+    // N2 · el writer estampa v1 (única versión por ahora). Antropometría
+    // longitudinal (peso/talla/IMC derivado/circunferencias/pliegues) +
+    // plan alimentario texto + objetivos; reusa <SerieEvolucion> de la biblioteca.
+    toolId: "nutricion.ficha.v1",
+    toolIds: ["nutricion.ficha.v1"],
+    schema: nutricionToolDataSchema,
+    resumenSesion: resumenSesionNutricion,
+    intakeAvanzado: intakeAvanzadoNutricion,
+    soapGuia: SOAP_GUIA_NUTRICION,
   },
 };
 

@@ -55,6 +55,13 @@ const ESP_CONTENT: Record<EspecialidadSlug, BookLandingContent> = {
     trustFraming: "Tu evolución funcional, cifrada y siempre a mano.",
     motif: "spine",
   },
+  nutricion: {
+    heroEyebrow: "Nutrición",
+    heroValueLine: "Plan alimentario y seguimiento, control a control.",
+    reservarCtaLabel: "Reservar consulta",
+    trustFraming: "Tu evolución nutricional, cifrada y siempre a mano.",
+    motif: "none",
+  },
 };
 
 export function resolveBookLandingContent(

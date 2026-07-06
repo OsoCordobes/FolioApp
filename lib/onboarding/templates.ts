@@ -235,6 +235,8 @@ const ESPECIALIDAD_SERVICIOS: Record<EspecialidadSlug, ServicioTemplate[]> = {
   // N1 · kinesiología comparte el set del rubro homónimo (mismo criterio 1:1
   // que quiropraxia/cardiología).
   kinesiologia: TEMPLATES.kinesiologia.servicios,
+  // N2 · nutrición comparte el set del rubro homónimo (mismo criterio 1:1).
+  nutricion: TEMPLATES.nutricion.servicios,
 };
 
 /**

@@ -211,6 +211,14 @@ export const Alert = ({ size, ...rest }: IconProps) => (
   </svg>
 );
 
+// Domain icon (N2 · nutrición): manzana estilizada — badge de la especialidad.
+export const Apple = ({ size, ...rest }: IconProps) => (
+  <svg {...baseAttrs(size)} {...rest}>
+    <path d="M12 8c-1.5-1.6-3.6-2-5.2-1C4.9 8.2 4 10.5 4.6 13c.6 2.6 2.3 5.8 4.4 6.7 1 .4 2-.1 3-.1s2 .5 3 .1c2.1-.9 3.8-4.1 4.4-6.7.6-2.5-.3-4.8-2.2-6-1.6-1-3.7-.6-5.2 1z" />
+    <path d="M12 8V5M12 5c0-1.1.9-2 2-2M12 5c0-1.1-.9-2-2-2" />
+  </svg>
+);
+
 export const Star = ({ size, ...rest }: IconProps) => (
   <svg {...baseAttrs(size)} {...rest}>
     <path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="currentColor" stroke="none" />
