@@ -140,7 +140,18 @@ test("target NO colegiado → validation (la especialidad es clínica), aun para
 // ─── Validación de slug ──────────────────────────────────────────────────────
 
 test("memberEspecialidadSchema: slugs del registry y null pasan; el resto no", () => {
-  for (const slug of ["quiropraxia", "cardiologia", "psicologia", null]) {
+  // Cada slug que pasa acá lo asigna updateMemberEspecialidad → UPDATE de
+  // member.especialidad, así que el CHECK member_especialidad_valida (M55 +
+  // widening M83) DEBE aceptar exactamente este mismo conjunto: kinesiologia y
+  // nutricion (N1/N2) incluidos, o el UPDATE explota con SQLSTATE 23514.
+  for (const slug of [
+    "quiropraxia",
+    "cardiologia",
+    "psicologia",
+    "kinesiologia",
+    "nutricion",
+    null,
+  ]) {
     assert.equal(memberEspecialidadSchema.safeParse(slug).success, true, `${slug} debería pasar`);
   }
   for (const invalido of ["odontologia", "", "QUIROPRAXIA", 42, undefined, {}]) {
