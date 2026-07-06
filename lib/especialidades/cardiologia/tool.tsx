@@ -33,10 +33,11 @@ import {
   RANGOS_PANEL,
   scoreRiesgoCV,
   TIPOS_ESTUDIO,
+  VITAL_LABELS,
   extractEstudios,
   type CampoVital,
   type CardioSeriesPoint,
-  type CardiologiaToolData,
+  type CardiologiaToolDataV2,
   type ConclusionEstudio,
   type EstudioCardio,
   type FactorRiesgo,
@@ -75,10 +76,25 @@ const SELECT_STYLE: CSSProperties = {
   lineHeight: 1.5,
 };
 
+/** Vitales primarios (TA/FC) — fila superior del panel. */
+const VITALES_TA_FC: Array<{ campo: CampoVital; label: string }> = [
+  { campo: "taSistolica", label: VITAL_LABELS.taSistolica },
+  { campo: "taDiastolica", label: VITAL_LABELS.taDiastolica },
+  { campo: "fc", label: VITAL_LABELS.fc },
+];
+
+/** Vitales extra (v2, C5): antropometría/oximetría/glucemia — segunda fila. */
+const VITALES_EXTRA: Array<{ campo: CampoVital; label: string }> = [
+  { campo: "peso", label: VITAL_LABELS.peso },
+  { campo: "talla", label: VITAL_LABELS.talla },
+  { campo: "satO2", label: VITAL_LABELS.satO2 },
+  { campo: "glucemia", label: VITAL_LABELS.glucemia },
+];
+
+/** Todos los vitales del panel v2 (para el chequeo de rango). */
 const VITALES: Array<{ campo: CampoVital; label: string }> = [
-  { campo: "taSistolica", label: "TA sist. (mmHg)" },
-  { campo: "taDiastolica", label: "TA diast. (mmHg)" },
-  { campo: "fc", label: "FC (lpm)" },
+  ...VITALES_TA_FC,
+  ...VITALES_EXTRA,
 ];
 
 function hoyISO(): string {
@@ -99,27 +115,29 @@ function fmtFecha(iso: string): string {
 // ─── Borrador (controlado desde value) ──────────────────────────────────────
 
 /**
- * Parse LAXO del borrador: tolera vitales fuera de rango (valores intermedios
- * mientras se tipea — el schema estricto los rechazaría y resetearía el
- * borrador en cada render) y shapes parciales re-hidratados. La validación
- * estricta (cardiologiaToolDataSchema) la aplica el writer antes de cifrar;
- * la UI avisa con el hint de "fuera de rango".
+ * Parse LAXO del borrador a un shape v2: tolera vitales fuera de rango (valores
+ * intermedios mientras se tipea — el schema estricto los rechazaría y
+ * resetearía el borrador en cada render), shapes parciales re-hidratados y
+ * sesiones LEGACY v1 (que se leen igual: los campos de v1 son un subset de v2,
+ * así que el borrador arranca en v2 sin migración de datos). La validación
+ * estricta (cardiologiaToolDataV2Schema) la aplica el writer antes de cifrar; la
+ * UI avisa con el hint de "fuera de rango".
  */
-function parseDraft(value: unknown): CardiologiaToolData {
-  const out: CardiologiaToolData = { v: 1 };
+function parseDraft(value: unknown): CardiologiaToolDataV2 {
+  const out: CardiologiaToolDataV2 = { v: 2 };
   if (value === null || typeof value !== "object") return out;
 
   const rawPanel = (value as { panel?: unknown }).panel;
   if (rawPanel !== null && typeof rawPanel === "object") {
     const p = rawPanel as Record<string, unknown>;
-    const panel: NonNullable<CardiologiaToolData["panel"]> = {};
+    const panel: NonNullable<CardiologiaToolDataV2["panel"]> = {};
     for (const campo of Object.keys(RANGOS_PANEL) as CampoVital[]) {
       const n = p[campo];
       if (typeof n === "number" && Number.isFinite(n)) panel[campo] = Math.round(n);
     }
     const rawFactores = p.factores;
     if (rawFactores !== null && typeof rawFactores === "object") {
-      const f: NonNullable<NonNullable<CardiologiaToolData["panel"]>["factores"]> = {};
+      const f: NonNullable<NonNullable<CardiologiaToolDataV2["panel"]>["factores"]> = {};
       for (const k of FACTORES_RIESGO) {
         if ((rawFactores as Record<string, unknown>)[k] === true) f[k] = true;
       }
@@ -136,9 +154,9 @@ function parseDraft(value: unknown): CardiologiaToolData {
 /**
  * Normaliza el borrador antes de emitirlo: factores sin ninguno marcado →
  * fuera; panel sin claves → fuera; estudios vacíos → fuera; todo vacío → null
- * (el writer guarda tool_data NULL, no un `{ v: 1 }` cifrado sin contenido).
+ * (el writer guarda tool_data NULL, no un `{ v: 2 }` cifrado sin contenido).
  */
-function limpiarDraft(next: CardiologiaToolData): CardiologiaToolData | null {
+function limpiarDraft(next: CardiologiaToolDataV2): CardiologiaToolDataV2 | null {
   const panel = next.panel ? { ...next.panel } : undefined;
   if (panel) {
     if (panel.factores && !FACTORES_RIESGO.some((f) => panel.factores?.[f] === true)) {
@@ -148,7 +166,7 @@ function limpiarDraft(next: CardiologiaToolData): CardiologiaToolData | null {
       if (panel[k] === undefined) delete panel[k];
     }
   }
-  const out: CardiologiaToolData = { v: 1 };
+  const out: CardiologiaToolDataV2 = { v: 2 };
   if (panel && Object.keys(panel).length > 0) out.panel = panel;
   if (next.estudios && next.estudios.length > 0) out.estudios = next.estudios;
   return out.panel || out.estudios ? out : null;
@@ -309,6 +327,40 @@ function EstudioRow({
   );
 }
 
+// ─── Input de un vital (TA/FC y extra v2) ────────────────────────────────────
+
+/** Un campo numérico de vital, con su rango plausible como min/max del input. */
+function VitalInput({
+  campo,
+  label,
+  value,
+  onChangeVital,
+  readOnly,
+}: {
+  campo: CampoVital;
+  label: string;
+  value: number | undefined;
+  onChangeVital: (campo: CampoVital, raw: string) => void;
+  readOnly?: boolean;
+}) {
+  return (
+    <label className="fi-wi-field">
+      <span>{label}</span>
+      <input
+        type="number"
+        inputMode="numeric"
+        min={RANGOS_PANEL[campo].min}
+        max={RANGOS_PANEL[campo].max}
+        step={1}
+        value={value ?? ""}
+        onChange={(e) => onChangeVital(campo, e.target.value)}
+        placeholder="—"
+        disabled={readOnly}
+      />
+    </label>
+  );
+}
+
 // ─── Tool ───────────────────────────────────────────────────────────────────
 
 const NUEVO_ESTUDIO_INICIAL = { tipo: "", fecha: "", hallazgos: "", conclusion: "" };
@@ -331,7 +383,7 @@ export function CardiologiaTool({ value, onChange, readOnly, historial, edad }: 
   const [nuevo, setNuevo] = useState(NUEVO_ESTUDIO_INICIAL);
   const [estudiosExpandidos, setEstudiosExpandidos] = useState(false);
 
-  const emit = (next: CardiologiaToolData) => {
+  const emit = (next: CardiologiaToolDataV2) => {
     if (readOnly) return;
     onChange(limpiarDraft(next));
   };
@@ -406,21 +458,27 @@ export function CardiologiaTool({ value, onChange, readOnly, historial, edad }: 
         </header>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
-          {VITALES.map(({ campo, label }) => (
-            <label key={campo} className="fi-wi-field">
-              <span>{label}</span>
-              <input
-                type="number"
-                inputMode="numeric"
-                min={RANGOS_PANEL[campo].min}
-                max={RANGOS_PANEL[campo].max}
-                step={1}
-                value={draft.panel?.[campo] ?? ""}
-                onChange={(e) => setVital(campo, e.target.value)}
-                placeholder="—"
-                disabled={readOnly}
-              />
-            </label>
+          {VITALES_TA_FC.map(({ campo, label }) => (
+            <VitalInput
+              key={campo}
+              campo={campo}
+              label={label}
+              value={draft.panel?.[campo]}
+              onChangeVital={setVital}
+              readOnly={readOnly}
+            />
+          ))}
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 10px" }}>
+          {VITALES_EXTRA.map(({ campo, label }) => (
+            <VitalInput
+              key={campo}
+              campo={campo}
+              label={label}
+              value={draft.panel?.[campo]}
+              onChangeVital={setVital}
+              readOnly={readOnly}
+            />
           ))}
         </div>
         {fueraDeRango.length > 0 ? (

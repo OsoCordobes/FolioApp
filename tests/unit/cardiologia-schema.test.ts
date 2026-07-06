@@ -14,8 +14,10 @@ import test from "node:test";
 
 import {
   cardiologiaToolDataSchema,
+  cardiologiaToolDataV2Schema,
   deriveCardioSeries,
   extractEstudios,
+  parseCardiologiaToolData,
   resumenSesionCardiologia,
   scoreRiesgoCV,
 } from "../../lib/especialidades/cardiologia/schema";
@@ -106,6 +108,89 @@ test("schema: inválidos — sin v, v incorrecta, vitales fuera de rango, enums 
   );
 });
 
+// ─── Schema v2 (C5 · panel con vitales extra) ───────────────────────────────
+
+test("schema v2: payload con vitales extra válido; v1 rechaza contra v2 y viceversa", () => {
+  const v2 = {
+    v: 2,
+    panel: {
+      taSistolica: 130,
+      taDiastolica: 85,
+      fc: 72,
+      peso: 78,
+      talla: 172,
+      satO2: 97,
+      glucemia: 105,
+      factores: { hta: true },
+    },
+    estudios: [{ tipo: "ECG", fecha: "2026-06-01", hallazgos: "RS.", conclusion: "normal" }],
+  };
+  assert.equal(cardiologiaToolDataV2Schema.safeParse(v2).success, true);
+  // {v:2} pelado es válido (todo el contenido es opcional).
+  assert.equal(cardiologiaToolDataV2Schema.safeParse({ v: 2 }).success, true);
+  // v1 (literal 1) NO parsea contra v2 y v2 (literal 2) NO parsea contra v1.
+  assert.equal(cardiologiaToolDataV2Schema.safeParse({ v: 1 }).success, false);
+  assert.equal(cardiologiaToolDataSchema.safeParse({ v: 2 }).success, false);
+});
+
+test("schema v2: vitales extra fuera de rango rechazan; .strict() rechaza claves ajenas", () => {
+  // peso 20–400, talla 50–250, satO2 50–100, glucemia 20–800.
+  assert.equal(
+    cardiologiaToolDataV2Schema.safeParse({ v: 2, panel: { satO2: 120 } }).success,
+    false,
+  );
+  assert.equal(
+    cardiologiaToolDataV2Schema.safeParse({ v: 2, panel: { peso: 10 } }).success,
+    false,
+  );
+  assert.equal(
+    cardiologiaToolDataV2Schema.safeParse({ v: 2, panel: { glucemia: 105.5 } }).success,
+    false, // no entero
+  );
+  assert.equal(
+    cardiologiaToolDataV2Schema.safeParse({ v: 2, panel: { peso: 78, talla: 172 } }).success,
+    true,
+  );
+  // .strict(): una clave desconocida (payload ajeno) RECHAZA, no se stripea.
+  assert.equal(
+    cardiologiaToolDataV2Schema.safeParse({ v: 2, panel: {}, vertebras: [] }).success,
+    false,
+  );
+});
+
+test("parseCardiologiaToolData: discrimina v2 / v1 / empty", () => {
+  const v2 = parseCardiologiaToolData({ v: 2, panel: { peso: 80 } });
+  assert.equal(v2.kind, "v2");
+  if (v2.kind === "v2") assert.equal(v2.data.panel?.peso, 80);
+
+  const v1 = parseCardiologiaToolData({ v: 1, panel: { taSistolica: 120, taDiastolica: 80 } });
+  assert.equal(v1.kind, "v1");
+  if (v1.kind === "v1") assert.equal(v1.data.panel?.taSistolica, 120);
+
+  // Shapes ajenos / vacíos → empty.
+  assert.equal(parseCardiologiaToolData(null).kind, "empty");
+  assert.equal(parseCardiologiaToolData({ v: 3 }).kind, "empty");
+  assert.equal(parseCardiologiaToolData({ vertebras: [] }).kind, "empty");
+});
+
+test("resumenSesion v2: lee el panel v2 con el mismo copy que v1", () => {
+  assert.equal(
+    resumenSesionCardiologia({
+      v: 2,
+      panel: {
+        taSistolica: 130,
+        taDiastolica: 85,
+        fc: 72,
+        peso: 78,
+        factores: { tabaquismo: true, sedentarismo: true },
+      },
+    }),
+    "TA 130/85 · FC 72 · riesgo moderado",
+  );
+  // v2 solo con vitales extra (sin TA/FC/factores/estudios) → copy genérico.
+  assert.equal(resumenSesionCardiologia({ v: 2, panel: { peso: 78, talla: 172 } }), "Sesión registrada");
+});
+
 // ─── scoreRiesgoCV ──────────────────────────────────────────────────────────
 
 test("scoreRiesgoCV: bordes del conteo (0-1 bajo, 2-3 moderado, >=4 alto)", () => {
@@ -165,6 +250,18 @@ test("deriveCardioSeries: historial DESC → serie ASC, sesiones sin panel se om
   const serie = deriveCardioSeries(historial);
   assert.deepEqual(serie, [
     { fecha: "2026-04-18", taS: 140, taD: 90, fc: null },
+    { fecha: "2026-06-08", taS: 128, taD: 82, fc: 70 },
+  ]);
+});
+
+test("deriveCardioSeries: lee sesiones v2 y v1 mezcladas (por nombre de campo)", () => {
+  const historial = [
+    { fecha: "2026-06-08", toolData: { v: 2, panel: { taSistolica: 128, taDiastolica: 82, fc: 70, peso: 80 } } },
+    { fecha: "2026-05-04", toolData: { v: 1, panel: { taSistolica: 140, taDiastolica: 90 } } },
+  ];
+  const serie = deriveCardioSeries(historial);
+  assert.deepEqual(serie, [
+    { fecha: "2026-05-04", taS: 140, taD: 90, fc: null },
     { fecha: "2026-06-08", taS: 128, taD: 82, fc: 70 },
   ]);
 });

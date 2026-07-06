@@ -73,8 +73,12 @@ test("slugs y toolIds: registry consistente (Workstream 6 · write id v2)", () =
     [...ESPECIALIDADES_META.quiropraxia.toolIds],
     ["quiropraxia.ficha.v2", "quiropraxia.spine.v1"],
   );
-  assert.equal(ESPECIALIDADES_META.cardiologia.toolId, "cardiologia.cv.v1");
-  assert.deepEqual([...ESPECIALIDADES_META.cardiologia.toolIds], ["cardiologia.cv.v1"]);
+  // C5 · el id de ESCRITURA de cardiología es v2; v1 se sigue LEYENDO via toolIds.
+  assert.equal(ESPECIALIDADES_META.cardiologia.toolId, "cardiologia.cv.v2");
+  assert.deepEqual(
+    [...ESPECIALIDADES_META.cardiologia.toolIds],
+    ["cardiologia.cv.v2", "cardiologia.cv.v1"],
+  );
   assert.equal(ESPECIALIDADES_META.psicologia.toolId, "psicologia.escalas.v1");
   assert.deepEqual([...ESPECIALIDADES_META.psicologia.toolIds], ["psicologia.escalas.v1"]);
 });
@@ -153,8 +157,18 @@ const PAYLOADS_VALIDOS = {
     palpacionEstatica: "Hipertonía paravertebral C4-C6.",
   },
   cardiologia: {
-    v: 1,
-    panel: { taSistolica: 130, taDiastolica: 85, fc: 72, factores: { hta: true } },
+    // C5 · el schema del registry es v2 (panel con vitales extra).
+    v: 2,
+    panel: {
+      taSistolica: 130,
+      taDiastolica: 85,
+      fc: 72,
+      peso: 78,
+      talla: 172,
+      satO2: 97,
+      glucemia: 105,
+      factores: { hta: true },
+    },
     estudios: [{ tipo: "ECG", fecha: "2026-06-01", hallazgos: "RS.", conclusion: "normal" }],
   },
   psicologia: {
@@ -180,11 +194,13 @@ test("cross-tool: cada payload RECHAZA contra los schemas de las otras dos espec
 });
 
 test("cross-tool: el rechazo es por .strict(), no por casualidad — sin claves ajenas {v:1}/{v:2} pelado donde corresponde", () => {
-  // Documenta el mecanismo: cardio/psico aceptan {v:1} pelado (campos de
-  // contenido opcionales) — el peligro era exactamente que un payload ajeno
-  // degradara a eso. Quiro v2 exige `v: 2`, así que ni {v:1} ni {v:2} pelado
-  // de otra tool le parsean; {v:2} pelado SÍ (vértebras/secciones opcionales).
-  assert.equal(ESPECIALIDADES_META.cardiologia.schema.safeParse({ v: 1 }).success, true);
+  // Documenta el mecanismo: psico acepta {v:1} pelado (campos de contenido
+  // opcionales) — el peligro era exactamente que un payload ajeno degradara a
+  // eso. Quiro (v2) y cardio (v2, C5) exigen `v: 2`, así que ni {v:1} ni {v:2}
+  // pelado de otra tool le parsean por el literal + .strict(); {v:2} pelado SÍ
+  // (panel/vértebras/secciones opcionales).
+  assert.equal(ESPECIALIDADES_META.cardiologia.schema.safeParse({ v: 1 }).success, false);
+  assert.equal(ESPECIALIDADES_META.cardiologia.schema.safeParse({ v: 2 }).success, true);
   assert.equal(ESPECIALIDADES_META.psicologia.schema.safeParse({ v: 1 }).success, true);
   assert.equal(ESPECIALIDADES_META.quiropraxia.schema.safeParse({ v: 1 }).success, false);
   assert.equal(ESPECIALIDADES_META.quiropraxia.schema.safeParse({ v: 2 }).success, true);
@@ -221,7 +237,10 @@ test("schemas: las tres especialidades validan estricto (v literal, shape propio
     false,
   );
   assert.equal(ESPECIALIDADES_META.cardiologia.schema.safeParse({ x: 1 }).success, false);
-  assert.equal(ESPECIALIDADES_META.cardiologia.schema.safeParse({ v: 1 }).success, true);
+  // C5 · cardio escribe v2: {v:2} pelado válido; {v:1} (legacy) ya no es el
+  // shape de escritura, así que rechaza contra el schema del registry.
+  assert.equal(ESPECIALIDADES_META.cardiologia.schema.safeParse({ v: 2 }).success, true);
+  assert.equal(ESPECIALIDADES_META.cardiologia.schema.safeParse({ v: 1 }).success, false);
   assert.equal(ESPECIALIDADES_META.psicologia.schema.safeParse(null).success, false);
   assert.equal(ESPECIALIDADES_META.psicologia.schema.safeParse({ v: 1 }).success, true);
   assert.equal(
