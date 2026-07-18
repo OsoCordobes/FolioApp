@@ -31,10 +31,14 @@
 import { z } from "zod";
 
 import { encryptColumn, tryDecrypt } from "@/lib/crypto";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  createSupabaseServerClient,
+  createSupabaseServiceClient,
+} from "@/lib/supabase/server";
 
 import { err, mapSupabaseError, ok, type Result } from "./errors";
 import { getPacienteSession } from "./paciente-session";
+import { resolveProfesionalPublico } from "./profesional-destino";
 
 // ─── Constantes de dominio ────────────────────────────────────────────────────
 
@@ -99,6 +103,26 @@ export function propuestaSolapa(
     if (excludeTurnoId && t.id === excludeTurnoId) return false;
     return propuestaInicioMs < t.finMs && t.inicioMs < propuestaFinMs;
   });
+}
+
+/**
+ * Decisión pura del profesional destino de una reserva NUEVA del portal, a
+ * partir de los profesionales VINCULADOS al servicio (tabla M:N
+ * `servicio_profesional`, M02 — `servicio` NO tiene columna profesional_id).
+ * El caller ya filtró los vínculos a colegiados activos vivos:
+ *
+ *   - exactamente 1 vinculado → ese (el servicio define a su profesional);
+ *   - 0 o varios → fallback_org: se resuelve como el booking público sin
+ *     elección explícita (resolveProfesionalPublico org-level: único colegiado
+ *     → ese; varios → hay que elegir; ninguno → la org no recibe reservas).
+ */
+export function decideProfesionalPorServicio(
+  vinculadosValidos: string[],
+): { kind: "usar"; profesionalId: string } | { kind: "fallback_org" } {
+  if (vinculadosValidos.length === 1) {
+    return { kind: "usar", profesionalId: vinculadosValidos[0] };
+  }
+  return { kind: "fallback_org" };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -395,8 +419,16 @@ const nuevaReservaSchema = z.object({
  * PENDIENTE atado a una ficha `paciente` propia. El paciente_id llega por
  * argumento PERO se valida contra su sesión (debe estar en session.pacientes) y la
  * RLS del INSERT (pedido_insert_portal: paciente_owns) lo re-valida — doble gate
- * anti-IDOR. Duración/precio/profesional salen del servicio elegido (validado como
- * de la org de esa ficha).
+ * anti-IDOR.
+ *
+ * Duración/precio salen del servicio elegido, leído con el SERVICE client
+ * scopeado a la org de la ficha (el paciente NO tiene policy sobre `servicio` —
+ * la lectura anon devolvería siempre 0 filas). Mismo patrón que el booking
+ * público (createPedidoPublico): service client + filtros de org explícitos y
+ * obligatorios. El profesional destino se resuelve vía `servicio_profesional`
+ * (M:N, M02): exactamente 1 vinculado válido → ese; 0 o varios → misma regla
+ * que el booking público sin elección (resolveProfesionalPublico). El INSERT
+ * del pedido sigue saliendo por el cliente ANON bajo RLS (Gate 2 intacto).
  */
 export async function solicitarTurnoPortal(
   input: z.infer<typeof nuevaReservaSchema>,
@@ -423,32 +455,82 @@ export async function solicitarTurnoPortal(
 
   const supabase = await createSupabaseServerClient();
 
-  // El servicio, validado contra la org de la ficha. La policy servicio_select_org
-  // (M09) es clinic-scoped (no la ve el paciente por RLS), así que leemos el
-  // servicio con el mismo cliente anon PERO no dependemos de verlo: si la policy
-  // no lo devuelve, no podemos derivar duración/precio → pedimos que el clínico
-  // fije el servicio. Para robustez, resolvemos el servicio y sus datos; si la RLS
-  // no lo expone, encolamos con la duración default y el clínico ajusta.
-  const { data: servicio } = await supabase
+  // El servicio, leído con el SERVICE client (RLS no aplica: el paciente no tiene
+  // policy sobre `servicio` y el anon devolvería 0 filas SIEMPRE) pero scopeado
+  // explícitamente a la org de la ficha YA validada contra la sesión — mismo
+  // patrón que createPedidoPublico (app/(public)/book/[slug]/actions.ts). Mismos
+  // filtros que allá: activo y no borrado. Un servicio inexistente/inactivo/de
+  // otra org es un error real del pedido, no una degradación silenciosa.
+  const service = createSupabaseServiceClient();
+  const { data: servicio, error: servErr } = await service
     .from("servicio")
-    .select("id, organization_id, duracion_min, precio_cents, profesional_id")
+    .select("id, duracion_min, precio_cents")
     .eq("id", parsed.data.servicioId)
     .eq("organization_id", ficha.organizationId)
+    .eq("activo", true)
+    .is("deleted_at", null)
     .maybeSingle();
 
-  // profesional destino: el del servicio si lo trae; sino, el principal de la
-  // ficha; sino null (el clínico lo resuelve al aceptar — resolverProfesionalDelPedido).
-  const servicioProfesionalId =
-    (servicio as { profesional_id?: string | null } | null)?.profesional_id ?? null;
+  if (servErr) {
+    const mapped = mapSupabaseError(servErr);
+    return err(mapped.code, "No se pudo validar el servicio elegido.", servErr.message);
+  }
+  if (!servicio) {
+    return err("not_found", "Servicio no disponible.");
+  }
+
+  // Profesional destino vía servicio_profesional (M:N, M02 — `servicio` NO tiene
+  // columna profesional_id). Vínculos activos cuyo member sigue siendo colegiado
+  // vivo (mismo predicado que resolveProfesionalPublico; el !inner filtra por el
+  // join). limit(2) alcanza para distinguir 0 / 1 / varios; ORDER BY member_id
+  // para determinismo.
+  const { data: vinculados, error: vincErr } = await service
+    .from("servicio_profesional")
+    .select("member_id, member!inner(id)")
+    .eq("servicio_id", parsed.data.servicioId)
+    .eq("organization_id", ficha.organizationId)
+    .eq("activo", true)
+    .eq("member.es_colegiado", true)
+    .is("member.deleted_at", null)
+    .order("member_id", { ascending: true })
+    .limit(2);
+
+  if (vincErr) {
+    const mapped = mapSupabaseError(vincErr);
+    return err(
+      mapped.code,
+      "No se pudo resolver el profesional del servicio.",
+      vincErr.message,
+    );
+  }
+
+  const decision = decideProfesionalPorServicio(
+    ((vinculados ?? []) as Array<{ member_id: string }>).map((v) => v.member_id),
+  );
+
+  let profesionalId: string;
+  if (decision.kind === "usar") {
+    profesionalId = decision.profesionalId;
+  } else {
+    // 0 o varios vinculados → exactamente lo que hace el booking público sin
+    // elección explícita: único colegiado de la org → ese; varios → err de
+    // validación (hay que elegir); ninguno → err not_found (sin profesional).
+    const profRes = await resolveProfesionalPublico(service, {
+      organizationId: ficha.organizationId,
+      profesionalId: null,
+    });
+    if (!profRes.ok) return profRes;
+    profesionalId = profRes.data;
+  }
 
   return await insertarPedidoPortal(supabase, {
     pacienteId: parsed.data.pacienteId,
     organizationId: ficha.organizationId,
     servicioId: parsed.data.servicioId,
-    profesionalId: servicioProfesionalId,
+    profesionalId,
     fechaPropuesta: parsed.data.inicio,
-    duracionMin: (servicio as { duracion_min?: number } | null)?.duracion_min ?? 45,
-    precioCents: (servicio as { precio_cents?: number | null } | null)?.precio_cents ?? null,
+    duracionMin: servicio.duracion_min as number,
+    precioCents: (servicio.precio_cents as number | null) ?? null,
     motivo: parsed.data.motivo ?? null,
   });
 }

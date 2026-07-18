@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  decideProfesionalPorServicio,
   ESTADOS_CANCELABLES_PACIENTE,
   propuestaSolapa,
   puedeCancelarPaciente,
@@ -163,4 +164,32 @@ test("reagenda: sin turnos vivos → nunca solapa", () => {
   const inicio = Date.parse("2026-07-08T10:00:00-03:00");
   const fin = Date.parse("2026-07-08T11:00:00-03:00");
   assert.equal(propuestaSolapa(inicio, fin, []), false);
+});
+
+// ─── decideProfesionalPorServicio · reserva nueva del portal ─────────────────
+//
+// La relación profesional↔servicio es la tabla M:N servicio_profesional (M02);
+// `servicio` NO tiene columna profesional_id (el select viejo con esa columna
+// rebotaba 42703 y TODA reserva caía al fallback silencioso). Regla: exactamente
+// 1 vinculado válido → ese; 0 o varios → fallback a la resolución org-level del
+// booking público (resolveProfesionalPublico).
+
+const PROF_A = "aaaaaaaa-0000-0000-0000-000000000001";
+const PROF_B = "bbbbbbbb-0000-0000-0000-000000000002";
+
+test("reserva: servicio con exactamente 1 profesional vinculado → usar ese", () => {
+  assert.deepEqual(decideProfesionalPorServicio([PROF_A]), {
+    kind: "usar",
+    profesionalId: PROF_A,
+  });
+});
+
+test("reserva: servicio sin profesionales vinculados → fallback org-level (booking público)", () => {
+  assert.deepEqual(decideProfesionalPorServicio([]), { kind: "fallback_org" });
+});
+
+test("reserva: servicio con varios vinculados → fallback org-level, NUNCA un 'primero' arbitrario", () => {
+  assert.deepEqual(decideProfesionalPorServicio([PROF_A, PROF_B]), {
+    kind: "fallback_org",
+  });
 });
