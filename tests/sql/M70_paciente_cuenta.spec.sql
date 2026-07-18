@@ -12,8 +12,13 @@
 --      unique_violation).
 --   4. same-org guard de paciente_claim: paciente de otra org → el trigger
 --      rechaza.
---   5. RLS FORCE + CERRADA: paciente_cuenta y paciente_claim tienen RLS
---      ENABLE+FORCE y CERO policies (P2/M71 las agrega).
+--   5. RLS FORCE + estado FINAL de policies del stack (post-M71..M87):
+--      paciente_cuenta sigue CERRADA (CERO policies — el acceso sancionado es
+--      SOLO vía funciones DEFINER: paciente_cuenta_actual M70,
+--      listar_paciente_claims_pendientes M87); paciente_claim tiene EXACTAMENTE
+--      las 4 policies de M71 (self-select/self-insert del paciente +
+--      select/update del clínico), PERMISSIVE sobre public, y NINGUNA de
+--      DELETE/ALL (cola append-only).
 --   5b. paciente_cuenta NO tiene audit trigger (es cross-org, sin
 --      organization_id → el trigger genérico de M12 abortaría con 42703, el bug
 --      de M48/`pago`). paciente_claim SÍ lo tiene (tiene organization_id).
@@ -188,10 +193,23 @@ BEGIN
   RAISE NOTICE 'M70 spec OK (5/7): same-org guard de paciente_claim';
 END $$;
 
--- ─── 6. RLS FORCE + CERRADA + helper SECURITY DEFINER STABLE ─────────────────
+-- ─── 6. RLS FORCE + policies del estado FINAL + helper SECURITY DEFINER STABLE ─
+-- El CI replaya TODA la cadena de migraciones antes de correr los specs, así que
+-- acá se asevera el estado FINAL post-M71..M87 (no el estado intermedio de M70):
+--   · paciente_cuenta sigue CERRADA (0 policies): es la identidad de LOGIN
+--     cross-org; nadie la lee por RLS. El único acceso sancionado es vía
+--     funciones SECURITY DEFINER (paciente_cuenta_actual M70,
+--     listar_paciente_claims_pendientes M87).
+--   · paciente_claim tiene EXACTAMENTE las 4 policies que define M71 —
+--     self-select/self-insert del paciente (self-scope por
+--     paciente_cuenta_actual()) + select/update del clínico (gate
+--     can_read_clinical) — todas PERMISSIVE sobre public. M84-M87 no agregan
+--     ninguna, y NUNCA debe existir DELETE/ALL (cola append-only: los claims se
+--     resuelven por estado, no se borran).
 DO $$
 DECLARE
-  t text;
+  t     text;
+  v_cnt int;
 BEGIN
   FOREACH t IN ARRAY ARRAY['paciente_cuenta','paciente_claim'] LOOP
     IF NOT EXISTS (
@@ -200,11 +218,69 @@ BEGIN
     ) THEN
       RAISE EXCEPTION 'M70 spec FAIL: RLS no está ENABLE + FORCE en %', t;
     END IF;
-    -- CERRADA: 0 policies (P2/M71 las agrega).
-    IF EXISTS (SELECT 1 FROM pg_policies WHERE tablename = t) THEN
-      RAISE EXCEPTION 'M70 spec FAIL: % tiene policies (debe estar cerrada; las policies van en M71)', t;
-    END IF;
   END LOOP;
+
+  -- paciente_cuenta: CERRADA también en el estado final (M71..M87 no le agregan
+  -- policies a propósito).
+  IF EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'paciente_cuenta') THEN
+    RAISE EXCEPTION 'M70 spec FAIL: paciente_cuenta tiene policies (debe seguir cerrada; el acceso sancionado es sólo vía funciones DEFINER)';
+  END IF;
+
+  -- paciente_claim: exactamente las 4 policies de M71, con nombre + comando +
+  -- PERMISSIVE + rol public + la guarda medular en su expresión.
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'paciente_claim'
+      AND policyname = 'paciente_claim_select_portal' AND cmd = 'SELECT'
+      AND permissive = 'PERMISSIVE' AND array_to_string(roles, ',') = 'public'
+      AND qual LIKE '%paciente_cuenta_actual%'
+  ) THEN
+    RAISE EXCEPTION 'M70 spec FAIL: falta paciente_claim_select_portal (SELECT, self-scope por paciente_cuenta_actual) — M71';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'paciente_claim'
+      AND policyname = 'paciente_claim_insert_portal' AND cmd = 'INSERT'
+      AND permissive = 'PERMISSIVE' AND array_to_string(roles, ',') = 'public'
+      AND with_check LIKE '%paciente_cuenta_actual%'
+      AND with_check LIKE '%pendiente%'
+  ) THEN
+    RAISE EXCEPTION 'M70 spec FAIL: falta paciente_claim_insert_portal (INSERT, self-scope + estado pendiente) — M71';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'paciente_claim'
+      AND policyname = 'paciente_claim_select_clinical' AND cmd = 'SELECT'
+      AND permissive = 'PERMISSIVE' AND array_to_string(roles, ',') = 'public'
+      AND qual LIKE '%can_read_clinical%'
+  ) THEN
+    RAISE EXCEPTION 'M70 spec FAIL: falta paciente_claim_select_clinical (SELECT, gate can_read_clinical) — M71';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'paciente_claim'
+      AND policyname = 'paciente_claim_update_clinical' AND cmd = 'UPDATE'
+      AND permissive = 'PERMISSIVE' AND array_to_string(roles, ',') = 'public'
+      AND qual LIKE '%can_read_clinical%'
+      AND with_check LIKE '%can_read_clinical%'
+  ) THEN
+    RAISE EXCEPTION 'M70 spec FAIL: falta paciente_claim_update_clinical (UPDATE, gate can_read_clinical en USING y WITH CHECK) — M71';
+  END IF;
+
+  -- Ni una policy más que esas 4 (una quinta = superficie no revisada).
+  SELECT count(*) INTO v_cnt FROM pg_policies
+   WHERE schemaname = 'public' AND tablename = 'paciente_claim';
+  IF v_cnt <> 4 THEN
+    RAISE EXCEPTION 'M70 spec FAIL: paciente_claim tiene % policies (esperadas EXACTAMENTE las 4 de M71)', v_cnt;
+  END IF;
+
+  -- Y NUNCA DELETE/ALL: la cola de claims es append-only (se resuelve por estado).
+  IF EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'paciente_claim' AND cmd IN ('DELETE','ALL')
+  ) THEN
+    RAISE EXCEPTION 'M70 spec FAIL: paciente_claim tiene una policy DELETE/ALL (cola append-only: prohibido)';
+  END IF;
 
   -- Helper existe, SECURITY DEFINER (prosecdef) + STABLE (provolatile='s').
   IF NOT EXISTS (
@@ -222,7 +298,7 @@ BEGIN
     RAISE EXCEPTION 'M70 spec FAIL: paciente_cuenta_actual() no devolvió NULL sin auth.uid()';
   END IF;
 
-  RAISE NOTICE 'M70 spec OK (6/7): RLS FORCE + cerrada + helper DEFINER/STABLE';
+  RAISE NOTICE 'M70 spec OK (6/7): RLS FORCE + paciente_cuenta cerrada + las 4 policies M71 de paciente_claim + helper DEFINER/STABLE';
 END $$;
 
 -- ─── 6b. paciente_cuenta NO tiene audit trigger; el ciclo de vida no aborta ───

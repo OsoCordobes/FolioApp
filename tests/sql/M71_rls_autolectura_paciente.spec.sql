@@ -170,6 +170,13 @@ END $$;
 GRANT USAGE ON SCHEMA public TO authenticated;
 GRANT SELECT ON paciente, paciente_identidad, turno, consentimiento, sesion TO authenticated;
 GRANT SELECT, INSERT, UPDATE ON paciente_claim TO authenticated;
+-- La policy clínica paciente_select_clinical (M03) tiene un EXISTS inline sobre
+-- `member` (rama DIRECTOR colegiado): al evaluar CUALQUIER SELECT sobre paciente,
+-- el planner exige el privilegio de tabla sobre member aunque la fila entre por
+-- la policy portal (las PERMISSIVE se OR-ean pero se planifican todas). En
+-- Supabase real el default grant lo cubre; en CI vanilla hay que darlo (la RLS
+-- sigue filtrando filas — el grant no abre datos).
+GRANT SELECT ON member TO authenticated;
 
 -- ════════════════════════════════════════════════════════════════════════════
 -- POSITIVAS + NEGATIVAS como PACIENTE X (auth.uid() = cuenta X)
