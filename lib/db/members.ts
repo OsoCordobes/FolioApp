@@ -972,6 +972,226 @@ export async function getOwnPerfilPublico(): Promise<Result<OwnPerfilPublico>> {
   });
 }
 
+// ─── Prescriptor (M78 · identidad para la receta digital · R1) ──────────────
+
+/** Datos prescriptores del member (M78). Todos opcionales (nullable en DB). */
+export interface PrescriptorFields {
+  /** member.registro_prescriptor — REFEPS/ReNaPDiS/registro nacional. */
+  registroPrescriptor: string | null;
+  /** member.jurisdiccion_matricula — jurisdicción de la matrícula. */
+  jurisdiccionMatricula: string | null;
+  /** member.especialidad_prescriptora — especialidad bajo la que prescribe. */
+  especialidadPrescriptora: string | null;
+}
+
+/** Límites de longitud espejo de los CHECK de M78 (member_*_len). */
+const PRESCRIPTOR_LIMITS = {
+  registroPrescriptor: 60,
+  jurisdiccionMatricula: 80,
+  especialidadPrescriptora: 80,
+} as const;
+
+/**
+ * Schema de edición del prescriptor. Cada campo es opcional; string vacío o
+ * whitespace → null (limpia el campo). Recorta y valida longitud contra los
+ * CHECK de M78. Es texto administrativo (no PII de paciente, no PHI).
+ */
+const prescriptorInputField = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .transform((s) => (s.length === 0 ? null : s))
+    .nullable()
+    .optional()
+    .transform((v) => v ?? null);
+
+export const prescriptorSchema = z.object({
+  registroPrescriptor: prescriptorInputField(PRESCRIPTOR_LIMITS.registroPrescriptor),
+  jurisdiccionMatricula: prescriptorInputField(PRESCRIPTOR_LIMITS.jurisdiccionMatricula),
+  especialidadPrescriptora: prescriptorInputField(PRESCRIPTOR_LIMITS.especialidadPrescriptora),
+});
+
+export type PrescriptorInput = z.infer<typeof prescriptorSchema>;
+
+/**
+ * Gate puro del cambio de datos prescriptores de un member (testeable sin
+ * Supabase, patrón checkEspecialidadUpdateAllowed de M55):
+ *   - el TARGET debe ser colegiado (sólo el personal ejerciente prescribe;
+ *     para roles administrativos la identidad prescriptora no significa nada),
+ *   - el ACTOR debe poder gestionar el equipo (OWNER/DIRECTOR) O ser el propio
+ *     member (cada profesional gestiona su propia identidad prescriptora).
+ *
+ * A diferencia de la especialidad clínica (M55), NO se gatea por tipo de org:
+ * un profesional de un consultorio INDEPENDIENTE también prescribe.
+ */
+export type PrescriptorUpdateVerdict =
+  | { ok: true }
+  | { ok: false; code: "forbidden" | "validation"; message: string };
+
+export function checkPrescriptorUpdateAllowed(input: {
+  actorRole: Role;
+  actorEsColegiado: boolean;
+  actorMemberId: string;
+  targetMemberId: string;
+  targetEsColegiado: boolean;
+}): PrescriptorUpdateVerdict {
+  if (!input.targetEsColegiado) {
+    return {
+      ok: false,
+      code: "validation",
+      message: "Solo el personal colegiado tiene datos de prescriptor.",
+    };
+  }
+  const caps = capabilitiesFor(input.actorRole, input.actorEsColegiado);
+  if (!caps.canManageTeam && input.actorMemberId !== input.targetMemberId) {
+    return {
+      ok: false,
+      code: "forbidden",
+      message: "Solo dirección (o la propia persona) puede cambiar los datos de prescriptor.",
+    };
+  }
+  return { ok: true };
+}
+
+/**
+ * M78 · datos prescriptores del member de la sesión activa, para el panel de
+ * receta / configuración. Lectura RLS-aware de la PROPIA fila
+ * (member_select_same_org), sin gate canManageTeam a propósito: cada
+ * profesional consulta/edita su propia identidad prescriptora. Sin PII de
+ * paciente.
+ */
+export async function getOwnPrescriptor(): Promise<Result<PrescriptorFields>> {
+  const ctx = await getActiveContext();
+  if (!ctx.ok) return ctx;
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("member")
+    .select("registro_prescriptor, jurisdiccion_matricula, especialidad_prescriptora")
+    .eq("id", ctx.data.session.memberId)
+    .eq("organization_id", ctx.data.organization.id)
+    .maybeSingle();
+  if (error) {
+    const mapped = mapSupabaseError(error);
+    return err(mapped.code, mapped.message, error.message);
+  }
+
+  const m = (data ?? {}) as {
+    registro_prescriptor?: string | null;
+    jurisdiccion_matricula?: string | null;
+    especialidad_prescriptora?: string | null;
+  };
+  return ok({
+    registroPrescriptor: m.registro_prescriptor ?? null,
+    jurisdiccionMatricula: m.jurisdiccion_matricula ?? null,
+    especialidadPrescriptora: m.especialidad_prescriptora ?? null,
+  });
+}
+
+/**
+ * M78 · setea/limpia los datos prescriptores (REFEPS/registro, jurisdicción,
+ * especialidad prescriptora) de un member colegiado.
+ *
+ * Gate app-side: canManageTeam O self (checkPrescriptorUpdateAllowed). El
+ * UPDATE va con service client ACOTADO a las tres columnas de M78 + scoping
+ * explícito por org — mismo patrón EXACTO que updateMemberEspecialidad (M55):
+ * la policy member_update_owner (M02) sólo cubre OWNER y RLS no es column-level;
+ * una policy "self/director" sobre member permitiría escalar role/alcance. El
+ * target se valida primero con una lectura RLS-aware y el cambio queda en
+ * audit_log (Ley 26.529 art. 18). Sin PII de paciente.
+ */
+export async function updateMemberPrescriptor(
+  memberId: string,
+  input: PrescriptorInput,
+): Promise<Result<void>> {
+  const parsedId = z.string().uuid().safeParse(memberId);
+  if (!parsedId.success) return err("validation", "Identificador de miembro inválido.");
+  const parsed = prescriptorSchema.safeParse(input);
+  if (!parsed.success) {
+    return err("validation", parsed.error.issues[0]?.message ?? "Datos de prescriptor inválidos.");
+  }
+  const d = parsed.data;
+
+  const ctx = await getActiveContext();
+  if (!ctx.ok) return ctx;
+
+  const supabase = await createSupabaseServerClient();
+  const { data: target, error: tErr } = await supabase
+    .from("member")
+    .select(
+      "id, role, es_colegiado, registro_prescriptor, jurisdiccion_matricula, especialidad_prescriptora",
+    )
+    .eq("id", parsedId.data)
+    .eq("organization_id", ctx.data.organization.id)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (tErr) {
+    const mapped = mapSupabaseError(tErr);
+    return err(mapped.code, mapped.message, tErr.message);
+  }
+  if (!target) return err("not_found", "Ese miembro no existe o fue dado de baja.");
+  const targetRow = target as {
+    id: string;
+    role: Role;
+    es_colegiado: boolean;
+    registro_prescriptor: string | null;
+    jurisdiccion_matricula: string | null;
+    especialidad_prescriptora: string | null;
+  };
+
+  const verdict = checkPrescriptorUpdateAllowed({
+    actorRole: ctx.data.session.role,
+    actorEsColegiado: ctx.data.session.esColegiado,
+    actorMemberId: ctx.data.session.memberId,
+    targetMemberId: targetRow.id,
+    targetEsColegiado: targetRow.es_colegiado,
+  });
+  if (!verdict.ok) return err(verdict.code, verdict.message);
+
+  // No-op si nada cambia (evita un UPDATE y una entrada de audit vacía).
+  if (
+    targetRow.registro_prescriptor === d.registroPrescriptor &&
+    targetRow.jurisdiccion_matricula === d.jurisdiccionMatricula &&
+    targetRow.especialidad_prescriptora === d.especialidadPrescriptora
+  ) {
+    return ok(undefined);
+  }
+
+  const service = createSupabaseServiceClient();
+  const { error: upErr } = await service
+    .from("member")
+    .update({
+      registro_prescriptor: d.registroPrescriptor,
+      jurisdiccion_matricula: d.jurisdiccionMatricula,
+      especialidad_prescriptora: d.especialidadPrescriptora,
+    })
+    .eq("id", targetRow.id)
+    .eq("organization_id", ctx.data.organization.id);
+  if (upErr) {
+    const mapped = mapSupabaseError(upErr);
+    return err(mapped.code, mapped.message, upErr.message);
+  }
+
+  // Audit (Ley 26.529 art. 18): la identidad prescriptora individualiza al
+  // firmante de futuras recetas. Sólo credenciales (no PII de paciente).
+  await writeAuditEntry({
+    organizationId: ctx.data.organization.id,
+    actorId: ctx.data.session.userId,
+    actorRole: ctx.data.session.role,
+    action: "member.prescriptor_update",
+    resourceType: "member",
+    resourceId: targetRow.id,
+    payload: {
+      registro_prescriptor: d.registroPrescriptor,
+      jurisdiccion_matricula: d.jurisdiccionMatricula,
+      especialidad_prescriptora: d.especialidadPrescriptora,
+    },
+  });
+
+  return ok(undefined);
+}
+
 /**
  * M55 · espejo per-member de countSesionesOtraEspecialidad (/configuracion):
  * cuántas sesiones de TURNOS de este profesional tienen un tool_id que NO es

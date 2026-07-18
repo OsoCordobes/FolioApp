@@ -39,6 +39,8 @@ export function canalPedidoLabel(canal: string): string {
       return "Instagram";
     case "TELEFONO":
       return "teléfono";
+    case "PORTAL":
+      return "portal del paciente";
     default:
       return canal;
   }

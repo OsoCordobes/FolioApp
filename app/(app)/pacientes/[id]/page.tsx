@@ -90,6 +90,7 @@ export default async function PacientePage({ params }: PageProps) {
       cumple={data.data.cumple}
       especialidad={especialidad}
       intakeAvanzado={data.data.intakeAvanzado}
+      organizacionNombre={ctx.data.organization.nombre}
     />
   );
 }

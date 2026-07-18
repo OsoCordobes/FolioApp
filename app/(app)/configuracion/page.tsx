@@ -16,8 +16,9 @@ import { capabilitiesFor } from "@/lib/auth/capabilities";
 import { computeMonthlyPriceCents } from "@/lib/billing/pricing";
 import { getActiveContext } from "@/lib/db/active-context";
 import { getConfiguracionData } from "@/lib/db/configuracion";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isOrgListedInDirectory } from "@/lib/db/directorio";
+import { puedeResolverClaims } from "@/lib/db/paciente-claims";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   getOwnEspecialidad,
   getOwnPerfilPublico,
@@ -128,6 +129,10 @@ export default async function ConfiguracionPage() {
       initialListarEnDirectorio={listarEnDirectorio}
       suscripcionEstado={ctx.data.subscription.estado}
       whatsappConfigured={whatsappConfigured}
+      showVinculaciones={puedeResolverClaims(
+        ctx.data.session.role,
+        ctx.data.session.esColegiado,
+      )}
     />
   );
 }

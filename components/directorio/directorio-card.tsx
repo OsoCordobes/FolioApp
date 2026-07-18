@@ -6,6 +6,8 @@
  * /book/[slug]?ref=directorio. Acento por org. Solo datos públicos de la org.
  */
 
+import Image from "next/image";
+
 import { AvatarIniciales } from "@/components/avatar-iniciales";
 import type { DirectorioOrg } from "@/lib/db/directorio";
 import { getEspecialidadMeta } from "@/lib/especialidades/meta";
@@ -33,15 +35,12 @@ export function DirectorioCard({ org }: { org: DirectorioOrg }) {
     >
       <div className="dir-card-head">
         {org.logoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <Image
             src={org.logoUrl}
             alt={`Logo de ${org.nombre}`}
             className="dir-card-logo"
             width={48}
             height={48}
-            loading="lazy"
-            decoding="async"
           />
         ) : (
           <AvatarIniciales fullName={org.nombre} acentoHex={acento} size="md" />

@@ -1,10 +1,29 @@
 /**
- * Folio · tipos de la DB.
+ * Folio · tipos de la DB (schema `public`).
  *
- * STUB DE F3: tipos manuales mínimos de las tablas más usadas. El archivo
- * completo se regenera cuando levantemos Supabase local:
+ * ESTADO: **scaffold manual curado**, NO output completo de `supabase gen
+ * types`. Cubre las tablas/funciones/enums más usados por código nuevo, con
+ * los nombres de columna verificados a mano contra `supabase/migrations/`.
+ * La generación real desde prod requiere Docker Desktop (CLI `gen types
+ * --db-url` levanta `postgres-meta` en contenedor) o un access-token de
+ * Supabase (`gen types --project-id grkpayhxndztlfwxobnt`); ninguno está
+ * disponible en el entorno de CI/agente. Cuando alguno lo esté, regenerar:
  *
+ *   # local (requiere `supabase start` con Docker):
  *   pnpm exec supabase gen types typescript --local > lib/supabase/database.types.ts
+ *   # o directo desde prod (requiere `supabase login`):
+ *   pnpm exec supabase gen types typescript --project-id grkpayhxndztlfwxobnt > lib/supabase/database.types.ts
+ *
+ * USO: el cliente Supabase runtime sigue tipado `<any>` en `server.ts`
+ * (ver la nota de flip global en el plan S1b). El **código nuevo** que quiera
+ * chequeo de esquema en tiempo de compilación debe usar los wrappers tipados:
+ * `createTypedServerClient` / `createTypedServiceClient` de
+ * `lib/supabase/typed.ts` (server-only) y `createTypedBrowserClient` de
+ * `lib/supabase/typed.client.ts` (Client Components), que parametrizan este
+ * `Database`. Así el drift de esquema (columna/tabla renombrada) se vuelve
+ * error de `tsc` **para lo nuevo**, sin romper lo existente. La seguridad
+ * multi-tenant NO depende de estos tipos — depende de RLS + el JWT (ver
+ * CLAUDE.md).
  */
 
 export type Json =

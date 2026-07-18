@@ -40,6 +40,7 @@ import {
   createDocumentoClinico,
   refreshSignedUrl,
 } from "@/lib/db/documentos";
+import { listRespuestasPaciente, saveRespuesta } from "@/lib/db/instrumentos";
 import { savePacienteIntakeAvanzado } from "@/lib/db/paciente-intake";
 import { createPaciente } from "@/lib/db/pacientes";
 import { savePlanTratamiento } from "@/lib/db/plan-tratamiento";
@@ -49,6 +50,10 @@ import { transitionTurno } from "@/lib/db/turnos";
 import { err, ok, type Result } from "@/lib/db/errors";
 import { buildUpsertSesionInput } from "@/lib/especialidades/draft";
 import { ESPECIALIDAD_SLUGS } from "@/lib/especialidades/meta";
+import {
+  CSSRS_INSTRUMENTO_ID,
+  CSSRS_ITEMS_LEN,
+} from "@/lib/especialidades/psicologia/schema";
 import {
   createSupabaseServerClient,
   createSupabaseServiceClient,
@@ -155,6 +160,146 @@ export async function savePacienteIntakeAvanzadoAction(
   revalidatePath("/pacientes/[id]");
   revalidatePath(`/pacientes/${parsed.data.pacienteId}`);
   return ok({ id: result.data.id });
+}
+
+// ─── Registrar el screener C-SSRS en el historial de riesgo (C7) ─────────────
+//
+// El workflow de riesgo suicida de psicología (Tool, tab Plan) documenta el
+// plan de crisis en el toolData de la sesión (cifrado, viaja con el SOAP). Este
+// action, ADEMÁS, registra el screener C-SSRS en instrumento_respuesta (C2) para
+// el TRACKING LONGITUDINAL del riesgo — una serie de bandas independiente del
+// SOAP, base del dashboard de outcomes (C8). Se persiste una fila POR aplicación
+// (append-only): el profesional lo dispara explícitamente al completar el
+// screener, no en cada guardado de la sesión (evita duplicados por re-save).
+//
+// El scoring canónico se recomputa server-side en saveRespuesta (nunca se
+// confía en un score del cliente); acá solo se validan pacienteId/turnoId y las
+// 6 respuestas 0/1. Tenancy: paciente ∈ org activa (guard IDOR) + RLS +
+// trigger same-org de instrumento_respuesta (M73).
+
+const registrarCssrsSchema = z.object({
+  pacienteId: z.string().uuid(),
+  /** Turno en curso (opcional): resuelve la sesion_id para atar la aplicación. */
+  turnoId: z.string().uuid().optional().nullable(),
+  /** Screener C-SSRS completo: 6 respuestas 0 (No) / 1 (Sí). */
+  cssrs: z.array(z.number().int().min(0).max(1)).length(CSSRS_ITEMS_LEN),
+});
+
+export type RegistrarCssrsActionInput = z.infer<typeof registrarCssrsSchema>;
+
+/**
+ * Registra una aplicación del screener C-SSRS en instrumento_respuesta (C2) para
+ * el tracking longitudinal del riesgo. Si hay un turno en curso con sesión
+ * guardada, la aplicación se ata a esa sesión; si no, se guarda como aplicación
+ * suelta (sesion_id NULL) — sigue siendo parte de la HC del paciente.
+ */
+export async function registrarCssrsAction(
+  input: RegistrarCssrsActionInput,
+): Promise<Result<{ id: string }>> {
+  const parsed = registrarCssrsSchema.safeParse(input);
+  if (!parsed.success) {
+    return err("validation", "Datos del C-SSRS inválidos.", parsed.error.message);
+  }
+  const d = parsed.data;
+
+  const session = await getActiveSession();
+  if (!session.ok) return session;
+  const organizationId = session.data.organizationId;
+
+  const supabase = await createSupabaseServerClient();
+
+  // F-AUTH (IDOR): paciente ∈ org activa. Mismo guard que los vecinos — no se
+  // confía en ids del cliente. La RLS de instrumento_respuesta + el trigger
+  // same-org (M73) son la última línea.
+  const { data: pacienteRow, error: pacienteErr } = await supabase
+    .from("paciente")
+    .select("id")
+    .eq("id", d.pacienteId)
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+  if (pacienteErr) {
+    return err("db_error", "No pudimos validar el paciente.", pacienteErr.message);
+  }
+  if (!pacienteRow) {
+    return err("forbidden", "Ese paciente no pertenece a tu organización.");
+  }
+
+  // Resuelve la sesion del turno en curso (best-effort): la aplicación se ata a
+  // ella si existe. El SELECT es org-scoped + valida turno↔paciente para que un
+  // turno ajeno no ate la respuesta a una sesión de otro paciente/tenant.
+  let sesionId: string | null = null;
+  if (d.turnoId) {
+    const { data: sesionRow } = await supabase
+      .from("sesion")
+      .select("id")
+      .eq("turno_id", d.turnoId)
+      .eq("organization_id", organizationId)
+      .eq("paciente_id", d.pacienteId)
+      .maybeSingle();
+    sesionId = (sesionRow as { id: string } | null)?.id ?? null;
+  }
+
+  const result = await saveRespuesta({
+    pacienteId: d.pacienteId,
+    sesionId,
+    instrumentoId: CSSRS_INSTRUMENTO_ID,
+    respuestas: d.cssrs,
+    completadoPor: "profesional",
+  });
+  if (!result.ok) return result;
+
+  // La vuelta: la serie longitudinal de riesgo de la ficha trae la aplicación nueva.
+  revalidatePath(`/pacientes/${d.pacienteId}`);
+  return ok({ id: result.data.id });
+}
+
+// ─── Dashboard de outcomes de psicología (C8) ────────────────────────────────
+//
+// El dashboard de la Tool de psicología (psicologia/dashboard.tsx) grafica las
+// series de instrumento_respuesta (PHQ-9/GAD-7/DASS-21/PCL-5 en el tiempo). Esta
+// action expone SOLO el snapshot no-PHI que el dashboard necesita
+// (instrumentoId + scoreTotal + createdAt) — NUNCA las respuestas crudas
+// descifradas. La tenancy la cubre listRespuestasPaciente, que ya filtra por la
+// org activa (organization_id de la sesión) además de la RLS + rol clínico.
+
+/** Punto de serie de un instrumento para el dashboard (score en claro, no-PHI). */
+export interface OutcomeSeriePunto {
+  instrumentoId: string;
+  scoreTotal: number | null;
+  createdAt: string;
+}
+
+/**
+ * Serie de instrumentos de un paciente para el dashboard de outcomes: devuelve
+ * solo { instrumentoId, scoreTotal, createdAt } — el score ya viene en claro del
+ * snapshot (C2), así que no se descifra ni viaja PHI al cliente. Filtra al set de
+ * salud mental del dashboard (PHQ-9/GAD-7/DASS-21/PCL-5) server-side para no
+ * mandar filas de otros dominios (p. ej. el C-SSRS de riesgo, que tiene su propia
+ * vista). RLS + rol clínico son la barrera real.
+ */
+export async function listOutcomeSeriesAction(
+  pacienteId: string,
+): Promise<Result<OutcomeSeriePunto[]>> {
+  if (!z.string().uuid().safeParse(pacienteId).success) {
+    return err("validation", "ID de paciente inválido.");
+  }
+
+  const { OUTCOME_INSTRUMENTOS, familiaInstrumento } = await import(
+    "@/lib/especialidades/psicologia/schema"
+  );
+  const familias = new Set(OUTCOME_INSTRUMENTOS.map((o) => o.key));
+
+  const result = await listRespuestasPaciente(pacienteId);
+  if (!result.ok) return result;
+
+  const puntos: OutcomeSeriePunto[] = result.data
+    .filter((r) => familias.has(familiaInstrumento(r.instrumentoId)))
+    .map((r) => ({
+      instrumentoId: r.instrumentoId,
+      scoreTotal: r.scoreTotal,
+      createdAt: r.createdAt,
+    }));
+  return ok(puntos);
 }
 
 // ─── Guardar sesión desde la ficha (tab Plan) ───────────────────────────────
@@ -393,58 +538,63 @@ export async function savePlanTratamientoAction(
   return ok({ id: result.data.id });
 }
 
-// ─── Radiografías de la Tool quiropraxia (Workstream 6) ──────────────────────
+// ─── Adjuntos clínicos por sesión (documento_clinico, M08) ───────────────────
+//
+// Un solo core (uploadDocumentoSesion) que sube los bytes server-side al bucket
+// privado y registra la fila atada a la sesion del turno en curso. Lo usan:
+//   - Radiografías de la Tool quiropraxia (tipo RADIOGRAFIA, Workstream 6).
+//   - C6 · adjuntos de estudios de la Tool cardio (tipo INFORME_EXTERNO:
+//     ECG/Holter/ergometría escaneados o en PDF).
+// El waveform NO se renderiza: el archivo se ABRE por signed URL en la galería.
 
-const RADIO_BUCKET = "documentos-clinicos";
-const RADIO_MAX_BYTES = 50 * 1024 * 1024; // espeja el CHECK documento_tamanio_limite (M08)
+const DOC_BUCKET = "documentos-clinicos";
+const DOC_MAX_BYTES = 50 * 1024 * 1024; // espeja el CHECK documento_tamanio_limite (M08)
 // image/* | pdf | dicom. El set fino lo re-valida createDocumentoClinico contra
 // ALLOWED_MIME; acá hacemos un primer filtro barato antes de subir bytes.
-function radioMimeOk(mime: string): boolean {
+function docMimeOk(mime: string): boolean {
   return mime.startsWith("image/") || mime === "application/pdf" || mime === "application/dicom";
 }
 
 /**
- * Adjunta una radiografía a la sesión del turno en curso (documento_clinico
- * tipo RADIOGRAFIA, M08). Sube los bytes server-side al bucket privado y
- * registra la fila con el storage_path canónico.
+ * Core compartido: adjunta un documento a la sesión del turno en curso.
  *
- * Reglas:
+ * Reglas (idénticas para radiografías y estudios cardio):
  *   - turno ∈ org activa Y turno.paciente_id == pacienteId (mismo guard IDOR
  *     que upsertSesion — no se confía en IDs del cliente).
- *   - debe existir una sesion para el turno (la radiografía cuelga de ella):
- *     sino se pide "Guardá la sesión antes de adjuntar radiografías." — así el
- *     documento siempre queda atado a una visita.
+ *   - debe existir una sesion para el turno (el documento cuelga de ella): sino
+ *     se pide guardar la sesión primero, así el documento queda atado a la visita.
  *   - mime image/* | pdf | dicom y tamaño <= 50 MB.
  *
  * PHI: el nombre/descripción no se loguean; el blob vive en el bucket privado y
  * la fila la lee la ficha con signed URLs de vida corta.
  */
-export async function uploadRadiografiaAction(
-  formData: FormData,
-): Promise<Result<{ documentoId: string }>> {
-  const file = formData.get("file");
-  const pacienteId = String(formData.get("pacienteId") ?? "");
-  const turnoId = String(formData.get("turnoId") ?? "");
-  const descripcionRaw = formData.get("descripcion");
-  const descripcion =
-    typeof descripcionRaw === "string" && descripcionRaw.trim() !== ""
-      ? descripcionRaw.trim().slice(0, 2000)
-      : undefined;
+async function uploadDocumentoSesion(params: {
+  file: unknown;
+  pacienteId: string;
+  turnoId: string;
+  descripcion?: string;
+  tipo: "RADIOGRAFIA" | "INFORME_EXTERNO";
+  /** Nombre de la entidad para los mensajes de error ("radiografía"/"estudio"). */
+  etiqueta: string;
+  /** Filename por defecto si el Blob no trae nombre. */
+  fallbackFilename: string;
+}): Promise<Result<{ documentoId: string }>> {
+  const { file, pacienteId, turnoId, descripcion, tipo, etiqueta, fallbackFilename } = params;
 
   if (!(file instanceof Blob) || file.size === 0) {
     return err("validation", "Adjuntá un archivo válido.");
   }
   if (!z.string().uuid().safeParse(pacienteId).success || !z.string().uuid().safeParse(turnoId).success) {
-    return err("validation", "Datos de la radiografía inválidos.");
+    return err("validation", `Datos del ${etiqueta} inválidos.`);
   }
-  if (file.size > RADIO_MAX_BYTES) {
+  if (file.size > DOC_MAX_BYTES) {
     return err("validation", "El archivo supera el límite de 50 MB.");
   }
   const mimeType = file.type || "application/octet-stream";
-  if (!radioMimeOk(mimeType)) {
+  if (!docMimeOk(mimeType)) {
     return err("validation", `Tipo de archivo no permitido: ${mimeType}.`);
   }
-  const filename = file instanceof File && file.name ? file.name : "radiografia.bin";
+  const filename = file instanceof File && file.name ? file.name : fallbackFilename;
 
   const ctx = await getActiveContext();
   if (!ctx.ok) return ctx;
@@ -468,7 +618,7 @@ export async function uploadRadiografiaAction(
     return err("forbidden", "El turno no corresponde a ese paciente.");
   }
 
-  // La radiografía cuelga de la sesion del turno: si todavía no hay sesión, se
+  // El documento cuelga de la sesion del turno: si todavía no hay sesión, se
   // pide guardarla primero (el documento siempre queda atado a una visita).
   const { data: sesionRow } = await supabase
     .from("sesion")
@@ -478,7 +628,7 @@ export async function uploadRadiografiaAction(
     .maybeSingle();
   const sesionId = (sesionRow as { id: string } | null)?.id ?? null;
   if (!sesionId) {
-    return err("validation", "Guardá la sesión antes de adjuntar radiografías.");
+    return err("validation", `Guardá la sesión antes de adjuntar el ${etiqueta}.`);
   }
 
   // Subida server-side de los bytes al bucket privado. El storage_path canónico
@@ -488,7 +638,7 @@ export async function uploadRadiografiaAction(
   const pathInBucket = storagePath.replace(/^documentos-clinicos\//, "");
   const bytes = new Uint8Array(await file.arrayBuffer());
   const { error: uploadErr } = await supabase.storage
-    .from(RADIO_BUCKET)
+    .from(DOC_BUCKET)
     .upload(pathInBucket, bytes, { contentType: mimeType });
   if (uploadErr) {
     return err("db_error", "No pudimos subir el archivo.", uploadErr.message);
@@ -497,7 +647,7 @@ export async function uploadRadiografiaAction(
   const created = await createDocumentoClinico({
     pacienteId,
     sesionId,
-    tipo: "RADIOGRAFIA",
+    tipo,
     storagePath,
     mimeType,
     tamanioBytes: file.size,
@@ -505,15 +655,64 @@ export async function uploadRadiografiaAction(
   });
   if (!created.ok) return created;
 
-  // La vuelta: la galería de la Tool quiro trae la radiografía nueva.
+  // La vuelta: la galería de la Tool trae el documento nuevo.
   revalidatePath(`/pacientes/${pacienteId}`);
   return ok({ documentoId: created.data.id });
 }
 
 /**
- * Refresca el signed URL de una radiografía (los URLs de la galería expiran a
- * los 5 min). Wrapper fino sobre refreshSignedUrl — la tenancy la cubre el
- * propio reader (org-scoped).
+ * Adjunta una radiografía a la sesión del turno en curso (documento_clinico
+ * tipo RADIOGRAFIA, M08). Delega en uploadDocumentoSesion (core compartido).
+ */
+export async function uploadRadiografiaAction(
+  formData: FormData,
+): Promise<Result<{ documentoId: string }>> {
+  const descripcionRaw = formData.get("descripcion");
+  return uploadDocumentoSesion({
+    file: formData.get("file"),
+    pacienteId: String(formData.get("pacienteId") ?? ""),
+    turnoId: String(formData.get("turnoId") ?? ""),
+    descripcion:
+      typeof descripcionRaw === "string" && descripcionRaw.trim() !== ""
+        ? descripcionRaw.trim().slice(0, 2000)
+        : undefined,
+    tipo: "RADIOGRAFIA",
+    etiqueta: "radiografía",
+    fallbackFilename: "radiografia.bin",
+  });
+}
+
+/**
+ * C6 · adjunta un estudio cardiológico (ECG/Holter/ergometría escaneado o en
+ * PDF) a la sesión del turno en curso, como documento_clinico tipo
+ * INFORME_EXTERNO (el enum tipo_documento de M08 no tiene ECG/HOLTER; la
+ * categoría clínica fina la lleva el campo `estudios[].tipo` del panel cardio).
+ * Delega en uploadDocumentoSesion (mismo core + guards que las radiografías).
+ * Waveform: el archivo se ABRE por signed URL — Folio NO renderiza la señal.
+ */
+export async function uploadEstudioCardioAction(
+  formData: FormData,
+): Promise<Result<{ documentoId: string }>> {
+  const descripcionRaw = formData.get("descripcion");
+  return uploadDocumentoSesion({
+    file: formData.get("file"),
+    pacienteId: String(formData.get("pacienteId") ?? ""),
+    turnoId: String(formData.get("turnoId") ?? ""),
+    descripcion:
+      typeof descripcionRaw === "string" && descripcionRaw.trim() !== ""
+        ? descripcionRaw.trim().slice(0, 2000)
+        : undefined,
+    tipo: "INFORME_EXTERNO",
+    etiqueta: "estudio",
+    fallbackFilename: "estudio.bin",
+  });
+}
+
+/**
+ * Refresca el signed URL de un documento clínico (los URLs de la galería
+ * expiran a los 5 min). Wrapper fino sobre refreshSignedUrl — la tenancy la
+ * cubre el propio reader (org-scoped). Lo usan tanto la galería de radiografías
+ * (quiro) como la de estudios adjuntos (cardio).
  */
 export async function refreshRadiografiaUrlAction(
   documentoId: string,

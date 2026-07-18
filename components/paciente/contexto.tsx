@@ -33,6 +33,12 @@ interface PacienteFichaContextValue {
    * tab Información lo muestra read-only + un modal de edición.
    */
   intakeAvanzado: IntakeAvanzadoFicha | null;
+  /**
+   * X7 · nombre de la organización (consultorio/clínica). Se usa en el
+   * encabezado membretado de impresión (`.fi-print-header`) para que una hoja
+   * impresa identifique de dónde salió el documento.
+   */
+  organizacionNombre: string;
 }
 
 const PacienteFichaContext = createContext<PacienteFichaContextValue | null>(null);

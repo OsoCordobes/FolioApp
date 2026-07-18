@@ -28,6 +28,7 @@ import {
   getEspecialidad,
   getIntakeAvanzadoConfig,
   type EspecialidadSlug,
+  type SoapGuia,
 } from "@/lib/especialidades/registry";
 import { toWhatsappE164 } from "@/lib/format/phone";
 import type { IntakeAvanzadoFicha, PacienteFichaInfo, PlanData } from "@/lib/db/paciente-ficha";
@@ -81,6 +82,7 @@ function SoapStacked({
   setSoap,
   saveBadge,
   eyebrow,
+  guia,
 }: {
   soap: SoapState;
   setSoap: (s: SoapState) => void;
@@ -88,6 +90,12 @@ function SoapStacked({
   saveBadge?: ReactNode;
   /** Título del header — TabPlan lo ajusta si se edita una visita pasada. */
   eyebrow?: string;
+  /**
+   * C9 · guía SOAP de la especialidad (prompts/checklists por sección). Andamiaje
+   * VISUAL opcional arriba de cada textarea; el texto libre no cambia. Ausente =
+   * SOAP genérico sin guía (comportamiento histórico de cardio/psico pre-C9).
+   */
+  guia?: SoapGuia;
 }) {
   // El borrador se persiste con "Guardar sesión" (TabPlan) cuando el paciente
   // tiene un turno ancla (en curso / de hoy / última visita). Sin ancla no hay
@@ -106,23 +114,40 @@ function SoapStacked({
           </span>
         )}
       </header>
-      {SOAP_SECTIONS.map((s) => (
-        <div key={s.id} className="pc-soap-section">
-          <div className="pc-soap-section-head">
-            <b>{s.label}</b>
-            <span className="pc-soap-section-hint">{s.hint}</span>
+      {SOAP_SECTIONS.map((s) => {
+        const g = guia?.[s.id];
+        return (
+          <div key={s.id} className="pc-soap-section">
+            <div className="pc-soap-section-head">
+              <b>{s.label}</b>
+              <span className="pc-soap-section-hint">{s.hint}</span>
+            </div>
+            {/* C9 · andamiaje visual de la especialidad. Aditivo: no altera el
+                textarea de texto libre; solo orienta qué registrar. */}
+            {g && (g.prompt || g.checklist?.length) ? (
+              <div className="pc-soap-guia">
+                {g.prompt ? <p className="pc-soap-guia-prompt">{g.prompt}</p> : null}
+                {g.checklist?.length ? (
+                  <ul className="pc-soap-guia-list">
+                    {g.checklist.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            ) : null}
+            <textarea
+              className="pc-soap-textarea"
+              value={soap[s.id]}
+              onChange={(e) => setSoap({ ...soap, [s.id]: e.target.value })}
+              placeholder={`Escribí el ${s.label.toLowerCase()}…`}
+              aria-label={`${s.label} — nota SOAP. ${s.hint}`}
+              spellCheck={false}
+              rows={Math.max(3, Math.ceil((soap[s.id]?.length ?? 0) / 60))}
+            />
           </div>
-          <textarea
-            className="pc-soap-textarea"
-            value={soap[s.id]}
-            onChange={(e) => setSoap({ ...soap, [s.id]: e.target.value })}
-            placeholder={`Escribí el ${s.label.toLowerCase()}…`}
-            aria-label={`${s.label} — nota SOAP. ${s.hint}`}
-            spellCheck={false}
-            rows={Math.max(3, Math.ceil((soap[s.id]?.length ?? 0) / 60))}
-          />
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -254,6 +279,8 @@ function TabPlan() {
     pacienteId: paciente.id,
     turno: turnoActivo ? { id: turnoActivo.id, tieneSesionGuardada: turnoActivo.tieneSesionGuardada } : null,
     radiografias: plan.radiografias,
+    // C6 · adjuntos de estudios de la Tool cardio (ECG/Holter/ergometría); quiro/psico los ignoran.
+    estudiosAdjuntos: plan.estudiosAdjuntos,
     // Cardiología la usa en el score de riesgo CV (≥60 suma); quiro/psico la ignoran.
     edad: paciente.edad > 0 ? paciente.edad : undefined,
   };
@@ -413,6 +440,7 @@ function TabPlan() {
             soap={soap}
             setSoap={setSoap}
             saveBadge={saveBadge}
+            guia={def.soapGuia}
             eyebrow={
               turnoActivo?.modo === "retroactivo"
                 ? `Nota SOAP · visita del ${fmtTurnoAncla(turnoActivo.inicio, { day: "numeric", month: "short" })}`
@@ -682,6 +710,60 @@ function TabDocumentos() {
   );
 }
 
+// ─── X7 · membrete de impresión + botón imprimir ───────────────────────────
+
+/**
+ * Encabezado que SOLO aparece al imprimir (clase `.print-only`, oculta en
+ * pantalla vía @media print). Estampa consultorio · paciente · sección · fecha
+ * para que la hoja impresa sea un documento auto-identificable. No hay PHI de
+ * OTROS pacientes: la ruta /pacientes/[id] renderiza un único paciente.
+ */
+function FichaPrintHeader({
+  organizacionNombre,
+  pacienteNombre,
+  seccion,
+}: {
+  organizacionNombre: string;
+  pacienteNombre: string;
+  seccion: string;
+}) {
+  const hoy = new Intl.DateTimeFormat("es-AR", {
+    timeZone: TZ_AR,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(new Date());
+  return (
+    <header className="fi-print-header print-only" aria-hidden>
+      <div className="fi-print-header-brand">
+        <b>{organizacionNombre || "Folio"}</b>
+        <span className="fi-print-header-meta">Impreso el {hoy}</span>
+      </div>
+      <p className="fi-print-header-doc">
+        Ficha clínica — <b>{pacienteNombre}</b> · {seccion}
+      </p>
+    </header>
+  );
+}
+
+/**
+ * Botón "Imprimir" de la ficha. Dispara el diálogo de impresión del navegador;
+ * los estilos `@media print` (folio.css) ocultan el chrome y refluyen a A4.
+ * `.no-print` para que no aparezca en el propio papel.
+ */
+function ImprimirFichaButton() {
+  return (
+    <button
+      type="button"
+      className="fi-btn fi-btn-ghost no-print"
+      onClick={() => window.print()}
+      title="Imprimir o guardar como PDF la sección visible de la ficha"
+    >
+      <I.Printer size={13} /> Imprimir
+    </button>
+  );
+}
+
 // ─── Header del paciente ──────────────────────────────────────────────────
 
 function PacienteWhatsAppButton({ telefono, nombre }: { telefono: string; nombre: string }) {
@@ -750,6 +832,7 @@ function PacienteHeader() {
         </div>
         <div className="pc-actions">
           <PacienteWhatsAppButton telefono={paciente.tel} nombre={paciente.nombre} />
+          <ImprimirFichaButton />
           <button
             type="button"
             className="fi-btn fi-btn-secondary"
@@ -788,6 +871,8 @@ interface PacienteDetalleProps {
   especialidad: EspecialidadSlug;
   /** Workstream 5 · intake avanzado de la especialidad activa (M60) o null. */
   intakeAvanzado: IntakeAvanzadoFicha | null;
+  /** X7 · nombre del consultorio/clínica para el membrete de impresión. */
+  organizacionNombre: string;
 }
 
 export function PacienteDetalle({
@@ -796,16 +881,19 @@ export function PacienteDetalle({
   cumple,
   especialidad,
   intakeAvanzado,
+  organizacionNombre,
 }: PacienteDetalleProps) {
   return (
-    <PacienteFichaProvider value={{ paciente, plan, cumple, especialidad, intakeAvanzado }}>
+    <PacienteFichaProvider
+      value={{ paciente, plan, cumple, especialidad, intakeAvanzado, organizacionNombre }}
+    >
       <PacienteDetalleInner />
     </PacienteFichaProvider>
   );
 }
 
 function PacienteDetalleInner() {
-  const { plan } = usePacienteFicha();
+  const { plan, paciente, organizacionNombre } = usePacienteFicha();
   const [tab, setTab] = useState<TabId>("plan");
 
   const tabs: [TabId, string, boolean?][] = [
@@ -839,8 +927,18 @@ function PacienteDetalleInner() {
     tabIndex: 0,
   });
 
+  const tabLabel = tabs.find(([id]) => id === tab)?.[1] ?? "Ficha";
+
   return (
-    <div className="fi-content pc-content">
+    <div className="fi-content pc-content" data-printable>
+      {/* X7 · encabezado membretado sólo-impresión. En pantalla está oculto
+          (`.print-only`); en papel identifica consultorio · paciente · fecha
+          para que una hoja suelta no sea PHI anónima. */}
+      <FichaPrintHeader
+        organizacionNombre={organizacionNombre}
+        pacienteNombre={paciente.nombre}
+        seccion={tabLabel}
+      />
       <PacienteHeader />
 
       <nav className="pc-tabs" role="tablist" aria-label="Secciones de la ficha">

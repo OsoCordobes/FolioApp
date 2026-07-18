@@ -147,6 +147,10 @@ export function PhotoUpload({
       />
 
       {showPreview ? (
+        // Raw <img> on purpose (X8 skips it): the preview is a transient data
+        // URL (FileReader, during upload) or a Supabase public URL (after).
+        // next/image rejects data URLs without `unoptimized`, so the next/image
+        // logo/avatar migration deliberately leaves this upload preview as-is.
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={localPreview!}

@@ -232,6 +232,11 @@ const ESPECIALIDAD_SERVICIOS: Record<EspecialidadSlug, ServicioTemplate[]> = {
     { nombre: "Sesión de psicoterapia", dur: 50, precioCents: 1500000, tipoCanonico: "SEGUIMIENTO_ESTANDAR" },
     { nombre: "Sesión de pareja", dur: 80, precioCents: 2200000, tipoCanonico: "SEGUIMIENTO_EXTENDIDO" },
   ],
+  // N1 · kinesiología comparte el set del rubro homónimo (mismo criterio 1:1
+  // que quiropraxia/cardiología).
+  kinesiologia: TEMPLATES.kinesiologia.servicios,
+  // N2 · nutrición comparte el set del rubro homónimo (mismo criterio 1:1).
+  nutricion: TEMPLATES.nutricion.servicios,
 };
 
 /**

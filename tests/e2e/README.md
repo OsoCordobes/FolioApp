@@ -55,6 +55,57 @@ pnpm exec playwright test tests/e2e/demo-path.spec.ts --project=e2e
 
 Sin las envs, ambos specs se **skipean** (seguro por defecto en CI).
 
+## Flujos premium (PR X10)
+
+Tres specs que cubren los caminos que hacen a Folio "vendible". Todos son
+best-effort: su nivel *smoke* corre sin envs extra, y el nivel *profundo*
+(que escribe datos reales) está gateado por su propia env. El **verde real**
+de cualquier nivel necesita el **dev server corriendo** (`E2E_BASE_URL`) más
+una **org semilla** — sin eso los specs no pueden pasar (se skipean o fallan
+al conectar), no es un bug del spec.
+
+### `onboarding.spec.ts` — signup → especialidad → ficha
+
+- **Smoke** (siempre): signup inline real → `/onboarding` Step 2, y el
+  radiogroup de especialidad de Step 3 refleja la elección. Crea **una** fila
+  en `auth.users` namespaced `e2e-onb-<ts>@folio.app` (cleanup mecánico por
+  patrón, igual que `auth.spec.ts`). No finaliza onboarding ni crea PHI.
+- **Ficha** (`E2E_ONBOARDING_FICHA=1`): finaliza el wizard y crea una ficha
+  real `E2E Onb Ficha <fecha>` (✍️ **escribe PHI cifrada** — solo org de prueba).
+
+```powershell
+pnpm exec playwright test tests/e2e/onboarding.spec.ts --project=e2e
+$env:E2E_ONBOARDING_FICHA = "1"   # + creación de ficha real
+```
+
+### `booking.spec.ts` — `/book/<slug>` landing + wizard (solo lectura)
+
+Recorre el link público real: landing médico-first → wizard → servicio →
+grilla de slots (con horarios accesibles) → "Cambiar servicio". **No envía**
+la reserva → **no crea filas** (complementa a `booking-submit.spec.ts`, que
+sí escribe). Gated por `E2E_BOOKING_SLUG` (mismo env, misma org de prueba).
+
+```powershell
+$env:E2E_BOOKING_SLUG = "lautaro-folio"
+pnpm exec playwright test tests/e2e/booking.spec.ts --project=e2e
+```
+
+### `billing.spec.ts` — activación de suscripción con MP mockeado
+
+- **Smoke** (gated por login OWNER): `/configuracion/billing` carga y ofrece
+  activar/gestionar la suscripción. Solo lee.
+- **Activar** (`E2E_BILLING_ACTIVATE=1`): click en "Activar suscripción" con
+  `page.route` **interceptando todo mercadopago.com** → nunca pega a MP real;
+  tolera ambos desenlaces (redirect al mock si hay creds MP, banner de error
+  si faltan). Crea un preapproval PENDIENTE local (sin cobro).
+
+```powershell
+$env:E2E_LOGIN_EMAIL = "lautaro-folio-test@folio.app"   # OWNER existente
+$env:E2E_LOGIN_PASSWORD = "<password>"
+pnpm exec playwright test tests/e2e/billing.spec.ts --project=e2e
+$env:E2E_BILLING_ACTIVATE = "1"   # + click de activación con MP mockeado
+```
+
 ## Resto de los specs
 
 Los demás specs del directorio (`book-public`, `public-card`, `not-found`,

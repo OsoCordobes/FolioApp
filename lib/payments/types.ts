@@ -56,6 +56,15 @@ export interface SubscriptionInfo {
    * descarta como stale.
    */
   lastModified: string | null;
+  /**
+   * A-4 · false = la suscripción vive en el entorno SANDBOX del proveedor
+   * (MP: live_mode de credenciales de test). Los puntos de ingesta de estado
+   * (webhook, cron reconcile, lazy refresh) lo pasan por `checkMpLiveMode` y
+   * descartan el update en producción real. OPCIONAL a propósito: un proveedor
+   * futuro que no exponga el dato lo omite y el guardrail nunca descarta
+   * (`undefined` = no evaluable, se procesa).
+   */
+  liveMode?: boolean;
 }
 
 /** Intento de cobro recurrente, ya mapeado a dominio (MP: authorized_payment). */

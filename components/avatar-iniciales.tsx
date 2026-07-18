@@ -18,6 +18,8 @@
  * cuando integremos upload a Storage).
  */
 
+import Image from "next/image";
+
 import { getInitials, contrastingTextColor, adjustHexLightness } from "@/lib/format/initials";
 
 export type AvatarSize = "sm" | "md" | "lg" | "xl";
@@ -87,8 +89,7 @@ export function AvatarIniciales({
 
   if (avatarUrl) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
+      <Image
         src={avatarUrl}
         alt={fullName ?? ""}
         width={dim}

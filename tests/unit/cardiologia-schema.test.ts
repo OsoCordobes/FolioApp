@@ -14,8 +14,13 @@ import test from "node:test";
 
 import {
   cardiologiaToolDataSchema,
+  cardiologiaToolDataV2Schema,
+  cardiologiaToolDataV3Schema,
   deriveCardioSeries,
+  extractDerivacion,
   extractEstudios,
+  extractMedicacion,
+  parseCardiologiaToolData,
   resumenSesionCardiologia,
   scoreRiesgoCV,
 } from "../../lib/especialidades/cardiologia/schema";
@@ -106,6 +111,212 @@ test("schema: inválidos — sin v, v incorrecta, vitales fuera de rango, enums 
   );
 });
 
+// ─── Schema v2 (C5 · panel con vitales extra) ───────────────────────────────
+
+test("schema v2: payload con vitales extra válido; v1 rechaza contra v2 y viceversa", () => {
+  const v2 = {
+    v: 2,
+    panel: {
+      taSistolica: 130,
+      taDiastolica: 85,
+      fc: 72,
+      peso: 78,
+      talla: 172,
+      satO2: 97,
+      glucemia: 105,
+      factores: { hta: true },
+    },
+    estudios: [{ tipo: "ECG", fecha: "2026-06-01", hallazgos: "RS.", conclusion: "normal" }],
+  };
+  assert.equal(cardiologiaToolDataV2Schema.safeParse(v2).success, true);
+  // {v:2} pelado es válido (todo el contenido es opcional).
+  assert.equal(cardiologiaToolDataV2Schema.safeParse({ v: 2 }).success, true);
+  // v1 (literal 1) NO parsea contra v2 y v2 (literal 2) NO parsea contra v1.
+  assert.equal(cardiologiaToolDataV2Schema.safeParse({ v: 1 }).success, false);
+  assert.equal(cardiologiaToolDataSchema.safeParse({ v: 2 }).success, false);
+});
+
+test("schema v2: vitales extra fuera de rango rechazan; .strict() rechaza claves ajenas", () => {
+  // peso 20–400, talla 50–250, satO2 50–100, glucemia 20–800.
+  assert.equal(
+    cardiologiaToolDataV2Schema.safeParse({ v: 2, panel: { satO2: 120 } }).success,
+    false,
+  );
+  assert.equal(
+    cardiologiaToolDataV2Schema.safeParse({ v: 2, panel: { peso: 10 } }).success,
+    false,
+  );
+  assert.equal(
+    cardiologiaToolDataV2Schema.safeParse({ v: 2, panel: { glucemia: 105.5 } }).success,
+    false, // no entero
+  );
+  assert.equal(
+    cardiologiaToolDataV2Schema.safeParse({ v: 2, panel: { peso: 78, talla: 172 } }).success,
+    true,
+  );
+  // .strict(): una clave desconocida (payload ajeno) RECHAZA, no se stripea.
+  assert.equal(
+    cardiologiaToolDataV2Schema.safeParse({ v: 2, panel: {}, vertebras: [] }).success,
+    false,
+  );
+});
+
+// ─── Schema v3 (C6 · medicación + derivación) ───────────────────────────────
+
+test("schema v3: payload con medicación + derivación válido; v2/v1 rechazan contra v3", () => {
+  const v3 = {
+    v: 3,
+    panel: { taSistolica: 130, taDiastolica: 85, fc: 72, peso: 78, factores: { hta: true } },
+    estudios: [{ tipo: "ECG", fecha: "2026-06-01", hallazgos: "RS.", conclusion: "normal" }],
+    medicacion: [
+      { droga: "Enalapril", dosis: "10 mg", frecuencia: "1 comp/día", estado: "activa", desde: "2026-05-01" },
+      { droga: "Atorvastatina", estado: "suspendida" },
+    ],
+    derivacion: {
+      destinatario: "Dr. Pérez",
+      especialidad: "Electrofisiología",
+      motivo: "Palpitaciones recurrentes con Holter anormal.",
+      urgencia: "preferente",
+      fecha: "2026-06-05",
+    },
+  };
+  assert.equal(cardiologiaToolDataV3Schema.safeParse(v3).success, true);
+  // {v:3} pelado es válido (todo el contenido es opcional).
+  assert.equal(cardiologiaToolDataV3Schema.safeParse({ v: 3 }).success, true);
+  // v2/v1 (literales 2/1) NO parsean contra v3, y v3 no parsea contra v2/v1.
+  assert.equal(cardiologiaToolDataV3Schema.safeParse({ v: 2 }).success, false);
+  assert.equal(cardiologiaToolDataV3Schema.safeParse({ v: 1 }).success, false);
+  assert.equal(cardiologiaToolDataV2Schema.safeParse({ v: 3 }).success, false);
+  assert.equal(cardiologiaToolDataSchema.safeParse({ v: 3 }).success, false);
+});
+
+test("schema v3: medicación requiere droga; derivación requiere motivo; .strict() rechaza claves ajenas", () => {
+  // Medicamento sin droga → rechaza.
+  assert.equal(
+    cardiologiaToolDataV3Schema.safeParse({ v: 3, medicacion: [{ estado: "activa" }] }).success,
+    false,
+  );
+  // Estado fuera del enum → rechaza.
+  assert.equal(
+    cardiologiaToolDataV3Schema.safeParse({ v: 3, medicacion: [{ droga: "X", estado: "pausada" }] }).success,
+    false,
+  );
+  // Derivación sin motivo → rechaza.
+  assert.equal(
+    cardiologiaToolDataV3Schema.safeParse({ v: 3, derivacion: { urgencia: "programada" } }).success,
+    false,
+  );
+  // Urgencia fuera del enum → rechaza.
+  assert.equal(
+    cardiologiaToolDataV3Schema.safeParse({ v: 3, derivacion: { motivo: "x", urgencia: "ya" } }).success,
+    false,
+  );
+  // .strict(): una clave desconocida (payload ajeno) RECHAZA, no se stripea.
+  assert.equal(
+    cardiologiaToolDataV3Schema.safeParse({ v: 3, vertebras: [] }).success,
+    false,
+  );
+});
+
+test("extractMedicacion / extractDerivacion: validan y toleran v1/v2/ajenos", () => {
+  const toolData = {
+    v: 3,
+    medicacion: [
+      { droga: "Bisoprolol", dosis: "2.5 mg", estado: "activa" },
+      { droga: "", estado: "activa" }, // droga vacía → descartado
+      { estado: "activa" }, // sin droga → descartado
+      "basura",
+      null,
+    ],
+    derivacion: { motivo: "Control de arritmia.", urgencia: "urgente" },
+  };
+  const meds = extractMedicacion(toolData);
+  assert.equal(meds.length, 1);
+  assert.equal(meds[0].droga, "Bisoprolol");
+  const deriv = extractDerivacion(toolData);
+  assert.equal(deriv?.motivo, "Control de arritmia.");
+  assert.equal(deriv?.urgencia, "urgente");
+  // v1/v2 (sin esos campos) y ajenos → [] / null, sin romper.
+  assert.deepEqual(extractMedicacion({ v: 1, panel: {} }), []);
+  assert.deepEqual(extractMedicacion(null), []);
+  assert.equal(extractDerivacion({ v: 2 }), null);
+  assert.equal(extractDerivacion(null), null);
+  // Derivación con motivo inválido (vacío) → null.
+  assert.equal(extractDerivacion({ v: 3, derivacion: { motivo: "", urgencia: "programada" } }), null);
+});
+
+test("resumenSesion v3: suma fármacos activos y derivación al copy", () => {
+  assert.equal(
+    resumenSesionCardiologia({
+      v: 3,
+      panel: { taSistolica: 130, taDiastolica: 85 },
+      medicacion: [
+        { droga: "Enalapril", estado: "activa" },
+        { droga: "Atorvastatina", estado: "activa" },
+        { droga: "AAS", estado: "suspendida" }, // suspendida no cuenta
+      ],
+      derivacion: { motivo: "Interconsulta.", urgencia: "programada" },
+    }),
+    "TA 130/85 · 2 fármacos · derivación",
+  );
+  // Un único fármaco activo → singular.
+  assert.equal(
+    resumenSesionCardiologia({ v: 3, medicacion: [{ droga: "Enalapril", estado: "activa" }] }),
+    "1 fármaco",
+  );
+  // v3 sólo con derivación → copy con derivación.
+  assert.equal(
+    resumenSesionCardiologia({ v: 3, derivacion: { motivo: "x", urgencia: "urgente" } }),
+    "derivación",
+  );
+  // v3 pelado → genérico.
+  assert.equal(resumenSesionCardiologia({ v: 3 }), "Sesión registrada");
+});
+
+test("parseCardiologiaToolData: discrimina v3 / v2 / v1 / empty", () => {
+  const v3 = parseCardiologiaToolData({
+    v: 3,
+    panel: { peso: 80 },
+    medicacion: [{ droga: "Enalapril", estado: "activa" }],
+  });
+  assert.equal(v3.kind, "v3");
+  if (v3.kind === "v3") {
+    assert.equal(v3.data.panel?.peso, 80);
+    assert.equal(v3.data.medicacion?.[0].droga, "Enalapril");
+  }
+
+  const v2 = parseCardiologiaToolData({ v: 2, panel: { peso: 80 } });
+  assert.equal(v2.kind, "v2");
+  if (v2.kind === "v2") assert.equal(v2.data.panel?.peso, 80);
+
+  const v1 = parseCardiologiaToolData({ v: 1, panel: { taSistolica: 120, taDiastolica: 80 } });
+  assert.equal(v1.kind, "v1");
+  if (v1.kind === "v1") assert.equal(v1.data.panel?.taSistolica, 120);
+
+  // Shapes ajenos / vacíos → empty. {v:4} todavía no existe → empty.
+  assert.equal(parseCardiologiaToolData(null).kind, "empty");
+  assert.equal(parseCardiologiaToolData({ v: 4 }).kind, "empty");
+  assert.equal(parseCardiologiaToolData({ vertebras: [] }).kind, "empty");
+});
+
+test("resumenSesion v2: lee el panel v2 con el mismo copy que v1", () => {
+  assert.equal(
+    resumenSesionCardiologia({
+      v: 2,
+      panel: {
+        taSistolica: 130,
+        taDiastolica: 85,
+        fc: 72,
+        peso: 78,
+        factores: { tabaquismo: true, sedentarismo: true },
+      },
+    }),
+    "TA 130/85 · FC 72 · riesgo moderado",
+  );
+  // v2 solo con vitales extra (sin TA/FC/factores/estudios) → copy genérico.
+  assert.equal(resumenSesionCardiologia({ v: 2, panel: { peso: 78, talla: 172 } }), "Sesión registrada");
+});
+
 // ─── scoreRiesgoCV ──────────────────────────────────────────────────────────
 
 test("scoreRiesgoCV: bordes del conteo (0-1 bajo, 2-3 moderado, >=4 alto)", () => {
@@ -165,6 +376,18 @@ test("deriveCardioSeries: historial DESC → serie ASC, sesiones sin panel se om
   const serie = deriveCardioSeries(historial);
   assert.deepEqual(serie, [
     { fecha: "2026-04-18", taS: 140, taD: 90, fc: null },
+    { fecha: "2026-06-08", taS: 128, taD: 82, fc: 70 },
+  ]);
+});
+
+test("deriveCardioSeries: lee sesiones v2 y v1 mezcladas (por nombre de campo)", () => {
+  const historial = [
+    { fecha: "2026-06-08", toolData: { v: 2, panel: { taSistolica: 128, taDiastolica: 82, fc: 70, peso: 80 } } },
+    { fecha: "2026-05-04", toolData: { v: 1, panel: { taSistolica: 140, taDiastolica: 90 } } },
+  ];
+  const serie = deriveCardioSeries(historial);
+  assert.deepEqual(serie, [
+    { fecha: "2026-05-04", taS: 140, taD: 90, fc: null },
     { fecha: "2026-06-08", taS: 128, taD: 82, fc: 70 },
   ]);
 });

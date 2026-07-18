@@ -22,6 +22,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import { err, ok, type Result } from "./errors";
 import { getActiveSession } from "./session";
+import { normalizeModalidad } from "@/lib/types";
 import type { Paciente, PacientesById, EstadoTurno, OrigenTurno, PostVisita, Turno } from "@/lib/types";
 
 // ─── Tipo de fila de turno_extendido ───────────────────────────────────────
@@ -50,6 +51,8 @@ interface TurnoExtendidoRow {
   profesional_id: string;
   /** M56 · motivo del booking público (PHI). Solo se descifra para roles clínicos. */
   nota_reserva_cifrado: string | null;
+  /** M72 · modalidad del turno (presencial | telemedicina). */
+  modalidad: string | null;
 }
 
 // ─── Mapeos enum DB → UI ───────────────────────────────────────────────────
@@ -142,7 +145,8 @@ export async function getDashboardHoy(input: FetcherInput): Promise<Result<Dashb
         "gcal_event_id, atendiendo_desde, duracion_real_min, " +
         "paciente_id, paciente_nombre_cifrado, paciente_apellido_cifrado, paciente_telefono_cifrado, " +
         "paciente_tipo, paciente_tags, paciente_alerta_alergia, " +
-        "servicio_nombre, servicio_tipo_canonico, pago_id, profesional_id, nota_reserva_cifrado",
+        "servicio_nombre, servicio_tipo_canonico, pago_id, profesional_id, nota_reserva_cifrado, " +
+        "modalidad",
     )
     .eq("organization_id", organizationId)
     .gte("inicio", startUtc)
@@ -263,6 +267,7 @@ function rowToTurno(
     postVisita,
     gcal: !!row.gcal_event_id,
     origen,
+    modalidad: normalizeModalidad(row.modalidad),
     cobro: row.pago_id ? { estado: "pagado", ts: null } : { estado: "pendiente", ts: null },
     profesionalId: row.profesional_id ?? null,
     profesionalNombre: profesionalesNombreById?.[row.profesional_id] ?? null,

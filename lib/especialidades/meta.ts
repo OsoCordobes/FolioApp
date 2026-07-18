@@ -17,12 +17,12 @@
 import { z } from "zod";
 
 import {
-  cardiologiaToolDataSchema,
+  cardiologiaToolDataV3Schema,
   resumenSesionCardiologia,
 } from "@/lib/especialidades/cardiologia/schema";
 import { intakeAvanzadoCardiologia } from "@/lib/especialidades/cardiologia/intake";
 import {
-  psicologiaToolDataSchema,
+  psicologiaToolDataV3Schema,
   resumenSesionPsicologia,
 } from "@/lib/especialidades/psicologia/schema";
 import { intakeAvanzadoPsicologia } from "@/lib/especialidades/psicologia/intake";
@@ -31,11 +31,27 @@ import {
   resumenSesionQuiropraxia,
 } from "@/lib/especialidades/quiropraxia/schema";
 import { intakeAvanzadoQuiropraxia } from "@/lib/especialidades/quiropraxia/intake";
-import type { IntakeAvanzadoConfig } from "@/lib/especialidades/types";
+import {
+  kinesiologiaToolDataSchema,
+  resumenSesionKinesiologia,
+} from "@/lib/especialidades/kinesiologia/schema";
+import { intakeAvanzadoKinesiologia } from "@/lib/especialidades/kinesiologia/intake";
+import {
+  nutricionToolDataSchema,
+  resumenSesionNutricion,
+} from "@/lib/especialidades/nutricion/schema";
+import { intakeAvanzadoNutricion } from "@/lib/especialidades/nutricion/intake";
+import type { IntakeAvanzadoConfig, SoapGuia } from "@/lib/especialidades/types";
 
 // ─── Slugs ──────────────────────────────────────────────────────────────────
 
-export const ESPECIALIDAD_SLUGS = ["quiropraxia", "cardiologia", "psicologia"] as const;
+export const ESPECIALIDAD_SLUGS = [
+  "quiropraxia",
+  "cardiologia",
+  "psicologia",
+  "kinesiologia",
+  "nutricion",
+] as const;
 
 export type EspecialidadSlug = (typeof ESPECIALIDAD_SLUGS)[number];
 
@@ -145,7 +161,203 @@ export interface EspecialidadMeta {
    * en paciente_intake_avanzado (M60). Vive en lib/especialidades/<slug>/intake.ts.
    */
   intakeAvanzado: IntakeAvanzadoConfig;
+  /**
+   * C9 · guía SOAP opcional por especialidad: prompts/checklists por sección
+   * (S/O/A/P) que la ficha (SoapStacked) renderiza como andamiaje VISUAL arriba
+   * de cada textarea. ADITIVO: el texto libre no cambia; ausente = SOAP genérico
+   * sin guía (comportamiento histórico). No persiste — no es PHI ni toolData.
+   */
+  soapGuia?: SoapGuia;
 }
+
+// ─── Guías SOAP por especialidad (C9) ─────────────────────────────────────────
+//
+// Andamiaje visual es-AR sobre las 4 secciones del SOAP. Redactadas con lenguaje
+// clínico profesional propio de cada práctica; opcionales sección por sección.
+// El texto libre del SOAP no cambia — esto solo orienta qué registrar.
+
+const SOAP_GUIA_QUIROPRAXIA: SoapGuia = {
+  subjetivo: {
+    prompt: "Motivo de consulta, dolor y su evolución desde la última visita.",
+    checklist: [
+      "Localización, tipo e intensidad del dolor (EVA 0–10)",
+      "Factores que agravan o alivian (posturas, actividad, reposo)",
+      "Impacto funcional: sueño, trabajo, actividad física",
+      "Respuesta al último ajuste (mejoría, sin cambios, exacerbación)",
+    ],
+  },
+  objetivo: {
+    prompt: "Hallazgos de la evaluación postural, palpatoria y de movilidad.",
+    checklist: [
+      "Postura y análisis de la marcha",
+      "Palpación estática y por movimiento (segmentos restringidos)",
+      "Rango de movilidad activo/pasivo por región",
+      "Tests ortopédicos y neurológicos relevantes",
+    ],
+  },
+  analisis: {
+    prompt: "Impresión clínica: subluxaciones/disfunciones y su correlato con el cuadro.",
+    checklist: [
+      "Segmentos a ajustar y técnica indicada",
+      "Diagnóstico diferencial y banderas rojas descartadas",
+      "Correlación con estudios de imagen si los hay",
+    ],
+  },
+  plan: {
+    prompt: "Ajuste realizado, indicaciones y frecuencia del tratamiento.",
+    checklist: [
+      "Segmentos ajustados y técnica aplicada esta sesión",
+      "Ejercicios, higiene postural y pautas domiciliarias",
+      "Frecuencia y próxima visita; criterios de derivación",
+    ],
+  },
+};
+
+const SOAP_GUIA_CARDIOLOGIA: SoapGuia = {
+  subjetivo: {
+    prompt: "Síntomas cardiovasculares actuales y adherencia al tratamiento.",
+    checklist: [
+      "Dolor torácico, disnea, palpitaciones, síncope, edemas",
+      "Clase funcional (NYHA) y tolerancia al esfuerzo",
+      "Adherencia a medicación y efectos adversos",
+      "Factores de riesgo: tabaquismo, dieta, actividad física",
+    ],
+  },
+  objetivo: {
+    prompt: "Signos vitales, examen cardiovascular y resultados de estudios.",
+    checklist: [
+      "TA, FC y ritmo; peso e IMC",
+      "Auscultación cardíaca y pulmonar; ingurgitación yugular, edemas",
+      "ECG, laboratorio (perfil lipídico, función renal) y estudios por imagen",
+    ],
+  },
+  analisis: {
+    prompt: "Estratificación de riesgo cardiovascular e impresión diagnóstica.",
+    checklist: [
+      "Score de riesgo CV y control de factores modificables",
+      "Diagnóstico principal y comorbilidades relevantes",
+      "Necesidad de estudios complementarios o interconsulta",
+    ],
+  },
+  plan: {
+    prompt: "Ajustes farmacológicos, metas y seguimiento.",
+    checklist: [
+      "Cambios en medicación con dosis y justificación",
+      "Metas de TA, LDL y estilo de vida",
+      "Estudios a solicitar y fecha de control",
+    ],
+  },
+};
+
+const SOAP_GUIA_PSICOLOGIA: SoapGuia = {
+  subjetivo: {
+    prompt: "Relato del paciente: estado anímico, eventos y motivo de esta sesión.",
+    checklist: [
+      "Estado de ánimo y sueño desde la última sesión",
+      "Eventos vitales o estresores recientes",
+      "Ideación de riesgo (autolesión / heteroagresión) — indagar explícitamente",
+      "Adherencia a pautas y a medicación psiquiátrica si corresponde",
+    ],
+  },
+  objetivo: {
+    prompt: "Examen del estado mental y resultados de escalas aplicadas.",
+    checklist: [
+      "Presentación, afecto, discurso y contenido del pensamiento",
+      "Atención, orientación e insight",
+      "Puntajes de escalas (PHQ-9 / GAD-7) y su tendencia",
+    ],
+  },
+  analisis: {
+    prompt: "Formulación clínica y evolución respecto de los objetivos terapéuticos.",
+    checklist: [
+      "Impresión diagnóstica y evolución del cuadro",
+      "Nivel de riesgo actual y factores protectores",
+      "Progreso frente a los objetivos del tratamiento",
+    ],
+  },
+  plan: {
+    prompt: "Intervenciones, tareas y encuadre de la próxima sesión.",
+    checklist: [
+      "Técnicas trabajadas y tareas entre sesiones",
+      "Plan de seguridad si hay riesgo; derivación si corresponde",
+      "Frecuencia y foco de la próxima sesión",
+    ],
+  },
+};
+
+const SOAP_GUIA_KINESIOLOGIA: SoapGuia = {
+  subjetivo: {
+    prompt: "Motivo de consulta, dolor y evolución funcional desde la última sesión.",
+    checklist: [
+      "Localización, tipo e intensidad del dolor (EVA 0–10)",
+      "Factores que agravan o alivian (movimiento, carga, reposo)",
+      "Limitación funcional: actividades de la vida diaria, trabajo, deporte",
+      "Respuesta al tratamiento previo (mejoría, sin cambios, exacerbación)",
+    ],
+  },
+  objetivo: {
+    prompt: "Hallazgos de la evaluación física: postura, rango de movilidad y tests.",
+    checklist: [
+      "Rango de movilidad activo/pasivo por región (ROM en grados)",
+      "Fuerza muscular, tono y trofismo",
+      "Tests ortopédicos y neurológicos con su resultado",
+      "Índices de outcome aplicados (NDI / ODI / Borg)",
+    ],
+  },
+  analisis: {
+    prompt: "Diagnóstico kinésico funcional y correlato con el cuadro.",
+    checklist: [
+      "Estructuras y funciones comprometidas",
+      "Banderas rojas descartadas / criterios de derivación",
+      "Progreso frente a los objetivos funcionales",
+    ],
+  },
+  plan: {
+    prompt: "Tratamiento realizado, dosificación y pautas domiciliarias.",
+    checklist: [
+      "Técnicas y ejercicios aplicados esta sesión, con dosis",
+      "Ejercicios y pautas para el domicilio",
+      "Frecuencia, próxima sesión y objetivos de corto plazo",
+    ],
+  },
+};
+
+const SOAP_GUIA_NUTRICION: SoapGuia = {
+  subjetivo: {
+    prompt: "Relato del paciente: hábitos, adherencia al plan y evolución desde el último control.",
+    checklist: [
+      "Motivo de consulta y objetivo nutricional",
+      "Adherencia al plan anterior y dificultades encontradas",
+      "Recordatorio alimentario y horarios de comida",
+      "Actividad física, sueño y estado general",
+    ],
+  },
+  objetivo: {
+    prompt: "Mediciones antropométricas y datos objetivos del control.",
+    checklist: [
+      "Peso, talla e IMC derivado",
+      "Circunferencias (cintura, cadera) y pliegues cutáneos",
+      "Laboratorio relevante (glucemia, perfil lipídico) si lo hay",
+      "Composición corporal y su tendencia",
+    ],
+  },
+  analisis: {
+    prompt: "Diagnóstico nutricional y evolución respecto de los objetivos.",
+    checklist: [
+      "Estado nutricional según IMC y composición corporal",
+      "Riesgo asociado (obesidad, desnutrición, comorbilidades)",
+      "Progreso frente a las metas de peso y hábitos",
+    ],
+  },
+  plan: {
+    prompt: "Plan alimentario indicado, metas y seguimiento.",
+    checklist: [
+      "Plan alimentario: distribución, calorías y macronutrientes",
+      "Metas de peso, hábitos y actividad física",
+      "Suplementación si corresponde y próxima fecha de control",
+    ],
+  },
+};
 
 export const ESPECIALIDADES_META: Record<EspecialidadSlug, EspecialidadMeta> = {
   quiropraxia: {
@@ -159,26 +371,63 @@ export const ESPECIALIDADES_META: Record<EspecialidadSlug, EspecialidadMeta> = {
     schema: quiropraxiaToolDataV2Schema,
     resumenSesion: resumenSesionQuiropraxia,
     intakeAvanzado: intakeAvanzadoQuiropraxia,
+    soapGuia: SOAP_GUIA_QUIROPRAXIA,
   },
   cardiologia: {
     slug: "cardiologia",
     nombre: "Cardiología",
     badgeLabel: "Módulo · Cardiología",
-    toolId: "cardiologia.cv.v1",
-    toolIds: ["cardiologia.cv.v1"],
-    schema: cardiologiaToolDataSchema,
+    // C6 · el writer estampa v3 (panel + medicación + derivación); v2 y v1
+    // (cardiologia.cv.v2/v1) se siguen LEYENDO (sesiones viejas) vía toolIds —
+    // no quedan huérfanas (patrón dos-ids de quiropraxia, acá tres).
+    toolId: "cardiologia.cv.v3",
+    toolIds: ["cardiologia.cv.v3", "cardiologia.cv.v2", "cardiologia.cv.v1"],
+    schema: cardiologiaToolDataV3Schema,
     resumenSesion: resumenSesionCardiologia,
     intakeAvanzado: intakeAvanzadoCardiologia,
+    soapGuia: SOAP_GUIA_CARDIOLOGIA,
   },
   psicologia: {
     slug: "psicologia",
     nombre: "Psicología",
     badgeLabel: "Módulo · Psicología",
-    toolId: "psicologia.escalas.v1",
-    toolIds: ["psicologia.escalas.v1"],
-    schema: psicologiaToolDataSchema,
+    // C8 · el writer estampa v3 (escalas + registro/MSE completo + objetivos +
+    // plan de crisis opcional + nota de proceso guiada SOAP/DAP/BIRP); v2 y v1
+    // (psicologia.escalas.v2/v1) se siguen LEYENDO (sesiones viejas) vía toolIds
+    // — no quedan huérfanas (patrón de ids de quiropraxia, acá TRES).
+    toolId: "psicologia.escalas.v3",
+    toolIds: ["psicologia.escalas.v3", "psicologia.escalas.v2", "psicologia.escalas.v1"],
+    schema: psicologiaToolDataV3Schema,
     resumenSesion: resumenSesionPsicologia,
     intakeAvanzado: intakeAvanzadoPsicologia,
+    soapGuia: SOAP_GUIA_PSICOLOGIA,
+  },
+  kinesiologia: {
+    slug: "kinesiologia",
+    nombre: "Kinesiología",
+    badgeLabel: "Módulo · Kinesiología",
+    // N1 · el writer estampa v1 (única versión por ahora). Instrumentos de
+    // outcome embebidos de lib/instrumentos (NDI/ODI/Borg) + dolor EVA/VAS.
+    toolId: "kinesiologia.ficha.v1",
+    toolIds: ["kinesiologia.ficha.v1"],
+    schema: kinesiologiaToolDataSchema,
+    resumenSesion: resumenSesionKinesiologia,
+    intakeAvanzado: intakeAvanzadoKinesiologia,
+    soapGuia: SOAP_GUIA_KINESIOLOGIA,
+  },
+  nutricion: {
+    slug: "nutricion",
+    nombre: "Nutrición",
+    badgeLabel: "Módulo · Nutrición",
+    // N2 · el writer estampa v1 (única versión por ahora). Antropometría
+    // longitudinal (peso/talla/IMC derivado/circunferencias/pliegues) +
+    // plan alimentario texto + objetivos; reusa <SerieEvolucion> de la biblioteca.
+    toolId: "nutricion.ficha.v1",
+    toolIds: ["nutricion.ficha.v1"],
+    schema: nutricionToolDataSchema,
+    resumenSesion: resumenSesionNutricion,
+    intakeAvanzado: intakeAvanzadoNutricion,
+    soapGuia: SOAP_GUIA_NUTRICION,
   },
 };
 

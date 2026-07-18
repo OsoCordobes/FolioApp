@@ -145,6 +145,15 @@ test("toSubscriptionInfo: monto con decimales ARS no pierde centavos", () => {
   assert.equal(info.amountCents, 3_000_001);
 });
 
+test("toSubscriptionInfo: propaga live_mode como liveMode (A-4: reconcile/refresh dependen de esto)", () => {
+  // false (sandbox) y true (prod) pasan tal cual; ausente queda undefined —
+  // NUNCA defaultear a true/false: checkMpLiveMode trata undefined como
+  // "no evaluable, procesar".
+  assert.equal(toSubscriptionInfo(mpPreapprovalFixture({ live_mode: false })).liveMode, false);
+  assert.equal(toSubscriptionInfo(mpPreapprovalFixture({ live_mode: true })).liveMode, true);
+  assert.equal(toSubscriptionInfo(mpPreapprovalFixture()).liveMode, undefined);
+});
+
 test("toSubscriptionInfo: campos opcionales ausentes caen a null", () => {
   const info = toSubscriptionInfo(
     mpPreapprovalFixture({

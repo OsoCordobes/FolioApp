@@ -31,6 +31,12 @@ const turnoSchema = z.object({
   duracion_min: z.number().int().min(5).max(480),
   precio_cents: z.number().int().min(0),
   origen: z.enum(["MANUAL", "BOOKING", "WALK_IN", "GOOGLE", "WHATSAPP"]).default("MANUAL"),
+  // M72 · modalidad del turno. Default 'presencial' → los callers que no la
+  // setean (Agendar manual, walk-in, promoción de pedido) crean turnos
+  // presenciales exactamente como antes. La sala de telemedicina (campos
+  // sala_* en turno) la provisiona T2 después de crear el turno; acá sólo se
+  // fija la modalidad.
+  modalidad: z.enum(["presencial", "telemedicina"]).default("presencial"),
 });
 
 const transitionSchema = z.object({
@@ -42,7 +48,11 @@ const transitionSchema = z.object({
   duracionRealMin: z.number().int().min(0).max(480).optional(),
 });
 
-export type CreateTurnoInput = z.infer<typeof turnoSchema>;
+// `z.input` (no `z.infer`/`z.output`): los campos con `.default()` (origen,
+// modalidad M72) quedan OPCIONALES para el caller — el schema los completa al
+// parsear. Así los callers que no setean modalidad crean turnos presenciales
+// sin cambios (default preserva comportamiento).
+export type CreateTurnoInput = z.input<typeof turnoSchema>;
 
 // ─── Overlap / double-booking check ─────────────────────────────────────
 //
@@ -593,7 +603,7 @@ export async function reagendarTurno(
   //    reagendado no debe perder el motivo del booking original.
   const { data: turno, error: selErr } = await supabase
     .from("turno")
-    .select("id, estado, paciente_id, servicio_id, profesional_id, precio_cents, duracion_min, nota_reserva_cifrado")
+    .select("id, estado, paciente_id, servicio_id, profesional_id, precio_cents, duracion_min, nota_reserva_cifrado, modalidad")
     .eq("id", parsed.data.turnoId)
     .eq("organization_id", session.data.organizationId)
     .is("deleted_at", null)
@@ -655,6 +665,10 @@ export async function reagendarTurno(
       duracion_min: duracionNueva,
       precio_cents: turno.precio_cents as number,
       origen: "MANUAL",
+      // M72 · el reagendado conserva la modalidad del turno original (un turno
+      // de telemedicina reagendado sigue siendo de telemedicina). La sala (T2)
+      // se re-provisiona para el turno nuevo — NO se arrastra la del viejo.
+      modalidad: (turno.modalidad as "presencial" | "telemedicina" | null) ?? "presencial",
     },
     { notaReservaCifrado: (turno.nota_reserva_cifrado as string | null) ?? null },
   );

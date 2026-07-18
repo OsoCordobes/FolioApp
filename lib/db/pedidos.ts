@@ -77,6 +77,9 @@ export const CANAL_TO_ORIGEN: Record<string, string> = {
   WHATSAPP: "WHATSAPP",
   INSTAGRAM: "BOOKING",
   TELEFONO: "MANUAL",
+  // M84 · pedidos del portal del paciente (P4). El paciente ya está autenticado
+  // y linkeado; el turno resultante es un booking (self-service), no manual.
+  PORTAL: "BOOKING",
 };
 
 export function buildTurnoOrigenFromCanal(canal: string): string {

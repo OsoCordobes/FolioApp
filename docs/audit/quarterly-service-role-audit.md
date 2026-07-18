@@ -49,6 +49,7 @@ Una vez por trimestre (próximas fechas abajo), un encargado:
 | `lib/auth/find-user-by-email.ts` | Helper invocado por endpoints ya gateados | `confirm-user` (gated) y `onboarding/actions` (auth.getUser) |
 | `lib/booking/availability.ts` | Llamado desde booking público (gated) | Helper de availability calc |
 | `lib/db/onboarding-resume.ts` | Llamado solo desde `onboarding/page.tsx` (con user authenticated) | Helper de resume state |
+| `lib/db/paciente-session.ts` | `auth.getUser()` + `paciente_cuenta_actual()` antes del bypass | Lee SOLO `organization.nombre` de las orgs cuyas fichas `paciente` ya pasaron RLS (fan-out anon M71); el paciente no es member y org_select_own le oculta la fila |
 | `lib/db/recordatorios.ts` | Helper invocado desde `cron/dispatch-recordatorios` (Bearer gated) | |
 | `lib/db/suscripcion.ts` | Helper invocado desde MP webhook (HMAC gated) + Server Actions con auth | |
 

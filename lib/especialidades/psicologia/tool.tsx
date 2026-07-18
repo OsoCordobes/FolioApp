@@ -28,8 +28,15 @@
 
 import { useId, useMemo, useState, type CSSProperties } from "react";
 
+import { useRouter } from "next/navigation";
+
 import * as I from "@/components/icons";
+import { registrarCssrsAction } from "@/app/(app)/pacientes/actions";
+import { cssrs as cssrsDef } from "@/lib/instrumentos";
+import { PlanillaRenderer, ResultadoBadge } from "@/lib/instrumentos/components";
+import { SerieEvolucion, type MetricaSerie, type PuntoSerie } from "@/lib/instrumentos/components";
 import type { SpecialtyToolProps } from "@/lib/especialidades/types";
+import { OutcomesDashboard } from "@/lib/especialidades/psicologia/dashboard";
 import {
   AFECTO_LABELS,
   AFECTOS,
@@ -37,27 +44,55 @@ import {
   ANIMOS,
   APARIENCIA_LABELS,
   APARIENCIAS,
+  ATENCION_LABELS,
+  ATENCIONES,
   CONSIGNA_ESCALAS,
+  CONTENIDO_PENSAMIENTO_LABELS,
+  CONTENIDOS_PENSAMIENTO,
+  CSSRS_ITEMS_LEN,
+  cssrsBandaLabel,
   deriveScoreSeries,
+  deteccionRiesgo,
   ESTADO_OBJETIVO_LABELS,
   ESTADOS_OBJETIVO,
+  extractCrisisPlan,
   extractObjetivos,
+  extractProcesoNota,
   extractRegistro,
   extractRespuestasEscala,
   GAD7_ITEMS,
   GAD7_LEN,
+  INSIGHT_LABELS,
+  INSIGHTS,
+  JUICIO_LABELS,
+  JUICIOS,
+  LENGUAJE_LABELS,
+  LENGUAJES,
+  MEMORIA_LABELS,
+  MEMORIAS,
+  NOTA_FORMATO_LABELS,
+  NOTA_FORMATO_SECCIONES,
+  NOTA_FORMATOS,
   OPCIONES_FRECUENCIA,
+  ORIENTACION_LABELS,
+  ORIENTACIONES,
   PENSAMIENTO_LABELS,
   PENSAMIENTOS,
   PHQ9_ITEM_IDEACION,
   PHQ9_ITEMS,
   PHQ9_LEN,
+  PSICOMOTRICIDAD_LABELS,
+  PSICOMOTRICIDADES,
   RIESGO_LABELS,
   RIESGOS,
+  scoreCssrsCrisis,
   scoreGad7,
   scorePhq9,
+  SENSOPERCEPCION_LABELS,
+  SENSOPERCEPCIONES,
   type BandaPhq9,
   type EstadoObjetivo,
+  type NotaFormato,
   type Objetivo,
   type PsicoSeriesPoint,
   type RegistroSesion,
@@ -114,21 +149,38 @@ function fmtFecha(iso: string): string {
 // ─── Borrador (controlado desde value) ──────────────────────────────────────
 
 /**
- * Borrador en memoria: las escalas admiten null (ítem sin responder) — el
- * schema estricto (psicologiaToolDataSchema) exige la escala completa y lo
- * aplica el writer antes de cifrar; la UI avisa la incompletitud.
+ * Borrador en memoria (v2, C7): las escalas admiten null (ítem sin responder) —
+ * el schema estricto (psicologiaToolDataV2Schema) exige la escala completa y lo
+ * aplica el writer antes de cifrar; la UI avisa la incompletitud. El screener
+ * C-SSRS del plan de crisis admite igual respuestas parciales en memoria.
  */
+interface CrisisPlanDraft {
+  /** Respuestas del C-SSRS (0/1), con null en lo no respondido. */
+  cssrs?: Array<number | null>;
+  accesoMedios?: string;
+  factoresProtectores?: string;
+  planTexto?: string;
+}
+
+/** Sub-borrador de la nota de proceso (C8): formato + textos por sección. */
+interface ProcesoNotaDraft {
+  formato?: NotaFormato;
+  campos?: Record<string, string>;
+}
+
 interface PsicologiaDraft {
-  v: 1;
+  v: 3;
   phq9?: Array<number | null>;
   gad7?: Array<number | null>;
   registro?: RegistroSesion;
   objetivos?: Objetivo[];
+  crisisPlan?: CrisisPlanDraft;
+  procesoNota?: ProcesoNotaDraft;
 }
 
-/** Parse LAXO del borrador: tolera shapes parciales/ajenos re-hidratados. */
+/** Parse LAXO del borrador: tolera shapes parciales/ajenos re-hidratados (v1/v2/v3). */
 function parseDraft(value: unknown): PsicologiaDraft {
-  const out: PsicologiaDraft = { v: 1 };
+  const out: PsicologiaDraft = { v: 3 };
   if (value === null || typeof value !== "object") return out;
   const v = value as Record<string, unknown>;
 
@@ -140,17 +192,100 @@ function parseDraft(value: unknown): PsicologiaDraft {
   if (registro) out.registro = registro;
   const objetivos = extractObjetivos(value);
   if (objetivos.length > 0) out.objetivos = objetivos;
+
+  // C7 · plan de crisis (v2). Se re-hidrata laxo: el screener a Array<number|null>
+  // y los textos tal cual. En una sesión v1 (sin crisisPlan) queda undefined.
+  const crisis = extractCrisisPlan(value);
+  if (crisis) {
+    const draft: CrisisPlanDraft = {};
+    const cssrs = extractRespuestasCssrs(v.crisisPlan);
+    if (cssrs) draft.cssrs = cssrs;
+    if (crisis.accesoMedios) draft.accesoMedios = crisis.accesoMedios;
+    if (crisis.factoresProtectores) draft.factoresProtectores = crisis.factoresProtectores;
+    if (crisis.planTexto) draft.planTexto = crisis.planTexto;
+    if (Object.keys(draft).length > 0) out.crisisPlan = draft;
+  }
+
+  // C8 · nota de proceso (v3). Re-hidrata formato + textos por sección tal cual.
+  // En una sesión v1/v2 (sin procesoNota) queda undefined.
+  const nota = extractProcesoNota(value);
+  if (nota) {
+    const draft: ProcesoNotaDraft = {};
+    if (nota.formato) draft.formato = nota.formato;
+    if (nota.campos) {
+      // El record del schema es Partial<Record<…>> (valores string | undefined);
+      // el borrador guarda solo las claves con texto real (Record<string, string>).
+      const campos: Record<string, string> = {};
+      for (const [k, v2] of Object.entries(nota.campos)) {
+        if (typeof v2 === "string") campos[k] = v2;
+      }
+      if (Object.keys(campos).length > 0) draft.campos = campos;
+    }
+    if (Object.keys(draft).length > 0) out.procesoNota = draft;
+  }
   return out;
 }
 
 /**
+ * Respuestas laxas del screener C-SSRS (0/1) para el borrador: array de longitud
+ * fija con null en lo no respondido. Devuelve null si no hay ninguna respuesta
+ * válida. Espejo de extractRespuestasEscala pero con rango 0–1.
+ */
+function extractRespuestasCssrs(crisisPlan: unknown): Array<number | null> | null {
+  if (crisisPlan === null || typeof crisisPlan !== "object") return null;
+  const raw = (crisisPlan as Record<string, unknown>).cssrs;
+  if (!Array.isArray(raw)) return null;
+  const out: Array<number | null> = [];
+  for (let i = 0; i < CSSRS_ITEMS_LEN; i++) {
+    const v = raw[i];
+    out.push(v === 0 || v === 1 ? v : v === true ? 1 : v === false ? 0 : null);
+  }
+  return out.some((v) => v !== null) ? out : null;
+}
+
+/** Limpia el sub-borrador del plan de crisis; null si no aporta nada. */
+function limpiarCrisisPlan(next: CrisisPlanDraft | undefined): CrisisPlanDraft | null {
+  if (!next) return null;
+  const out: CrisisPlanDraft = {};
+  // El screener persiste SOLO completo (mismo criterio que PHQ-9/GAD-7).
+  if (next.cssrs && next.cssrs.every((r) => r === 0 || r === 1)) out.cssrs = next.cssrs;
+  const texto = (s: string | undefined) => (s && s.trim() !== "" ? s.trim() : undefined);
+  const acceso = texto(next.accesoMedios);
+  if (acceso) out.accesoMedios = acceso;
+  const factores = texto(next.factoresProtectores);
+  if (factores) out.factoresProtectores = factores;
+  const plan = texto(next.planTexto);
+  if (plan) out.planTexto = plan;
+  return Object.keys(out).length > 0 ? out : null;
+}
+
+/**
+ * Limpia el sub-borrador de la nota de proceso (C8); null si no aporta nada. El
+ * formato solo persiste si hay al menos un texto (elegir formato sin escribir no
+ * ensucia el toolData). Las secciones vacías se descartan; solo se guardan las
+ * del formato elegido.
+ */
+function limpiarProcesoNota(next: ProcesoNotaDraft | undefined): ProcesoNotaDraft | null {
+  if (!next || !next.formato) return null;
+  const secciones = NOTA_FORMATO_SECCIONES[next.formato];
+  const campos: Record<string, string> = {};
+  for (const s of secciones) {
+    const raw = next.campos?.[s.key];
+    const t = typeof raw === "string" ? raw.trim() : "";
+    if (t !== "") campos[s.key] = t.slice(0, 5000);
+  }
+  if (Object.keys(campos).length === 0) return null;
+  return { formato: next.formato, campos };
+}
+
+/**
  * Normaliza el borrador antes de emitirlo: escala sin ninguna respuesta →
- * fuera; registro sin campos → fuera; objetivos vacíos → fuera; todo vacío →
- * null (el writer guarda tool_data NULL, no un `{ v: 1 }` cifrado sin
- * contenido).
+ * fuera; registro sin campos → fuera; objetivos vacíos → fuera; plan de crisis
+ * sin contenido → fuera; nota de proceso sin texto → fuera; todo vacío → null
+ * (el writer guarda tool_data NULL, no un `{ v: 3 }` cifrado sin contenido).
  */
 function limpiarDraft(next: PsicologiaDraft): PsicologiaDraft | null {
-  const out: PsicologiaDraft = { v: 1 };
+  const out: PsicologiaDraft = { v: 3 };
   if (next.phq9 && next.phq9.some((r) => r !== null)) out.phq9 = next.phq9;
   if (next.gad7 && next.gad7.some((r) => r !== null)) out.gad7 = next.gad7;
   if (next.registro) {
@@ -161,102 +296,33 @@ function limpiarDraft(next: PsicologiaDraft): PsicologiaDraft | null {
     if (Object.keys(r).length > 0) out.registro = r;
   }
   if (next.objetivos && next.objetivos.length > 0) out.objetivos = next.objetivos;
-  return out.phq9 || out.gad7 || out.registro || out.objetivos ? out : null;
+  const crisis = limpiarCrisisPlan(next.crisisPlan);
+  if (crisis) out.crisisPlan = crisis;
+  const nota = limpiarProcesoNota(next.procesoNota);
+  if (nota) out.procesoNota = nota;
+  return out.phq9 || out.gad7 || out.registro || out.objetivos || out.crisisPlan || out.procesoNota
+    ? out
+    : null;
 }
 
-// ─── Sparkline longitudinal PHQ-9 / GAD-7 ───────────────────────────────────
+// ─── Serie longitudinal PHQ-9 / GAD-7 ───────────────────────────────────────
+//
+// C4: el sparkline propio (PsicoSparkline) se reemplaza por <SerieEvolucion> de
+// la biblioteca (C3), que unifica los sparklines duplicados de cardio/psico.
+// Solo hay que aportar las métricas (colores/labels) y adaptar la serie de
+// psico ({ fecha, phq9, gad7 }) al punto genérico ({ fecha, valores: {…} }).
 
-const METRICAS_SERIE = [
-  { key: "phq9" as const, label: "PHQ-9", color: "var(--accent)" },
-  { key: "gad7" as const, label: "GAD-7", color: "var(--slate)" },
+const METRICAS_SERIE: MetricaSerie[] = [
+  { key: "phq9", label: "PHQ-9", color: "var(--accent)" },
+  { key: "gad7", label: "GAD-7", color: "var(--slate)" },
 ];
 
-function PsicoSparkline({ series }: { series: PsicoSeriesPoint[] }) {
-  const W = 320;
-  const H = 110;
-  const PX = 8;
-  const PY = 12;
-
-  const valores = series
-    .flatMap((p) => [p.phq9, p.gad7])
-    .filter((n): n is number => n !== null);
-
-  if (series.length === 0 || valores.length === 0) {
-    return (
-      <p className="pc-card-text muted" style={{ fontSize: 12.5 }}>
-        Sin escalas completas en el historial todavía. La curva aparece al
-        guardar sesiones con PHQ-9 o GAD-7 completos.
-      </p>
-    );
-  }
-
-  // Piso 0 (los puntajes arrancan ahí); techo con margen para que no pegue.
-  const min = 0;
-  const max = Math.max(...valores, 10) + 2;
-  const x = (i: number) =>
-    series.length === 1 ? W / 2 : PX + (i * (W - 2 * PX)) / (series.length - 1);
-  const y = (v: number) => H - PY - ((v - min) * (H - 2 * PY)) / (max - min);
-
-  const metricas = METRICAS_SERIE.map((m) => ({
-    ...m,
-    puntos: series
-      .map((p, i) => ({ i, v: p[m.key] }))
-      .filter((p): p is { i: number; v: number } => p.v !== null),
-  })).filter((m) => m.puntos.length > 0);
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        preserveAspectRatio="xMidYMid meet"
-        role="img"
-        aria-label={`Evolución de puntajes PHQ-9 y GAD-7 en ${series.length} ${series.length === 1 ? "sesión" : "sesiones"}`}
-        style={{ width: "100%", display: "block" }}
-      >
-        <line
-          x1={PX} y1={H - PY} x2={W - PX} y2={H - PY}
-          stroke="var(--line-soft)" strokeWidth="1"
-        />
-        {metricas.map((m) => (
-          <g key={m.key}>
-            {m.puntos.length > 1 ? (
-              <polyline
-                points={m.puntos.map((p) => `${x(p.i)},${y(p.v)}`).join(" ")}
-                fill="none"
-                stroke={m.color}
-                strokeWidth="1.5"
-                strokeLinejoin="round"
-                strokeLinecap="round"
-              />
-            ) : null}
-            {m.puntos.map((p, idx) => (
-              <circle
-                key={p.i}
-                cx={x(p.i)}
-                cy={y(p.v)}
-                r={idx === m.puntos.length - 1 ? 3 : 2}
-                fill={m.color}
-              />
-            ))}
-          </g>
-        ))}
-      </svg>
-      <div className="pc-spine-legend" style={{ marginTop: 0, justifyContent: "space-between" }}>
-        <span style={{ display: "inline-flex", gap: 12 }}>
-          {metricas.map((m) => (
-            <span key={m.key} className="pc-legend-item">
-              <span className="pc-legend-swatch" style={{ background: m.color }} />
-              <span>{m.label}</span>
-            </span>
-          ))}
-        </span>
-        <span className="fm-mono muted" style={{ fontSize: 10 }}>
-          {fmtFecha(series[0].fecha)}
-          {series.length > 1 ? ` → ${fmtFecha(series[series.length - 1].fecha)}` : ""}
-        </span>
-      </div>
-    </div>
-  );
+/** Adapta la serie tipada de psico al punto genérico de <SerieEvolucion>. */
+function aPuntosSerie(series: PsicoSeriesPoint[]): PuntoSerie[] {
+  return series.map((p) => ({
+    fecha: p.fecha,
+    valores: { phq9: p.phq9, gad7: p.gad7 },
+  }));
 }
 
 // ─── Bloque de escala (PHQ-9 / GAD-7) ───────────────────────────────────────
@@ -402,14 +468,339 @@ function EscalaBlock({
 
 // ─── Tool ───────────────────────────────────────────────────────────────────
 
-const CAMPOS_ESTADO_MENTAL = [
-  { campo: "apariencia" as const, label: "Apariencia", opciones: APARIENCIAS, labels: APARIENCIA_LABELS as Record<string, string> },
-  { campo: "animo" as const, label: "Ánimo", opciones: ANIMOS, labels: ANIMO_LABELS as Record<string, string> },
-  { campo: "afecto" as const, label: "Afecto", opciones: AFECTOS, labels: AFECTO_LABELS as Record<string, string> },
-  { campo: "pensamiento" as const, label: "Curso del pensamiento", opciones: PENSAMIENTOS, labels: PENSAMIENTO_LABELS as Record<string, string> },
+interface CampoMSE {
+  campo: keyof RegistroSesion;
+  label: string;
+  opciones: readonly string[];
+  labels: Record<string, string>;
+}
+
+/** Dominios básicos del MSE — siempre visibles (los 4 originales, v1). */
+const CAMPOS_ESTADO_MENTAL_BASE: readonly CampoMSE[] = [
+  { campo: "apariencia", label: "Apariencia", opciones: APARIENCIAS, labels: APARIENCIA_LABELS as Record<string, string> },
+  { campo: "animo", label: "Ánimo", opciones: ANIMOS, labels: ANIMO_LABELS as Record<string, string> },
+  { campo: "afecto", label: "Afecto", opciones: AFECTOS, labels: AFECTO_LABELS as Record<string, string> },
+  { campo: "pensamiento", label: "Curso del pensamiento", opciones: PENSAMIENTOS, labels: PENSAMIENTO_LABELS as Record<string, string> },
 ];
 
-export function PsicologiaTool({ value, onChange, readOnly, historial }: SpecialtyToolProps) {
+/**
+ * Dominios ampliados del MSE (C8) — se muestran al expandir "MSE completo". Todos
+ * opcionales; completá solo los que aporten valor a la sesión.
+ */
+const CAMPOS_ESTADO_MENTAL_EXT: readonly CampoMSE[] = [
+  { campo: "psicomotricidad", label: "Psicomotricidad", opciones: PSICOMOTRICIDADES, labels: PSICOMOTRICIDAD_LABELS as Record<string, string> },
+  { campo: "lenguaje", label: "Lenguaje", opciones: LENGUAJES, labels: LENGUAJE_LABELS as Record<string, string> },
+  { campo: "orientacion", label: "Orientación", opciones: ORIENTACIONES, labels: ORIENTACION_LABELS as Record<string, string> },
+  { campo: "atencion", label: "Atención", opciones: ATENCIONES, labels: ATENCION_LABELS as Record<string, string> },
+  { campo: "memoria", label: "Memoria", opciones: MEMORIAS, labels: MEMORIA_LABELS as Record<string, string> },
+  { campo: "sensopercepcion", label: "Sensopercepción", opciones: SENSOPERCEPCIONES, labels: SENSOPERCEPCION_LABELS as Record<string, string> },
+  { campo: "contenidoPensamiento", label: "Contenido del pensamiento", opciones: CONTENIDOS_PENSAMIENTO, labels: CONTENIDO_PENSAMIENTO_LABELS as Record<string, string> },
+  { campo: "juicio", label: "Juicio", opciones: JUICIOS, labels: JUICIO_LABELS as Record<string, string> },
+  { campo: "insight", label: "Insight", opciones: INSIGHTS, labels: INSIGHT_LABELS as Record<string, string> },
+];
+
+// ─── Workflow de riesgo suicida: C-SSRS + plan de seguridad (C7) ─────────────
+//
+// Reemplaza los banners role=alert históricos por un protocolo ESTRUCTURADO:
+//   1. C-SSRS (screener de 6 ítems sí/no de lib/instrumentos, renderizado con el
+//      PlanillaRenderer genérico en modo binario) → banda de riesgo automática.
+//   2. Plan de seguridad documentado: acceso a medios, factores protectores,
+//      texto del plan.
+// Todo se persiste en el toolData (crisisPlan, v2, cifrado) al guardar la sesión.
+// Además, el screener completo se registra en instrumento_respuesta (C2) para el
+// tracking longitudinal del riesgo, vía registrarCssrsAction — botón explícito.
+
+/** Copy del motivo del disparo (uno o ambos), para el encabezado del protocolo. */
+function motivoCopy(motivos: readonly ("phq9_item9" | "registro_riesgo")[]): string {
+  const partes: string[] = [];
+  if (motivos.includes("phq9_item9")) partes.push("ítem 9 del PHQ-9 (ideación) > 0");
+  if (motivos.includes("registro_riesgo")) partes.push("riesgo registrado (ideación o plan)");
+  return partes.join(" y ");
+}
+
+function CrisisWorkflow({
+  crisisPlan,
+  motivos,
+  onChange,
+  readOnly,
+  pacienteId,
+  turno,
+}: {
+  crisisPlan: CrisisPlanDraft | undefined;
+  motivos: readonly ("phq9_item9" | "registro_riesgo")[];
+  onChange(next: CrisisPlanDraft | undefined): void;
+  readOnly?: boolean;
+  pacienteId?: string;
+  turno?: { id: string; tieneSesionGuardada: boolean } | null;
+}) {
+  const router = useRouter();
+  const [registrando, setRegistrando] = useState(false);
+  const [registrado, setRegistrado] = useState(false);
+  const [errorRegistro, setErrorRegistro] = useState<string | null>(null);
+
+  const plan = crisisPlan ?? {};
+  const cssrs = plan.cssrs ?? null;
+  // El score en vivo con la def de la biblioteca (contrato laxo: null si incompleto).
+  const score = scoreCssrsCrisis(cssrs);
+  const respondidasCssrs = cssrs ? cssrs.filter((r) => r !== null).length : 0;
+  const cssrsCompleto = respondidasCssrs === CSSRS_ITEMS_LEN;
+
+  const setCampo = <K extends keyof CrisisPlanDraft>(campo: K, valor: CrisisPlanDraft[K]) => {
+    if (readOnly) return;
+    onChange({ ...plan, [campo]: valor });
+  };
+
+  // El PlanillaRenderer emite Array<number | null> (modo binario, 0/1).
+  const setCssrs = (next: number[] | number | null) => {
+    if (readOnly) return;
+    const arr = Array.isArray(next) ? (next as Array<number | null>) : null;
+    onChange({ ...plan, cssrs: arr ?? undefined });
+    // Cambió el screener → invalida el "registrado" previo (hay que re-registrar).
+    setRegistrado(false);
+    setErrorRegistro(null);
+  };
+
+  // Registra el screener completo en instrumento_respuesta (tracking longitudinal).
+  const registrarEnHistorial = async () => {
+    if (readOnly || registrando || !cssrsCompleto || !pacienteId) return;
+    const respuestas = (cssrs ?? []).map((r) => (r === 1 ? 1 : 0));
+    setRegistrando(true);
+    setErrorRegistro(null);
+    const result = await registrarCssrsAction({
+      pacienteId,
+      turnoId: turno?.id ?? null,
+      cssrs: respuestas,
+    });
+    setRegistrando(false);
+    if (result.ok) {
+      setRegistrado(true);
+      router.refresh();
+    } else {
+      setErrorRegistro(result.error.message);
+    }
+  };
+
+  return (
+    <section
+      className="pc-card"
+      style={{ borderColor: "var(--red)", boxShadow: "0 0 0 1px var(--red-soft)" }}
+    >
+      <header className="pc-card-head" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <I.Alert size={15} aria-hidden style={{ color: "var(--red)" }} />
+        <span className="fi-eyebrow" style={{ color: "var(--red)" }}>
+          Protocolo de riesgo
+        </span>
+        {score ? (
+          <ResultadoBadge
+            banda={score.banda}
+            def={cssrsDef}
+            title="C-SSRS (screener)"
+          />
+        ) : null}
+      </header>
+
+      <p role="alert" style={{ ...AVISO_STYLE }}>
+        Se activó por {motivoCopy(motivos)}. Completá el screener C-SSRS y
+        documentá el plan de seguridad. Es tamizaje: no reemplaza la evaluación
+        clínica presencial ni el juicio profesional.
+      </p>
+
+      {/* ── C-SSRS (screener binario, renderer genérico de la biblioteca) ── */}
+      <PlanillaRenderer
+        def={cssrsDef}
+        respuestas={cssrs}
+        onChange={setCssrs}
+        readOnly={readOnly}
+      />
+
+      {/* ── Plan de seguridad ── */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <span className="fi-eyebrow">Plan de seguridad</span>
+        <label className="fi-wi-field">
+          <span>Acceso a medios letales y su restricción</span>
+          <textarea
+            value={plan.accesoMedios ?? ""}
+            maxLength={2000}
+            onChange={(e) => setCampo("accesoMedios", e.target.value)}
+            placeholder="Medios disponibles y medidas acordadas para restringir el acceso…"
+            rows={2}
+            spellCheck={false}
+            disabled={readOnly}
+          />
+        </label>
+        <label className="fi-wi-field">
+          <span>Factores protectores</span>
+          <textarea
+            value={plan.factoresProtectores ?? ""}
+            maxLength={2000}
+            onChange={(e) => setCampo("factoresProtectores", e.target.value)}
+            placeholder="Red de apoyo, razones para vivir, recursos personales…"
+            rows={2}
+            spellCheck={false}
+            disabled={readOnly}
+          />
+        </label>
+        <label className="fi-wi-field">
+          <span>Plan de seguridad acordado</span>
+          <textarea
+            value={plan.planTexto ?? ""}
+            maxLength={4000}
+            onChange={(e) => setCampo("planTexto", e.target.value)}
+            placeholder="Señales de alarma, estrategias de afrontamiento, contactos de emergencia y pasos a seguir…"
+            rows={4}
+            spellCheck={false}
+            disabled={readOnly}
+          />
+        </label>
+      </div>
+
+      {/* ── Registro longitudinal del screener (instrumento_respuesta, C2) ── */}
+      {!readOnly ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              className="fi-btn fi-btn-secondary"
+              onClick={registrarEnHistorial}
+              disabled={!cssrsCompleto || registrando || !pacienteId}
+              title={
+                !pacienteId
+                  ? "Disponible en la ficha del paciente."
+                  : !cssrsCompleto
+                    ? "Completá las 6 respuestas del C-SSRS para registrar."
+                    : "Registra el screener en el historial de riesgo del paciente (seguimiento longitudinal)."
+              }
+            >
+              {registrado ? <I.Check size={12} /> : <I.History size={12} />}
+              {registrado ? "Registrado en el historial" : "Registrar C-SSRS en el historial de riesgo"}
+            </button>
+            {!cssrsCompleto && respondidasCssrs > 0 ? (
+              <span className="fm-mono muted" style={{ fontSize: 10.5 }}>
+                {respondidasCssrs}/{CSSRS_ITEMS_LEN}
+              </span>
+            ) : null}
+          </div>
+          {errorRegistro ? (
+            <p role="alert" style={{ margin: 0, fontSize: 11.5, color: "var(--red)" }}>
+              No se pudo registrar: {errorRegistro}
+            </p>
+          ) : (
+            <p className="muted" style={{ margin: 0, fontSize: 11, lineHeight: 1.5 }}>
+              El plan de crisis se guarda con la sesión. «Registrar» además suma
+              el screener a la serie de riesgo del paciente (seguimiento
+              longitudinal), independiente del SOAP.
+            </p>
+          )}
+        </div>
+      ) : score ? (
+        <p className="muted" style={{ margin: 0, fontSize: 11, lineHeight: 1.5 }}>
+          C-SSRS: riesgo {cssrsBandaLabel(score.banda)} (registro de solo lectura).
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+// ─── Nota de proceso guiada: SOAP / DAP / BIRP (C8) ──────────────────────────
+//
+// Nota de proceso ESTRUCTURADA de la sesión, apoyada en el SOAP guiado de Fase 0:
+// el profesional elige el formato (SOAP/DAP/BIRP) y redacta cada sección con un
+// prompt orientador. Persiste en el toolData (procesoNota, v3, cifrado). El SOAP
+// de texto libre de la ficha NO cambia — esto es una nota clínica adicional.
+
+function NotaProcesoBlock({
+  nota,
+  onChange,
+  readOnly,
+}: {
+  nota: ProcesoNotaDraft | undefined;
+  onChange(next: ProcesoNotaDraft | undefined): void;
+  readOnly?: boolean;
+}) {
+  const formato = nota?.formato;
+  const campos = nota?.campos ?? {};
+
+  const setFormato = (f: NotaFormato | "") => {
+    if (readOnly) return;
+    if (f === "") {
+      onChange(undefined);
+      return;
+    }
+    onChange({ formato: f, campos: nota?.campos });
+  };
+
+  const setCampo = (key: string, valor: string) => {
+    if (readOnly || !formato) return;
+    onChange({ formato, campos: { ...campos, [key]: valor } });
+  };
+
+  return (
+    <section className="pc-card">
+      <header className="pc-card-head" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <span className="fi-eyebrow">Nota de proceso</span>
+        {formato ? (
+          <span className="fi-pill" style={{ color: "var(--slate)", background: "var(--slate-soft)", borderColor: "transparent" }}>
+            {NOTA_FORMATO_LABELS[formato]}
+          </span>
+        ) : null}
+      </header>
+
+      <label className="fi-wi-field">
+        <span>Formato de nota</span>
+        <select
+          style={SELECT_STYLE}
+          value={formato ?? ""}
+          onChange={(e) => setFormato(e.target.value as NotaFormato | "")}
+          disabled={readOnly}
+          aria-label="Formato de la nota de proceso"
+        >
+          <option value="">— Sin nota de proceso</option>
+          {NOTA_FORMATOS.map((f) => (
+            <option key={f} value={f}>
+              {NOTA_FORMATO_LABELS[f]}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      {formato ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {NOTA_FORMATO_SECCIONES[formato].map((s) => (
+            <label key={s.key} className="fi-wi-field">
+              <span>{s.label}</span>
+              <p className="muted" style={{ margin: "0 0 4px", fontSize: 11, lineHeight: 1.5 }}>
+                {s.guia}
+              </p>
+              <textarea
+                value={campos[s.key] ?? ""}
+                maxLength={5000}
+                onChange={(e) => setCampo(s.key, e.target.value)}
+                placeholder={`Escribí ${s.label.toLowerCase()}…`}
+                rows={3}
+                spellCheck={false}
+                disabled={readOnly}
+              />
+            </label>
+          ))}
+        </div>
+      ) : (
+        <p className="muted" style={{ margin: 0, fontSize: 11.5, lineHeight: 1.5 }}>
+          Elegí un formato para redactar la nota de proceso de la sesión (SOAP,
+          DAP o BIRP). Es una nota clínica adicional al SOAP de la ficha.
+        </p>
+      )}
+    </section>
+  );
+}
+
+export function PsicologiaTool({
+  value,
+  onChange,
+  readOnly,
+  historial,
+  pacienteId,
+  turno,
+}: SpecialtyToolProps) {
   const draft = useMemo(() => parseDraft(value), [value]);
   const series = useMemo(() => deriveScoreSeries(historial), [historial]);
   // Últimos objetivos registrados (historial DESC → el primero que tenga).
@@ -423,6 +814,11 @@ export function PsicologiaTool({ value, onChange, readOnly, historial }: Special
 
   // Form local de alta de objetivo (el resto del borrador vive en `value`).
   const [nuevoObjetivo, setNuevoObjetivo] = useState("");
+  // MSE completo (C8): los dominios ampliados arrancan abiertos si la sesión ya
+  // cargó alguno; el profesional puede expandirlos siempre.
+  const tieneMseExt = CAMPOS_ESTADO_MENTAL_EXT.some((c) => draft.registro?.[c.campo] != null);
+  const [mseExpandido, setMseExpandido] = useState(tieneMseExt);
+  const mseAbierto = mseExpandido || tieneMseExt;
 
   const emit = (next: PsicologiaDraft) => {
     if (readOnly) return;
@@ -433,6 +829,21 @@ export function PsicologiaTool({ value, onChange, readOnly, historial }: Special
   const phq9Score = scorePhq9(draft.phq9);
   const gad7Score = scoreGad7(draft.gad7);
   const ideacionPhq9 = (draft.phq9?.[PHQ9_ITEM_IDEACION] ?? 0) > 0;
+
+  // ── Detección de riesgo (C7) ──
+  // El trigger PURO (deteccionRiesgo) decide si abrir el workflow estructurado:
+  // PHQ-9 ítem 9 > 0 O registro.riesgo in {ideacion, plan}. Reemplaza los dos
+  // banners role=alert históricos por el C-SSRS + plan de seguridad.
+  const deteccion = deteccionRiesgo(draft);
+
+  const setCrisisPlan = (next: CrisisPlanDraft | undefined) => {
+    emit({ ...draft, crisisPlan: next });
+  };
+
+  // ── Nota de proceso (C8) ──
+  const setProcesoNota = (next: ProcesoNotaDraft | undefined) => {
+    emit({ ...draft, procesoNota: next });
+  };
 
   const setItemEscala = (escala: "phq9" | "gad7", len: number) => (idx: number, valor: number) => {
     const base = draft[escala] ?? Array.from({ length: len }, () => null);
@@ -505,10 +916,10 @@ export function PsicologiaTool({ value, onChange, readOnly, historial }: Special
         />
 
         {ideacionPhq9 ? (
-          <p role="alert" style={AVISO_STYLE}>
+          <p style={AVISO_STYLE}>
             <b>Ítem 9 mayor a 0:</b> el paciente reportó pensamientos de muerte
-            o autolesión. Evaluá riesgo suicida según tu protocolo y registrá
-            la conducta a seguir.
+            o autolesión. Abajo se abrió el <b>protocolo de riesgo</b> (C-SSRS +
+            plan de seguridad) para estructurar la evaluación.
           </p>
         ) : null}
 
@@ -525,14 +936,20 @@ export function PsicologiaTool({ value, onChange, readOnly, historial }: Special
 
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <span className="fi-eyebrow">Evolución de puntajes</span>
-          <PsicoSparkline series={series} />
+          <SerieEvolucion
+            serie={aPuntosSerie(series)}
+            metricas={METRICAS_SERIE}
+            pisoCero
+            ariaLabel={`Evolución de puntajes PHQ-9 y GAD-7 en ${series.length} ${series.length === 1 ? "sesión" : "sesiones"}`}
+            vacio="Sin escalas completas en el historial todavía. La curva aparece al guardar sesiones con PHQ-9 o GAD-7 completos."
+          />
         </div>
       </section>
 
-      {/* ── Registro de sesión (estado mental) ── */}
+      {/* ── Registro de sesión: examen del estado mental (MSE completo · C8) ── */}
       <section className="pc-card">
         <header className="pc-card-head">
-          <span className="fi-eyebrow">Registro de sesión</span>
+          <span className="fi-eyebrow">Examen del estado mental</span>
           {riesgo && riesgo !== "sin_riesgo" ? (
             <span
               className="fi-pill"
@@ -544,7 +961,7 @@ export function PsicologiaTool({ value, onChange, readOnly, historial }: Special
         </header>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          {CAMPOS_ESTADO_MENTAL.map(({ campo, label, opciones, labels }) => (
+          {CAMPOS_ESTADO_MENTAL_BASE.map(({ campo, label, opciones, labels }) => (
             <label key={campo} className="fi-wi-field">
               <span>{label}</span>
               <select
@@ -562,6 +979,38 @@ export function PsicologiaTool({ value, onChange, readOnly, historial }: Special
           ))}
         </div>
 
+        {/* Dominios ampliados del MSE (C8) — opcionales, detrás de un toggle. */}
+        {mseAbierto ? (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            {CAMPOS_ESTADO_MENTAL_EXT.map(({ campo, label, opciones, labels }) => (
+              <label key={campo} className="fi-wi-field">
+                <span>{label}</span>
+                <select
+                  style={SELECT_STYLE}
+                  value={registro[campo] ?? ""}
+                  onChange={(e) => setCampoRegistro(campo, e.target.value)}
+                  disabled={readOnly}
+                >
+                  <option value="">—</option>
+                  {opciones.map((o) => (
+                    <option key={o} value={o}>{labels[o]}</option>
+                  ))}
+                </select>
+              </label>
+            ))}
+          </div>
+        ) : !readOnly ? (
+          <button
+            type="button"
+            className="pc-link"
+            onClick={() => setMseExpandido(true)}
+            style={{ alignSelf: "flex-start" }}
+            title="Agrega orientación, atención, memoria, sensopercepción, contenido del pensamiento, juicio, insight, lenguaje y psicomotricidad"
+          >
+            + MSE completo (dominios adicionales)
+          </button>
+        ) : null}
+
         <label className="fi-wi-field">
           <span>Riesgo</span>
           <select
@@ -578,12 +1027,35 @@ export function PsicologiaTool({ value, onChange, readOnly, historial }: Special
         </label>
 
         {riesgo === "ideacion" || riesgo === "plan" ? (
-          <p role="alert" style={AVISO_STYLE}>
-            Registraste riesgo con {riesgo === "plan" ? "plan" : "ideación"}.
-            Documentá la evaluación y el plan de seguridad según tu protocolo.
+          <p style={AVISO_STYLE}>
+            Registraste riesgo con {riesgo === "plan" ? "plan" : "ideación"}. Abajo
+            se abrió el <b>protocolo de riesgo</b> (C-SSRS + plan de seguridad)
+            para estructurar la evaluación y documentar el plan.
           </p>
         ) : null}
       </section>
+
+      {/* ── Nota de proceso guiada: SOAP / DAP / BIRP (C8) ── */}
+      <NotaProcesoBlock
+        nota={draft.procesoNota}
+        onChange={setProcesoNota}
+        readOnly={readOnly}
+      />
+
+      {/* ── Dashboard de outcomes (C8) ── */}
+      <OutcomesDashboard historial={historial} pacienteId={pacienteId} />
+
+      {/* ── Protocolo de riesgo suicida (C7) ── */}
+      {deteccion.activo ? (
+        <CrisisWorkflow
+          crisisPlan={draft.crisisPlan}
+          motivos={deteccion.motivos}
+          onChange={setCrisisPlan}
+          readOnly={readOnly}
+          pacienteId={pacienteId}
+          turno={turno}
+        />
+      ) : null}
 
       {/* ── Objetivos terapéuticos ── */}
       <section className="pc-card">

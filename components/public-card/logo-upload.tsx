@@ -176,9 +176,11 @@ export function LogoUpload({
       />
 
       {showPreview ? (
-        // The preview is a transient data URL (during upload) or a Supabase
-        // public URL (after upload). next/image's static optimization adds no
-        // value here and breaks on data URLs without unoptimized config.
+        // Raw <img> on purpose (X8 skips it): the preview is a transient data
+        // URL (FileReader, during upload) or a Supabase public URL (after).
+        // next/image rejects data URLs without `unoptimized` and the
+        // logo-upload Playwright spec asserts `data:image/png` on this src, so
+        // the next/image logo migration deliberately leaves this untouched.
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={localPreview!}

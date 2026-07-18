@@ -41,12 +41,22 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get("code");
   const redirectTo = searchParams.get("redirect") ?? null;
 
+  // Si el link PIDIÓ el portal (magic-link del paciente llega con
+  // ?redirect=/portal, ver app/(portal)/portal/login/actions.ts), los ERRORES
+  // también deben volver al login DEL PORTAL: el /login de staff
+  // (password/Google) es un dead-end para un paciente sin password que sólo
+  // necesita pedir otro magic-link. Cubre las tres ramas de error de abajo:
+  // link vencido/ya usado (?error_code=otp_expired), verifyOtp fallido y el
+  // exchange PKCE sin cookie code_verifier (link abierto en OTRO dispositivo
+  // del que lo pidió).
+  const loginPath = redirectTo?.startsWith("/portal") ? "/portal/login" : "/login";
+
   // Ítem 1.5 (a): GoTrue redirige con ?error=...&error_code=otp_expired (sin
   // code ni token_hash) cuando el link de email venció o ya fue usado. Cortar
   // acá con código amigable — sin esto caía al redirect genérico a /login.
   const callbackErr = parseAuthCallbackError(searchParams);
   if (callbackErr) {
-    return NextResponse.redirect(`${origin}/login?error=${encodeURIComponent(callbackErr)}`);
+    return NextResponse.redirect(`${origin}${loginPath}?error=${encodeURIComponent(callbackErr)}`);
   }
 
   const supabase = await createSupabaseServerClient();
@@ -67,7 +77,7 @@ export async function GET(request: NextRequest) {
     });
     if (error) {
       return NextResponse.redirect(
-        `${origin}/login?error=${encodeURIComponent(mapAuthError(error.message))}`,
+        `${origin}${loginPath}?error=${encodeURIComponent(mapAuthError(error.message))}`,
       );
     }
   }
@@ -80,7 +90,7 @@ export async function GET(request: NextRequest) {
       // pasamos texto crudo si el error es genuinamente desconocido (truncado
       // a 80 chars para no permitir URL injection cosmético).
       const code = mapAuthError(error.message);
-      return NextResponse.redirect(`${origin}/login?error=${encodeURIComponent(code)}`);
+      return NextResponse.redirect(`${origin}${loginPath}?error=${encodeURIComponent(code)}`);
     }
   }
 
@@ -89,7 +99,38 @@ export async function GET(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.redirect(`${origin}/login`);
+    return NextResponse.redirect(`${origin}${loginPath}`);
+  }
+
+  // ─── Portal del paciente (Fase 3 · P3 + M88) ────────────────────────────────
+  // Un magic-link del portal llega con ?redirect=/portal. Los pacientes NO son
+  // `member` (M70): la lógica de staff de abajo los mandaría a /onboarding (un
+  // dead-end para un paciente). Si la sesión corresponde a una `paciente_cuenta`
+  // viva, ruteamos al portal ANTES del flujo de staff.
+  //
+  // M88 · provisioning de primera sesión: paciente_cuenta_ensure() devuelve la
+  // cuenta viva del usuario logueado, CREÁNDOLA si no existe (email = verdad del
+  // server desde auth.users del propio auth.uid() — sin args, no impersona). Sin
+  // esto ningún paciente podía entrar jamás (nada creaba filas paciente_cuenta y
+  // paciente_cuenta_actual() era siempre NULL → sin_cuenta). La función NO
+  // linkea fichas: eso sigue siendo del matcher auditado (LinkagePanel del
+  // portal corre el auto-run email-only al montar, con sus guards de P3/P9).
+  // NULL sólo queda para: cuenta soft-deleted (baja explícita, no se resucita)
+  // o usuario auth sin email usable.
+  //
+  // Precedencia (humano que es paciente Y staff): sólo desviamos al portal
+  // cuando el link PIDIÓ el portal (redirect empieza con /portal). Un usuario
+  // que además es staff y entró por el login normal sigue el flujo de staff.
+  if (redirectTo && redirectTo.startsWith("/portal")) {
+    const { data: cuentaId } = await supabase.rpc("paciente_cuenta_ensure");
+    if (cuentaId) {
+      const safePortal = safeRedirect(redirectTo, "/portal");
+      return NextResponse.redirect(`${origin}${safePortal}`);
+    }
+    // Pidió portal pero no hay cuenta de portal utilizable (baja explícita o
+    // usuario sin email): no lo mandamos a /onboarding de staff. Al login del
+    // portal con un aviso neutro.
+    return NextResponse.redirect(`${origin}/portal/login?error=sin_cuenta`);
   }
 
   // Consolidated lookup: member + organization en 1 query con inner join.

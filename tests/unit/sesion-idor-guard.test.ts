@@ -15,7 +15,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { checkTurnoOwnership } from "../../lib/db/sesiones";
+import { checkTurnoOwnership, sesionPerteneceAPaciente } from "../../lib/db/sesiones";
 
 const ORG_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const ORG_B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
@@ -61,4 +61,29 @@ test("turno de la org activa y del paciente correcto → ok (no regresa el flujo
     PACIENTE,
   );
   assert.equal(verdict.ok, true);
+});
+
+// ─── sesionPerteneceAPaciente (export PDF · ?sesion=<uuid>) ──────────────
+//
+// getSesionCompleta scopea por org, no por paciente. El export PDF resuelve la
+// sesión a partir de un id del cliente: debe descartarla si es de OTRO paciente
+// de la misma org, o el PDF mezclaría membrete de A con SOAP de B (HC legal
+// mislabeled). Estas invariantes fijan esa decisión sin mockear Supabase.
+
+test("sesión del mismo paciente → pertenece (usa su SOAP)", () => {
+  assert.equal(sesionPerteneceAPaciente(PACIENTE, PACIENTE), true);
+});
+
+test("sesión de OTRO paciente de la misma org → NO pertenece (cae al SOAP de la ficha)", () => {
+  assert.equal(sesionPerteneceAPaciente(OTRO_PACIENTE, PACIENTE), false);
+});
+
+test("paciente_id ausente/null en la fila → NO pertenece (no mislabela)", () => {
+  assert.equal(sesionPerteneceAPaciente(null, PACIENTE), false);
+  assert.equal(sesionPerteneceAPaciente(undefined, PACIENTE), false);
+});
+
+test("paciente_id no-string (tipo inesperado de la vista) → NO pertenece", () => {
+  assert.equal(sesionPerteneceAPaciente(123, PACIENTE), false);
+  assert.equal(sesionPerteneceAPaciente({ id: PACIENTE }, PACIENTE), false);
 });

@@ -3772,6 +3772,25 @@ input:focus { outline: none; }
   font-size: 14px; font-weight: 600; color: var(--ink); letter-spacing: -.005em;
 }
 .pc-soap-section-hint { font-size: 11.5px; color: var(--ink-3); }
+/* C9 · guía SOAP por especialidad — andamiaje visual sobre el textarea. */
+.pc-soap-guia {
+  display: flex; flex-direction: column; gap: 6px;
+  margin-bottom: 8px; padding: 10px 12px;
+  background: var(--accent-soft);
+  border: 1px solid var(--line-soft);
+  border-left: 2px solid var(--accent);
+  border-radius: var(--r-sm);
+}
+.pc-soap-guia-prompt {
+  margin: 0; font-size: 12.5px; line-height: 1.45;
+  color: var(--ink-2); font-weight: 500;
+}
+.pc-soap-guia-list {
+  margin: 0; padding-left: 16px;
+  display: flex; flex-direction: column; gap: 3px;
+  font-size: 11.5px; line-height: 1.4; color: var(--ink-3);
+}
+.pc-soap-guia-list li { padding-left: 2px; }
 .pc-soap-textarea {
   width: 100%;
   resize: vertical;
@@ -5619,6 +5638,15 @@ input:focus { outline: none; }
 .cfg-radio-btn.is-on {
   background: var(--ink); color: var(--surface); border-color: var(--ink); font-weight: 600;
 }
+
+/* Theme toggle (X5) — segmented light/dark control reusing cfg-radio-btn.
+   Adds icon+label layout and a real pointer cursor (it IS interactive, unlike
+   the slot-duration group above). Selected state inherits .is-on tokens. */
+.cfg-theme-opt {
+  display: inline-flex; align-items: center; gap: 7px;
+  cursor: pointer;
+}
+.cfg-theme-opt svg { flex-shrink: 0; }
 
 .cfg-switch {
   width: 36px; height: 20px; border-radius: 99px;
@@ -18220,6 +18248,13 @@ input:focus { outline: none; }
 
 .pc-consent-card { grid-column: 1 / -1; }
 
+/* X7 · agrupador de acciones del header de la card (Imprimir · Registrar). */
+.pc-consent-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+}
+
 .pc-consent-empty {
   display: flex; flex-direction: column; align-items: flex-start; gap: 12px;
 }
@@ -18417,4 +18452,461 @@ input:focus { outline: none; }
 @media (max-width: 640px) {
   .pc-consent-row { grid-template-columns: 1fr; }
   .pc-consent-row-actions { padding-top: 6px; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   X4 · Matriz de permisos rol × capacidad (vista, /configuracion Equipo).
+   Solo-lectura, derivada de capabilitiesFor. Tokens brass/cream, sin hex nuevo.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* Leyenda: rol + una línea de alcance, en tarjetas compactas. */
+.pm-legend {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.pm-legend-item {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 10px 12px;
+  background: var(--bg);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm);
+}
+.pm-legend-role { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.pm-legend-desc { font-size: 11.5px; color: var(--ink-3); line-height: 1.45; }
+
+/* Contenedor con scroll horizontal propio: la tabla nunca desborda el body. */
+.pm-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.pm-table {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+}
+
+/* Encabezados de columna: capacidad (izquierda, pegada) + roles. */
+.pm-table thead th {
+  font-family: 'Geist Mono', monospace;
+  font-size: 10px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  font-weight: 500;
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  vertical-align: bottom;
+}
+.pm-th-cap {
+  text-align: left;
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  min-width: 220px;
+}
+.pm-th-role {
+  text-align: center;
+  min-width: 92px;
+  white-space: normal;
+  line-height: 1.3;
+}
+
+/* Fila de grupo: banda de sección (Datos clínicos, Finanzas, …). */
+.pm-group-th {
+  text-align: left;
+  padding: 10px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  color: var(--accent);
+  background: var(--bg);
+  border-bottom: 1px solid var(--line-soft);
+  position: sticky;
+  left: 0;
+}
+
+/* Celda de capacidad (primera columna, pegada al hacer scroll). */
+.pm-th-cap-cell {
+  text-align: left;
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--surface);
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  vertical-align: top;
+}
+.pm-cap-label { display: block; font-size: 13px; font-weight: 500; color: var(--ink); }
+.pm-cap-detalle { display: block; font-size: 11.5px; color: var(--ink-3); line-height: 1.4; margin-top: 2px; }
+
+.pm-row:hover .pm-th-cap-cell,
+.pm-row:hover .pm-cell { background: var(--bg); }
+
+/* Celda de valor: check (concedido) o guion tenue (no). */
+.pm-cell {
+  text-align: center;
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--surface);
+  vertical-align: middle;
+}
+.pm-yes {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px;
+  border-radius: 99px;
+  color: var(--green);
+  background: var(--green-soft);
+}
+.pm-no {
+  color: var(--ink-4, var(--ink-3));
+  font-size: 14px;
+  user-select: none;
+}
+
+.pm-foot {
+  margin: 0;
+  padding: 14px 24px 18px;
+  font-size: 11.5px;
+  color: var(--ink-3);
+  line-height: 1.5;
+}
+
+@media (max-width: 640px) {
+  .pm-legend { padding: 14px; }
+  .pm-foot { padding: 12px 16px 16px; }
+}
+
+/* ═════════════ SKELETONS · loading.tsx (PR X6) ═════════════
+ * Bloques de carga con shimmer sutil. Construidos sobre `--surface-*` para
+ * adaptarse a light/dark sin reglas duplicadas (los tokens se redefinen en
+ * [data-theme="dark"]). El barrido usa un gradiente que corre sobre la base
+ * `--surface-2`; el highlight es `--surface-3` (un paso más claro en light,
+ * un paso más cálido en dark). Puramente decorativo → los elementos son
+ * `aria-hidden` desde el componente `<Skeleton />`.
+ * ─────────────────────────────────────────────────────────── */
+.fi-skeleton {
+  display: block;
+  width: 100%;
+  height: 1em;
+  border-radius: var(--r-sm);
+  background-color: var(--surface-2);
+  background-image: linear-gradient(
+    100deg,
+    transparent 0%,
+    transparent 35%,
+    var(--surface-3) 50%,
+    transparent 65%,
+    transparent 100%
+  );
+  background-size: 220% 100%;
+  background-repeat: no-repeat;
+  background-position: 180% 0;
+  animation: fi-skeleton-shimmer 1.4s var(--ease-standard) infinite;
+  /* Nunca es interactivo ni seleccionable. */
+  pointer-events: none;
+  user-select: none;
+}
+.fi-skeleton-text { border-radius: var(--r-sm); }
+.fi-skeleton-block { border-radius: var(--r-md); }
+.fi-skeleton-circle { border-radius: 50%; }
+
+@keyframes fi-skeleton-shimmer {
+  from { background-position: 180% 0; }
+  to   { background-position: -80% 0; }
+}
+
+/* Contenedor de filas (listas/tablas en carga). Espeja el ritmo vertical de
+ * las tablas densas (turnos, transacciones, directorio) sin cargar datos. */
+.fi-skeleton-list {
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  background: var(--surface);
+}
+.fi-skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.fi-skeleton-row:last-child { border-bottom: none; }
+.fi-skeleton-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+/* Reduced-motion: el shimmer es una animación decorativa infinita → OFF
+ * (política Folio v2, punto 2). El bloque permanece visible con su base
+ * `--surface-2` para que el layout de carga siga leyéndose. */
+@media (prefers-reduced-motion: reduce) {
+  .fi-skeleton { animation: none !important; background-image: none; }
+}
+
+/* X7 · `.print-only` existe en el DOM siempre pero SOLO se ve en papel: en
+ * pantalla queda oculto para no ensuciar la ficha con el membrete. Regla base
+ * (fuera de @media print); el bloque print de abajo lo revela. */
+.print-only { display: none !important; }
+
+/* ═════════════ PRINT · documentos clínicos (PR X7) ═════════════
+ * Estilos @media print para imprimir/guardar-como-PDF documentos clínicos
+ * desde el navegador: la ficha del paciente y los consentimientos. La
+ * arquitectura de impresión es OPT-IN, no opt-out, por una razón de PHI: la
+ * app puede tener otras rutas (agenda, finanzas) con datos de MÚLTIPLES
+ * pacientes en pantalla. Imprimir "lo que sea que esté visible" filtraría PHI
+ * de terceros a un papel suelto. Por eso:
+ *
+ *   1. Por defecto, en print NO se imprime NADA del cuerpo de la app
+ *      (`.fi-main > * { display: none }`). El papel sale en blanco salvo que
+ *      la página se marque explícitamente como imprimible.
+ *   2. Una pantalla imprimible pone `data-printable` en su contenedor raíz
+ *      (`.fi-content[data-printable]`). Hoy sólo la ficha de UN paciente lo
+ *      hace — la ruta /pacientes/[id] renderiza un único paciente, así que no
+ *      hay PHI cruzada estructuralmente posible.
+ *   3. Dentro de lo imprimible, el chrome (sidebar, nav, tabs, botones,
+ *      badges, modales) se oculta; el contenido se refluye a A4 vertical.
+ *   4. Cualquier elemento marcado `.no-print` desaparece; `.print-only`
+ *      aparece SÓLO en papel (encabezados membretados que identifican el
+ *      documento — sin ellos una hoja suelta sería PHI anónima).
+ *
+ * Se fuerzan los tokens claros aunque el usuario tenga dark-mode activo: la
+ * tinta oscura sobre papel es derroche de tóner y un documento legal debe
+ * verse como documento, no como captura de pantalla nocturna.
+ * ─────────────────────────────────────────────────────────── */
+@media print {
+  /* Página A4 con márgenes clínicos (membrete arriba, aire a los lados). */
+  @page {
+    size: A4 portrait;
+    margin: 16mm 14mm 18mm;
+  }
+
+  /* Tokens claros forzados: dark-mode nunca llega al papel. Redefinimos sobre
+   * la raíz (donde `data-theme` vive, en <html>) para ganarle a `[data-theme]`. */
+  :root,
+  html[data-theme="dark"] {
+    --bg:        #FFFFFF;
+    --surface:   #FFFFFF;
+    --surface-2: #FFFFFF;
+    --surface-3: #F4F1EA;
+    --line:      #C9C2AE;
+    --line-soft: #DDD5C0;
+    --ink:       #111111;
+    --ink-2:     #2A271E;
+    --ink-3:     #4A4636;
+    --ink-4:     #6B6553;
+    --accent:    #6E5119;
+    --accent-2:  #5A4214;
+    --accent-soft:   #EFE6CE;
+    --accent-soft-2: #E4D6AE;
+    --green:     #235730;
+    --red:       #7E2E21;
+    --amber:     #8F6A22;
+  }
+
+  html,
+  body,
+  html[data-theme="dark"],
+  html[data-theme="dark"] body {
+    background: #FFFFFF !important;
+    background-color: #FFFFFF !important;
+    color: #111111 !important;
+    /* Fuerza la impresión de fondos/colores de acento (membrete, pills). */
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* El shell deja de ser grilla: una sola columna a ancho de página. */
+  .fi-app {
+    display: block !important;
+    min-height: 0 !important;
+  }
+
+  /* Chrome que nunca va al papel. El sidebar es sticky/100vh: fuera. Banners
+   * de verificación, skeletons de carga y modales tampoco. */
+  .fi-sidebar,
+  .fi-nav,
+  .pc-tabs,
+  .fi-email-verify-banner,
+  .fi-skeleton,
+  .fi-skeleton-list,
+  .a11y-modal-root,
+  .fi-ficha-backdrop,
+  .no-print {
+    display: none !important;
+  }
+
+  .fi-main {
+    display: block !important;
+  }
+
+  /* Por defecto, el cuerpo de la app NO se imprime (evita fuga de PHI de otras
+   * rutas). Sólo el contenedor marcado imprimible reaparece. */
+  .fi-main > * {
+    display: none !important;
+  }
+  .fi-main > .fi-content[data-printable],
+  .fi-main > [data-printable] {
+    display: block !important;
+  }
+
+  /* El contenedor imprimible ocupa toda la caja de página, sin max-width ni
+   * padding de pantalla (los márgenes los pone @page). */
+  .fi-content[data-printable],
+  [data-printable] {
+    max-width: none !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Dentro de lo imprimible: fuera todo control interactivo. Los botones de
+   * acción, los "Ver firma"/"Revocar"/"Editar", los badges de guardado y los
+   * indicadores de foco no tienen sentido en papel. */
+  [data-printable] .fi-btn,
+  [data-printable] .pc-link,
+  [data-printable] .pc-actions,
+  [data-printable] .pc-back,
+  [data-printable] .pc-card-head .pc-link,
+  [data-printable] .fm-save,
+  [data-printable] .pc-consent-row-actions,
+  [data-printable] .pc-consent-revoke-box,
+  [data-printable] button,
+  [data-printable] .no-print {
+    display: none !important;
+  }
+
+  /* Encabezado membretado sólo-papel: identifica el documento (org · paciente ·
+   * fecha) para que una hoja suelta no sea PHI anónima. La regla base lo oculta
+   * en pantalla (`.print-only { display:none !important }`); acá lo revelamos
+   * dentro del contenedor imprimible con mayor especificidad. */
+  [data-printable] .print-only,
+  .print-only.fi-print-header {
+    display: block !important;
+  }
+  .fi-print-header {
+    margin: 0 0 14px;
+    padding: 0 0 12px;
+    border-bottom: 1.5px solid var(--accent);
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+  .fi-print-header-brand {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .fi-print-header-brand b {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+  }
+  .fi-print-header-meta {
+    font-size: 10.5px;
+    color: var(--ink-3);
+    font-variant-numeric: tabular-nums;
+  }
+  .fi-print-header-doc {
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--ink-2);
+  }
+  .fi-print-header-doc b { color: var(--ink); }
+
+  /* Tarjetas como bloques de papel: borde fino, sin sombra ni radios grandes,
+   * y sin cortarlas a mitad de página cuando se puede evitar. */
+  [data-printable] .pc-card,
+  [data-printable] .pc-spine-wrap {
+    border: 1px solid var(--line) !important;
+    border-radius: 4px !important;
+    box-shadow: none !important;
+    background: #FFFFFF !important;
+    padding: 14px 16px !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Reflow de grillas de la ficha a una sola columna (el papel es angosto). */
+  [data-printable] .pc-info-grid,
+  [data-printable] .pc-plan-grid,
+  [data-printable] .pc-bottom-grid {
+    display: block !important;
+  }
+  [data-printable] .pc-info-grid > *,
+  [data-printable] .pc-bottom-grid > * {
+    margin-bottom: 12px;
+  }
+
+  /* Los textareas del SOAP se imprimen como texto plano, no como campos. */
+  [data-printable] textarea,
+  [data-printable] .pc-soap-textarea {
+    border: none !important;
+    padding: 0 !important;
+    resize: none !important;
+    background: transparent !important;
+    color: var(--ink) !important;
+    font-family: inherit;
+    white-space: pre-wrap;
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  /* Tipografía base de documento: negro nítido, sin arrastrar títulos solos. */
+  [data-printable] h1,
+  [data-printable] h2,
+  [data-printable] h3,
+  [data-printable] .fi-eyebrow,
+  [data-printable] b {
+    color: var(--ink) !important;
+  }
+  [data-printable] h1,
+  [data-printable] h2,
+  [data-printable] h3 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  /* Los links imprimibles no muestran su URL (los internos no sirven en papel). */
+  [data-printable] a[href] {
+    color: var(--ink) !important;
+    text-decoration: none !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Portal del paciente (Fase 3 · P3) — shell liviano sobre tokens brass/cream.
+   Reusa .au-* de la pantalla de auth para el login; estas clases visten la
+   landing (/portal) y el panel de vinculación. Sin nuevos hex off-theme.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.pt-app {
+  min-height: 100vh;
+  background: var(--surface);
+  color: var(--ink);
+}
+.pt-main h1 { font-size: var(--fs-2xl, 1.6rem); letter-spacing: -0.01em; }
+.pt-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+  padding: 18px 20px;
+}
+.pt-org-list .pt-card { transition: border-color .15s ease, box-shadow .15s ease; }
+.pt-org-list .pt-card:hover { border-color: var(--accent); box-shadow: var(--shadow-2); }
+.pt-empty {
+  padding: 16px 18px;
+  background: var(--surface-2);
+  border: 1px dashed var(--line);
+  border-radius: var(--r-md);
 }

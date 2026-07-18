@@ -21,7 +21,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 
-import { updateSupabaseSession } from "@/lib/supabase/middleware";
+import { resolveAudience, updateSupabaseSession } from "@/lib/supabase/middleware";
 
 const PUBLIC_PATHS = [
   "/",                      // landing de marketing
@@ -37,6 +37,7 @@ const PUBLIC_PATHS = [
   "/sitemap.xml",           // SEO — generado por app/sitemap.ts; los crawlers no tienen sesión
   "/robots.txt",            // SEO — generado por app/robots.ts; ídem
   "/profesionales",         // directorio público (Fase 3) — índice; los hubs van por PUBLIC_PREFIXES
+  "/portal/login",          // login del portal del paciente (Fase 3 · P3) — magic-link, sin sesión
 ];
 
 const PUBLIC_PREFIXES = [
@@ -72,19 +73,68 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
-  // Si no hay user y la ruta NO es pública → redirect a login
+  const isPortalPath = pathname === "/portal" || pathname.startsWith("/portal/");
+  const isPortalLogin = pathname === "/portal/login";
+
+  // ─── Sin sesión ─────────────────────────────────────────────────────────────
+  // Ruta no pública → login. El portal tiene SU PROPIO login (magic-link): un
+  // anónimo que pide /portal (o cualquier /portal/*) va a /portal/login, no al
+  // login de staff (que pide password y es otro público).
   if (!user && !isPublicPath(pathname)) {
     const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    url.searchParams.set("redirect", pathname);
+    if (isPortalPath) {
+      url.pathname = "/portal/login";
+    } else {
+      url.pathname = "/login";
+      url.searchParams.set("redirect", pathname);
+    }
     return NextResponse.redirect(url);
   }
 
-  // Si hay user y va a /login → redirect a /hoy
-  if (user && (pathname === "/login" || pathname === "/")) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/hoy";
-    return NextResponse.redirect(url);
+  // ─── Con sesión · ruteo de PRECEDENCIA staff vs paciente (P3) ────────────────
+  // Un humano puede ser member (staff) Y paciente_cuenta (portal) a la vez. La
+  // precedencia se resuelve SÓLO en las rutas de entrada ambiguas para no pagar
+  // el costo de resolveAudience() en cada request:
+  //   · /login, / (raíz)  → si es SÓLO paciente (no staff) → /portal; si es
+  //     staff (aunque también sea paciente) → /hoy. STAFF gana en la app.
+  //   · /portal/login      → si ya hay sesión con cuenta de portal → /portal.
+  //   · /portal/* (no login) → si el user NO es cuenta de portal pero SÍ es
+  //     staff → /hoy (un profesional sin ficha no tiene nada que hacer en el
+  //     portal); si no es ninguno → /portal/login (defensa; no debería pasar
+  //     con sesión válida de portal).
+  if (user) {
+    if (pathname === "/login" || pathname === "/") {
+      const { isMember, isPortalAccount } = await resolveAudience(request);
+      const url = request.nextUrl.clone();
+      url.search = "";
+      url.pathname = isPortalAccount && !isMember ? "/portal" : "/hoy";
+      return NextResponse.redirect(url);
+    }
+
+    if (isPortalLogin) {
+      const { isPortalAccount } = await resolveAudience(request);
+      if (isPortalAccount) {
+        const url = request.nextUrl.clone();
+        url.search = "";
+        url.pathname = "/portal";
+        return NextResponse.redirect(url);
+      }
+      // Sesión de staff en /portal/login: no lo forzamos a portal. Lo dejamos
+      // ver el login del portal (puede querer entrar a un buzón distinto).
+      return response;
+    }
+
+    if (isPortalPath) {
+      const { isMember, isPortalAccount } = await resolveAudience(request);
+      if (!isPortalAccount) {
+        const url = request.nextUrl.clone();
+        url.search = "";
+        url.pathname = isMember ? "/hoy" : "/portal/login";
+        return NextResponse.redirect(url);
+      }
+      // Cuenta de portal en /portal/* → dejar pasar.
+      return response;
+    }
   }
 
   return response;

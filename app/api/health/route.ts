@@ -4,14 +4,16 @@
  * Health check público para load balancers / uptime monitoring (UptimeRobot,
  * BetterStack, etc.). Devuelve:
  *   - ok: true si todas las dependencias críticas responden
- *   - checks: status individual por dependencia (db, env)
+ *   - checks: status individual por dependencia (db, env, rate_limit)
  *   - version: SHA del commit deployado (Vercel inyecta `VERCEL_GIT_COMMIT_SHA`)
  *
  * No expone secrets ni datos del tenant. Safe para exponer en GET sin auth.
  */
 
+import { captureMessage } from "@sentry/nextjs";
 import { NextResponse } from "next/server";
 
+import { isUpstashConfigured } from "@/lib/security/rate-limit";
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -21,6 +23,17 @@ interface CheckResult {
   ok: boolean;
   latencyMs?: number;
   error?: string;
+}
+
+// Alerta de Upstash ausente en prod: fire-once por proceso. `/api/health` lo
+// pinguean monitores de uptime con frecuencia — sin este guard, un deploy sin
+// Upstash inundaría Sentry con un evento por request. Espeja el log-once de
+// lib/security/rate-limit.ts (warnedMissingEnvs) y el dedupe de lib/crypto.ts.
+let alertedUpstashMissing = false;
+
+/** Solo para tests: resetea el estado de fire-once del alert de Upstash. */
+export function __resetHealthAlertState() {
+  alertedUpstashMissing = false;
 }
 
 export async function GET() {
@@ -43,7 +56,31 @@ export async function GET() {
   const missing = requiredEnv.filter((k) => !process.env[k]);
   checks.env = { ok: missing.length === 0, error: missing.length > 0 ? `falta: ${missing.join(",")}` : undefined };
 
-  // 3. Envs de integraciones runtime (no bloquean boot pero sí features).
+  // 3. Rate limiting provisionado (Upstash). En PRODUCCIÓN es un check duro: sin
+  // Upstash el rate limiting queda fail-open (booking/signup/captcha sin
+  // defensa de brute-force — ver lib/security/rate-limit.ts). Se assert-ea acá
+  // para que el go-live no pase con la defensa apagada en silencio; además se
+  // reporta a Sentry (no sólo console) una vez por proceso. Fuera de prod no
+  // baja `ok` (dev/test no necesitan Upstash). El booleano crudo sigue expuesto
+  // en `integrations.upstash_redis` para diagnóstico en cualquier entorno.
+  const upstashOk = isUpstashConfigured();
+  const inProd = process.env.NODE_ENV === "production";
+  checks.rate_limit = {
+    ok: upstashOk || !inProd,
+    error: !upstashOk && inProd ? "Upstash no configurado — rate limiting fail-open" : undefined,
+  };
+  if (!upstashOk && inProd && !alertedUpstashMissing) {
+    alertedUpstashMissing = true;
+    captureMessage(
+      "[health] Upstash no configurado en producción — rate limiting DESACTIVADO (fail-open)",
+      {
+        level: "error",
+        tags: { component: "health", op: "rate-limit-assertion" },
+      },
+    );
+  }
+
+  // 4. Envs de integraciones runtime (no bloquean boot pero sí features).
   // Reporta presencia (boolean) sin leak de valores. Útil para diagnosticar
   // qué features están funcionales en este deploy.
   const integrations = {
@@ -64,10 +101,9 @@ export async function GET() {
       process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY &&
       process.env.TURNSTILE_SECRET_KEY,
     ),
-    upstash_redis: Boolean(
-      process.env.UPSTASH_REDIS_REST_URL &&
-      process.env.UPSTASH_REDIS_REST_TOKEN,
-    ),
+    // Derivado de isUpstashConfigured() (misma fuente que checks.rate_limit) —
+    // presencia de ambas keys, sin leak de valores.
+    upstash_redis: upstashOk,
     sentry: Boolean(process.env.NEXT_PUBLIC_SENTRY_DSN),
     posthog: Boolean(process.env.NEXT_PUBLIC_POSTHOG_KEY),
     // Secreto que autentica los Vercel Crons (Bearer). Sin él, todo /api/cron/*

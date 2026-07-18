@@ -18,6 +18,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import { err, ok, type Result } from "./errors";
 import { getActiveSession } from "./session";
+import { normalizeModalidad } from "@/lib/types";
 import type {
   Bloqueo,
   CanalPedido,
@@ -49,6 +50,8 @@ interface TurnoExtendidoRow {
   profesional_id: string;
   /** M56 · motivo del booking público (PHI). Solo se descifra para roles clínicos. */
   nota_reserva_cifrado: string | null;
+  /** M72 · modalidad del turno (presencial | telemedicina). */
+  modalidad: string | null;
 }
 
 interface BloqueoRow {
@@ -268,7 +271,7 @@ export async function getCalendarioSemana(input: FetcherInput): Promise<Result<C
           "id, organization_id, inicio, duracion_min, estado, origen, " +
             "paciente_id, paciente_nombre_cifrado, paciente_apellido_cifrado, paciente_telefono_cifrado, " +
             "paciente_tipo, paciente_tags, paciente_alerta_alergia, servicio_nombre, profesional_id, " +
-            "nota_reserva_cifrado",
+            "nota_reserva_cifrado, modalidad",
         )
         .eq("organization_id", organizationId)
         .gte("inicio", startUtc)
@@ -341,6 +344,7 @@ export async function getCalendarioSemana(input: FetcherInput): Promise<Result<C
       origen: ORIGEN_DB_TO_UI[row.origen],
       profesionalId: row.profesional_id ?? null,
       profesionalNombre: profesionalesNombreById?.[row.profesional_id] ?? null,
+      modalidad: normalizeModalidad(row.modalidad),
       // M56 · gate PHI: solo desciframos la nota de reserva para roles clínicos;
       // para el resto queda null y nunca sale del server (ni texto ni cifrado).
       notaReserva: canReadClinical
@@ -778,6 +782,7 @@ export async function getCalendarioMes(input: MesFetcherInput): Promise<Result<C
       origen: ORIGEN_DB_TO_UI[row.origen],
       profesionalId: row.profesional_id ?? null,
       profesionalNombre: profesionalesNombreById?.[row.profesional_id] ?? null,
+      modalidad: normalizeModalidad(row.modalidad),
       // M56 · gate PHI (ver getCalendarioSemana).
       notaReserva: canReadClinical
         ? tryDecrypt(row.nota_reserva_cifrado, `turno.${row.id}.nota_reserva`)
