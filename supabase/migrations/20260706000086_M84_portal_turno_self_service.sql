@@ -216,18 +216,17 @@ BEGIN
       USING ERRCODE = '42501';
   END IF;
 
-  -- (iii) Anti-tampering: NINGUNA otra columna material puede cambiar. El paciente
-  --       no mueve el horario, ni el precio, ni el profesional, ni la modalidad,
-  --       ni reasigna el turno a otro paciente/servicio/org.
-  IF NEW.paciente_id      IS DISTINCT FROM OLD.paciente_id
-     OR NEW.organization_id IS DISTINCT FROM OLD.organization_id
-     OR NEW.servicio_id     IS DISTINCT FROM OLD.servicio_id
-     OR NEW.profesional_id  IS DISTINCT FROM OLD.profesional_id
-     OR NEW.inicio          IS DISTINCT FROM OLD.inicio
-     OR NEW.duracion_min    IS DISTINCT FROM OLD.duracion_min
-     OR NEW.precio_cents    IS DISTINCT FROM OLD.precio_cents
-     OR NEW.modalidad       IS DISTINCT FROM OLD.modalidad
-  THEN
+  -- (iii) Anti-tampering: NINGUNA otra columna puede cambiar — comparación de la
+  --       FILA COMPLETA menos `estado` (allowlist, no denylist). Un denylist de
+  --       columnas enumeradas dejaba pasar deleted_at (soft-delete: el paciente
+  --       escondía su cancelación tardía de las vistas del consultorio),
+  --       nota_reserva_cifrado (PHI, M56), gcal_event_id y sala_* (telemedicina,
+  --       M72) — y cualquier columna futura. La forma cerrada cubre todo.
+  --       Orden de triggers (alfabético): este guard (…portal_cancel…) corre
+  --       ANTES de turno_same_org_guard y turno_set_updated_at, así que NEW
+  --       llega acá sin mutar por otros triggers (updated_at aún es el de OLD
+  --       salvo que el cliente lo haya tocado — y eso también se bloquea).
+  IF (to_jsonb(NEW) - 'estado') IS DISTINCT FROM (to_jsonb(OLD) - 'estado') THEN
     RAISE EXCEPTION 'portal: sólo se puede cambiar el estado a CANCELADO, no otros campos del turno'
       USING ERRCODE = '42501';
   END IF;
@@ -246,7 +245,7 @@ END
 $$;
 
 COMMENT ON FUNCTION public.turno_portal_cancel_guard() IS
-  'Folio M84 · guard BEFORE UPDATE de turno para el path del PACIENTE de portal (P4). Si el actor NO es member y ES dueño (paciente_owns) de la fila, exige: estado→CANCELADO, origen AGENDADO|CONFIRMADO, ninguna otra columna cambiada, y fuera de la ventana de corte (organization.portal_cancel_cutoff_horas). Staff (member de la org) no entra al guard. Cinturón sobre la policy turno_cancel_portal + la máquina de estados M09 + el EXCLUDE M40.';
+  'Folio M84 · guard BEFORE UPDATE de turno para el path del PACIENTE de portal (P4). Si el actor NO es member y ES dueño (paciente_owns) de la fila, exige: estado→CANCELADO, origen AGENDADO|CONFIRMADO, NINGUNA otra columna cambiada (fila completa via to_jsonb menos estado — cubre deleted_at/nota_reserva_cifrado/gcal_event_id/sala_* y columnas futuras), y fuera de la ventana de corte (organization.portal_cancel_cutoff_horas). Staff (member de la org) no entra al guard. Cinturón sobre la policy turno_cancel_portal + la máquina de estados M09 + el EXCLUDE M40.';
 
 -- BEFORE UPDATE, por-fila. Corre para TODO update de turno pero es no-op salvo
 -- para el path del paciente (early-return si es member o si no es dueño).

@@ -12,6 +12,12 @@
 --     N1. X NO cancela un turno DENTRO de la ventana de corte (guard 42501).
 --     N2. X NO cancela el turno de Y (no es dueño → 0 filas por RLS).
 --     N3. X NO puede tocar OTRA columna al "cancelar" (mover inicio → guard 42501).
+--     N3a. X NO puede soft-deletear (deleted_at) al cancelar FUERA de la ventana —
+--          el exploit del audit: esconder la cancelación de las vistas del staff.
+--          Corre ANTES de P1 (necesita f1 vivo y cancelable; sobre un turno dentro
+--          de la ventana el bloqueo vendría por la ventana y no ejercería esto).
+--     N3b. X NO puede escribir nota_reserva_cifrado (PHI) ni gcal_event_id al
+--          cancelar fuera de la ventana (misma fila-completa del guard).
 --     N4. X NO puede llevar su turno a un estado != CANCELADO (p.ej. EN_SALA).
 --     N5. X NO puede insertar un `pedido` para la ficha de Y (WITH CHECK falla).
 --     N6. X NO puede cancelar un turno EN_SALA aunque esté lejísimos (guard: origen).
@@ -130,6 +136,57 @@ CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE
 AS $$ SELECT 'a1840000-0000-4000-8000-0000000008a2'::uuid $$;
 
 SET ROLE authenticated;
+
+-- ── N3a. X NO puede soft-deletear su turno al "cancelar" (anti-tampering) ────
+-- Exploit del audit adversarial: sobre el turno LEJANO f1 (fuera de la ventana →
+-- la policy SÍ deja pasar el UPDATE), emitir `SET estado='CANCELADO',
+-- deleted_at=now()` — cancela Y esconde la fila de las vistas del consultorio
+-- (filtran deleted_at IS NULL). Con el denylist viejo esto PASABA (deleted_at no
+-- estaba enumerada); la comparación de fila completa del guard debe abortar 42501.
+-- DEBE correr ANTES de P1: necesita a f1 vivo y cancelable — dentro de la ventana
+-- el bloqueo vendría por la ventana/policy y el test no ejercería el anti-tampering.
+DO $$
+DECLARE v int; v_blocked boolean := false;
+BEGIN
+  BEGIN
+    UPDATE turno SET estado = 'CANCELADO', deleted_at = now()
+     WHERE id = 'f1840000-0000-4000-8000-0000000008f1';
+    GET DIAGNOSTICS v = ROW_COUNT;
+  EXCEPTION WHEN insufficient_privilege THEN
+    v_blocked := true; v := 0;
+  END;
+  IF v <> 0 THEN
+    RAISE EXCEPTION 'M84 FAIL N3a: X soft-deleteó su turno al cancelar (rows=%) — deleted_at no está protegida', v;
+  END IF;
+  IF NOT v_blocked THEN
+    RAISE EXCEPTION 'M84 FAIL N3a: el guard no abortó 42501 (bloqueo vino de otra capa — revisar)';
+  END IF;
+  RAISE NOTICE 'M84 spec · N3a OK: no se puede soft-deletear al cancelar (fila completa protegida)';
+END $$;
+
+-- ── N3b. X NO puede escribir PHI/integraciones al "cancelar" ─────────────────
+-- Mismo vector sobre columnas NO enumeradas por el denylist viejo:
+-- nota_reserva_cifrado (motivo de consulta, PHI — M56) y gcal_event_id (M09).
+DO $$
+DECLARE v int; v_blocked boolean := false;
+BEGIN
+  BEGIN
+    UPDATE turno SET estado = 'CANCELADO',
+                     nota_reserva_cifrado = '\xdeadbeef'::bytea,
+                     gcal_event_id = 'tampered-event'
+     WHERE id = 'f1840000-0000-4000-8000-0000000008f1';
+    GET DIAGNOSTICS v = ROW_COUNT;
+  EXCEPTION WHEN insufficient_privilege THEN
+    v_blocked := true; v := 0;
+  END;
+  IF v <> 0 THEN
+    RAISE EXCEPTION 'M84 FAIL N3b: X escribió nota_reserva_cifrado/gcal_event_id al cancelar (rows=%)', v;
+  END IF;
+  IF NOT v_blocked THEN
+    RAISE EXCEPTION 'M84 FAIL N3b: el guard no abortó 42501 (bloqueo vino de otra capa — revisar)';
+  END IF;
+  RAISE NOTICE 'M84 spec · N3b OK: PHI e integraciones protegidas al cancelar';
+END $$;
 
 -- ── P1. X cancela su turno LEJANO (fuera de la ventana) ─────────────────────
 DO $$
