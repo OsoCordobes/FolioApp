@@ -112,9 +112,10 @@ export function propuestaSolapa(
  * El caller ya filtró los vínculos a colegiados activos vivos:
  *
  *   - exactamente 1 vinculado → ese (el servicio define a su profesional);
- *   - 0 o varios → fallback_org: se resuelve como el booking público sin
- *     elección explícita (resolveProfesionalPublico org-level: único colegiado
- *     → ese; varios → hay que elegir; ninguno → la org no recibe reservas).
+ *   - 0 o varios → fallback_org: resolución org-level como el booking público
+ *     sin elección explícita (resolveProfesionalPublico: único colegiado →
+ *     ese; ninguno → la org no recibe reservas), PERO con la adaptación del
+ *     portal para "varios" (ver adaptarFallbackOrgPortal).
  */
 export function decideProfesionalPorServicio(
   vinculadosValidos: string[],
@@ -123,6 +124,32 @@ export function decideProfesionalPorServicio(
     return { kind: "usar", profesionalId: vinculadosValidos[0] };
   }
   return { kind: "fallback_org" };
+}
+
+/**
+ * Adaptación PURA (testeable sin DB) del fallback org-level al portal. En el
+ * booking público, el err("validation") de resolveProfesionalPublico ("elegí
+ * con qué profesional…", varios colegiados sin elección) es RECUPERABLE: el
+ * wizard muestra el picker y reintenta con profesionalId. El portal NO tiene
+ * picker (nuevaReservaSchema no pide profesionalId), así que ese mismo err
+ * sería un dead-end terminal: ninguna reserva nueva podría tener éxito para
+ * servicios con 0 o ≥2 vinculados en una org multi-profesional, y el mensaje
+ * pediría una elección imposible.
+ *
+ * Se degrada a profesional_id NULL: insertarPedidoPortal lo acepta y el staff
+ * asigna el profesional al aceptar (resolverProfesionalDelPedido +
+ * picker del PedidoModal, lib/db/pedidos.ts) — la degradación que ya usa
+ * solicitarReagendaPortal para turnos sin profesional.
+ *
+ * La discriminación por code es segura: en el camino sin param de
+ * resolveProfesionalPublico, mapSupabaseError nunca emite "validation"
+ * (lib/db/errors.ts), así que "validation" ⇔ "hay varios, hay que elegir".
+ * "not_found" (org sin colegiados: nadie podría aceptar el pedido) y los
+ * errores de infra pasan tal cual.
+ */
+export function adaptarFallbackOrgPortal(res: Result<string>): Result<string | null> {
+  if (!res.ok && res.error.code === "validation") return ok(null);
+  return res;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -426,9 +453,12 @@ const nuevaReservaSchema = z.object({
  * la lectura anon devolvería siempre 0 filas). Mismo patrón que el booking
  * público (createPedidoPublico): service client + filtros de org explícitos y
  * obligatorios. El profesional destino se resuelve vía `servicio_profesional`
- * (M:N, M02): exactamente 1 vinculado válido → ese; 0 o varios → misma regla
- * que el booking público sin elección (resolveProfesionalPublico). El INSERT
- * del pedido sigue saliendo por el cliente ANON bajo RLS (Gate 2 intacto).
+ * (M:N, M02): exactamente 1 vinculado válido → ese; 0 o varios → regla del
+ * booking público sin elección (resolveProfesionalPublico) ADAPTADA al portal:
+ * con varios colegiados el pedido entra con profesional_id NULL y el staff lo
+ * asigna al aceptar (adaptarFallbackOrgPortal — sin picker acá, el err de
+ * "elegí profesional" sería un dead-end). El INSERT del pedido sigue saliendo
+ * por el cliente ANON bajo RLS (Gate 2 intacto).
  */
 export async function solicitarTurnoPortal(
   input: z.infer<typeof nuevaReservaSchema>,
@@ -508,17 +538,23 @@ export async function solicitarTurnoPortal(
     ((vinculados ?? []) as Array<{ member_id: string }>).map((v) => v.member_id),
   );
 
-  let profesionalId: string;
+  let profesionalId: string | null;
   if (decision.kind === "usar") {
     profesionalId = decision.profesionalId;
   } else {
-    // 0 o varios vinculados → exactamente lo que hace el booking público sin
-    // elección explícita: único colegiado de la org → ese; varios → err de
-    // validación (hay que elegir); ninguno → err not_found (sin profesional).
-    const profRes = await resolveProfesionalPublico(service, {
-      organizationId: ficha.organizationId,
-      profesionalId: null,
-    });
+    // 0 o varios vinculados → resolución org-level como el booking público sin
+    // elección explícita: único colegiado de la org → ese; ninguno → err
+    // not_found (la org no puede recibir reservas). Con VARIOS colegiados el
+    // público devuelve err("validation") y su wizard muestra el picker; acá NO
+    // hay picker (nuevaReservaSchema no pide profesionalId), así que ese err
+    // sería un dead-end irrecuperable — se degrada a profesional_id NULL y el
+    // staff asigna al aceptar (ver adaptarFallbackOrgPortal).
+    const profRes = adaptarFallbackOrgPortal(
+      await resolveProfesionalPublico(service, {
+        organizationId: ficha.organizationId,
+        profesionalId: null,
+      }),
+    );
     if (!profRes.ok) return profRes;
     profesionalId = profRes.data;
   }

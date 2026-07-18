@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { err, ok } from "../../lib/db/errors";
 import {
+  adaptarFallbackOrgPortal,
   decideProfesionalPorServicio,
   ESTADOS_CANCELABLES_PACIENTE,
   propuestaSolapa,
@@ -192,4 +194,36 @@ test("reserva: servicio con varios vinculados → fallback org-level, NUNCA un '
   assert.deepEqual(decideProfesionalPorServicio([PROF_A, PROF_B]), {
     kind: "fallback_org",
   });
+});
+
+// ─── adaptarFallbackOrgPortal · degradación multi-profesional a NULL ─────────
+//
+// En el booking público, err("validation") ("elegí con qué profesional…") es
+// recuperable: el wizard muestra el picker. El portal NO tiene picker
+// (nuevaReservaSchema no pide profesionalId), así que ese err era un dead-end
+// terminal para clínicas multi-profesional con servicios de 0 o ≥2 vinculados.
+// La adaptación degrada a profesional_id NULL (el staff asigna al aceptar,
+// resolverProfesionalDelPedido). Los demás resultados pasan tal cual.
+
+test("fallback portal: único colegiado resuelto (ok) → pasa tal cual", () => {
+  assert.deepEqual(adaptarFallbackOrgPortal(ok(PROF_A)), ok(PROF_A));
+});
+
+test("fallback portal: varios colegiados (err validation 'hay que elegir') → degrada a NULL, NO dead-end", () => {
+  const res = adaptarFallbackOrgPortal(
+    err("validation", "Elegí con qué profesional querés atenderte."),
+  );
+  assert.deepEqual(res, ok(null));
+});
+
+test("fallback portal: org sin colegiados (err not_found) → pasa tal cual (nadie podría aceptar el pedido)", () => {
+  const res = adaptarFallbackOrgPortal(err("not_found", "Sin profesional disponible."));
+  assert.equal(res.ok, false);
+  if (!res.ok) assert.equal(res.error.code, "not_found");
+});
+
+test("fallback portal: error de infraestructura (db_error) → pasa tal cual, no se enmascara como NULL", () => {
+  const res = adaptarFallbackOrgPortal(err("db_error", "Error en la base de datos.", "boom"));
+  assert.equal(res.ok, false);
+  if (!res.ok) assert.equal(res.error.code, "db_error");
 });

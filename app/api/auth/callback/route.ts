@@ -41,12 +41,22 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get("code");
   const redirectTo = searchParams.get("redirect") ?? null;
 
+  // Si el link PIDIÓ el portal (magic-link del paciente llega con
+  // ?redirect=/portal, ver app/(portal)/portal/login/actions.ts), los ERRORES
+  // también deben volver al login DEL PORTAL: el /login de staff
+  // (password/Google) es un dead-end para un paciente sin password que sólo
+  // necesita pedir otro magic-link. Cubre las tres ramas de error de abajo:
+  // link vencido/ya usado (?error_code=otp_expired), verifyOtp fallido y el
+  // exchange PKCE sin cookie code_verifier (link abierto en OTRO dispositivo
+  // del que lo pidió).
+  const loginPath = redirectTo?.startsWith("/portal") ? "/portal/login" : "/login";
+
   // Ítem 1.5 (a): GoTrue redirige con ?error=...&error_code=otp_expired (sin
   // code ni token_hash) cuando el link de email venció o ya fue usado. Cortar
   // acá con código amigable — sin esto caía al redirect genérico a /login.
   const callbackErr = parseAuthCallbackError(searchParams);
   if (callbackErr) {
-    return NextResponse.redirect(`${origin}/login?error=${encodeURIComponent(callbackErr)}`);
+    return NextResponse.redirect(`${origin}${loginPath}?error=${encodeURIComponent(callbackErr)}`);
   }
 
   const supabase = await createSupabaseServerClient();
@@ -67,7 +77,7 @@ export async function GET(request: NextRequest) {
     });
     if (error) {
       return NextResponse.redirect(
-        `${origin}/login?error=${encodeURIComponent(mapAuthError(error.message))}`,
+        `${origin}${loginPath}?error=${encodeURIComponent(mapAuthError(error.message))}`,
       );
     }
   }
@@ -80,7 +90,7 @@ export async function GET(request: NextRequest) {
       // pasamos texto crudo si el error es genuinamente desconocido (truncado
       // a 80 chars para no permitir URL injection cosmético).
       const code = mapAuthError(error.message);
-      return NextResponse.redirect(`${origin}/login?error=${encodeURIComponent(code)}`);
+      return NextResponse.redirect(`${origin}${loginPath}?error=${encodeURIComponent(code)}`);
     }
   }
 
@@ -89,7 +99,7 @@ export async function GET(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.redirect(`${origin}/login`);
+    return NextResponse.redirect(`${origin}${loginPath}`);
   }
 
   // ─── Portal del paciente (Fase 3 · P3 + M88) ────────────────────────────────
