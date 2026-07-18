@@ -1,0 +1,58 @@
+# Folio · trigger de /api/cron/reconcile-suscripciones cada hora (audit B-7).
+#
+# Por qué acá y no en vercel.json: la cuenta de Vercel está en plan Hobby,
+# que limita los crons a frecuencia diaria. El estado local de `suscripcion`
+# se actualiza solo por webhook de MP; si un webhook de activación se pierde,
+# un cliente que paga queda sin acceso hasta la próxima reconciliación —
+# con corrida diaria, hasta ~24 h. Con esta corrida horaria la ventana de
+# divergencia baja a ~1 h. GitHub Actions no tiene la limitación de Hobby.
+#
+# El cron diario de vercel.json queda como backstop. El endpoint es seguro
+# de correr a cualquier frecuencia (verificado en el route):
+#   - applySubscriptionUpdate descarta eventos no más nuevos que
+#     mp_last_modified (no pisa webhooks que sí llegaron; re-aplicar es no-op).
+#   - syncSubscriptionAmount solo toca MP si hay drift real de monto.
+#   - Los emails de lifecycle hacen claim-before-send con dedupe_key única
+#     en email_notificacion (M65) — at-most-once aunque corra 24x/día.
+# Si la cuenta sube a Vercel Pro, mover "0 * * * *" a vercel.json y borrar
+# este workflow.
+#
+# Requiere:
+#   - Secret de Actions `CRON_SECRET` = mismo valor que en Vercel
+#     (ya configurado para dispatch-recordatorios.yml).
+#   - (Opcional) Variable de Actions `APP_URL` si cambia el dominio.
+#
+# Nota: los schedules de Actions son best-effort (pueden atrasarse minutos)
+# y GitHub los pausa tras 60 días sin actividad en el repo. Minuto 7 y no
+# :00 para esquivar la congestión de schedules en la hora en punto y no
+# solaparse con la corrida de dispatch-recordatorios.
+
+name: Cron · reconcile-suscripciones (1h)
+
+on:
+  schedule:
+    - cron: "7 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: dispatch-reconcile
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Invocar endpoint
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_URL: ${{ vars.APP_URL != '' && vars.APP_URL || 'https://folio-app-ten.vercel.app' }}
+        run: |
+          set -euo pipefail
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::Falta el secret de Actions CRON_SECRET (mismo valor que en Vercel)." >&2
+            exit 1
+          fi
+          curl --fail-with-body -sS -m 75 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_URL/api/cron/reconcile-suscripciones"
