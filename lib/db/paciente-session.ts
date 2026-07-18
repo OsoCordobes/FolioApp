@@ -11,8 +11,10 @@
  *   · El paciente NUNCA es `member` ⇒ NO se resuelve organización activa vía
  *     `member`; se resuelve la `paciente_cuenta` vía `auth_user_id = auth.uid()`.
  *   · La lectura de las filas `paciente` sale por el cliente ANON (RLS-enforced,
- *     M71): `paciente.cuenta_id = paciente_cuenta_actual()`. NO se usa
- *     service_role acá (eso queda para el matcher/export auditados).
+ *     M71): `paciente.cuenta_id = paciente_cuenta_actual()`. La ÚNICA lectura
+ *     service_role acá es `organization.nombre` de las orgs linkeadas (el
+ *     paciente no es member ⇒ org_select_own se la oculta al anon); el resto de
+ *     los usos privilegiados queda para el matcher/export auditados.
  *   · El "multi-org" del paciente es el fan-out de sus filas `paciente` (una por
  *     org linkeada), no un switcher de membership.
  *
@@ -24,7 +26,10 @@
  * otra: son ortogonales y self-scoped por RLS.
  */
 
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  createSupabaseServerClient,
+  createSupabaseServiceClient,
+} from "@/lib/supabase/server";
 
 import { err, ok, type Result } from "./errors";
 
@@ -48,12 +53,10 @@ export interface PortalPaciente {
   organizacionNombre: string | null;
 }
 
-/** Forma cruda del row + embed. PostgREST tipa el embed to-one como array en
- * inferencia aunque en runtime venga objeto (FK a-uno); normalizamos abajo. */
+/** Forma cruda del row del fan-out (query anon, RLS-enforced). */
 interface PacienteRow {
   id: string;
   organization_id: string;
-  organization: { nombre: string | null } | { nombre: string | null }[] | null;
 }
 
 /**
@@ -99,11 +102,14 @@ export async function getPacienteSession(): Promise<Result<PacienteSession>> {
 
   // Fan-out: las filas `paciente` linkeadas a esta cuenta. M71
   // (paciente_select_portal) las deja leer bajo el cliente anon (RLS): sólo las
-  // que tienen cuenta_id = paciente_cuenta_actual(). El embed a organization usa
-  // la FK organization_id (PostgREST la detecta).
+  // que tienen cuenta_id = paciente_cuenta_actual().
+  //
+  // OJO: acá NO se embebe organization(nombre). El paciente NO es member ⇒
+  // org_select_own (M02) le oculta la fila `organization` al cliente anon y el
+  // embed venía SIEMPRE null (todo el portal mostraba el fallback "Consultorio").
   const { data: pacientesRaw, error: pacientesErr } = await supabase
     .from("paciente")
-    .select("id, organization_id, organization(nombre)")
+    .select("id, organization_id")
     .eq("cuenta_id", cuentaIdStr)
     .is("pseudonimizado_en", null);
 
@@ -111,16 +117,33 @@ export async function getPacienteSession(): Promise<Result<PacienteSession>> {
     return err("db_error", "Error listando tus fichas.", pacientesErr.message);
   }
 
-  const pacientes: PortalPaciente[] = (
-    (pacientesRaw ?? []) as unknown as PacienteRow[]
-  ).map((p) => {
-    const org = Array.isArray(p.organization) ? p.organization[0] : p.organization;
-    return {
-      pacienteId: p.id,
-      organizationId: p.organization_id,
-      organizacionNombre: org?.nombre ?? null,
-    };
-  });
+  const rows = (pacientesRaw ?? []) as unknown as PacienteRow[];
+
+  // Nombre de cada org linkeada, resuelto server-side con service_role.
+  // Salvaguarda (ver docs/audit/quarterly-service-role-audit.md): corre DESPUÉS
+  // de auth.getUser() + paciente_cuenta_actual(), y los org ids salen del
+  // fan-out RLS-enforced de arriba ⇒ sólo orgs a las que el paciente está
+  // linkeado. Se lee ÚNICAMENTE `nombre` (dato no sensible que el paciente ya
+  // conoce: es el consultorio que lo atiende). El client admin nunca sale del
+  // server. Falla soft: sin nombre, el portal muestra su fallback.
+  const nombrePorOrg = new Map<string, string | null>();
+  const orgIds = [...new Set(rows.map((p) => p.organization_id))];
+  if (orgIds.length > 0) {
+    const service = createSupabaseServiceClient();
+    const { data: orgs } = await service
+      .from("organization")
+      .select("id, nombre")
+      .in("id", orgIds);
+    for (const o of (orgs ?? []) as { id: string; nombre: string | null }[]) {
+      nombrePorOrg.set(o.id, o.nombre);
+    }
+  }
+
+  const pacientes: PortalPaciente[] = rows.map((p) => ({
+    pacienteId: p.id,
+    organizationId: p.organization_id,
+    organizacionNombre: nombrePorOrg.get(p.organization_id) ?? null,
+  }));
 
   return ok({
     userId: user.id,
