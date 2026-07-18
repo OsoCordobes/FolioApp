@@ -55,6 +55,45 @@ function isProductionEnv(): boolean {
   return process.env.VERCEL_ENV === "production" || process.env.NODE_ENV === "production";
 }
 
+/**
+ * A-4 (audit 2026-07-13) · Guardrail live_mode sandbox↔producción.
+ *
+ * MP incluye `live_mode: false` en los webhooks generados con credenciales de
+ * test (sandbox). Si un evento así llega a producción real (token de test en
+ * prod, o webhook de sandbox apuntado al dominio prod), el handler lo
+ * procesaría "bien" en silencio y podría activar suscripciones SIN cobro real.
+ *
+ * Decisión pura que el route mapea a HTTP:
+ *   - discard:true  → el route loguea + responde 200 SIN procesar (200 para
+ *                     que MP no reintente un evento que jamás vamos a querer).
+ *   - discard:false → el evento sigue el flujo normal.
+ *
+ * Reglas:
+ *   - Solo descarta en producción REAL. A diferencia de isProductionEnv()
+ *     (fail-closed del secret), acá VERCEL_ENV manda cuando existe: en un
+ *     preview de Vercel NODE_ENV también es "production", pero preview es
+ *     justamente donde se prueba con sandbox → NO descartar.
+ *   - `live_mode === false` estricto. `undefined` NUNCA descarta: no todos los
+ *     eventos de MP traen el campo, y el payload se parsea con JSON.parse sin
+ *     defaults (MpWebhookPayload lo declara opcional).
+ */
+export type MpLiveModeCheck =
+  | { discard: false }
+  | { discard: true; reason: "sandbox-event-in-production" };
+
+function isLiveProductionEnv(): boolean {
+  const vercelEnv = process.env.VERCEL_ENV;
+  if (vercelEnv) return vercelEnv === "production";
+  return process.env.NODE_ENV === "production";
+}
+
+export function checkMpLiveMode(liveMode: boolean | undefined): MpLiveModeCheck {
+  if (liveMode === false && isLiveProductionEnv()) {
+    return { discard: true, reason: "sandbox-event-in-production" };
+  }
+  return { discard: false };
+}
+
 export function verifyMpSignature(input: MpSignatureInput): MpSignatureCheckResult {
   const secret = process.env.MP_WEBHOOK_SECRET;
 

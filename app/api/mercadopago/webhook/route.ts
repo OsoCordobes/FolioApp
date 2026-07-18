@@ -21,6 +21,11 @@
  * Seguridad: HMAC-SHA256 sobre manifest `id:<data.id>;request-id:<x-request-id>;ts:<ts>;`
  * con `MP_WEBHOOK_SECRET`. Ver lib/mercadopago/webhook-security.ts.
  *
+ * Guardrail live_mode (A-4): en producción real, un evento con live_mode:false
+ * (sandbox / credenciales de test) se descarta con 200 + log + Sentry en vez de
+ * procesarse — procesarlo activaría suscripciones sin cobro real. Ver
+ * checkMpLiveMode en lib/mercadopago/webhook-security.ts.
+ *
  * Idempotencia: cargo_suscripcion tiene UNIQUE(mp_payment_id). MP reenvía
  * webhooks ante timeout (3 reintentos). Devolvemos 200 siempre que procesemos
  * sin error inesperado — los 4xx/5xx hacen que MP reintente con backoff.
@@ -42,7 +47,7 @@ import {
   notifySuscripcionActivada,
   notifySuscripcionReactivada,
 } from "@/lib/email/notify";
-import { verifyMpSignature } from "@/lib/mercadopago/webhook-security";
+import { checkMpLiveMode, verifyMpSignature } from "@/lib/mercadopago/webhook-security";
 import { getPaymentProvider, type ChargeAttemptInfo } from "@/lib/payments";
 import {
   applySubscriptionUpdate,
@@ -93,6 +98,26 @@ export async function POST(request: NextRequest) {
     return new NextResponse(`signature ${sigCheck.reason}`, {
       status: sigCheck.reason === "server-misconfigured" ? 503 : 403,
     });
+  }
+
+  // 3. Guardrail sandbox↔producción (A-4, audit 2026-07-13). Un evento con
+  //    live_mode:false en producción real viene de credenciales de test: si lo
+  //    procesáramos, "activaría" suscripciones sin cobro real. Descartamos con
+  //    200 (MP no debe reintentar algo que jamás vamos a procesar) y lo
+  //    hacemos ruidoso en logs + Sentry: casi seguro hay un token de test en
+  //    prod. `live_mode` ausente NO descarta (no todos los eventos lo traen);
+  //    dev/preview tampoco (ahí sandbox es lo esperado).
+  const liveModeCheck = checkMpLiveMode(payload.live_mode);
+  if (liveModeCheck.discard) {
+    console.error(
+      `[mp-webhook] evento sandbox (live_mode=false) descartado en producción type=${payload.type} dataId=${dataId}. Revisar credenciales: ¿token/webhook de test apuntando a prod?`,
+    );
+    captureMessage("[mp-webhook] evento sandbox (live_mode=false) descartado en producción", {
+      level: "error",
+      tags: { component: "mp-webhook", op: "live-mode-guard" },
+      extra: { type: payload.type, dataId, action: payload.action },
+    });
+    return NextResponse.json({ ok: true, discarded: liveModeCheck.reason });
   }
 
   if (!dataId || !payload.type) {
