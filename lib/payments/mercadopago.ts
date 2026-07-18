@@ -107,6 +107,9 @@ export function toSubscriptionInfo(preapproval: MpPreapproval): SubscriptionInfo
     checkoutUrl: preapproval.init_point ?? null,
     nextChargeDate: preapproval.next_payment_date ?? null,
     lastModified: preapproval.last_modified ?? null,
+    // A-4: passthrough del flag sandbox de MP. Los puntos de ingesta (webhook,
+    // reconcile, refresh) lo pasan por checkMpLiveMode antes de aplicar.
+    liveMode: preapproval.live_mode,
   };
 }
 

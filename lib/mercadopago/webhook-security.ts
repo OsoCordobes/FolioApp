@@ -68,6 +68,13 @@ function isProductionEnv(): boolean {
  *                     que MP no reintente un evento que jamás vamos a querer).
  *   - discard:false → el evento sigue el flujo normal.
  *
+ * No es solo del webhook: TODOS los puntos de ingesta de estado MP la aplican
+ * antes de applySubscriptionUpdate — el cron /api/cron/reconcile-suscripciones
+ * y el refresh manual de billing ingieren via GET /preapproval (que también
+ * trae live_mode, propagado como SubscriptionInfo.liveMode); sin el guardrail
+ * ahí, un token de test en prod activaría suscripciones sandbox igual,
+ * bypasseando A-4 por el costado.
+ *
  * Reglas:
  *   - Solo descarta en producción REAL. A diferencia de isProductionEnv()
  *     (fail-closed del secret), acá VERCEL_ENV manda cuando existe: en un

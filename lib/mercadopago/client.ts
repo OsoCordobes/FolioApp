@@ -128,6 +128,13 @@ export type MpPreapprovalStatus =
 export interface MpPreapproval {
   id: string;
   status: MpPreapprovalStatus;
+  /**
+   * A-4 (audit 2026-07-13): false = preapproval creado con credenciales de
+   * TEST (sandbox). MP lo incluye en GET /preapproval; lo declaramos opcional
+   * porque no está garantizado en todos los payloads. El guardrail
+   * (checkMpLiveMode) trata `undefined` como "no descartar".
+   */
+  live_mode?: boolean;
   init_point: string;
   preapproval_plan_id: string | null;
   payer_id: number | null;

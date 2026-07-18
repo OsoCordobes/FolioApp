@@ -16,6 +16,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { captureMessage } from "@sentry/nextjs";
 
 import { getAppUrl } from "@/lib/config/app-url";
 import { getActiveContext } from "@/lib/db/active-context";
@@ -26,6 +27,7 @@ import {
   createOrRenewPendingSubscription,
   syncSubscriptionAmount,
 } from "@/lib/db/suscripcion";
+import { checkMpLiveMode } from "@/lib/mercadopago/webhook-security";
 import { getPaymentProvider } from "@/lib/payments";
 
 /**
@@ -95,6 +97,25 @@ export async function refreshSubscriptionAction(): Promise<Result<void>> {
 
   try {
     const remote = await getPaymentProvider().fetchSubscription(local.data.mpPreapprovalId);
+
+    // Guardrail A-4 extendido al lazy refresh: mismo bypass que el cron — un
+    // preapproval de sandbox leído con token de test en producción real NO
+    // debe activar la suscripción. Descartamos SIN aplicar (el estado local
+    // queda como está) y hacemos ruido en logs + Sentry; para el usuario el
+    // refresh "no encontró novedades", que es exactamente la verdad.
+    const liveModeCheck = checkMpLiveMode(remote.liveMode);
+    if (liveModeCheck.discard) {
+      console.error(
+        `[billing-refresh] preapproval sandbox (live_mode=false) descartado en producción preapproval=${local.data.mpPreapprovalId}. Revisar credenciales: ¿MP_ACCESS_TOKEN de test en prod?`,
+      );
+      captureMessage("[billing-refresh] preapproval sandbox (live_mode=false) descartado en producción", {
+        level: "error",
+        tags: { component: "billing-refresh", op: "live-mode-guard" },
+        extra: { preapprovalId: local.data.mpPreapprovalId },
+      });
+      return ok(undefined);
+    }
+
     const upd = await applySubscriptionUpdate(remote);
     if (!upd.ok) return upd;
   } catch (e) {

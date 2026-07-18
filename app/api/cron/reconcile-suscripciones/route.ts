@@ -55,6 +55,7 @@ import {
   type EstadoSuscripcion,
 } from "@/lib/db/suscripcion";
 import { notifySuscripcionSuspendida, notifyTrialPorVencer } from "@/lib/email/notify";
+import { checkMpLiveMode } from "@/lib/mercadopago/webhook-security";
 import { getPaymentProvider } from "@/lib/payments";
 import { verifyBearer } from "@/lib/security/verify-bearer";
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
@@ -108,11 +109,35 @@ async function runReconcile(): Promise<NextResponse> {
   let unchanged = 0;
   let failed = 0;
   let montoSynced = 0;
+  let sandboxDiscarded = 0;
 
   const provider = getPaymentProvider();
   for (const sus of picked) {
     try {
       const subscription = await provider.fetchSubscription(sus.mp_preapproval_id);
+
+      // Guardrail A-4 extendido al cron: el webhook ya descarta eventos
+      // sandbox en producción real, pero este reconcile ingiere estado por
+      // GET /preapproval — con un token de TEST en prod, un preapproval de
+      // sandbox "authorized" activaría la suscripción igual, bypasseando el
+      // guardrail del webhook. Misma decisión pura (checkMpLiveMode) y mismo
+      // ruido (console.error + Sentry): casi seguro hay credenciales de test
+      // en prod. NO aplicamos el update ni sincronizamos monto: el estado
+      // local queda como está.
+      const liveModeCheck = checkMpLiveMode(subscription.liveMode);
+      if (liveModeCheck.discard) {
+        sandboxDiscarded++;
+        console.error(
+          `[reconcile-sus] preapproval sandbox (live_mode=false) descartado en producción sus=${sus.id} preapproval=${sus.mp_preapproval_id}. Revisar credenciales: ¿MP_ACCESS_TOKEN de test en prod?`,
+        );
+        captureMessage("[reconcile] preapproval sandbox (live_mode=false) descartado en producción", {
+          level: "error",
+          tags: { component: "reconcile", op: "live-mode-guard" },
+          extra: { suscripcionId: sus.id, preapprovalId: sus.mp_preapproval_id },
+        });
+        continue;
+      }
+
       const res = await applySubscriptionUpdate(subscription);
       if (!res.ok) {
         failed++;
@@ -180,6 +205,7 @@ async function runReconcile(): Promise<NextResponse> {
     unchanged,
     failed,
     montoSynced,
+    sandboxDiscarded,
     lifecycleEmails,
     deadReminders,
   };
