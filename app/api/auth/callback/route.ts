@@ -92,24 +92,34 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/login`);
   }
 
-  // ─── Portal del paciente (Fase 3 · P3) ──────────────────────────────────────
+  // ─── Portal del paciente (Fase 3 · P3 + M88) ────────────────────────────────
   // Un magic-link del portal llega con ?redirect=/portal. Los pacientes NO son
   // `member` (M70): la lógica de staff de abajo los mandaría a /onboarding (un
   // dead-end para un paciente). Si la sesión corresponde a una `paciente_cuenta`
-  // viva, ruteamos al portal ANTES del flujo de staff. El helper
-  // paciente_cuenta_actual() (M70) filtra por auth.uid() ⇒ no impersona.
+  // viva, ruteamos al portal ANTES del flujo de staff.
+  //
+  // M88 · provisioning de primera sesión: paciente_cuenta_ensure() devuelve la
+  // cuenta viva del usuario logueado, CREÁNDOLA si no existe (email = verdad del
+  // server desde auth.users del propio auth.uid() — sin args, no impersona). Sin
+  // esto ningún paciente podía entrar jamás (nada creaba filas paciente_cuenta y
+  // paciente_cuenta_actual() era siempre NULL → sin_cuenta). La función NO
+  // linkea fichas: eso sigue siendo del matcher auditado (LinkagePanel del
+  // portal corre el auto-run email-only al montar, con sus guards de P3/P9).
+  // NULL sólo queda para: cuenta soft-deleted (baja explícita, no se resucita)
+  // o usuario auth sin email usable.
   //
   // Precedencia (humano que es paciente Y staff): sólo desviamos al portal
   // cuando el link PIDIÓ el portal (redirect empieza con /portal). Un usuario
   // que además es staff y entró por el login normal sigue el flujo de staff.
   if (redirectTo && redirectTo.startsWith("/portal")) {
-    const { data: cuentaId } = await supabase.rpc("paciente_cuenta_actual");
+    const { data: cuentaId } = await supabase.rpc("paciente_cuenta_ensure");
     if (cuentaId) {
       const safePortal = safeRedirect(redirectTo, "/portal");
       return NextResponse.redirect(`${origin}${safePortal}`);
     }
-    // Pidió portal pero no tiene cuenta de portal: no lo mandamos a /onboarding
-    // de staff. Al login del portal con un aviso neutro.
+    // Pidió portal pero no hay cuenta de portal utilizable (baja explícita o
+    // usuario sin email): no lo mandamos a /onboarding de staff. Al login del
+    // portal con un aviso neutro.
     return NextResponse.redirect(`${origin}/portal/login?error=sin_cuenta`);
   }
 
