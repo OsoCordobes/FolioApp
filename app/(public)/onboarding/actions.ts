@@ -30,6 +30,7 @@ import { classifySignUpOutcome } from "@/lib/auth/signup-outcome";
 import { getAppUrl } from "@/lib/config/app-url";
 import { encryptColumn } from "@/lib/crypto";
 import { ESPECIALIDAD_SLUGS } from "@/lib/especialidades/meta";
+import { trackEvent } from "@/lib/observability/events";
 import { signUpSchema } from "@/lib/onboarding/schemas";
 import { deriveProvisionalSlug } from "@/lib/onboarding/slug";
 import { TIPOS_CANONICOS_VALIDOS } from "@/lib/onboarding/templates";
@@ -260,6 +261,15 @@ export async function signUpAndInitOrganization(
   }
 
   const result = bootstrapped as { organization_id: string; member_id: string; slug: string; created: boolean };
+
+  // Business event: signup completado (funnel de activación). Sólo cuando el
+  // RPC efectivamente creó la org (created=true) — así un re-signup idempotente
+  // de un usuario ya registrado NO vuelve a disparar el evento. Fire-and-forget;
+  // no-op sin POSTHOG_KEY. Sólo ids/flags, sin PII.
+  if (result.created) {
+    void trackEvent.signupCompleted({ orgId: result.organization_id, source: "email" });
+  }
+
   return { ok: true, organizationId: result.organization_id, slug: result.slug };
 }
 
@@ -338,6 +348,14 @@ export async function bootstrapOrgForAuthenticatedUser(
   }
 
   const result = bootstrapped as { organization_id: string; member_id: string; slug: string; created: boolean };
+
+  // Business event: signup completado vía Google OAuth. Mismo guard que el
+  // path email/password — sólo dispara si el RPC creó la org (created=true),
+  // no en el retorno idempotente de un usuario ya registrado. Sin PII.
+  if (result.created) {
+    void trackEvent.signupCompleted({ orgId: result.organization_id, source: "google" });
+  }
+
   return { ok: true, organizationId: result.organization_id, slug: result.slug };
 }
 
@@ -636,6 +654,16 @@ export async function finalizeOnboarding(): Promise<{ ok: boolean; error?: strin
     .is("deleted_at", null)
     .maybeSingle();
   if (!member?.organization_id) return { ok: false, error: "No pude resolver tu organización." };
+  const orgId = member.organization_id as string;
+
+  // Estado previo: nos permite disparar el business event UNA sola vez (en la
+  // transición false→true). Si el usuario vuelve a Step 9 y re-llama esta
+  // action, onboarding_completed ya es true y el evento no se re-dispara.
+  const { data: prev } = await service
+    .from("organization")
+    .select("onboarding_completed")
+    .eq("id", orgId)
+    .maybeSingle();
 
   const { data: org, error } = await service
     .from("organization")
@@ -643,11 +671,19 @@ export async function finalizeOnboarding(): Promise<{ ok: boolean; error?: strin
       onboarding_completed: true,
       onboarding_step_max: 9,
     })
-    .eq("id", member.organization_id)
+    .eq("id", orgId)
     .select("slug")
     .single();
 
   if (error) return { ok: false, error: error.message };
+
+  // Business event: onboarding finalizado y org operativa. Sólo en la
+  // transición (prev.onboarding_completed !== true) para no contar dobles.
+  // Fire-and-forget, no-op sin POSTHOG_KEY, sin PII (org id + steps).
+  if (prev?.onboarding_completed !== true) {
+    void trackEvent.onboardingCompleted({ orgId, stepsCompleted: 9 });
+  }
+
   return { ok: true, slug: org.slug as string };
 }
 

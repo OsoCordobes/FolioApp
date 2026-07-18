@@ -12,10 +12,12 @@
  */
 
 import { useId, useState, useTransition, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 
 import * as I from "@/components/icons";
 import { PermissionMatrix } from "@/components/configuracion/permission-matrix";
 import { PhotoUpload } from "@/components/configuracion/photo-upload";
+import { UpgradeClinicaModal } from "@/components/configuracion/upgrade-clinica-modal";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
   connectGoogleCalendar,
@@ -442,6 +444,10 @@ function SecConsultorio({
   canEdit,
   orgSlug,
   initialListarEnDirectorio,
+  isOwner,
+  membersActivos,
+  montoActualCents,
+  montoClinicaCents,
 }: {
   c: ConsultorioData;
   set: (patch: Partial<ConsultorioData>) => void;
@@ -453,7 +459,17 @@ function SecConsultorio({
   orgSlug: string;
   /** M64 · opt-in al directorio público (toggle "Presencia online"). */
   initialListarEnDirectorio: boolean;
+  /** PR 1.4 · solo el OWNER puede pasar de plan (self-serve a Clínica). */
+  isOwner: boolean;
+  /** Members activos actuales (incluye al titular) — desglose de seats de Clínica. */
+  membersActivos: number;
+  /** Precio mensual actual (centavos ARS), según pricing.ts. */
+  montoActualCents: number;
+  /** Precio mensual como Clínica (centavos) con los seats actuales. */
+  montoClinicaCents: number;
 }) {
+  const router = useRouter();
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
   // M50 · count de sesiones cargadas con la herramienta de OTRA especialidad.
   // Se consulta server-side al cambiar el selector; si hay, mostramos la
   // advertencia ANTES de que el user guarde (el save real va por la save-bar).
@@ -535,13 +551,53 @@ function SecConsultorio({
         </Row>
         <Row
           label="Tipo de organización"
-          sub="El cambio a Clínica llega junto con la facturación por equipo — todavía no se edita desde acá."
+          sub={
+            orgTipo === "CLINICA"
+              ? "Tu organización trabaja en equipo con facturación por seat."
+              : "Pasá a Clínica para trabajar en equipo (roles, multi-profesional y facturación por seat)."
+          }
+          vertical={orgTipo === "INDEPENDIENTE" && isOwner}
         >
           <span className="muted" style={{ fontSize: 13 }}>
             {orgTipo === "CLINICA" ? "Clínica" : "Consultorio independiente"}
           </span>
+          {/* PR 1.4 · upgrade self-serve a Clínica. Solo el OWNER de una org
+              INDEPENDIENTE ve el botón; para CLINICA, el downgrade es vía
+              soporte (no self-serve). No-OWNER: nada. */}
+          {orgTipo === "INDEPENDIENTE" && isOwner ? (
+            <button
+              type="button"
+              className="fi-btn fi-btn-primary"
+              style={{ marginTop: 8, alignSelf: "flex-start" }}
+              onClick={() => setUpgradeOpen(true)}
+            >
+              Pasar a plan Clínica
+            </button>
+          ) : null}
+          {orgTipo === "CLINICA" ? (
+            <p style={{ fontSize: 12.5, color: "var(--ink-3)", margin: "6px 0 0", lineHeight: 1.5 }}>
+              Para volver al plan Individual, escribinos a{" "}
+              <a href={supportMailto("Volver al plan Individual")} className="cfg-link">
+                {SUPPORT_EMAIL}
+              </a>
+              .
+            </p>
+          ) : null}
         </Row>
       </Section>
+
+      {upgradeOpen ? (
+        <UpgradeClinicaModal
+          montoAntesCents={montoActualCents}
+          montoDespuesCents={montoClinicaCents}
+          membersActivos={membersActivos}
+          onClose={() => setUpgradeOpen(false)}
+          onDone={() => {
+            setUpgradeOpen(false);
+            router.refresh();
+          }}
+        />
+      ) : null}
 
       <Section title="Ubicación" sub="Aparece en los recordatorios de turno enviados al paciente.">
         <Row label="Dirección">
@@ -1704,9 +1760,15 @@ interface ConfiguracionProps {
   initialAutoConfirmar: boolean;
   initialSlotMargenMin: number;
   googleCalendar: IntegrationStatus;
-  /** M49 · tipo de organización — solo display (el upgrade llega con billing por seats). */
+  /** M49 · tipo de organización. PR 1.4 · el OWNER de una INDEPENDIENTE puede upgradear a Clínica desde acá. */
   orgTipo: "INDEPENDIENTE" | "CLINICA";
   canEdit: boolean;
+  /** PR 1.4 · members activos de la org (incluye titular) — desglose de seats del upgrade. */
+  membersActivos: number;
+  /** PR 1.4 · precio mensual actual (centavos ARS) — display del upgrade. */
+  montoActualCents: number;
+  /** PR 1.4 · precio mensual como Clínica (centavos) con los seats actuales — display del upgrade. */
+  montoClinicaCents: number;
   /** M49/M51 · solo OWNER/DIRECTOR ven y gestionan la sección Equipo. */
   canManageTeam: boolean;
   /** Solo el OWNER puede dar de baja miembros (policy member_update_owner, M02). */
@@ -1753,6 +1815,9 @@ export function Configuracion({
   googleCalendar,
   orgTipo,
   canEdit,
+  membersActivos,
+  montoActualCents,
+  montoClinicaCents,
   canManageTeam,
   isOwner,
   equipoMembers,
@@ -1895,6 +1960,10 @@ export function Configuracion({
               canEdit={canEdit}
               orgSlug={orgSlug}
               initialListarEnDirectorio={initialListarEnDirectorio}
+              isOwner={isOwner}
+              membersActivos={membersActivos}
+              montoActualCents={montoActualCents}
+              montoClinicaCents={montoClinicaCents}
             />
           ) : null}
           {seccion === "equipo" && (canManageTeam || equipoSelf != null) ? (
