@@ -25,6 +25,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   createTurnoAction,
   loadCreateTurnoMeta,
+  searchPacientesAction,
   type CreateTurnoMeta,
   type PacientePickerRow,
   type ServicioPickerRow,
@@ -33,13 +34,21 @@ import { useToast } from "@/components/ui/toast";
 import { resolvePickerProfesional } from "@/lib/agenda/profesional";
 import {
   isoToLocalDatetime,
+  isoToLocalDatetimeExact,
   localDatetimeToIso,
   localDatetimeToastLabel,
 } from "@/lib/datetime-local";
+import { normalizarBusqueda } from "@/lib/format/busqueda";
 import { useModalA11y } from "@/lib/use-modal-a11y";
 
 interface TurnoCreateModalProps {
-  defaultInicio?: string; // ISO with offset
+  /**
+   * Inicio default del picker (ISO con offset o "YYYY-MM-DDTHH:mm" local).
+   * Si viene, se respeta EXACTO — es un horario elegido (p. ej. el slot
+   * clickeado en /calendario), no uno por sugerir. Sin él, el default es
+   * "ahora" redondeado al próximo múltiplo de 5' (walk-in de /hoy).
+   */
+  defaultInicio?: string;
   origen?: "MANUAL" | "WALK_IN";
   /** Si está set, abrimos en modo "existente" con el paciente preseleccionado. */
   preselectPacienteId?: string;
@@ -89,7 +98,9 @@ export function TurnoCreateModal({
   const [servicioId, setServicioId] = useState<string | null>(null);
   /** Profesional destino (CLINICA-3). Se setea al cargar la metadata. */
   const [profesionalId, setProfesionalId] = useState<string | null>(null);
-  const [inicioLocal, setInicioLocal] = useState<string>(() => isoToLocalDatetime(defaultInicio));
+  const [inicioLocal, setInicioLocal] = useState<string>(() =>
+    defaultInicio ? isoToLocalDatetimeExact(defaultInicio) : isoToLocalDatetime(),
+  );
   const [duracion, setDuracion] = useState<number>(45);
   const [submitting, startTransition] = useTransition();
   const [submitErr, setSubmitErr] = useState<string | null>(null);
@@ -167,19 +178,62 @@ export function TurnoCreateModal({
     if (s) setDuracion(s.duracionMin);
   };
 
+  // ── Búsqueda de pacientes (encargo C3) ──────────────────────────────────
+  // La metadata solo trae los últimos 50 pacientes: filtrarlos client-side da
+  // matches instantáneos, pero en una clínica grande un paciente antiguo daba
+  // "Sin resultados" e invitaba a crear un DUPLICADO de historia clínica.
+  // Con query, además del filtro local (normalizado: "jose" encuentra a
+  // "José") disparamos searchPacientesAction con debounce de 250ms sobre el
+  // directorio COMPLETO y mergeamos ambos, cap visible en 8.
+  const [serverResults, setServerResults] = useState<PacientePickerRow[]>([]);
+  const [buscando, setBuscando] = useState(false);
+  const searchSeqRef = useRef(0);
+
+  useEffect(() => {
+    const q = normalizarBusqueda(pacienteQuery);
+    if (q.length < 2) {
+      searchSeqRef.current += 1; // invalida respuestas en vuelo
+      setServerResults([]);
+      setBuscando(false);
+      return;
+    }
+    const seq = ++searchSeqRef.current;
+    setBuscando(true);
+    const t = setTimeout(async () => {
+      // try/catch además del Result: si la promise RECHAZA (red caída, o un
+      // deploy que invalidó el id del server action con el modal abierto),
+      // sin el catch `setBuscando(false)` nunca corría y el empty-state
+      // quedaba en "Buscando en todo el directorio…" para siempre.
+      try {
+        const result = await searchPacientesAction(pacienteQuery);
+        if (searchSeqRef.current !== seq) return; // respuesta vieja: ignorar
+        // Best-effort: si la búsqueda server falla, el filtro local sigue vivo.
+        setServerResults(result.ok ? result.data : []);
+      } catch {
+        if (searchSeqRef.current !== seq) return;
+        setServerResults([]);
+      } finally {
+        if (searchSeqRef.current === seq) setBuscando(false);
+      }
+    }, 250);
+    return () => clearTimeout(t);
+  }, [pacienteQuery]);
+
   const pacientesFiltrados = useMemo<PacientePickerRow[]>(() => {
     if (!meta) return [];
-    const q = pacienteQuery.trim().toLowerCase();
+    const q = normalizarBusqueda(pacienteQuery);
     if (q.length === 0) return meta.pacientes.slice(0, 8);
-    return meta.pacientes
-      .filter(
-        (p) =>
-          p.nombre.toLowerCase().includes(q) ||
-          p.apellido.toLowerCase().includes(q) ||
-          (p.telefono ?? "").includes(q),
-      )
-      .slice(0, 8);
-  }, [meta, pacienteQuery]);
+    const digitos = q.replace(/\D/g, "");
+    const locales = meta.pacientes.filter((p) => {
+      const nombreCompleto = normalizarBusqueda(`${p.nombre} ${p.apellido}`);
+      if (nombreCompleto.includes(q)) return true;
+      if (digitos.length >= 3 && (p.telefono ?? "").replace(/\D/g, "").includes(digitos)) return true;
+      return false;
+    });
+    const vistos = new Set(locales.map((p) => p.id));
+    const remotos = serverResults.filter((p) => !vistos.has(p.id));
+    return [...locales, ...remotos].slice(0, 8);
+  }, [meta, pacienteQuery, serverResults]);
 
   // Picker de profesional: visible SOLO con >1 colegiado (org Solo intacta).
   const pickerProfesionalVisible = (meta?.profesionales.length ?? 0) > 1;
@@ -322,8 +376,10 @@ export function TurnoCreateModal({
                     style={inputStyle}
                   />
                   {pacientesFiltrados.length === 0 ? (
-                    <p style={{ fontSize: 13, color: "var(--ink-3)", marginTop: 8 }}>
-                      Sin resultados. Probá crear uno nuevo.
+                    <p style={{ fontSize: 13, color: "var(--ink-3)", marginTop: 8 }} aria-live="polite">
+                      {buscando
+                        ? "Buscando en todo el directorio…"
+                        : "Sin resultados en el directorio. Probá crear uno nuevo."}
                     </p>
                   ) : (
                     <ul

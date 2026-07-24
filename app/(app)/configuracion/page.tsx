@@ -133,6 +133,7 @@ export default async function ConfiguracionPage() {
         ctx.data.session.role,
         ctx.data.session.esColegiado,
       )}
+      showImportarPacientes={caps.canCreatePacienteClinical}
     />
   );
 }

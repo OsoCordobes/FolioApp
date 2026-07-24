@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Folio · Onboarding · Step 9 "the moment".
+ * Folio · Onboarding · paso final "the moment" (paso 8 de 8).
  *
  * Reveal coreografiado al cierre del onboarding:
  *   0-400ms   Logo aparece (scale 0.92→1.0 + fade).
@@ -11,8 +11,12 @@
  *
  * Idle: el avatar dentro de la card pulsa sutil cada 4s (vida).
  *
+ * Incluye la línea de trial + precio (fusión del viejo Step 8 informativo
+ * de Mercado Pago — 8 pasos percibidos en vez de 9).
+ *
  * Llama finalizeOnboarding() al montar (no antes — el user llegó acá). Si
- * falla, muestra error y permite reintentar.
+ * falla, muestra error + botón Reintentar, y "Ir al panel" queda
+ * deshabilitado: sin finalize, /hoy redirige de vuelta acá (loop confuso).
  *
  * 3 CTAs (jerarquía clara):
  *   1. "Ver mi página" → abre /book/<slug> en nueva tab (primary).
@@ -30,6 +34,7 @@ import {
 } from "@/components/public-card/public-card";
 import { FolioMark } from "@/components/folio-mark";
 import { getAppUrl } from "@/lib/config/app-url";
+import { formatArsFromCents } from "@/lib/format/currency";
 import { listRubros } from "@/lib/onboarding/templates";
 import type { OnboardingDataState } from "@/components/onboarding/steps";
 
@@ -44,6 +49,10 @@ interface Step9MomentProps {
   onGoToPanel: () => void;
   finishing?: boolean;
   error?: string | null;
+  /** true cuando finalizeOnboarding resolvió ok — habilita "Ir al panel". */
+  finalizeOk?: boolean;
+  /** Precio del plan en centavos ARS (fuente canónica MP_PLAN_PRICE_CENTS). */
+  planPriceCents: number;
 }
 
 const APP_URL = getAppUrl();
@@ -56,9 +65,12 @@ export function Step9Moment({
   onGoToPanel,
   finishing,
   error,
+  finalizeOk,
+  planPriceCents,
 }: Step9MomentProps) {
   const [copied, setCopied] = useState(false);
   const [finalized, setFinalized] = useState(false);
+  const [retrying, setRetrying] = useState(false);
 
   // Finalizar onboarding al montar (idempotente — el server lo soporta).
   useEffect(() => {
@@ -66,6 +78,12 @@ export function Step9Moment({
     void Promise.resolve(onFinish()).finally(() => setFinalized(true));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const onRetryFinish = () => {
+    if (retrying) return;
+    setRetrying(true);
+    void Promise.resolve(onFinish()).finally(() => setRetrying(false));
+  };
 
   const fullName = [data.nombre, data.apellido].filter(Boolean).join(" ").trim() || "Tu consultorio";
   const publicUrl = slug ? `${APP_URL}/book/${slug}` : null;
@@ -118,6 +136,12 @@ export function Step9Moment({
       <p className="onb-moment-sub onb-anim-head">
         Compartí tu link y empezá a recibir reservas hoy mismo.
       </p>
+      {/* Fusión del viejo Step 8: trial + precio (canónico MP_PLAN_PRICE_CENTS,
+          mismo valor que el cobro real — nunca un hardcode que driftee). */}
+      <p className="onb-moment-trial onb-anim-head">
+        Tenés 30 días de prueba gratis, sin tarjeta. Después,{" "}
+        {formatArsFromCents(planPriceCents)} / mes — lo activás desde Configuración.
+      </p>
 
       <div className="onb-moment-card onb-anim-card">
         {/* onCta = mismo handler que "Ver mi página": abre /book/<slug> en
@@ -151,9 +175,19 @@ export function Step9Moment({
       ) : null}
 
       {error ? (
-        <p className="au-err onb-banner-err" role="alert">
-          {error}
-        </p>
+        <div className="onb-moment-finalize-err">
+          <p className="au-err onb-banner-err" role="alert">
+            {error}
+          </p>
+          <button
+            type="button"
+            className="fi-btn fi-btn-secondary"
+            onClick={onRetryFinish}
+            disabled={retrying}
+          >
+            {retrying ? "Reintentando…" : "Reintentar"}
+          </button>
+        </div>
       ) : null}
 
       <div className="onb-moment-ctas">
@@ -178,7 +212,10 @@ export function Step9Moment({
           type="button"
           className="fi-btn fi-btn-ghost onb-moment-cta onb-anim-cta-3"
           onClick={onGoToPanel}
-          disabled={finishing}
+          // Sin finalize ok, /hoy redirige de vuelta a /onboarding → loop.
+          // El botón queda deshabilitado hasta que finalizeOnboarding resuelva.
+          disabled={finishing || !finalizeOk}
+          title={!finalizeOk && error ? "Primero reintentá guardar tu onboarding." : undefined}
         >
           {finishing ? "Abriendo panel…" : "Ir al panel"}
           <ArrowRightIcon />
