@@ -80,13 +80,19 @@ export default async function HoyPage({ searchParams }: PageProps) {
     }),
     // Checklist "Primeros pasos" (org joven). Fail-safe: si la lectura falla,
     // se loguea y no se muestra la card — nunca tira /hoy abajo.
-    loadPrimerosPasosHoy({
-      organizationId: ctx.data.organization.id,
-      tipo: ctx.data.organization.tipo,
-      orgCreatedAt: ctx.data.organization.createdAt,
-      onboardingCompleted: ctx.data.organization.onboardingCompleted,
-      suscripcionEstado: ctx.data.subscription.estado,
-    }),
+    // Solo OWNER/DIRECTOR (canManageTeam): las policies RLS de integration y
+    // turno devuelven filas parciales para asistentes/profesionales — la card
+    // mostraría estado FALSO — y sus CTAs (billing, invitar equipo) son
+    // acciones owner-only. Para el resto: cero queries.
+    caps.canManageTeam
+      ? loadPrimerosPasosHoy({
+          organizationId: ctx.data.organization.id,
+          tipo: ctx.data.organization.tipo,
+          orgCreatedAt: ctx.data.organization.createdAt,
+          onboardingCompleted: ctx.data.organization.onboardingCompleted,
+          suscripcionEstado: ctx.data.subscription.estado,
+        })
+      : Promise.resolve({ ok: true as const, data: null }),
   ]);
 
   if (!data.ok) {

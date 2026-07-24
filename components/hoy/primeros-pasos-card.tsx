@@ -158,8 +158,10 @@ export function PrimerosPasosCard({
       ),
     },
     cobros_mp: {
-      label: "Activá los cobros con Mercado Pago",
-      sub: "Suscribite para seguir usando Folio cuando termine la prueba.",
+      // "Activá tu suscripción", no "cobros con MP": Folio NO cobra turnos a
+      // pacientes (sin MP Connect) — prometerlo acá sería una feature falsa.
+      label: "Activá tu suscripción",
+      sub: "El pago es por Mercado Pago; seguís usando Folio al terminar la prueba.",
       action: (
         <Link href="/configuracion/billing" className="fi-btn fi-btn-secondary">
           <I.Wallet size={13} /> Ver plan

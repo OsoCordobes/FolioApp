@@ -11,7 +11,7 @@
  * Pago (estado de la suscripción) y WhatsApp (solo si el deploy lo tiene operativo).
  */
 
-import { useId, useState, useTransition, type ReactNode } from "react";
+import { useEffect, useId, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
 import * as I from "@/components/icons";
@@ -1831,6 +1831,29 @@ export function Configuracion({
   showVinculaciones,
 }: ConfiguracionProps) {
   const [seccion, setSeccion] = useState<SeccionId>("consultorio");
+
+  // Deep-link por hash (#integraciones, #equipo, …): la nav es 100%
+  // client-side y el estado inicial ignoraba window.location.hash — los CTAs
+  // de la card "Primeros pasos" de /hoy, el sidebar y el callback de Google
+  // OAuth aterrizaban siempre en "Consultorio". Solo secciones visibles para
+  // el rol (mismas condiciones que SideNav); corre una vez al montar.
+  useEffect(() => {
+    const hash = window.location.hash.slice(1);
+    if (!hash) return;
+    const visibles: SeccionId[] = [
+      "cuenta",
+      "consultorio",
+      "horarios",
+      "servicios",
+      "integraciones",
+      "plan",
+      ...(canManageTeam || equipoSelf != null ? (["equipo"] as const) : []),
+      ...(esColegiado && initialPerfilPublico != null ? (["perfil-publico"] as const) : []),
+    ];
+    if ((visibles as string[]).includes(hash)) setSeccion(hash as SeccionId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al montar
+  }, []);
+
   const [consultorio, setConsultorio] = useState<ConsultorioData>(initialConsultorio);
   const [consultorioSnap, setConsultorioSnap] = useState<ConsultorioData>(initialConsultorio);
   const [dias, setDias] = useState<Record<DiaId, Dia>>(initialDias);
