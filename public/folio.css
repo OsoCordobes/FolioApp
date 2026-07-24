@@ -18938,3 +18938,264 @@ input:focus { outline: none; }
   border: 1px dashed var(--line);
   border-radius: var(--r-md);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LANDING · Grado A — honestidad total, 5 especialidades y social proof.
+   Append-only: celdas nuevas del bento (Portal del paciente + Escalas),
+   sección "Ficha clínica por especialidad" (.fl-esp-*) y testimonios
+   (.fl-testi-*, se renderiza solo con quotes reales). Tokens existentes,
+   cero hex off-theme.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Celda media del bento: dos por fila (3 de 6 columnas) — cierran la grilla
+   de 8 celdas sin huecos. En mobile caen a columna completa como el resto. */
+.fl-bento-cell--half {
+  grid-column: span 3;
+}
+@media (max-width: 767px) {
+  .fl-bento-cell--half {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ── Demo 7 · fl-bport · mini-card del portal del paciente (estática) ────── */
+.fl-bport {
+  justify-content: center;
+}
+.fl-bport-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: min(240px, 100%);
+  margin: 0 auto;
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+}
+.fl-bport-label {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  letter-spacing: var(--track-loose-2);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.fl-bport-turno {
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.fl-bport-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+.fl-bport-btn {
+  padding: 3px 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.fl-bport-btn.is-primary {
+  background: var(--accent-soft);
+  border-color: var(--accent-soft-2);
+  color: var(--accent-2);
+}
+
+/* ── Demo 8 · fl-bscore · escala con puntaje que baja (mejora, estática) ── */
+.fl-bscore {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: var(--space-3);
+}
+.fl-bscore-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.fl-bscore-name {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--ink);
+}
+.fl-bscore-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: var(--r-pill);
+  background: var(--green-soft);
+  color: var(--green);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.fl-bscore-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 44px;
+}
+.fl-bscore-bar {
+  flex: 1;
+  border-radius: var(--r-sm) var(--r-sm) 2px 2px;
+  background: var(--accent-soft-2);
+}
+.fl-bscore-bar--1 { height: 88%; }
+.fl-bscore-bar--2 { height: 66%; }
+.fl-bscore-bar--3 { height: 52%; }
+/* la última sesión, en verde: el puntaje bajó — el paciente mejora */
+.fl-bscore-bar--4 {
+  height: 34%;
+  background: var(--green);
+}
+
+/* ── Sección "Ficha clínica por especialidad" (.fl-esp-*) ─────────────────
+   Intro centrada (patrón .fl-ficha-intro) + 5 cards con chips de
+   instrumentos reales. */
+.fl-esp-title {
+  font-family: var(--font-display);
+  font-size: var(--fl-display-lg);
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  text-wrap: balance;
+  text-align: center;
+  margin: 0 0 var(--space-3);
+}
+.fl-esp-lead {
+  max-width: 42rem;
+  margin: 0 auto var(--space-10);
+  text-align: center;
+  font-size: var(--fs-md);
+  line-height: 1.55;
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+.fl-esp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-4);
+}
+.fl-esp-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-1);
+  transition:
+    transform var(--dur-snappy) var(--spring-soft),
+    box-shadow var(--dur-snappy) var(--ease-standard-out),
+    border-color var(--dur-snappy) var(--ease-standard-out);
+}
+.fl-esp-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-2);
+  border-color: var(--line);
+}
+.fl-esp-name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-lg);
+  font-weight: 500;
+  color: var(--ink);
+}
+.fl-esp-desc {
+  margin: 0;
+  flex: 1;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.fl-esp-tools {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.fl-esp-tool {
+  padding: 3px 10px;
+  border-radius: var(--r-pill);
+  background: var(--accent-soft);
+  color: var(--accent-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fl-esp-card {
+    transition: none;
+  }
+}
+
+/* ── Sección Testimonios (.fl-testi-*) — solo con quotes reales ─────────── */
+.fl-testi-title {
+  font-family: var(--font-display);
+  font-size: var(--fl-display-lg);
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  text-wrap: balance;
+  text-align: center;
+  margin: 0 0 var(--space-10);
+}
+.fl-testi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--space-4);
+}
+.fl-testi-card {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-6);
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-1);
+}
+.fl-testi-quote {
+  margin: 0;
+  flex: 1;
+}
+.fl-testi-quote p {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-lg);
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--ink);
+  text-wrap: pretty;
+}
+.fl-testi-who {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.fl-testi-name {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--ink);
+}
+.fl-testi-meta {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--ink-3);
+}

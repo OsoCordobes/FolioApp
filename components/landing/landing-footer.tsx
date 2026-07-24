@@ -39,7 +39,7 @@ const COLUMNAS = [
   },
   {
     titulo: "Contacto",
-    links: [{ href: "mailto:soporte@folio.app", label: "soporte@folio.app" }],
+    links: [{ href: "mailto:soporte@foliosalud.com", label: "soporte@foliosalud.com" }],
   },
 ] as const;
 

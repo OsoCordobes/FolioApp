@@ -5,14 +5,17 @@
  * en miniatura — header del consultorio (avatar con iniciales + nombre + URL
  * mono), selector de servicio, grilla de horarios con el de Belén
  * seleccionado y botón Confirmar — compuesta en capas como el hero: una
- * card trasera desenfocada detrás y la notificación de WhatsApp superpuesta
- * en la esquina (hora + doble check). Server component, cero JS; en el modo
- * sticky la burbuja "llega" scrubeada por --fl-day (fl-rsv-wa-in, range
- * contain 6%–16% intacto), en base se muestra estática.
+ * card trasera desenfocada detrás y la notificación de confirmación (email
+ * automático) superpuesta en la esquina. Server component, cero JS; en el
+ * modo sticky la notificación "llega" scrubeada por --fl-day (fl-rsv-wa-in,
+ * range contain 6%–16% intacto), en base se muestra estática. La URL del
+ * mock deriva del host real del deploy (getAppHost) — nunca un dominio
+ * ficticio que un prospecto pueda tipear y encontrar vacío.
  * Clases .fl-rsv-* en public/folio.css (fragmento E2 + refinamiento R2).
  */
 
-import { Check, WhatsApp } from "@/components/icons";
+import { Bell, Check } from "@/components/icons";
+import { getAppHost } from "@/lib/config/app-url";
 
 interface Slot {
   time: string;
@@ -29,6 +32,7 @@ const SLOTS: Slot[] = [
 ];
 
 export function SceneReserva() {
+  const bookingUrl = `${getAppHost()}/book/anchorena`;
   return (
     <div className="fl-scene-visual" aria-hidden="true">
       <div className="fl-rsv">
@@ -38,7 +42,7 @@ export function SceneReserva() {
             <span className="fl-rsv-avatar">CA</span>
             <span className="fl-rsv-org">
               <span className="fl-rsv-name">Consultorio Anchorena</span>
-              <span className="fl-rsv-url">folio.ar/r/anchorena</span>
+              <span className="fl-rsv-url">{bookingUrl}</span>
             </span>
           </div>
           <div className="fl-rsv-back-lines">
@@ -53,7 +57,7 @@ export function SceneReserva() {
             <span className="fl-rsv-avatar">CA</span>
             <span className="fl-rsv-org">
               <span className="fl-rsv-name">Consultorio Anchorena</span>
-              <span className="fl-rsv-url">folio.ar/r/anchorena</span>
+              <span className="fl-rsv-url">{bookingUrl}</span>
             </span>
             <span className="fl-rsv-open">
               <span className="fl-rsv-open-dot" />
@@ -94,19 +98,19 @@ export function SceneReserva() {
           </footer>
         </div>
 
-        {/* notificación superpuesta — el WhatsApp ya salió */}
+        {/* notificación superpuesta — la confirmación por email ya salió */}
         <div className="fl-rsv-wa">
           <span className="fl-rsv-wa-icon">
-            <WhatsApp size={16} />
+            <Bell size={16} />
           </span>
           <span className="fl-rsv-wa-text">
             <span className="fl-rsv-wa-head">
-              <b>WhatsApp</b>
+              <b>Turno confirmado</b>
               <span className="fl-rsv-wa-time">10:31</span>
             </span>
             Belén, tu turno quedó confirmado: Kinesiología · consulta — mié 11
             jun, 10:00.
-            <span className="fl-rsv-wa-meta">✓✓ entregado</span>
+            <span className="fl-rsv-wa-meta">confirmación enviada por email</span>
           </span>
         </div>
       </div>

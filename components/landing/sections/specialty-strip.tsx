@@ -2,17 +2,24 @@
  * Folio · Landing — tira de especialidades (proof band, inventory-free).
  *
  * Banda calma entre el día y la bóveda: confirma "esto es para mí" y la
- * cobertura por especialidad. Fichas por especialidad REALES hoy: quiropraxia,
- * psicología y cardiología (kinesiología, nutrición y más en el roadmap). 100 %
- * real — sin testimonios inventados, sin listar especialidades que aún no
- * existen como reales. Server component, cero JS.
+ * cobertura por especialidad. Fichas por especialidad REALES hoy: las 5 de
+ * lib/especialidades/meta.ts (quiropraxia, psicología, cardiología,
+ * kinesiología y nutrición — estas dos últimas desde PR #101). 100 % real —
+ * sin testimonios inventados, sin listar especialidades que aún no existen
+ * como reales. Server component, cero JS.
  */
 
 /** Especialidades con ficha clínica real disponible hoy. */
-const PRINCIPALES = ["Quiropraxia", "Psicología", "Cardiología"] as const;
+const PRINCIPALES = [
+  "Quiropraxia",
+  "Psicología",
+  "Cardiología",
+  "Kinesiología",
+  "Nutrición",
+] as const;
 
 /** Roadmap (próximamente) — no se presentan como disponibles. */
-const PROXIMAMENTE = "Kinesiología · Nutrición · y más en camino";
+const PROXIMAMENTE = "Más especialidades en camino";
 
 export function SpecialtyStrip() {
   return (
