@@ -686,7 +686,7 @@ export async function finalizeOnboarding(): Promise<{ ok: boolean; error?: strin
   // action, onboarding_completed ya es true y el evento no se re-dispara.
   const { data: prev } = await service
     .from("organization")
-    .select("onboarding_completed")
+    .select("onboarding_completed, is_internal_account")
     .eq("id", orgId)
     .maybeSingle();
 
@@ -706,8 +706,13 @@ export async function finalizeOnboarding(): Promise<{ ok: boolean; error?: strin
   // Business event: onboarding finalizado y org operativa. Sólo en la
   // transición (prev.onboarding_completed !== true) para no contar dobles.
   // Fire-and-forget, no-op sin POSTHOG_KEY, sin PII (org id + steps).
+  // isInternal filtra los re-onboardings de cuentas internas/demo del funnel.
   if (prev?.onboarding_completed !== true) {
-    void trackEvent.onboardingCompleted({ orgId, stepsCompleted: 8 });
+    void trackEvent.onboardingCompleted({
+      orgId,
+      stepsCompleted: 8,
+      isInternal: Boolean(prev?.is_internal_account),
+    });
   }
 
   return { ok: true, slug: org.slug as string };

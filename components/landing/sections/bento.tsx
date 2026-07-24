@@ -8,9 +8,15 @@
  * label. Sin view() o con reduced-motion, el CSS base muestra el estado
  * FINAL de cada demo. Entrada de las cards vía `.fl-reveal` (la define B1)
  * + stagger con revealRange(i).
+ *
+ * Honestidad del copy (auditoría grado A): los recordatorios son por email
+ * hoy — WhatsApp se anuncia como próximamente, nunca como activo — y la URL
+ * del mock de reservas deriva del host real del deploy (getAppHost), no de
+ * un dominio ficticio.
  */
 
-import { Check, Lock, WhatsApp } from "@/components/icons";
+import { Bell, Check, Lock } from "@/components/icons";
+import { getAppHost } from "@/lib/config/app-url";
 import { revealRange } from "../reveal";
 
 /** Slots de la mini página de reservas — `fill` marca los que se "llenan"
@@ -54,24 +60,24 @@ export function Bento() {
             </div>
           </div>
           <h3 className="fl-bento-label">Reservan solos</h3>
-          <p className="fl-bento-sub">folio.ar/tu-consultorio</p>
+          <p className="fl-bento-sub">{getAppHost()}/book/tu-consultorio</p>
         </article>
 
-        {/* 2 · WhatsApp */}
+        {/* 2 · Recordatorios automáticos (email hoy · WhatsApp próximamente) */}
         <article className="fl-bento-cell fl-reveal" style={revealRange(1)}>
           <div className="fl-bento-demo fl-bwa" aria-hidden="true">
             <span className="fl-bwa-app">
-              <WhatsApp size={14} />
+              <Bell size={14} />
             </span>
             <span className="fl-bwa-bubble">
               Te esperamos mañana 10:00
-              <span className="fl-bwa-meta">
-                18:32 <span className="fl-bwa-ticks">✓✓</span>
-              </span>
+              <span className="fl-bwa-meta">enviado · 18:32</span>
             </span>
           </div>
-          <h3 className="fl-bento-label">WhatsApp automático</h3>
-          <p className="fl-bento-sub">recordatorio 24 h antes</p>
+          <h3 className="fl-bento-label">Recordatorios automáticos</h3>
+          <p className="fl-bento-sub">
+            email hoy · <span className="fl-specialties-soon-badge">WhatsApp próximamente</span>
+          </p>
         </article>
 
         {/* 3 · Ingresos del mes */}
@@ -139,6 +145,42 @@ export function Bento() {
           </div>
           <h3 className="fl-bento-label">Equipo con roles</h3>
           <p className="fl-bento-sub">admin · médica · recepción</p>
+        </article>
+
+        {/* 7 · Portal del paciente — demo estática (sin view()): el paciente
+            ve su próximo turno y lo gestiona solo. */}
+        <article className="fl-bento-cell fl-bento-cell--half fl-reveal" style={revealRange(6)}>
+          <div className="fl-bento-demo fl-bport" aria-hidden="true">
+            <span className="fl-bport-card">
+              <span className="fl-bport-label">Tu próximo turno</span>
+              <span className="fl-bport-turno">mar 20 may · 10:00</span>
+              <span className="fl-bport-actions">
+                <span className="fl-bport-btn is-primary">Confirmar</span>
+                <span className="fl-bport-btn">Reagendar</span>
+              </span>
+            </span>
+          </div>
+          <h3 className="fl-bento-label">Portal del paciente</h3>
+          <p className="fl-bento-sub">turnos, datos y consentimientos</p>
+        </article>
+
+        {/* 8 · Escalas e instrumentos — demo estática: puntaje que baja
+            sesión a sesión (el paciente mejora). */}
+        <article className="fl-bento-cell fl-bento-cell--half fl-reveal" style={revealRange(7)}>
+          <div className="fl-bento-demo fl-bscore" aria-hidden="true">
+            <span className="fl-bscore-head">
+              <span className="fl-bscore-name">PHQ-9</span>
+              <span className="fl-bscore-badge">12 → 6 · mejora</span>
+            </span>
+            <span className="fl-bscore-bars">
+              <i className="fl-bscore-bar fl-bscore-bar--1" />
+              <i className="fl-bscore-bar fl-bscore-bar--2" />
+              <i className="fl-bscore-bar fl-bscore-bar--3" />
+              <i className="fl-bscore-bar fl-bscore-bar--4" />
+            </span>
+          </div>
+          <h3 className="fl-bento-label">Escalas e instrumentos</h3>
+          <p className="fl-bento-sub">PHQ-9 · GAD-7 · NDI/ODI · antropometría</p>
         </article>
       </div>
     </section>

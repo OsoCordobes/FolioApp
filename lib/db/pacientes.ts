@@ -314,6 +314,7 @@ export async function createPaciente(input: CreatePacienteInput): Promise<Result
     source: "manual",
     hasDni: Boolean(d.numeroDoc),
     hasEmail: Boolean(d.email),
+    isInternal: session.data.isInternalAccount,
   });
 
   return ok({ id: paciente.id });

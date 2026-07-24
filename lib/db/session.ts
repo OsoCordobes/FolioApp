@@ -34,6 +34,13 @@ export interface ActiveSession {
   memberId: string;
   role: "OWNER" | "DIRECTOR" | "PROFESIONAL" | "COORDINADOR" | "ASISTENTE";
   esColegiado: boolean;
+  /**
+   * `organization.is_internal_account` (M37) de la org activa. Lo consumen
+   * los trackEvent.* (lib/observability/events.ts) para que las orgs
+   * internas/demo no ensucien el funnel de PostHog. Viaja en la misma query
+   * de membresías (embed FK) — cero round-trips extra.
+   */
+  isInternalAccount: boolean;
 }
 
 const ACTIVE_ORG_COOKIE = "folio.active_org";
@@ -62,7 +69,7 @@ export async function getActiveSession(): Promise<Result<ActiveSession>> {
   // memberships creadas en el mismo instante (seed batch).
   const { data: members, error } = await supabase
     .from("member")
-    .select("id, organization_id, role, es_colegiado")
+    .select("id, organization_id, role, es_colegiado, organization:organization_id (is_internal_account)")
     .eq("profile_id", user.id)
     .is("deleted_at", null)
     .order("created_at", { ascending: true })
@@ -79,6 +86,14 @@ export async function getActiveSession(): Promise<Result<ActiveSession>> {
   const picked =
     members.find((m) => m.organization_id === preferredOrgId) ?? members[0];
 
+  // El FK member→organization es many-to-one: PostgREST devuelve un objeto,
+  // pero el cliente lo tipa como array — normalizamos ambos shapes (mismo
+  // patrón que listUserMemberships). Ausente/null → false: jamás suprimir
+  // analytics de una org real por un embed fallido.
+  const pickedOrg = Array.isArray(picked.organization)
+    ? picked.organization[0]
+    : picked.organization;
+
   return ok({
     userId: user.id,
     email: user.email ?? "",
@@ -87,6 +102,7 @@ export async function getActiveSession(): Promise<Result<ActiveSession>> {
     memberId: picked.id,
     role: picked.role,
     esColegiado: picked.es_colegiado,
+    isInternalAccount: Boolean(pickedOrg?.is_internal_account),
   });
 }
 

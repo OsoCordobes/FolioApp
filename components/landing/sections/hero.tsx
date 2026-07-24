@@ -13,7 +13,7 @@
 
 import Link from "next/link";
 
-import { ChevronDown, Lock, WhatsApp } from "@/components/icons";
+import { Bell, ChevronDown, Lock } from "@/components/icons";
 
 export function Hero() {
   return (
@@ -31,7 +31,7 @@ export function Hero() {
       <div className="fl-hero-body">
         <div className="fl-hero-copy">
           <p className="fl-hero-sub">
-            Turnos, reservas online y recordatorios por WhatsApp, listos cada mañana.
+            Turnos, reservas online y recordatorios automáticos, listos cada mañana.
             Y cada historia clínica, cifrada de punta a punta.
           </p>
           <div className="fl-hero-ctas">
@@ -117,7 +117,7 @@ export function Hero() {
 
             <span className="fl-mock-chip">
               <span className="fl-mock-chip-icon">
-                <WhatsApp size={14} />
+                <Bell size={14} />
               </span>
               Recordatorio enviado a María
             </span>
@@ -129,8 +129,8 @@ export function Hero() {
             de pantalla y crawlers el contenido que el mock comunica en pantalla. */}
         <p className="sr-only">
           Vista de la agenda de Folio: los turnos del día ya confirmados, con
-          recordatorios por WhatsApp enviados automáticamente y cada historia
-          clínica cifrada.
+          recordatorios enviados automáticamente y cada historia clínica
+          cifrada.
         </p>
       </div>
     </section>

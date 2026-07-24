@@ -11,7 +11,7 @@
  *                              chip de Mateo aparece + totals 7→8 cuentan
  *   phase 2       T2400        toast "Pago recibido" + chip pasa a is-paid
  *                              paid 4→5, amount 186→221 cuentan
- *   phase 3       T4100        WhatsApp card bottom-right (recordatorio auto)
+ *   phase 3       T4100        card de recordatorio bottom-right (enviado auto)
  */
 
 import { useEffect, useState } from "react";
@@ -44,7 +44,7 @@ const DAYS: { d: string; n: number; today?: boolean; target?: boolean }[] = [
 // Timings idénticos al pre-refactor:
 //   700   → banner "Mateo A. reservó" + totals tween 7→8
 //   2400  → toast "Pago recibido" + paid 4→5 + amount 186→221
-//   4100  → WhatsApp card bottom-right
+//   4100  → card de recordatorio bottom-right
 const PHASES_CALENDARIO = [700, 2400, 4100] as const;
 
 export function SlideCalendario({ active }: Props) {
@@ -219,8 +219,9 @@ export function SlideCalendario({ active }: Props) {
 
       <div className={"au2-cal2-wa" + (phase >= 3 ? " is-on" : "")} aria-hidden={phase < 3}>
         <span className="au2-cal2-wa-icon">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M17.6 6.32A7.85 7.85 0 0 0 12.05 4a7.94 7.94 0 0 0-6.88 11.9L4 20l4.2-1.1a7.93 7.93 0 0 0 3.84.98h.01a7.94 7.94 0 0 0 7.94-7.94 7.9 7.9 0 0 0-2.4-5.6zM12.05 18.5a6.6 6.6 0 0 1-3.36-.92l-.24-.14-2.5.65.67-2.43-.16-.25a6.6 6.6 0 1 1 5.6 3.1zm3.62-4.94c-.2-.1-1.18-.58-1.36-.65-.18-.07-.32-.1-.45.1-.13.2-.5.65-.62.78-.11.13-.23.15-.43.05-.2-.1-.85-.31-1.61-1-.6-.53-1-1.19-1.12-1.39-.12-.2-.01-.31.09-.41.09-.09.2-.23.3-.35.1-.12.13-.2.2-.33.07-.13.03-.25-.02-.35-.05-.1-.45-1.08-.62-1.48-.16-.39-.33-.34-.45-.34h-.38a.74.74 0 0 0-.54.25c-.18.2-.7.69-.7 1.67 0 .99.71 1.94.82 2.07.1.13 1.4 2.14 3.38 3 .47.2.84.32 1.13.41.47.15.9.13 1.24.08.38-.06 1.18-.48 1.34-.95.17-.46.17-.86.12-.95-.05-.09-.18-.13-.38-.23z" />
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
           </svg>
         </span>
         <div className="au2-cal2-wa-body">
