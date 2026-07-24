@@ -185,11 +185,21 @@ export function TurnoCreateModal({
     const seq = ++searchSeqRef.current;
     setBuscando(true);
     const t = setTimeout(async () => {
-      const result = await searchPacientesAction(pacienteQuery);
-      if (searchSeqRef.current !== seq) return; // respuesta vieja: ignorar
-      // Best-effort: si la búsqueda server falla, el filtro local sigue vivo.
-      setServerResults(result.ok ? result.data : []);
-      setBuscando(false);
+      // try/catch además del Result: si la promise RECHAZA (red caída, o un
+      // deploy que invalidó el id del server action con el modal abierto),
+      // sin el catch `setBuscando(false)` nunca corría y el empty-state
+      // quedaba en "Buscando en todo el directorio…" para siempre.
+      try {
+        const result = await searchPacientesAction(pacienteQuery);
+        if (searchSeqRef.current !== seq) return; // respuesta vieja: ignorar
+        // Best-effort: si la búsqueda server falla, el filtro local sigue vivo.
+        setServerResults(result.ok ? result.data : []);
+      } catch {
+        if (searchSeqRef.current !== seq) return;
+        setServerResults([]);
+      } finally {
+        if (searchSeqRef.current === seq) setBuscando(false);
+      }
     }, 250);
     return () => clearTimeout(t);
   }, [pacienteQuery]);
