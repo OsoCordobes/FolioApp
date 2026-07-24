@@ -14,7 +14,7 @@ export interface FaqItem {
 export const FAQ_ITEMS: { q: string; a: string }[] = [
   {
     q: "¿Necesito tarjeta para probar? ¿Cómo pago después?",
-    a: "No hace falta tarjeta para probar: tenés 7 días con todo habilitado. Si te quedás, activás la suscripción con Mercado Pago, en pesos, mes a mes — sin contratos ni permanencia, cancelás cuando quieras desde la app.",
+    a: "No hace falta tarjeta para probar: tenés 30 días con todo habilitado. Si te quedás, activás la suscripción con Mercado Pago, en pesos, mes a mes — sin contratos ni permanencia, cancelás cuando quieras desde la app.",
   },
   {
     q: "¿Cuánto tardo en dejar todo configurado?",

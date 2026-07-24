@@ -60,12 +60,21 @@ test("trial: graceDaysLeft=1 → un email 1d", () => {
   ]);
 });
 
-test("trial: los umbrales exportados son exactamente {3,1}", () => {
-  assert.deepEqual([...TRIAL_AVISO_UMBRALES_DIAS], [3, 1]);
+test("trial: graceDaysLeft=7 → un email 7d (primer aviso del grace de 30)", () => {
+  const emails = decideLifecycleEmails(
+    snapshot({ gate: { allowed: true, reason: null, graceDaysLeft: 7 } }),
+  );
+  assert.deepEqual(emails, [
+    { tipo: "trial_por_vencer", dedupeKey: `trial-por-vencer:${ORG}:7d`, diasRestantes: 7 },
+  ]);
 });
 
-test("trial: cualquier otro graceDaysLeft (7/5/4/2/0/null) → nada", () => {
-  for (const dias of [7, 5, 4, 2, 0, null]) {
+test("trial: los umbrales exportados son exactamente {7,3,1}", () => {
+  assert.deepEqual([...TRIAL_AVISO_UMBRALES_DIAS], [7, 3, 1]);
+});
+
+test("trial: cualquier otro graceDaysLeft (30/14/5/4/2/0/null) → nada", () => {
+  for (const dias of [30, 14, 5, 4, 2, 0, null]) {
     const emails = decideLifecycleEmails(
       snapshot({ gate: { allowed: true, reason: null, graceDaysLeft: dias } }),
     );

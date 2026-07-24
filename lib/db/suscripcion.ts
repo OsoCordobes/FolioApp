@@ -105,7 +105,7 @@ export interface AccessGate {
   graceDaysLeft: number | null;
 }
 
-export const GRACE_PERIOD_DAYS = 7;
+export const GRACE_PERIOD_DAYS = 30;
 
 // ─── Row mapper ────────────────────────────────────────────────────────────
 
@@ -880,7 +880,7 @@ export function syncSubscriptionAmountInBackground(organizationId: string, trigg
  *   3. PAUSADA → bloqueado.
  *   4. CANCELADA con proxima_cobro > now → permitido (terminar ciclo pagado).
  *   5. PENDIENTE_ACTIVACION o sin suscripción:
- *       - si orgCreatedAt + 7d > now → permitido (grace).
+ *       - si orgCreatedAt + GRACE_PERIOD_DAYS > now → permitido (grace).
  *       - si no → bloqueado.
  */
 export function computeAccessGate(

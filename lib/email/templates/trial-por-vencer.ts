@@ -3,15 +3,17 @@
  *
  * Función PURA (sin DB, sin Resend) → testeable. El caller (notify.ts)
  * resuelve org, monto del plan y la URL absoluta de billing.
- * Se envía en dos umbrales del grace period de 7 días: 3 días y 1 día.
+ * Se envía en los umbrales del grace period de 30 días: 7, 3 y 1 día(s).
  */
+
+import type { TrialUmbralDias } from "@/lib/billing/lifecycle";
 
 import { ctaButton, esc, formatArs, p, pMuted, renderBillingEmail } from "./billing-common";
 
 export interface TrialPorVencerEmailInput {
   organizationNombre: string;
-  /** Umbral del recordatorio: 3 (primer aviso) o 1 (último aviso). */
-  diasRestantes: 3 | 1;
+  /** Umbral del recordatorio: 7 (primer aviso), 3, o 1 (último aviso). */
+  diasRestantes: TrialUmbralDias;
   /** Precio mensual del plan de la org en centavos ARS. */
   montoMensualCents: number;
   /** URL absoluta a /configuracion/billing. */

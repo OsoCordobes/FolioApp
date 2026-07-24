@@ -1,9 +1,9 @@
 /**
  * Folio · Términos y Condiciones.
  *
- * Versión 2026-07-04. Incluye cláusulas de suscripción, cancelación,
+ * Versión 2026-07-24. Incluye cláusulas de suscripción, cancelación,
  * falta de pago y reembolsos alineadas al comportamiento real del
- * producto (trial de 7 días sin tarjeta, cancelación self-service desde
+ * producto (trial de 30 días sin tarjeta, cancelación self-service desde
  * /configuracion/billing, gate de acceso con retención de datos).
  * Bump lib/legal/versions.ts (TERMS_VERSION) ante cambios materiales.
  */
@@ -26,7 +26,7 @@ export default function TerminosPage() {
 
       <h1 style={{ marginBottom: 8 }}>Términos y Condiciones</h1>
       <p style={{ color: "var(--ink-3)", marginBottom: 32 }}>
-        Última actualización: 4 de julio de 2026
+        Última actualización: 24 de julio de 2026
       </p>
 
       <section style={{ marginBottom: 32 }}>
@@ -98,7 +98,7 @@ export default function TerminosPage() {
         <ul>
           <li>
             <b>Período de prueba:</b> toda organización nueva cuenta con{" "}
-            <b>7 días de prueba sin cargo y sin necesidad de cargar ningún
+            <b>30 días de prueba sin cargo y sin necesidad de cargar ningún
             medio de pago</b>. Al finalizar la prueba, para seguir usando el
             Servicio hay que activar una suscripción.
           </li>

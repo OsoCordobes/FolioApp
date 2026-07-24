@@ -10,7 +10,7 @@
  * Reglas:
  *
  *   (a) TRIAL POR VENCER — org sin suscripción activa cuyo gate todavía
- *       permite por grace period y quedan exactamente 3 o 1 días
+ *       permite por grace period y quedan exactamente 7, 3 o 1 días
  *       (gate.graceDaysLeft, computeAccessGate). Un email por umbral por org:
  *       dedupe `trial-por-vencer:{orgId}:{n}d` (DEBE coincidir con la key que
  *       construye notifyTrialPorVencer en lib/email/notify.ts).
@@ -44,8 +44,8 @@
 
 import type { AccessGate, EstadoSuscripcion } from "@/lib/db/suscripcion";
 
-/** Umbrales del grace period (7 días) en los que avisamos por email. */
-export const TRIAL_AVISO_UMBRALES_DIAS = [3, 1] as const;
+/** Umbrales del grace period (30 días) en los que avisamos por email. */
+export const TRIAL_AVISO_UMBRALES_DIAS = [7, 3, 1] as const;
 
 export type TrialUmbralDias = (typeof TRIAL_AVISO_UMBRALES_DIAS)[number];
 
@@ -99,15 +99,15 @@ export function decideLifecycleEmails(input: LifecycleOrgSnapshot): LifecycleEma
   // el caller armó un snapshot inconsistente.
   if (input.estadoSuscripcion === "ACTIVA") return [];
 
-  // (a) Trial por vencer: umbrales exactos 3 y 1 del grace period.
+  // (a) Trial por vencer: umbrales exactos del grace period (7, 3 y 1).
   if (input.gate.allowed) {
     const dias = input.gate.graceDaysLeft;
-    if (dias === 3 || dias === 1) {
+    if (dias !== null && (TRIAL_AVISO_UMBRALES_DIAS as readonly number[]).includes(dias)) {
       return [
         {
           tipo: "trial_por_vencer",
           dedupeKey: `trial-por-vencer:${input.organizationId}:${dias}d`,
-          diasRestantes: dias,
+          diasRestantes: dias as TrialUmbralDias,
         },
       ];
     }

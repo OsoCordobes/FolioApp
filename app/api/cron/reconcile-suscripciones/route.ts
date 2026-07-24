@@ -70,8 +70,9 @@ const BATCH_SIZE = 50;
 // Batch chico y fijo: el cron corre diario; lo que no entra hoy entra mañana
 // (el dedupe de M65 garantiza que nada se manda dos veces).
 const LIFECYCLE_BATCH = 200;
-// Ventana del pick de trial: solo orgs creadas dentro del grace (7d) + 1 día
-// de margen. Mantiene el pick acotado aunque `organization` crezca sin límite.
+// Ventana del pick de trial: solo orgs creadas dentro del grace
+// (GRACE_PERIOD_DAYS) + 1 día de margen. Mantiene el pick acotado aunque
+// `organization` crezca sin límite.
 const TRIAL_PICK_WINDOW_DAYS = GRACE_PERIOD_DAYS + 1;
 // Dead jobs de recordatorio_job: sin enviar con intentos agotados (el
 // dispatcher pickea intentos < 5, M11) o vencidos hace más de 6 h.

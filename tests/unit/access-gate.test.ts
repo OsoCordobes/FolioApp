@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   BILLING_RECOVERY_PATH,
   computeAccessGate,
+  GRACE_PERIOD_DAYS,
   isBillingRecoveryPath,
   shouldGateToBilling,
   type SuscripcionRow,
@@ -11,8 +12,8 @@ import {
 
 const NOW = new Date("2026-06-01T12:00:00.000Z");
 
-// Org creada hace mucho → grace period (7d) ya vencido salvo que la suscripción
-// diga otra cosa.
+// Org creada hace mucho → grace period (GRACE_PERIOD_DAYS) ya vencido salvo que
+// la suscripción diga otra cosa.
 const ORG_OLD = "2026-01-01T00:00:00.000Z";
 
 function sub(partial: Partial<SuscripcionRow>): SuscripcionRow {
@@ -75,7 +76,7 @@ test("computeAccessGate: no subscription within grace → allowed with days left
   const gate = computeAccessGate(recentOrg, null, NOW);
   assert.equal(gate.allowed, true);
   assert.equal(gate.reason, null);
-  assert.equal(gate.graceDaysLeft, 5);
+  assert.equal(gate.graceDaysLeft, GRACE_PERIOD_DAYS - 2);
 });
 
 // ─── H-BILLING-1 · billing es la pantalla de recuperación ───────────────────

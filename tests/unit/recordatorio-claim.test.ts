@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { decideClaimRecordatorio } from "../../lib/db/recordatorios";
+import {
+  decideClaimRecordatorio,
+  decideSkipRecordatorioOrgInterna,
+} from "../../lib/db/recordatorios";
 
 // Claim CAS del dispatcher de recordatorios (espejo de decidePedidoCas).
 // `decideClaimRecordatorio` traduce el resultado del UPDATE guardado
@@ -27,4 +30,21 @@ test("decideClaimRecordatorio: más de 1 fila → claimed (no debería pasar; id
 test("decideClaimRecordatorio: error gana sobre filas (no procede aunque haya filas)", () => {
   // Si hubo error, nunca confiamos en rowsAffected.
   assert.notEqual(decideClaimRecordatorio(1, true), "claimed");
+});
+
+// ─── Skip por org interna (demo) ─────────────────────────────────────────────
+//
+// Orgs internas (is_internal_account, M37) tienen pacientes MOCK con contactos
+// ficticios: el dispatcher NUNCA debe enviarles WhatsApp/email. Solo `true`
+// estricto skipea — null/undefined (select viejo sin la columna) no deben
+// suprimir envíos de orgs reales.
+
+test("decideSkipRecordatorioOrgInterna: true → skip", () => {
+  assert.equal(decideSkipRecordatorioOrgInterna(true), true);
+});
+
+test("decideSkipRecordatorioOrgInterna: false/null/undefined → NO skip (org real envía)", () => {
+  assert.equal(decideSkipRecordatorioOrgInterna(false), false);
+  assert.equal(decideSkipRecordatorioOrgInterna(null), false);
+  assert.equal(decideSkipRecordatorioOrgInterna(undefined), false);
 });

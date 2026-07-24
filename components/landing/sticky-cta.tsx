@@ -97,7 +97,7 @@ export function StickyCta() {
         href="/onboarding"
         data-fl-cta="sticky"
       >
-        Empezá gratis · 7 días
+        Empezá gratis · 30 días
       </a>
       <span className="fl-sticky-cta-note">Sin tarjeta</span>
     </div>

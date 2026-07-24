@@ -1657,7 +1657,7 @@ function SecPlan({ isOwner }: { isOwner: boolean }) {
             <h3>Folio Profesional · $30.000 / mes</h3>
             <p>
               Cobro automático mensual vía Mercado Pago. Podés cancelar cuando quieras.
-              Durante los primeros 7 días tenés acceso completo sin tarjeta.
+              Durante los primeros 30 días tenés acceso completo sin tarjeta.
             </p>
           </div>
           <div className="cfg-plan-card-r">

@@ -36,7 +36,7 @@ export function Hero() {
           </p>
           <div className="fl-hero-ctas">
             <Link className="fi-btn fi-btn-primary fl-btn-lg" href="/onboarding" data-fl-cta="hero">
-              Empezá gratis · 7 días
+              Empezá gratis · 30 días
             </Link>
             <a className="fi-btn fi-btn-secondary fl-btn-lg" href="#ficha" data-fl-cta="hero_demo">
               Ver la ficha del paciente

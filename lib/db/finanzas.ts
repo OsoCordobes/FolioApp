@@ -160,24 +160,33 @@ export async function getFinanzasDelMes(input: FetcherInput): Promise<Result<Fin
   // 1. Pagos del mes con join expandido para hidratar paciente + servicio.
   // PostgREST relational nesting:
   //   pago.turno → paciente → identidad → nombre/apellido_cifrado.
+  //
+  // Scoping por org EXPLÍCITO (no solo RLS): `pago` no tiene organization_id
+  // propio y la RLS delega en la visibilidad de `turno`, que permite TODAS las
+  // membresías del user (user_org_ids()). Con multi-membresía (clínicas,
+  // cuenta demo multi-org) una query sin filtro mezclaría pagos de todas las
+  // orgs — por eso el join es !inner + .eq sobre turno.organization_id.
   const { data: pagosRaw, error: pagosErr } = await supabase
     .from("pago")
     .select(
       "id, monto_cents, metodo, estado, pagado_ts, created_at, " +
-        "turno:turno_id(id, inicio, estado, duracion_min, paciente_id, servicio_id, " +
+        "turno:turno_id!inner(id, inicio, estado, duracion_min, organization_id, paciente_id, servicio_id, " +
         "paciente:paciente_id(identidad:identidad_id(nombre_cifrado, apellido_cifrado)), " +
         "servicio:servicio_id(nombre, tipo_canonico))",
     )
+    .eq("turno.organization_id", input.organizationId)
     .gte("created_at", startUtc)
     .lt("created_at", endUtc)
     .order("created_at", { ascending: false });
 
   if (pagosErr) return err("db_error", "Error leyendo pagos del mes.", pagosErr.message);
 
-  // 2. Total mes pasado (solo pagado) para delta KPI.
+  // 2. Total mes pasado (solo pagado) para delta KPI. Mismo scoping explícito
+  // por org que la query principal (ver comment arriba).
   const { data: prevPagosAgg } = await supabase
     .from("pago")
-    .select("monto_cents")
+    .select("monto_cents, turno:turno_id!inner(organization_id)")
+    .eq("turno.organization_id", input.organizationId)
     .eq("estado", "PAGADO")
     .gte("created_at", prevStartUtc)
     .lt("created_at", prevEndUtc);
