@@ -36,6 +36,7 @@ import {
   getEspecialidadMetaByToolId,
 } from "@/lib/especialidades/meta";
 import { getInstrumento } from "@/lib/instrumentos";
+import { evolucionDesdeSesiones } from "@/lib/pdf/ficha-format";
 import { buildFichaPdf, type FichaPdfData } from "@/lib/pdf/ficha-pdf";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -178,6 +179,10 @@ export async function GET(
     // Instrumentos: best-effort (la tabla instrumento_respuesta llega en C2/M73).
     // Hoy degrada a [] sin romper el export; cuando la tabla exista, se llena.
     instrumentos: await loadInstrumentosBestEffort(pacienteId, ctx.data.organization.id),
+    // D2 · Evolución: últimas N sesiones cerradas (fecha · servicio · resumen +
+    // SOAP compacto). plan.sesiones ya viene DESC con el SOAP descifrado
+    // server-side (getPacienteFicha) — sin queries ni descifrados extra.
+    evolucion: evolucionDesdeSesiones(ficha.plan.sesiones),
     generadoTs: new Date().toISOString(),
   };
 

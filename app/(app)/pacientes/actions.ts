@@ -38,7 +38,10 @@ import {
 import {
   buildDocumentoStoragePath,
   createDocumentoClinico,
+  listDocumentosPaciente,
   refreshSignedUrl,
+  TIPO_DOCUMENTO,
+  type TipoDocumento,
 } from "@/lib/db/documentos";
 import { listRespuestasPaciente, saveRespuesta } from "@/lib/db/instrumentos";
 import { savePacienteIntakeAvanzado } from "@/lib/db/paciente-intake";
@@ -573,7 +576,11 @@ async function uploadDocumentoSesion(params: {
   pacienteId: string;
   turnoId: string;
   descripcion?: string;
-  tipo: "RADIOGRAFIA" | "INFORME_EXTERNO";
+  /**
+   * D2 · cualquier tipo del enum M08 salvo FOTO_POSTURAL (exige un
+   * consentimiento FOTOS vigente — flujo aparte, el trigger SQL lo valida).
+   */
+  tipo: Exclude<TipoDocumento, "FOTO_POSTURAL">;
   /** Nombre de la entidad para los mensajes de error ("radiografía"/"estudio"). */
   etiqueta: string;
   /** Filename por defecto si el Blob no trae nombre. */
@@ -705,6 +712,78 @@ export async function uploadEstudioCardioAction(
     tipo: "INFORME_EXTERNO",
     etiqueta: "estudio",
     fallbackFilename: "estudio.bin",
+  });
+}
+
+// ─── Tab Documentos de la ficha (D2 · listado + subida generalizada) ─────────
+
+/** Item plano del tab Documentos (sin ciphertext: descripcion ya descifrada). */
+export interface DocumentoFichaItem {
+  id: string;
+  tipo: TipoDocumento;
+  /** YYYY-MM-DD: fecha_estudio ?? created_at. */
+  fecha: string;
+  descripcion: string | null;
+  mimeType: string;
+  /** Signed URL de vida corta (5 min) — refrescar al abrir si expiró. */
+  signedUrl: string;
+}
+
+/**
+ * Lista TODOS los documentos clínicos vigentes del paciente para el tab
+ * Documentos (todas las categorías — el tab es la vista transversal; las
+ * galerías de las Tools siguen filtrando por su tipo). Tenancy: la cubre
+ * listDocumentosPaciente (org de la sesión activa) + RLS clínica.
+ */
+export async function listDocumentosPacienteAction(
+  pacienteId: string,
+): Promise<Result<DocumentoFichaItem[]>> {
+  if (!z.string().uuid().safeParse(pacienteId).success) {
+    return err("validation", "ID de paciente inválido.");
+  }
+  const result = await listDocumentosPaciente({ pacienteId });
+  if (!result.ok) return result;
+  return ok(
+    result.data.map((doc) => ({
+      id: doc.id,
+      tipo: doc.tipo,
+      fecha: (doc.fecha_estudio ?? doc.created_at).slice(0, 10),
+      descripcion: doc.descripcion,
+      mimeType: doc.mime_type,
+      signedUrl: doc.signedUrl,
+    })),
+  );
+}
+
+/**
+ * D2 · sube un documento clínico desde el tab Documentos, generalizando
+ * uploadRadiografiaAction: el TIPO viaja en el FormData y se valida contra el
+ * enum M08 (FOTO_POSTURAL excluida: exige consentimiento FOTOS firmado — ese
+ * flujo tiene su propia puerta). Mismo core y guards que radiografías/estudios
+ * (turno ∈ org, turno↔paciente, sesión guardada como ancla del documento).
+ */
+export async function uploadDocumentoPacienteAction(
+  formData: FormData,
+): Promise<Result<{ documentoId: string }>> {
+  const tipoRaw = String(formData.get("tipo") ?? "");
+  const tipo = (TIPO_DOCUMENTO as readonly string[]).includes(tipoRaw)
+    ? (tipoRaw as TipoDocumento)
+    : null;
+  if (!tipo || tipo === "FOTO_POSTURAL") {
+    return err("validation", "Elegí un tipo de documento válido.");
+  }
+  const descripcionRaw = formData.get("descripcion");
+  return uploadDocumentoSesion({
+    file: formData.get("file"),
+    pacienteId: String(formData.get("pacienteId") ?? ""),
+    turnoId: String(formData.get("turnoId") ?? ""),
+    descripcion:
+      typeof descripcionRaw === "string" && descripcionRaw.trim() !== ""
+        ? descripcionRaw.trim().slice(0, 2000)
+        : undefined,
+    tipo,
+    etiqueta: "documento",
+    fallbackFilename: "documento.bin",
   });
 }
 
