@@ -51,6 +51,19 @@ test("trial-por-vencer (3 días): subject con umbral, html con monto + CTA", () 
   assert.ok(html.includes("Activar suscripción"));
 });
 
+test("trial-por-vencer (7 días): primer aviso del grace de 30 — subject con umbral", () => {
+  const { subject, html } = buildTrialPorVencerEmail({
+    organizationNombre: ORG,
+    diasRestantes: 7,
+    montoMensualCents: SOLO_CENTS,
+    billingUrl: BILLING_URL,
+  });
+  assert.ok(subject.includes("en 7 días"));
+  assert.ok(html.includes(SOLO_ARS));
+  assert.ok(html.includes(BILLING_URL));
+  assert.ok(html.includes(ORG));
+});
+
 test("trial-por-vencer (1 día): subject dice 'mañana'", () => {
   const { subject, html } = buildTrialPorVencerEmail({
     organizationNombre: ORG,

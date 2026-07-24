@@ -55,12 +55,18 @@ export async function getActiveSession(): Promise<Result<ActiveSession>> {
   const cookieStore = await cookies();
   const preferredOrgId = cookieStore.get(ACTIVE_ORG_COOKIE)?.value ?? null;
 
-  // Listar memberships activas
+  // Listar memberships activas. ORDER BY explícito: sin él, Postgres no
+  // garantiza orden y el fallback members[0] (sin cookie) sería NO determinista
+  // con multi-membresía — el user podría aterrizar en una org distinta según el
+  // plan de la query. La más vieja = la org original del user; `id` desempata
+  // memberships creadas en el mismo instante (seed batch).
   const { data: members, error } = await supabase
     .from("member")
     .select("id, organization_id, role, es_colegiado")
     .eq("profile_id", user.id)
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .order("created_at", { ascending: true })
+    .order("id", { ascending: true });
 
   if (error) {
     return err("db_error", "Error obteniendo membresía.", error.message);

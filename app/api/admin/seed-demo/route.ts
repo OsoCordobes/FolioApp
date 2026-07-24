@@ -32,6 +32,7 @@
 import { NextResponse } from "next/server";
 
 import { blindIndex, blindIndexPhone, encryptColumn } from "@/lib/crypto";
+import { computeScoreSnapshot } from "@/lib/db/instrumentos";
 import {
   buildDemoToolData,
   demoOrgNombre,
@@ -51,7 +52,10 @@ import { createSupabaseServiceClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+// 300s: ?especialidad=all son 5 orgs × ~150 inserts REST (cifrado incluido).
+// La invocación recomendada igual es POR especialidad (5 curls) — acota el
+// blast radius si una falla a mitad — pero el techo alto cubre el peor caso.
+export const maxDuration = 300;
 
 const DEFAULT_EMAIL = "amiunelautaro@gmail.com";
 const TZ_DEFAULT = "America/Argentina/Cordoba";
@@ -91,6 +95,8 @@ interface SeedResult {
   turnos: number;
   pagos: number;
   sesiones: number;
+  /** Filas de instrumento_respuesta (PHQ-9/GAD-7, solo psicología). */
+  instrumentos: number;
   skipped: boolean;
   cleaned: number;
   error: string | null;
@@ -174,6 +180,7 @@ async function seedEspecialidad(
     turnos: 0,
     pagos: 0,
     sesiones: 0,
+    instrumentos: 0,
     skipped: false,
     cleaned: 0,
     error: null,
@@ -224,9 +231,19 @@ async function seedEspecialidad(
   }
   res.orgId = orgId;
 
+  // Guard anti-secuestro: si el slug demo-* ya existe pero NO es interna, es
+  // una org real homónima — ABORTAR en vez de flipearle el flag y sembrarle
+  // data MOCK. (No debería pasar: el formato demo-<especialidad> no colisiona
+  // con slugs de onboarding, pero el costo de chequear es cero.)
+  if (existingOrg && existingOrg.is_internal_account !== true) {
+    return fail(
+      "org guard",
+      `la org ${slug} existe y NO es interna — no se toca una org real; revisala a mano`,
+    );
+  }
   // is_internal_account vía UPDATE (no en el INSERT): el trigger de audit M37
   // es AFTER UPDATE OF — así el flip queda registrado en audit_log.
-  if (!existingOrg || existingOrg.is_internal_account !== true) {
+  if (!existingOrg) {
     const { error: flagErr } = await supabase
       .from("organization")
       .update({ is_internal_account: true })
@@ -349,6 +366,9 @@ async function seedEspecialidad(
     if (tSelErr) return fail("cleanup turno select", tSelErr.message);
     const turnoIds = (turnoRows ?? []).map((t) => t.id as string);
 
+    const { error: dInstErr } = await supabase
+      .from("instrumento_respuesta").delete().in("paciente_id", pacIds);
+    if (dInstErr) return fail("cleanup instrumentos", dInstErr.message);
     const { error: dSesErr } = await supabase.from("sesion").delete().in("paciente_id", pacIds);
     if (dSesErr) return fail("cleanup sesion", dSesErr.message);
     if (turnoIds.length > 0) {
@@ -365,6 +385,19 @@ async function seedEspecialidad(
     }
     res.cleaned = pacIds.length;
   }
+
+  // Defensa en profundidad: purgar recordatorios PENDIENTES de la org demo.
+  // El seed no encola (INSERTs directos, nunca createTurno/transitionTurno) y
+  // el dispatcher skipea orgs internas, pero acciones EN VIVO durante la demo
+  // (booking del ensayo, cerrar el turno EN_SALA) sí encolan — esta purga
+  // garantiza que un reset entre llamadas también limpie esa cola.
+  const { error: purgeErr } = await supabase
+    .from("recordatorio_job")
+    .delete()
+    .eq("organization_id", orgId)
+    .is("enviado_ts", null);
+  if (purgeErr) return fail("purge recordatorios", purgeErr.message);
+
   if (opts.cleanup) return res;
 
   // ── 6. Insertar pacientes (batch: identidades → pacientes) ────────────────
@@ -510,6 +543,53 @@ async function seedEspecialidad(
   );
   if (sesInsErr) return fail("sesion insert", sesInsErr.message);
   res.sesiones = cerradosIdx.filter((t) => t.conSesion).length;
+
+  // ── 9. Instrumentos (solo psicología): serie PHQ-9/GAD-7 con mejoría ──────
+  // 3 aplicaciones escalonadas por paciente (3 pacientes) para que el panel
+  // "Evolución de resultados" de la ficha psico no abra vacío en la demo.
+  // score_total/banda se computan con la def canónica del registry
+  // (computeScoreSnapshot — el mismo camino que saveRespuesta); las respuestas
+  // crudas van cifradas. PHQ-9 ítem 9 (ideación) SIEMPRE 0: un valor > 0
+  // dispararía el workflow de riesgo (C7) en plena llamada de venta.
+  if (esp === "psicologia") {
+    const APLICACIONES = [
+      // [díasAtrás, phq9 (8 ítems — el 9no se appendea en 0), gad7]
+      { dias: 21, phq9: [2, 2, 2, 1, 2, 2, 1, 1], gad7: [2, 2, 2, 1, 2, 1, 1] },
+      { dias: 10, phq9: [2, 1, 1, 1, 2, 1, 1, 0], gad7: [2, 1, 1, 1, 1, 1, 0] },
+      { dias: 2, phq9: [1, 1, 1, 0, 1, 1, 0, 0], gad7: [1, 1, 0, 0, 1, 0, 0] },
+    ];
+    const filas: Array<Record<string, unknown>> = [];
+    for (let p = 0; p < Math.min(3, pacientes.length); p++) {
+      for (const ap of APLICACIONES) {
+        // Leve variación por paciente, clampeada a 0-3.
+        const vary = (arr: number[]) => arr.map((n) => Math.min(3, Math.max(0, n + (p % 2))));
+        const phq9 = [...vary(ap.phq9), 0]; // ítem 9 = 0 SIEMPRE
+        const gad7 = vary(ap.gad7);
+        for (const [instrumentoId, respuestas] of [
+          ["phq9.v1", phq9],
+          ["gad7.v1", gad7],
+        ] as const) {
+          const scored = computeScoreSnapshot(instrumentoId, respuestas);
+          if (!scored.ok) return fail("instrumento score", `${instrumentoId}: ${scored.message}`);
+          filas.push({
+            organization_id: orgId,
+            paciente_id: pacientes[p].id,
+            sesion_id: null,
+            instrumento_id: instrumentoId,
+            instrumento_version: scored.version,
+            respuestas_cifrado: encryptColumn(JSON.stringify(respuestas)),
+            score_total: scored.snapshot.scoreTotal,
+            banda: scored.snapshot.banda,
+            completado_por: "profesional",
+            created_at: isoWallClock(tz, -ap.dias, "10:30"),
+          });
+        }
+      }
+    }
+    const { error: instErr } = await supabase.from("instrumento_respuesta").insert(filas);
+    if (instErr) return fail("instrumento insert", instErr.message);
+    res.instrumentos = filas.length;
+  }
 
   return res;
 }

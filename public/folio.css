@@ -334,7 +334,10 @@ input:focus { outline: none; }
   padding: 1px 5px; background: var(--surface);
 }
 
-.fi-nav { display: flex; flex-direction: column; gap: 1px; }
+/* min-height:0 + overflow-y: en cuentas internas el sidebar apila OrgSwitcher +
+   badge + EspecialidadSwitcher arriba del nav; en laptops (768px de alto) el
+   nav scrollea en vez de clipear los links de abajo. */
+.fi-nav { display: flex; flex-direction: column; gap: 1px; min-height: 0; overflow-y: auto; }
 .fi-nav-item {
   display: flex; align-items: center; gap: 10px;
   padding: 8px 10px; border-radius: var(--r-md);

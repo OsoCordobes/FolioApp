@@ -11,8 +11,10 @@
  */
 
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 
 import { setActiveOrg } from "@/lib/db/session";
+import { ESPECIALIDAD_OVERRIDE_COOKIE } from "@/lib/especialidades/meta";
 
 export async function switchActiveOrgAction(
   organizationId: string,
@@ -21,6 +23,12 @@ export async function switchActiveOrgAction(
   if (!result.ok) {
     return { ok: false, message: result.error.message };
   }
+  // La cookie de override de especialidad (EspecialidadSwitcher, orgs
+  // internas) es GLOBAL del browser, no está scopeada por org: un override
+  // residual de la org anterior haría que la ficha de ESTA org muestre la
+  // herramienta clínica equivocada. Al cambiar de org se resetea — cada org
+  // demo ya tiene su especialidad real seteada.
+  (await cookies()).delete(ESPECIALIDAD_OVERRIDE_COOKIE);
   revalidatePath("/", "layout");
   return { ok: true, message: null };
 }

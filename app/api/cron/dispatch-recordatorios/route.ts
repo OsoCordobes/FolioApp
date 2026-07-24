@@ -50,7 +50,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { decryptColumn, tryDecrypt } from "@/lib/crypto";
-import { decideCanalRecordatorio, decideClaimRecordatorio } from "@/lib/db/recordatorios";
+import {
+  decideCanalRecordatorio,
+  decideClaimRecordatorio,
+  decideSkipRecordatorioOrgInterna,
+} from "@/lib/db/recordatorios";
 import { sendEmail } from "@/lib/email/client";
 import {
   buildConfirmacion24hEmail,
@@ -217,7 +221,7 @@ async function processJob(
       .maybeSingle(),
     service
       .from("organization")
-      .select("nombre, direccion_completa, ciudad, timezone")
+      .select("nombre, direccion_completa, ciudad, timezone, is_internal_account")
       .eq("id", job.organization_id)
       .maybeSingle(),
     service
@@ -228,6 +232,18 @@ async function processJob(
   ]);
 
   if (!org) throw new Error("organization no encontrada");
+
+  // Orgs internas/demo (M37): pacientes MOCK con contactos ficticios — nunca
+  // enviar. Se marca enviado (sin enviar) ANTES de descifrar PII, mismo patrón
+  // que el skip por estado del turno. Decisión pura testeable en
+  // lib/db/recordatorios.ts (decideSkipRecordatorioOrgInterna).
+  if (decideSkipRecordatorioOrgInterna(org.is_internal_account)) {
+    await service
+      .from("recordatorio_job")
+      .update({ enviado_ts: new Date().toISOString(), error_msg: "skip: org interna" })
+      .eq("id", job.id);
+    return;
+  }
   if (!paciente?.identidad_id) {
     throw new Error("paciente sin identidad (pseudonimizado?)");
   }

@@ -75,12 +75,18 @@ export async function getOnboardingResumeState(
 ): Promise<Result<OnboardingResumeState>> {
   const service = serviceOverride ?? createSupabaseServiceClient();
 
-  // 1. Buscar member del user (la membership a una org).
+  // 1. Buscar member del user. Con MULTI-membresía (clínicas, cuenta demo
+  // multi-org) un maybeSingle() pelado devuelve PGRST116 (multiple rows) →
+  // db_error espurio. Tomamos la membresía MÁS VIEJA (la org original del
+  // user, la que armó en su onboarding) — mismo patrón que
+  // app/api/auth/callback/route.ts.
   const { data: member, error: memErr } = await service
     .from("member")
     .select("id, organization_id")
     .eq("profile_id", userId)
     .is("deleted_at", null)
+    .order("created_at", { ascending: true })
+    .limit(1)
     .maybeSingle();
 
   if (memErr) return err("db_error", "Error leyendo membresía.", memErr.message);

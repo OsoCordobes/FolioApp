@@ -85,6 +85,14 @@ function makeService(fixture: Fixture): {
       select() {
         return builder;
       },
+      // Chainers puros del pick determinista multi-membresía (.order + .limit
+      // antes del maybeSingle) — no cambian el shape del resultado mockeado.
+      order() {
+        return builder;
+      },
+      limit() {
+        return builder;
+      },
       eq(col: string, val: unknown) {
         if (col === "id") lastEqId = String(val);
         if (mode === "update") {

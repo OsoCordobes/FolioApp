@@ -12,18 +12,30 @@
  *     (mismo mecanismo que scripts/seed-mock-org.mjs).
  *   - Los datos son FICTICIOS: nombres inventados, DNIs fuera de rango real
  *     bajo, teléfonos 351 555-xxxx, emails @example.com. Nunca PHI real.
- *   - quiropraxia escribe el shape v2 vigente; cardiología y psicología usan
- *     los shapes v1 LEGACY (el registry los sigue leyendo vía toolIds — mismo
- *     criterio probado de scripts/seed-mock-org.mjs); kinesiología y
- *     nutrición usan sus v1 vigentes validados acá contra el schema real.
+ *   - TODOS los builders escriben el shape de ESCRITURA vigente del registry
+ *     (quiropraxia.ficha.v2, cardiologia.cv.v3, psicologia.escalas.v3,
+ *     kinesiologia.ficha.v1, nutricion.ficha.v1) y se validan con
+ *     schema.parse — los shapes legacy (v1/v2 de cardio/psico) renderizan el
+ *     panel viejo, y la demo tiene que mostrar los paneles actuales
+ *     (medicación/derivación C6, nota de proceso C8).
+ *   - Fechas embebidas (estudios, medicación, derivación) RELATIVAS a la
+ *     ejecución — nunca hardcodeadas, para que la demo no muestre datos
+ *     "viejos" sin importar cuándo se corra el seed.
  */
 
+import { cardiologiaToolDataV3Schema } from "@/lib/especialidades/cardiologia/schema";
 import {
   kinesiologiaToolDataSchema,
 } from "@/lib/especialidades/kinesiologia/schema";
 import { nutricionToolDataSchema } from "@/lib/especialidades/nutricion/schema";
+import { psicologiaToolDataV3Schema } from "@/lib/especialidades/psicologia/schema";
 import { quiropraxiaToolDataV2Schema } from "@/lib/especialidades/quiropraxia/schema";
 import type { EspecialidadSlug } from "@/lib/especialidades/meta";
+
+/** YYYY-MM-DD de hace `n` días (UTC) — fechas demo siempre relativas a hoy. */
+function isoDateDaysAgo(n: number): string {
+  return new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
 
 export const DEMO_ORG_SLUG_PREFIX = "demo-";
 
@@ -145,10 +157,9 @@ export const PACIENTES_DEMO: Record<EspecialidadSlug, DemoPacienteSeed[]> = {
 
 // ─── tool_data por especialidad ─────────────────────────────────────────────
 //
-// quiropraxia v2 / kinesiología v1 / nutrición v1 se validan contra el schema
-// zod real (throw temprano si el shape driftea). cardiología/psicología van en
-// shape v1 LEGACY (leído vía toolIds del registry) — mismos payloads probados
-// del script seed-mock-org.mjs.
+// Los CINCO builders escriben el shape de escritura vigente y se validan
+// contra el schema zod real (throw temprano si el shape driftea — preferimos
+// fallar el seed a sembrar una ficha que renderiza el panel legacy o nada).
 
 export interface DemoSesionPayload {
   toolId: string;
@@ -176,49 +187,83 @@ function quiroToolData(i: number): DemoSesionPayload {
 }
 
 function cardioToolData(i: number): DemoSesionPayload {
-  return {
-    toolId: "cardiologia.cv.v1",
-    data: {
-      v: 1,
-      panel: {
-        taSistolica: 128 + (i % 5) * 4,
-        taDiastolica: 78 + (i % 4) * 3,
-        fc: 68 + (i % 6) * 3,
-        factores: {
-          hta: i % 2 === 0,
-          dislipemia: i % 3 === 0,
-          sedentarismo: true,
-          tabaquismo: i % 4 === 0,
-        },
+  const data = {
+    v: 3 as const,
+    panel: {
+      taSistolica: 128 + (i % 5) * 4,
+      taDiastolica: 78 + (i % 4) * 3,
+      fc: 68 + (i % 6) * 3,
+      // Vitales extra (v2, aditivos) — la curva de evolución los grafica.
+      peso: 78 + (i % 4) * 3,
+      satO2: 96 + (i % 3),
+      glucemia: 92 + (i % 5) * 4,
+      factores: {
+        hta: i % 2 === 0,
+        dislipemia: i % 3 === 0,
+        sedentarismo: true,
+        tabaquismo: i % 4 === 0,
       },
-      estudios: [
-        { tipo: "ECG", fecha: "2026-06-20", hallazgos: "Ritmo sinusal, sin alteraciones agudas del ST-T.", conclusion: "normal" },
-        { tipo: "Laboratorio", fecha: "2026-06-18", hallazgos: "LDL 145 mg/dl, HDL 38 mg/dl, glucemia 98.", conclusion: "requiere_seguimiento" },
-      ],
     },
+    estudios: [
+      { tipo: "ECG" as const, fecha: isoDateDaysAgo(9 + (i % 3)), hallazgos: "Ritmo sinusal, sin alteraciones agudas del ST-T.", conclusion: "normal" as const },
+      { tipo: "Laboratorio" as const, fecha: isoDateDaysAgo(12 + (i % 3)), hallazgos: "LDL 145 mg/dl, HDL 38 mg/dl, glucemia 98.", conclusion: "requiere_seguimiento" as const },
+    ],
+    // Tracking de medicación (v3 · C6) — muestra la vista de esquema activo.
+    medicacion: [
+      { droga: "Enalapril", dosis: "10 mg", frecuencia: "1 comp/día", estado: "activa" as const, desde: isoDateDaysAgo(120) },
+      { droga: "Atorvastatina", dosis: "20 mg", frecuencia: "1 comp/noche", estado: "activa" as const, desde: isoDateDaysAgo(90) },
+      ...(i % 2 === 0
+        ? [{ droga: "AAS", dosis: "100 mg", frecuencia: "1 comp/día", estado: "suspendida" as const, desde: isoDateDaysAgo(300) }]
+        : []),
+    ],
+    // Derivación imprimible (v3 · C6) — solo en algunas sesiones.
+    ...(i % 3 === 0
+      ? {
+          derivacion: {
+            especialidad: "Electrofisiología",
+            motivo: "Palpitaciones recurrentes con Holter no concluyente; evaluar estudio electrofisiológico.",
+            urgencia: "programada" as const,
+            fecha: isoDateDaysAgo(0),
+          },
+        }
+      : {}),
   };
+  return { toolId: "cardiologia.cv.v3", data: cardiologiaToolDataV3Schema.parse(data) as Record<string, unknown> };
 }
 
 function psicoToolData(i: number): DemoSesionPayload {
-  return {
-    toolId: "psicologia.escalas.v1",
-    data: {
-      v: 1,
-      phq9: [1, 2, 1, 0, 2, 1, 1, 0, 1].map((n) => (n + (i % 2)) % 4),
-      gad7: [2, 1, 1, 0, 1, 1, 0].map((n) => (n + (i % 2)) % 4),
-      registro: {
-        apariencia: "cuidada",
-        animo: "ansioso",
-        afecto: "congruente",
-        pensamiento: "lineal",
-        riesgo: "sin_riesgo",
+  const data = {
+    v: 3 as const,
+    // OJO: el ítem 9 del PHQ-9 (ideación) queda SIEMPRE en 0 — un valor > 0
+    // dispara el workflow de riesgo (C7) en plena demo de venta.
+    phq9: [...[1, 2, 1, 0, 2, 1, 1, 0].map((n) => (n + (i % 2)) % 3), 0],
+    gad7: [2, 1, 1, 0, 1, 1, 0].map((n) => (n + (i % 2)) % 4),
+    registro: {
+      apariencia: "cuidada" as const,
+      animo: (i % 2 === 0 ? "ansioso" : "eutimico") as "ansioso" | "eutimico",
+      afecto: "congruente" as const,
+      pensamiento: "lineal" as const,
+      riesgo: "sin_riesgo" as const,
+      // Dominios MSE agregados por C8 — muestran el examen completo.
+      orientacion: "orientado" as const,
+      atencion: "conservada" as const,
+    },
+    objetivos: [
+      { texto: "Reducir sintomatología ansiosa", estado: "en_curso" as const },
+      { texto: "Mejorar higiene del sueño", estado: "en_curso" as const },
+    ],
+    // Nota de proceso guiada (v3 · C8) en formato SOAP.
+    procesoNota: {
+      formato: "soap" as const,
+      campos: {
+        subjetivo: "Refiere mejor manejo del estrés laboral; duerme 6-7 h con menos despertares.",
+        objetivo: "MSE sin hallazgos de riesgo. PHQ-9 y GAD-7 en descenso respecto de la evaluación inicial.",
+        analisis: "Buena respuesta a las estrategias de regulación; evolución favorable del cuadro ansioso.",
+        plan: "Continuar frecuencia semanal. Registro de pensamientos entre sesiones.",
       },
-      objetivos: [
-        { texto: "Reducir sintomatología ansiosa", estado: "en_curso" },
-        { texto: "Mejorar higiene del sueño", estado: "en_curso" },
-      ],
     },
   };
+  return { toolId: "psicologia.escalas.v3", data: psicologiaToolDataV3Schema.parse(data) as Record<string, unknown> };
 }
 
 function kinesioToolData(i: number): DemoSesionPayload {

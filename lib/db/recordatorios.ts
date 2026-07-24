@@ -44,6 +44,22 @@ export function decideClaimRecordatorio(
   return "claimed";
 }
 
+/**
+ * Decisión pura: ¿el dispatcher debe SALTEAR el envío porque la org es
+ * interna/demo (is_internal_account, M37)? Las orgs internas tienen pacientes
+ * MOCK con teléfonos/emails ficticios — un recordatorio real por WhatsApp o
+ * email a esos contactos es, en el mejor caso, ruido, y en el peor un mensaje
+ * a un número de un tercero. El job se marca enviado con error_msg
+ * "skip: org interna" (mismo patrón que el skip por estado del turno) para no
+ * reintentar. Solo `true` estricto skipea: null/undefined (columna ausente en
+ * un select viejo) NO deben suprimir envíos de orgs reales.
+ */
+export function decideSkipRecordatorioOrgInterna(
+  isInternalAccount: boolean | null | undefined,
+): boolean {
+  return isInternalAccount === true;
+}
+
 /** Canal efectivo de un recordatorio — espejo del CHECK de M67. */
 export type CanalRecordatorio = "whatsapp" | "email" | "ninguno";
 

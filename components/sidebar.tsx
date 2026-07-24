@@ -119,7 +119,10 @@ export function Sidebar({
 
       {organization.isInternalAccount ? <InternalAccountBadge /> : null}
       {organization.isInternalAccount && especialidad ? (
+        // key por org activa: el switcher tiene useState interno (pill
+        // seleccionada) que quedaría stale al cambiar de org sin remount.
         <EspecialidadSwitcher
+          key={activeOrgId ?? organization.nombre}
           current={especialidadOverride ?? especialidad}
           orgEspecialidad={especialidad}
         />
