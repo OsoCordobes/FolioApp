@@ -31,6 +31,7 @@ import { getAppUrl } from "@/lib/config/app-url";
 import { encryptColumn } from "@/lib/crypto";
 import { ESPECIALIDAD_SLUGS } from "@/lib/especialidades/meta";
 import { trackEvent } from "@/lib/observability/events";
+import { validateFranjas } from "@/lib/onboarding/franjas";
 import { signUpSchema } from "@/lib/onboarding/schemas";
 import { deriveProvisionalSlug } from "@/lib/onboarding/slug";
 import { TIPOS_CANONICOS_VALIDOS } from "@/lib/onboarding/templates";
@@ -401,7 +402,8 @@ export interface Step2Data {
 
 export interface Step3Data {
   consultorioNombre: string;
-  rubro: string;
+  /** Puede faltar mientras el user no eligió especialidad (sin preselección). */
+  rubro?: string;
   /** M50 · slug de especialidad. Validado server-side contra ESPECIALIDAD_SLUGS. */
   especialidad?: string;
   /** M49 · tipo de organización. Validado server-side contra el enum organizacion_tipo. */
@@ -439,6 +441,13 @@ export interface Step6Data {
   }>;
 }
 
+/**
+ * Step 7 (Google Calendar) no persiste datos propios — el cliente llama con
+ * `{}` al ENTRAR al paso solo para subir onboarding_step_max: el OAuth de
+ * Google saca al user del wizard y sin esto el resume lo devolvía al Step 6.
+ */
+export type Step7Data = Record<string, never>;
+
 // M49/M50 · validación server-side de los campos arquitecturales del Step 3.
 // El cliente manda strings libres; acá los chequeamos contra los valores
 // reales (CHECK organization_especialidad_valida + enum organizacion_tipo)
@@ -461,7 +470,7 @@ const TIPOS_CANONICOS_SET = new Set<string>(TIPOS_CANONICOS_VALIDOS);
  */
 export async function updateOnboardingStep(
   stepId: number,
-  data: Step2Data | Step3Data | Step4Data | Step5Data | Step6Data,
+  data: Step2Data | Step3Data | Step4Data | Step5Data | Step6Data | Step7Data,
 ): Promise<StepUpdateResult> {
   const supabase = await createSupabaseServerClient();
   const {
@@ -514,7 +523,8 @@ export async function updateOnboardingStep(
         if (arq.data.especialidad !== undefined) orgPatch.especialidad = arq.data.especialidad;
         if (arq.data.tipo !== undefined) orgPatch.tipo = arq.data.tipo;
         if (d.ciudad !== undefined) orgPatch.ciudad = d.ciudad;
-        if (d.provincia !== undefined) orgPatch.provincia = d.provincia;
+        // "" = sin elegir (ya no hay default Córdoba) → null, no string vacío.
+        if (d.provincia !== undefined) orgPatch.provincia = d.provincia || null;
         if (d.telefonoPublico !== undefined) orgPatch.telefono_publico = d.telefonoPublico || null;
         if (d.direccionCompleta !== undefined || d.direccion !== undefined) {
           orgPatch.direccion_completa = d.direccionCompleta || d.direccion || null;
@@ -566,6 +576,20 @@ export async function updateOnboardingStep(
       }
       case 5: {
         const d = data as Step5Data;
+        // Validación ANTES del DELETE (lib/onboarding/franjas — la misma que
+        // corre el cliente). Sin esto, una franja invertida borraba la
+        // disponibilidad vieja y el INSERT fallaba contra el CHECK disp_orden:
+        // el user quedaba con CERO disponibilidad y un error crudo de Postgres.
+        if (!Array.isArray(d.diasActivos) || d.diasActivos.length === 0) {
+          return { ok: false, error: "Elegí al menos un día de atención." };
+        }
+        const franjasCheck = validateFranjas(d.franjas ?? []);
+        if (!franjasCheck.ok) {
+          return {
+            ok: false,
+            error: franjasCheck.error ?? "Revisá las franjas horarias.",
+          };
+        }
         // Reemplazo total de disponibilidad: delete + insert
         const { data: memberSelf } = await service
           .from("member")
@@ -618,8 +642,9 @@ export async function updateOnboardingStep(
         }
         break;
       }
-      // Steps 7-8 (integraciones): no persistimos nada acá — sus flows OAuth
-      // ya escriben en `integration` cuando el user conecta.
+      // Step 7 (Google Calendar): no persistimos datos acá — su flow OAuth
+      // escribe en `integration` cuando el user conecta. El cliente llama con
+      // {} solo para que el update de step_max de abajo registre el avance.
     }
 
     // Actualizar onboarding_step_max si avanzó
@@ -637,7 +662,7 @@ export async function updateOnboardingStep(
 }
 
 /**
- * Marca el onboarding como completado. Llamada desde Step 9.
+ * Marca el onboarding como completado. Llamada desde el paso final (moment).
  */
 export async function finalizeOnboarding(): Promise<{ ok: boolean; error?: string; slug?: string }> {
   const supabase = await createSupabaseServerClient();
@@ -665,11 +690,12 @@ export async function finalizeOnboarding(): Promise<{ ok: boolean; error?: strin
     .eq("id", orgId)
     .maybeSingle();
 
+  // Wizard de 8 pasos (el viejo Step 8 informativo se fusionó en el moment).
   const { data: org, error } = await service
     .from("organization")
     .update({
       onboarding_completed: true,
-      onboarding_step_max: 9,
+      onboarding_step_max: 8,
     })
     .eq("id", orgId)
     .select("slug")
@@ -684,7 +710,7 @@ export async function finalizeOnboarding(): Promise<{ ok: boolean; error?: strin
   if (prev?.onboarding_completed !== true) {
     void trackEvent.onboardingCompleted({
       orgId,
-      stepsCompleted: 9,
+      stepsCompleted: 8,
       isInternal: Boolean(prev?.is_internal_account),
     });
   }
