@@ -74,6 +74,11 @@ export interface ActiveOrganization {
    * billing gate when set. Set manually via service-role only; audited.
    */
   isInternalAccount: boolean;
+  /**
+   * organization.created_at (ISO). Ya viajaba en el select (accessGate);
+   * expuesto para heurísticas de "org joven" (checklist Primeros pasos).
+   */
+  createdAt: string;
 }
 
 export interface ActiveProfile {
@@ -209,6 +214,7 @@ export async function getActiveContext(): Promise<Result<ActiveContext>> {
     tipo: orgRow.tipo,
     especialidad: normalizeEspecialidadSlug(orgRow.especialidad),
     isInternalAccount: orgRow.is_internal_account,
+    createdAt: orgRow.created_at,
   };
 
   const profile: ActiveProfile = {

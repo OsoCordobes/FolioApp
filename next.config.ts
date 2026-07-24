@@ -122,6 +122,23 @@ const nextConfig: NextConfig = {
         source: "/(.*)",
         headers: SECURITY_HEADERS,
       },
+      // folio.css: 592KB render-blocking que por default Vercel sirve con
+      // max-age=0 (revalidación en CADA navegación). Cache inmutable de un
+      // año: el <link> de app/layout.tsx lo versiona con ?v=<commit SHA>,
+      // así cada deploy bustea el cache sin tocar este header.
+      // SOLO en producción: en dev la URL es siempre ?v=dev y el immutable
+      // dejaría estilos stale al editar folio.css (el flujo de estilado
+      // principal del repo).
+      ...(process.env.NODE_ENV === "production"
+        ? [
+            {
+              source: "/folio.css",
+              headers: [
+                { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+              ],
+            },
+          ]
+        : []),
     ];
   },
 };

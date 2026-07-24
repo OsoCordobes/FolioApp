@@ -30,7 +30,7 @@ export const FAQ_ITEMS: { q: string; a: string }[] = [
   },
   {
     q: "¿Cómo reciben los recordatorios mis pacientes?",
-    a: "Por WhatsApp, sin que hagas nada. Al reservar les llega la confirmación, y 24 horas antes, el recordatorio, siempre que el paciente tenga WhatsApp — menos ausencias y menos llamadas.",
+    a: "Hoy por email, automático: al reservar les llega la confirmación y, 24 horas antes, el recordatorio — menos ausencias y menos llamadas. WhatsApp, próximamente.",
   },
   {
     q: "¿Se integra con mi Google Calendar?",

@@ -1,22 +1,28 @@
 "use client";
 
 /**
- * Folio · Onboarding · 9-step wizard (premium architecture).
+ * Folio · Onboarding · 8-step wizard (premium architecture).
  *
  * Flow:
  *   - Step 1 (signup) crea auth.user + organization + member en el mismo paso
  *     via signUpAndInitOrganization. Devuelve organizationId + slug provisional.
- *   - Steps 2-8 hacen auto-save por step (debounce 800ms) via updateOnboardingStep.
+ *   - Steps 2-6 hacen auto-save por step (debounce 800ms) via updateOnboardingStep.
  *     Cada cambio actualiza optimistic state local; el persist a DB ocurre async.
- *   - Step 9 llama finalizeOnboarding (marca onboarding_completed=true) y muestra
- *     el "moment" — card real con link real + CTAs.
+ *   - Step 7 (Google Calendar) persiste solo step_max al montar (su flow OAuth
+ *     escribe en `integration` por su cuenta).
+ *   - Step 8 llama finalizeOnboarding (marca onboarding_completed=true) y muestra
+ *     el "moment" — card real con link real + CTAs + trial/precio (fusión del
+ *     viejo Step 8 informativo de MP).
  *
  * Resume: si el user vuelve después de abandonar, /onboarding/page.tsx lee
  * organizationId + initialSlug + initialData + initialStep desde DB y los pasa
  * acá. Hidratamos el state desde DB (no desde localStorage).
  *
- * Keyboard: Enter avanza el step (si Next está activo), Esc vuelve uno.
- * localStorage: backup secundario de drafts no guardados (red intermitente).
+ * Keyboard: vive en StepShell — Enter invoca el next EFECTIVO del paso
+ * (respetando nextDisabled), Esc vuelve uno.
+ * localStorage: backup secundario de drafts no guardados (red intermitente),
+ * namespaceado por identidad (lib/onboarding/draft) para que el PII de un
+ * usuario no se precargue al siguiente en una máquina compartida.
  */
 
 import dynamic from "next/dynamic";
@@ -32,6 +38,8 @@ import {
 import { CheckEmailPanel } from "@/components/auth/check-email-panel";
 import { SideArt } from "@/components/auth/side-art";
 import { FolioMark } from "@/components/folio-mark";
+import { packDraft, unpackDraft } from "@/lib/onboarding/draft";
+import { validateFranjas } from "@/lib/onboarding/franjas";
 import { Step1Consent } from "@/components/onboarding/step1-consent";
 import { Step1Registro } from "@/components/onboarding/step1-registro";
 // ONBOARDING_INITIAL es un literal de data; OnboardingDataState es un type.
@@ -77,14 +85,11 @@ const Step6Servicios = dynamic(
 const Step7Google = dynamic(
   () => import("@/components/onboarding/steps").then((m) => m.Step7Google),
 );
-const Step8MercadoPago = dynamic(
-  () => import("@/components/onboarding/steps").then((m) => m.Step8MercadoPago),
-);
 const Step9Moment = dynamic(
   () => import("@/components/onboarding/step9-moment").then((m) => m.Step9Moment),
 );
 
-const ONB_TOTAL = 9;
+const ONB_TOTAL = 8;
 const STORAGE_KEY = "folio:onboarding";
 const AUTOSAVE_DEBOUNCE_MS = 800;
 
@@ -114,10 +119,16 @@ interface OnboardingAppProps {
   /**
    * Precio del plan Solo en centavos ARS. Lo lee el server component
    * (app/(public)/onboarding/page.tsx) de MP_PLAN_PRICE_CENTS — fuente
-   * canónica del cobro real — y lo baja acá para que Step 1 y Step 8 muestren
-   * el mismo monto que se va a debitar (nunca un hardcode que driftee).
+   * canónica del cobro real — y lo baja acá para que Step 1 y el moment
+   * muestren el mismo monto que se va a debitar (nunca un hardcode que driftee).
    */
   planPriceCents: number;
+  /**
+   * true si el member ya tiene la integración GOOGLE_CALENDAR (leído
+   * server-side). El Step 7 lo usa para renderizar "Conectado ✓" en vez del
+   * botón de conectar.
+   */
+  googleConnected?: boolean;
 }
 
 interface SaveState {
@@ -133,10 +144,12 @@ export function OnboardingApp({
   initialSlug,
   authedEmail,
   planPriceCents,
+  googleConnected,
 }: OnboardingAppProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [stepIdx, setStepIdx] = useState(initialStep ?? 1);
+  // Clamp: datos legacy (wizard de 9 pasos) pueden traer initialStep=9.
+  const [stepIdx, setStepIdx] = useState(Math.min(initialStep ?? 1, ONB_TOTAL));
   const [data, setData] = useState<OnboardingDataState>(ONBOARDING_INITIAL);
   const [orgId, setOrgId] = useState<string | undefined>(organizationId);
   const [orgSlug, setOrgSlug] = useState<string | undefined>(initialSlug);
@@ -177,25 +190,34 @@ export function OnboardingApp({
     // por template de especialidad) nunca guardaba → 0 servicios y onboarding
     // sin finalizar. La hidratación es un evento de arranque, no de navegación.
     if (hydratedRef.current) return;
-    let restored: Partial<OnboardingDataState> = {};
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as Record<string, unknown>;
-        // Guard legado: si una versión vieja guardó password, no lo restauramos.
-        delete parsed.password;
-        restored = parsed as Partial<OnboardingDataState>;
-      }
-    } catch {
-      // ignore
-    }
     const prefillEmail = searchParams.get("email");
     const prefillNombre = searchParams.get("nombre");
+    // Draft namespaceado por identidad (lib/onboarding/draft): se descarta si
+    // no pertenece a la identidad actual (authedEmail server-side, o el email
+    // del prefill). En una máquina compartida, el PII del profesional anterior
+    // NO se precarga al siguiente. Los drafts legados (sin identidad) también
+    // se descartan.
+    let restored: Partial<OnboardingDataState> = {};
+    try {
+      const unpacked = unpackDraft(
+        localStorage.getItem(STORAGE_KEY),
+        authedEmail ?? prefillEmail ?? "",
+      );
+      if (unpacked) restored = unpacked as Partial<OnboardingDataState>;
+    } catch {
+      // ignore (privacy mode)
+    }
+    // initialData llega del server con TODAS las keys (varias en undefined).
+    // Spreadearlas tal cual pisaría con undefined los valores restaurados del
+    // draft — filtramos las ausentes.
+    const dbData = Object.fromEntries(
+      Object.entries(initialData ?? {}).filter(([, v]) => v !== undefined),
+    ) as Partial<OnboardingDataState>;
     setData((prev) => {
       const next = {
         ...prev,
         ...restored,
-        ...(initialData ?? {}),
+        ...dbData,
         ...(prefillEmail ? { email: prefillEmail } : {}),
         ...(prefillNombre ? { nombre: prefillNombre } : {}),
       };
@@ -208,18 +230,20 @@ export function OnboardingApp({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Persistir cada cambio en localStorage (backup). Excluimos `password`: es
-  // un secreto que no debe quedar en disco, y si dos usuarios distintos usan
-  // la misma máquina, el password viejo aparecería pre-cargado en el form.
+  // Persistir cada cambio en localStorage (backup). packDraft excluye
+  // `password` (secreto, no debe quedar en disco) y sella el draft con la
+  // identidad del dueño (email) para que otro usuario en la misma máquina no
+  // lo herede.
   useEffect(() => {
     try {
-      const { password: _omitPassword, ...safeSnapshot } = data;
-      void _omitPassword;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(safeSnapshot));
+      localStorage.setItem(
+        STORAGE_KEY,
+        packDraft(authedEmail ?? data.email, data as unknown as Record<string, unknown>),
+      );
     } catch {
       // quota / privacy mode
     }
-  }, [data]);
+  }, [data, authedEmail]);
 
   // ─── Auto-save por step (debounce 800ms) ─────────────────────────────────
 
@@ -241,8 +265,10 @@ export function OnboardingApp({
           case 3:
             result = await updateOnboardingStep(3, {
               consultorioNombre: snapshot.consultorioNombre,
-              rubro: snapshot.rubro,
-              especialidad: snapshot.especialidad,
+              // "" = todavía sin elegir (ya no hay preselección) — omitir para
+              // no chocar con el z.enum del server.
+              rubro: snapshot.rubro || undefined,
+              especialidad: snapshot.especialidad || undefined,
               tipo: snapshot.tipo,
               ciudad: snapshot.ciudad,
               provincia: snapshot.provincia,
@@ -259,13 +285,25 @@ export function OnboardingApp({
               cardMood: snapshot.cardMood,
             });
             break;
-          case 5:
+          case 5: {
+            // No mandar al server estados intermedios inválidos (franja recién
+            // agregada vacía, fin < inicio mientras edita): el server los
+            // rechaza igual, pero acá evitamos el flash de "Reintentar
+            // guardar" en cada tecla. El último estado válido queda en DB.
+            if (
+              snapshot.diasActivos.length === 0 ||
+              !validateFranjas(snapshot.franjas).ok
+            ) {
+              setSaveState({ status: "idle" });
+              return;
+            }
             result = await updateOnboardingStep(5, {
               diasActivos: snapshot.diasActivos,
               franjas: snapshot.franjas,
               slotMin: snapshot.slotMin,
             });
             break;
+          }
           case 6:
             result = await updateOnboardingStep(6, {
               servicios: snapshot.servicios.map((s) => ({
@@ -303,9 +341,9 @@ export function OnboardingApp({
   // Trigger auto-save cuando cambian datos relevantes
   useEffect(() => {
     if (!orgId) return;
-    if (stepIdx === 1 || stepIdx === 9) return;
-    // Steps 7-8 no persisten datos (sus integraciones tienen su propio flow)
-    if (stepIdx === 7 || stepIdx === 8) return;
+    // Steps sin auto-save: 1 (signup), 7 (Google — persiste step_max al montar
+    // y su OAuth escribe en `integration`), 8 (moment — finaliza, no edita).
+    if (stepIdx === 1 || stepIdx >= 7) return;
 
     const snapshot = JSON.stringify({ step: stepIdx, data });
     if (snapshot === lastSavedSnapshotRef.current) return;
@@ -350,31 +388,10 @@ export function OnboardingApp({
 
   const skip = next;
 
-  // ─── Keyboard shortcuts ──────────────────────────────────────────────────
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      // Ignorar si está modificador (Cmd/Ctrl+Enter = nueva línea, etc.)
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      const target = e.target as HTMLElement | null;
-      const tag = target?.tagName?.toLowerCase();
-      const isTextArea = tag === "textarea";
-      const isContentEditable = target?.isContentEditable;
-
-      if (e.key === "Escape" && stepIdx > 1 && stepIdx < 9) {
-        e.preventDefault();
-        back();
-        return;
-      }
-      if (e.key === "Enter" && !isTextArea && !isContentEditable && stepIdx < 9) {
-        // En Step 1 dejamos que el botón maneje su validación + captcha
-        if (tag === "button" || stepIdx === 1) return;
-        e.preventDefault();
-        next();
-      }
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [stepIdx, next, back]);
+  // Keyboard (Enter/Esc) vive en StepShell: Enter tiene que invocar el next
+  // EFECTIVO del paso (p.ej. handleNext del Step 3 que persiste el slug) y
+  // respetar nextDisabled. El listener global anterior llamaba a next()
+  // directo y salteaba validación + persist.
 
   // ─── Step 1: signup (cuenta nueva) o consent-only (Google OAuth) ──────────
   //
@@ -416,7 +433,10 @@ export function OnboardingApp({
     });
   };
 
-  // ─── Step 9: finalizar ───────────────────────────────────────────────────
+  // ─── Paso final (8, moment): finalizar ───────────────────────────────────
+  // `finalizeDone` habilita "Ir al panel": sin finalize ok, /hoy redirige de
+  // vuelta a /onboarding (loop). El moment muestra Reintentar si falló.
+  const [finalizeDone, setFinalizeDone] = useState(false);
   const handleFinish = async () => {
     setError(null);
     await flushSaveIfPending();
@@ -426,6 +446,7 @@ export function OnboardingApp({
       return;
     }
     if (result.slug && result.slug !== orgSlug) setOrgSlug(result.slug);
+    setFinalizeDone(true);
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch {
@@ -439,6 +460,17 @@ export function OnboardingApp({
       router.refresh();
     });
   };
+
+  // Reintento manual del autosave (indicador "Reintentar guardar" clickeable).
+  const retrySave = useCallback(() => {
+    const step = pendingStepRef.current ?? stepIdx;
+    void persistStep(step, data);
+  }, [stepIdx, data, persistStep]);
+
+  // Estado real de la integración Google (server) + retorno del OAuth.
+  const gcalParam = searchParams.get("gcal");
+  const gcalConnected = Boolean(googleConnected) || gcalParam === "ok";
+  const gcalError = gcalParam === "error";
 
   const stepKey = `step-${stepIdx}-${direction}`;
   const commonStepProps = {
@@ -496,7 +528,7 @@ export function OnboardingApp({
     );
   }
 
-  // ─── Steps 2-9: layout estándar con PublicCard lateral integrado en StepShell ─
+  // ─── Steps 2-8: layout estándar con PublicCard lateral integrado en StepShell ─
   return (
     <div className="onb-app">
       <header className="onb-app-head">
@@ -504,15 +536,15 @@ export function OnboardingApp({
           <FolioMark size={24} />
           <span className="onb-brand-name">folio</span>
         </div>
-        {stepIdx < 9 ? (
-          <SaveIndicator state={saveState} />
+        {stepIdx < ONB_TOTAL ? (
+          <SaveIndicator state={saveState} onRetry={retrySave} />
         ) : (
           <span />
         )}
       </header>
 
       <main className="onb-app-main">
-        {error && stepIdx !== 9 ? (
+        {error && stepIdx !== ONB_TOTAL ? (
           <p className="au-err onb-banner-err" role="alert">{error}</p>
         ) : null}
 
@@ -522,9 +554,14 @@ export function OnboardingApp({
           {stepIdx === 4 ? <Step4Personalizacion {...commonStepProps} /> : null}
           {stepIdx === 5 ? <Step5Horarios {...commonStepProps} /> : null}
           {stepIdx === 6 ? <Step6Servicios {...commonStepProps} /> : null}
-          {stepIdx === 7 ? <Step7Google {...commonStepProps} /> : null}
-          {stepIdx === 8 ? <Step8MercadoPago {...commonStepProps} /> : null}
-          {stepIdx === 9 ? (
+          {stepIdx === 7 ? (
+            <Step7Google
+              {...commonStepProps}
+              connected={gcalConnected}
+              connectError={gcalError}
+            />
+          ) : null}
+          {stepIdx === 8 ? (
             <Step9Moment
               data={data}
               accent={data.acento}
@@ -533,6 +570,8 @@ export function OnboardingApp({
               onGoToPanel={goToPanel}
               finishing={finishing}
               error={error}
+              finalizeOk={finalizeDone}
+              planPriceCents={planPriceCents}
             />
           ) : null}
         </div>
@@ -541,9 +580,9 @@ export function OnboardingApp({
   );
 }
 
-// ─── Save indicator (header derecho durante steps 2-8) ──────────────────────
+// ─── Save indicator (header derecho durante steps 2-7) ──────────────────────
 
-function SaveIndicator({ state }: { state: SaveState }) {
+function SaveIndicator({ state, onRetry }: { state: SaveState; onRetry: () => void }) {
   // A11y: todas las ramas devuelven un <span> raíz en la misma posición del
   // árbol → React muta el mismo nodo DOM. Declarar aria-live también en el
   // estado idle garantiza que la región exista ANTES de que llegue contenido
@@ -565,9 +604,41 @@ function SaveIndicator({ state }: { state: SaveState }) {
     );
   }
   if (state.status === "error") {
+    // Antes era un <span> muerto: un autosave fallido (red, constraint) era
+    // pérdida de datos silenciosa. Ahora muestra el motivo y reintenta.
     return (
-      <span style={{ ...base, color: "var(--red, #9B3A2A)" }} role="alert">
-        Reintentar guardar
+      <span style={{ ...base, color: "var(--red, #9B3A2A)", gap: 8 }} role="alert">
+        {state.message ? (
+          <span
+            style={{
+              maxWidth: 260,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+            title={state.message}
+          >
+            {state.message}
+          </span>
+        ) : (
+          <span>No se pudo guardar.</span>
+        )}
+        <button
+          type="button"
+          onClick={onRetry}
+          style={{
+            background: "none",
+            border: "none",
+            padding: 0,
+            font: "inherit",
+            color: "inherit",
+            fontWeight: 600,
+            textDecoration: "underline",
+            cursor: "pointer",
+          }}
+        >
+          Reintentar guardar
+        </button>
       </span>
     );
   }
