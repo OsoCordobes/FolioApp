@@ -24,6 +24,12 @@ import { PedidoModal } from "@/components/calendario/pedido-modal";
 import { TurnoDetalleModal } from "@/components/calendario/turno-detalle-modal";
 import { TurnoCreateModal } from "@/components/hoy/turno-create-modal";
 import { inicialesProfesional, type ProfesionalLite } from "@/lib/agenda/profesional";
+import {
+  deriveRangoHorario,
+  slotDesdeOffsetY,
+  type EventoHorario,
+  type RangoMin,
+} from "@/lib/agenda/rango-horario";
 import { useAgendaAutoRefresh } from "@/lib/use-agenda-refresh";
 import type { MonthGridCell } from "@/lib/db/calendario";
 import type {
@@ -35,19 +41,31 @@ import type {
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
-const HORA_INICIO = 8;
-const HORA_FIN = 19;
-const HOURS = HORA_FIN - HORA_INICIO;
 const HORA_PX = 56;
-const HEIGHT_PX = HOURS * HORA_PX;
 
 const DIAS = ["LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB", "DOM"];
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-function timeToTop(hora: string): number {
+/** Rango horario de la grilla, en horas enteras (derivado, ya no hardcode). */
+interface RangoHorario {
+  horaInicio: number;
+  horaFin: number;
+}
+
+/**
+ * Top en px de una hora "HH:MM" dentro de la grilla. Clamp defensivo a
+ * [0, heightPx]: el rango derivado ya cubre todos los eventos, pero un dato
+ * corrupto nunca debe empujar una card fuera del `overflow: hidden`.
+ */
+function timeToTop(hora: string, rango: RangoHorario): number {
   const [h, m] = hora.split(":").map(Number);
-  return ((h - HORA_INICIO) * 60 + m) * (HORA_PX / 60);
+  const top = ((h - rango.horaInicio) * 60 + m) * (HORA_PX / 60);
+  const heightPx = (rango.horaFin - rango.horaInicio) * HORA_PX;
+  if (!Number.isFinite(top)) return 0;
+  // -32px: si un dato corrupto cae fuera del rango, la card queda pegada al
+  // borde pero visible (no desaparece detrás del overflow: hidden).
+  return Math.max(0, Math.min(top, Math.max(0, heightPx - 32)));
 }
 
 function durToHeight(dur: number): number {
@@ -194,18 +212,20 @@ function TurnoCardSemana({
   lane,
   totalLanes,
   pacientes,
+  rango,
   onSelect,
 }: {
   turno: TurnoSemana;
   lane: number;
   totalLanes: number;
   pacientes: PacientesById;
+  rango: RangoHorario;
   onSelect: (t: TurnoSemana) => void;
 }) {
   const paciente = pacientes[turno.pacienteId];
   if (!paciente) return null;
   const vis = STATE_VIS[turno.estado] ?? STATE_VIS.agendado;
-  const top = timeToTop(turno.hora);
+  const top = timeToTop(turno.hora, rango);
   const height = Math.max(36, durToHeight(turno.dur) - 2);
   const isAtendiendo = turno.estado === "atendiendo";
   const isCancelado = ["no_asistio", "cancelado"].includes(turno.estado);
@@ -303,8 +323,18 @@ function TurnoCardSemana({
   );
 }
 
-function BloqueoCardSemana({ bloqueo, lane, totalLanes }: { bloqueo: Bloqueo; lane: number; totalLanes: number }) {
-  const top = timeToTop(bloqueo.hora);
+function BloqueoCardSemana({
+  bloqueo,
+  lane,
+  totalLanes,
+  rango,
+}: {
+  bloqueo: Bloqueo;
+  lane: number;
+  totalLanes: number;
+  rango: RangoHorario;
+}) {
+  const top = timeToTop(bloqueo.hora, rango);
   const height = Math.max(28, durToHeight(bloqueo.dur) - 2);
   const lanePos = laneStyle(lane, totalLanes);
   const isNarrow = totalLanes >= 2;
@@ -338,14 +368,16 @@ function PedidoGhostCard({
   pedido,
   lane,
   totalLanes,
+  rango,
   onClick,
 }: {
   pedido: Pedido;
   lane: number;
   totalLanes: number;
+  rango: RangoHorario;
   onClick: (p: Pedido) => void;
 }) {
-  const top = timeToTop(pedido.hora!);
+  const top = timeToTop(pedido.hora!, rango);
   const height = Math.max(36, durToHeight(pedido.dur || 45) - 2);
   const lanePos = laneStyle(lane, totalLanes);
   const isNarrow = totalLanes >= 2;
@@ -605,11 +637,13 @@ function VistaSemana({
   weekDates,
   diasCerrados,
   capacidadDiaMin,
+  rango,
   hoyIso,
   nowHHMM,
   onOpenBandeja,
   onSelectPedido,
   onSelectTurno,
+  onCreateSlot,
 }: {
   turnos: TurnoSemana[];
   bloqueos: Bloqueo[];
@@ -620,13 +654,24 @@ function VistaSemana({
   diasCerrados: boolean[];
   /** Minutos de disponibilidad real por día; null = fallback histórico (600). */
   capacidadDiaMin?: Array<number | null>;
+  /** Rango horario derivado (disponibilidad + eventos); antes hardcode 08–19. */
+  rango: RangoHorario;
   hoyIso: string;
   nowHHMM: string;
   onOpenBandeja: () => void;
   onSelectPedido: (p: Pedido) => void;
   onSelectTurno: (t: TurnoSemana) => void;
+  /** Click en slot vacío o "+" del header → crear turno en fecha + "HH:MM". */
+  onCreateSlot: (fecha: string, hora: string) => void;
 }) {
   const pedidosSinFecha = pedidos.filter((p) => p.estado === "pendiente" && !p.fecha);
+  const hours = rango.horaFin - rango.horaInicio;
+  const heightPx = hours * HORA_PX;
+  const nowMin = hmToMin(nowHHMM);
+  // La línea de "ahora" solo se pinta si cae dentro del rango visible (antes
+  // un "ahora" de 07:40 dibujaba la línea con top negativo, clipeada).
+  const ahoraVisible =
+    Number.isFinite(nowMin) && nowMin >= rango.horaInicio * 60 && nowMin <= rango.horaFin * 60;
 
   // Auto-scroll a la "ahora" line al cargar — port directo del prototipo
   // (folio/calendario.jsx líneas 445-454). Sin esto, el viewport arranca en
@@ -679,16 +724,30 @@ function VistaSemana({
                   <div className="cal-day-cap-fill" style={{ width: `${pctCapacidad}%` }} />
                 </div>
               ) : null}
+              {/* Camino por teclado del click-to-create: un "+" por día. */}
+              {!cerrado ? (
+                <button
+                  type="button"
+                  className="cal-day-add"
+                  title={`Agendar turno el ${DIAS[i]} ${numero}`}
+                  aria-label={`Agendar turno el ${DIAS[i]} ${numero}`}
+                  onClick={() =>
+                    onCreateSlot(iso, `${String(rango.horaInicio).padStart(2, "0")}:00`)
+                  }
+                >
+                  <I.Plus size={11} />
+                </button>
+              ) : null}
             </div>
           );
         })}
       </div>
 
       <div className="cal-grid">
-        <div className="cal-time-axis" style={{ height: HEIGHT_PX }}>
-          {Array.from({ length: HOURS + 1 }, (_, i) => (
+        <div className="cal-time-axis" style={{ height: heightPx }}>
+          {Array.from({ length: hours + 1 }, (_, i) => (
             <div key={i} className="cal-time-tick" style={{ top: i * HORA_PX }}>
-              <span>{String(HORA_INICIO + i).padStart(2, "0")}:00</span>
+              <span>{String(rango.horaInicio + i).padStart(2, "0")}:00</span>
             </div>
           ))}
         </div>
@@ -701,36 +760,39 @@ function VistaSemana({
           const dayPedidos = pedidos.filter((p) => p.fecha === iso && p.estado === "pendiente");
           const dayEvents = layoutDayEvents(dayTurnos, dayBloqueos, dayPedidos);
 
-          // Almuerzo band 12:00-14:00 si no hay overlap
-          const lunchStart = 12 * 60;
-          const lunchEnd = 14 * 60;
-          const hasLunchOverlap = dayEvents.some((ev) => ev._start < lunchEnd && ev._end > lunchStart);
-          const showLunch = !hasLunchOverlap && !cerrado;
-
           return (
             <div
               key={iso}
-              className={"cal-day-col " + (isHoy ? "is-hoy " : "") + (cerrado ? "is-cerrado" : "")}
-              style={{ height: HEIGHT_PX }}
+              className={
+                "cal-day-col " +
+                (isHoy ? "is-hoy " : "") +
+                (cerrado ? "is-cerrado" : "is-agendable")
+              }
+              style={{ height: heightPx }}
+              // Click en un slot vacío → crear turno a esa hora (redondeo 15').
+              // Los clicks sobre cards (turno/bloqueo/pedido) NO caen acá: se
+              // filtran por closest() porque esos handlers no hacen
+              // stopPropagation y abrir dos modales sería un doble-open.
+              onClick={(e) => {
+                if (cerrado) return;
+                const target = e.target as HTMLElement;
+                if (target.closest(".cal-turno, .cal-bloqueo, .cal-pedido")) return;
+                const rect = e.currentTarget.getBoundingClientRect();
+                const hora = slotDesdeOffsetY({
+                  offsetY: e.clientY - rect.top,
+                  horaInicio: rango.horaInicio,
+                  horaFin: rango.horaFin,
+                  horaPx: HORA_PX,
+                });
+                onCreateSlot(iso, hora);
+              }}
             >
-              {Array.from({ length: HOURS }, (_, k) => (
+              {Array.from({ length: hours }, (_, k) => (
                 <div key={`g-${k}`}>
                   <div className="cal-gridline" style={{ top: k * HORA_PX }} />
                   <div className="cal-gridline cal-gridline-half" style={{ top: k * HORA_PX + HORA_PX / 2 }} />
                 </div>
               ))}
-
-              {showLunch ? (
-                <div
-                  className="cal-almuerzo"
-                  style={{
-                    top: timeToTop("12:00"),
-                    height: timeToTop("14:00") - timeToTop("12:00"),
-                  }}
-                >
-                  <span className="cal-almuerzo-lbl">almuerzo</span>
-                </div>
-              ) : null}
 
               {cerrado ? (
                 <div className="cal-cerrado-overlay">
@@ -746,6 +808,7 @@ function VistaSemana({
                       bloqueo={ev.bloqueo}
                       lane={ev._lane}
                       totalLanes={ev._totalLanes}
+                      rango={rango}
                     />
                   );
                 }
@@ -756,6 +819,7 @@ function VistaSemana({
                       pedido={ev.pedido}
                       lane={ev._lane}
                       totalLanes={ev._totalLanes}
+                      rango={rango}
                       onClick={onSelectPedido}
                     />
                   );
@@ -767,13 +831,14 @@ function VistaSemana({
                     lane={ev._lane}
                     totalLanes={ev._totalLanes}
                     pacientes={pacientes}
+                    rango={rango}
                     onSelect={onSelectTurno}
                   />
                 );
               })}
 
-              {isHoy ? (
-                <div className="cal-ahora" style={{ top: timeToTop(nowHHMM) }}>
+              {isHoy && ahoraVisible ? (
+                <div className="cal-ahora" style={{ top: timeToTop(nowHHMM, rango) }}>
                   <span className="cal-ahora-dot" />
                   <span className="cal-ahora-line" />
                 </div>
@@ -894,6 +959,11 @@ interface CalendarioProps {
   diasCerrados?: boolean[];
   /** Minutos de disponibilidad por día (0=LUN..6=DOM); ver deriveCapacidadSemana. */
   capacidadDiaMin?: Array<number | null>;
+  /**
+   * Min/max (minutos) de disponibilidad_profesional en la semana visible;
+   * null/ausente = sin disponibilidad cargada. Ver deriveRangoHorario.
+   */
+  rangoDisponibilidadMin?: RangoMin | null;
   weekRangeLabel: string;
   hoyIso: string;
   nowHHMM: string;
@@ -941,6 +1011,7 @@ export function Calendario({
   weekDates,
   diasCerrados,
   capacidadDiaMin,
+  rangoDisponibilidadMin = null,
   weekRangeLabel,
   hoyIso,
   nowHHMM,
@@ -975,6 +1046,9 @@ export function Calendario({
   // pedido vinculado — al crear el turno, el server marca el pedido CONFIRMADO
   // (cierra el dead-end en que quedaba PENDIENTE para siempre).
   const [agendarDesdePedido, setAgendarDesdePedido] = useState<Pedido | null>(null);
+  // Click-to-create desde la grilla: "YYYY-MM-DDTHH:MM" (hora local del slot
+  // clickeado o del "+" del header) — abre el TurnoCreateModal con ese default.
+  const [agendarSlot, setAgendarSlot] = useState<string | null>(null);
 
   // Href de cada chip del selector de profesional: preserva la vista activa
   // (semana ?w= / mes ?mes=) — SSR puro, mismo patrón que la navegación.
@@ -998,6 +1072,20 @@ export function Calendario({
     if (estados.size === 0) return turnos;
     return turnos.filter((t) => estados.has(t.estado));
   }, [estados, turnos]);
+
+  // Rango horario de la grilla: min/max entre disponibilidad y eventos REALES
+  // de la semana (sin filtros de estado/pedidos — el rango no salta al togglear
+  // chips). Antes: hardcode 08–19 que clipeaba un turno de 07:30 o 19:30.
+  const rangoHorario = useMemo(() => {
+    const eventos: EventoHorario[] = [
+      ...turnos.map((t) => ({ hora: t.hora, dur: t.dur })),
+      ...bloqueos.map((b) => ({ hora: b.hora, dur: b.dur })),
+      ...pedidos
+        .filter((p) => p.estado === "pendiente" && p.fecha && p.hora)
+        .map((p) => ({ hora: p.hora, dur: p.dur })),
+    ];
+    return deriveRangoHorario({ eventos, disponibilidad: rangoDisponibilidadMin });
+  }, [turnos, bloqueos, pedidos, rangoDisponibilidadMin]);
 
   return (
     <div className="fi-content cal-content">
@@ -1032,11 +1120,13 @@ export function Calendario({
           weekDates={weekDates}
           diasCerrados={cerradosSemana}
           capacidadDiaMin={capacidadDiaMin}
+          rango={rangoHorario}
           hoyIso={hoyIso}
           nowHHMM={nowHHMM}
           onOpenBandeja={() => setVista("bandeja")}
           onSelectPedido={setSelectedPedido}
           onSelectTurno={setSelectedTurno}
+          onCreateSlot={(fecha, hora) => setAgendarSlot(`${fecha}T${hora}`)}
         />
       ) : vista === "bandeja" ? (
         <VistaBandejaSimple
@@ -1104,6 +1194,23 @@ export function Calendario({
           onClose={() => setAgendarOpen(false)}
           onCreated={() => {
             setAgendarOpen(false);
+            router.refresh();
+          }}
+        />
+      ) : null}
+
+      {/* Click-to-create: mismo modal, con el datetime del slot clickeado como
+          default EXACTO (estándar Jane/Cliniko — sin tipear fecha ni hora).
+          "YYYY-MM-DDTHH:MM" se interpreta en la TZ del browser, igual que el
+          inicioIso del TurnoReagendarModal en /hoy. */}
+      {agendarSlot ? (
+        <TurnoCreateModal
+          origen="MANUAL"
+          defaultInicio={agendarSlot}
+          defaultProfesionalId={profActivo}
+          onClose={() => setAgendarSlot(null)}
+          onCreated={() => {
+            setAgendarSlot(null);
             router.refresh();
           }}
         />

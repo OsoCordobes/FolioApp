@@ -12,6 +12,7 @@
  *   - DST-safe via Intl + offset probe.
  */
 
+import { deriveRangoDisponibilidadSemana, type RangoMin } from "@/lib/agenda/rango-horario";
 import { capabilitiesFor } from "@/lib/auth/capabilities";
 import { decryptColumn } from "@/lib/crypto";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -231,6 +232,14 @@ export interface CalendarioSemanaData {
    * Con filtro de profesional: SU capacidad; en "Todos": suma org-wide.
    */
   capacidadDiaMin: Array<number | null>;
+  /**
+   * Min/max (minutos desde medianoche) de las franjas de disponibilidad
+   * vigentes en la semana visible; null = org sin disponibilidad cargada.
+   * La UI lo combina con los eventos reales para derivar el rango horario
+   * de la grilla (deriveRangoHorario) — antes hardcodeaba 08–19 y clipeaba
+   * turnos fuera de ese rango.
+   */
+  rangoDisponibilidadMin: RangoMin | null;
 }
 
 interface FetcherInput {
@@ -431,6 +440,11 @@ export async function getCalendarioSemana(input: FetcherInput): Promise<Result<C
   // sus franjas; en "Todos" suma las de toda la org. Sin franjas → null →
   // fallback histórico (600 min) en la UI.
   const capacidadDiaMin = deriveCapacidadSemana(weekDates, dispRes.error ? [] : disponibilidad);
+  // Rango horario de disponibilidad de la semana (para el rango de la grilla).
+  const rangoDisponibilidadMin = deriveRangoDisponibilidadSemana(
+    weekDates,
+    dispRes.error ? [] : disponibilidad,
+  );
 
   const nowDate = new Date();
   const hoyIso = ymdInTz(nowDate.toISOString(), tz);
@@ -449,6 +463,7 @@ export async function getCalendarioSemana(input: FetcherInput): Promise<Result<C
     pacientes: Object.fromEntries(pacientesAcum.entries()),
     diasCerrados,
     capacidadDiaMin,
+    rangoDisponibilidadMin,
   });
 }
 

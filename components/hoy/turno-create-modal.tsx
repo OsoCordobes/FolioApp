@@ -30,11 +30,17 @@ import {
   type ServicioPickerRow,
 } from "@/app/(app)/hoy/actions";
 import { resolvePickerProfesional } from "@/lib/agenda/profesional";
-import { isoToLocalDatetime, localDatetimeToIso } from "@/lib/datetime-local";
+import { isoToLocalDatetime, isoToLocalDatetimeExact, localDatetimeToIso } from "@/lib/datetime-local";
 import { useModalA11y } from "@/lib/use-modal-a11y";
 
 interface TurnoCreateModalProps {
-  defaultInicio?: string; // ISO with offset
+  /**
+   * Inicio default del picker (ISO con offset o "YYYY-MM-DDTHH:mm" local).
+   * Si viene, se respeta EXACTO — es un horario elegido (p. ej. el slot
+   * clickeado en /calendario), no uno por sugerir. Sin él, el default es
+   * "ahora" redondeado al próximo múltiplo de 5' (walk-in de /hoy).
+   */
+  defaultInicio?: string;
   origen?: "MANUAL" | "WALK_IN";
   /** Si está set, abrimos en modo "existente" con el paciente preseleccionado. */
   preselectPacienteId?: string;
@@ -84,7 +90,9 @@ export function TurnoCreateModal({
   const [servicioId, setServicioId] = useState<string | null>(null);
   /** Profesional destino (CLINICA-3). Se setea al cargar la metadata. */
   const [profesionalId, setProfesionalId] = useState<string | null>(null);
-  const [inicioLocal, setInicioLocal] = useState<string>(() => isoToLocalDatetime(defaultInicio));
+  const [inicioLocal, setInicioLocal] = useState<string>(() =>
+    defaultInicio ? isoToLocalDatetimeExact(defaultInicio) : isoToLocalDatetime(),
+  );
   const [duracion, setDuracion] = useState<number>(45);
   const [submitting, startTransition] = useTransition();
   const [submitErr, setSubmitErr] = useState<string | null>(null);
