@@ -801,7 +801,7 @@ export function Step8MercadoPago({ data, next, back, skip, orgSlug, planPriceCen
   return (
     <StepShell stepIdx={8} back={back} next={next} skip={skip}
       headline="Activá tu prueba"
-      sub="Tenés 7 días gratis sin tarjeta. Después, activás tu suscripción desde Configuración cuando estés listo para cobrar."
+      sub="Tenés 30 días gratis sin tarjeta. Después, activás tu suscripción desde Configuración cuando estés listo para cobrar."
       previewData={previewDataFor(data)}
       slug={orgSlug}
     >
@@ -816,7 +816,7 @@ export function Step8MercadoPago({ data, next, back, skip, orgSlug, planPriceCen
             </div>
             <div>
               <b>Tu prueba arranca ya</b>
-              <p>7 días para probar todas las funciones. Sin compromiso, sin tarjeta.</p>
+              <p>30 días para probar todas las funciones. Sin compromiso, sin tarjeta.</p>
             </div>
           </div>
           <div className="onb-trial-row">

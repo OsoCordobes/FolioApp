@@ -21,7 +21,7 @@ export function FinalCta() {
         </p>
         <div className="fl-cta-actions">
           <Link className="fi-btn fi-btn-primary fl-btn-lg" href="/onboarding" data-fl-cta="final">
-            Empezá gratis · 7 días
+            Empezá gratis · 30 días
           </Link>
           <Link className="fi-btn fi-btn-secondary fl-btn-lg" href="/login">
             Ingresar

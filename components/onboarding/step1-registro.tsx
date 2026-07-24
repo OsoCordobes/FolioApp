@@ -118,7 +118,7 @@ export function Step1Registro({
       // Precio: fuente canónica MP_PLAN_PRICE_CENTS (lib/mercadopago/client.ts).
       // Llega como prop desde el server component de /onboarding — mismo valor
       // que el cobro real, sin hardcode que pueda driftear del env.
-      sub={`7 días de prueba sin tarjeta. Después, ${formatArsFromCents(planPriceCents)} / mes.`}
+      sub={`30 días de prueba sin tarjeta. Después, ${formatArsFromCents(planPriceCents)} / mes.`}
       next={validateAndNext}
       canSkip={false}
       nextLabel={loading ? "Creando cuenta…" : "Continuar"}

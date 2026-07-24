@@ -47,7 +47,7 @@ export function Pricing() {
   return (
     <section id="precios" className="fl-section fl-pricing" data-fl-section="pricing">
       <h2 className="fl-pricing-title fl-reveal">Un precio. En pesos.</h2>
-      <p className="fl-pricing-sub fl-reveal">7 días gratis. Sin tarjeta.</p>
+      <p className="fl-pricing-sub fl-reveal">30 días gratis. Sin tarjeta.</p>
 
       <div className="fl-pricing-grid">
         <article className="fl-price-card fl-price-card--featured fl-reveal" style={revealRange(0)}>
@@ -109,7 +109,7 @@ export function Pricing() {
       </div>
 
       <p className="fl-pricing-banner fl-reveal">
-        <span className="fl-pricing-banner-days">7 días</span> con todo habilitado. Pagás recién
+        <span className="fl-pricing-banner-days">30 días</span> con todo habilitado. Pagás recién
         si te quedás — en pesos, con Mercado Pago.
       </p>
     </section>

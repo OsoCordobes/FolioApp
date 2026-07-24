@@ -10,6 +10,7 @@
  * testeables sin dependencia de entorno.
  */
 
+import type { TrialUmbralDias } from "@/lib/billing/lifecycle";
 import { getAppUrl } from "@/lib/config/app-url";
 import { recordEmailOnce } from "@/lib/db/email-notificacion";
 import { BILLING_RECOVERY_PATH } from "@/lib/db/suscripcion";
@@ -297,13 +298,13 @@ async function sendBillingLifecycleEmail(input: {
 }
 
 /**
- * Aviso "tu prueba termina en N días" (umbrales 3 y 1 del grace de 7 días).
+ * Aviso "tu prueba termina en N días" (umbrales 7, 3 y 1 del grace de 30 días).
  * Dedupe por org + umbral: cada umbral se avisa una sola vez por org.
  */
 export async function notifyTrialPorVencer(input: {
   organizationId: string;
   destinatario: string;
-  diasRestantes: 3 | 1;
+  diasRestantes: TrialUmbralDias;
   /** Precio mensual del plan de la org en centavos ARS. */
   montoMensualCents: number;
 }): Promise<void> {

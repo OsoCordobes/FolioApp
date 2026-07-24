@@ -619,7 +619,7 @@ function Signup({ setVista, switchToLoginWith }: SignupProps) {
           className="fi-btn fi-btn-primary au-submit"
           disabled={pending || !consent || (Boolean(TURNSTILE_SITE_KEY) && !captchaToken)}
         >
-          {pending ? "Creando cuenta…" : "Empezar 7 días gratis"}
+          {pending ? "Creando cuenta…" : "Empezar 30 días gratis"}
           <ArrowRightTiny />
         </button>
       </form>

@@ -20,6 +20,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { EspecialidadSwitcher } from "@/components/especialidad-switcher";
 import { FolioMark } from "@/components/folio-mark";
 import * as I from "@/components/icons";
+import { OrgSwitcher, type OrgSwitcherOption } from "@/components/org-switcher";
 import { capabilitiesFor, type Capabilities, type Role } from "@/lib/auth/capabilities";
 import type { EspecialidadSlug } from "@/lib/especialidades/meta";
 import { formatRubro, formatProfesionalDisplay } from "@/lib/format/identity";
@@ -76,6 +77,10 @@ export interface SidebarProps {
   especialidad?: EspecialidadSlug;
   /** Override de especialidad activo (cuentas internas), o null. */
   especialidadOverride?: EspecialidadSlug | null;
+  /** Todas las membresías del user — con >1 se muestra el OrgSwitcher. */
+  memberships?: OrgSwitcherOption[];
+  /** Org activa de la sesión (para preseleccionar el OrgSwitcher). */
+  activeOrgId?: string;
 }
 
 export function Sidebar({
@@ -86,6 +91,8 @@ export function Sidebar({
   googleSync,
   especialidad,
   especialidadOverride,
+  memberships,
+  activeOrgId,
 }: SidebarProps) {
   const caps = capabilitiesFor(role, esColegiado);
   const navItems = NAV_ITEMS.filter((item) => !item.requires || item.requires(caps));
@@ -105,6 +112,10 @@ export function Sidebar({
           </span>
         </div>
       </div>
+
+      {memberships && activeOrgId ? (
+        <OrgSwitcher orgs={memberships} activeOrgId={activeOrgId} />
+      ) : null}
 
       {organization.isInternalAccount ? <InternalAccountBadge /> : null}
       {organization.isInternalAccount && especialidad ? (

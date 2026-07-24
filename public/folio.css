@@ -359,6 +359,31 @@ input:focus { outline: none; }
   background: var(--accent); color: #FBF9F4; font-weight: 500;
 }
 
+/* ── Selector de organización · users con más de una membresía ──────────── */
+.fi-org-switcher {
+  margin: 8px 12px 0;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.fi-org-switcher-lbl {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.4px;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.fi-org-switcher select {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm);
+  background: var(--surface, #fff);
+  color: var(--ink);
+  font-size: 12px; font-weight: 500; line-height: 1.3;
+  cursor: pointer;
+}
+.fi-org-switcher select:disabled { opacity: 0.6; cursor: default; }
+.fi-org-switcher select:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 1px;
+}
+.fi-org-switcher-err { font-size: 10.5px; color: var(--red); }
+
 /* ── Selector de especialidad · solo cuentas internas (demo/QA) ──────────── */
 .fi-esp-switcher {
   margin: 8px 12px 0;

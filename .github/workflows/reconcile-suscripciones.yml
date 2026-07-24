@@ -1,0 +1,45 @@
+# Folio · trigger de /api/cron/reconcile-suscripciones cada 2 horas.
+#
+# Por qué (B-7, auditoría pre-venta 2026-07-13): el cron diario de vercel.json
+# (plan Hobby: frecuencia mínima diaria) deja hasta ~24h de ventana si se
+# pierde el webhook de activación de MP — un cliente que pagó queda sin acceso
+# hasta la próxima corrida. La reconciliación es idempotente (watermark
+# mp_last_modified + UNIQUE mp_payment_id), así que correrla más seguido es
+# seguro. El cron diario de vercel.json queda como backstop.
+#
+# Mismo patrón que dispatch-recordatorios.yml. Requiere:
+#   - Secret de Actions `CRON_SECRET` = mismo valor que en Vercel.
+#   - (Opcional) Variable de Actions `APP_URL` si cambia el dominio.
+#
+# Nota: los schedules de Actions son best-effort y GitHub los pausa tras 60
+# días sin actividad en el repo — aceptable: el backstop diario sigue en Vercel.
+
+name: Cron · reconcile-suscripciones (2h)
+
+on:
+  schedule:
+    - cron: "0 */2 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: reconcile-suscripciones
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Invocar endpoint
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_URL: ${{ vars.APP_URL != '' && vars.APP_URL || 'https://folio-app-ten.vercel.app' }}
+        run: |
+          set -euo pipefail
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::Falta el secret de Actions CRON_SECRET (mismo valor que en Vercel)." >&2
+            exit 1
+          fi
+          curl --fail-with-body -sS -m 55 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_URL/api/cron/reconcile-suscripciones"

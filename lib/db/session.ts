@@ -85,6 +85,68 @@ export async function getActiveSession(): Promise<Result<ActiveSession>> {
 }
 
 /**
+ * Membresías activas del user con los datos de org que necesita el
+ * <OrgSwitcher /> del sidebar. RLS scopea: member por profile_id propio,
+ * organization por user_org_ids(). Soft-deletes filtrados app-side
+ * (convención del repo — ver docs/audit/known-gaps.md).
+ */
+export interface UserMembership {
+  organizationId: string;
+  memberId: string;
+  role: ActiveSession["role"];
+  organizationNombre: string;
+  organizationSlug: string;
+  isInternalAccount: boolean;
+}
+
+export async function listUserMemberships(): Promise<Result<UserMembership[]>> {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return err("auth_required", "No estás autenticado.");
+  }
+
+  const { data, error } = await supabase
+    .from("member")
+    .select(
+      "id, organization_id, role, organization:organization_id (nombre, slug, is_internal_account, deleted_at)",
+    )
+    .eq("profile_id", user.id)
+    .is("deleted_at", null);
+
+  if (error) {
+    return err("db_error", "Error obteniendo membresías.", error.message);
+  }
+
+  const memberships = (data ?? [])
+    // El FK member→organization es many-to-one: PostgREST devuelve un objeto,
+    // pero el cliente lo tipa como array — normalizamos ambos shapes.
+    .map((m) => {
+      const org = Array.isArray(m.organization) ? m.organization[0] : m.organization;
+      return { ...m, org };
+    })
+    .filter((m) => m.org && m.org.deleted_at === null)
+    .map((m) => ({
+      organizationId: m.organization_id as string,
+      memberId: m.id as string,
+      role: m.role as ActiveSession["role"],
+      organizationNombre: (m.org.nombre as string) ?? "",
+      organizationSlug: (m.org.slug as string) ?? "",
+      isInternalAccount: Boolean(m.org.is_internal_account),
+    }))
+    // Orgs reales primero, después las internas/demo; alfabético dentro de cada grupo.
+    .sort(
+      (a, b) =>
+        Number(a.isInternalAccount) - Number(b.isInternalAccount) ||
+        a.organizationNombre.localeCompare(b.organizationNombre, "es"),
+    );
+
+  return ok(memberships);
+}
+
+/**
  * Switchear la org activa (set cookie). Usado por <OrgSwitcher />.
  *
  * Defense in depth: valida que el user sea member ACTIVO de esa org antes

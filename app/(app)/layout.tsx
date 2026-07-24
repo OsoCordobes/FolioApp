@@ -18,6 +18,7 @@ import { redirect } from "next/navigation";
 import { EmailVerifyBanner } from "@/components/auth/email-verify-banner";
 import { Sidebar, type GoogleSyncStatus } from "@/components/sidebar";
 import { getActiveContext } from "@/lib/db/active-context";
+import { listUserMemberships } from "@/lib/db/session";
 import { BILLING_RECOVERY_PATH, shouldGateToBilling } from "@/lib/db/suscripcion";
 import {
   ESPECIALIDAD_OVERRIDE_COOKIE,
@@ -76,6 +77,17 @@ export default async function AppShellLayout({
 
   const googleSync = await loadGoogleSyncStatus(session.organizationId, session.memberId);
 
+  // Membresías para el OrgSwitcher (visible solo con >1). Fail-safe: un error
+  // acá no puede tirar el shell — se degrada a "sin switcher".
+  const membershipsResult = await listUserMemberships();
+  const memberships = membershipsResult.ok
+    ? membershipsResult.data.map((m) => ({
+        organizationId: m.organizationId,
+        organizationNombre: m.organizationNombre,
+        isInternalAccount: m.isInternalAccount,
+      }))
+    : [];
+
   // Override de especialidad (cuentas internas): para resaltar la vista activa
   // del selector del sidebar. Solo se lee si la org es interna.
   let especialidadOverride: EspecialidadSlug | null = null;
@@ -102,6 +114,8 @@ export default async function AppShellLayout({
         googleSync={googleSync}
         especialidad={organization.especialidad}
         especialidadOverride={especialidadOverride}
+        memberships={memberships}
+        activeOrgId={session.organizationId}
       />
       <main className="fi-main">
         {session.emailVerified === false ? (

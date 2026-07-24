@@ -7,7 +7,7 @@
 - **Modelo de negocio**: 30.000 ARS/mes fijos por organización (consultorio).
 - **Folio es merchant directo**: el dinero entra a la cuenta MP de Folio. No es marketplace.
 - **Sin OAuth de profesional**: el `MP_ACCESS_TOKEN` es de Folio. El profesional solo autoriza el preapproval con su tarjeta.
-- **Grace period**: 7 días desde el alta de la org antes de exigir suscripción activa.
+- **Grace period**: 30 días desde el alta de la org antes de exigir suscripción activa (7 días hasta 2026-07; fuente: `GRACE_PERIOD_DAYS` en `lib/db/suscripcion.ts`).
 
 ## Componentes
 
