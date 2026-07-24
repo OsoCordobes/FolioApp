@@ -5,14 +5,16 @@
  * placeholders @folio.app repartidos por la app (dominio que no es nuestro
  * — los mails rebotaban). Si el contacto cambia, se cambia ACÁ.
  *
- * soporte@foliosalud.com vive en el dominio propio (foliosalud.com) — el
- * buzón/forward lo administra el founder; un @gmail.com en la pantalla de
- * error de un SaaS médico de pago socavaba la percepción de seriedad.
+ * PENDIENTE (bloqueado por DNS): migrar a soporte@foliosalud.com cuando el
+ * dominio tenga MX + forwarding configurado por el founder. Al 2026-07-24
+ * foliosalud.com NO tiene registros MX — un mail a ese buzón rebota, y esta
+ * dirección aparece en pantallas de error, legales y el reply-to de todos
+ * los emails: hasta que el buzón reciba de verdad, se queda el Gmail.
  *
  * Es un string plano importable desde Server y Client Components.
  */
 
-export const SUPPORT_EMAIL = "soporte@foliosalud.com";
+export const SUPPORT_EMAIL = "folioasistencia@gmail.com";
 
 /** mailto: con subject opcional (URL-encoded). */
 export function supportMailto(subject?: string): string {

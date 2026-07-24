@@ -17,10 +17,10 @@ export const metadata: Metadata = {
  * prototipo original, se carga vía <link rel="stylesheet">.
  *
  * Cache-busting por deploy: next.config.ts sirve /folio.css con
- * `max-age=31536000, immutable`, así que el href DEBE cambiar en cada deploy
- * o los usuarios quedarían pegados a un CSS viejo — Vercel inyecta
- * VERCEL_GIT_COMMIT_SHA en build; en dev el fallback "dev" no cachea nada
- * relevante.
+ * `max-age=31536000, immutable` SOLO en producción, así que el href DEBE
+ * cambiar en cada deploy o los usuarios quedarían pegados a un CSS viejo —
+ * Vercel inyecta VERCEL_GIT_COMMIT_SHA en build. En dev el header immutable
+ * NO se emite (la URL fija ?v=dev dejaría estilos stale al editar folio.css).
  *
  * Fonts: Geist + Geist Mono + Fraunces (display variable, opsz 9..144 +
  * weights 400/500/600) via Google Fonts CDN. Fraunces se usa en
