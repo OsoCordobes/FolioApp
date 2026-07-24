@@ -30,6 +30,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { EspecialidadSwitcher } from "@/components/especialidad-switcher";
 import * as I from "@/components/icons";
 import { OrgSwitcher, type OrgSwitcherOption } from "@/components/org-switcher";
+import { InternalAccountBadge } from "@/components/sidebar";
 import { capabilitiesFor, type Capabilities, type Role } from "@/lib/auth/capabilities";
 import type { EspecialidadSlug } from "@/lib/especialidades/meta";
 import { useModalA11y } from "@/lib/use-modal-a11y";
@@ -188,6 +189,9 @@ function MobileMoreSheet({
         {memberships && activeOrgId ? (
           <OrgSwitcher orgs={memberships} activeOrgId={activeOrgId} />
         ) : null}
+        {/* Invariant M37: el flag interno nunca puede ser invisible — en
+            desktop lo muestra el sidebar; acá, el sheet. */}
+        {organization.isInternalAccount ? <InternalAccountBadge /> : null}
         {organization.isInternalAccount && especialidad ? (
           <EspecialidadSwitcher
             key={activeOrgId ?? organization.nombre}

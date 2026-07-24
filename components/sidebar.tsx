@@ -226,7 +226,9 @@ function SidebarSearch() {
  * Bypassing the billing gate without a visible marker is how internal flags
  * end up accidentally on paying customers.
  */
-function InternalAccountBadge() {
+// Exportado: el shell mobile (mobile-nav.tsx) lo renderiza en el sheet «Más» —
+// el invariant M37 exige que el flag interno NUNCA sea invisible, tampoco ≤920px.
+export function InternalAccountBadge() {
   return (
     <div
       className="fi-internal-badge"

@@ -81,9 +81,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           a una región ya existente en el árbol de accesibilidad. */}
       <div className="fi-toasts" aria-live="polite">
         {toasts.map((t) => (
+          // Sin role="status" por item: una live-region anidada en el
+          // contenedor aria-live duplica anuncios en NVDA/VoiceOver.
           <div
             key={t.id}
-            role="status"
             className={"fi-toast" + (t.tono === "error" ? " fi-toast--error" : "")}
           >
             <span className="fi-toast-ico" aria-hidden>

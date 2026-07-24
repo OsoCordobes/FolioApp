@@ -19488,3 +19488,18 @@ input:focus { outline: none; }
   .cal-mes-headers,
   .cal-mes-grid { min-width: 640px; }
 }
+
+/* ── Fase 3 fix review · mobile: BulkBar sobre la bottom-nav ─────────────────
+   .pd-bulk (fixed bottom:24px z-60) quedaba DETRAS de .fi-mnav (z-90, ~60px):
+   los botones de WhatsApp masivo eran inclickeables en telefono. Mismo offset
+   que .fi-fab/.fi-toasts + wrap para 375px. */
+@media (max-width: 920px) {
+  .pd-bulk {
+    bottom: calc(76px + env(safe-area-inset-bottom));
+    max-width: calc(100vw - 24px);
+    flex-wrap: wrap;
+    justify-content: center;
+    row-gap: 8px;
+    border-radius: var(--r-lg);
+  }
+}
