@@ -35,11 +35,28 @@ interface TurnoListProps {
 interface Group {
   id: string;
   label: string;
-  hoursRange: string;
+  /** Rango horario REAL del grupo ("08 – 12 hs"); null si no es derivable. */
+  hoursRange: string | null;
   turnos: Turno[];
 }
 
 const CANCELADOS_ESTADOS: EstadoTurno[] = ["cancelado", "no_asistio", "reagendado"];
+
+/**
+ * Rango horario real de un grupo, derivado de la primera y última hora de SUS
+ * turnos (antes: "09 – 12 hs" / "15 – 18 hs" hardcodeados del prototipo — un
+ * turno de 07:45 aparecía bajo un header que decía "09 – 12 hs").
+ */
+function rangoHorasGrupo(turnos: Turno[]): string | null {
+  const horas = turnos
+    .map((t) => parseInt(t.hora, 10))
+    .filter((h) => Number.isFinite(h) && h >= 0 && h <= 23);
+  if (horas.length === 0) return null;
+  const pad = (h: number) => String(h).padStart(2, "0");
+  const primera = Math.min(...horas);
+  const ultima = Math.max(...horas);
+  return primera === ultima ? `${pad(primera)} hs` : `${pad(primera)} – ${pad(ultima)} hs`;
+}
 
 export function TurnoList({ turnos, pacientes, nextId, now, timezone, onTransition, onOpenFicha, onReagendar, dense }: TurnoListProps) {
   const [showCerrados, setShowCerrados] = useState(true);
@@ -59,8 +76,8 @@ export function TurnoList({ turnos, pacientes, nextId, now, timezone, onTransiti
     const morning = activos.filter((t) => parseInt(t.hora) < 13);
     const afternoon = activos.filter((t) => parseInt(t.hora) >= 13);
     return [
-      { id: "manana", label: "Mañana", hoursRange: "09 – 12 hs", turnos: morning },
-      { id: "tarde", label: "Tarde", hoursRange: "15 – 18 hs", turnos: afternoon },
+      { id: "manana", label: "Mañana", hoursRange: rangoHorasGrupo(morning), turnos: morning },
+      { id: "tarde", label: "Tarde", hoursRange: rangoHorasGrupo(afternoon), turnos: afternoon },
     ];
   }, [activos]);
 
@@ -79,7 +96,7 @@ export function TurnoList({ turnos, pacientes, nextId, now, timezone, onTransiti
           <section key={g.id} className="fi-block">
             <header className="fi-block-head">
               <span className="fi-block-lbl">{g.label}</span>
-              <span className="fi-block-hours">{g.hoursRange}</span>
+              {g.hoursRange ? <span className="fi-block-hours">{g.hoursRange}</span> : null}
               <span className="fi-block-line" />
               <span className="fi-block-count">{g.turnos.length} turnos</span>
             </header>

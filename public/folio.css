@@ -19608,6 +19608,41 @@ input:focus { outline: none; }
   outline: none;
 }
 
+/* ─── C2 · Calendario: crear turno desde el slot (feat/calendario-pro) ────────
+   Click en un slot vacío de la columna del día crea un turno a esa hora
+   (redondeo 15'); el botón "+" del header de cada día es el mismo flujo por
+   teclado. Hint sutil: cursor pointer + tinte accent-soft en hover. */
+.cal-day-col.is-agendable { cursor: pointer; }
+.cal-day-col.is-agendable:hover {
+  background-color: color-mix(in oklab, var(--accent-soft) 45%, transparent);
+}
+.cal-day-add {
+  position: absolute;
+  top: 10px;
+  right: 8px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink-3);
+  cursor: pointer;
+  opacity: 0.4;
+  transition: opacity .12s ease, color .12s ease, border-color .12s ease;
+}
+.cal-day-head:hover .cal-day-add,
+.cal-day-add:focus-visible {
+  opacity: 1;
+}
+.cal-day-add:hover {
+  color: var(--accent-2);
+  border-color: var(--accent);
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    C3 · /hoy — fila de turno SIN drag handle (audit grado A: affordance muerta)
    El prototipo reservaba la primera columna (16px) de .fi-turno para .fi-drag,
