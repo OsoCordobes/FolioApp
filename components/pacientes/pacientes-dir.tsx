@@ -133,6 +133,15 @@ function TablaPacientes({ pacientes, selected, setSelected, onOpen, onAgendar, t
             Creá el primero con el botón <b>Nuevo paciente</b> de arriba, o esperá a que entre uno
             por tu link público de reservas.
           </p>
+          <p>
+            ¿Venís de una planilla o de otro sistema? Importá tu cartera completa desde un CSV —
+            Folio detecta duplicados por DNI y teléfono.
+          </p>
+          <div className="fi-empty-actions">
+            <a href="/configuracion/importar-pacientes" className="fi-btn fi-btn-secondary">
+              Importar pacientes desde CSV
+            </a>
+          </div>
         </div>
       );
     }

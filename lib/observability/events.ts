@@ -34,6 +34,14 @@ interface PacienteCreatedProps extends BaseEventProps {
   hasEmail: boolean;
 }
 
+interface PacientesImportedProps extends BaseEventProps {
+  /** Filas del archivo (sin encabezado). */
+  total: number;
+  importados: number;
+  duplicados: number;
+  errores: number;
+}
+
 interface TurnoCreatedProps extends BaseEventProps {
   source: "manual" | "calendario" | "ficha" | "booking" | "walkin";
   servicioId: string;
@@ -91,6 +99,21 @@ export const trackEvent = {
       },
     }),
 
+  // Un solo evento por importación (no uno por paciente): el volumen es
+  // parte de la señal y 500 `paciente.created` ensuciarían los funnels.
+  pacientesImported: (p: PacientesImportedProps) =>
+    captureServerEvent({
+      distinctId: p.orgId,
+      event: "pacientes.imported",
+      properties: {
+        total: p.total,
+        importados: p.importados,
+        duplicados: p.duplicados,
+        errores: p.errores,
+        org_id: p.orgId,
+      },
+    }),
+
   turnoCreated: (p: TurnoCreatedProps) =>
     captureServerEvent({
       distinctId: p.orgId,
@@ -144,6 +167,7 @@ export const EVENT_NAMES = {
   SIGNUP_COMPLETED: "signup.completed",
   ONBOARDING_COMPLETED: "onboarding.completed",
   PACIENTE_CREATED: "paciente.created",
+  PACIENTES_IMPORTED: "pacientes.imported",
   TURNO_CREATED: "turno.created",
   TURNO_CLOSED: "turno.closed",
   BOOKING_PUBLIC_COMPLETED: "booking_public.completed",

@@ -448,6 +448,7 @@ function SecConsultorio({
   membersActivos,
   montoActualCents,
   montoClinicaCents,
+  showImportarPacientes,
 }: {
   c: ConsultorioData;
   set: (patch: Partial<ConsultorioData>) => void;
@@ -467,6 +468,8 @@ function SecConsultorio({
   montoActualCents: number;
   /** Precio mensual como Clínica (centavos) con los seats actuales. */
   montoClinicaCents: number;
+  /** ¿Mostrar el acceso al importador CSV? (espejo de canCreatePacienteClinical). */
+  showImportarPacientes: boolean;
 }) {
   const router = useRouter();
   const [upgradeOpen, setUpgradeOpen] = useState(false);
@@ -640,6 +643,22 @@ function SecConsultorio({
           <TextInput prefix="@" value={c.instagram} onChange={(v) => set({ instagram: v })} />
         </Row>
       </Section>
+
+      {showImportarPacientes ? (
+        <Section
+          title="Pacientes"
+          sub="Traé tu cartera de pacientes desde otra planilla o sistema."
+        >
+          <Row
+            label="Importar desde CSV"
+            sub="Subí un CSV exportado de Excel o Google Sheets, mapeá las columnas y Folio crea los pacientes cifrados, sin duplicar por DNI o teléfono."
+          >
+            <a href="/configuracion/importar-pacientes" className="fi-btn fi-btn-ghost">
+              Importar pacientes →
+            </a>
+          </Row>
+        </Section>
+      ) : null}
     </>
   );
 }
@@ -1794,6 +1813,10 @@ interface ConfiguracionProps {
    * rol clínico (OWNER/PROFESIONAL/DIRECTOR colegiado — espeja can_read_clinical).
    * La página destino igual role-gatea (redirige a /configuracion); esto es UX. */
   showVinculaciones: boolean;
+  /** ¿Mostrar el acceso al importador CSV de pacientes? Espeja
+   * canCreatePacienteClinical (OWNER/PROFESIONAL/DIRECTOR) — la página destino
+   * igual role-gatea y el server action re-chequea. */
+  showImportarPacientes: boolean;
 }
 
 interface DirtyState {
@@ -1829,6 +1852,7 @@ export function Configuracion({
   suscripcionEstado,
   whatsappConfigured,
   showVinculaciones,
+  showImportarPacientes,
 }: ConfiguracionProps) {
   const [seccion, setSeccion] = useState<SeccionId>("consultorio");
   const [consultorio, setConsultorio] = useState<ConsultorioData>(initialConsultorio);
@@ -1964,6 +1988,7 @@ export function Configuracion({
               membersActivos={membersActivos}
               montoActualCents={montoActualCents}
               montoClinicaCents={montoClinicaCents}
+              showImportarPacientes={showImportarPacientes}
             />
           ) : null}
           {seccion === "equipo" && (canManageTeam || equipoSelf != null) ? (
