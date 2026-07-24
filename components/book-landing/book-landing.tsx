@@ -148,7 +148,7 @@ export function BookLanding({
               <span className="bl-confirm-note">
                 {org.autoConfirmar
                   ? "Confirmación al instante"
-                  : "Te confirmamos por WhatsApp"}
+                  : "El consultorio te confirma a la brevedad"}
               </span>
             </div>
             <p className="bl-trust-micro fm-mono">Datos cifrados · AES-256 · Ley 25.326</p>

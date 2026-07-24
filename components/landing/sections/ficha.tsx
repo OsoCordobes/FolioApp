@@ -29,7 +29,8 @@ export function Ficha() {
       <p className="sr-only">
         Ejemplo de ficha clínica de cardiología en Folio: panel cardiovascular con
         tensión arterial, frecuencia cardíaca, factores de riesgo y estudios, y un
-        selector de especialidad entre cardiología, psicología y quiropraxia.
+        selector de especialidad entre cardiología, psicología, quiropraxia,
+        kinesiología y nutrición.
       </p>
     </section>
   );

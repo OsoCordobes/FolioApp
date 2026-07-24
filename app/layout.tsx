@@ -16,6 +16,12 @@ export const metadata: Metadata = {
  * intactas, sin pasar por ningún bundler/postprocessor). Igual que en el
  * prototipo original, se carga vía <link rel="stylesheet">.
  *
+ * Cache-busting por deploy: next.config.ts sirve /folio.css con
+ * `max-age=31536000, immutable` SOLO en producción, así que el href DEBE
+ * cambiar en cada deploy o los usuarios quedarían pegados a un CSS viejo —
+ * Vercel inyecta VERCEL_GIT_COMMIT_SHA en build. En dev el header immutable
+ * NO se emite (la URL fija ?v=dev dejaría estilos stale al editar folio.css).
+ *
  * Fonts: Geist + Geist Mono + Fraunces (display variable, opsz 9..144 +
  * weights 400/500/600) via Google Fonts CDN. Fraunces se usa en
  * <PublicCard> hero, Step 9 reveal y mood "editorial" / "boutique";
@@ -32,6 +38,8 @@ export const metadata: Metadata = {
  * choice ('granted' | 'denied') persists in localStorage and gates the
  * PostHog SDK init inside FolioPostHogProvider.
  */
+const FOLIO_CSS_VERSION = process.env.VERCEL_GIT_COMMIT_SHA ?? "dev";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -46,7 +54,7 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&display=swap"
           rel="stylesheet"
         />
-        <link rel="stylesheet" href="/folio.css" />
+        <link rel="stylesheet" href={`/folio.css?v=${FOLIO_CSS_VERSION}`} />
       </head>
       <body>
         <FolioPostHogProvider>

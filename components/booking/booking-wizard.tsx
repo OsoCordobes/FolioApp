@@ -761,12 +761,16 @@ export function BookingWizard({
               </p>
             ) : (
               <p style={{ color: "var(--ink-3)", marginTop: 8, fontSize: 13, lineHeight: 1.6 }}>
-                Te van a confirmar por WhatsApp al <span className="fm-mono">{telefono}</span> en las próximas horas.
+                El consultorio va a revisar tu solicitud en las próximas horas.
                 {email ? (
                   <>
-                    <br />También te enviamos una confirmación a <span className="fm-mono">{email}</span> cuando el consultorio acepte.
+                    <br />Te va a llegar la confirmación por email a <span className="fm-mono">{email}</span> cuando la acepten.
                   </>
-                ) : null}
+                ) : (
+                  <>
+                    <br />Si necesitan coordinar algo, te contactan al <span className="fm-mono">{telefono}</span>.
+                  </>
+                )}
               </p>
             )}
             <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 24 }}>

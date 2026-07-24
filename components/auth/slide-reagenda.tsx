@@ -13,7 +13,7 @@
  *   T1500       Cursor entra desde abajo-derecha, viaja al botón
  *   T2100       Cursor sobre botón, click ripple, botón press
  *   T2400       Step 2 ✓, cursor fade out
- *   T2800       Step 3 activa · "Folio programa" + WhatsApp glyph
+ *   T2800       Step 3 activa · "Folio programa" + glyph campana
  *   T3500       Step 3 ✓
  *   T3900       Bottom banner sube · "próxima cita queda lista"
  */
@@ -38,7 +38,7 @@ function Check() {
 //   1100 → step 1 ✓
 //   1500 → cursor entra desde abajo-derecha
 //   2500 → step 2 ✓ (click ripple + button press)
-//   2900 → step 3 activa "Folio programa" + WhatsApp glyph
+//   2900 → step 3 activa "Folio programa" + glyph campana
 //   3600 → step 3 ✓
 //   4000 → bottom banner "próxima cita queda lista" sube
 const PHASES_REAGENDA = [400, 1100, 1500, 2500, 2900, 3600, 4000] as const;
@@ -120,14 +120,15 @@ export function SlideReagenda({ active }: Props) {
           <div className="au2-rea2-step-body">
             <span className="au2-rea2-step-actor">
               <span className="au2-rea2-step-actor-glyph au2-rea2-step-wa">
-                <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M17.6 6.3A7.85 7.85 0 0 0 12 4a7.94 7.94 0 0 0-6.88 11.9L4 20l4.2-1.1a7.93 7.93 0 0 0 3.84.98 7.94 7.94 0 0 0 7.94-7.94 7.9 7.9 0 0 0-2.4-5.6z" />
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0" />
                 </svg>
               </span>
               <span>folio programa</span>
             </span>
             <span className="au2-rea2-step-content">
-              <span>recordatorio por WhatsApp</span>
+              <span>recordatorio automático</span>
               <span className="au2-rea2-step-meta">24h antes · auto</span>
             </span>
           </div>

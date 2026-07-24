@@ -193,7 +193,7 @@ export async function createPedidoPublico(
   // podía reservar contra orgs deslistadas/borradas o servicios inactivos.
   const { data: org } = await service
     .from("organization")
-    .select("id, auto_confirmar_reservas, opt_out_public_listing, slot_margen_min")
+    .select("id, auto_confirmar_reservas, opt_out_public_listing, slot_margen_min, is_internal_account")
     .eq("slug", parsed.data.orgSlug)
     .is("deleted_at", null)
     .maybeSingle();
@@ -380,10 +380,12 @@ export async function createPedidoPublico(
 
   // Business event: pedido público creado (Sprint 2 T2.2). distinctId =
   // org.slug porque el pedido es anónimo (no hay user authenticated en el
-  // contexto público); tracking a nivel org.
+  // contexto público); tracking a nivel org. isInternal filtra las reservas
+  // de prueba contra los consultorios demo-* del funnel.
   void trackEvent.bookingPublicCompleted({
     orgSlug: parsed.data.orgSlug,
     servicioId: servicio.id,
+    isInternal: Boolean(org.is_internal_account),
   });
 
   // Auto-confirmación configurable (M43). Si la org lo tiene activado y hay un
@@ -458,6 +460,7 @@ export async function createPedidoPublico(
       telefono: parsed.data.telefono,
       email: parsed.data.email ?? null,
       motivo: parsed.data.motivo ?? null,
+      orgEsInterna: Boolean(org.is_internal_account),
     });
 
     if (promote.ok) {

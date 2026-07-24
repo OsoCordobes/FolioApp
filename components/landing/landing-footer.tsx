@@ -10,6 +10,7 @@
 import Link from "next/link";
 
 import { FolioMark } from "@/components/folio-mark";
+import { SUPPORT_EMAIL, supportMailto } from "@/lib/support";
 
 const COLUMNAS = [
   {
@@ -39,7 +40,9 @@ const COLUMNAS = [
   },
   {
     titulo: "Contacto",
-    links: [{ href: "mailto:soporte@folio.app", label: "soporte@folio.app" }],
+    // Fuente única del email de soporte (lib/support.ts) — no hardcodear acá:
+    // el buzón @foliosalud.com recién existe cuando el dominio tenga MX.
+    links: [{ href: supportMailto(), label: SUPPORT_EMAIL }],
   },
 ] as const;
 

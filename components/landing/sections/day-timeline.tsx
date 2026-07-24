@@ -36,7 +36,7 @@ const SCENES: DayScene[] = [
   {
     id: "a",
     hour: "10:30",
-    text: "Estás en sesión. Belén reserva su turno y la confirmación por WhatsApp sale automáticamente.",
+    text: "Estás en sesión. Belén reserva su turno y la confirmación sale automáticamente.",
     visual: <SceneReserva />,
   },
   {

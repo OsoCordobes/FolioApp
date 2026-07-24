@@ -14,10 +14,27 @@
  * Si POSTHOG_KEY no está configurada, los calls son no-op (no rompen).
  */
 
-import { captureServerEvent } from "./posthog";
+import { captureServerEvent, type CaptureInput } from "./posthog";
 
 interface BaseEventProps {
   orgId: string;
+  /**
+   * `organization.is_internal_account` (M37) del contexto del caller. Con
+   * `true` el evento NO se captura: las orgs internas/demo (demo-*,
+   * lorenzomj925, folioasistencia) no deben ensuciar el funnel de PostHog
+   * cuando se enciendan las keys. Opcional para no romper call sites que no
+   * tienen la org cargada — undefined captura normal (orgs reales).
+   */
+  isInternal?: boolean;
+}
+
+/** Guard central: las orgs internas/demo no generan eventos de negocio. */
+function captureUnlessInternal(
+  isInternal: boolean | undefined,
+  input: CaptureInput,
+): Promise<void> {
+  if (isInternal === true) return Promise.resolve();
+  return captureServerEvent(input);
 }
 
 interface SignupCompletedProps extends BaseEventProps {
@@ -47,6 +64,8 @@ interface TurnoClosedProps extends BaseEventProps {
 interface BookingPublicCompletedProps {
   orgSlug: string;
   servicioId: string;
+  /** Mismo semántica que BaseEventProps.isInternal (acá no hay orgId). */
+  isInternal?: boolean;
 }
 
 interface SoapAutosavedProps extends BaseEventProps {
@@ -66,21 +85,21 @@ interface DocumentoUploadedProps extends BaseEventProps {
  */
 export const trackEvent = {
   signupCompleted: (p: SignupCompletedProps) =>
-    captureServerEvent({
+    captureUnlessInternal(p.isInternal, {
       distinctId: p.orgId,
       event: "signup.completed",
       properties: { source: p.source, org_id: p.orgId },
     }),
 
   onboardingCompleted: (p: OnboardingCompletedProps) =>
-    captureServerEvent({
+    captureUnlessInternal(p.isInternal, {
       distinctId: p.orgId,
       event: "onboarding.completed",
       properties: { steps_completed: p.stepsCompleted, org_id: p.orgId },
     }),
 
   pacienteCreated: (p: PacienteCreatedProps) =>
-    captureServerEvent({
+    captureUnlessInternal(p.isInternal, {
       distinctId: p.orgId,
       event: "paciente.created",
       properties: {
@@ -92,14 +111,14 @@ export const trackEvent = {
     }),
 
   turnoCreated: (p: TurnoCreatedProps) =>
-    captureServerEvent({
+    captureUnlessInternal(p.isInternal, {
       distinctId: p.orgId,
       event: "turno.created",
       properties: { source: p.source, servicio_id: p.servicioId, org_id: p.orgId },
     }),
 
   turnoClosed: (p: TurnoClosedProps) =>
-    captureServerEvent({
+    captureUnlessInternal(p.isInternal, {
       distinctId: p.orgId,
       event: "turno.closed",
       properties: {
@@ -110,21 +129,21 @@ export const trackEvent = {
     }),
 
   bookingPublicCompleted: (p: BookingPublicCompletedProps) =>
-    captureServerEvent({
+    captureUnlessInternal(p.isInternal, {
       distinctId: p.orgSlug,
       event: "booking_public.completed",
       properties: { org_slug: p.orgSlug, servicio_id: p.servicioId },
     }),
 
   soapAutosaved: (p: SoapAutosavedProps) =>
-    captureServerEvent({
+    captureUnlessInternal(p.isInternal, {
       distinctId: p.orgId,
       event: "soap.autosaved",
       properties: { turno_id: p.turnoId, org_id: p.orgId },
     }),
 
   documentoUploaded: (p: DocumentoUploadedProps) =>
-    captureServerEvent({
+    captureUnlessInternal(p.isInternal, {
       distinctId: p.orgId,
       event: "documento.uploaded",
       properties: {

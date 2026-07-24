@@ -20,6 +20,10 @@
  *     'sin canal de contacto' (consume presupuesto de intentos como
  *     cualquier falla). La decisión es pura: `decideCanalRecordatorio`.
  *   - Éxito: enviado_ts = now() + canal ('whatsapp' | 'email')
+ *   - Email simulado (sin RESEND_API_KEY): enviado_ts + error_msg "envío
+ *     simulado (…)" — no se reintenta pero la DB NO reporta entrega real.
+ *     Email fallido (Resend error): SIN enviado_ts, se reintenta (máx 5).
+ *     Matriz completa en `decideMarcaEmailRecordatorio`.
  *   - Falla: error_msg = mensaje (el claim ya incrementó intentos; 5 máx)
  *
  * Semántica de `intentos`: cuenta intentos INICIADOS (el claim incrementa
@@ -53,6 +57,7 @@ import { decryptColumn, tryDecrypt } from "@/lib/crypto";
 import {
   decideCanalRecordatorio,
   decideClaimRecordatorio,
+  decideMarcaEmailRecordatorio,
   decideSkipRecordatorioOrgInterna,
 } from "@/lib/db/recordatorios";
 import { sendEmail } from "@/lib/email/client";
@@ -366,14 +371,31 @@ async function processJob(
               memoCorto: memo,
             });
 
-    // sendEmail es fail-safe (nunca lanza; sin RESEND_API_KEY simula). El job
-    // queda enviado por email — mismo contrato best-effort que los emails de
-    // booking.
-    await sendEmail({ to: email, subject, html });
+    // sendEmail es fail-safe (nunca lanza) pero HONESTO: devuelve un resultado
+    // discriminado. La matriz resultado → efecto en el job es una decisión
+    // pura (decideMarcaEmailRecordatorio, lib/db/recordatorios.ts):
+    //   'sent'      → enviado_ts + canal, sin error_msg (entrega real).
+    //   'simulated' → enviado_ts + canal + error_msg "envío simulado (…)":
+    //                 sin RESEND_API_KEY reintentar quemaría los 5 intentos
+    //                 en ruido, pero la DB deja constancia de que el paciente
+    //                 NO recibió nada (antes se marcaba como éxito y el
+    //                 profesional creía que el anti-ausencias funcionaba).
+    //   'failed'    → SIN enviado_ts: throw → el caller escribe error_msg y
+    //                 el presupuesto de intentos (el claim ya incrementó)
+    //                 permite reintentar fallas transitorias de Resend.
+    const resultado = await sendEmail({ to: email, subject, html });
+    const marca = decideMarcaEmailRecordatorio(resultado);
+    if (!marca.marcarEnviado) {
+      throw new Error(marca.errorMsg ?? "envío email falló");
+    }
 
     await service
       .from("recordatorio_job")
-      .update({ enviado_ts: new Date().toISOString(), error_msg: null, canal: "email" })
+      .update({
+        enviado_ts: new Date().toISOString(),
+        error_msg: marca.errorMsg,
+        canal: "email",
+      })
       .eq("id", job.id);
     return;
   }

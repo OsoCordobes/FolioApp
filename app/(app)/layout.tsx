@@ -98,6 +98,12 @@ export default async function AppShellLayout({
 
   return (
     <div className="fi-app">
+      {/* Skip-link (a11y): con nav + búsqueda + switchers antes del contenido,
+          un usuario de teclado tabula ~10 veces por página sin esto. Mismo
+          patrón .fl-skip del landing, espejado como .fi-skip para el shell. */}
+      <a className="fi-skip" href="#main">
+        Saltar al contenido
+      </a>
       <Sidebar
         organization={{
           nombre: organization.nombre,
@@ -117,7 +123,7 @@ export default async function AppShellLayout({
         memberships={memberships}
         activeOrgId={session.organizationId}
       />
-      <main className="fi-main">
+      <main className="fi-main" id="main" tabIndex={-1}>
         {session.emailVerified === false ? (
           <EmailVerifyBanner email={session.email} />
         ) : null}
