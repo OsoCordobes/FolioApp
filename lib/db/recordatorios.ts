@@ -18,6 +18,7 @@
  * scheduled_ts = closed_ts + 2h.
  */
 
+import type { SendEmailResult } from "@/lib/email/client";
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
 
 import { err, ok, type Result } from "./errors";
@@ -89,6 +90,47 @@ export function decideCanalRecordatorio(input: {
     return "whatsapp";
   }
   return input.emailPresente ? "email" : "ninguno";
+}
+
+/** Efecto de un intento de envío por email sobre la fila `recordatorio_job`. */
+export interface MarcaEmailRecordatorio {
+  /** true → setear enviado_ts (el job no se vuelve a pickear). */
+  marcarEnviado: boolean;
+  /** Texto para error_msg (null = envío real OK, sin nada que aclarar). */
+  errorMsg: string | null;
+}
+
+/**
+ * Decisión pura: qué escribir en `recordatorio_job` según el resultado
+ * discriminado de `sendEmail` (lib/email/client.ts). Matriz completa:
+ *
+ *   - 'sent'      → enviado_ts + error_msg null. Éxito real.
+ *   - 'simulated' → enviado_ts + error_msg "envío simulado (…)". Sin
+ *                   RESEND_API_KEY reintentar es inútil (toda corrida
+ *                   posterior simularía igual y quemaría los 5 intentos en
+ *                   ruido); se marca procesado PERO el error_msg deja
+ *                   registro honesto de que ningún paciente recibió nada.
+ *   - 'failed'    → SIN enviado_ts + error_msg con el error real. El claim
+ *                   ya incrementó `intentos`, así que una falla transitoria
+ *                   de Resend se reintenta en la próxima corrida (máx 5).
+ *
+ * La DB nunca miente: enviado_ts sin error_msg significa entrega real
+ * confirmada por el proveedor; cualquier otra cosa queda explicada.
+ */
+export function decideMarcaEmailRecordatorio(
+  resultado: SendEmailResult,
+): MarcaEmailRecordatorio {
+  switch (resultado.status) {
+    case "sent":
+      return { marcarEnviado: true, errorMsg: null };
+    case "simulated":
+      return {
+        marcarEnviado: true,
+        errorMsg: "envío simulado (sin RESEND_API_KEY) — el paciente NO recibió el email",
+      };
+    case "failed":
+      return { marcarEnviado: false, errorMsg: `envío email falló: ${resultado.detail}` };
+  }
 }
 
 interface ScheduleInput {

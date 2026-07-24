@@ -18938,3 +18938,35 @@ input:focus { outline: none; }
   border: 1px dashed var(--line);
   border-radius: var(--r-md);
 }
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * APP SHELL · Skip-link (honestidad operativa · a11y)
+ * Espejo de .fl-skip del landing (folio.css:13474) para el shell logueado:
+ * visualmente oculto hasta recibir foco de teclado, apunta a #main en
+ * .fi-main. Solo tokens var() existentes; append-only.
+ * ─────────────────────────────────────────────────────────────────────────── */
+.fi-skip {
+  position: absolute;
+  left: var(--space-3);
+  top: -100px;
+  z-index: 60;
+  padding: 10px 16px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-2);
+  text-decoration: none;
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+.fi-skip:focus-visible {
+  top: var(--space-3);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* El target del skip-link recibe foco programático (tabindex="-1"); el anillo
+   de foco ahí es ruido visual — el foco real sigue siendo visible al tabular. */
+.fi-main:focus {
+  outline: none;
+}
