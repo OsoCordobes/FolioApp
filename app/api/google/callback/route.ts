@@ -1,8 +1,13 @@
 /**
  * Folio · /api/google/callback
  *
- * OAuth callback de Google Calendar. Recibe `code` + `state` (memberId),
- * exchange por tokens y los guarda cifrados en `integration`.
+ * OAuth callback de Google Calendar. Recibe `code` + `state` y hace exchange
+ * por tokens que guarda cifrados en `integration`.
+ *
+ * `state` = `<memberId>` o `<memberId>:onb`. El sufijo `:onb` lo agrega
+ * connectGoogleCalendar("onboarding") (Step 7 del wizard): con él, el
+ * callback vuelve a /onboarding?gcal=ok|error en vez de /configuracion —
+ * antes el flujo expulsaba del wizard y el resume rebotaba al Step 6.
  *
  * Después dispara sync inicial: 30 días siguientes de eventos como bloqueos.
  */
@@ -22,16 +27,25 @@ export const maxDuration = 60;
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const state = searchParams.get("state");                      // memberId
+  const rawState = searchParams.get("state");
   const error = searchParams.get("error");
 
-  if (error) {
-    return NextResponse.redirect(
-      `${origin}/configuracion?error=${encodeURIComponent(error)}#integraciones`,
+  // state = "<memberId>" | "<memberId>:onb" (retorno al wizard de onboarding).
+  const [memberId, stateFlag] = (rawState ?? "").split(":");
+  const fromOnboarding = stateFlag === "onb";
+
+  const failRedirect = (errCode: string) =>
+    NextResponse.redirect(
+      fromOnboarding
+        ? `${origin}/onboarding?gcal=error&reason=${encodeURIComponent(errCode)}`
+        : `${origin}/configuracion?error=${encodeURIComponent(errCode)}#integraciones`,
     );
+
+  if (error) {
+    return failRedirect(error);
   }
-  if (!code || !state) {
-    return NextResponse.redirect(`${origin}/configuracion?error=missing_params#integraciones`);
+  if (!code || !memberId) {
+    return failRedirect("missing_params");
   }
 
   const supabase = await createSupabaseServerClient();
@@ -46,24 +60,24 @@ export async function GET(request: NextRequest) {
   const { data: member } = await supabase
     .from("member")
     .select("id, organization_id")
-    .eq("id", state)
+    .eq("id", memberId)
     .eq("profile_id", user.id)
     .maybeSingle();
 
   if (!member) {
-    return NextResponse.redirect(`${origin}/configuracion?error=invalid_state#integraciones`);
+    return failRedirect("invalid_state");
   }
 
   try {
     const tokens = await exchangeCodeForTokens(code);
     if (!tokens.access_token || !tokens.refresh_token) {
-      return NextResponse.redirect(`${origin}/configuracion?error=no_tokens#integraciones`);
+      return failRedirect("no_tokens");
     }
 
     const accessCifrado = encryptColumn(tokens.access_token);
     const refreshCifrado = encryptColumn(tokens.refresh_token);
     if (!accessCifrado || !refreshCifrado) {
-      return NextResponse.redirect(`${origin}/configuracion?error=encrypt_failed#integraciones`);
+      return failRedirect("encrypt_failed");
     }
 
     await supabase
@@ -88,13 +102,13 @@ export async function GET(request: NextRequest) {
       );
 
     return NextResponse.redirect(
-      `${origin}/configuracion?ok=google_connected#integraciones`,
+      fromOnboarding
+        ? `${origin}/onboarding?gcal=ok`
+        : `${origin}/configuracion?ok=google_connected#integraciones`,
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : "unknown";
     console.error("[google oauth callback]", msg);
-    return NextResponse.redirect(
-      `${origin}/configuracion?error=${encodeURIComponent("oauth_failed")}#integraciones`,
-    );
+    return failRedirect("oauth_failed");
   }
 }

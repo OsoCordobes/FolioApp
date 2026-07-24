@@ -19,12 +19,17 @@ import { type Result, err, ok } from "./errors";
 export interface OnboardingResumeState {
   /** false si el user todavía NO terminó. Si true, redirigir a /hoy. */
   shouldShowOnboarding: boolean;
-  /** Step en el que arrancar (2-9). 9 si ya está completo. */
+  /** Step en el que arrancar (2-8). 8 si ya está completo. */
   initialStep: number;
   /** Slug actual de la org (provisional o ya editado por el user). */
   slug: string | null;
   /** OrganizationId — necesario para auto-save por step. */
   organizationId: string | null;
+  /**
+   * true si el member ya conectó Google Calendar (row en `integration`).
+   * El Step 7 del wizard lo usa para renderizar "Conectado ✓".
+   */
+  googleConnected: boolean;
   /** Datos pre-llenados de los steps anteriores. Cliente los carga al state. */
   initialData: {
     email: string;
@@ -99,6 +104,7 @@ export async function getOnboardingResumeState(
       initialStep: 1,
       slug: null,
       organizationId: null,
+      googleConnected: false,
       initialData: { email },
     });
   }
@@ -134,6 +140,7 @@ export async function getOnboardingResumeState(
       initialStep: 1,
       slug: null,
       organizationId: null,
+      googleConnected: false,
       initialData: { email },
     });
   }
@@ -187,16 +194,18 @@ export async function getOnboardingResumeState(
   if (org.onboarding_completed) {
     return ok({
       shouldShowOnboarding: false,
-      initialStep: 9,
+      initialStep: 8,
       slug: org.slug,
       organizationId: org.id,
+      googleConnected: false,
       initialData: { email },
     });
   }
 
   // Caso C: onboarding incompleto → resumir donde quedó.
   // Resume al MAYOR de: step_max guardado, o step 2 si recién pasó signup.
-  const resumeStep = Math.max(org.onboarding_step_max, 2);
+  // Clamp a 8: filas legacy del wizard de 9 pasos pueden traer step_max=9.
+  const resumeStep = Math.min(Math.max(org.onboarding_step_max, 2), 8);
 
   // Desencriptar PII del profile (con fallback null si falla).
   const tryDecrypt = (v: string | null | undefined): string | undefined => {
@@ -253,11 +262,22 @@ export async function getOnboardingResumeState(
     }
   }
 
+  // Estado real de la integración Google Calendar del member (Step 7 muestra
+  // "Conectado ✓" en vez del botón de conectar).
+  const { data: gcalRow } = await service
+    .from("integration")
+    .select("id")
+    .eq("organization_id", org.id)
+    .eq("profesional_id", member.id)
+    .eq("proveedor", "GOOGLE_CALENDAR")
+    .maybeSingle();
+
   return ok({
     shouldShowOnboarding: true,
     initialStep: resumeStep,
     slug: org.slug,
     organizationId: org.id,
+    googleConnected: Boolean(gcalRow),
     initialData: {
       email,
       nombre: tryDecrypt(prof.nombre_cifrado),
@@ -265,7 +285,11 @@ export async function getOnboardingResumeState(
       matricula: prof.matricula ?? undefined,
       consultorioNombre: org.nombre ?? undefined,
       rubro: org.rubro ?? undefined,
-      especialidad: org.especialidad ?? undefined,
+      // La columna especialidad tiene DEFAULT 'quiropraxia' (M50): recién es
+      // una ELECCIÓN del user cuando rubro está seteado (Step 3 los escribe
+      // en lockstep). Sin este gate, el resume re-preseleccionaba quiropraxia
+      // y anulaba el "sin preselección" del wizard.
+      especialidad: org.rubro ? (org.especialidad ?? undefined) : undefined,
       tipo: org.tipo ?? undefined,
       ciudad: org.ciudad ?? undefined,
       provincia: org.provincia ?? undefined,

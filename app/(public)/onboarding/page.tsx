@@ -1,7 +1,7 @@
 /**
  * Folio · /onboarding (Server Component)
  *
- * Wizard de 9 pasos premium con resume state.
+ * Wizard de 8 pasos premium con resume state.
  *
  * Si el user llega ya logueado (auth.user existe), leemos su estado de DB:
  *   - Si onboarding_completed=true → redirect /hoy (no debería estar acá).
@@ -40,6 +40,8 @@ export default async function OnboardingPage() {
   // que mostrar el form de email+password de Step 1 — basta con consent +
   // bootstrap (los users de Google OAuth no tienen password de Supabase).
   let authedEmail: string | undefined;
+  // Estado real de la integración Google Calendar (Step 7: "Conectado ✓").
+  let googleConnected = false;
 
   if (user) {
     authedEmail = user.email ?? undefined;
@@ -53,6 +55,7 @@ export default async function OnboardingPage() {
       initialData = result.data.initialData as Record<string, unknown>;
       organizationId = result.data.organizationId ?? undefined;
       initialSlug = result.data.slug ?? undefined;
+      googleConnected = result.data.googleConnected;
     } else {
       // No silenciar errores de DB: si no podemos leer el estado del wizard,
       // mandamos al user a /hoy con su sesión activa. El layout (app) tiene
@@ -75,6 +78,7 @@ export default async function OnboardingPage() {
           initialSlug={initialSlug}
           authedEmail={authedEmail}
           planPriceCents={MP_PLAN_PRICE_CENTS}
+          googleConnected={googleConnected}
         />
       </Suspense>
     </MotionProvider>
