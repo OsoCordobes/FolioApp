@@ -1077,15 +1077,20 @@ export function Calendario({
   // de la semana (sin filtros de estado/pedidos — el rango no salta al togglear
   // chips). Antes: hardcode 08–19 que clipeaba un turno de 07:30 o 19:30.
   const rangoHorario = useMemo(() => {
+    // Pedidos acotados a la semana VISIBLE: la query de pedidos es org-wide
+    // (para la bandeja), y un pedido pendiente a las 06:30 dentro de 3
+    // semanas expandía la grilla de TODAS las semanas con horas vacías.
+    // Turnos/bloqueos ya vienen week-scoped del fetcher.
+    const semana = new Set(weekDates);
     const eventos: EventoHorario[] = [
       ...turnos.map((t) => ({ hora: t.hora, dur: t.dur })),
       ...bloqueos.map((b) => ({ hora: b.hora, dur: b.dur })),
       ...pedidos
-        .filter((p) => p.estado === "pendiente" && p.fecha && p.hora)
+        .filter((p) => p.estado === "pendiente" && p.fecha && semana.has(p.fecha) && p.hora)
         .map((p) => ({ hora: p.hora, dur: p.dur })),
     ];
     return deriveRangoHorario({ eventos, disponibilidad: rangoDisponibilidadMin });
-  }, [turnos, bloqueos, pedidos, rangoDisponibilidadMin]);
+  }, [turnos, bloqueos, pedidos, rangoDisponibilidadMin, weekDates]);
 
   return (
     <div className="fi-content cal-content">
