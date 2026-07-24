@@ -10,7 +10,10 @@
  *  - servicio + cronómetro vivo si "atendiendo"
  *  - CTA contextual según estado (Marcar llegada / Abrir ficha / Cerrar turno)
  *  - menú "⋮" con las acciones secundarias (Reagendar / No asistió / Cancelar)
- *  - drag handle (drag-and-drop habilitado en F4)
+ *
+ * El drag handle del prototipo se quitó (audit C3): era una affordance
+ * muerta — no hay drag-and-drop implementado. Si algún día llega el DnD,
+ * volver a montar `.fi-drag` junto con su handler real.
  */
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -124,10 +127,6 @@ export function TurnoRow({ turno, paciente, isNext, now, timezone, onTransition,
         .filter(Boolean)
         .join(" ")}
     >
-      <span className="fi-drag" aria-hidden>
-        <I.Drag size={14} />
-      </span>
-
       <div className="fi-t-time">
         <b>{turno.hora}</b>
         {turno.gcal ? (
