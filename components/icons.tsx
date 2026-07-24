@@ -300,3 +300,12 @@ export const Copy = ({ size, ...rest }: IconProps) => (
     <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
   </svg>
 );
+
+/** "Más" (ellipsis horizontal) — trigger del sheet de la bottom-nav mobile. */
+export const More = ({ size, ...rest }: IconProps) => (
+  <svg {...baseAttrs(size)} {...rest}>
+    <circle cx="5" cy="12" r="1" fill="currentColor" />
+    <circle cx="12" cy="12" r="1" fill="currentColor" />
+    <circle cx="19" cy="12" r="1" fill="currentColor" />
+  </svg>
+);

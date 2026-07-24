@@ -19,9 +19,10 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import * as I from "@/components/icons";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { nombreCortoProfesional } from "@/lib/agenda/profesional";
 import { minutesTo, STATE_CONF } from "@/lib/dashboard-helpers";
-import { canTransition } from "@/lib/turno-states";
+import { canTransition, TURNO_STATE_CONF } from "@/lib/turno-states";
 import { useLiveTimer } from "@/lib/use-live-timer";
 import type { EstadoTurno, Paciente, Turno } from "@/lib/types";
 
@@ -136,9 +137,16 @@ export function TurnoRow({ turno, paciente, isNext, now, timezone, onTransition,
         ) : null}
       </div>
 
-      <span className="fi-t-dot-wrap">
-        <span className="fi-t-dot" style={{ background: conf.dot }} />
-        {isAtendiendo ? <span className="fi-t-dot-pulse" style={{ background: conf.dot }} /> : null}
+      {/* A11y (WCAG 1.4.1): el estado se comunicaba SOLO con el color del dot.
+          title = tooltip con la explicación (lib/turno-states) + sr-only con el
+          label — mismo patrón que CerradoRow. Cero cambio visual. */}
+      <span
+        className="fi-t-dot-wrap"
+        title={TURNO_STATE_CONF[turno.estado]?.tip ?? conf.label}
+      >
+        <span className="fi-t-dot" style={{ background: conf.dot }} aria-hidden />
+        {isAtendiendo ? <span className="fi-t-dot-pulse" style={{ background: conf.dot }} aria-hidden /> : null}
+        <span className="sr-only">{conf.label}</span>
       </span>
 
       <div className="fi-t-who">
@@ -232,6 +240,9 @@ function TurnoOverflowMenu({
   onCancelar,
 }: TurnoOverflowMenuProps) {
   const [open, setOpen] = useState(false);
+  /** Acción terminal pendiente de confirmación (ConfirmDialog con diseño,
+      reemplaza a los window.confirm nativos que rompían el tema). */
+  const [confirmar, setConfirmar] = useState<"no_asistio" | "cancelar" | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -258,8 +269,9 @@ function TurnoOverflowMenu({
     };
   }, [open]);
 
-  // Helper: ejecuta la acción y cierra el menú. Las que tienen window.confirm
-  // preservan el guard (acciones terminales en la UI).
+  // Helper: ejecuta la acción y cierra el menú. Las terminales (No asistió /
+  // Cancelar) primero abren el ConfirmDialog — el guard sigue existiendo, solo
+  // que con el diseño de la casa en vez del confirm nativo del browser.
   const run = (fn: () => void) => {
     setOpen(false);
     fn();
@@ -306,13 +318,7 @@ function TurnoOverflowMenu({
               type="button"
               role="menuitem"
               className="fi-t-menu-item"
-              onClick={() =>
-                run(() => {
-                  if (typeof window === "undefined") return;
-                  if (!window.confirm(`¿Marcar que ${pacienteNombre} no asistió? El turno queda registrado como "No asistió".`)) return;
-                  onNoAsistio();
-                })
-              }
+              onClick={() => run(() => setConfirmar("no_asistio"))}
               title="El paciente no se presentó"
             >
               No asistió
@@ -323,19 +329,34 @@ function TurnoOverflowMenu({
               type="button"
               role="menuitem"
               className="fi-t-menu-item fi-t-menu-item--danger"
-              onClick={() =>
-                run(() => {
-                  if (typeof window === "undefined") return;
-                  if (!window.confirm(`¿Cancelar el turno de ${pacienteNombre}? Esta acción queda en el audit log y no se puede borrar.`)) return;
-                  onCancelar();
-                })
-              }
+              onClick={() => run(() => setConfirmar("cancelar"))}
               title="Cancelar turno"
             >
               Cancelar
             </button>
           ) : null}
         </div>
+      ) : null}
+
+      {confirmar === "no_asistio" ? (
+        <ConfirmDialog
+          titulo={`¿Marcar que ${pacienteNombre} no asistió?`}
+          mensaje="El turno queda registrado como «No asistió»."
+          confirmLabel="Marcar no asistió"
+          onConfirm={onNoAsistio}
+          onClose={() => setConfirmar(null)}
+        />
+      ) : null}
+      {confirmar === "cancelar" ? (
+        <ConfirmDialog
+          titulo={`¿Cancelar el turno de ${pacienteNombre}?`}
+          mensaje="Esta acción queda en el audit log y no se puede borrar."
+          confirmLabel="Cancelar turno"
+          cancelLabel="Volver"
+          variant="danger"
+          onConfirm={onCancelar}
+          onClose={() => setConfirmar(null)}
+        />
       ) : null}
     </div>
   );

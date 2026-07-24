@@ -15,7 +15,12 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 
 import { reagendarTurnoAction } from "@/app/(app)/hoy/actions";
-import { isoToLocalDatetimeExact, localDatetimeToIso } from "@/lib/datetime-local";
+import { useToast } from "@/components/ui/toast";
+import {
+  isoToLocalDatetimeExact,
+  localDatetimeToIso,
+  localDatetimeToastLabel,
+} from "@/lib/datetime-local";
 import { useModalA11y } from "@/lib/use-modal-a11y";
 
 interface TurnoReagendarModalProps {
@@ -45,6 +50,7 @@ export function TurnoReagendarModal({
   const [duracion, setDuracion] = useState<number>(duracionMin);
   const [submitting, startTransition] = useTransition();
   const [submitErr, setSubmitErr] = useState<string | null>(null);
+  const toast = useToast();
 
   // A11y de modal compartida (PR #45): focus trap + Escape (deshabilitado en
   // submit) + foco inicial + restore focus. Ver lib/use-modal-a11y.ts.
@@ -74,6 +80,10 @@ export function TurnoReagendarModal({
         setSubmitErr(result.error.message);
         return;
       }
+      // C4 · feedback: confirma el nuevo horario (con fecha si no es hoy).
+      toast.show({
+        titulo: `Turno reagendado · ${localDatetimeToastLabel(inicioLocal)} · ${pacienteNombre}`,
+      });
       onDone(result.data.nuevoTurnoId);
     });
   };

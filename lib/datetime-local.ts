@@ -57,3 +57,18 @@ export function localDatetimeToIso(local: string): string {
   // produces UTC with Z suffix which is a valid ISO 8601 with offset.
   return new Date(local).toISOString();
 }
+
+/**
+ * "YYYY-MM-DDTHH:mm" local → label corto para toasts de mutación de turnos:
+ * "10:30" si es hoy, "28/07 10:30" si es otro día. Compartido por
+ * TurnoCreateModal y TurnoReagendarModal (C4 · feedback).
+ */
+export function localDatetimeToastLabel(local: string, now: Date = new Date()): string {
+  if (local.length < 16) return local;
+  const fecha = local.slice(0, 10);
+  const hora = local.slice(11, 16);
+  const hoy = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
+    now.getDate(),
+  ).padStart(2, "0")}`;
+  return fecha === hoy ? hora : `${fecha.slice(8, 10)}/${fecha.slice(5, 7)} ${hora}`;
+}
