@@ -6,16 +6,19 @@
  *
  * Paneles apilados en la columna del slot (pc-plan-grid, 380px):
  *   1. Cuadro y dolor — motivo de consulta (texto libre) + dolor EVA/VAS 0–10
- *      (select) + curva longitudinal de dolor + scores de outcome.
+ *      (fila segmentada de un click, <EscalaSegmentada> D3) + curva longitudinal
+ *      NORMALIZADA (cada métrica contra su propio rango: EVA 0–10 no se aplasta
+ *      contra ODI 0–100) de dolor + scores de outcome.
  *   2. Rango de movilidad (ROM) — alta de mediciones por región (grados) en el
  *      borrador de la sesión + historial de solo lectura.
  *   3. Tests ortopédicos — nombre + resultado categórico (positivo/negativo/
  *      dudoso) en el borrador + historial.
  *   4. Instrumentos de outcome — NDI (cervical), ODI (lumbar) y Borg RPE,
- *      RENDERIZADOS con el <PlanillaRenderer> genérico de la biblioteca (C3):
- *      no se duplican ítems ni scoring, se leen de lib/instrumentos.
- *   5. Objetivos funcionales — alta y estado (en curso/logrado/pausado) con
- *      "retomar de la última sesión" para continuidad.
+ *      RENDERIZADOS con el <PlanillaRenderer> genérico de la biblioteca (C3),
+ *      COLAPSABLES (D3): sin respuestas arrancan plegados con "Cargar {nombre}"
+ *      — la sesión típica no administra el cuestionario y no necesita el muro
+ *      de fieldsets.
+ *   5. Objetivos funcionales — <ObjetivosBlock> genérico de la biblioteca (D3).
  *
  * Controlado por el slot: deriva TODO de `value` (toolData del borrador) y
  * notifica cada edición con `onChange(next)`. Un instrumento a medio responder
@@ -32,7 +35,7 @@ import { useMemo, useState, type CSSProperties } from "react";
 
 import * as I from "@/components/icons";
 import { ndi as ndiDef, odi as odiDef, borg as borgDef } from "@/lib/instrumentos";
-import { PlanillaRenderer } from "@/lib/instrumentos/components";
+import { EscalaSegmentada, ObjetivosBlock, PlanillaRenderer } from "@/lib/instrumentos/components";
 import {
   SerieEvolucion,
   type MetricaSerie,
@@ -58,7 +61,6 @@ import {
   RESULTADOS_TEST,
   ROM_GRADOS_MAX,
   ROM_GRADOS_MIN,
-  type EstadoObjetivoKine,
   type KinesioSeriesPoint,
   type KinesiologiaToolData,
   type ObjetivoKine,
@@ -74,25 +76,6 @@ const CHIP_RESULTADO: Record<ResultadoTest, CSSProperties> = {
   positivo: { color: "var(--red)", background: "var(--red-soft)", borderColor: "transparent" },
   negativo: { color: "var(--green)", background: "var(--green-soft)", borderColor: "transparent" },
   dudoso: { color: "var(--amber)", background: "var(--amber-soft)", borderColor: "transparent" },
-};
-
-const CHIP_ESTADO_OBJETIVO: Record<EstadoObjetivoKine, CSSProperties> = {
-  en_curso: { color: "var(--slate)", background: "var(--slate-soft)", borderColor: "transparent" },
-  logrado: { color: "var(--green)", background: "var(--green-soft)", borderColor: "transparent" },
-  pausado: { color: "var(--amber)", background: "var(--amber-soft)", borderColor: "transparent" },
-};
-
-/** Mismo look que los inputs de .fi-wi-field (folio.css no estila selects). */
-const SELECT_STYLE: CSSProperties = {
-  width: "100%",
-  padding: "9px 11px",
-  background: "var(--surface)",
-  border: "1px solid var(--line)",
-  borderRadius: "var(--r-sm)",
-  font: "inherit",
-  fontSize: 13.5,
-  color: "var(--ink)",
-  lineHeight: 1.5,
 };
 
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
@@ -195,12 +178,19 @@ function limpiarDraft(next: KinesioDraft): KinesiologiaToolData | null {
 }
 
 // ─── Serie longitudinal (dolor EVA + NDI + ODI + Borg) ──────────────────────
+//
+// D3: la serie se dibuja en modo NORMALIZADO — las cuatro métricas tienen rangos
+// dispares (EVA 0–10, NDI 0–50, ODI 0–100 %, Borg 6–20) y compartir un solo eje
+// aplastaba las chicas hasta hacerlas ilegibles. Cada métrica declara el DOMINIO
+// de su instrumento: la posición vertical refleja la severidad dentro de ese
+// rango, y el tooltip/último valor muestran siempre el valor real.
 
 const METRICAS_SERIE: MetricaSerie[] = [
-  { key: "eva", label: "Dolor EVA", color: "var(--red)" },
-  { key: "ndi", label: "NDI", color: "var(--accent)" },
-  { key: "odi", label: "ODI %", color: "var(--amber)" },
-  { key: "borg", label: "Borg", color: "var(--slate)" },
+  { key: "eva", label: "Dolor EVA", color: "var(--red)", dominio: { min: EVA_MIN, max: EVA_MAX } },
+  // NDI crudo 0–50 (10 ítems × 0–5, contrato de deriveKinesioSeries).
+  { key: "ndi", label: "NDI", color: "var(--accent)", dominio: { min: 0, max: 50 } },
+  { key: "odi", label: "ODI %", color: "var(--amber)", dominio: { min: 0, max: 100 } },
+  { key: "borg", label: "Borg", color: "var(--slate)", dominio: { min: 6, max: 20 } },
 ];
 
 /** Adapta la serie tipada de kinesiología al punto genérico de <SerieEvolucion>. */
@@ -352,7 +342,6 @@ export function KinesiologiaTool({
 
   const [nuevoRom, setNuevoRom] = useState(NUEVO_ROM_INICIAL);
   const [nuevoTest, setNuevoTest] = useState(NUEVO_TEST_INICIAL);
-  const [nuevoObjetivo, setNuevoObjetivo] = useState("");
   const [romExpandido, setRomExpandido] = useState(false);
   const [testsExpandido, setTestsExpandido] = useState(false);
 
@@ -364,11 +353,11 @@ export function KinesiologiaTool({
   // ── Motivo ──
   const setMotivo = (raw: string) => emit({ ...draft, motivo: raw });
 
-  // ── Dolor EVA ──
-  const setDolorEva = (raw: string) => {
+  // ── Dolor EVA (fila segmentada, un click; null = quitar el registro) ──
+  const setDolorEva = (n: number | null) => {
     const next = { ...draft };
-    if (raw === "") delete next.dolorEva;
-    else next.dolorEva = Number(raw);
+    if (n === null) delete next.dolorEva;
+    else next.dolorEva = n;
     emit(next);
   };
 
@@ -438,28 +427,11 @@ export function KinesiologiaTool({
     emit({ ...draft, tests: testsDraft.filter((_, idx) => idx !== i) });
   };
 
-  // ── Objetivos ──
+  // ── Objetivos (ObjetivosBlock genérico de la biblioteca, D3) ──
   const objetivos = draft.objetivos ?? [];
-  const textoNuevoObjetivo = nuevoObjetivo.trim();
 
-  const agregarObjetivo = () => {
-    if (textoNuevoObjetivo === "" || readOnly) return;
-    const objetivo: ObjetivoKine = { texto: textoNuevoObjetivo.slice(0, 500), estado: "en_curso" };
-    emit({ ...draft, objetivos: [...objetivos, objetivo] });
-    setNuevoObjetivo("");
-  };
-
-  const setEstadoObjetivo = (i: number, estado: EstadoObjetivoKine) => {
-    emit({ ...draft, objetivos: objetivos.map((o, idx) => (idx === i ? { ...o, estado } : o)) });
-  };
-
-  const quitarObjetivo = (i: number) => {
-    emit({ ...draft, objetivos: objetivos.filter((_, idx) => idx !== i) });
-  };
-
-  const retomarObjetivos = () => {
-    if (!ultimosObjetivos || readOnly) return;
-    emit({ ...draft, objetivos: ultimosObjetivos.objetivos });
+  const setObjetivos = (next: ObjetivoKine[]) => {
+    emit({ ...draft, objetivos: next });
   };
 
   const romVisibles = romExpandido ? romHistorial : romHistorial.slice(0, 4);
@@ -495,31 +467,26 @@ export function KinesiologiaTool({
           />
         </label>
 
-        <label className="fi-wi-field">
+        <div className="fi-wi-field">
           <span>Dolor (EVA / VAS 0–10)</span>
-          <select
-            style={SELECT_STYLE}
-            value={draft.dolorEva ?? ""}
-            onChange={(e) => setDolorEva(e.target.value)}
-            disabled={readOnly}
-            aria-label="Dolor en escala visual analógica de 0 a 10"
-          >
-            <option value="">—</option>
-            {Array.from({ length: EVA_MAX - EVA_MIN + 1 }, (_, i) => EVA_MIN + i).map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
-        </label>
+          <EscalaSegmentada
+            min={EVA_MIN}
+            max={EVA_MAX}
+            value={draft.dolorEva ?? null}
+            onChange={setDolorEva}
+            readOnly={readOnly}
+            label="Dolor en escala visual analógica de 0 a 10"
+            anclas={{ min: "Sin dolor", max: "Peor dolor" }}
+          />
+        </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <span className="fi-eyebrow">Evolución de dolor y función</span>
           <SerieEvolucion
             serie={aPuntosSerie(series)}
             metricas={METRICAS_SERIE}
-            pisoCero
-            ariaLabel={`Evolución de dolor EVA y outcomes en ${series.length} ${series.length === 1 ? "sesión" : "sesiones"}`}
+            normalizado
+            ariaLabel={`Evolución de dolor EVA y outcomes en ${series.length} ${series.length === 1 ? "sesión" : "sesiones"}, cada métrica en su propia escala`}
             vacio="Sin registros de dolor u outcomes en el historial todavía. La curva aparece al guardar sesiones con dolor EVA, NDI, ODI o Borg."
           />
         </div>
@@ -557,7 +524,6 @@ export function KinesiologiaTool({
               <label className="fi-wi-field">
                 <span>Región</span>
                 <select
-                  style={SELECT_STYLE}
                   value={nuevoRom.region}
                   onChange={(e) => setNuevoRom({ ...nuevoRom, region: e.target.value })}
                 >
@@ -672,7 +638,6 @@ export function KinesiologiaTool({
               <label className="fi-wi-field">
                 <span>Resultado</span>
                 <select
-                  style={SELECT_STYLE}
                   value={nuevoTest.resultado}
                   onChange={(e) =>
                     setNuevoTest({ ...nuevoTest, resultado: e.target.value as ResultadoTest | "" })
@@ -742,145 +707,23 @@ export function KinesiologiaTool({
           Índices de discapacidad y esfuerzo percibido para el seguimiento
           funcional. Tamizaje orientativo — no reemplazan la evaluación clínica.
         </p>
-        <PlanillaRenderer def={ndiDef} respuestas={draft.ndi ?? null} onChange={setNdi} readOnly={readOnly} />
-        <PlanillaRenderer def={odiDef} respuestas={draft.odi ?? null} onChange={setOdi} readOnly={readOnly} />
-        <PlanillaRenderer def={borgDef} respuestas={draft.borg ?? null} onChange={setBorg} readOnly={readOnly} />
+        <PlanillaRenderer def={ndiDef} respuestas={draft.ndi ?? null} onChange={setNdi} readOnly={readOnly} colapsable />
+        <PlanillaRenderer def={odiDef} respuestas={draft.odi ?? null} onChange={setOdi} readOnly={readOnly} colapsable />
+        <PlanillaRenderer def={borgDef} respuestas={draft.borg ?? null} onChange={setBorg} readOnly={readOnly} colapsable />
       </section>
 
-      {/* ── Objetivos funcionales ── */}
-      <section className="pc-card">
-        <header className="pc-card-head">
-          <span className="fi-eyebrow">Objetivos funcionales</span>
-        </header>
-
-        {objetivos.length > 0 ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            <span className="muted" style={{ fontSize: 11, fontWeight: 500 }}>
-              En esta sesión
-            </span>
-            {objetivos.map((o, i) => (
-              <div
-                key={`${o.texto}-${i}`}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  padding: "7px 0",
-                  borderBottom: "1px solid var(--line-soft)",
-                }}
-              >
-                <span style={{ flex: 1, fontSize: 12.5, lineHeight: 1.45, color: "var(--ink)" }}>{o.texto}</span>
-                <select
-                  style={{ ...SELECT_STYLE, width: "auto", padding: "4px 6px", fontSize: 12 }}
-                  value={o.estado}
-                  onChange={(e) => setEstadoObjetivo(i, e.target.value as EstadoObjetivoKine)}
-                  disabled={readOnly}
-                  aria-label={`Estado del objetivo: ${o.texto}`}
-                >
-                  {ESTADOS_OBJETIVO_KINE.map((estado) => (
-                    <option key={estado} value={estado}>
-                      {ESTADO_OBJETIVO_KINE_LABELS[estado]}
-                    </option>
-                  ))}
-                </select>
-                {!readOnly ? (
-                  <button
-                    type="button"
-                    className="pc-link"
-                    onClick={() => quitarObjetivo(i)}
-                    aria-label={`Quitar objetivo: ${o.texto}`}
-                  >
-                    Quitar
-                  </button>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        ) : null}
-
-        {!readOnly ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {objetivos.length === 0 && ultimosObjetivos ? (
-              <button
-                type="button"
-                className="fi-btn fi-btn-secondary"
-                onClick={retomarObjetivos}
-                style={{ alignSelf: "flex-start" }}
-                title={`Copia los ${ultimosObjetivos.objetivos.length} objetivos de la sesión del ${fmtFecha(ultimosObjetivos.fecha)} para actualizar su estado`}
-              >
-                <I.History size={12} /> Retomar de la última sesión ({ultimosObjetivos.objetivos.length})
-              </button>
-            ) : null}
-            <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
-              <label className="fi-wi-field" style={{ flex: 1 }}>
-                <span>Nuevo objetivo</span>
-                <input
-                  type="text"
-                  value={nuevoObjetivo}
-                  maxLength={500}
-                  onChange={(e) => setNuevoObjetivo(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      agregarObjetivo();
-                    }
-                  }}
-                  placeholder="Ej.: recuperar flexión de rodilla a 120°…"
-                  spellCheck={false}
-                />
-              </label>
-              <button
-                type="button"
-                className="fi-btn fi-btn-secondary"
-                onClick={agregarObjetivo}
-                disabled={textoNuevoObjetivo === ""}
-                title={
-                  textoNuevoObjetivo !== ""
-                    ? "Suma el objetivo al borrador de esta sesión (estado: en curso)"
-                    : "Escribí el objetivo para agregarlo"
-                }
-              >
-                <I.Plus size={12} /> Agregar
-              </button>
-            </div>
-          </div>
-        ) : null}
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          <span className="muted" style={{ fontSize: 11, fontWeight: 500 }}>
-            Última sesión registrada
-          </span>
-          {!ultimosObjetivos ? (
-            <p className="pc-card-text muted" style={{ fontSize: 12.5 }}>
-              Sin objetivos registrados todavía. Los guardados en sesiones
-              anteriores aparecen acá.
-            </p>
-          ) : (
-            <>
-              {ultimosObjetivos.objetivos.map((o, i) => (
-                <div
-                  key={`${ultimosObjetivos.fecha}-${i}`}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    padding: "7px 0",
-                    borderBottom: "1px solid var(--line-soft)",
-                  }}
-                >
-                  <span style={{ flex: 1, fontSize: 12.5, lineHeight: 1.45, color: "var(--ink-2)" }}>{o.texto}</span>
-                  <span className="fi-pill" style={CHIP_ESTADO_OBJETIVO[o.estado]}>
-                    {ESTADO_OBJETIVO_KINE_LABELS[o.estado]}
-                  </span>
-                </div>
-              ))}
-              <span className="muted" style={{ fontSize: 10.5, marginTop: 4 }}>
-                Registrados en la sesión del {fmtFecha(ultimosObjetivos.fecha)}
-              </span>
-            </>
-          )}
-        </div>
-      </section>
+      {/* ── Objetivos funcionales (ObjetivosBlock genérico, D3) ── */}
+      <ObjetivosBlock
+        titulo="Objetivos funcionales"
+        placeholder="Ej.: recuperar flexión de rodilla a 120°…"
+        estados={ESTADOS_OBJETIVO_KINE}
+        estadoLabels={ESTADO_OBJETIVO_KINE_LABELS}
+        estadoInicial="en_curso"
+        objetivos={objetivos}
+        ultimos={ultimosObjetivos}
+        onChange={setObjetivos}
+        readOnly={readOnly}
+      />
     </div>
   );
 }
