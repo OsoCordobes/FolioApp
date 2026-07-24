@@ -19607,3 +19607,19 @@ input:focus { outline: none; }
 .fi-main:focus {
   outline: none;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   C3 · /hoy — fila de turno SIN drag handle (audit grado A: affordance muerta)
+   El prototipo reservaba la primera columna (16px) de .fi-turno para .fi-drag,
+   pero el drag-and-drop nunca se implementó y el handle se quitó del markup.
+   La grilla pasa a 4 columnas; el padding-left compensa el track eliminado.
+   Si el DnD llega algún día: restaurar la columna de 16px junto con el
+   handler real y volver a montar .fi-drag (sus reglas siguen arriba).
+   ═══════════════════════════════════════════════════════════════════════════ */
+.fi-turno {
+  grid-template-columns: 64px 14px 1fr auto;
+  padding-left: 18px;
+}
+.fi-list.is-dense .fi-turno { padding-left: 14px; }
+.fi-turno.is-atendiendo { padding-left: 16px; }
+.fi-list.is-dense .fi-turno.is-atendiendo { padding-left: 16px; }

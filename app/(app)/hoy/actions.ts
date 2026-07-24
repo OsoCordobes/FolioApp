@@ -21,6 +21,7 @@ import { z } from "zod";
 
 import type { ProfesionalLite } from "@/lib/agenda/profesional";
 import { blindIndex, blindIndexPhone, encryptColumn } from "@/lib/crypto";
+import { normalizarBusqueda } from "@/lib/format/busqueda";
 import { err, mapSupabaseError, ok, type Result } from "@/lib/db/errors";
 import { listProfesionalesLite } from "@/lib/db/members";
 import { getActiveSession } from "@/lib/db/session";
@@ -135,6 +136,11 @@ export interface CreateTurnoMeta {
  * servicios activos de la org, pacientes recientes (hasta 50), colegiados
  * activos (CLINICA-3: picker de profesional, visible solo con >1) y el
  * member de la sesión para resolver el default del picker.
+ *
+ * Los 50 pacientes son solo las sugerencias INICIALES del typeahead (query
+ * vacía + matches instantáneos): la búsqueda real sobre el directorio
+ * completo la hace `searchPacientesAction` con debounce desde el modal —
+ * mantener el slice evita mandar toda la PII de la org en cada apertura.
  */
 export async function loadCreateTurnoMeta(): Promise<Result<CreateTurnoMeta>> {
   const session = await getActiveSession();
@@ -179,6 +185,48 @@ export async function loadCreateTurnoMeta(): Promise<Result<CreateTurnoMeta>> {
     sessionMemberId: session.data.memberId,
     sessionEsColegiado: session.data.esColegiado,
   });
+}
+
+/**
+ * Búsqueda del typeahead del modal de crear turno sobre el directorio
+ * COMPLETO de la org (encargo C3): el modal solo recibe los últimos 50
+ * pacientes en la metadata, así que en una clínica grande un paciente
+ * antiguo daba "Sin resultados" e invitaba a crear un DUPLICADO de historia
+ * clínica. Esta action reusa `listPacientesDirectorio` (el mismo fetcher —
+ * y el mismo descifrado — que ya paga /pacientes) y matchea con
+ * `normalizarBusqueda` en ambos lados, para que "jose" encuentre a "José".
+ *
+ * Cap de resultados en 8: es lo que el typeahead muestra — no viaja PII
+ * de más al cliente. El teléfono matchea por dígitos ("351555" encuentra
+ * a "+54 351 555-0199").
+ */
+export async function searchPacientesAction(q: string): Promise<Result<PacientePickerRow[]>> {
+  const query = normalizarBusqueda(String(q ?? ""));
+  if (query.length < 2) return ok([]);
+
+  const res = await listPacientesDirectorio();
+  if (!res.ok) return res;
+
+  const digitos = query.replace(/\D/g, "");
+  const matches = res.data
+    .filter((p) => {
+      const nombreCompleto = normalizarBusqueda(`${p.nombre ?? ""} ${p.apellido ?? ""}`);
+      if (nombreCompleto.includes(query)) return true;
+      if (digitos.length >= 3) {
+        const tel = (p.telefono ?? "").replace(/\D/g, "");
+        if (tel.includes(digitos)) return true;
+      }
+      return false;
+    })
+    .slice(0, 8)
+    .map((p) => ({
+      id: p.id,
+      nombre: p.nombre ?? "",
+      apellido: p.apellido ?? "",
+      telefono: p.telefono,
+    }));
+
+  return ok(matches);
 }
 
 const createTurnoActionSchema = z
