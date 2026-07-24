@@ -61,11 +61,18 @@ jobs:
             TARGETS="$ESPECIALIDAD"
           fi
           # Un curl por especialidad (no ?especialidad=all): acota el timeout
-          # por invocación y el blast radius si una falla a mitad.
+          # por invocación y el blast radius si una falla a mitad. Una
+          # especialidad fallida NO aborta las restantes — se acumula y el
+          # job falla al final con el detalle de cada una ya impreso.
+          rc=0
           for esp in $TARGETS; do
             echo "── seed $esp ──"
-            curl --fail-with-body -sS -m 280 -X POST \
+            if ! curl --fail-with-body -sS -m 280 -X POST \
               -H "Authorization: Bearer $CRON_SECRET" \
-              "$APP_URL/api/admin/seed-demo?especialidad=$esp&force=$FORCE&cleanup=$CLEANUP"
+              "$APP_URL/api/admin/seed-demo?especialidad=$esp&force=$FORCE&cleanup=$CLEANUP"; then
+              echo "::error::seed $esp falló (ver body arriba)"
+              rc=1
+            fi
             echo
           done
+          exit $rc
