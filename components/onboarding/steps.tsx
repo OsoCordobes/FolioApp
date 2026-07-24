@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Folio · Onboarding · Steps 2-8 (premium refactor).
+ * Folio · Onboarding · Steps 2-7 (premium refactor).
  *
  * Cada step:
  *   - Validación inline (blur + onChange para limpiar errores).
@@ -9,10 +9,12 @@
  *   - Step 3 incluye <SlugEditor /> + bio textarea con contador + smart defaults por rubro.
  *   - StepShell renderiza <PublicCard variant="preview" /> a la derecha (desktop) o vía drawer (mobile).
  *
- * Step 9 vive en step9-moment.tsx (separado por su tamaño + animaciones propias).
+ * El paso final (8, "the moment") vive en step9-moment.tsx (separado por su
+ * tamaño + animaciones propias). El viejo Step 8 informativo de Mercado Pago
+ * se fusionó dentro del moment: 8 pasos percibidos en vez de 9.
  */
 
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 
 import { connectGoogleCalendar } from "@/app/(app)/configuracion/actions";
 import { updateOnboardingStep } from "@/app/(public)/onboarding/actions";
@@ -23,7 +25,7 @@ import { LogoUpload } from "@/components/public-card/logo-upload";
 import { MoodPicker } from "@/components/public-card/mood-picker";
 import { type CardMood } from "@/components/public-card/public-card";
 import { ESPECIALIDADES_META, ESPECIALIDAD_SLUGS } from "@/lib/especialidades/meta";
-import { formatArsFromCents } from "@/lib/format/currency";
+import { validateFranjas } from "@/lib/onboarding/franjas";
 import {
   getEspecialidadServicios,
   getKnownTemplateServiceSignatures,
@@ -82,12 +84,15 @@ export const ONBOARDING_INITIAL: OnboardingDataState = {
   matricula: "",
   tel: "",
   consultorioNombre: "",
-  rubro: "quiropraxia",
-  especialidad: "quiropraxia",
+  // Sin preselección: la especialidad decide la herramienta clínica de la
+  // ficha — un cardiólogo apurado que no veía los pills quedaba con las tools
+  // de quiropraxia. El Step 3 exige elegirla para continuar.
+  rubro: "",
+  especialidad: "",
   tipo: "INDEPENDIENTE",
   direccion: "",
   ciudad: "",
-  provincia: "Córdoba",
+  provincia: "",
   instagram: "",
   telefonoPublico: "",
   bio: "",
@@ -116,7 +121,7 @@ interface StepProps {
   /**
    * Precio del plan en centavos ARS. Derivado server-side de
    * MP_PLAN_PRICE_CENTS (app/(public)/onboarding/page.tsx) y bajado por
-   * OnboardingApp — Step 8 lo muestra; el resto lo ignora.
+   * OnboardingApp — lo muestra el moment final; los steps 2-7 lo ignoran.
    */
   planPriceCents: number;
 }
@@ -193,7 +198,7 @@ function nextServicioId(): number {
 
 // ─── Step 2 · Profesional (con validación inline) ───────────────────────────
 
-export function Step2Profesional({ data, set, next, back, skip, orgSlug }: StepProps) {
+export function Step2Profesional({ data, set, next, back, orgSlug }: StepProps) {
   const [errors, setErrors] = useState<Partial<Record<keyof OnboardingDataState, string>>>({});
 
   const validate = (field: keyof OnboardingDataState, value: string): string => {
@@ -215,7 +220,9 @@ export function Step2Profesional({ data, set, next, back, skip, orgSlug }: StepP
     !errors.nombre && !errors.apellido && !errors.tel;
 
   return (
-    <StepShell stepIdx={2} back={back} next={next} skip={skip}
+    // canSkip=false: paso obligatorio — saltearlo publicaba una card pública
+    // vacía (contradicción: Continuar deshabilitado pero Saltar habilitado).
+    <StepShell stepIdx={2} back={back} next={next} canSkip={false}
       headline="¿Cómo te llamás?"
       sub="Aparece en el sidebar y en tu link público. Lo cambiás cuando quieras."
       nextDisabled={!canContinue}
@@ -258,7 +265,7 @@ export function Step2Profesional({ data, set, next, back, skip, orgSlug }: StepP
 
 // ─── Step 3 · Consultorio (SlugEditor + bio + smart defaults) ───────────────
 
-export function Step3Consultorio({ data, set, next, back, skip, orgId, orgSlug }: StepProps) {
+export function Step3Consultorio({ data, set, next, back, orgId, orgSlug }: StepProps) {
   const [errors, setErrors] = useState<Partial<Record<keyof OnboardingDataState, string>>>({});
   const [draftSlug, setDraftSlug] = useState<string>(orgSlug ?? "");
 
@@ -317,8 +324,9 @@ export function Step3Consultorio({ data, set, next, back, skip, orgId, orgSlug }
       try {
         const res = await updateOnboardingStep(3, {
           consultorioNombre: data.consultorioNombre,
-          rubro: data.rubro,
-          especialidad: data.especialidad,
+          // "" (sin elegir) no pasa el z.enum del server — omitir hasta que elija.
+          rubro: data.rubro || undefined,
+          especialidad: data.especialidad || undefined,
           tipo: data.tipo,
           ciudad: data.ciudad,
           provincia: data.provincia,
@@ -341,6 +349,7 @@ export function Step3Consultorio({ data, set, next, back, skip, orgId, orgSlug }
 
   const canContinue =
     !!data.consultorioNombre.trim() &&
+    !!data.especialidad &&
     !!data.ciudad.trim() &&
     !errors.consultorioNombre &&
     !errors.ciudad &&
@@ -350,7 +359,8 @@ export function Step3Consultorio({ data, set, next, back, skip, orgId, orgSlug }
   const bioOverLimit = bioCount > 280;
 
   return (
-    <StepShell stepIdx={3} back={back} next={handleNext} skip={skip}
+    // canSkip=false: igual que el Step 2 — este paso define la card pública.
+    <StepShell stepIdx={3} back={back} next={handleNext} canSkip={false}
       headline="¿Dónde está tu consultorio?"
       sub="Esta info aparece en tu link público de reservas."
       nextDisabled={!canContinue}
@@ -430,10 +440,6 @@ export function Step3Consultorio({ data, set, next, back, skip, orgId, orgSlug }
           />
         </Field>
 
-        <Field label="Dirección">
-          <input type="text" placeholder="Belgrano 234"
-            value={data.direccion} onChange={(e) => set({ direccion: e.target.value })}/>
-        </Field>
         <div className="onb-form-row-2">
           <Field label="Ciudad" error={errors.ciudad}>
             <input type="text" placeholder="Alta Gracia"
@@ -443,44 +449,60 @@ export function Step3Consultorio({ data, set, next, back, skip, orgId, orgSlug }
           </Field>
           <Field label="Provincia">
             <select value={data.provincia} onChange={(e) => set({ provincia: e.target.value })}>
+              <option value="" disabled>Elegí…</option>
               {["Córdoba","Buenos Aires","Santa Fe","Mendoza","Neuquén","Salta","Tucumán","Río Negro","Entre Ríos","Misiones","Otra"].map(p =>
                 <option key={p} value={p}>{p}</option>)}
             </select>
           </Field>
         </div>
 
-        <Field label="Teléfono del consultorio" hint="El que aparece en tu link público (puede ser distinto al personal).">
-          <div className="onb-input-prefix">
-            <span className="fm-mono">+54</span>
-            <input type="tel" placeholder="9 351 411-2233"
-              value={data.telefonoPublico}
-              onChange={(e) => set({ telefonoPublico: e.target.value })} />
-          </div>
-        </Field>
+        {/* Lo diferible (dirección, teléfono público, IG, bio) va plegado:
+            pedir lo mínimo, completar después. El preview en vivo ya
+            incentiva abrirlo sin obligar. */}
+        <details className="onb-optional">
+          <summary>
+            Completá tu card pública <span className="onb-optional-tag">opcional</span>
+          </summary>
+          <div className="onb-optional-body">
+            <Field label="Dirección">
+              <input type="text" placeholder="Belgrano 234"
+                value={data.direccion} onChange={(e) => set({ direccion: e.target.value })}/>
+            </Field>
 
-        <Field label="Instagram" hint="Opcional. Aparece como link en tu card pública.">
-          <div className="onb-input-prefix">
-            <span className="fm-mono">@</span>
-            <input type="text" placeholder="lorenzo.quiropraxia"
-              value={data.instagram} onChange={(e) => set({ instagram: e.target.value.replace(/^@/, "") })}/>
-          </div>
-        </Field>
+            <Field label="Teléfono del consultorio" hint="El que aparece en tu link público (puede ser distinto al personal).">
+              <div className="onb-input-prefix">
+                <span className="fm-mono">+54</span>
+                <input type="tel" placeholder="9 351 411-2233"
+                  value={data.telefonoPublico}
+                  onChange={(e) => set({ telefonoPublico: e.target.value })} />
+              </div>
+            </Field>
 
-        <Field label="Descripción corta" error={errors.bio}
-          hint={`Una o dos oraciones. Aparece en tu card pública.`}>
-          <textarea
-            placeholder={data.ciudad ? `Quiropráctica y bienestar postural en ${data.ciudad}.` : "Quiropráctica y bienestar postural."}
-            value={data.bio}
-            rows={3}
-            maxLength={320}
-            onChange={(e) => { set({ bio: e.target.value }); if (errors.bio) setErrors((p) => ({ ...p, bio: undefined })); }}
-            onBlur={() => onBlur("bio")}
-            style={{ resize: "vertical", minHeight: 72 }}
-          />
-          <span className={`onb-counter ${bioOverLimit ? "is-over" : ""}`} aria-live="polite">
-            {bioCount} / 280
-          </span>
-        </Field>
+            <Field label="Instagram" hint="Aparece como link en tu card pública.">
+              <div className="onb-input-prefix">
+                <span className="fm-mono">@</span>
+                <input type="text" placeholder="lorenzo.consultorio"
+                  value={data.instagram} onChange={(e) => set({ instagram: e.target.value.replace(/^@/, "") })}/>
+              </div>
+            </Field>
+
+            <Field label="Descripción corta" error={errors.bio}
+              hint={`Una o dos oraciones. Aparece en tu card pública.`}>
+              <textarea
+                placeholder={data.ciudad ? `Atención personalizada en ${data.ciudad}.` : "Contale a tus pacientes qué hacés."}
+                value={data.bio}
+                rows={3}
+                maxLength={320}
+                onChange={(e) => { set({ bio: e.target.value }); if (errors.bio) setErrors((p) => ({ ...p, bio: undefined })); }}
+                onBlur={() => onBlur("bio")}
+                style={{ resize: "vertical", minHeight: 72 }}
+              />
+              <span className={`onb-counter ${bioOverLimit ? "is-over" : ""}`} aria-live="polite">
+                {bioCount} / 280
+              </span>
+            </Field>
+          </div>
+        </details>
       </div>
     </StepShell>
   );
@@ -601,7 +623,11 @@ export function Step5Horarios({ data, set, next, back, skip, orgSlug }: StepProp
   const addFranja = () => set({ franjas: [...data.franjas, ["", ""]] });
   const removeFranja = (i: number) => set({ franjas: data.franjas.filter((_, k) => k !== i) });
 
-  const canContinue = data.diasActivos.length > 0 && data.franjas.every(([a, b]) => a && b);
+  // Fin > inicio + no-solape (lib/onboarding/franjas — misma validación que
+  // corre el server antes del DELETE). Una franja invertida antes pasaba y
+  // dejaba al usuario con cero disponibilidad.
+  const franjasCheck = validateFranjas(data.franjas);
+  const canContinue = data.diasActivos.length > 0 && franjasCheck.ok;
 
   return (
     <StepShell stepIdx={5} back={back} next={next} skip={skip}
@@ -629,19 +655,27 @@ export function Step5Horarios({ data, set, next, back, skip, orgSlug }: StepProp
         <div className="onb-field">
           <span>Franjas horarias</span>
           <div className="onb-franjas">
-            {data.franjas.map((f, i) => (
-              <div key={i} className="onb-franja">
-                <input type="time" value={f[0]} onChange={(e) => setFranja(i, 0, e.target.value)}/>
-                <span className="muted">a</span>
-                <input type="time" value={f[1]} onChange={(e) => setFranja(i, 1, e.target.value)}/>
-                {data.franjas.length > 1 ? (
-                  <button type="button" className="onb-franja-remove"
-                    onClick={() => removeFranja(i)} aria-label="Quitar franja">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
-                  </button>
-                ) : null}
-              </div>
-            ))}
+            {data.franjas.map((f, i) => {
+              // Errores inline solo para franjas completas: una franja recién
+              // agregada (vacía) bloquea Continuar pero no grita todavía.
+              const franjaErr = f[0] && f[1] ? franjasCheck.porFranja[i] : undefined;
+              return (
+                <div key={i}>
+                  <div className="onb-franja">
+                    <input type="time" value={f[0]} onChange={(e) => setFranja(i, 0, e.target.value)}/>
+                    <span className="muted">a</span>
+                    <input type="time" value={f[1]} onChange={(e) => setFranja(i, 1, e.target.value)}/>
+                    {data.franjas.length > 1 ? (
+                      <button type="button" className="onb-franja-remove"
+                        onClick={() => removeFranja(i)} aria-label="Quitar franja">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                      </button>
+                    ) : null}
+                  </div>
+                  {franjaErr ? <span className="onb-err" role="alert">{franjaErr}</span> : null}
+                </div>
+              );
+            })}
             <button type="button" className="onb-link-add" onClick={addFranja}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
               Agregar franja
@@ -731,14 +765,32 @@ export function Step6Servicios({ data, set, next, back, skip, orgSlug }: StepPro
 
 // ─── Step 7 · Google Calendar ──────────────────────────────────────────────
 
-export function Step7Google({ data, next, back, skip, orgSlug }: StepProps) {
+interface Step7GoogleProps extends StepProps {
+  /** Estado real de la integración (leído server-side) o retorno gcal=ok. */
+  connected?: boolean;
+  /** El callback OAuth volvió con error (gcal=error). */
+  connectError?: boolean;
+}
+
+export function Step7Google({ data, next, back, skip, orgSlug, connected, connectError }: Step7GoogleProps) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+
+  // Persistir onboarding_step_max=7 al entrar: el OAuth de Google saca al
+  // user del wizard, y sin esto el resume lo devolvía al Step 6. El case 7
+  // del server solo actualiza step_max (no toca datos). Guard ref: el double
+  // invoke de StrictMode en dev no debe duplicar la llamada.
+  const stepMaxPersistedRef = useRef(false);
+  useEffect(() => {
+    if (stepMaxPersistedRef.current) return;
+    stepMaxPersistedRef.current = true;
+    void updateOnboardingStep(7, {});
+  }, []);
 
   const handleConnect = () => {
     setError(null);
     startTransition(async () => {
-      const result = await connectGoogleCalendar();
+      const result = await connectGoogleCalendar("onboarding");
       // On success, connectGoogleCalendar() does a server-side redirect() to
       // Google's OAuth URL and the navigation happens — we never reach here.
       // We only get a Result back on the error envelope (e.g. missing
@@ -750,35 +802,47 @@ export function Step7Google({ data, next, back, skip, orgSlug }: StepProps) {
   };
 
   return (
-    <StepShell stepIdx={7} back={back} next={next} skip={skip}
+    <StepShell stepIdx={7} back={back} next={next} skip={skip} canSkip={!connected}
       headline="¿Conectamos tu Google Calendar?"
       sub="Los eventos personales que crees en Google bloquean slots automáticamente. Las reservas confirmadas se sincronizan a tu calendar."
       previewData={previewDataFor(data)}
       slug={orgSlug}
     >
       <div className="onb-integration">
-        <button
-          type="button"
-          className="onb-oauth-card"
-          onClick={handleConnect}
-          disabled={pending}
-        >
-          <div className="onb-oauth-ico">
-            <svg width="32" height="32" viewBox="0 0 24 24">
-              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-            </svg>
+        {connected ? (
+          <div className="onb-oauth-card is-connected" role="status">
+            <div className="onb-oauth-ico">
+              <GoogleGlyph />
+            </div>
+            <div className="onb-oauth-body">
+              <b>Google Calendar conectado ✓</b>
+              <p>Tus eventos bloquean slots y las reservas confirmadas se sincronizan a tu calendar.</p>
+            </div>
           </div>
-          <div className="onb-oauth-body">
-            <b>{pending ? "Abriendo Google…" : "Conectar Google Calendar"}</b>
-            <p>Pedimos permiso para leer y crear eventos en tu calendar primario.</p>
-          </div>
-          <div className="onb-oauth-arrow">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-          </div>
-        </button>
+        ) : (
+          <button
+            type="button"
+            className="onb-oauth-card"
+            onClick={handleConnect}
+            disabled={pending}
+          >
+            <div className="onb-oauth-ico">
+              <GoogleGlyph />
+            </div>
+            <div className="onb-oauth-body">
+              <b>{pending ? "Abriendo Google…" : "Conectar Google Calendar"}</b>
+              <p>Pedimos permiso para leer y crear eventos en tu calendar primario.</p>
+            </div>
+            <div className="onb-oauth-arrow">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </div>
+          </button>
+        )}
+        {!connected && connectError && !error ? (
+          <p className="onb-err" role="alert" style={{ marginTop: 8 }}>
+            No pudimos conectar tu Google Calendar. Probá de nuevo, o conectalo más tarde desde Configuración.
+          </p>
+        ) : null}
         {error ? (
           <p className="onb-err" role="alert" style={{ marginTop: 8 }}>
             {error}
@@ -787,61 +851,30 @@ export function Step7Google({ data, next, back, skip, orgSlug }: StepProps) {
         <p className="onb-fine">
           Tus datos del calendar quedan privados. Solo leemos eventos para bloquear slots; no se comparten con pacientes.
         </p>
-        <p className="onb-fine" style={{ marginTop: 4 }}>
-          Después del consent en Google volvés a Folio. Si querés saltar este paso, podés conectarlo más tarde desde <b>Configuración → Integraciones</b>.
-        </p>
+        {!connected ? (
+          <p className="onb-fine" style={{ marginTop: 4 }}>
+            Después del consent en Google volvés acá. Si querés saltar este paso, podés conectarlo más tarde desde <b>Configuración → Integraciones</b>.
+          </p>
+        ) : null}
       </div>
     </StepShell>
   );
 }
 
-// ─── Step 8 · Mercado Pago ──────────────────────────────────────────────────
-
-export function Step8MercadoPago({ data, next, back, skip, orgSlug, planPriceCents }: StepProps) {
+function GoogleGlyph() {
   return (
-    <StepShell stepIdx={8} back={back} next={next} skip={skip}
-      headline="Activá tu prueba"
-      sub="Tenés 30 días gratis sin tarjeta. Después, activás tu suscripción desde Configuración cuando estés listo para cobrar."
-      previewData={previewDataFor(data)}
-      slug={orgSlug}
-    >
-      <div className="onb-integration">
-        <div className="onb-trial-card">
-          <div className="onb-trial-row">
-            <div className="onb-trial-ico">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"/>
-                <polyline points="12 6 12 12 16 14"/>
-              </svg>
-            </div>
-            <div>
-              <b>Tu prueba arranca ya</b>
-              <p>30 días para probar todas las funciones. Sin compromiso, sin tarjeta.</p>
-            </div>
-          </div>
-          <div className="onb-trial-row">
-            <div className="onb-trial-ico">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="2" y="6" width="20" height="12" rx="2"/>
-                <line x1="2" y1="10" x2="22" y2="10"/>
-              </svg>
-            </div>
-            <div>
-              {/* Precio: fuente canónica MP_PLAN_PRICE_CENTS (lib/mercadopago/client.ts).
-                  Llega como prop desde el server component de /onboarding — mismo
-                  valor que el cobro real, sin hardcode que pueda driftear del env. */}
-              <b>Cuando quieras, {formatArsFromCents(planPriceCents)} / mes</b>
-              <p>Suscripción mensual via Mercado Pago. Cancelás cuando quieras desde Configuración.</p>
-            </div>
-          </div>
-        </div>
-        <p className="onb-fine">
-          Mientras tanto, los pacientes pueden reservar libremente. Cuando actives tu cuenta MP, también podrás cobrar online.
-        </p>
-      </div>
-    </StepShell>
+    <svg width="32" height="32" viewBox="0 0 24 24">
+      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+    </svg>
   );
 }
+
+// El viejo Step 8 (Mercado Pago, pantalla informativa pura) se fusionó dentro
+// del moment (step9-moment.tsx): el trial + precio aparecen como línea bajo el
+// headline final. 8 pasos percibidos en vez de 9.
 
 // ─── Field helper ──────────────────────────────────────────────────────────
 

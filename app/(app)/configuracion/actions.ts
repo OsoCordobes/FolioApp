@@ -339,7 +339,15 @@ export async function upgradeOrgTipoAction(): Promise<Result<UpgradeOrgTipoResul
   });
 }
 
-export async function connectGoogleCalendar(): Promise<Result<void>> {
+/**
+ * Inicia el OAuth de Google Calendar. `returnTo="onboarding"` marca el state
+ * (`<memberId>:onb`) para que /api/google/callback devuelva al wizard
+ * (/onboarding?gcal=ok|error) en vez de expulsar a /configuracion — antes el
+ * Step 7 del onboarding cortaba el flujo y el resume rebotaba al Step 6.
+ */
+export async function connectGoogleCalendar(
+  returnTo?: "onboarding",
+): Promise<Result<void>> {
   const session = await getActiveSession();
   if (!session.ok) return session;
 
@@ -354,7 +362,11 @@ export async function connectGoogleCalendar(): Promise<Result<void>> {
   // redirect() hace su throw normal y Next navega al consent de Google.
   let url: string;
   try {
-    url = getGoogleAuthUrl(session.data.memberId);
+    const state =
+      returnTo === "onboarding"
+        ? `${session.data.memberId}:onb`
+        : session.data.memberId;
+    url = getGoogleAuthUrl(state);
   } catch (e) {
     const detail = e instanceof Error ? e.message : String(e);
     return err(

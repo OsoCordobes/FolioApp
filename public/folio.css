@@ -18940,6 +18940,117 @@ input:focus { outline: none; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   ONBOARDING · PREMIUM (feat/onboarding-premium)
+   Barra de progreso fina del wizard, card pública opcional plegada (Step 3),
+   estado "Conectado" de Google Calendar (Step 7), línea de trial en el moment
+   y link a login del Step 1.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Barra de progreso: 3px bajo el header del step, avanza con var(--accent).
+   Misma duración (280ms) que la transición de pasos (onb-anim). */
+.onb-progress {
+  width: 100%;
+  height: 3px;
+  background: var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+.onb-progress-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: inherit;
+  transition: width 280ms var(--motion-ease-out, ease);
+}
+@media (prefers-reduced-motion: reduce) {
+  .onb-progress-fill { transition: none; }
+}
+
+/* Step 3 · campos diferibles de la card pública, plegados por defecto. */
+.onb-optional {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+.onb-optional > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+  list-style: none;
+  user-select: none;
+}
+.onb-optional > summary::-webkit-details-marker { display: none; }
+.onb-optional > summary::after {
+  content: "+";
+  margin-left: auto;
+  font-size: 15px;
+  color: var(--ink-3);
+  line-height: 1;
+}
+.onb-optional[open] > summary::after { content: "–"; }
+.onb-optional > summary:hover { color: var(--ink); }
+.onb-optional-tag {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-3);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+.onb-optional-body {
+  display: grid;
+  gap: 16px;
+  padding: 4px 14px 16px;
+}
+
+/* Step 7 · Google Calendar ya conectado: card informativa, no clickeable. */
+.onb-oauth-card.is-connected {
+  cursor: default;
+  border-color: var(--green);
+  background: var(--green-soft);
+}
+.onb-oauth-card.is-connected:hover {
+  border-color: var(--green);
+  background: var(--green-soft);
+}
+.onb-oauth-card.is-connected .onb-oauth-body b { color: var(--green); }
+
+/* Moment · línea de trial + precio (fusión del viejo Step 8 informativo). */
+.onb-moment-trial {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-3);
+  line-height: 1.55;
+  max-width: 480px;
+  opacity: 0;
+  animation: onb-moment-up 520ms var(--motion-ease-out) 560ms both;
+}
+
+/* Moment · error de finalize + botón Reintentar. */
+.onb-moment-finalize-err {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 520px;
+}
+
+/* Step 1 · "¿Ya tenés cuenta? Entrar". */
+.onb-step1-login {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--ink-2);
+  text-align: center;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    LANDING · Grado A — honestidad total, 5 especialidades y social proof.
    Append-only: celdas nuevas del bento (Portal del paciente + Escalas),
    sección "Ficha clínica por especialidad" (.fl-esp-*) y testimonios
