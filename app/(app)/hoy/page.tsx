@@ -13,14 +13,17 @@
 
 import { resolveAgendaProfesional, type ProfesionalLite } from "@/lib/agenda/profesional";
 import { capabilitiesFor } from "@/lib/auth/capabilities";
+import { getAppUrl } from "@/lib/config/app-url";
 import { getActiveContext } from "@/lib/db/active-context";
 import { fechaHoyEnTz, getDashboardHoy } from "@/lib/db/hoy";
 import { listProfesionalesLite } from "@/lib/db/members";
+import { loadPrimerosPasosHoy } from "@/lib/db/primeros-pasos";
 import { decideGcalNudge, type GcalNudgeModo } from "@/lib/google/health";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import { Dashboard } from "@/components/hoy/dashboard";
 import { GcalNudgeBanner } from "@/components/hoy/gcal-nudge-banner";
+import { PrimerosPasosCard } from "@/components/hoy/primeros-pasos-card";
 
 export const dynamic = "force-dynamic";
 
@@ -60,7 +63,7 @@ export default async function HoyPage({ searchParams }: PageProps) {
   // "reconectar"). La decisión es pura (lib/google/health.ts); la lectura es
   // fail-safe — ante cualquier error, no molestar. En paralelo con la agenda:
   // son independientes y /hoy es la página más caliente (review PR #51).
-  const [gcalNudgeModo, data] = await Promise.all([
+  const [gcalNudgeModo, data, primerosPasosRes] = await Promise.all([
     loadGcalNudgeModo(
       ctx.data.organization.id,
       ctx.data.session.memberId,
@@ -75,11 +78,27 @@ export default async function HoyPage({ searchParams }: PageProps) {
         ? Object.fromEntries(profesionales.map((p) => [p.id, p.displayName]))
         : undefined,
     }),
+    // Checklist "Primeros pasos" (org joven). Fail-safe: si la lectura falla,
+    // se loguea y no se muestra la card — nunca tira /hoy abajo.
+    loadPrimerosPasosHoy({
+      organizationId: ctx.data.organization.id,
+      tipo: ctx.data.organization.tipo,
+      orgCreatedAt: ctx.data.organization.createdAt,
+      onboardingCompleted: ctx.data.organization.onboardingCompleted,
+      suscripcionEstado: ctx.data.subscription.estado,
+    }),
   ]);
 
   if (!data.ok) {
     throw new Error(`Error cargando agenda: ${data.error.message}`);
   }
+
+  if (!primerosPasosRes.ok) {
+    console.warn(`[hoy] loadPrimerosPasosHoy falló: ${primerosPasosRes.error.message}`);
+  }
+  const primerosPasos = primerosPasosRes.ok ? primerosPasosRes.data : null;
+  const appUrl = getAppUrl();
+  const bookingPath = `/book/${ctx.data.organization.slug}`;
 
   return (
     <>
@@ -97,6 +116,18 @@ export default async function HoyPage({ searchParams }: PageProps) {
         organizationId={ctx.data.organization.id}
         profesionales={selectorVisible ? profesionales : []}
         profActivo={selectorVisible ? profesionalIdEfectivo : null}
+        primerosPasos={
+          primerosPasos ? (
+            <PrimerosPasosCard
+              estado={primerosPasos}
+              bookingUrl={`${appUrl}${bookingPath}`}
+              bookingUrlDisplay={`${appUrl.replace(/^https?:\/\//, "")}${bookingPath}`}
+              organizationId={ctx.data.organization.id}
+              especialidad={ctx.data.organization.especialidad}
+              permiteElegirEspecialidad={ctx.data.organization.tipo === "CLINICA"}
+            />
+          ) : null
+        }
       />
     </>
   );
