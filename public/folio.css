@@ -19199,3 +19199,13 @@ input:focus { outline: none; }
   font-size: var(--fs-xs);
   color: var(--ink-3);
 }
+
+/* ── Fase 1 fix review · slides de auth: campana de recordatorio en tokens ──
+   El glifo WhatsApp de los mocks del login se reemplazó por una campana
+   genérica, pero los contenedores conservaban el verde de marca WhatsApp
+   (#25D366) — la implicación visual que este PR elimina. Override a tokens. */
+.au2-cal2-wa-icon,
+.au2-rea2-step-wa {
+  background: var(--green-soft);
+  color: var(--green);
+}

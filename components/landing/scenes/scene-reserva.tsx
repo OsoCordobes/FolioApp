@@ -32,7 +32,9 @@ const SLOTS: Slot[] = [
 ];
 
 export function SceneReserva() {
-  const bookingUrl = `${getAppHost()}/book/anchorena`;
+  // Slug REAL y bookeable (org demo sembrada): la regla del header — nunca
+  // mostrar una URL que un prospecto pueda tipear y encontrar vacía.
+  const bookingUrl = `${getAppHost()}/book/demo-quiropraxia`;
   return (
     <div className="fl-scene-visual" aria-hidden="true">
       <div className="fl-rsv">
