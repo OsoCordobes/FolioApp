@@ -447,50 +447,78 @@ async function seedEspecialidad(
   res.pacientes = pacientes.length;
 
   // ── 7. Turnos: pasados cerrados + agenda de hoy + futuros ─────────────────
-  // Horas únicas por paciente/día → sin colisión con el EXCLUDE anti-overlap.
+  // Pasados/futuros: un turno por DÍA distinto → sin riesgo de solape.
+  // HOY: agenda con cursor secuencial (próximo inicio = fin del anterior +
+  // 15 min de buffer) — inmune a servicios largos (psicología atiende 50-90
+  // min: con horas fijas cada 60 min el INSERT violaba el EXCLUDE
+  // turno_no_overlap_excl y la org quedaba a medio sembrar).
+  type EstadoDemo = "CERRADO" | "EN_SALA" | "CONFIRMADO" | "AGENDADO";
   interface TurnoPlan {
     pacienteIdx: number;
     inicio: string;
-    estado: "CERRADO" | "EN_SALA" | "CONFIRMADO" | "AGENDADO" | "ATENDIENDO";
+    estado: EstadoDemo;
     conPago: boolean;
     conSesion: boolean;
+    serv: { id: string; duracion_min: number; precio_cents: number };
   }
-  const HOY: Array<Pick<TurnoPlan, "estado" | "conPago" | "conSesion"> & { hora: string }> = [
-    { hora: "09:00", estado: "CERRADO", conPago: true, conSesion: true },
-    { hora: "10:00", estado: "EN_SALA", conPago: false, conSesion: false },
-    { hora: "15:00", estado: "CONFIRMADO", conPago: false, conSesion: false },
-    { hora: "16:00", estado: "AGENDADO", conPago: false, conSesion: false },
-    { hora: "17:00", estado: "AGENDADO", conPago: false, conSesion: false },
-    { hora: "18:00", estado: "AGENDADO", conPago: false, conSesion: false },
+  const HOY_ESTADOS: Array<{
+    estado: EstadoDemo;
+    conPago: boolean;
+    conSesion: boolean;
+    bloque: "maniana" | "tarde";
+  }> = [
+    { estado: "CERRADO", conPago: true, conSesion: true, bloque: "maniana" },
+    { estado: "EN_SALA", conPago: false, conSesion: false, bloque: "maniana" },
+    { estado: "CONFIRMADO", conPago: false, conSesion: false, bloque: "tarde" },
+    { estado: "AGENDADO", conPago: false, conSesion: false, bloque: "tarde" },
+    { estado: "AGENDADO", conPago: false, conSesion: false, bloque: "tarde" },
+    { estado: "AGENDADO", conPago: false, conSesion: false, bloque: "tarde" },
   ];
+  const hhmm = (min: number) =>
+    `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
+
   const plan: TurnoPlan[] = [];
+  let nServ = 0;
   for (let i = 0; i < seeds.length; i++) {
     plan.push(
-      { pacienteIdx: i, inicio: isoWallClock(tz, -(7 + i), "09:00"), estado: "CERRADO", conPago: true, conSesion: true },
-      { pacienteIdx: i, inicio: isoWallClock(tz, -(14 + i), "11:00"), estado: "CERRADO", conPago: true, conSesion: true },
-      { pacienteIdx: i, inicio: isoWallClock(tz, 0, HOY[i % HOY.length].hora), estado: HOY[i % HOY.length].estado, conPago: HOY[i % HOY.length].conPago, conSesion: HOY[i % HOY.length].conSesion },
-      { pacienteIdx: i, inicio: isoWallClock(tz, 1 + i, "10:00"), estado: "AGENDADO", conPago: false, conSesion: false },
+      { pacienteIdx: i, inicio: isoWallClock(tz, -(7 + i), "09:00"), estado: "CERRADO", conPago: true, conSesion: true, serv: servAt(nServ++) },
+      { pacienteIdx: i, inicio: isoWallClock(tz, -(14 + i), "11:00"), estado: "CERRADO", conPago: true, conSesion: true, serv: servAt(nServ++) },
+      { pacienteIdx: i, inicio: isoWallClock(tz, 1 + i, "10:00"), estado: "AGENDADO", conPago: false, conSesion: false, serv: servAt(nServ++) },
     );
+  }
+  let cursorManiana = 9 * 60; // 09:00
+  let cursorTarde = 15 * 60; // 15:00
+  for (let i = 0; i < seeds.length; i++) {
+    const spec = HOY_ESTADOS[i % HOY_ESTADOS.length];
+    const serv = servAt(nServ++);
+    const inicioMin = spec.bloque === "maniana" ? cursorManiana : cursorTarde;
+    if (spec.bloque === "maniana") cursorManiana = inicioMin + serv.duracion_min + 15;
+    else cursorTarde = inicioMin + serv.duracion_min + 15;
+    plan.push({
+      pacienteIdx: i,
+      inicio: isoWallClock(tz, 0, hhmm(inicioMin)),
+      estado: spec.estado,
+      conPago: spec.conPago,
+      conSesion: spec.conSesion,
+      serv,
+    });
   }
 
   const { data: turnos, error: turnoInsErr } = await supabase
     .from("turno")
     .insert(
-      plan.map((t, n) => {
-        const serv = servAt(t.pacienteIdx + n);
-        return {
-          organization_id: orgId,
-          paciente_id: pacientes[t.pacienteIdx].id,
-          servicio_id: serv.id,
-          profesional_id: memberId,
-          inicio: t.inicio,
-          duracion_min: serv.duracion_min,
-          precio_cents: serv.precio_cents,
-          estado: t.estado,
-          origen: "MANUAL",
-          duracion_real_min: t.estado === "CERRADO" ? serv.duracion_min : null,
-        };
-      }),
+      plan.map((t) => ({
+        organization_id: orgId,
+        paciente_id: pacientes[t.pacienteIdx].id,
+        servicio_id: t.serv.id,
+        profesional_id: memberId,
+        inicio: t.inicio,
+        duracion_min: t.serv.duracion_min,
+        precio_cents: t.serv.precio_cents,
+        estado: t.estado,
+        origen: "MANUAL",
+        duracion_real_min: t.estado === "CERRADO" ? t.serv.duracion_min : null,
+      })),
     )
     .select("id, precio_cents, inicio, paciente_id");
   if (turnoInsErr || !turnos || turnos.length !== plan.length) {

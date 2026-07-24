@@ -175,6 +175,11 @@ export interface PromotePedidoInput {
   telefono: string;
   email: string | null;
   motivo: string | null;
+  /**
+   * `organization.is_internal_account` si el caller ya lo tiene cargado —
+   * filtra los trackEvent.* de orgs internas/demo del funnel de PostHog.
+   */
+  orgEsInterna?: boolean;
 }
 
 export async function promotePedidoToTurno(
@@ -299,6 +304,7 @@ export async function promotePedidoToTurno(
       source: "pedido",
       hasDni: false,
       hasEmail: Boolean(email),
+      isInternal: input.orgEsInterna,
     });
   }
 
@@ -680,6 +686,7 @@ export async function aceptarPedido(
     telefono,
     email,
     motivo,
+    orgEsInterna: session.data.isInternalAccount,
   });
 }
 
@@ -841,5 +848,6 @@ export async function aceptarPedidoConHorario(
     telefono,
     email,
     motivo,
+    orgEsInterna: session.data.isInternalAccount,
   });
 }
