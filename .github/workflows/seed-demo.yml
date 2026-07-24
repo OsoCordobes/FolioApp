@@ -1,0 +1,71 @@
+# Folio · seed/reset de los consultorios DEMO por especialidad (manual).
+#
+# Dispara /api/admin/seed-demo con el secret de Actions CRON_SECRET (mismo
+# patrón que dispatch-reconcile.yml / dispatch-recordatorios.yml). Pensado
+# para correrse desde la pestaña Actions antes de cada llamada de venta:
+#   - especialidad=all + force=true  → re-siembra las 5 orgs demo con la
+#     agenda "del día" fresca (turnos de HOY, uno EN_SALA).
+#   - cleanup=true                   → solo borra los pacientes MOCK.
+#
+# Requisitos en prod (además del secret):
+#   - Env ALLOW_DEMO_SEED=yes-demo-2026 en Vercel Production (escape hatch del
+#     admin-gate; quitarla cierra el endpoint sin tocar código).
+#
+# El endpoint es idempotente y SOLO opera sobre orgs demo-* internas (guard
+# anti-secuestro server-side) — ver app/api/admin/seed-demo/route.ts.
+
+name: Demo · seed consultorios (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      especialidad:
+        description: "Especialidad a seedear"
+        type: choice
+        default: all
+        options: [all, quiropraxia, cardiologia, psicologia, kinesiologia, nutricion]
+      force:
+        description: "Borrar pacientes MOCK y re-sembrar (reset pre-llamada)"
+        type: boolean
+        default: false
+      cleanup:
+        description: "SOLO borrar pacientes MOCK (sin re-sembrar)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: seed-demo
+  cancel-in-progress: false
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Invocar endpoint
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_URL: ${{ vars.APP_URL != '' && vars.APP_URL || 'https://folio-app-ten.vercel.app' }}
+          ESPECIALIDAD: ${{ inputs.especialidad }}
+          FORCE: ${{ inputs.force && '1' || '0' }}
+          CLEANUP: ${{ inputs.cleanup && '1' || '0' }}
+        run: |
+          set -euo pipefail
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::Falta el secret de Actions CRON_SECRET (mismo valor que en Vercel)." >&2
+            exit 1
+          fi
+          if [ "$ESPECIALIDAD" = "all" ]; then
+            TARGETS="quiropraxia cardiologia psicologia kinesiologia nutricion"
+          else
+            TARGETS="$ESPECIALIDAD"
+          fi
+          # Un curl por especialidad (no ?especialidad=all): acota el timeout
+          # por invocación y el blast radius si una falla a mitad.
+          for esp in $TARGETS; do
+            echo "── seed $esp ──"
+            curl --fail-with-body -sS -m 280 -X POST \
+              -H "Authorization: Bearer $CRON_SECRET" \
+              "$APP_URL/api/admin/seed-demo?especialidad=$esp&force=$FORCE&cleanup=$CLEANUP"
+            echo
+          done
