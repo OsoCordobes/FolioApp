@@ -46,9 +46,14 @@ interface DashboardProps {
   profesionales?: ProfesionalLite[];
   /** member.id activo en el filtro `?prof=`; null = "Todos". */
   profActivo?: string | null;
+  /**
+   * Checklist "Primeros pasos" (org joven): el Server Component decide si va
+   * y arma la card; acá solo se inserta arriba del KpiStrip.
+   */
+  primerosPasos?: React.ReactNode;
 }
 
-export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fechaAnio, nowIso, timezone, organizationId, profesionales = [], profActivo = null }: DashboardProps) {
+export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fechaAnio, nowIso, timezone, organizationId, profesionales = [], profActivo = null, primerosPasos = null }: DashboardProps) {
   const router = useRouter();
   const [turnos, setTurnos] = useState<Turno[]>(initialTurnos);
   const [walkInOpen, setWalkInOpen] = useState(false);
@@ -138,6 +143,7 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
             hrefFor={(id) => (id ? `/hoy?prof=${id}` : "/hoy")}
           />
         ) : null}
+        {primerosPasos}
         <KpiStrip turnos={turnos} pacientes={pacientes} now={now} timezone={timezone} />
         {transitionError ? (
           <div

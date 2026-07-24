@@ -18940,6 +18940,116 @@ input:focus { outline: none; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   Primeros pasos (/hoy) — checklist de activación post-onboarding.
+   Card fi-* arriba del KpiStrip, visible solo mientras la org es joven
+   (lib/primeros-pasos.ts). Tokens brass/cream; sin hex nuevos.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.fi-pp {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  margin-bottom: 24px;
+  overflow: hidden;
+}
+.fi-pp-head {
+  display: flex; align-items: center; gap: 18px;
+  padding: 16px 20px;
+}
+.fi-pp-head-txt { min-width: 0; }
+.fi-pp-head-txt h2 {
+  margin: 3px 0 0;
+  font-size: 17px; font-weight: 600; letter-spacing: -.01em;
+  color: var(--ink); line-height: 1.2;
+}
+.fi-pp-progress {
+  margin-left: auto;
+  display: flex; align-items: center; gap: 10px;
+  flex-shrink: 0;
+}
+.fi-pp-count {
+  font-size: 11px; letter-spacing: .04em;
+  color: var(--ink-3); white-space: nowrap;
+}
+.fi-pp-bar {
+  width: 96px; height: 3px; border-radius: 99px;
+  background: var(--line-soft);
+  overflow: hidden;
+}
+.fi-pp-bar-fill {
+  height: 100%; border-radius: 99px;
+  background: var(--accent);
+  transition: width 280ms var(--ease-in);
+}
+.fi-pp-toggle {
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: var(--r-sm);
+  background: transparent; border: 1px solid transparent;
+  color: var(--ink-3); cursor: pointer;
+  transition: background 120ms var(--ease-in), color 120ms var(--ease-in);
+}
+.fi-pp-toggle:hover { background: var(--surface-2); color: var(--ink); }
+.fi-pp-toggle svg { transition: transform 200ms var(--ease-in); }
+.fi-pp-toggle.is-collapsed svg { transform: rotate(-90deg); }
+
+.fi-pp-list {
+  list-style: none; margin: 0; padding: 2px 12px 12px;
+  display: flex; flex-direction: column;
+}
+.fi-pp-item {
+  display: flex; align-items: center; gap: 14px;
+  padding: 10px 10px;
+  border-radius: var(--r-md);
+}
+.fi-pp-item + .fi-pp-item { border-top: 1px solid var(--line-soft); }
+.fi-pp-check {
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 99px;
+  border: 1.5px solid var(--line);
+  color: transparent;
+}
+.fi-pp-item.is-done .fi-pp-check {
+  background: var(--green-soft); border-color: transparent;
+  color: var(--green);
+}
+.fi-pp-body { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.fi-pp-label { font-size: 13.5px; font-weight: 500; color: var(--ink); }
+.fi-pp-item.is-done .fi-pp-label { color: var(--ink-3); }
+.fi-pp-sub { font-size: 12px; color: var(--ink-3); line-height: 1.45; }
+.fi-pp-url {
+  font-size: 12px; color: var(--accent);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 100%; display: inline-block;
+  border-bottom: 1px solid transparent;
+}
+.fi-pp-url:hover { border-bottom-color: var(--accent); }
+.fi-pp-action { margin-left: auto; flex-shrink: 0; display: flex; align-items: center; }
+.fi-pp-action .fi-btn { cursor: pointer; text-decoration: none; }
+.fi-pp-copy.is-copied {
+  background: var(--accent); color: #FBF9F4; border-color: var(--accent);
+}
+.fi-pp-done-chip {
+  font-family: 'Geist Mono', monospace; font-size: 10px;
+  letter-spacing: .06em; text-transform: uppercase;
+  color: var(--green); background: var(--green-soft);
+  padding: 2px 8px; border-radius: 99px;
+}
+
+@media (max-width: 640px) {
+  .fi-pp-head { flex-wrap: wrap; gap: 10px 14px; }
+  .fi-pp-progress { margin-left: 0; order: 3; width: 100%; }
+  .fi-pp-bar { flex: 1; width: auto; }
+  .fi-pp-item { flex-wrap: wrap; }
+  .fi-pp-body { flex: 1; min-width: 180px; }
+  .fi-pp-action { margin-left: 36px; width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fi-pp-bar-fill, .fi-pp-toggle svg { transition: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    ONBOARDING · PREMIUM (feat/onboarding-premium)
    Barra de progreso fina del wizard, card pública opcional plegada (Step 3),
    estado "Conectado" de Google Calendar (Step 7), línea de trial en el moment
