@@ -20,12 +20,14 @@ import { FAQ_ITEMS } from "@/components/landing/faq-data";
 import { LandingAnalytics } from "@/components/landing/landing-analytics";
 import { Bento } from "@/components/landing/sections/bento";
 import { DayTimeline } from "@/components/landing/sections/day-timeline";
+import { EspecialidadesFicha } from "@/components/landing/sections/especialidades-ficha";
 import { Faq } from "@/components/landing/sections/faq";
 import { Ficha } from "@/components/landing/sections/ficha";
 import { FinalCta } from "@/components/landing/sections/final-cta";
 import { Hero } from "@/components/landing/sections/hero";
 import { Pricing } from "@/components/landing/sections/pricing";
 import { SpecialtyStrip } from "@/components/landing/sections/specialty-strip";
+import { Testimonials } from "@/components/landing/sections/testimonials";
 import { Vault } from "@/components/landing/sections/vault";
 import { StickyCta } from "@/components/landing/sticky-cta";
 import { getAppUrl } from "@/lib/config/app-url";
@@ -55,7 +57,7 @@ function buildJsonLd(): string {
         url: BASE_URL,
         publisher: { "@id": `${BASE_URL}#org` },
         description:
-          "El día de tu consultorio, armado solo: turnos, reservas online, recordatorios por WhatsApp e historias clínicas cifradas. Para profesionales de la salud en Argentina.",
+          "El día de tu consultorio, armado solo: turnos, reservas online, recordatorios automáticos e historias clínicas cifradas. Para profesionales de la salud en Argentina.",
         offers: [
           {
             "@type": "Offer",
@@ -99,7 +101,10 @@ export default function LandingPage() {
       <Hero />
       <DayTimeline />
       <SpecialtyStrip />
+      {/* Social proof honesta: null hasta que haya quotes reales cargadas. */}
+      <Testimonials />
       <Ficha />
+      <EspecialidadesFicha />
       <Vault />
       <Bento />
       <Pricing />

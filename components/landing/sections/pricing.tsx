@@ -22,7 +22,9 @@ import { revealRange } from "../reveal";
 const SOLO_BULLETS = [
   "Turnos ilimitados",
   "Historia clínica cifrada",
-  "Reservas + WhatsApp",
+  "Reservas + recordatorios",
+  "Portal del paciente",
+  "Instrumentos y escalas",
   "Finanzas del consultorio",
   "Google Calendar espejado",
 ];

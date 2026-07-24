@@ -17,7 +17,7 @@ export const revalidate = 300;
 export const metadata: Metadata = {
   title: "Profesionales de la salud · Folio",
   description:
-    "Encontrá profesionales de la salud y reservá tu turno online: quiropraxia, cardiología, psicología y más.",
+    "Encontrá profesionales de la salud y reservá tu turno online: quiropraxia, cardiología, psicología, kinesiología, nutrición y más.",
 };
 
 export default async function ProfesionalesIndexPage() {
