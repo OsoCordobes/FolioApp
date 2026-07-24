@@ -162,8 +162,8 @@ export async function importarPacientesAction(
   for (const v of validas) {
     dniLegacy.set(v.fila, blindIndex(claveDni(v.data.dni)));
     telLegacy.set(v.fila, blindIndexPhone(v.data.telefono));
-    const raw = v.data.dni.trim();
-    if (raw && raw !== claveDni(v.data.dni)) {
+    const raw = v.data.dni?.trim();
+    if (raw && raw !== claveDni(raw)) {
       dniRawSalted.set(v.fila, blindIndex(raw, orgId));
       dniRawLegacy.set(v.fila, blindIndex(raw));
     }
