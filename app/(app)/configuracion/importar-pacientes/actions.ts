@@ -153,13 +153,29 @@ export async function importarPacientesAction(
   // sin salt guardado y el lookup solo-salted lo dejaría duplicarse.
   const dniLegacy = new Map<number, string | null>();
   const telLegacy = new Map<number, string | null>();
+  // Variante CRUDA del DNI: createPaciente/buscarPaciente hashean el valor tal
+  // como se tipeó ("28.456.789" con puntos) — el lookup solo-normalizado no
+  // matchearía un paciente cargado a mano y el import lo duplicaría. Se buscan
+  // las 4 variantes (normalizada/cruda × salted/legacy) cuando difieren.
+  const dniRawSalted = new Map<number, string | null>();
+  const dniRawLegacy = new Map<number, string | null>();
   for (const v of validas) {
     dniLegacy.set(v.fila, blindIndex(claveDni(v.data.dni)));
     telLegacy.set(v.fila, blindIndexPhone(v.data.telefono));
+    const raw = v.data.dni.trim();
+    if (raw && raw !== claveDni(v.data.dni)) {
+      dniRawSalted.set(v.fila, blindIndex(raw, orgId));
+      dniRawLegacy.set(v.fila, blindIndex(raw));
+    }
   }
 
   const setNoNulos = (xs: Array<string | null>) => [...new Set(xs.filter((x): x is string => x !== null))];
-  const dniBuscar = setNoNulos([...validas.map((v) => v.dniHash), ...dniLegacy.values()]);
+  const dniBuscar = setNoNulos([
+    ...validas.map((v) => v.dniHash),
+    ...dniLegacy.values(),
+    ...dniRawSalted.values(),
+    ...dniRawLegacy.values(),
+  ]);
   const telBuscar = setNoNulos([...validas.map((v) => v.telHash), ...telLegacy.values()]);
 
   const dniDb = await fetchHashesExistentes(supabase, orgId, "dni_hash", dniBuscar);
@@ -174,6 +190,10 @@ export async function importarPacientesAction(
   for (const v of validas) {
     const dl = dniLegacy.get(v.fila);
     if (v.dniHash && dl && existentes.dni.has(dl)) existentes.dni.add(v.dniHash);
+    const drs = dniRawSalted.get(v.fila);
+    if (v.dniHash && drs && existentes.dni.has(drs)) existentes.dni.add(v.dniHash);
+    const drl = dniRawLegacy.get(v.fila);
+    if (v.dniHash && drl && existentes.dni.has(drl)) existentes.dni.add(v.dniHash);
     const tl = telLegacy.get(v.fila);
     if (v.telHash && tl && existentes.telefono.has(tl)) existentes.telefono.add(v.telHash);
   }
@@ -311,22 +331,22 @@ async function importarChunk(
     return;
   }
 
-  const { data: pacientes, error: pacErr } = await supabase
-    .from("paciente")
-    .insert(
-      chunk.map((v, i) => ({
-        organization_id: orgId,
-        identidad_id: idents[i].id,
-        profesional_principal_id: profesionalPrincipalId,
-      })),
-    )
-    .select("id");
+  // SIN .select(): con RETURNING, Postgres aplica las policies de SELECT de
+  // `paciente` (can_read_clinical, M46), que excluyen a DIRECTOR no colegiado
+  // — el INSERT pasaba el WITH CHECK pero el RETURNING volvía vacío y el
+  // import entero se reportaba como error. El insert sin select va con
+  // Prefer: return=minimal (no dispara SELECT) y es atómico: pacErr alcanza.
+  const { error: pacErr } = await supabase.from("paciente").insert(
+    chunk.map((v, i) => ({
+      organization_id: orgId,
+      identidad_id: idents[i].id,
+      profesional_principal_id: profesionalPrincipalId,
+    })),
+  );
 
-  if (pacErr || !pacientes || pacientes.length !== chunk.length) {
+  if (pacErr) {
     await limpiarIdentidadesHuerfanas(orgId, idents.map((x) => x.id as string));
-    const mapped = pacErr
-      ? mapSupabaseError(pacErr)
-      : { message: "No se pudieron crear los pacientes." };
+    const mapped = mapSupabaseError(pacErr);
     for (const v of chunk) resumen.errores.push({ fila: v.fila, motivo: mapped.message });
     return;
   }
@@ -369,20 +389,17 @@ async function importarFilaPorFila(
       continue;
     }
 
-    const { data: pac, error: pacErr } = await supabase
-      .from("paciente")
-      .insert({
-        organization_id: orgId,
-        identidad_id: ident.id,
-        profesional_principal_id: profesionalPrincipalId,
-      })
-      .select("id")
-      .single();
+    // SIN .select() — mismo motivo que el batch: el RETURNING dispararía las
+    // policies de SELECT de `paciente` y rompería para DIRECTOR no colegiado.
+    const { error: pacErr } = await supabase.from("paciente").insert({
+      organization_id: orgId,
+      identidad_id: ident.id,
+      profesional_principal_id: profesionalPrincipalId,
+    });
 
-    if (pacErr || !pac) {
+    if (pacErr) {
       await limpiarIdentidadesHuerfanas(orgId, [ident.id as string]);
-      const mapped = pacErr ? mapSupabaseError(pacErr) : { message: "No se pudo crear el paciente." };
-      resumen.errores.push({ fila: v.fila, motivo: mapped.message });
+      resumen.errores.push({ fila: v.fila, motivo: mapSupabaseError(pacErr).message });
       continue;
     }
 
