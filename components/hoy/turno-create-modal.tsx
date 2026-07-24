@@ -29,8 +29,13 @@ import {
   type PacientePickerRow,
   type ServicioPickerRow,
 } from "@/app/(app)/hoy/actions";
+import { useToast } from "@/components/ui/toast";
 import { resolvePickerProfesional } from "@/lib/agenda/profesional";
-import { isoToLocalDatetime, localDatetimeToIso } from "@/lib/datetime-local";
+import {
+  isoToLocalDatetime,
+  localDatetimeToIso,
+  localDatetimeToastLabel,
+} from "@/lib/datetime-local";
 import { useModalA11y } from "@/lib/use-modal-a11y";
 
 interface TurnoCreateModalProps {
@@ -88,6 +93,7 @@ export function TurnoCreateModal({
   const [duracion, setDuracion] = useState<number>(45);
   const [submitting, startTransition] = useTransition();
   const [submitErr, setSubmitErr] = useState<string | null>(null);
+  const toast = useToast();
 
   // Hidratar metadata. La pre-selección de paciente la usamos una sola vez
   // al montar — si cambia el prop después, ignoramos (el modal se rerenderea
@@ -212,6 +218,14 @@ export function TurnoCreateModal({
         setSubmitErr(result.error.message);
         return;
       }
+      // C4 · feedback: hasta acá crear un turno cerraba el modal en silencio.
+      // Nombre según modo: existente → row de la metadata; nuevo → form inline.
+      const pac = mode === "existente" ? meta?.pacientes.find((p) => p.id === pacienteId) : null;
+      const nombre =
+        mode === "existente"
+          ? (pac ? `${pac.nombre} ${pac.apellido}`.trim() : pacienteQuery.trim() || "paciente")
+          : `${nuevo.nombre} ${nuevo.apellido}`.trim();
+      toast.show({ titulo: `Turno creado · ${localDatetimeToastLabel(inicioLocal)} · ${nombre}` });
       onCreated(result.data.turnoId);
     });
   };

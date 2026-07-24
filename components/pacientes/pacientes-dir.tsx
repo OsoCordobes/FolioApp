@@ -16,6 +16,8 @@ import { useMemo, useState } from "react";
 import * as I from "@/components/icons";
 import { TurnoCreateModal } from "@/components/hoy/turno-create-modal";
 import { PacienteCreateModal } from "@/components/pacientes/paciente-create-modal";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
 import { toWhatsappE164 } from "@/lib/format/phone";
 import type { PacienteDirRow } from "@/lib/db/pacientes-dir";
 import type { EspecialidadSlug } from "@/lib/especialidades/meta";
@@ -317,7 +319,14 @@ function BulkBar({ count, onClear, onWa, onTag, onArchivar }: BulkBarProps) {
 
 // ─── Reactivar widget ──────────────────────────────────────────────────────
 
-function ReactivarWidget({ pacientes }: { pacientes: PacienteDir[] }) {
+function ReactivarWidget({
+  pacientes,
+  onWhatsApp,
+}: {
+  pacientes: PacienteDir[];
+  /** Delegado al root: valida teléfonos y pide confirmación (ConfirmDialog). */
+  onWhatsApp: (ids: Set<string>) => void;
+}) {
   if (pacientes.length === 0) return null;
   return (
     <section className="pd-reactivar">
@@ -331,7 +340,7 @@ function ReactivarWidget({ pacientes }: { pacientes: PacienteDir[] }) {
         <button
           type="button"
           className="fi-btn fi-btn-secondary"
-          onClick={() => handleBulkWhatsApp(new Set(pacientes.map((p) => p.id)), pacientes)}
+          onClick={() => onWhatsApp(new Set(pacientes.map((p) => p.id)))}
         >
           Enviar a todos →
         </button>
@@ -352,7 +361,7 @@ function ReactivarWidget({ pacientes }: { pacientes: PacienteDir[] }) {
               <button
                 type="button"
                 className="fi-btn fi-btn-secondary"
-                onClick={() => handleBulkWhatsApp(new Set([p.id]), pacientes)}
+                onClick={() => onWhatsApp(new Set([p.id]))}
                 disabled={!p.tel}
                 title={p.tel ? "Abrir WhatsApp" : "Sin teléfono cargado"}
                 aria-disabled={!p.tel}
@@ -448,6 +457,34 @@ export function PacientesDir({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [createOpen, setCreateOpen] = useState(false);
   const [agendarFor, setAgendarFor] = useState<PacienteDir | null>(null);
+  /** Confirmación pendiente del WhatsApp masivo (reemplaza confirm/alert nativos). */
+  const [waConfirm, setWaConfirm] = useState<string[] | null>(null);
+  const toast = useToast();
+
+  /**
+   * WhatsApp masivo (C4): resuelve teléfonos E.164 válidos y decide UI —
+   * 0 válidos → toast de error (antes: alert nativo); 1 → abre directo;
+   * >1 → ConfirmDialog (antes: confirm nativo) porque abre una pestaña por
+   * paciente y eso hay que anticiparlo.
+   */
+  const solicitarWhatsApp = (ids: Set<string>) => {
+    const e164s = pacientes
+      .filter((p) => ids.has(p.id))
+      .map((p) => toWhatsappE164(p.tel))
+      .filter((e): e is string => e !== null);
+    if (e164s.length === 0) {
+      toast.show({
+        titulo: "Ningún paciente seleccionado tiene un teléfono válido cargado.",
+        tono: "error",
+      });
+      return;
+    }
+    if (e164s.length === 1) {
+      abrirWhatsApp(e164s);
+      return;
+    }
+    setWaConfirm(e164s);
+  };
 
   const paraReactivar = useMemo(
     () =>
@@ -500,7 +537,7 @@ export function PacientesDir({
         />
 
         {filtro !== "reactivar" && paraReactivar.length > 0 ? (
-          <ReactivarWidget pacientes={paraReactivar} />
+          <ReactivarWidget pacientes={paraReactivar} onWhatsApp={solicitarWhatsApp} />
         ) : null}
 
         <Toolbar
@@ -530,9 +567,19 @@ export function PacientesDir({
         <BulkBar
           count={selected.size}
           onClear={() => setSelected(new Set())}
-          onWa={() => handleBulkWhatsApp(selected, pacientes)}
+          onWa={() => solicitarWhatsApp(selected)}
           onTag={() => undefined /* botón disabled, ver BulkBar */}
           onArchivar={() => undefined /* botón disabled, ver BulkBar */}
+        />
+      ) : null}
+
+      {waConfirm ? (
+        <ConfirmDialog
+          titulo={`¿Abrir WhatsApp para ${waConfirm.length} pacientes?`}
+          mensaje="Se abre una pestaña de WhatsApp por paciente."
+          confirmLabel="Abrir pestañas"
+          onConfirm={() => abrirWhatsApp(waConfirm)}
+          onClose={() => setWaConfirm(null)}
         />
       ) : null}
 
@@ -561,24 +608,13 @@ export function PacientesDir({
   );
 }
 
-function handleBulkWhatsApp(selected: Set<string>, pacientes: PacienteDir[]): void {
-  // Normaliza a E.164 AR (54 + 9 móvil + NSN, sin 0/15): un teléfono cargado en
-  // formato local abriría un wa.me inválido sin esto (auditoría L4).
-  const elegidos = pacientes
-    .filter((p) => selected.has(p.id))
-    .map((p) => ({ p, e164: toWhatsappE164(p.tel) }))
-    .filter((x): x is { p: PacienteDir; e164: string } => x.e164 !== null);
-  if (elegidos.length === 0) {
-    alert("Ninguno de los pacientes seleccionados tiene un teléfono válido cargado.");
-    return;
-  }
-  if (elegidos.length > 1) {
-    const ok = confirm(
-      `WhatsApp masivo abre una pestaña por paciente (${elegidos.length}). ¿Continuar?`,
-    );
-    if (!ok) return;
-  }
-  for (const { e164 } of elegidos) {
+/**
+ * Abre wa.me por cada teléfono ya normalizado a E.164 AR (54 + 9 móvil + NSN,
+ * sin 0/15 — auditoría L4). La validación + confirmación viven en
+ * `solicitarWhatsApp` (root): acá solo se ejecuta la apertura.
+ */
+function abrirWhatsApp(e164s: string[]): void {
+  for (const e164 of e164s) {
     window.open(`https://wa.me/${e164}`, "_blank", "noopener");
   }
 }
