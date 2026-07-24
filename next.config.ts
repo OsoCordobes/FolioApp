@@ -122,6 +122,16 @@ const nextConfig: NextConfig = {
         source: "/(.*)",
         headers: SECURITY_HEADERS,
       },
+      {
+        // folio.css: 592KB render-blocking que por default Vercel sirve con
+        // max-age=0 (revalidación en CADA navegación). Cache inmutable de un
+        // año: el <link> de app/layout.tsx lo versiona con ?v=<commit SHA>,
+        // así cada deploy bustea el cache sin tocar este header.
+        source: "/folio.css",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+        ],
+      },
     ];
   },
 };
