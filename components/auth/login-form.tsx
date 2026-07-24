@@ -15,7 +15,7 @@
 
 import Script from "next/script";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
+import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
 
@@ -29,6 +29,7 @@ import {
 } from "@/app/(public)/login/actions";
 import { signUpAndInitOrganization } from "@/app/(public)/onboarding/actions";
 import { CheckEmailPanel } from "@/components/auth/check-email-panel";
+import { PasswordStrengthMeter } from "@/components/auth/password-strength-meter";
 import { safeRedirect } from "@/lib/security/safe-redirect";
 import { supportMailto } from "@/lib/support";
 
@@ -466,18 +467,6 @@ function Signup({ setVista, switchToLoginWith }: SignupProps) {
     });
   };
 
-  const pwStrength = useMemo(() => {
-    if (!password) return 0;
-    let s = 0;
-    if (password.length >= 8) s++;
-    if (password.length >= 12) s++;
-    if (/[A-Z]/.test(password) && /[a-z]/.test(password)) s++;
-    if (/\d/.test(password)) s++;
-    if (/[^a-zA-Z0-9]/.test(password)) s++;
-    return Math.min(s, 4);
-  }, [password]);
-  const pwLbl = ["Muy débil", "Débil", "Aceptable", "Buena", "Excelente"][pwStrength];
-
   // Ítem 1.5: post-signup con Confirm email ON — panel "Revisá tu email".
   // (Después de TODOS los hooks para no romper las reglas de hooks.)
   if (awaitingEmail) {
@@ -564,16 +553,7 @@ function Signup({ setVista, switchToLoginWith }: SignupProps) {
               {showPw ? <EyeClosed /> : <EyeOpen />}
             </button>
           </div>
-          {password ? (
-            <div className="au-pw-meter">
-              <div className="au-pw-meter-bars">
-                {[0, 1, 2, 3].map((i) => (
-                  <span key={i} className={i < pwStrength ? `au-pw-bar is-on s-${pwStrength}` : "au-pw-bar"} />
-                ))}
-              </div>
-              <span className="au-pw-label">{pwLbl}</span>
-            </div>
-          ) : null}
+          <PasswordStrengthMeter password={password} />
         </label>
 
         {/* Ley 25.326 art. 14: explicit informed consent before processing PII */}
