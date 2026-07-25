@@ -51,6 +51,7 @@ import {
   ESPECIALIDAD_SLUGS,
   type EspecialidadSlug,
 } from "@/lib/especialidades/meta";
+import { formatArsFromCents } from "@/lib/format/currency";
 import { SUPPORT_EMAIL, supportMailto } from "@/lib/support";
 import type {
   ConsultorioData,
@@ -1666,15 +1667,38 @@ function SecEquipo({
 
 // ─── Sección: Plan ─────────────────────────────────────────────────────────
 
-function SecPlan({ isOwner }: { isOwner: boolean }) {
+function SecPlan({
+  isOwner,
+  orgTipo,
+  montoActualCents,
+  membersActivos,
+}: {
+  isOwner: boolean;
+  orgTipo: "INDEPENDIENTE" | "CLINICA";
+  /** Precio mensual real computado server-side (computeMonthlyPriceCents). */
+  montoActualCents: number;
+  membersActivos: number;
+}) {
+  // E3 · antes esto hardcodeaba "Folio Profesional · $30.000 / mes" incluso
+  // para clínicas que pagan por seats (y drifteaba si MP_PLAN_PRICE_CENTS se
+  // overridea por env). Ahora plan + precio vienen de la capa de pricing.
+  const esClinica = orgTipo === "CLINICA";
   return (
     <>
       <Section title="Suscripción">
         <div className="cfg-plan-card">
           <div className="cfg-plan-card-l">
             <span className="fi-eyebrow">Plan actual</span>
-            <h3>Folio Profesional · $30.000 / mes</h3>
+            <h3>
+              {esClinica ? "Plan Clínica" : "Folio Profesional"} ·{" "}
+              {formatArsFromCents(montoActualCents)} / mes
+            </h3>
             <p>
+              {esClinica
+                ? `Según tu equipo actual (${membersActivos} ${
+                    membersActivos === 1 ? "integrante activo" : "integrantes activos"
+                  }): el monto se ajusta solo cuando cambia el equipo. `
+                : ""}
               Cobro automático mensual vía Mercado Pago. Podés cancelar cuando quieras.
               Durante los primeros 30 días tenés acceso completo sin tarjeta.
             </p>
@@ -2053,7 +2077,14 @@ export function Configuracion({
               isOwner={isOwner}
             />
           ) : null}
-          {seccion === "plan"          ? <SecPlan isOwner={isOwner} /> : null}
+          {seccion === "plan"          ? (
+            <SecPlan
+              isOwner={isOwner}
+              orgTipo={orgTipo}
+              montoActualCents={montoActualCents}
+              membersActivos={membersActivos}
+            />
+          ) : null}
         </div>
       </div>
     </div>

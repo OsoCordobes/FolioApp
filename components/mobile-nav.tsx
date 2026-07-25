@@ -30,8 +30,9 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { EspecialidadSwitcher } from "@/components/especialidad-switcher";
 import * as I from "@/components/icons";
 import { OrgSwitcher, type OrgSwitcherOption } from "@/components/org-switcher";
-import { InternalAccountBadge } from "@/components/sidebar";
+import { InternalAccountBadge, TrialChip } from "@/components/sidebar";
 import { capabilitiesFor, type Capabilities, type Role } from "@/lib/auth/capabilities";
+import { computeTrialChip, type TrialChipView } from "@/lib/billing/trial-chip";
 import type { EspecialidadSlug } from "@/lib/especialidades/meta";
 import { useModalA11y } from "@/lib/use-modal-a11y";
 
@@ -71,6 +72,8 @@ export interface MobileNavProps {
   especialidadOverride?: EspecialidadSlug | null;
   memberships?: OrgSwitcherOption[];
   activeOrgId?: string;
+  /** E3 · días restantes del trial (accessGate.graceDaysLeft del layout). */
+  graceDaysLeft?: number | null;
 }
 
 export function MobileNav({
@@ -81,11 +84,19 @@ export function MobileNav({
   especialidadOverride,
   memberships,
   activeOrgId,
+  graceDaysLeft,
 }: MobileNavProps) {
   const caps = capabilitiesFor(role, esColegiado);
   const items = MOBILE_NAV_ITEMS.filter((item) => !item.requires || item.requires(caps));
   const pathname = usePathname() ?? "/";
   const [sheetOpen, setSheetOpen] = useState(false);
+  // E3 · misma decisión pura que el chip del sidebar; acá alimenta el dot
+  // sobre "Más" y el chip dentro del sheet.
+  const trialChip = computeTrialChip({
+    role,
+    graceDaysLeft: graceDaysLeft ?? null,
+    isInternalAccount: organization.isInternalAccount,
+  });
 
   // Navegar (desde el sheet o desde cualquier lado) cierra el sheet: el
   // pathname nuevo es la señal más confiable — cubre Links, back button, etc.
@@ -120,8 +131,16 @@ export function MobileNav({
           aria-current={masActivo ? "page" : undefined}
           onClick={() => setSheetOpen((v) => !v)}
         >
-          <span className="fi-mnav-ico" aria-hidden><I.More size={20} /></span>
+          <span className="fi-mnav-ico" aria-hidden>
+            <I.More size={20} />
+            {/* E3 · dot de trial: indicador discreto equivalente al chip del
+                sidebar (el detalle vive en el sheet). Amber solo con ≤7 días. */}
+            {trialChip.show ? (
+              <span className={"fi-mnav-trial-dot" + (trialChip.urgent ? " is-urgent" : "")} />
+            ) : null}
+          </span>
           <span className="fi-mnav-lbl">Más</span>
+          {trialChip.show ? <span className="sr-only">{trialChip.label}</span> : null}
         </button>
       </nav>
 
@@ -132,6 +151,7 @@ export function MobileNav({
           especialidadOverride={especialidadOverride}
           memberships={memberships}
           activeOrgId={activeOrgId}
+          trialChip={trialChip}
           onClose={() => setSheetOpen(false)}
         />
       ) : null}
@@ -147,6 +167,8 @@ interface MobileMoreSheetProps {
   especialidadOverride?: EspecialidadSlug | null;
   memberships?: OrgSwitcherOption[];
   activeOrgId?: string;
+  /** E3 · chip de trial ya decidido por el nav (mismo view que el sidebar). */
+  trialChip: TrialChipView;
   onClose: () => void;
 }
 
@@ -156,6 +178,7 @@ function MobileMoreSheet({
   especialidadOverride,
   memberships,
   activeOrgId,
+  trialChip,
   onClose,
 }: MobileMoreSheetProps) {
   const sheetRef = useRef<HTMLDivElement | null>(null);
@@ -199,6 +222,10 @@ function MobileMoreSheet({
             orgEspecialidad={especialidad}
           />
         ) : null}
+
+        {/* E3 · el dot de "Más" apunta acá: el chip completo con los días,
+            mismo componente que el sidebar. Navegar cierra el sheet. */}
+        <TrialChip chip={trialChip} onNavigate={onClose} />
 
         <div className="fi-mnav-sheet-links">
           <Link href="/configuracion" className="fi-mnav-sheet-link" onClick={onClose}>
