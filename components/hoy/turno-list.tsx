@@ -17,6 +17,8 @@ import { nombreCortoProfesional } from "@/lib/agenda/profesional";
 import { fmtMoney } from "@/lib/dashboard-helpers";
 import type { EstadoTurno, PacientesById, Turno } from "@/lib/types";
 
+import type { CobroCierreActionInput } from "@/app/(app)/hoy/actions";
+
 interface TurnoListProps {
   turnos: Turno[];
   pacientes: PacientesById;
@@ -25,7 +27,7 @@ interface TurnoListProps {
   now?: Date;
   /** IANA timezone de la org, para comparar `turno.hora` contra `now`. */
   timezone?: string;
-  onTransition: (id: string, to: EstadoTurno, extra?: Partial<Turno>) => void;
+  onTransition: (id: string, to: EstadoTurno, extra?: Partial<Turno>, cobro?: CobroCierreActionInput) => void;
   onOpenFicha: (id: string) => void;
   /** Abre el modal de reagendar para un turno (sube hasta Dashboard). */
   onReagendar?: (id: string) => void;

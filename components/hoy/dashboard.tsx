@@ -27,7 +27,7 @@ import { useAgendaAutoRefresh } from "@/lib/use-agenda-refresh";
 import { useNow } from "@/lib/use-now";
 import type { EstadoTurno, PacientesById, Turno } from "@/lib/types";
 
-import { transitionTurnoAction } from "@/app/(app)/hoy/actions";
+import { transitionTurnoAction, type CobroCierreActionInput } from "@/app/(app)/hoy/actions";
 
 interface DashboardProps {
   initialTurnos: Turno[];
@@ -95,7 +95,12 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
    * - Dispara `transitionTurnoAction` en server.
    * - Si falla, revierte al estado anterior y muestra el error inline.
    */
-  const handleTransition = (id: string, to: EstadoTurno, extra: Partial<Turno> = {}) => {
+  const handleTransition = (
+    id: string,
+    to: EstadoTurno,
+    extra: Partial<Turno> = {},
+    cobro?: CobroCierreActionInput,
+  ) => {
     setTransitionError(null);
     setTurnos((prev) => {
       const idx = prev.findIndex((t) => t.id === id);
@@ -113,6 +118,8 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
           turnoId: id,
           to,
           duracionRealMin: typeof extra.duracionMin === "number" ? extra.duracionMin : undefined,
+          // E1 · cobro del mini-diálogo (solo viaja al cerrar).
+          cobro,
         });
         if (!result.ok) {
           console.warn("[hoy] transición rechazada:", result.error.message);
@@ -122,7 +129,9 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
         }
         // C4 · feedback: toast de éxito recién cuando el server confirmó (el
         // update optimista ya se ve en la lista; el toast asegura "se guardó").
-        const tituloToast = TRANSITION_TOAST[to];
+        const tituloToast = to === "cerrado" && cobro && !cobro.pagado
+          ? "Turno cerrado · deuda registrada"
+          : TRANSITION_TOAST[to];
         if (tituloToast) {
           const nombre = pacientes[before.pacienteId]?.nombre ?? "paciente";
           toast.show({ titulo: `${tituloToast} · ${before.hora} · ${nombre}` });

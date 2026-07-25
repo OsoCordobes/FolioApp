@@ -19920,3 +19920,144 @@ input:focus { outline: none; }
 .fi-list.is-dense .fi-turno { padding-left: 14px; }
 .fi-turno.is-atendiendo { padding-left: 16px; }
 .fi-list.is-dense .fi-turno.is-atendiendo { padding-left: 16px; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   E1+E2 · FINANZAS COMPLETAS — cobro real, deudores y números del período
+   (feat/finanzas-completas · append-only)
+   1) Mini-diálogo de cobro al cerrar turno en /hoy (.fi-cobro-*)
+   2) KPI strip a auto-fit (entra "Por cobrar"; la Proyección solo va en mes)
+   3) Chips Todos/Cobrados/Pendientes + chip de estado + botón Cobrar inline
+   4) Desglose por profesional bajo el donut (patrón fn-legend-row)
+   5) Responsive fn-*: /finanzas no tenía UNA sola regla mobile (audit)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* 1 · Mini-diálogo de cobro (components/hoy/cobro-cierre-dialog.tsx) */
+.fi-cobro-field { display: block; margin-bottom: 14px; }
+.fi-cobro-lbl {
+  display: block;
+  font-size: 11px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 6px;
+}
+.fi-cobro-monto {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 9px 12px;
+  background: var(--surface);
+  color: var(--ink-2);
+}
+.fi-cobro-monto:focus-within { border-color: var(--accent); }
+.fi-cobro-monto input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -.01em;
+  min-width: 0;
+}
+.fi-cobro-metodos { display: flex; flex-wrap: wrap; gap: 6px; }
+.fi-cobro-metodo {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-2);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: border-color .12s ease, color .12s ease, background .12s ease;
+}
+.fi-cobro-metodo:hover { border-color: var(--accent); color: var(--ink); }
+.fi-cobro-metodo.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-2);
+  font-weight: 600;
+}
+.fi-cobro-deuda {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px dashed var(--line);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+.fi-cobro-deuda input { margin-top: 2px; accent-color: var(--amber); }
+.fi-cobro-deuda small { display: block; color: var(--ink-3); font-size: 12px; margin-top: 2px; }
+
+/* 2 · KPI strip: auto-fit (5 cards en "Este mes", 4 en el resto) + tono deuda */
+.fn-kpis { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+.fn-kpi.is-warn .fn-kpi-val { color: var(--amber); }
+
+/* 3 · Chips de estado de la tabla + botón Cobrar inline */
+.fn-estado-chips {
+  display: inline-flex;
+  gap: 2px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px;
+  background: var(--surface);
+}
+.fn-estado-chip-btn {
+  border: none;
+  background: transparent;
+  color: var(--ink-3);
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color .12s ease, background .12s ease;
+}
+.fn-estado-chip-btn:hover { color: var(--ink); }
+.fn-estado-chip-btn.is-active { background: var(--surface-2); color: var(--ink); font-weight: 600; }
+.fn-estado-chip {
+  display: inline-block;
+  font-size: 11px;
+  letter-spacing: .02em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.fn-estado-chip.is-cobrado { color: var(--green); background: var(--green-soft); }
+.fn-estado-chip.is-pendiente { color: var(--amber); background: var(--amber-soft); }
+.fn-cobrar-btn { margin-left: 8px; padding: 3px 9px; font-size: 11.5px; }
+
+/* 4 · Desglose por profesional (bajo el donut, solo Director/dueño) */
+.fn-prof-breakdown {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
+}
+.fn-prof-rows { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.fn-prof-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+}
+.fn-prof-count { font-size: 11.5px; color: var(--ink-3); }
+
+/* 5 · Responsive fn-* (audit: la página más probable de abrirse en mobile) */
+@media (max-width: 767px) {
+  .fn-content { padding: 20px 16px 96px; }
+  .fn-kpis { grid-template-columns: repeat(2, 1fr); }
+  .fn-charts-grid { grid-template-columns: 1fr; }
+  .fn-head { flex-wrap: wrap; gap: 10px; }
+  .fn-head-controls { max-width: 100%; }
+  .fn-period { overflow-x: auto; max-width: 100%; }
+  .fn-table-wrap { overflow-x: auto; }
+  .fn-table { min-width: 640px; }
+  .fn-donut-wrap { flex-direction: column; align-items: center; }
+  .fn-table-head { flex-wrap: wrap; gap: 8px; }
+  .fn-table-tools { flex-wrap: wrap; }
+}

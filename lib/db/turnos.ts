@@ -39,6 +39,22 @@ const turnoSchema = z.object({
   modalidad: z.enum(["presencial", "telemedicina"]).default("presencial"),
 });
 
+/**
+ * Cobro explícito del cierre (E1 · finanzas): lo que la recepción/el médico
+ * eligió en el mini-diálogo de cobro al cerrar el turno. Opcional: los
+ * callers que no lo mandan (Guardar y cerrar de la ficha, flujos legacy)
+ * conservan el comportamiento histórico — efectivo PAGADO por el precio del
+ * turno. `pagado=false` ("quedó debiendo") crea el pago en estado PENDIENTE,
+ * que /finanzas lista como deuda por cobrar.
+ */
+const cobroCierreSchema = z.object({
+  montoCents: z.number().int().min(0).max(100_000_000),
+  metodo: z.enum(["EFECTIVO", "TRANSFERENCIA", "MERCADOPAGO", "TARJETA", "OBRA_SOCIAL", "OTRO"]),
+  pagado: z.boolean(),
+});
+
+export type CobroCierre = z.infer<typeof cobroCierreSchema>;
+
 const transitionSchema = z.object({
   turnoId: z.string().uuid(),
   to: z.enum([
@@ -46,6 +62,8 @@ const transitionSchema = z.object({
     "CERRADO", "NO_ASISTIO", "CANCELADO", "REAGENDADO",
   ]),
   duracionRealMin: z.number().int().min(0).max(480).optional(),
+  /** Solo aplica cuando to === "CERRADO"; se ignora en el resto. */
+  cobro: cobroCierreSchema.optional(),
 });
 
 // `z.input` (no `z.infer`/`z.output`): los campos con `.default()` (origen,
@@ -444,24 +462,36 @@ export async function transitionTurno(input: z.infer<typeof transitionSchema>): 
   // $0 para el mismo día. Idempotente vía UNIQUE(turno_id); no-fatal: si la
   // RLS lo rechaza (rol sin permiso de pagos) el cierre del turno sigue
   // valiendo y el pago se puede registrar después desde finanzas.
-  if (parsed.data.to === "CERRADO" && precioCents > 0) {
-    const { error: pagoErr } = await supabase.from("pago").upsert(
-      {
-        turno_id: parsed.data.turnoId,
-        monto_cents: precioCents,
-        metodo: "EFECTIVO",
-        estado: "PAGADO",
-        pagado_ts: new Date().toISOString(),
-        notas: "Registrado automáticamente al cerrar el turno.",
-      },
-      { onConflict: "turno_id", ignoreDuplicates: true },
-    );
-    if (pagoErr) {
-      const { captureException } = await import("@sentry/nextjs");
-      captureException(new Error(`pago auto-registro falló: ${pagoErr.message}`), {
-        tags: { component: "turno-transition", op: "autoPago" },
-        extra: { turnoId: parsed.data.turnoId },
-      });
+  //
+  // E1 · con `cobro` explícito (mini-diálogo de /hoy) se respeta monto, método
+  // y estado elegidos: "quedó debiendo" crea el pago PENDIENTE (pagado_ts NULL,
+  // CHECK pago_consistency de M09). Sin `cobro`, comportamiento histórico:
+  // efectivo PAGADO por el precio del turno.
+  if (parsed.data.to === "CERRADO") {
+    const cobro = parsed.data.cobro;
+    const montoCents = cobro ? cobro.montoCents : precioCents;
+    const pagado = cobro ? cobro.pagado : true;
+    if (montoCents > 0) {
+      const { error: pagoErr } = await supabase.from("pago").upsert(
+        {
+          turno_id: parsed.data.turnoId,
+          monto_cents: montoCents,
+          metodo: cobro?.metodo ?? "EFECTIVO",
+          estado: pagado ? "PAGADO" : "PENDIENTE",
+          pagado_ts: pagado ? new Date().toISOString() : null,
+          notas: cobro
+            ? "Registrado en el cierre del turno."
+            : "Registrado automáticamente al cerrar el turno.",
+        },
+        { onConflict: "turno_id", ignoreDuplicates: true },
+      );
+      if (pagoErr) {
+        const { captureException } = await import("@sentry/nextjs");
+        captureException(new Error(`pago auto-registro falló: ${pagoErr.message}`), {
+          tags: { component: "turno-transition", op: "autoPago" },
+          extra: { turnoId: parsed.data.turnoId },
+        });
+      }
     }
   }
 

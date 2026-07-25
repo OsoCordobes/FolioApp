@@ -45,10 +45,23 @@ const ESTADO_UI_TO_DB: Record<
   reagendado: "REAGENDADO",
 };
 
+/**
+ * E1 · cobro elegido en el mini-diálogo al cerrar un turno. Espejo del
+ * `cobroCierreSchema` de lib/db/turnos.ts (la validación real vive allá).
+ * `pagado=false` = "quedó debiendo" → pago PENDIENTE visible en /finanzas.
+ */
+export interface CobroCierreActionInput {
+  montoCents: number;
+  metodo: "EFECTIVO" | "TRANSFERENCIA" | "MERCADOPAGO" | "TARJETA" | "OBRA_SOCIAL";
+  pagado: boolean;
+}
+
 export interface TransitionTurnoActionInput {
   turnoId: string;
   to: EstadoTurno;
   duracionRealMin?: number;
+  /** Solo con to === "cerrado": método/monto/estado del cobro registrado. */
+  cobro?: CobroCierreActionInput;
 }
 
 export async function transitionTurnoAction(
@@ -58,6 +71,7 @@ export async function transitionTurnoAction(
     turnoId: input.turnoId,
     to: ESTADO_UI_TO_DB[input.to],
     duracionRealMin: input.duracionRealMin,
+    cobro: input.to === "cerrado" ? input.cobro : undefined,
   });
 
   if (result.ok) {

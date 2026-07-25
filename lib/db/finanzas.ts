@@ -20,6 +20,7 @@
  * confían en el join (turno) + RLS para el scoping.
  */
 
+import type { ProfesionalLite } from "@/lib/agenda/profesional";
 import { decryptColumn } from "@/lib/crypto";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -47,6 +48,27 @@ export interface FinanzasServicioBreakdown {
   color: string;
 }
 
+/** Punto de la serie mensual (períodos 6m/año). */
+export interface FinanzasMesIngreso {
+  /** "2026-02" — clave estable. */
+  ym: string;
+  /** Label corto para el eje ("feb", o "feb 26" si el rango cruza años). */
+  label: string;
+  /** Pesos enteros. */
+  monto: number;
+}
+
+/** Desglose de ingresos por profesional (solo canSeeFinanzasAll). */
+export interface FinanzasProfesionalBreakdown {
+  /** member.id del profesional del turno. */
+  id: string;
+  nombre: string;
+  /** Pagos cobrados del período. */
+  count: number;
+  /** Pesos enteros (solo PAGADO — la deuda vive en porCobrar). */
+  monto: number;
+}
+
 export interface FinanzasData {
   mesLabel: string;          // "mayo 2026"
   mesNumero: number;         // 1..12
@@ -59,7 +81,23 @@ export interface FinanzasData {
   proyeccionFinDeMes: number;
   deltaIngresosVsMesPasadoPct: number | null;
   ingresosPorDia: Array<[number, number]>; // [day, monto]
+  /**
+   * E2 · serie mensual agregada para rangos largos (6m/año). Vacía para
+   * rangos cortos (el chart diario manda). Meses sin ingresos vienen en 0.
+   */
+  ingresosPorMes: FinanzasMesIngreso[];
+  /** true = rango >~40 días: la UI cambia el chart diario por barras mensuales. */
+  esRangoLargo: boolean;
+  /** E2 · deuda del período: suma de pagos con estado ≠ PAGADO (pesos). */
+  porCobrar: number;
+  porCobrarCount: number;
   serviciosBreakdown: FinanzasServicioBreakdown[];
+  /**
+   * E2 · ingresos por profesional — solo cuando el caller pasó `profesionales`
+   * (la page lo hace únicamente con canSeeFinanzasAll y >1 colegiado). null =
+   * no corresponde mostrarlo.
+   */
+  profesionalesBreakdown: FinanzasProfesionalBreakdown[] | null;
   transacciones: FinanzasTransaccion[];
 }
 
@@ -73,9 +111,22 @@ interface FetcherInput {
    * selector de período de /finanzas (hoy/semana/mes/6m/año). Cuando está
    * presente, los KPIs y transacciones se computan sobre [startUtc, endUtc).
    * Para rangos largos (>~1 mes) el chart diario se omite (ingresosPorDia vacío)
-   * y se reportan solo los totales.
+   * y en su lugar se agrega la serie mensual (ingresosPorMes).
    */
   rangeOverride?: { startUtc: string; endUtc: string; label: string };
+  /**
+   * E1 · FIX LEAK: scoping por profesional. Cuando viene (PROFESIONAL con
+   * canSeeFinanzasOwn y sin canSeeFinanzasAll), las TRES queries filtran por
+   * turno.profesional_id — cada médico/a ve SOLO lo suyo, como promete la
+   * matriz de permisos de Configuración. null/undefined = toda la org.
+   */
+  profesionalMemberId?: string | null;
+  /**
+   * E2 · colegiados activos para el desglose por profesional (nombres). La
+   * page los pasa solo con canSeeFinanzasAll y >1 colegiado; ausente/vacío →
+   * profesionalesBreakdown = null.
+   */
+  profesionales?: ProfesionalLite[];
 }
 
 // ─── Tipos de rows DB ──────────────────────────────────────────────────────
@@ -94,6 +145,7 @@ interface PagoTurnoRow {
     duracion_min: number;
     paciente_id: string;
     servicio_id: string;
+    profesional_id: string | null;
     paciente: {
       identidad: {
         nombre_cifrado: string | null;
@@ -126,6 +178,19 @@ const COLORES_SERVICIO = [
   "var(--ink-3)",
 ];
 
+const MESES_ABREV = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+
+/**
+ * Select compartido de pagos con el join expandido (paciente + servicio +
+ * profesional). Lo usan getFinanzasDelMes y getFinanzasExportRows para que el
+ * export vea EXACTAMENTE las mismas filas que la página (solo que sin cap).
+ */
+const PAGOS_SELECT =
+  "id, monto_cents, metodo, estado, pagado_ts, created_at, " +
+  "turno:turno_id!inner(id, inicio, estado, duracion_min, organization_id, paciente_id, servicio_id, profesional_id, " +
+  "paciente:paciente_id(identidad:identidad_id(nombre_cifrado, apellido_cifrado)), " +
+  "servicio:servicio_id(nombre, tipo_canonico))";
+
 // ─── Fetcher principal ─────────────────────────────────────────────────────
 
 export async function getFinanzasDelMes(input: FetcherInput): Promise<Result<FinanzasData>> {
@@ -157,6 +222,11 @@ export async function getFinanzasDelMes(input: FetcherInput): Promise<Result<Fin
   const rangeMs = new Date(endUtc).getTime() - new Date(startUtc).getTime();
   const isLongRange = rangeMs > 40 * 24 * 60 * 60_000; // > ~40 días
 
+  // Scoping por profesional (E1 · FIX LEAK): con `profesionalMemberId` las
+  // TRES queries filtran por turno.profesional_id — el join !inner ya expone
+  // la columna en las de pago.
+  const scopeMemberId = input.profesionalMemberId ?? null;
+
   // 1. Pagos del mes con join expandido para hidratar paciente + servicio.
   // PostgREST relational nesting:
   //   pago.turno → paciente → identidad → nombre/apellido_cifrado.
@@ -166,43 +236,47 @@ export async function getFinanzasDelMes(input: FetcherInput): Promise<Result<Fin
   // membresías del user (user_org_ids()). Con multi-membresía (clínicas,
   // cuenta demo multi-org) una query sin filtro mezclaría pagos de todas las
   // orgs — por eso el join es !inner + .eq sobre turno.organization_id.
-  const { data: pagosRaw, error: pagosErr } = await supabase
+  let pagosQuery = supabase
     .from("pago")
-    .select(
-      "id, monto_cents, metodo, estado, pagado_ts, created_at, " +
-        "turno:turno_id!inner(id, inicio, estado, duracion_min, organization_id, paciente_id, servicio_id, " +
-        "paciente:paciente_id(identidad:identidad_id(nombre_cifrado, apellido_cifrado)), " +
-        "servicio:servicio_id(nombre, tipo_canonico))",
-    )
+    .select(PAGOS_SELECT)
     .eq("turno.organization_id", input.organizationId)
     .gte("created_at", startUtc)
     .lt("created_at", endUtc)
     .order("created_at", { ascending: false });
+  if (scopeMemberId) pagosQuery = pagosQuery.eq("turno.profesional_id", scopeMemberId);
+
+  const { data: pagosRaw, error: pagosErr } = await pagosQuery;
 
   if (pagosErr) return err("db_error", "Error leyendo pagos del mes.", pagosErr.message);
 
   // 2. Total mes pasado (solo pagado) para delta KPI. Mismo scoping explícito
-  // por org que la query principal (ver comment arriba).
-  const { data: prevPagosAgg } = await supabase
+  // por org (y por profesional, si aplica) que la query principal.
+  let prevPagosQuery = supabase
     .from("pago")
-    .select("monto_cents, turno:turno_id!inner(organization_id)")
+    .select("monto_cents, turno:turno_id!inner(organization_id, profesional_id)")
     .eq("turno.organization_id", input.organizationId)
     .eq("estado", "PAGADO")
     .gte("created_at", prevStartUtc)
     .lt("created_at", prevEndUtc);
+  if (scopeMemberId) prevPagosQuery = prevPagosQuery.eq("turno.profesional_id", scopeMemberId);
+
+  const { data: prevPagosAgg } = await prevPagosQuery;
 
   const prevTotalCents = ((prevPagosAgg ?? []) as Array<{ monto_cents: number }>).reduce(
     (s, r) => s + (r.monto_cents ?? 0), 0,
   );
 
   // 3. Turnos CERRADOS del mes (para count sesiones, RLS-scoped).
-  const { data: turnosCerrados } = await supabase
+  let turnosQuery = supabase
     .from("turno")
     .select("id")
     .eq("organization_id", input.organizationId)
     .eq("estado", "CERRADO")
     .gte("inicio", startUtc)
     .lt("inicio", endUtc);
+  if (scopeMemberId) turnosQuery = turnosQuery.eq("profesional_id", scopeMemberId);
+
+  const { data: turnosCerrados } = await turnosQuery;
 
   const totalSesiones = (turnosCerrados ?? []).length;
 
@@ -218,8 +292,29 @@ export async function getFinanzasDelMes(input: FetcherInput): Promise<Result<Fin
     for (let d = 1; d <= diasDelMes; d++) ingresosPorDiaMap.set(d, 0);
   }
 
+  // E2 · serie mensual para rangos largos: prellenamos TODOS los meses del
+  // rango en 0 para que los meses sin ingresos aparezcan como barras vacías
+  // (y no desaparezcan del eje).
+  const mesesRango: Array<{ y: number; m: number }> = [];
+  if (isLongRange) {
+    const startParts = formatDateInTz(new Date(startUtc), tz);
+    const endParts = formatDateInTz(new Date(new Date(endUtc).getTime() - 1), tz);
+    let cy = startParts.year;
+    let cm = startParts.month;
+    while ((cy < endParts.year || (cy === endParts.year && cm <= endParts.month)) && mesesRango.length < 24) {
+      mesesRango.push({ y: cy, m: cm });
+      cm += 1;
+      if (cm > 12) { cm = 1; cy += 1; }
+    }
+  }
+  const ingresosPorMesMap = new Map<string, number>();
+  for (const mes of mesesRango) ingresosPorMesMap.set(ymKey(mes.y, mes.m), 0);
+
   const serviciosMap = new Map<string, { nombre: string; count: number; monto: number }>();
+  const profesionalesMap = new Map<string, { count: number; monto: number }>();
   let totalIngresosCents = 0;
+  let porCobrarCents = 0;
+  let porCobrarCount = 0;
 
   const transacciones: FinanzasTransaccion[] = [];
 
@@ -227,20 +322,45 @@ export async function getFinanzasDelMes(input: FetcherInput): Promise<Result<Fin
     const monto = pago.monto_cents ?? 0;
     if (pago.estado === "PAGADO") {
       totalIngresosCents += monto;
+      const fechaCobro = pago.pagado_ts ?? pago.created_at;
       if (buildDailyChart) {
-        const day = dayInTz(pago.pagado_ts ?? pago.created_at, tz);
+        const day = dayInTz(fechaCobro, tz);
         ingresosPorDiaMap.set(day, (ingresosPorDiaMap.get(day) ?? 0) + monto);
       }
+      if (isLongRange) {
+        const parts = formatDateInTz(new Date(fechaCobro), tz);
+        const key = ymKey(parts.year, parts.month);
+        if (ingresosPorMesMap.has(key)) {
+          ingresosPorMesMap.set(key, (ingresosPorMesMap.get(key) ?? 0) + monto);
+        }
+      }
+    } else {
+      // E2 · deuda del período (pagos PENDIENTE/PARCIAL del mini-diálogo de
+      // cierre con "quedó debiendo").
+      porCobrarCents += monto;
+      porCobrarCount += 1;
     }
 
-    if (pago.turno?.servicio) {
-      const key = pago.turno.servicio.tipo_canonico || pago.turno.servicio.nombre;
-      const prev = serviciosMap.get(key) ?? { nombre: pago.turno.servicio.nombre, count: 0, monto: 0 };
-      serviciosMap.set(key, {
-        nombre: prev.nombre,
-        count: prev.count + 1,
-        monto: prev.monto + monto,
-      });
+    // Breakdown por servicio y por profesional: SOLO pagos cobrados — el
+    // donut y la tabla de profesionales hablan de ingresos reales; la deuda
+    // vive en el KPI "Por cobrar". (Antes daba igual: todo pago nacía PAGADO.)
+    if (pago.estado === "PAGADO") {
+      if (pago.turno?.servicio) {
+        const key = pago.turno.servicio.tipo_canonico || pago.turno.servicio.nombre;
+        const prev = serviciosMap.get(key) ?? { nombre: pago.turno.servicio.nombre, count: 0, monto: 0 };
+        serviciosMap.set(key, {
+          nombre: prev.nombre,
+          count: prev.count + 1,
+          monto: prev.monto + monto,
+        });
+      }
+      if (pago.turno?.profesional_id) {
+        const prev = profesionalesMap.get(pago.turno.profesional_id) ?? { count: 0, monto: 0 };
+        profesionalesMap.set(pago.turno.profesional_id, {
+          count: prev.count + 1,
+          monto: prev.monto + monto,
+        });
+      }
     }
 
     if (transacciones.length < 20 && pago.turno) {
@@ -255,7 +375,9 @@ export async function getFinanzasDelMes(input: FetcherInput): Promise<Result<Fin
         paciente: pacienteFull,
         servicio: pago.turno.servicio?.nombre ?? "—",
         monto: Math.round(monto / 100),
-        metodo: pago.estado === "PAGADO" ? METODO_DB_TO_UI[pago.metodo] : "pendiente",
+        // E1 · el método ahora es un dato real (elegido en el cierre), así que
+        // se muestra SIEMPRE; el estado viaja aparte (columna Estado + chips).
+        metodo: METODO_DB_TO_UI[pago.metodo],
         estado: pago.estado === "PAGADO" ? "cobrado" : "pendiente",
       });
     }
@@ -292,6 +414,31 @@ export async function getFinanzasDelMes(input: FetcherInput): Promise<Result<Fin
     }))
     .sort((a, b) => b.monto - a.monto);
 
+  // Serie mensual (6m/año): label con año abreviado solo si el rango cruza años.
+  const cruzaAnios =
+    mesesRango.length > 0 && mesesRango[0].y !== mesesRango[mesesRango.length - 1].y;
+  const ingresosPorMes: FinanzasMesIngreso[] = mesesRango.map(({ y: yy, m: mm }) => ({
+    ym: ymKey(yy, mm),
+    label: MESES_ABREV[mm - 1] + (cruzaAnios ? ` ${String(yy).slice(-2)}` : ""),
+    monto: Math.round((ingresosPorMesMap.get(ymKey(yy, mm)) ?? 0) / 100),
+  }));
+
+  // Desglose por profesional: solo si la page pasó los colegiados (permiso
+  // canSeeFinanzasAll + >1 colegiado). Nombres por member.id; un profesional
+  // dado de baja con pagos históricos cae al fallback genérico.
+  let profesionalesBreakdown: FinanzasProfesionalBreakdown[] | null = null;
+  if (input.profesionales && input.profesionales.length > 0) {
+    const nombreById = new Map(input.profesionales.map((p) => [p.id, p.displayName]));
+    profesionalesBreakdown = Array.from(profesionalesMap.entries())
+      .map(([id, v]) => ({
+        id,
+        nombre: nombreById.get(id) ?? "Profesional",
+        count: v.count,
+        monto: Math.round(v.monto / 100),
+      }))
+      .sort((a, b) => b.monto - a.monto);
+  }
+
   return ok({
     mesLabel: override ? override.label : `${nombreMes(m)} ${y}`,
     mesNumero: m,
@@ -304,9 +451,81 @@ export async function getFinanzasDelMes(input: FetcherInput): Promise<Result<Fin
     proyeccionFinDeMes,
     deltaIngresosVsMesPasadoPct,
     ingresosPorDia,
+    ingresosPorMes,
+    esRangoLargo: isLongRange,
+    porCobrar: Math.round(porCobrarCents / 100),
+    porCobrarCount,
     serviciosBreakdown,
+    profesionalesBreakdown,
     transacciones,
   });
+}
+
+// ─── Export CSV (server-side, sin cap) ─────────────────────────────────────
+
+export interface FinanzasExportRow {
+  /** ISO de cobro (pagado_ts) o de registro (created_at). */
+  fecha: string;
+  paciente: string;
+  servicio: string;
+  /** Pesos enteros. */
+  monto: number;
+  metodo: MetodoPagoUI;
+  estado: "cobrado" | "pendiente";
+}
+
+/**
+ * E2 · filas COMPLETAS del período para el export CSV de /finanzas. El botón
+ * exportaba solo las ≤20 transacciones renderizadas; esta query es la MISMA
+ * que la de getFinanzasDelMes (mismo select, mismos bounds, mismo scoping por
+ * org y por profesional) pero sin cap. PII desencriptada server-side, igual
+ * que la página.
+ */
+export async function getFinanzasExportRows(
+  input: FetcherInput,
+): Promise<Result<{ rows: FinanzasExportRow[]; label: string }>> {
+  const tz = input.timezone || "America/Argentina/Cordoba";
+  const supabase = await createSupabaseServerClient();
+
+  const nowParts = formatDateInTz(new Date(), tz);
+  const monthAnchor = input.monthAnchor ?? `${nowParts.year}-${String(nowParts.month).padStart(2, "0")}-01`;
+  const [y, m] = monthAnchor.split("-").map(Number);
+
+  const override = input.rangeOverride;
+  const startUtc = override ? override.startUtc : wallClockInTzToUtc(y, m, 1, 0, 0, 0, tz).toISOString();
+  const nextMonth = m === 12 ? { y: y + 1, m: 1 } : { y, m: m + 1 };
+  const endUtc = override ? override.endUtc : wallClockInTzToUtc(nextMonth.y, nextMonth.m, 1, 0, 0, 0, tz).toISOString();
+
+  let pagosQuery = supabase
+    .from("pago")
+    .select(PAGOS_SELECT)
+    .eq("turno.organization_id", input.organizationId)
+    .gte("created_at", startUtc)
+    .lt("created_at", endUtc)
+    .order("created_at", { ascending: false });
+  if (input.profesionalMemberId) {
+    pagosQuery = pagosQuery.eq("turno.profesional_id", input.profesionalMemberId);
+  }
+
+  const { data: pagosRaw, error: pagosErr } = await pagosQuery;
+  if (pagosErr) return err("db_error", "Error leyendo pagos del período.", pagosErr.message);
+
+  const pagos = (pagosRaw ?? []) as unknown as PagoTurnoRow[];
+  const rows: FinanzasExportRow[] = pagos.map((pago) => {
+    const ident = pago.turno?.paciente?.identidad ?? null;
+    const nombre = tryDecrypt(ident?.nombre_cifrado, "export.nombre");
+    const apellido = tryDecrypt(ident?.apellido_cifrado, "export.apellido");
+    return {
+      fecha: pago.pagado_ts ?? pago.created_at,
+      paciente: [nombre, apellido].filter(Boolean).join(" ").trim() || "Paciente",
+      servicio: pago.turno?.servicio?.nombre ?? "—",
+      monto: Math.round((pago.monto_cents ?? 0) / 100),
+      metodo: METODO_DB_TO_UI[pago.metodo],
+      estado: pago.estado === "PAGADO" ? "cobrado" : "pendiente",
+    };
+  });
+
+  return ok({ rows, label: override ? override.label : `${nombreMes(m)} ${y}` });
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -344,6 +563,11 @@ export function formatDateInTz(date: Date, timeZone: string): { year: number; mo
 
 function dayInTz(isoTs: string, timeZone: string): number {
   return formatDateInTz(new Date(isoTs), timeZone).day;
+}
+
+/** Clave estable año-mes ("2026-02") para la serie mensual. */
+function ymKey(year: number, month: number): string {
+  return `${year}-${String(month).padStart(2, "0")}`;
 }
 
 export function wallClockInTzToUtc(
