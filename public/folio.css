@@ -20721,6 +20721,20 @@ input:focus { outline: none; }
 }
 .fi-chip-conf-paciente svg { flex: none; }
 
+/* M91 · gemelo del lado de la baja: "Canceló el paciente". Neutro (--slate),
+   no rojo: es atribución de quién originó la cancelación, no un error — y vive
+   dentro de filas que ya están atenuadas (is-muted) por estar canceladas. */
+.fi-chip-canc-paciente {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--slate-soft);
+  color: var(--slate);
+  font-size: 11px; font-weight: 600; letter-spacing: .01em;
+  white-space: nowrap;
+}
+.fi-chip-canc-paciente svg { flex: none; }
+
 /* ─── Página /t/[token] ─────────────────────────────────────────────────── */
 
 .fi-confirm-wrap {

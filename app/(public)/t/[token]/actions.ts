@@ -13,11 +13,18 @@
  *     público en sí misma — no confía en que el GET la haya "habilitado").
  *   - Rate limit por IP (fail-open según la matriz de lib/security/rate-limit).
  *   - Decisión pura (decideResultadoConfirmacion) + CAS guardado por estado:
- *     el `.in("estado", CONFIRM_CAS_FROM[accion])` hace el replay inocuo (0
- *     filas si otro click/staff ya movió el estado) y el trigger M09 es el
- *     backstop transaccional.
+ *     el guard por `CONFIRM_CAS_FROM[accion]` hace el replay inocuo (0 filas si
+ *     otro click/staff ya movió el estado) y el trigger M09 es el backstop
+ *     transaccional.
  *   - service client (RLS no aplica sin sesión) tocando SOLO las columnas
  *     estado/confirmado_via de UN turno cuyo id viene firmado.
+ *
+ * La mutación va por el RPC `turno_transicion_paciente` (M91) en vez de un
+ * UPDATE directo: necesita correr en la MISMA transacción que el
+ * set_config('folio.transition_origin','paciente') para que el log de
+ * `transicion` audite al paciente y no al consultorio. PostgREST abre una
+ * transacción por statement, así que un set_config suelto no llegaría al
+ * trigger.
  *
  * Al cancelar, se disparan los mismos side-effects post-respuesta que la
  * transición de staff (transitionTurno): borrar recordatorios pendientes y
@@ -101,24 +108,22 @@ export async function ejecutarConfirmacion1Click(
 
   // CAS guardado por estado: idempotente ante replay/doble click. El trigger
   // turno_record_transition (M09) valida la arista y registra la transición.
-  const patch =
-    v.accion === "confirmar"
-      ? { estado: "CONFIRMADO", confirmado_via: "paciente" }
-      : { estado: "CANCELADO" };
+  //
+  // M91 · el CAS vive DENTRO del RPC (`where id = … and deleted_at is null and
+  // estado = any(p_from)`), no en query builders acá: el set_config del origen
+  // y el UPDATE tienen que compartir transacción. El re-filtro de `deleted_at`
+  // sigue siendo obligatorio —el SECURITY DEFINER bypassea RLS igual que el
+  // service client— para que un soft-delete entre el fetch y el UPDATE no
+  // "resucite" el turno; ver el cuerpo de la función en M91.
+  const { data: casRows, error: casErr } = await service.rpc("turno_transicion_paciente", {
+    p_turno_id: turno.id,
+    p_to: v.accion === "confirmar" ? "CONFIRMADO" : "CANCELADO",
+    p_from: CONFIRM_CAS_FROM[v.accion] as string[],
+  });
 
-  const { data: casRows, error: casErr } = await service
-    .from("turno")
-    .update(patch)
-    .eq("id", turno.id)
-    // El service client bypassea RLS: el `deleted_at` hay que re-filtrarlo acá
-    // igual que en el SELECT de arriba. Sin esto, un soft-delete entre el
-    // fetch y el UPDATE (o un turno borrado por staff mientras el paciente
-    // tenía la página abierta) se "resucitaría" a CONFIRMADO.
-    .is("deleted_at", null)
-    .in("estado", CONFIRM_CAS_FROM[v.accion] as string[])
-    .select("id");
-
-  if (casErr || !casRows || casRows.length === 0) {
+  // `returns setof uuid` → PostgREST devuelve un array de ids (vacío si el CAS
+  // se perdió). Mismo contrato que el `.select("id")` del UPDATE anterior.
+  if (casErr || !Array.isArray(casRows) || casRows.length === 0) {
     // Carrera (otro click / staff movió el estado) o rechazo del trigger:
     // re-leer y re-decidir para responder la verdad actual.
     if (casErr) console.warn(`[confirm-1click] CAS rechazado: ${casErr.message}`);

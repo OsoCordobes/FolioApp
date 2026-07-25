@@ -66,7 +66,37 @@ de log sin ningún cambio en el código de la app.
 Es un ensanchamiento puro: toda fila existente pasa, así que valida inline sin
 riesgo.
 
-**(b) `public.turno_transicion_paciente(uuid, text, text[])`** — `SECURITY
+**(b) Redefinir `turno_record_transition()` con `nullif`.** Descubierto al
+verificar la migración contra `postgres:16` real, y es la parte más importante
+de M91:
+
+```
+select current_setting('folio.transition_origin', true) is null;              -- t
+begin; select set_config('folio.transition_origin','paciente',true); commit;
+select current_setting('folio.transition_origin', true) is null;              -- f  ← ''
+```
+
+`set_config(..., is_local => true)` revierte el *valor* al cerrar la
+transacción, pero el placeholder GUC queda **definido en la sesión para
+siempre**, y desde ese momento `current_setting(name, true)` devuelve string
+vacío en vez de `NULL`. El `coalesce(..., 'manual')` de M09 deja entonces de
+defaultear: escribe `trigger_origin = ''` y el CHECK lo rechaza (`23514`).
+
+Como PostgREST/Supavisor poolean conexiones, la **primera** transición de
+paciente envenena la conexión y a partir de ahí toda transición de **staff** que
+caiga en esa misma conexión falla — el consultorio no puede confirmar, cancelar,
+marcar llegada ni cerrar turnos, de forma intermitente según qué conexión le
+toque. Leer el GUC era inocuo mientras nadie lo escribía; M91 es el primer
+escritor, así que tiene que arreglar el lector:
+
+```sql
+coalesce(nullif(current_setting('folio.transition_origin', true), ''), 'manual')
+```
+
+Se redefine con el cuerpo completo de M57, preservando `SECURITY DEFINER` (M47),
+`search_path` y el `REVOKE`.
+
+**(c) `public.turno_transicion_paciente(uuid, text, text[])`** — `SECURITY
 DEFINER`, `plpgsql`. Setea el GUC y corre el mismo CAS que hoy hace la action:
 
 ```sql
@@ -85,9 +115,12 @@ return query
   select id from upd;
 ```
 
-Se rechaza cualquier `p_to` fuera de `('CONFIRMADO','CANCELADO')` para mantener
-la función angosta. `REVOKE` de `public, anon, authenticated` + `GRANT EXECUTE`
-sólo a `service_role`.
+Se rechaza cualquier `p_to` fuera de `('CONFIRMADO','CANCELADO')` y cualquier
+`p_from` que no sea subconjunto de `('AGENDADO','CONFIRMADO')` — el mismo piso
+que le pone el guard del portal (M84 (ii)). Sin eso, un caller `service_role`
+podría cancelar un turno `EN_SALA` y quedaría auditado como si lo hubiera hecho
+el paciente. `REVOKE` de `public, anon, authenticated` + `GRANT EXECUTE` sólo a
+`service_role`.
 
 *No agrega privilegio nuevo*: el llamador ya es el service client (BYPASSRLS),
 que hoy puede escribir cualquier turno con un `UPDATE` directo. La función sólo
@@ -100,7 +133,7 @@ sólo admite origen `AGENDADO`/`CONFIRMADO`, estados en los que la columna ya es
 El guard de M84 es no-op acá: sin `auth.uid()`, `paciente_owns` devuelve false y
 la función retorna temprano.
 
-**(c) `CREATE OR REPLACE turno_portal_cancel_guard()`** con el cuerpo completo
+**(d) `CREATE OR REPLACE turno_portal_cancel_guard()`** con el cuerpo completo
 de M84 (estilo casa, igual que hizo M57 con `turno_record_transition`), sumando
 `perform set_config('folio.transition_origin','paciente',true)` justo antes del
 `RETURN NEW` final — después de las salidas tempranas de staff/no-dueño y de las
@@ -158,16 +191,23 @@ Escalonado, según la disciplina de deploy del repo:
 
 ## Verificación
 
-- Gates: `pnpm typecheck && pnpm lint && pnpm test:unit && pnpm build`.
-- M91 tiene que replayar en `postgres:16` vanilla. No hay referencias hacia
-  adelante (todo lo que toca existe desde M09/M84), así que no necesita
-  `set check_function_bodies = off`.
-- pgTAP nuevo `tests/sql/M91_transicion_origen_paciente.spec.sql`:
-  - el CHECK acepta `'paciente'` y sigue rechazando basura;
+- Gates: `pnpm typecheck && pnpm lint && pnpm test:unit && pnpm build`. ✅
+- Replay de la cadena COMPLETA en `postgres:16` vanilla con settings **default**
+  (sin el `SET check_function_bodies = off` por archivo que aplica el CI — ver
+  CLAUDE.md: el wrapper del CI enmascara justo este modo de falla). ✅
+- `tests/sql/M91_transicion_origen_paciente.spec.sql`:
+  - el CHECK acepta `'paciente'` y sigue rechazando basura (`23514`);
   - `turno_transicion_paciente` deja `transicion.trigger_origin='paciente'`;
-  - un `UPDATE` de staff sigue dejando `'manual'`;
+  - confirmar además deja `turno.confirmado_via='paciente'` (M90 y M91 de acuerdo);
+  - CAS perdido → cero filas, turno intacto, sin fila nueva en `transicion`;
+  - `p_to`/`p_from` inválidos → `22023`;
   - una cancelación de portal deja `'paciente'`;
-  - la función está revocada para `anon`/`authenticated`.
+  - **un `UPDATE` de staff DESPUÉS de varias transiciones de paciente en la
+    misma sesión sigue dejando `'manual'`** — es la aserción que atrapa el bug
+    del GUC vacío, y por eso corre última;
+  - la función está revocada para `anon`/`authenticated`, concedida a `service_role`.
+- Los 24 specs del repo corren verdes contra ese replay (M84 incluido: con el
+  bug del `coalesce` quedaba rojo).
 
 ## Fuera de alcance
 
