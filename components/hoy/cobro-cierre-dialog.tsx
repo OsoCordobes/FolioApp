@@ -22,6 +22,7 @@
 
 import { useRef, useState, type FormEvent } from "react";
 
+import { formatArs, MONTO_MAX_PESOS } from "@/lib/format/currency";
 import { useModalA11y } from "@/lib/use-modal-a11y";
 
 import type { CobroCierreActionInput } from "@/app/(app)/hoy/actions";
@@ -51,9 +52,15 @@ export function CobroCierreDialog({ pacienteNombre, precioPesos, onConfirm, onCl
   const [debiendo, setDebiendo] = useState(false);
 
   const montoPesos = Number(montoStr.replace(/[^\d]/g, "")) || 0;
+  // PR #118 · techo int4 de pago.monto_cents, alineado con el schema del
+  // server (cobroCierreSchema). Validar ACÁ, con mensaje específico y submit
+  // deshabilitado: antes un monto gigante cerraba el diálogo y la transición
+  // ENTERA fallaba después con el genérico "Datos de transición inválidos".
+  const excedeMax = montoPesos > MONTO_MAX_PESOS;
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
+    if (excedeMax) return;
     onConfirm({ montoCents: montoPesos * 100, metodo, pagado: !debiendo });
     onClose();
   };
@@ -111,10 +118,16 @@ export function CobroCierreDialog({ pacienteNombre, precioPesos, onConfirm, onCl
                 value={montoStr}
                 onChange={(e) => setMontoStr(e.target.value.replace(/[^\d]/g, ""))}
                 aria-label="Monto en pesos"
+                aria-invalid={excedeMax || undefined}
                 placeholder="0"
               />
             </span>
           </label>
+          {excedeMax ? (
+            <p role="alert" style={{ margin: "6px 0 0", fontSize: 13, color: "var(--red)" }}>
+              El monto máximo por cobro es {formatArs(MONTO_MAX_PESOS)}.
+            </p>
+          ) : null}
 
           <div className="fi-cobro-field" role="group" aria-label="Método de pago">
             <span className="fi-cobro-lbl">Método</span>
@@ -151,7 +164,7 @@ export function CobroCierreDialog({ pacienteNombre, precioPesos, onConfirm, onCl
             </button>
             {/* autoFocus: Enter directo = confirmar con los defaults (efectivo
                 pagado por el precio del turno) — el camino de 1 tap de siempre. */}
-            <button type="submit" className="fi-btn fi-btn-primary" autoFocus>
+            <button type="submit" className="fi-btn fi-btn-primary" autoFocus disabled={excedeMax}>
               {debiendo ? "Cerrar con deuda" : montoPesos > 0 ? "Cobrar y cerrar" : "Cerrar sin cargo"}
             </button>
           </div>

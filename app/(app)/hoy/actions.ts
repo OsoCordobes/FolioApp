@@ -27,7 +27,7 @@ import { listProfesionalesLite } from "@/lib/db/members";
 import { getActiveSession } from "@/lib/db/session";
 import { listPacientesDirectorio } from "@/lib/db/pacientes";
 import { resolveProfesionalDestino } from "@/lib/db/profesional-destino";
-import { createTurno, reagendarTurno, transitionTurno } from "@/lib/db/turnos";
+import { createTurno, reagendarTurno, transitionTurno, type TransitionTurnoResult } from "@/lib/db/turnos";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { EstadoTurno } from "@/lib/types";
 
@@ -64,9 +64,14 @@ export interface TransitionTurnoActionInput {
   cobro?: CobroCierreActionInput;
 }
 
+/**
+ * PR #118: el Result propaga `pagoRegistrado` de transitionTurno para que el
+ * cliente pueda avisar cuando el turno cerró pero el cobro NO se registró
+ * (cierre y pago no son atómicos — ver TransitionTurnoResult en lib/db/turnos).
+ */
 export async function transitionTurnoAction(
   input: TransitionTurnoActionInput,
-): Promise<Result<void>> {
+): Promise<Result<TransitionTurnoResult>> {
   const result = await transitionTurno({
     turnoId: input.turnoId,
     to: ESTADO_UI_TO_DB[input.to],

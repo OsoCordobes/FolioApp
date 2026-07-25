@@ -46,13 +46,20 @@ interface TurnoRowProps {
   now?: Date;
   /** IANA timezone de la org. */
   timezone?: string;
+  /**
+   * PR #118 · capability `canRegistrarCobro` (lib/auth/capabilities). false =
+   * el rol no puede escribir `pago` (COORDINADOR — `pago_write_admin` de M09
+   * lo excluye): "Cerrar turno" cierra DIRECTO como antes del mini-diálogo,
+   * sin ofrecer un cobro que la RLS descartaría. Default true (legacy).
+   */
+  canRegistrarCobro?: boolean;
   onTransition: (id: string, to: EstadoTurno, extra?: Partial<Turno>, cobro?: CobroCierreActionInput) => void;
   onOpenFicha: (id: string) => void;
   /** Abre el modal de reagendar (estados agendado|confirmado). */
   onReagendar?: (id: string) => void;
 }
 
-export function TurnoRow({ turno, paciente, isNext, now, timezone, onTransition, onOpenFicha, onReagendar }: TurnoRowProps) {
+export function TurnoRow({ turno, paciente, isNext, now, timezone, canRegistrarCobro = true, onTransition, onOpenFicha, onReagendar }: TurnoRowProps) {
   const conf = STATE_CONF[turno.estado as keyof typeof STATE_CONF] ?? STATE_CONF.agendado;
   const isAtendiendo = turno.estado === "atendiendo";
   const isEnSala = turno.estado === "en_sala";
@@ -60,6 +67,20 @@ export function TurnoRow({ turno, paciente, isNext, now, timezone, onTransition,
   const isAgendado = turno.estado === "agendado";
   /** E1 · mini-diálogo de cobro abierto (intercepta "Cerrar turno"). */
   const [cobroOpen, setCobroOpen] = useState(false);
+
+  /**
+   * Cierra el turno, con el cobro elegido en el diálogo o sin cobro explícito
+   * (roles sin canRegistrarCobro — camino legacy). duracionReal: minutos
+   * transcurridos desde atendiendoDesde hasta ahora; sin timestamp (no debería
+   * pasar en estado atendiendo), default a la duración planificada.
+   */
+  const cerrarTurno = (cobro?: CobroCierreActionInput) => {
+    const fromIso = turno.atendiendoDesde;
+    const duracionMin = fromIso
+      ? Math.max(1, Math.round((Date.now() - new Date(fromIso).getTime()) / 60000))
+      : (turno.duracionMin ?? 45);
+    onTransition(turno.id, "cerrado", { duracionMin }, cobro);
+  };
 
   let cta: CtaSpec | null = null;
   if (isAgendado || isConfirmado) {
@@ -89,22 +110,11 @@ export function TurnoRow({ turno, paciente, isNext, now, timezone, onTransition,
       icon: <I.Check size={12} />,
       // E1 · el cierre pasa por el mini-diálogo de cobro (monto/método/deuda).
       // La transición real se dispara en onConfirm del diálogo.
-      onClick: () => setCobroOpen(true),
+      // PR #118 · sin canRegistrarCobro (COORDINADOR) NO se ofrece el diálogo:
+      // cierra directo (comportamiento legacy, sin cobro explícito).
+      onClick: () => (canRegistrarCobro ? setCobroOpen(true) : cerrarTurno()),
     };
   }
-
-  /**
-   * Cierra el turno con el cobro elegido en el diálogo. duracionReal: minutos
-   * transcurridos desde atendiendoDesde hasta ahora; sin timestamp (no debería
-   * pasar en estado atendiendo), default a la duración planificada.
-   */
-  const cerrarConCobro = (cobro: CobroCierreActionInput) => {
-    const fromIso = turno.atendiendoDesde;
-    const duracionMin = fromIso
-      ? Math.max(1, Math.round((Date.now() - new Date(fromIso).getTime()) / 60000))
-      : (turno.duracionMin ?? 45);
-    onTransition(turno.id, "cerrado", { duracionMin }, cobro);
-  };
 
   const time = useLiveTimer(isAtendiendo ? turno.atendiendoDesde : null);
   const hasImportante = (paciente.notasImportantes ?? "").trim().length > 0;
@@ -223,7 +233,7 @@ export function TurnoRow({ turno, paciente, isNext, now, timezone, onTransition,
         <CobroCierreDialog
           pacienteNombre={paciente.nombre}
           precioPesos={turno.precio ?? 0}
-          onConfirm={cerrarConCobro}
+          onConfirm={cerrarTurno}
           onClose={() => setCobroOpen(false)}
         />
       ) : null}

@@ -26,6 +26,10 @@ import {
   getFinanzasExportRows,
   type FinanzasPeriodo,
 } from "@/lib/db/finanzas";
+// PR #118 · csvEscapeTexto neutraliza formula injection (=, +, -, @, TAB, CR)
+// en los campos de texto libre — el nombre del paciente puede venir del
+// booking público. Helper compartido y testeado en lib/format/csv.ts.
+import { csvEscapeTexto } from "@/lib/format/csv";
 
 export const dynamic = "force-dynamic";
 
@@ -33,12 +37,6 @@ const PERIODOS: FinanzasPeriodo[] = ["hoy", "semana", "mes", "6m", "anio"];
 
 function parsePeriodo(raw: string | null): FinanzasPeriodo {
   return PERIODOS.includes(raw as FinanzasPeriodo) ? (raw as FinanzasPeriodo) : "mes";
-}
-
-function csvEscape(v: string): string {
-  const needsQuote = /[",\r\n]/.test(v);
-  const escaped = v.replace(/"/g, '""');
-  return needsQuote ? `"${escaped}"` : escaped;
 }
 
 export async function GET(req: Request): Promise<Response> {
@@ -73,8 +71,8 @@ export async function GET(req: Request): Promise<Response> {
   const lines = result.data.rows.map((r) =>
     [
       new Date(r.fecha).toISOString(),
-      csvEscape(r.paciente),
-      csvEscape(r.servicio),
+      csvEscapeTexto(r.paciente),
+      csvEscapeTexto(r.servicio),
       String(r.monto),
       r.metodo,
       r.estado,

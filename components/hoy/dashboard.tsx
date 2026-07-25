@@ -52,6 +52,13 @@ interface DashboardProps {
    * y arma la card; acá solo se inserta arriba del KpiStrip.
    */
   primerosPasos?: React.ReactNode;
+  /**
+   * PR #118 · capability real (lib/auth/capabilities → canRegistrarCobro):
+   * gates el mini-diálogo de cobro al cerrar. Un rol sin permiso de pagos
+   * (COORDINADOR: `pago_write_admin` de M09 lo excluye) cierra directo como
+   * antes — no se le ofrece un diálogo cuyo cobro la RLS va a descartar.
+   */
+  canRegistrarCobro?: boolean;
 }
 
 /**
@@ -66,7 +73,7 @@ const TRANSITION_TOAST: Partial<Record<EstadoTurno, string>> = {
   no_asistio: "No asistió registrado",
 };
 
-export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fechaAnio, nowIso, timezone, organizationId, profesionales = [], profActivo = null, primerosPasos = null }: DashboardProps) {
+export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fechaAnio, nowIso, timezone, organizationId, profesionales = [], profActivo = null, primerosPasos = null, canRegistrarCobro = true }: DashboardProps) {
   const router = useRouter();
   const toast = useToast();
   const [turnos, setTurnos] = useState<Turno[]>(initialTurnos);
@@ -127,13 +134,24 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
           setTurnos((curr) => curr.map((t) => (t.id === id ? before : t)));
           return;
         }
+        const nombre = pacientes[before.pacienteId]?.nombre ?? "paciente";
+        // PR #118 · el server confirma si el cobro quedó registrado: cierre y
+        // pago NO son atómicos. Si el usuario cargó un cobro y el upsert de
+        // `pago` falló (RLS u otro error), el toast de éxito mentía "deuda
+        // registrada" — ahora avisa con tono error que hay que cargarlo a mano.
+        if (to === "cerrado" && cobro && result.data.pagoRegistrado === false) {
+          toast.show({
+            titulo: `Turno cerrado, pero el cobro NO se registró — cargalo desde Finanzas · ${before.hora} · ${nombre}`,
+            tono: "error",
+          });
+          return;
+        }
         // C4 · feedback: toast de éxito recién cuando el server confirmó (el
         // update optimista ya se ve en la lista; el toast asegura "se guardó").
         const tituloToast = to === "cerrado" && cobro && !cobro.pagado
           ? "Turno cerrado · deuda registrada"
           : TRANSITION_TOAST[to];
         if (tituloToast) {
-          const nombre = pacientes[before.pacienteId]?.nombre ?? "paciente";
           toast.show({ titulo: `${tituloToast} · ${before.hora} · ${nombre}` });
         }
       });
@@ -212,6 +230,7 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
             nextId={nextId}
             now={now}
             timezone={timezone}
+            canRegistrarCobro={canRegistrarCobro}
             onTransition={handleTransition}
             onReagendar={(turnoId) => {
               const turno = turnos.find((t) => t.id === turnoId);

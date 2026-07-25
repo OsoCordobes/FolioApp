@@ -10,6 +10,7 @@
 import { z } from "zod";
 
 import { runAfterResponse } from "@/lib/after-response";
+import { MONTO_MAX_CENTS, MONTO_MAX_PESOS } from "@/lib/format/currency";
 import { cancelTurnoEnGoogle, pushTurnoToGoogle } from "@/lib/google/sync";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -48,7 +49,10 @@ const turnoSchema = z.object({
  * que /finanzas lista como deuda por cobrar.
  */
 const cobroCierreSchema = z.object({
-  montoCents: z.number().int().min(0).max(100_000_000),
+  // Techo = int4 de pago.monto_cents (review PR #118: el techo anterior de
+  // $1M rechazaba el cierre ENTERO de un turno caro — configuración admite
+  // precios de hasta $10M — con el genérico "Datos de transición inválidos").
+  montoCents: z.number().int().min(0).max(MONTO_MAX_CENTS),
   metodo: z.enum(["EFECTIVO", "TRANSFERENCIA", "MERCADOPAGO", "TARJETA", "OBRA_SOCIAL", "OTRO"]),
   pagado: z.boolean(),
 });
@@ -411,9 +415,41 @@ export async function createTurno(
  */
 export const ESTADOS_CANCELAN_SIDE_EFFECTS = ["CANCELADO", "REAGENDADO", "NO_ASISTIO"] as const;
 
-export async function transitionTurno(input: z.infer<typeof transitionSchema>): Promise<Result<void>> {
+/**
+ * Resultado de transitionTurno (review PR #118): el cierre del turno y el
+ * registro del cobro NO son atómicos — el UPDATE puede persistir y el upsert
+ * de `pago` fallar igual (ej.: COORDINADOR puede cerrar turnos pero
+ * `pago_write_admin` de M09 lo excluye de escribir pagos). Antes ese fallo se
+ * tragaba en silencio (captureException + ok(void)) y la UI mostraba "deuda
+ * registrada" según la INTENCIÓN del cliente. Ahora el caller sabe la verdad:
+ *
+ *   - `pagoRegistrado: true`  → el pago quedó registrado (o ya existía).
+ *   - `pagoRegistrado: false` → el turno CERRÓ pero el pago NO se registró
+ *                                (RLS u otro error) — la UI debe avisar.
+ *   - `pagoRegistrado: null`  → no aplicaba (no era cierre, o monto 0).
+ */
+export interface TransitionTurnoResult {
+  pagoRegistrado: boolean | null;
+}
+
+export async function transitionTurno(
+  input: z.infer<typeof transitionSchema>,
+): Promise<Result<TransitionTurnoResult>> {
   const parsed = transitionSchema.safeParse(input);
   if (!parsed.success) {
+    // Mensaje específico para monto fuera de rango (review PR #118): el
+    // genérico "Datos de transición inválidos" no le decía al usuario que el
+    // problema era el MONTO del cobro (y el diálogo ya se había cerrado).
+    const montoFueraDeRango = parsed.error.issues.some(
+      (i) => i.path.join(".") === "cobro.montoCents" && (i.code === "too_big" || i.code === "too_small"),
+    );
+    if (montoFueraDeRango) {
+      return err(
+        "validation",
+        `El monto del cobro está fuera de rango (máximo $${MONTO_MAX_PESOS.toLocaleString("es-AR")}). El turno NO se cerró — corregí el monto y volvé a intentar.`,
+        parsed.error.message,
+      );
+    }
     return err("validation", "Datos de transición inválidos.", parsed.error.message);
   }
   const session = await getActiveSession();
@@ -461,12 +497,15 @@ export async function transitionTurno(input: z.infer<typeof transitionSchema>): 
   // CERRADOS como recaudado; sin esta fila /finanzas (que lee `pago`) mostraba
   // $0 para el mismo día. Idempotente vía UNIQUE(turno_id); no-fatal: si la
   // RLS lo rechaza (rol sin permiso de pagos) el cierre del turno sigue
-  // valiendo y el pago se puede registrar después desde finanzas.
+  // valiendo y el pago se puede registrar después desde finanzas — pero el
+  // fallo YA NO es silencioso: viaja como `pagoRegistrado: false` en el
+  // Result para que la UI no afirme un cobro que se descartó (PR #118).
   //
   // E1 · con `cobro` explícito (mini-diálogo de /hoy) se respeta monto, método
   // y estado elegidos: "quedó debiendo" crea el pago PENDIENTE (pagado_ts NULL,
   // CHECK pago_consistency de M09). Sin `cobro`, comportamiento histórico:
   // efectivo PAGADO por el precio del turno.
+  let pagoRegistrado: boolean | null = null;
   if (parsed.data.to === "CERRADO") {
     const cobro = parsed.data.cobro;
     const montoCents = cobro ? cobro.montoCents : precioCents;
@@ -485,6 +524,7 @@ export async function transitionTurno(input: z.infer<typeof transitionSchema>): 
         },
         { onConflict: "turno_id", ignoreDuplicates: true },
       );
+      pagoRegistrado = !pagoErr;
       if (pagoErr) {
         const { captureException } = await import("@sentry/nextjs");
         captureException(new Error(`pago auto-registro falló: ${pagoErr.message}`), {
@@ -543,7 +583,7 @@ export async function transitionTurno(input: z.infer<typeof transitionSchema>): 
     }
   }
 
-  return ok(undefined);
+  return ok({ pagoRegistrado });
 }
 
 // ─── Reagendar turno ────────────────────────────────────────────────────

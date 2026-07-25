@@ -27,6 +27,8 @@ interface TurnoListProps {
   now?: Date;
   /** IANA timezone de la org, para comparar `turno.hora` contra `now`. */
   timezone?: string;
+  /** PR #118 · gate del mini-diálogo de cobro al cerrar (ver TurnoRow). */
+  canRegistrarCobro?: boolean;
   onTransition: (id: string, to: EstadoTurno, extra?: Partial<Turno>, cobro?: CobroCierreActionInput) => void;
   onOpenFicha: (id: string) => void;
   /** Abre el modal de reagendar para un turno (sube hasta Dashboard). */
@@ -60,7 +62,7 @@ function rangoHorasGrupo(turnos: Turno[]): string | null {
   return primera === ultima ? `${pad(primera)} hs` : `${pad(primera)} – ${pad(ultima)} hs`;
 }
 
-export function TurnoList({ turnos, pacientes, nextId, now, timezone, onTransition, onOpenFicha, onReagendar, dense }: TurnoListProps) {
+export function TurnoList({ turnos, pacientes, nextId, now, timezone, canRegistrarCobro = true, onTransition, onOpenFicha, onReagendar, dense }: TurnoListProps) {
   const [showCerrados, setShowCerrados] = useState(true);
   const [showCancelados, setShowCancelados] = useState(false);
 
@@ -111,6 +113,7 @@ export function TurnoList({ turnos, pacientes, nextId, now, timezone, onTransiti
                   isNext={t.id === nextId}
                   now={now}
                   timezone={timezone}
+                  canRegistrarCobro={canRegistrarCobro}
                   onTransition={onTransition}
                   onOpenFicha={onOpenFicha}
                   onReagendar={onReagendar}

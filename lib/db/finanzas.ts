@@ -18,6 +18,12 @@
  * deriva de `turno_id → turno.organization_id` + RLS). Por eso solo la query de
  * `turno` filtra explícitamente por `organization_id`; las queries de `pago`
  * confían en el join (turno) + RLS para el scoping.
+ *
+ * Semántica temporal (review PR #118): el período se filtra (y los totales se
+ * DEVENGAN) por `created_at`; `pagado_ts` solo AFINA el día/mes dentro del
+ * período. Si `pagado_ts` cae fuera del rango elegido (deuda vieja saldada en
+ * otro período), el bucket cae a `created_at` — así el total del período
+ * siempre cuadra con las barras del chart (ver `fechaBucketPago`).
  */
 
 import type { ProfesionalLite } from "@/lib/agenda/profesional";
@@ -181,6 +187,31 @@ const COLORES_SERVICIO = [
 const MESES_ABREV = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
 /**
+ * Review PR #118 · fecha efectiva para bucketizar un pago cobrado dentro del
+ * período [startUtcMs, endUtcMs). Función pura (testeable sin DB).
+ *
+ * El fetcher filtra pagos por `created_at` ∈ rango pero bucketizaba por
+ * `pagado_ts ?? created_at` SIN guard: una deuda de mayo saldada en julio se
+ * sumaba al día equivocado de MAYO (con el filtro en julio) y nunca aparecía
+ * en julio; en 6m/año sumaba al total pero se descartaba de las barras. Con el
+ * guard, si `pagado_ts` cae fuera del rango se bucketiza por `created_at` —
+ * el monto queda en el período que el filtro eligió y el total siempre cuadra
+ * con el chart. Semántica: devengado por created_at; pagado_ts solo afina el
+ * día dentro del período.
+ */
+export function fechaBucketPago(
+  pagadoTs: string | null,
+  createdAt: string,
+  startUtcMs: number,
+  endUtcMs: number,
+): string {
+  if (!pagadoTs) return createdAt;
+  const ts = new Date(pagadoTs).getTime();
+  if (Number.isNaN(ts) || ts < startUtcMs || ts >= endUtcMs) return createdAt;
+  return pagadoTs;
+}
+
+/**
  * Select compartido de pagos con el join expandido (paciente + servicio +
  * profesional). Lo usan getFinanzasDelMes y getFinanzasExportRows para que el
  * export vea EXACTAMENTE las mismas filas que la página (solo que sin cap).
@@ -318,11 +349,16 @@ export async function getFinanzasDelMes(input: FetcherInput): Promise<Result<Fin
 
   const transacciones: FinanzasTransaccion[] = [];
 
+  // Bounds en ms para el guard de bucketización (fechaBucketPago).
+  const startUtcMs = new Date(startUtc).getTime();
+  const endUtcMs = new Date(endUtc).getTime();
+
   for (const pago of pagos) {
     const monto = pago.monto_cents ?? 0;
     if (pago.estado === "PAGADO") {
       totalIngresosCents += monto;
-      const fechaCobro = pago.pagado_ts ?? pago.created_at;
+      // PR #118 · guard de rango: pagado_ts fuera del período → created_at.
+      const fechaCobro = fechaBucketPago(pago.pagado_ts, pago.created_at, startUtcMs, endUtcMs);
       if (buildDailyChart) {
         const day = dayInTz(fechaCobro, tz);
         ingresosPorDiaMap.set(day, (ingresosPorDiaMap.get(day) ?? 0) + monto);
@@ -332,6 +368,15 @@ export async function getFinanzasDelMes(input: FetcherInput): Promise<Result<Fin
         const key = ymKey(parts.year, parts.month);
         if (ingresosPorMesMap.has(key)) {
           ingresosPorMesMap.set(key, (ingresosPorMesMap.get(key) ?? 0) + monto);
+        } else {
+          // PR #118 · nunca descartar en silencio (antes el has() tragaba el
+          // monto y el total no cuadraba con las barras): fallback al mes de
+          // created_at, que por el filtro de la query SIEMPRE cae en rango.
+          const fbParts = formatDateInTz(new Date(pago.created_at), tz);
+          const fbKey = ymKey(fbParts.year, fbParts.month);
+          if (ingresosPorMesMap.has(fbKey)) {
+            ingresosPorMesMap.set(fbKey, (ingresosPorMesMap.get(fbKey) ?? 0) + monto);
+          }
         }
       }
     } else {
