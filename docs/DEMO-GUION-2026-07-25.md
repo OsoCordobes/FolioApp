@@ -1,10 +1,10 @@
-# Guion pre-demo — viernes 2026-07-25 (primera llamada de venta)
+# Guion de demo — primera llamada de venta
 
-Checklist operativo: preparación (la noche anterior / la mañana) y demo en vivo.
-Producto: https://folio-app-ten.vercel.app · Salud: https://folio-app-ten.vercel.app/api/health
+Checklist operativo: preparación (la mañana de la llamada) y demo en vivo.
+Producto: **https://foliosalud.com** · Salud: https://foliosalud.com/api/health
 
 Reemplaza a `DEMO-GUION-DOMINGO.md` (2026-06-14, construido sobre la org
-`lautaro-amiune` — ELIMINADA el 2026-06-15). El setup nuevo: la cuenta
+`lautaro-amiune` — ELIMINADA el 2026-06-15). El setup vigente: la cuenta
 `amiunelautaro@gmail.com` es soporte/demo con **una org demo por especialidad**
 (`demo-quiropraxia`, `demo-cardiologia`, `demo-psicologia`, `demo-kinesiologia`,
 `demo-nutricion`) + la org real — el **OrgSwitcher** del sidebar cambia entre
@@ -16,42 +16,55 @@ invisible en el directorio público y bookeable por link directo.
 ### 1. Sanidad ANTES de todo (5 min)
 
 - [ ] `GET /api/health` → si `ok: false`, mirar qué check está en `false`:
-      - `checks.db` / `checks.env` → **frena acá y resolvé primero** (el seed
+      - `checks.db` / `checks.env` → **frená acá y resolvé primero** (el seed
         necesita `FOLIO_ENC_KEY` y la DB; si env falla, el seed también).
       - `checks.rate_limit` (Upstash sin configurar) → benigno **siempre que**
         `UPSTASH_FAIL_CLOSED` NO esté en `"true"` en Vercel (verificalo en el
         dashboard: debe estar unset o `"false"`).
-- [ ] Signup sano, chequeo determinístico (5 seg, sin crear cuentas):
+      - `integrations.email: false` → **el email real no sale** (fail-safe: se
+        loguea como `simulated`, no se marca como enviado). Sin
+        `RESEND_API_KEY` no hay confirmación de reserva ni recordatorio 24h ni
+        botón de confirmación 1-click en el buzón del paciente.
+- [ ] Alta de cuenta, chequeo determinístico (5 seg, sin crear cuentas):
       `curl -s -H "apikey: $NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY" https://grkpayhxndztlfwxobnt.supabase.co/auth/v1/settings`
-      → `mailer_autoconfirm: true` = OK. Si es `false`: Supabase → Auth →
-      apagar "Confirm email", re-correr el curl hasta ver `true`, y de paso
-      confirmar `disable_signup: false` y captcha de Supabase Auth OFF
-      (LAUNCH-RUNBOOK §7).
+      → `mailer_autoconfirm: true` = alta con email+contraseña operativa.
+      Si es `false`, hay DOS caminos y conviene saber cuál vas a mostrar:
+      - **Google** (`"google": true` en el mismo JSON) — funciona hoy tal cual,
+        sin confirmación de email de por medio. Es el camino recomendado para
+        la demo en vivo.
+      - **Email + contraseña** — requiere Supabase → Auth → apagar "Confirm
+        email" (o configurar el SMTP de Resend). Re-correr el curl hasta ver
+        `true`, y de paso confirmar `disable_signup: false`.
 
 ### 2. Seed de las orgs demo (10 min)
 
-Requiere el deploy del PR de esta rama y la env `ALLOW_DEMO_SEED=yes-demo-2026`
-en Vercel Production **seteada ANTES del merge** (los cambios de env solo
-aplican a deploys nuevos). Con el `CRON_SECRET` vigente (rotado 2026-07-18):
+**Camino recomendado (1 click, sin secretos a mano):** GitHub → Actions →
+**"Demo · seed consultorios (manual)"** → Run workflow → `especialidad=all`,
+`force=true`. Usa el `CRON_SECRET` guardado en Actions (el de Vercel es
+*sensitive*/write-only: `vercel env pull` lo devuelve vacío).
+
+Camino manual equivalente, si tenés el `CRON_SECRET` a mano:
 
 ```bash
-# Un curl POR especialidad (no ?especialidad=all — acota timeouts y blast radius)
 for esp in quiropraxia cardiologia psicologia kinesiologia nutricion; do
-  curl -sS -X POST "https://folio-app-ten.vercel.app/api/admin/seed-demo?especialidad=$esp" \
+  curl -sS -X POST "https://foliosalud.com/api/admin/seed-demo?especialidad=$esp&force=1" \
     -H "Authorization: Bearer $CRON_SECRET"; echo;
 done
 ```
 
-- Idempotente: si la org ya tiene pacientes MOCK, se saltea (`skipped: true`).
-- **Reset entre llamadas de venta**: agregar `&force=1` → borra los MOCK y
-  re-siembra con la agenda "del día" fresca (correrlo la mañana de cada demo,
-  así los turnos de HOY caen en el día de la llamada).
-- Solo borrar: `&cleanup=1`. Quitar `ALLOW_DEMO_SEED` de Vercel post-seed.
+- Idempotente sin `force`: si la org ya tiene pacientes MOCK, se saltea
+  (`skipped: true`). **Con `force=1`** borra los MOCK y re-siembra con la
+  agenda "del día" fresca — correlo **la mañana de cada llamada**, así los
+  turnos de HOY caen en el día de la demo.
+- Solo borrar: `&cleanup=1`.
+- El endpoint está triple-gateado (env `ALLOW_DEMO_SEED` + `CRON_SECRET` +
+  guard que aborta si un slug `demo-*` NO es cuenta interna).
 - Cada org queda con: 6 pacientes MOCK coherentes con la especialidad,
   historia (turnos pasados cerrados + sesiones con la herramienta clínica
   ACTUAL + pagos), agenda de HOY con un turno **EN SALA** (para mostrar
   transiciones en vivo) y turnos futuros. Psicología además: serie PHQ-9/GAD-7
-  con mejoría (panel "Evolución de resultados").
+  con mejoría (panel "Evolución de resultados"). Cobertura (obra social) ya
+  cargada en parte de los pacientes.
 
 ### 3. Recorrido de verificación (10 min)
 
@@ -61,11 +74,14 @@ done
       un paciente → la herramienta clínica es la de ESA especialidad (si ves
       una equivocada: DevTools → borrar cookie `folio_esp_override`),
       /finanzas SOLO muestra pagos de esa org (nada del consultorio real).
-- [ ] Booking de ensayo desde el teléfono: `/book/demo-<especialidad>` →
-      servicio → slot → reservar (Turnstile real). El turno aparece en /hoy
+- [ ] Booking de ensayo desde el teléfono: `https://foliosalud.com/book/demo-<especialidad>`
+      → servicio → slot → reservar (Turnstile real). El turno aparece en /hoy
       (polling ~25 s — narrá la pausa o refrescá).
 - [ ] Los recordatorios NO salen para orgs demo (skip automático de internas) —
-      podés agendar/cerrar turnos en vivo sin miedo a WhatsApps fantasma.
+      podés agendar/cerrar turnos en vivo sin miedo a emails fantasma.
+- [ ] Mobile: abrí /hoy, /calendario, /pacientes y una ficha **desde el
+      teléfono**. Es el escenario real del médico entre consultas y es donde el
+      cliente va a mirar más de cerca.
 
 ### 4. Si algo falla — diagnóstico (orden)
 
@@ -79,27 +95,51 @@ done
 ## Durante la llamada
 
 - Pestañas de antemano: /hoy (org demo de la especialidad del cliente) ·
-  /calendario · /book/demo-<esp> (incógnito) · /api/health.
+  /calendario · /pacientes · /book/demo-\<esp\> (incógnito) · /api/health.
 - Guion sugerido:
-  1. **/hoy** — la agenda del día ya viva, un paciente EN SALA.
+  1. **/hoy** — la agenda del día ya viva, un paciente EN SALA, y el card
+     "Primeros pasos" si mostrás una cuenta nueva.
   2. El cliente reserva desde SU teléfono en `/book/demo-<esp>` → el turno
-     aparece solo en /hoy.
+     aparece solo en /hoy. Contá que al paciente le llega la confirmación por
+     email con **"Agregar al calendario"** (.ics) y que el recordatorio de 24 h
+     trae **Confirmo / Cancelar en un click** — el reductor de ausentismo.
   3. **Ficha del paciente** — historia clínica + herramienta de SU especialidad
      (cardio: panel TA/FC + medicación + derivación; psico: escalas con curva
      de evolución + nota SOAP guiada; kinesio: NDI/ODI/ROM; nutrición:
-     antropometría; quiro: mapa vertebral).
-  4. Transiciones: en sala → atendiendo → **cerrar turno** → /finanzas del mes.
+     antropometría; quiro: mapa vertebral). Mostrá **obra social / prepaga** en
+     el tab Información y **Exportar PDF** en el header.
+  4. Transiciones: en sala → atendiendo → **cerrar turno** → el diálogo de
+     cobro (monto + método + "quedó debiendo") → **/finanzas del mes** con
+     "Por cobrar" y el export para el contador.
   5. Si vende multi-especialidad / clínica: switchear de org en vivo con el
      selector — "cada consultorio, su agenda, sus fichas, sus finanzas".
-  6. Cierre: alta de cuenta en vivo (incógnito) — onboarding en 3 minutos con
-     **30 días de prueba sin tarjeta**.
+  6. Migración: **importar pacientes desde Excel/CSV** (Configuración →
+     Importar pacientes) — es la barrera #1 para cambiar de sistema y la
+     tenemos resuelta.
+  7. Cierre: alta de cuenta en vivo (incógnito) — onboarding en 3 minutos con
+     **30 días de prueba sin tarjeta**. Usá **Continuar con Google** si
+     "Confirm email" sigue prendido en Supabase.
 - Plan B si el wifi/booking falla: crear el turno manual desde /hoy (modal) —
   no depende de Turnstile ni del público.
 
-## Pendientes solo-founder (mismos del guion anterior, siguen vigentes)
+## Qué NO prometer (honestidad de venta)
+
+- **WhatsApp**: la landing lo muestra como "Próximamente" y así hay que
+  contarlo. Los recordatorios de hoy son **por email**. Prometer WhatsApp para
+  cerrar la venta es la forma más rápida de perder el cliente en el mes 2.
+- **Recetas digitales, facturación AFIP, telemedicina**: no existen. Están
+  fuera del alcance actual a propósito.
+- **Testimonios**: la sección solo se renderiza si hay quotes reales cargadas.
+  No inventamos testimonios en salud.
+
+## Pendientes solo-founder
 
 | Acción | Por qué |
 |---|---|
-| `RESEND_API_KEY` + `EMAIL_FROM` en Vercel (opcional para hoy) | Sin eso el email de confirmación de booking no sale (fail-safe silencioso) |
-| Supabase plan Pro (backups) | Plan FREE = cero backups de una DB con PHI |
+| Supabase → Auth → "Confirm email" OFF (o SMTP de Resend) | Alta con email+contraseña bloqueada hasta entonces; Google ya funciona |
+| `RESEND_API_KEY` + `EMAIL_FROM` (@foliosalud.com, SPF/DKIM) en Vercel | Sin eso NINGÚN email sale de verdad: confirmación, recordatorio y el 1-click |
+| Supabase plan Pro (backups PITR) | Plan FREE = cero backups de una DB con PHI |
+| Buzón `soporte@foliosalud.com` (forward a Gmail) | El dominio todavía no tiene MX; el soporte sigue apuntando a Gmail |
+| 2-3 testimonios reales con permiso escrito | Desbloquea la sección de social proof de la landing |
+| Keys de PostHog en prod | Sin eso el funnel signup → onboarding → primer turno no se mide |
 | OAuth app de Google "In production" | Refresh tokens de Testing mueren a los 7 días |
