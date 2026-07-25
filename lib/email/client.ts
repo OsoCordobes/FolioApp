@@ -28,8 +28,10 @@ interface SendEmailInput {
    * Reply-To opcional. El from es un noreply, así que el Reply-To es el
    * interlocutor REAL de cada email: soporte de Folio en los emails a
    * profesionales (invitaciones, billing, pedidos), y el email de contacto
-   * del consultorio en los emails a pacientes (booking/recordatorios —
-   * resuelto por lib/email/notify.ts; si no hay, sale sin Reply-To).
+   * del consultorio en los emails de BOOKING a pacientes (resuelto por
+   * lib/email/notify.ts; si no hay, sale sin Reply-To). Los RECORDATORIOS
+   * del dispatcher hoy salen sin Reply-To — pasarlo desde el dispatcher es
+   * un follow-up (resolveOrgContactEmail está en notify.ts).
    */
   replyTo?: string;
 }

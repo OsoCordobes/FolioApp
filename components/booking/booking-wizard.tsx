@@ -777,6 +777,10 @@ export function BookingWizard({
                     finIso: slotPicked.fin,
                     titulo: `${servicioNombre} · ${org.nombre}`,
                     ubicacion: org.direccionCompleta,
+                    // UID con slug: sin discriminador, dos turnos de orgs
+                    // distintas al mismo horario colisionarían en el
+                    // calendario del paciente (mismo UID = mismo evento).
+                    uid: `${org.slug}-${slotPicked.inicio}@foliosalud.com`,
                   };
                   return (
                     <div
