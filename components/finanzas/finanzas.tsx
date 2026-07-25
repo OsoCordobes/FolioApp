@@ -7,10 +7,14 @@
  *  - KPI strip con "Por cobrar" (deuda del período) y labels honestos por
  *    período (la proyección de fin de mes solo aplica a "Este mes").
  *  - Chart diario (línea) para rangos cortos; barras mensuales para 6m/año.
+ *    El eje diario va por FECHA REAL del período (no por día-del-mes): ver
+ *    LineChart y lib/db/finanzas · buildIngresosPorDia.
  *  - Eje Y relativo al dato (niceCeil) — el piso hardcodeado de $150.000
  *    aplanaba consultorios chicos.
  *  - Tabla con chips Todos/Cobrados/Pendientes y acción inline "Cobrar"
- *    (server action marcarPagoCobradoAction + toast).
+ *    (server action marcarPagoCobradoAction + toast). Lista TODOS los pagos
+ *    pendientes del período — es la única superficie de cobro del producto, y
+ *    el KPI "Por cobrar" cuenta exactamente esas filas.
  *  - Export CSV server-side SIN cap: el botón es un <a> a /finanzas/export.
  *
  * Los agregados se calculan server-side (lib/db/finanzas.ts) con RLS por org
@@ -26,6 +30,7 @@ import { useToast } from "@/components/ui/toast";
 import { niceCeil } from "@/lib/format/nice-ceil";
 import type {
   FinanzasData,
+  FinanzasDiaIngreso,
   FinanzasMesIngreso,
   FinanzasProfesionalBreakdown,
   FinanzasServicioBreakdown,
@@ -192,30 +197,50 @@ function KpiStrip({
 
 // ─── Line chart ─────────────────────────────────────────────────────────────
 
-function LineChart({ ingresosPorDia, diasDelMes, diaActual }: { ingresosPorDia: Array<[number, number]>; diasDelMes: number; diaActual: number }) {
+/**
+ * Chart diario del período.
+ *
+ * Review /finanzas · H5+H8: antes recibía `[díaDelMes, monto]` sobre un eje
+ * 1..diasDelMes del mes ancla y recortaba con `d <= diaActual`. En "Semana" a
+ * caballo de dos meses los días del mes anterior (27..31) quedaban fuera del
+ * filtro, y en "Año" corto todo pago con día-del-mes > hoy desaparecía de la
+ * curva aunque estuviera sumado en el KPI y en el CSV — el gráfico contradecía
+ * al número de arriba. Ahora el eje ES el período: un punto por fecha real
+ * (ya bucketizada en la TZ de la org por lib/db/finanzas) y sin recorte
+ * posterior, porque el fetcher ya corta el eje en HOY.
+ */
+function LineChart({ dias, hoyFecha }: { dias: FinanzasDiaIngreso[]; hoyFecha: string }) {
   const PAD_L = 36;
   const PAD_R = 12;
   const PAD_T = 12;
   const PAD_B = 26;
   const W = 600 - PAD_L - PAD_R;
   const H = 180 - PAD_T - PAD_B;
-  const days = diasDelMes;
-  // Solo mostramos hasta el día actual (no proyección visual).
-  const dataHastaHoy = ingresosPorDia.filter(([d]) => d <= diaActual);
-  const maxObserved = Math.max(0, ...dataHastaHoy.map(([, m]) => m));
+  const n = dias.length;
+  const maxObserved = Math.max(0, ...dias.map((d) => d.monto));
   // E2 · escala relativa al dato: el piso fijo de $150.000 aplanaba la curva
   // de consultorios con ticket bajo (facturar $40k/día se veía como $0).
   const maxY = niceCeil(maxObserved * 1.15, 10_000);
 
-  const points = dataHastaHoy.map(([d, m]) => ({
-    x: PAD_L + ((d - 1) / Math.max(1, days - 1)) * W,
-    y: PAD_T + H - (m / maxY) * H,
-    d,
-    m,
+  if (n === 0) {
+    return (
+      <p className="muted" style={{ padding: "44px 16px", textAlign: "center" }}>
+        Sin días para mostrar en este período todavía.
+      </p>
+    );
+  }
+
+  const points = dias.map((dia, i) => ({
+    x: PAD_L + (n === 1 ? W / 2 : (i / (n - 1)) * W),
+    y: PAD_T + H - (dia.monto / maxY) * H,
+    i,
+    fecha: dia.fecha,
+    label: dia.label,
+    m: dia.monto,
   }));
   const labPoints = points.filter((p) => p.m > 0);
   const path = labPoints.map((p, i) => (i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`)).join(" ");
-  const lastPoint = labPoints[labPoints.length - 1] ?? { x: PAD_L, y: PAD_T + H, d: 1, m: 0 };
+  const lastPoint = labPoints[labPoints.length - 1] ?? { x: PAD_L, y: PAD_T + H, i: 0, fecha: "", label: "", m: 0 };
   const firstPoint = labPoints[0] ?? lastPoint;
   const area = labPoints.length > 0
     ? path + ` L ${lastPoint.x} ${PAD_T + H} L ${firstPoint.x} ${PAD_T + H} Z`
@@ -251,11 +276,11 @@ function LineChart({ ingresosPorDia, diasDelMes, diaActual }: { ingresosPorDia: 
         );
       })}
 
-      {labelDaysFor(days).map((d) => {
-        const x = PAD_L + ((d - 1) / Math.max(1, days - 1)) * W;
+      {labelIdxFor(n).map((i) => {
+        const p = points[i];
         return (
-          <text key={d} x={x} y={PAD_T + H + 16} textAnchor="middle" fill="var(--ink-3)" fontSize="10" fontFamily="Geist Mono">
-            {d}
+          <text key={p.fecha} x={p.x} y={PAD_T + H + 16} textAnchor="middle" fill="var(--ink-3)" fontSize="10" fontFamily="Geist Mono">
+            {p.label}
           </text>
         );
       })}
@@ -264,9 +289,9 @@ function LineChart({ ingresosPorDia, diasDelMes, diaActual }: { ingresosPorDia: 
       <path d={path} stroke="var(--accent)" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
 
       {labPoints.map((p) => {
-        const isToday = p.d === diaActual;
+        const isToday = p.fecha === hoyFecha;
         return (
-          <g key={p.d}>
+          <g key={p.fecha}>
             <circle cx={p.x} cy={p.y} r={isToday ? 4.5 : 3} fill="var(--surface)" stroke="var(--accent)" strokeWidth="1.8" />
             {isToday ? <circle cx={p.x} cy={p.y} r="2.5" fill="var(--accent)" /> : null}
           </g>
@@ -277,7 +302,7 @@ function LineChart({ ingresosPorDia, diasDelMes, diaActual }: { ingresosPorDia: 
         <>
           <line x1={lastPoint.x} y1={PAD_T} x2={lastPoint.x} y2={PAD_T + H} stroke="var(--accent)" strokeWidth="1" strokeDasharray="2 3" opacity="0.5" />
           <text x={lastPoint.x} y={PAD_T - 2} textAnchor="middle" fill="var(--accent-2)" fontSize="10" fontFamily="Geist Mono" letterSpacing=".08em">
-            HOY
+            {lastPoint.fecha === hoyFecha ? "HOY" : lastPoint.label}
           </text>
         </>
       ) : null}
@@ -285,9 +310,14 @@ function LineChart({ ingresosPorDia, diasDelMes, diaActual }: { ingresosPorDia: 
   );
 }
 
-function labelDaysFor(diasDelMes: number): number[] {
-  if (diasDelMes <= 7) return [1, Math.ceil(diasDelMes / 2), diasDelMes];
-  return [1, Math.round(diasDelMes / 4), Math.round(diasDelMes / 2), Math.round((3 * diasDelMes) / 4), diasDelMes];
+/** Índices del eje X que llevan label (hasta 5, repartidos y sin repetir). */
+function labelIdxFor(n: number): number[] {
+  if (n <= 1) return [0];
+  const last = n - 1;
+  const crudos = n <= 7
+    ? [0, Math.round(last / 2), last]
+    : [0, Math.round(last / 4), Math.round(last / 2), Math.round((3 * last) / 4), last];
+  return Array.from(new Set(crudos));
 }
 
 // ─── Bar chart mensual (períodos 6m / año) ──────────────────────────────────
@@ -459,11 +489,13 @@ function TablaTransacciones({
   mesLabel,
   periodo,
   canMarcarCobrado,
+  cobradosNoListados,
 }: {
   transacciones: FinanzasTransaccion[];
   mesLabel: string;
   periodo: string;
   canMarcarCobrado: boolean;
+  cobradosNoListados: number;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -488,6 +520,12 @@ function TablaTransacciones({
     );
   }, [transacciones, search, estadoFiltro]);
 
+  const pendientesCount = useMemo(
+    () => transacciones.filter((t) => t.estado === "pendiente").length,
+    [transacciones],
+  );
+  const cobradosCount = transacciones.length - pendientesCount;
+
   const marcarCobrado = (t: FinanzasTransaccion) => {
     if (cobrandoId) return;
     setCobrandoId(t.id);
@@ -506,7 +544,7 @@ function TablaTransacciones({
   return (
     <div className="fn-table-wrap">
       <header className="fn-table-head">
-        <span className="fi-eyebrow">Transacciones recientes</span>
+        <span className="fi-eyebrow">Transacciones del período</span>
         <div className="fn-table-tools">
           <div className="fn-estado-chips" role="group" aria-label="Filtrar por estado">
             {ESTADO_FILTROS.map(([id, lbl]) => (
@@ -607,9 +645,24 @@ function TablaTransacciones({
           </tbody>
         </table>
       )}
+      {/* H1+H4 · el pie ya no puede prometer "las últimas N": la tabla lista
+          TODOS los pendientes del período (cada uno con su botón Cobrar, que no
+          existe en ninguna otra pantalla) + los cobros más recientes. Decimos
+          exactamente cuántos cobros quedaron fuera y dónde están. */}
       <footer className="fn-table-foot">
         <span className="muted">
-          Últimas {transacciones.length === 1 ? "1 transacción" : `${transacciones.length} transacciones`} del período · {mesLabel} · el export CSV incluye el período completo
+          {pendientesCount === 0
+            ? "Sin pagos pendientes"
+            : pendientesCount === 1
+              ? "1 pago pendiente (todos listados)"
+              : `${pendientesCount} pagos pendientes (todos listados)`}
+          {" · "}
+          {cobradosCount === 1 ? "1 cobro reciente" : `${cobradosCount} cobros recientes`}
+          {cobradosNoListados > 0
+            ? ` (hay ${cobradosNoListados} cobro${cobradosNoListados === 1 ? "" : "s"} más en el CSV)`
+            : ""}
+          {" · "}
+          {mesLabel} · el export CSV incluye el período completo
         </span>
       </footer>
     </div>
@@ -679,6 +732,18 @@ export function Finanzas({ data, periodo = "mes", canMarcarCobrado = false }: Fi
         nowLabel={esMes ? `Jornada en curso · datos al día ${data.diaActual}` : `Datos del período · ${data.mesLabel.toLowerCase()}`}
         periodo={periodo}
       />
+      {/* H2 · si la lectura tocó el tope de paginación, los números de abajo son
+          PARCIALES y hay que decirlo: truncar en silencio es plata mal
+          reportada. En la práctica no debería verse nunca (el tope son decenas
+          de miles de pagos por período). */}
+      {data.datosParciales ? (
+        <p className="fn-aviso-parcial" role="status">
+          <b>Datos parciales.</b> Este período tiene más pagos de los que podemos
+          leer de una sola vez, así que los totales, el gráfico y el desglose de
+          abajo se calcularon sobre una parte. Elegí un período más corto para
+          ver los números completos.
+        </p>
+      ) : null}
       <KpiStrip
         totalIngresos={data.totalIngresos}
         totalSesiones={data.totalSesiones}
@@ -706,11 +771,7 @@ export function Finanzas({ data, periodo = "mes", canMarcarCobrado = false }: Fi
           {data.esRangoLargo ? (
             <BarChartMensual meses={data.ingresosPorMes} />
           ) : (
-            <LineChart
-              ingresosPorDia={data.ingresosPorDia}
-              diasDelMes={data.diasDelMes}
-              diaActual={data.diaActual}
-            />
+            <LineChart dias={data.ingresosPorDia} hoyFecha={data.hoyFecha} />
           )}
         </section>
         <section className="fn-chart-card">
@@ -730,6 +791,7 @@ export function Finanzas({ data, periodo = "mes", canMarcarCobrado = false }: Fi
         mesLabel={data.mesLabel}
         periodo={periodo}
         canMarcarCobrado={canMarcarCobrado}
+        cobradosNoListados={data.cobradosNoListados}
       />
     </div>
   );
