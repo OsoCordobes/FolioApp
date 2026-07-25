@@ -20,7 +20,9 @@ import { PacienteCreateModal } from "@/components/pacientes/paciente-create-moda
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import { normalizarBusqueda } from "@/lib/format/busqueda";
+import { csvEscape, csvEscapeTexto } from "@/lib/format/csv";
 import { toWhatsappE164 } from "@/lib/format/phone";
+import { formatCobertura } from "@/lib/pacientes/cobertura";
 import type { PacienteDirRow } from "@/lib/db/pacientes-dir";
 import type { EspecialidadSlug } from "@/lib/especialidades/meta";
 
@@ -61,9 +63,25 @@ interface ToolbarProps {
   onAddPaciente: () => void;
   /** Ref del input de búsqueda — lo enfoca el atajo global "/". */
   searchRef: React.RefObject<HTMLInputElement | null>;
+  /** F7a · filtro por cobertura: "todas" | "__particular" | nombre exacto. */
+  cobFiltro: string;
+  setCobFiltro: (v: string) => void;
+  /** Valores distintos de cobertura de la org (orden es-AR). */
+  coberturas: string[];
 }
 
-function Toolbar({ q, setQ, filtro, setFiltro, counts, onAddPaciente, searchRef }: ToolbarProps) {
+function Toolbar({
+  q,
+  setQ,
+  filtro,
+  setFiltro,
+  counts,
+  onAddPaciente,
+  searchRef,
+  cobFiltro,
+  setCobFiltro,
+  coberturas,
+}: ToolbarProps) {
   const filtros: [string, string, number][] = [
     ["todos",     "Todos",          counts.todos],
     ["activos",   "Activos",        counts.activos],
@@ -97,6 +115,23 @@ function Toolbar({ q, setQ, filtro, setFiltro, counts, onAddPaciente, searchRef 
             <span className="pd-filtro-count">{count}</span>
           </button>
         ))}
+        {/* F7a (M89) · filtro por cobertura. Solo aparece si la org tiene al
+            menos una cobertura cargada — sin datos, el select sería ruido. */}
+        {coberturas.length > 0 ? (
+          <select
+            className={"pd-cob-select " + (cobFiltro !== "todas" ? "is-active" : "")}
+            value={cobFiltro}
+            onChange={(e) => setCobFiltro(e.target.value)}
+            aria-label="Filtrar por cobertura"
+            title="Filtrar el directorio por obra social / prepaga"
+          >
+            <option value="todas">Cobertura: todas</option>
+            {coberturas.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+            <option value="__particular">Particular</option>
+          </select>
+        ) : null}
       </div>
       <button type="button" className="fi-btn fi-btn-primary pd-add" onClick={onAddPaciente}>
         <I.Plus size={13} /> Nuevo paciente
@@ -172,6 +207,7 @@ function TablaPacientes({ pacientes, selected, setSelected, onOpen, onAgendar, t
             </label>
           </th>
           <th>Paciente</th>
+          <th>Cobertura</th>
           <th>Tags</th>
           <th className="ta-r">Última</th>
           <th className="ta-r">Sesiones</th>
@@ -207,6 +243,10 @@ function TablaPacientes({ pacientes, selected, setSelected, onOpen, onAgendar, t
                   </div>
                   {p.tipo === "nuevo" ? <span className="fi-pill fi-pill--new">1ª visita</span> : null}
                 </div>
+              </td>
+              <td>
+                {/* F7a · cobertura en claro (nombre + plan). null = Particular. */}
+                <span className="pd-cobertura">{formatCobertura(p.cobertura, p.coberturaPlan)}</span>
               </td>
               <td>
                 <div className="pd-tags">
@@ -388,17 +428,23 @@ function PageHeader({ total, activos, paraReactivarCount, onExport }: { total: n
 }
 
 function exportPacientesToCsv(pacientes: PacienteDir[]): void {
-  const headers = ["Nombre", "Telefono", "Email", "Tipo", "Sesiones", "Ultima", "Proximo", "Estado", "Tags"];
+  // F7a · columna Cobertura (nombre + plan, en claro — el nº de afiliado NO
+  // viaja al export: queda cifrado y solo se ve en la ficha). El escape usa
+  // lib/format/csv.ts: csvEscapeTexto para texto libre (nombres/tags/cobertura
+  // pueden nacer de terceros → neutraliza fórmulas de Excel), csvEscape para
+  // valores controlados por la app (fechas, enums).
+  const headers = ["Nombre", "Telefono", "Email", "Cobertura", "Tipo", "Sesiones", "Ultima", "Proximo", "Estado", "Tags"];
   const rows = pacientes.map((p) => [
-    csvEscape(p.nombre),
-    csvEscape(p.tel),
-    csvEscape(p.email),
+    csvEscapeTexto(p.nombre),
+    csvEscapeTexto(p.tel),
+    csvEscapeTexto(p.email),
+    csvEscapeTexto(formatCobertura(p.cobertura, p.coberturaPlan)),
     csvEscape(p.tipo),
     String(p.sesiones),
     csvEscape(p.ultima ?? ""),
     csvEscape(p.proximo ?? ""),
     csvEscape(p.estado),
-    csvEscape(p.tags.join("; ")),
+    csvEscapeTexto(p.tags.join("; ")),
   ].join(","));
   const csv = [headers.join(","), ...rows].join("\r\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -410,13 +456,6 @@ function exportPacientesToCsv(pacientes: PacienteDir[]): void {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
-}
-
-function csvEscape(value: string): string {
-  if (value == null) return "";
-  const needsQuote = /[",\r\n]/.test(value);
-  const escaped = value.replace(/"/g, '""');
-  return needsQuote ? `"${escaped}"` : escaped;
 }
 
 // ─── Root ──────────────────────────────────────────────────────────────────
@@ -442,6 +481,8 @@ export function PacientesDir({
   const router = useRouter();
   const [q, setQ] = useState(initialQuery);
   const [filtro, setFiltro] = useState("todos");
+  // F7a · filtro por cobertura: "todas" | "__particular" | nombre exacto.
+  const [cobFiltro, setCobFiltro] = useState("todas");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [createOpen, setCreateOpen] = useState(false);
   const [agendarFor, setAgendarFor] = useState<PacienteDir | null>(null);
@@ -514,6 +555,16 @@ export function PacientesDir({
     [pacientes, paraReactivar],
   );
 
+  // F7a · valores distintos de cobertura de la org para el select del filtro
+  // (orden alfabético es-AR; null NO entra — el bucket "Particular" es fijo).
+  const coberturas = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of pacientes) {
+      if (p.cobertura) set.add(p.cobertura);
+    }
+    return [...set].sort((a, b) => a.localeCompare(b, "es"));
+  }, [pacientes]);
+
   const filtered = useMemo(() => {
     let list: PacienteDir[] = pacientes;
     if (filtro === "activos") list = list.filter((p) => p.estado === "activo");
@@ -521,6 +572,9 @@ export function PacientesDir({
     if (filtro === "reactivar") list = paraReactivar;
     if (filtro === "inactivos") list = list.filter((p) => p.estado === "inactivo");
     if (filtro === "alta") list = list.filter((p) => p.estado === "alta");
+    // F7a · filtro por cobertura (AND con el filtro de estado y la búsqueda).
+    if (cobFiltro === "__particular") list = list.filter((p) => p.cobertura == null);
+    else if (cobFiltro !== "todas") list = list.filter((p) => p.cobertura === cobFiltro);
     if (q.trim()) {
       // Normalizado en AMBOS lados (query y campos): "jose" encuentra a
       // "José" — el caso más común del país. Ver lib/format/busqueda.ts.
@@ -535,7 +589,7 @@ export function PacientesDir({
       );
     }
     return list;
-  }, [filtro, q, paraReactivar, pacientes]);
+  }, [filtro, cobFiltro, q, paraReactivar, pacientes]);
 
   return (
     <>
@@ -559,6 +613,9 @@ export function PacientesDir({
           counts={counts}
           onAddPaciente={() => setCreateOpen(true)}
           searchRef={searchRef}
+          cobFiltro={cobFiltro}
+          setCobFiltro={setCobFiltro}
+          coberturas={coberturas}
         />
 
         <div className="pd-table-wrap">

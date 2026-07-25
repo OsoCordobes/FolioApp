@@ -31,6 +31,14 @@ export interface PacienteDirRow {
   proximo: string | null;
   tags: string[];
   estado: "activo" | "inactivo" | "pausa" | "alta";
+  /**
+   * F7a (M89) · obra social/prepaga EN CLARO (dato administrativo de baja
+   * sensibilidad — la afiliación no revela condición clínica). null =
+   * particular / sin informar. Alimenta la columna Cobertura, el filtro por
+   * cobertura y el export CSV del directorio.
+   */
+  cobertura: string | null;
+  coberturaPlan: string | null;
 }
 
 export async function getPacientesDirectorio(): Promise<Result<PacienteDirRow[]>> {
@@ -61,6 +69,8 @@ export async function getPacientesDirectorio(): Promise<Result<PacienteDirRow[]>
       proximo: p.proximoTurno ? p.proximoTurno.slice(0, 10) : null,
       tags: p.tags ?? [],
       estado,
+      cobertura: p.coberturaNombre,
+      coberturaPlan: p.coberturaPlan,
     };
   });
 

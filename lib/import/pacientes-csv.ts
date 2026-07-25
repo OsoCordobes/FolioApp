@@ -35,7 +35,9 @@ export type CampoImport =
   | "dni"
   | "telefono"
   | "email"
-  | "fechaNacimiento";
+  | "fechaNacimiento"
+  | "obraSocial"
+  | "nroAfiliado";
 
 export const CAMPOS_IMPORT: readonly CampoImport[] = [
   "nombre",
@@ -44,6 +46,10 @@ export const CAMPOS_IMPORT: readonly CampoImport[] = [
   "telefono",
   "email",
   "fechaNacimiento",
+  // F7a (M89) · cobertura: obra social en claro; el nº de afiliado se cifra
+  // en el server action (acá es solo texto — este módulo no importa crypto).
+  "obraSocial",
+  "nroAfiliado",
 ];
 
 export const CAMPOS_OBLIGATORIOS: readonly CampoImport[] = ["nombre", "apellido", "telefono"];
@@ -55,6 +61,8 @@ export const CAMPO_LABELS: Record<CampoImport, string> = {
   telefono: "Teléfono",
   email: "Email",
   fechaNacimiento: "Fecha de nacimiento",
+  obraSocial: "Obra social",
+  nroAfiliado: "Nº de afiliado",
 };
 
 /** Índice de columna del CSV por campo destino; ausente = columna ignorada. */
@@ -168,6 +176,33 @@ const SINONIMOS: Record<CampoImport, string[]> = {
     "fnac",
     "birthdate",
     "fecha de nac",
+  ],
+  // F7a · cobertura. OJO: sin sinónimos cortos tipo "os" — la pasada 2 matchea
+  // por substring y "os" está adentro de media planilla ("datos", "apellidos").
+  obraSocial: [
+    "obra social",
+    "obrasocial",
+    "obra soc",
+    "cobertura",
+    "prepaga",
+    "mutual",
+  ],
+  // El "º"/"°" no se normaliza con NFD (no descompone) — se listan las
+  // variantes con ordinal y con grado; "afiliado" como substring cubre el resto.
+  nroAfiliado: [
+    "nro afiliado",
+    "numero afiliado",
+    "nro de afiliado",
+    "numero de afiliado",
+    "nº afiliado",
+    "n° afiliado",
+    "nº de afiliado",
+    "n° de afiliado",
+    "num afiliado",
+    "afiliado",
+    "credencial",
+    "nro credencial",
+    "numero credencial",
   ],
 };
 
@@ -290,6 +325,10 @@ export interface FilaNormalizada {
   telefono: string;
   email: string | null;
   fechaNacimiento: string | null;
+  /** F7a (M89) · obra social/prepaga en claro. null = sin dato. */
+  obraSocial: string | null;
+  /** F7a (M89) · nº de afiliado — el action lo CIFRA antes del INSERT. */
+  nroAfiliado: string | null;
 }
 
 export type FilaResultado =
@@ -319,6 +358,8 @@ export function normalizarFila(
   const dniRaw = valor("dni");
   const emailRaw = valor("email");
   const fechaRaw = valor("fechaNacimiento");
+  const obraSocialRaw = valor("obraSocial");
+  const nroAfiliadoRaw = valor("nroAfiliado");
 
   const errores: string[] = [];
   if (nombre === "") errores.push("falta el nombre");
@@ -354,13 +395,27 @@ export function normalizarFila(
     }
   }
 
+  // F7a · cobertura: opcionales, solo límite de longitud (los mismos topes que
+  // el alta manual — M89: nombre ≤120, afiliado ≤40).
+  let obraSocial: string | null = null;
+  if (obraSocialRaw !== "") {
+    if (obraSocialRaw.length > 120) errores.push("obra social demasiado larga (máx. 120)");
+    else obraSocial = obraSocialRaw;
+  }
+
+  let nroAfiliado: string | null = null;
+  if (nroAfiliadoRaw !== "") {
+    if (nroAfiliadoRaw.length > 40) errores.push("nº de afiliado demasiado largo (máx. 40)");
+    else nroAfiliado = nroAfiliadoRaw;
+  }
+
   if (errores.length > 0) {
     return { fila: numeroFila, ok: false, motivo: errores.join(" · ") };
   }
   return {
     fila: numeroFila,
     ok: true,
-    data: { nombre, apellido, dni, telefono: telefonoRaw, email, fechaNacimiento },
+    data: { nombre, apellido, dni, telefono: telefonoRaw, email, fechaNacimiento, obraSocial, nroAfiliado },
   };
 }
 

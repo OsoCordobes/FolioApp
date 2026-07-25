@@ -104,6 +104,32 @@ test("proponerMapeo: columnas desconocidas quedan sin mapear", () => {
   assert.equal(Object.keys(m).length, 0);
 });
 
+// F7a · cobertura (obra social + nº de afiliado)
+
+test("proponerMapeo: obra social y nº de afiliado (headers típicos AR)", () => {
+  const m = proponerMapeo(["Nombre", "Apellido", "Teléfono", "Obra Social", "Nro Afiliado"]);
+  assert.equal(m.obraSocial, 3);
+  assert.equal(m.nroAfiliado, 4);
+});
+
+test("proponerMapeo: sinónimos de cobertura (prepaga, cobertura, credencial, n° afiliado)", () => {
+  const m1 = proponerMapeo(["nombre", "apellido", "tel", "prepaga", "n° de afiliado"]);
+  assert.equal(m1.obraSocial, 3);
+  assert.equal(m1.nroAfiliado, 4);
+
+  const m2 = proponerMapeo(["nombre", "apellido", "tel", "cobertura", "credencial"]);
+  assert.equal(m2.obraSocial, 3);
+  assert.equal(m2.nroAfiliado, 4);
+});
+
+test("proponerMapeo: la cobertura no roba columnas de otros campos", () => {
+  // "apellidos" y "datos personales" no deben matchear obraSocial/nroAfiliado.
+  const m = proponerMapeo(["nombres", "apellidos", "datos personales", "telefono"]);
+  assert.equal(m.obraSocial, undefined);
+  assert.equal(m.nroAfiliado, undefined);
+  assert.equal(m.apellido, 1);
+});
+
 test("proponerMapeo: una columna no se asigna a dos campos", () => {
   const m = proponerMapeo(["nombre y apellido"]);
   // "nombre y apellido" contiene ambos sinónimos — gana uno solo (nombre).
@@ -199,6 +225,37 @@ test("normalizarFila: columnas no mapeadas se ignoran", () => {
   const r = normalizarFila(["Carlos", "Vega", "3515551234", "basura", "x"], soloObligatorios, 2);
   assert.ok(r.ok);
   assert.equal(r.data.dni, null);
+  assert.equal(r.data.obraSocial, null);
+  assert.equal(r.data.nroAfiliado, null);
+});
+
+// F7a · cobertura en la normalización de filas
+
+const MAPEO_COB: MapeoColumnas = { nombre: 0, apellido: 1, telefono: 2, obraSocial: 3, nroAfiliado: 4 };
+
+test("normalizarFila: obra social y nº de afiliado mapeados se conservan (trim)", () => {
+  const r = normalizarFila(["Carlos", "Vega", "3515551234", "  OSDE  ", " 123456 "], MAPEO_COB, 2);
+  assert.ok(r.ok);
+  assert.equal(r.data.obraSocial, "OSDE");
+  assert.equal(r.data.nroAfiliado, "123456");
+});
+
+test("normalizarFila: cobertura vacía queda null, no error", () => {
+  const r = normalizarFila(["Ana", "Ruiz", "3515551234", "", ""], MAPEO_COB, 3);
+  assert.ok(r.ok);
+  assert.equal(r.data.obraSocial, null);
+  assert.equal(r.data.nroAfiliado, null);
+});
+
+test("normalizarFila: cobertura demasiado larga → error es-AR sin PII", () => {
+  const r = normalizarFila(
+    ["Carlos", "Vega", "3515551234", "x".repeat(121), "y".repeat(41)],
+    MAPEO_COB,
+    4,
+  );
+  assert.ok(!r.ok);
+  assert.match(r.motivo, /obra social demasiado larga/);
+  assert.match(r.motivo, /afiliado demasiado largo/);
 });
 
 test("normalizarFilas: numera desde 2 (la fila 1 es el encabezado)", () => {
