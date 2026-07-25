@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
  * Folio · Cookie consent banner — Phase 6b of the pre-audit sprint.
@@ -18,6 +18,21 @@ import { useEffect, useState } from "react";
  * Sin reload: aceptar dispara el evento `folio:cookie-consent` y el provider
  * inicializa PostHog in-place. Antes hacíamos window.location.reload() — un
  * paciente a mitad del wizard de /book/[slug] perdía todo su progreso.
+ *
+ * El banner es `position: fixed` y en mobile ocupa ~230px (el texto legal
+ * envuelve en 4-5 líneas): a 375px tapaba "Crear cuenta" y el link al Aviso
+ * de Privacidad al pie del card de /login — el punto de entrada al alta, en
+ * el dispositivo donde más gente llega. Achicarlo no alcanza (para despejar
+ * ambos controles tendría que medir <80px, menos que el título + los dos
+ * botones), así que RESERVA su espacio con un spacer en flujo normal,
+ * hermano del banner: al final del body, empuja el alto del documento y todo
+ * el contenido se puede scrollear por encima. Se va con el banner.
+ *
+ * Por qué un spacer y no CSS: `html, body { height: 100% }` (folio.css) +
+ * box-sizing:border-box global hacen que padding/margin sobre el body NO
+ * agreguen área scrolleable — se la comen. Un elemento en flujo sí la agrega,
+ * y funciona igual en los 5 layouts (landing, auth, booking, portal, app) sin
+ * tener que enumerar la clase raíz de cada uno.
  */
 
 const STORAGE_KEY = "folio.cookieConsent";
@@ -37,6 +52,31 @@ export function CookieBanner() {
       setConsent(null);
     }
   }, []);
+
+  // Alto del banner → alto del spacer. El ref callback mide en el primer
+  // paint y un ResizeObserver lo sigue ante rotación del teléfono o reflow
+  // del texto. 0 = todavía sin medir (o banner ausente).
+  const [spacerH, setSpacerH] = useState(0);
+  const observerRef = useRef<ResizeObserver | null>(null);
+  const setBannerRef = useCallback((node: HTMLDivElement | null) => {
+    observerRef.current?.disconnect();
+    observerRef.current = null;
+    if (!node) {
+      setSpacerH(0);
+      return;
+    }
+    // +16 del `bottom: 16` del banner + 8 de aire, para que el último control
+    // no quede pegado al borde superior del banner.
+    const publish = () => setSpacerH(Math.ceil(node.getBoundingClientRect().height) + 24);
+    publish();
+    if (typeof ResizeObserver !== "undefined") {
+      const ro = new ResizeObserver(publish);
+      ro.observe(node);
+      observerRef.current = ro;
+    }
+  }, []);
+
+  useEffect(() => () => observerRef.current?.disconnect(), []);
 
   const accept = () => {
     try {
@@ -59,7 +99,13 @@ export function CookieBanner() {
   if (consent === "granted" || consent === "denied") return null;
 
   return (
+    <>
+    {/* Spacer en flujo: empuja el alto del documento para que el contenido
+        del pie (p. ej. "Crear cuenta" en /login) se pueda scrollear por
+        encima del banner fijo. aria-hidden: no aporta nada al lector. */}
+    <div aria-hidden="true" style={{ height: spacerH }} />
     <div
+      ref={setBannerRef}
       role="dialog"
       aria-labelledby="cookie-banner-title"
       aria-describedby="cookie-banner-body"
@@ -100,5 +146,6 @@ export function CookieBanner() {
         </button>
       </div>
     </div>
+    </>
   );
 }
