@@ -29,6 +29,9 @@ import type { PortalTurnoView } from "@/lib/db/portal-turnos";
 
 import { cancelarTurnoAction, solicitarReagendaAction } from "./actions";
 
+// hourCycle explícito (mismo criterio que fmtHora): sin él el ICU de Node
+// resuelve es-AR como h12 y el turno del paciente se renderiza en el server
+// como "10:00 a. m." (y "10:00" en el browser → mismatch de hidratación).
 const FMT = new Intl.DateTimeFormat("es-AR", {
   timeZone: "America/Argentina/Cordoba",
   weekday: "long",
@@ -36,6 +39,7 @@ const FMT = new Intl.DateTimeFormat("es-AR", {
   month: "long",
   hour: "2-digit",
   minute: "2-digit",
+  hourCycle: "h23",
 });
 
 /** Etiqueta legible del estado del turno (no exponemos el enum crudo). */

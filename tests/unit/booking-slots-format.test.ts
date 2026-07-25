@@ -6,6 +6,7 @@ import {
   diaKey,
   fmtDia,
   fmtHora,
+  TZ_AR,
 } from "../../lib/booking/slots-format";
 
 /**
@@ -23,6 +24,25 @@ import {
 test("fmtHora presenta el instante UTC en hora argentina (UTC-3)", () => {
   assert.equal(fmtHora("2026-08-10T13:00:00.000Z"), "10:00");
   assert.equal(fmtHora("2026-08-10T13:30:00.000Z"), "10:30");
+});
+
+test("fmtHora: 24h explícito, nunca 'a. m.' (Node resuelve es-AR como h12)", () => {
+  // Este test corre en Node, donde el default de es-AR es h12: si alguien
+  // saca `hourCycle`, acá aparece "10:00 a. m." y todo lo que concatena " hs"
+  // (recordatorios, /t/[token], portal) le miente al paciente.
+  assert.ok(!fmtHora("2026-08-10T13:00:00.000Z").includes("m."));
+  assert.equal(fmtHora("2026-08-10T15:00:00.000Z"), "12:00");
+  assert.equal(fmtHora("2026-08-11T01:00:00.000Z"), "22:00");
+  assert.equal(fmtHora("2026-08-10T03:00:00.000Z"), "00:00");
+});
+
+test("fmtHora: la timezone es parametrizable (TZ configurada de la org)", () => {
+  // Mismo instante, dos zonas: AR (UTC-3) y Ushuaia — que también es UTC-3 —
+  // vs. UTC, para probar que el parámetro efectivamente se aplica.
+  assert.equal(fmtHora("2026-08-10T13:00:00.000Z", "UTC"), "13:00");
+  assert.equal(fmtHora("2026-08-10T13:00:00.000Z", "America/Argentina/Ushuaia"), "10:00");
+  // Sin parámetro sigue siendo la TZ AR por defecto (no rompe a los callers).
+  assert.equal(fmtHora("2026-08-10T13:00:00.000Z"), fmtHora("2026-08-10T13:00:00.000Z", TZ_AR));
 });
 
 test("diaKey agrupa por día calendario AR, no por día UTC", () => {
