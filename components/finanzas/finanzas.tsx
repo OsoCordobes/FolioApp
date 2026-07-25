@@ -1,25 +1,39 @@
 "use client";
 
 /**
- * Folio · /finanzas — Ingresos del mes con KPIs, gráficos y transacciones.
+ * Folio · /finanzas — Ingresos del período con KPIs, gráficos y transacciones.
  *
- * Port fiel de folio/finanzas.jsx (432 líneas). KPI strip + LineChart SVG
- * (ingresos diarios) + Donut SVG (servicios) + tabla densa de transacciones.
+ * Port fiel de folio/finanzas.jsx + E1/E2 (finanzas completas):
+ *  - KPI strip con "Por cobrar" (deuda del período) y labels honestos por
+ *    período (la proyección de fin de mes solo aplica a "Este mes").
+ *  - Chart diario (línea) para rangos cortos; barras mensuales para 6m/año.
+ *  - Eje Y relativo al dato (niceCeil) — el piso hardcodeado de $150.000
+ *    aplanaba consultorios chicos.
+ *  - Tabla con chips Todos/Cobrados/Pendientes y acción inline "Cobrar"
+ *    (server action marcarPagoCobradoAction + toast).
+ *  - Export CSV server-side SIN cap: el botón es un <a> a /finanzas/export.
  *
- * En F4 los agregados (totalIngresos, ticket prom, proyección) se calculan
- * server-side vía Server Component que consulta `Pago` con RLS por org.
+ * Los agregados se calculan server-side (lib/db/finanzas.ts) con RLS por org
+ * y scoping por profesional cuando el rol solo ve lo propio.
  */
 
 import Link from "next/link";
-import { useState, useMemo, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { useMemo, useState, useTransition, type ReactNode } from "react";
 
 import * as I from "@/components/icons";
+import { useToast } from "@/components/ui/toast";
+import { niceCeil } from "@/lib/format/nice-ceil";
 import type {
   FinanzasData,
+  FinanzasMesIngreso,
+  FinanzasProfesionalBreakdown,
   FinanzasServicioBreakdown,
   FinanzasTransaccion,
   MetodoPagoUI,
 } from "@/lib/db/finanzas";
+
+import { marcarPagoCobradoAction } from "@/app/(app)/finanzas/actions";
 
 const METODO_LBL: Record<MetodoPagoUI, { lbl: string; color: string }> = {
   mercadopago:   { lbl: "MercadoPago",   color: "var(--slate)" },
@@ -53,7 +67,7 @@ interface KpiCardProps {
   label: string;
   value: ReactNode;
   sub: string;
-  tone?: "primary";
+  tone?: "primary" | "warn";
   delta?: string;
 }
 
@@ -88,34 +102,62 @@ function KpiStrip({
   totalSesiones,
   ticketProm,
   proyeccion,
+  porCobrar,
+  porCobrarCount,
   diaActual,
   diasDelMes,
   deltaIngresosPct,
+  periodo,
+  periodoLabel,
 }: {
   totalIngresos: number;
   totalSesiones: number;
   ticketProm: number;
   proyeccion: number;
+  porCobrar: number;
+  porCobrarCount: number;
   diaActual: number;
   diasDelMes: number;
   deltaIngresosPct: number | null;
+  periodo: string;
+  periodoLabel: string;
 }) {
-  const deltaLabel = deltaIngresosPct == null
+  const esMes = periodo === "mes";
+  // Labels honestos por período: el delta "vs mes pasado" y la proyección de
+  // fin de mes solo tienen sentido en la vista mensual (E2).
+  const deltaLabel = !esMes || deltaIngresosPct == null
     ? undefined
     : `${deltaIngresosPct >= 0 ? "+" : ""}${deltaIngresosPct}%`;
   return (
     <div className="fn-kpis">
       <KpiCard
-        label="Ingresos del mes"
+        label={esMes ? "Ingresos del mes" : "Ingresos del período"}
         value={
           <>
             <small>$</small>
             {fmtMonth(totalIngresos)}
           </>
         }
-        sub={`${diaActual} de ${diasDelMes} días`}
+        sub={esMes ? `${diaActual} de ${diasDelMes} días` : periodoLabel.toLowerCase()}
         delta={deltaLabel}
         tone="primary"
+      />
+      <KpiCard
+        label="Por cobrar"
+        value={
+          <>
+            <small>$</small>
+            {fmtMonth(porCobrar)}
+          </>
+        }
+        sub={
+          porCobrarCount === 0
+            ? "sin deudas del período"
+            : porCobrarCount === 1
+              ? "1 pago pendiente"
+              : `${porCobrarCount} pagos pendientes`
+        }
+        tone={porCobrar > 0 ? "warn" : undefined}
       />
       <KpiCard
         label="Sesiones"
@@ -132,16 +174,18 @@ function KpiStrip({
         }
         sub="por sesión"
       />
-      <KpiCard
-        label="Proyección fin de mes"
-        value={
-          <>
-            <small>$</small>
-            {fmtMonth(proyeccion)}
-          </>
-        }
-        sub="al ritmo actual"
-      />
+      {esMes ? (
+        <KpiCard
+          label="Proyección fin de mes"
+          value={
+            <>
+              <small>$</small>
+              {fmtMonth(proyeccion)}
+            </>
+          }
+          sub="al ritmo actual"
+        />
+      ) : null}
     </div>
   );
 }
@@ -159,7 +203,9 @@ function LineChart({ ingresosPorDia, diasDelMes, diaActual }: { ingresosPorDia: 
   // Solo mostramos hasta el día actual (no proyección visual).
   const dataHastaHoy = ingresosPorDia.filter(([d]) => d <= diaActual);
   const maxObserved = Math.max(0, ...dataHastaHoy.map(([, m]) => m));
-  const maxY = Math.max(150000, Math.ceil(maxObserved / 50000) * 50000);
+  // E2 · escala relativa al dato: el piso fijo de $150.000 aplanaba la curva
+  // de consultorios con ticket bajo (facturar $40k/día se veía como $0).
+  const maxY = niceCeil(maxObserved * 1.15, 10_000);
 
   const points = dataHastaHoy.map(([d, m]) => ({
     x: PAD_L + ((d - 1) / Math.max(1, days - 1)) * W,
@@ -244,6 +290,77 @@ function labelDaysFor(diasDelMes: number): number[] {
   return [1, Math.round(diasDelMes / 4), Math.round(diasDelMes / 2), Math.round((3 * diasDelMes) / 4), diasDelMes];
 }
 
+// ─── Bar chart mensual (períodos 6m / año) ──────────────────────────────────
+
+/**
+ * E2 · barras mensuales para rangos largos. Reusa el patrón SVG del LineChart
+ * (mismo viewBox, misma grilla de ticks, mismos tokens) — antes 6m/año
+ * renderizaban ejes vacíos sin ningún mensaje.
+ */
+function BarChartMensual({ meses }: { meses: FinanzasMesIngreso[] }) {
+  const PAD_L = 36;
+  const PAD_R = 12;
+  const PAD_T = 12;
+  const PAD_B = 26;
+  const W = 600 - PAD_L - PAD_R;
+  const H = 180 - PAD_T - PAD_B;
+
+  const total = meses.reduce((s, m) => s + m.monto, 0);
+  if (meses.length === 0 || total === 0) {
+    return (
+      <p className="muted" style={{ padding: "44px 16px", textAlign: "center" }}>
+        Sin ingresos registrados en este período todavía. Cuando cierres turnos
+        con cobro, acá vas a ver la evolución mes a mes.
+      </p>
+    );
+  }
+
+  const maxY = niceCeil(Math.max(...meses.map((m) => m.monto)) * 1.15, 10_000);
+  const slotW = W / meses.length;
+  const barW = Math.min(44, slotW * 0.58);
+  const ticks = [0, Math.round(maxY / 3), Math.round((2 * maxY) / 3), maxY];
+
+  return (
+    <svg className="fn-chart" viewBox="0 0 600 180" preserveAspectRatio="none">
+      {ticks.map((t) => {
+        const y = PAD_T + H - (t / maxY) * H;
+        return (
+          <g key={t}>
+            <line
+              x1={PAD_L}
+              y1={y}
+              x2={PAD_L + W}
+              y2={y}
+              stroke="var(--line-soft)"
+              strokeWidth="1"
+              strokeDasharray={t === 0 ? "0" : "2 3"}
+            />
+            <text x={PAD_L - 8} y={y + 3} textAnchor="end" fill="var(--ink-3)" fontSize="10" fontFamily="Geist Mono" letterSpacing="0">
+              {t === 0 ? "0" : fmtMonth(t)}
+            </text>
+          </g>
+        );
+      })}
+
+      {meses.map((mes, i) => {
+        const h = maxY > 0 ? (mes.monto / maxY) * H : 0;
+        const x = PAD_L + i * slotW + (slotW - barW) / 2;
+        const y = PAD_T + H - h;
+        return (
+          <g key={mes.ym}>
+            <rect x={x} y={y} width={barW} height={h} rx="2" fill="var(--accent)" opacity="0.85">
+              <title>{`${mes.label} · ${fmtMoney(mes.monto)}`}</title>
+            </rect>
+            <text x={x + barW / 2} y={PAD_T + H + 16} textAnchor="middle" fill="var(--ink-3)" fontSize="10" fontFamily="Geist Mono">
+              {mes.label}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 // ─── Donut ──────────────────────────────────────────────────────────────────
 
 function Donut({ servicios }: { servicios: FinanzasServicioBreakdown[] }) {
@@ -258,7 +375,7 @@ function Donut({ servicios }: { servicios: FinanzasServicioBreakdown[] }) {
     return (
       <div className="fn-donut-wrap">
         <p className="muted" style={{ padding: "32px 16px", textAlign: "center" }}>
-          Sin ingresos este mes todavía.
+          Sin ingresos en este período todavía.
         </p>
       </div>
     );
@@ -305,24 +422,105 @@ function Donut({ servicios }: { servicios: FinanzasServicioBreakdown[] }) {
   );
 }
 
+// ─── Desglose por profesional (E2 · solo canSeeFinanzasAll y >1 colegiado) ──
+
+function ProfesionalesBreakdown({ profesionales }: { profesionales: FinanzasProfesionalBreakdown[] }) {
+  if (profesionales.length === 0) return null;
+  return (
+    <div className="fn-prof-breakdown">
+      <span className="fi-eyebrow">Por profesional</span>
+      <div className="fn-prof-rows">
+        {profesionales.map((p) => (
+          <div key={p.id} className="fn-prof-row">
+            <span className="fn-legend-name">{p.nombre}</span>
+            <span className="fn-prof-count fm-mono">
+              {p.count} {p.count === 1 ? "cobro" : "cobros"}
+            </span>
+            <span className="fn-legend-monto fm-mono">{fmtMoney(p.monto)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Tabla ──────────────────────────────────────────────────────────────────
 
-function TablaTransacciones({ transacciones, totalSesiones, mesLabel }: { transacciones: FinanzasTransaccion[]; totalSesiones: number; mesLabel: string }) {
+type EstadoFiltro = "todos" | "cobrados" | "pendientes";
+
+const ESTADO_FILTROS: Array<[EstadoFiltro, string]> = [
+  ["todos", "Todos"],
+  ["cobrados", "Cobrados"],
+  ["pendientes", "Pendientes"],
+];
+
+function TablaTransacciones({
+  transacciones,
+  mesLabel,
+  periodo,
+  canMarcarCobrado,
+}: {
+  transacciones: FinanzasTransaccion[];
+  mesLabel: string;
+  periodo: string;
+  canMarcarCobrado: boolean;
+}) {
+  const router = useRouter();
+  const toast = useToast();
   const [search, setSearch] = useState("");
+  const [estadoFiltro, setEstadoFiltro] = useState<EstadoFiltro>("todos");
+  /** id del pago con "Cobrar" en vuelo (deshabilita el botón de ESA fila). */
+  const [cobrandoId, setCobrandoId] = useState<string | null>(null);
+  const [, startTransition] = useTransition();
+
   const filtered = useMemo(() => {
-    if (!search.trim()) return transacciones;
+    let rows = transacciones;
+    if (estadoFiltro !== "todos") {
+      const target = estadoFiltro === "cobrados" ? "cobrado" : "pendiente";
+      rows = rows.filter((t) => t.estado === target);
+    }
+    if (!search.trim()) return rows;
     const q = search.toLowerCase();
-    return transacciones.filter((t) =>
+    return rows.filter((t) =>
       t.paciente.toLowerCase().includes(q) ||
       t.servicio.toLowerCase().includes(q) ||
       String(t.monto).includes(q),
     );
-  }, [transacciones, search]);
+  }, [transacciones, search, estadoFiltro]);
+
+  const marcarCobrado = (t: FinanzasTransaccion) => {
+    if (cobrandoId) return;
+    setCobrandoId(t.id);
+    startTransition(async () => {
+      const result = await marcarPagoCobradoAction(t.id);
+      setCobrandoId(null);
+      if (!result.ok) {
+        toast.show({ titulo: `No se pudo registrar el cobro: ${result.error.message}`, tono: "error" });
+        return;
+      }
+      toast.show({ titulo: `Pago cobrado · ${fmtMoney(t.monto)} · ${t.paciente}` });
+      router.refresh();
+    });
+  };
+
   return (
     <div className="fn-table-wrap">
       <header className="fn-table-head">
         <span className="fi-eyebrow">Transacciones recientes</span>
         <div className="fn-table-tools">
+          <div className="fn-estado-chips" role="group" aria-label="Filtrar por estado">
+            {ESTADO_FILTROS.map(([id, lbl]) => (
+              <button
+                key={id}
+                type="button"
+                className={"fn-estado-chip-btn " + (estadoFiltro === id ? "is-active" : "")}
+                aria-pressed={estadoFiltro === id}
+                onClick={() => setEstadoFiltro(id)}
+              >
+                {lbl}
+              </button>
+            ))}
+          </div>
           <div className="fn-table-search">
             <I.Search size={12} />
             <input
@@ -331,22 +529,27 @@ function TablaTransacciones({ transacciones, totalSesiones, mesLabel }: { transa
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <button
-            type="button"
+          {/* E2 · export server-side SIN cap: baja TODO el período, no solo
+              las ≤20 filas renderizadas. */}
+          <a
             className="fi-btn fi-btn-secondary"
-            onClick={() => exportTransaccionesToCsv(filtered, mesLabel)}
-            title="Descargar CSV con las transacciones visibles"
+            href={`/finanzas/export?periodo=${periodo}`}
+            title="Descargar CSV con todas las transacciones del período"
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
             </svg>
             Exportar
-          </button>
+          </a>
         </div>
       </header>
       {filtered.length === 0 ? (
         <p className="muted" style={{ padding: 24, textAlign: "center" }}>
-          {transacciones.length === 0 ? "Sin transacciones registradas todavía." : "Sin resultados para esa búsqueda."}
+          {transacciones.length === 0
+            ? "Sin transacciones registradas todavía."
+            : estadoFiltro === "pendientes" && !search.trim()
+              ? "Sin pagos pendientes en el período. Todo cobrado."
+              : "Sin resultados para ese filtro."}
         </p>
       ) : (
         <table className="fn-table">
@@ -356,6 +559,7 @@ function TablaTransacciones({ transacciones, totalSesiones, mesLabel }: { transa
               <th>Paciente</th>
               <th>Servicio</th>
               <th>Método</th>
+              <th>Estado</th>
               <th className="ta-r">Monto</th>
             </tr>
           </thead>
@@ -376,6 +580,22 @@ function TablaTransacciones({ transacciones, totalSesiones, mesLabel }: { transa
                       {m.lbl}
                     </span>
                   </td>
+                  <td>
+                    <span className={"fn-estado-chip " + (isPendiente ? "is-pendiente" : "is-cobrado")}>
+                      {isPendiente ? "Pendiente" : "Cobrado"}
+                    </span>
+                    {isPendiente && canMarcarCobrado ? (
+                      <button
+                        type="button"
+                        className="fi-btn fi-btn-secondary fn-cobrar-btn"
+                        disabled={cobrandoId === t.id}
+                        onClick={() => marcarCobrado(t)}
+                        title={`Registrar el cobro de ${t.paciente}`}
+                      >
+                        {cobrandoId === t.id ? "Cobrando…" : "Cobrar"}
+                      </button>
+                    ) : null}
+                  </td>
                   <td className="ta-r">
                     <span className={"fn-monto fm-mono " + (isPendiente ? "is-pendiente" : "")}>
                       {fmtMoney(t.monto)}
@@ -388,39 +608,12 @@ function TablaTransacciones({ transacciones, totalSesiones, mesLabel }: { transa
         </table>
       )}
       <footer className="fn-table-foot">
-        <span className="muted">Mostrando {filtered.length} de {totalSesiones} · {mesLabel}</span>
+        <span className="muted">
+          Últimas {transacciones.length === 1 ? "1 transacción" : `${transacciones.length} transacciones`} del período · {mesLabel} · el export CSV incluye el período completo
+        </span>
       </footer>
     </div>
   );
-}
-
-function exportTransaccionesToCsv(transacciones: FinanzasTransaccion[], mesLabel: string): void {
-  const headers = ["Fecha", "Paciente", "Servicio", "Monto", "Metodo", "Estado"];
-  const rows = transacciones.map((t) => [
-    new Date(t.fecha).toISOString(),
-    csvEscapeFn(t.paciente),
-    csvEscapeFn(t.servicio),
-    String(t.monto),
-    t.metodo,
-    t.estado,
-  ].join(","));
-  const csv = [headers.join(","), ...rows].join("\r\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `transacciones-folio-${mesLabel.replace(/\s+/g, "-")}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-function csvEscapeFn(v: string): string {
-  if (v == null) return "";
-  const needsQuote = /[",\r\n]/.test(v);
-  const escaped = v.replace(/"/g, '""');
-  return needsQuote ? `"${escaped}"` : escaped;
 }
 
 // ─── Page header ────────────────────────────────────────────────────────────
@@ -440,7 +633,7 @@ function PageHeader({ mesLabel, nowLabel, periodo }: { mesLabel: string; nowLabe
       <div>
         <span className="fi-eyebrow">finanzas · {mesLabel}</span>
         <h1>Ingresos del período</h1>
-        <p className="fn-head-sub">Jornada en curso · datos {nowLabel}</p>
+        <p className="fn-head-sub">{nowLabel}</p>
       </div>
       <div className="fn-head-controls">
         <div className="fn-period">
@@ -469,11 +662,12 @@ function PageHeader({ mesLabel, nowLabel, periodo }: { mesLabel: string; nowLabe
 interface FinanzasProps {
   data: FinanzasData;
   periodo?: string;
+  /** capabilities.canRegistrarCobro — habilita "Cobrar" inline en la tabla. */
+  canMarcarCobrado?: boolean;
 }
 
-export function Finanzas({ data, periodo = "mes" }: FinanzasProps) {
-  void useMemo; // keep import compat con sub-componentes
-
+export function Finanzas({ data, periodo = "mes", canMarcarCobrado = false }: FinanzasProps) {
+  const esMes = periodo === "mes";
   const deltaLabel = data.deltaIngresosVsMesPasadoPct == null
     ? "vs mes pasado: sin datos"
     : `${data.deltaIngresosVsMesPasadoPct >= 0 ? "+" : ""}${data.deltaIngresosVsMesPasadoPct}% vs mes pasado`;
@@ -482,7 +676,7 @@ export function Finanzas({ data, periodo = "mes" }: FinanzasProps) {
     <div className="fi-content fn-content">
       <PageHeader
         mesLabel={data.mesLabel}
-        nowLabel={`al día ${data.diaActual}`}
+        nowLabel={esMes ? `Jornada en curso · datos al día ${data.diaActual}` : `Datos del período · ${data.mesLabel.toLowerCase()}`}
         periodo={periodo}
       />
       <KpiStrip
@@ -490,22 +684,34 @@ export function Finanzas({ data, periodo = "mes" }: FinanzasProps) {
         totalSesiones={data.totalSesiones}
         ticketProm={data.ticketPromedio}
         proyeccion={data.proyeccionFinDeMes}
+        porCobrar={data.porCobrar}
+        porCobrarCount={data.porCobrarCount}
         diaActual={data.diaActual}
         diasDelMes={data.diasDelMes}
         deltaIngresosPct={data.deltaIngresosVsMesPasadoPct}
+        periodo={periodo}
+        periodoLabel={data.mesLabel}
       />
 
       <div className="fn-charts-grid">
         <section className="fn-chart-card">
           <header>
-            <span className="fi-eyebrow">Ingresos diarios · este mes</span>
-            <span className="fn-chart-sub fm-mono">{deltaLabel}</span>
+            <span className="fi-eyebrow">
+              {data.esRangoLargo ? "Ingresos mensuales" : "Ingresos diarios"} · {data.mesLabel.toLowerCase()}
+            </span>
+            {/* El delta "vs mes pasado" solo es honesto en la vista mensual —
+                con override de período viene null del fetcher (E2). */}
+            {esMes ? <span className="fn-chart-sub fm-mono">{deltaLabel}</span> : null}
           </header>
-          <LineChart
-            ingresosPorDia={data.ingresosPorDia}
-            diasDelMes={data.diasDelMes}
-            diaActual={data.diaActual}
-          />
+          {data.esRangoLargo ? (
+            <BarChartMensual meses={data.ingresosPorMes} />
+          ) : (
+            <LineChart
+              ingresosPorDia={data.ingresosPorDia}
+              diasDelMes={data.diasDelMes}
+              diaActual={data.diaActual}
+            />
+          )}
         </section>
         <section className="fn-chart-card">
           <header>
@@ -513,13 +719,17 @@ export function Finanzas({ data, periodo = "mes" }: FinanzasProps) {
             <span className="fn-chart-sub muted">{data.totalSesiones} sesiones</span>
           </header>
           <Donut servicios={data.serviciosBreakdown} />
+          {data.profesionalesBreakdown ? (
+            <ProfesionalesBreakdown profesionales={data.profesionalesBreakdown} />
+          ) : null}
         </section>
       </div>
 
       <TablaTransacciones
         transacciones={data.transacciones}
-        totalSesiones={data.totalSesiones}
         mesLabel={data.mesLabel}
+        periodo={periodo}
+        canMarcarCobrado={canMarcarCobrado}
       />
     </div>
   );

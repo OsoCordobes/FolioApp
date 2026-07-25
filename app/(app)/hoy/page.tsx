@@ -122,6 +122,9 @@ export default async function HoyPage({ searchParams }: PageProps) {
         organizationId={ctx.data.organization.id}
         profesionales={selectorVisible ? profesionales : []}
         profActivo={selectorVisible ? profesionalIdEfectivo : null}
+        // PR #118: sin canRegistrarCobro (COORDINADOR — pago_write_admin de
+        // M09 lo excluye) no se ofrece el mini-diálogo de cobro al cerrar.
+        canRegistrarCobro={caps.canRegistrarCobro}
         primerosPasos={
           primerosPasos ? (
             <PrimerosPasosCard
