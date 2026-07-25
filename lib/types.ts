@@ -110,6 +110,14 @@ export interface Turno {
    * "Confirmó el paciente" en /hoy y el detalle del turno.
    */
   confirmadoVia?: ConfirmadoVia | null;
+  /**
+   * M91 · la cancelación la originó el paciente (1-click del email o
+   * self-service del portal), leído de `transicion.trigger_origin='paciente'`.
+   * false = la canceló el consultorio, todavía no está cancelado, o es una
+   * cancelación previa a M91 (sin origen registrable). Alimenta el chip
+   * "Canceló el paciente".
+   */
+  canceladoPorPaciente?: boolean;
   transiciones?: TransicionTurno[];
   cobro?: Cobro;
   /** member.id del profesional asignado (turno.profesional_id, vista M14). */
@@ -143,6 +151,8 @@ export interface TurnoSemana {
   modalidad?: ModalidadTurno;
   /** M90 · quién confirmó ('manual' | 'paciente'); null = sin dato (ver Turno). */
   confirmadoVia?: ConfirmadoVia | null;
+  /** M91 · la cancelación la originó el paciente (ver Turno). */
+  canceladoPorPaciente?: boolean;
   /** member.id del profesional asignado (turno.profesional_id, vista M14). */
   profesionalId?: string | null;
   /** Display name — solo seteado en vista "Todos" con >1 colegiado (ver Turno). */

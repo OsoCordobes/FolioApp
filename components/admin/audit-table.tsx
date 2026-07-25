@@ -7,6 +7,8 @@
 
 import type { AuditEntry } from "@/lib/db/audit";
 
+/** hourCycle explícito: la tabla es server-rendered y el ICU de Node resuelve
+ * es-AR como h12 — los timestamps de auditoría salían "10:00:03 a. m.". */
 function fmtTs(iso: string): string {
   return new Date(iso).toLocaleString("es-AR", {
     day: "2-digit",
@@ -15,6 +17,7 @@ function fmtTs(iso: string): string {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
+    hourCycle: "h23",
     timeZone: "America/Argentina/Cordoba",
   });
 }

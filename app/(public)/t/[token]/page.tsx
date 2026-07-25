@@ -23,6 +23,7 @@ import { headers } from "next/headers";
 
 import { decideResultadoConfirmacion } from "@/lib/booking/confirm-decision";
 import { verifyConfirmToken } from "@/lib/booking/confirm-token";
+import { fmtHora } from "@/lib/booking/slots-format";
 import { limitByIp } from "@/lib/security/rate-limit";
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
 
@@ -133,11 +134,9 @@ export default async function ConfirmacionTurnoPage({
       month: "short",
       timeZone: tz,
     }),
-    hora: inicio.toLocaleTimeString("es-AR", {
-      hour: "2-digit",
-      minute: "2-digit",
-      timeZone: tz,
-    }),
+    // fmtHora fija hourCycle h23: el ICU de Node resuelve es-AR como h12, y
+    // la vista concatena " hs" → "mié, 29 jul · 10:00 a. m. hs".
+    hora: fmtHora(turno.inicio as string, tz),
   };
 
   const decision = decideResultadoConfirmacion({

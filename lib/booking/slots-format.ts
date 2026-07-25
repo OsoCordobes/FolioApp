@@ -18,15 +18,17 @@ export interface SlotConInicio {
   inicio: string;
 }
 
-/** "14:30" en hora AR. hourCycle explícito: los browsers ya resuelven es-AR
+/** "14:30" en hora AR (o en `tz`, para las vistas que muestran la timezone
+ * configurada de la org). hourCycle explícito: los browsers ya resuelven es-AR
  * como h23, pero el ICU de Node cae a h12 ("10:00 a. m.") — lo fijamos para
- * que server/cliente/tests rindan idéntico. */
-export function fmtHora(iso: string): string {
+ * que server/cliente/tests rindan idéntico. Sin él, todo lo que concatena
+ * " hs" imprime "10:00 a. m. hs" en cuanto lo renderiza Node. */
+export function fmtHora(iso: string, tz: string = TZ_AR): string {
   return new Date(iso).toLocaleTimeString("es-AR", {
     hour: "2-digit",
     minute: "2-digit",
     hourCycle: "h23",
-    timeZone: TZ_AR,
+    timeZone: tz,
   });
 }
 

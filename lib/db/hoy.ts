@@ -20,6 +20,7 @@ import { capabilitiesFor } from "@/lib/auth/capabilities";
 import { decryptColumn } from "@/lib/crypto";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
+import { loadCanceladoPorPacienteIds } from "./cancelado-por-paciente";
 import { loadConfirmadoViaByTurnoId } from "./confirmado-via";
 import { err, ok, type Result } from "./errors";
 import { getActiveSession } from "./session";
@@ -177,11 +178,17 @@ export async function getDashboardHoy(input: FetcherInput): Promise<Result<Dashb
   // M90 · confirmado_via para el chip "Confirmó el paciente". Batch directo a
   // `turno` (la vista turno_extendido no expone la columna — ver
   // lib/db/confirmado-via.ts) y solo para los CONFIRMADO del día.
-  const [postVisitaByTurno, confirmadoViaByTurno] = await Promise.all([
+  // M91 · su gemelo para el chip "Canceló el paciente", desde el log de
+  // transiciones (ver lib/db/cancelado-por-paciente.ts), solo para CANCELADO.
+  const [postVisitaByTurno, confirmadoViaByTurno, canceladoPorPaciente] = await Promise.all([
     loadPostVisitaFlags(turnoIdsCerrados, organizationId),
     loadConfirmadoViaByTurnoId(
       supabase,
       rows.filter((r) => r.estado === "CONFIRMADO").map((r) => r.id),
+    ),
+    loadCanceladoPorPacienteIds(
+      supabase,
+      rows.filter((r) => r.estado === "CANCELADO").map((r) => r.id),
     ),
   ]);
 
@@ -199,6 +206,7 @@ export async function getDashboardHoy(input: FetcherInput): Promise<Result<Dashb
       profesionalesNombreById,
       canReadClinical,
       confirmadoViaByTurno[row.id] ?? null,
+      canceladoPorPaciente.has(row.id),
     );
   });
 
@@ -267,6 +275,7 @@ function rowToTurno(
   profesionalesNombreById?: Record<string, string>,
   canReadClinical = false,
   confirmadoVia: ConfirmadoVia | null = null,
+  canceladoPorPaciente = false,
 ): Turno {
   const estado = ESTADO_DB_TO_UI[row.estado];
   const origen = ORIGEN_DB_TO_UI[row.origen];
@@ -290,6 +299,8 @@ function rowToTurno(
     modalidad: normalizeModalidad(row.modalidad),
     // M90 · chip "Confirmó el paciente" (solo viene poblado para CONFIRMADO).
     confirmadoVia,
+    // M91 · chip "Canceló el paciente" (solo viene poblado para CANCELADO).
+    canceladoPorPaciente,
     // El cobro sale de `pago`, no del estado del turno: un turno CERRADO con
     // "quedó debiendo" tiene pago PENDIENTE y NO es plata cobrada (mismo
     // criterio que /finanzas). Sin fila en `pago` ⇒ montoCents null = "sin
