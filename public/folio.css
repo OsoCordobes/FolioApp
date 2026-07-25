@@ -20798,3 +20798,34 @@ input:focus { outline: none; }
   font-size: 12px;
   color: var(--ink-4);
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   F7a · COBERTURA DEL PACIENTE (obra social / prepaga, M89)
+   Filtro por cobertura en la toolbar de /pacientes + celda de la columna
+   Cobertura. El select convive con los chips .pd-filtro (mismo alto/idioma
+   visual); is-active espeja el estado activo de los chips.
+   ══════════════════════════════════════════════════════════════════════════ */
+.pd-cob-select {
+  padding: 6px 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  font: inherit; font-size: 12.5px; color: var(--ink-3); font-weight: 500;
+  max-width: 210px;
+  cursor: default;
+  transition: border-color 120ms var(--ease-in), color 120ms var(--ease-in);
+}
+.pd-cob-select:hover { color: var(--ink); }
+.pd-cob-select:focus { border-color: var(--accent); outline: none; }
+.pd-cob-select.is-active {
+  border-color: var(--ink);
+  color: var(--ink);
+  font-weight: 600;
+}
+.pd-cobertura {
+  font-size: 12.5px; color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+  display: inline-block; max-width: 160px;
+  vertical-align: bottom;
+}

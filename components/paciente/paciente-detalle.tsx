@@ -33,6 +33,7 @@ import {
   type BorradorFicha,
 } from "@/lib/ficha/borrador";
 import { TurnoCreateModal } from "@/components/hoy/turno-create-modal";
+import { CoberturaModal } from "@/components/paciente/cobertura-modal";
 import { ConsentimientosCard } from "@/components/paciente/consentimientos-card";
 import { PacienteFichaProvider, usePacienteFicha } from "@/components/paciente/contexto";
 import { IntakeAvanzadoModal } from "@/components/paciente/intake-avanzado-modal";
@@ -45,6 +46,7 @@ import {
   type SoapGuia,
 } from "@/lib/especialidades/registry";
 import { toWhatsappE164 } from "@/lib/format/phone";
+import { formatCobertura } from "@/lib/pacientes/cobertura";
 import type { IntakeAvanzadoFicha, PacienteFichaInfo, PlanData } from "@/lib/db/paciente-ficha";
 
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
@@ -638,6 +640,8 @@ function TabPlan() {
 
 function TabInformacion() {
   const { paciente, cumple } = usePacienteFicha();
+  // F7a (M89) · edición de la cobertura desde la ficha (modal chico).
+  const [coberturaOpen, setCoberturaOpen] = useState(false);
   return (
     <div className="pc-info-grid">
       <section className="pc-card">
@@ -664,13 +668,49 @@ function TabInformacion() {
           <dd>{paciente.ocupacion || "—"}</dd>
           <dt>Recomendado por</dt>
           <dd>{paciente.recomendadoPor || "—"}</dd>
-          {/* D2 fix: "Particular" estaba hardcodeado para TODOS los pacientes
-              (dato inventado en una HC). "—" honesto hasta que el campo real
-              llegue en Fase 7. */}
+          {/* F7a (M89) · cobertura REAL: "OSDE 210 · Nº 123456" o "Particular"
+              (null). Cierra el D2 del "—" placeholder — el dato ya existe en
+              paciente_identidad y se edita con el modal de al lado. */}
           <dt>Obra social</dt>
-          <dd>—</dd>
+          <dd>
+            {paciente.coberturaLeida ? (
+              <>
+                {formatCobertura(
+                  paciente.coberturaNombre,
+                  paciente.coberturaPlan,
+                  paciente.coberturaNroAfiliado,
+                )}{" "}
+                <button
+                  type="button"
+                  className="pc-link"
+                  onClick={() => setCoberturaOpen(true)}
+                  title="Editar la obra social / prepaga del paciente"
+                >
+                  Editar
+                </button>
+              </>
+            ) : (
+              // El SELECT falló: NO decimos "Particular" (sería inventar un
+              // dato clínico-administrativo) ni ofrecemos editar — el modal
+              // prefillaría vacío y guardaría NULL sobre la cobertura real.
+              <span style={{ color: "var(--ink-3)" }}>
+                No se pudo leer la cobertura. Recargá la página.
+              </span>
+            )}
+          </dd>
         </dl>
       </section>
+      {coberturaOpen && paciente.coberturaLeida ? (
+        <CoberturaModal
+          pacienteId={paciente.id}
+          prefill={{
+            coberturaNombre: paciente.coberturaNombre,
+            coberturaPlan: paciente.coberturaPlan,
+            coberturaNroAfiliado: paciente.coberturaNroAfiliado,
+          }}
+          onClose={() => setCoberturaOpen(false)}
+        />
+      ) : null}
       <section className="pc-card">
         <header className="pc-card-head">
           <span className="fi-eyebrow">Motivo de consulta</span>

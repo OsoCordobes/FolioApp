@@ -64,6 +64,18 @@ export interface PacienteFichaInfo {
   ocupacion: string;
   /** M59 · recomendado por (PII de tercero, desencriptada). "" si no está. */
   recomendadoPor: string;
+  /** F7a (M89) · obra social/prepaga (en claro). null = particular. */
+  coberturaNombre: string | null;
+  /** F7a (M89) · plan de la cobertura (en claro). */
+  coberturaPlan: string | null;
+  /** F7a (M89) · nº de afiliado DESCIFRADO server-side (viaja como el resto de la PII de la ficha). */
+  coberturaNroAfiliado: string | null;
+  /**
+   * F7a (M89) · false si el SELECT de cobertura falló. Distingue "no tiene
+   * cobertura" de "no pudimos leerla": con false la UI muestra el estado
+   * degradado y NO abre el editor (guardaría NULL sobre datos reales).
+   */
+  coberturaLeida: boolean;
 }
 
 /**
@@ -493,6 +505,47 @@ export async function getPacienteFicha(
   const ocupacion = tryDecrypt(row.ocupacion_cifrado, "ocupacion") ?? "";
   const recomendadoPor = tryDecrypt(row.recomendado_por_cifrado, "recomendado_por") ?? "";
 
+  // F7a (M89) · cobertura. La vista `paciente_completo` no expone las columnas
+  // nuevas (las vistas son append-only-por-migración): SELECT chico directo a
+  // paciente_identidad (RLS org-scoped). Best-effort: si falla, la ficha
+  // muestra "Particular" en vez de romperse. El nº de afiliado se descifra acá
+  // (mismo criterio que el resto de la PII de la ficha).
+  let coberturaNombre: string | null = null;
+  let coberturaPlan: string | null = null;
+  let coberturaNroAfiliado: string | null = null;
+  // false → el SELECT falló y los tres campos de arriba son "no sé", NO
+  // "particular". La UI lo usa para no ofrecer el modal de edición: prefillado
+  // en vacío, "Guardar cobertura" pisaría con NULL una cobertura real.
+  let coberturaLeida = true;
+  if (row.identidad_id) {
+    const { data: cobRow, error: cobErr } = await supabase
+      .from("paciente_identidad")
+      .select("cobertura_nombre, cobertura_plan, cobertura_nro_afiliado_cifrado")
+      .eq("id", row.identidad_id)
+      .eq("organization_id", organizationId)
+      .maybeSingle();
+    if (cobErr) {
+      // Degradamos la ficha, no la rompemos — pero con señal: una regresión de
+      // schema/RLS acá se vería como "Particular" en todas las fichas.
+      coberturaLeida = false;
+      console.error(`[paciente-ficha] lookup de cobertura falló: ${cobErr.message}`);
+      const { captureException } = await import("@sentry/nextjs");
+      captureException(new Error(`Cobertura ficha falló — ${cobErr.message}`), {
+        tags: { component: "paciente-ficha", op: "cobertura" },
+      });
+    }
+    if (cobRow) {
+      const c = cobRow as {
+        cobertura_nombre: string | null;
+        cobertura_plan: string | null;
+        cobertura_nro_afiliado_cifrado: string | null;
+      };
+      coberturaNombre = c.cobertura_nombre ?? null;
+      coberturaPlan = c.cobertura_plan ?? null;
+      coberturaNroAfiliado = tryDecrypt(c.cobertura_nro_afiliado_cifrado, "cobertura.nro_afiliado");
+    }
+  }
+
   const cerrados = turnos.filter((t) => t.estado === "CERRADO");
   const sesionesCompletadas = cerrados.length;
   const lastSesion = sesiones[0] ?? null;
@@ -575,6 +628,10 @@ export async function getPacienteFicha(
     email,
     ocupacion,
     recomendadoPor,
+    coberturaNombre,
+    coberturaPlan,
+    coberturaNroAfiliado,
+    coberturaLeida,
   };
 
   const proximoTurno = turnos.find((t) =>
