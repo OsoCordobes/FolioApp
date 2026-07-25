@@ -101,7 +101,7 @@ export function ConsentimientosView({ fichas }: { fichas: FichaPortal[] }) {
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
+      <div className="pt-toolbar">
         {puedeFirmar && items && items.length > 0 ? (
           <button
             type="button"
@@ -118,18 +118,17 @@ export function ConsentimientosView({ fichas }: { fichas: FichaPortal[] }) {
       </div>
 
       {items === null ? (
-        <p className="pt-empty" style={{ color: "var(--ink-2)", fontSize: "var(--fs-sm)" }}>
-          Cargando consentimientos…
-        </p>
+        <p className="pt-empty">Cargando consentimientos…</p>
       ) : loadError ? (
-        <p className="au-notice" role="alert" style={{ color: "var(--red)" }}>
+        <p className="au-notice pt-msg-err" role="alert">
           {loadError}
         </p>
       ) : items.length === 0 ? (
-        <div style={{ display: "grid", gap: 14, justifyItems: "start" }}>
-          <p className="pt-empty" style={{ color: "var(--ink-2)", fontSize: "var(--fs-sm)" }}>
-            No tenés consentimientos firmados. La Ley 26.529 pide tu consentimiento
-            informado para la atención — podés firmarlo desde acá.
+        <div className="pt-empty pt-empty-hero">
+          <p className="pt-empty-title">No tenés consentimientos firmados</p>
+          <p className="pt-empty-sub">
+            La Ley 26.529 pide tu consentimiento informado para la atención —
+            podés firmarlo desde acá.
           </p>
           {puedeFirmar ? (
             <button
@@ -147,64 +146,33 @@ export function ConsentimientosView({ fichas }: { fichas: FichaPortal[] }) {
         </div>
       ) : (
         <>
-          <ul
-            className="pt-org-list"
-            style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 10 }}
-          >
+          <ul className="pt-org-list">
             {items.map((c) => (
-              <li key={c.id} className="pt-card" style={{ padding: "14px 16px" }}>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: 12,
-                    alignItems: "baseline",
-                  }}
-                >
-                  <strong>{c.titulo}</strong>
-                  <span
-                    style={{
-                      fontSize: "var(--fs-xs, .78rem)",
-                      color: c.vigente ? "var(--green, #2E7D5B)" : "var(--red)",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
+              <li key={c.id} className="pt-card">
+                <div className="pt-card-row">
+                  <strong className="pt-card-title">{c.titulo}</strong>
+                  <span className={`pt-chip ${c.vigente ? "pt-chip--green" : "pt-chip--red"}`}>
                     {c.vigente ? "Vigente" : "Revocado"}
                   </span>
                 </div>
-                <p
-                  style={{
-                    margin: "4px 0 0",
-                    color: "var(--ink-2)",
-                    fontSize: "var(--fs-sm)",
-                  }}
-                >
+                <p className="pt-card-meta">
                   {c.organizacionNombre ?? "Consultorio"}
                   {" · "}
                   {c.tipoLabel}
                   {c.version != null ? ` · v${c.version}` : ""}
                 </p>
-                <div
-                  style={{
-                    marginTop: 8,
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    gap: 12,
-                  }}
-                >
-                  <span style={{ color: "var(--ink-3)", fontSize: "var(--fs-xs, .78rem)" }}>
+                <div className="pt-card-foot">
+                  <span className="pt-footnote">
                     Firmado el {fmtFecha(c.firmadoEn)}
                     {c.revocadoEn ? ` · Revocado el ${fmtFecha(c.revocadoEn)}` : ""}
                   </span>
                   <button
                     type="button"
-                    className="fi-btn fi-btn-ghost"
+                    className="fi-btn fi-btn-ghost pt-nowrap"
                     onClick={() => {
                       void verFirma(c.id);
                     }}
                     disabled={firmaPendingId !== null}
-                    style={{ whiteSpace: "nowrap" }}
                     title="Abrir la imagen de tu firma en una pestaña nueva (link válido 5 minutos)"
                   >
                     {firmaPendingId === c.id ? "Abriendo…" : "Ver firma"}
@@ -213,7 +181,7 @@ export function ConsentimientosView({ fichas }: { fichas: FichaPortal[] }) {
               </li>
             ))}
           </ul>
-          <p style={{ marginTop: 14, color: "var(--ink-3)", fontSize: "var(--fs-xs, .78rem)" }}>
+          <p className="pt-footnote pt-footnote-page">
             {vigentes === 1 ? "1 consentimiento vigente" : `${vigentes} consentimientos vigentes`}
             {" · "}los links de firma expiran a los 5 minutos.
           </p>
@@ -221,7 +189,7 @@ export function ConsentimientosView({ fichas }: { fichas: FichaPortal[] }) {
       )}
 
       {accionError ? (
-        <p className="au-notice" role="alert" style={{ color: "var(--red)", marginTop: 12 }}>
+        <p className="au-notice pt-msg-err" role="alert">
           {accionError}
         </p>
       ) : null}

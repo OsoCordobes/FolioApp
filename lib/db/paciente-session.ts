@@ -26,6 +26,7 @@
  * otra: son ortogonales y self-scoped por RLS.
  */
 
+import { bookingSlugDeOrg } from "@/lib/portal/portal-booking";
 import {
   createSupabaseServerClient,
   createSupabaseServiceClient,
@@ -51,6 +52,10 @@ export interface PortalPaciente {
   pacienteId: string;
   organizationId: string;
   organizacionNombre: string | null;
+  /** Slug del booking público (`/book/{slug}`) SI la org está viva y listada
+   * (bookingSlugDeOrg); null si la org optó por no listarse o fue borrada —
+   * en ese caso el portal no ofrece "Reservar turno". */
+  bookingSlug: string | null;
 }
 
 /** Forma cruda del row del fan-out (query anon, RLS-enforced). */
@@ -119,23 +124,39 @@ export async function getPacienteSession(): Promise<Result<PacienteSession>> {
 
   const rows = (pacientesRaw ?? []) as unknown as PacienteRow[];
 
-  // Nombre de cada org linkeada, resuelto server-side con service_role.
-  // Salvaguarda (ver docs/audit/quarterly-service-role-audit.md): corre DESPUÉS
-  // de auth.getUser() + paciente_cuenta_actual(), y los org ids salen del
-  // fan-out RLS-enforced de arriba ⇒ sólo orgs a las que el paciente está
-  // linkeado. Se lee ÚNICAMENTE `nombre` (dato no sensible que el paciente ya
-  // conoce: es el consultorio que lo atiende). El client admin nunca sale del
-  // server. Falla soft: sin nombre, el portal muestra su fallback.
+  // Nombre + slug reservable de cada org linkeada, resueltos server-side con
+  // service_role. Salvaguarda (ver docs/audit/quarterly-service-role-audit.md):
+  // corre DESPUÉS de auth.getUser() + paciente_cuenta_actual(), y los org ids
+  // salen del fan-out RLS-enforced de arriba ⇒ sólo orgs a las que el paciente
+  // está linkeado. Se leen ÚNICAMENTE `nombre` y el trío slug/opt-out/deleted
+  // que decide si el link público /book/{slug} existe (datos no sensibles: el
+  // slug es, por definición, público). El client admin nunca sale del server.
+  // Falla soft: sin fila, el portal muestra su fallback y no ofrece reservar.
   const nombrePorOrg = new Map<string, string | null>();
+  const bookingSlugPorOrg = new Map<string, string | null>();
   const orgIds = [...new Set(rows.map((p) => p.organization_id))];
   if (orgIds.length > 0) {
     const service = createSupabaseServiceClient();
     const { data: orgs } = await service
       .from("organization")
-      .select("id, nombre")
+      .select("id, nombre, slug, opt_out_public_listing, deleted_at")
       .in("id", orgIds);
-    for (const o of (orgs ?? []) as { id: string; nombre: string | null }[]) {
+    for (const o of (orgs ?? []) as Array<{
+      id: string;
+      nombre: string | null;
+      slug: string | null;
+      opt_out_public_listing: boolean | null;
+      deleted_at: string | null;
+    }>) {
       nombrePorOrg.set(o.id, o.nombre);
+      bookingSlugPorOrg.set(
+        o.id,
+        bookingSlugDeOrg({
+          slug: o.slug,
+          optOutPublicListing: Boolean(o.opt_out_public_listing),
+          deletedAt: o.deleted_at,
+        }),
+      );
     }
   }
 
@@ -143,6 +164,7 @@ export async function getPacienteSession(): Promise<Result<PacienteSession>> {
     pacienteId: p.id,
     organizationId: p.organization_id,
     organizacionNombre: nombrePorOrg.get(p.organization_id) ?? null,
+    bookingSlug: bookingSlugPorOrg.get(p.organization_id) ?? null,
   }));
 
   return ok({

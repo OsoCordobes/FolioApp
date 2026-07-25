@@ -14,6 +14,7 @@
  * alcanza el umbral de auto-link → cae a claim, seguro).
  */
 
+import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import type { Result } from "@/lib/db/errors";
@@ -22,6 +23,7 @@ import {
   runLinkageForCurrentAccount,
   type LinkageResult,
 } from "@/lib/portal/link-actions";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const linkageInput = z.object({
   dni: z.string().trim().max(40).optional(),
@@ -43,4 +45,24 @@ export async function runPortalLinkage(
     telefono: parsed.data.telefono ?? null,
     captchaToken: parsed.data.captchaToken ?? null,
   });
+}
+
+/**
+ * Logout del PORTAL (botón Salir del shell). Espeja `signOut` de staff pero
+ * aterriza en /portal/login: el paciente que sale del portal no tiene nada que
+ * hacer en la landing de profesionales, y desde ahí puede volver a entrar con
+ * su magic-link.
+ */
+export async function signOutPortal(): Promise<void> {
+  const supabase = await createSupabaseServerClient();
+  await supabase.auth.signOut();
+
+  // Paridad con el signOut de staff: un humano puede ser staff Y paciente a la
+  // vez — si sale desde el portal, no dejamos la cookie de org activa para que
+  // el próximo user del mismo navegador no herede el switcher.
+  const { cookies } = await import("next/headers");
+  const cookieStore = await cookies();
+  cookieStore.delete("folio.active_org");
+
+  redirect("/portal/login");
 }

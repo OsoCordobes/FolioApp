@@ -20,17 +20,19 @@ import { actualizarContactoAction } from "./actions";
 export function PerfilList({ perfiles }: { perfiles: PortalPerfilView[] }) {
   if (perfiles.length === 0) {
     return (
-      <p className="pt-empty" style={{ color: "var(--ink-2)", fontSize: "var(--fs-sm)" }}>
-        Todavía no hay ninguna ficha vinculada a tu cuenta. Vinculá tu ficha desde el
-        portal para gestionar tus datos.
-      </p>
+      <div className="pt-empty pt-empty-hero">
+        <p className="pt-empty-title">Todavía no hay fichas vinculadas</p>
+        <p className="pt-empty-sub">
+          Vinculá tu ficha desde el inicio del portal para gestionar tus datos.
+        </p>
+      </div>
     );
   }
 
   return (
-    <ul className="pt-org-list" style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 16 }}>
+    <ul className="pt-org-list">
       {perfiles.map((p) => (
-        <li key={p.identidadId} className="pt-card" style={{ padding: "18px 20px" }}>
+        <li key={p.identidadId} className="pt-card">
           <PerfilCard perfil={p} />
         </li>
       ))}
@@ -89,12 +91,12 @@ function PerfilCard({ perfil }: { perfil: PortalPerfilView }) {
         guardar();
       }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
-        <strong>{perfil.organizacionNombre ?? "Consultorio"}</strong>
+      <div className="pt-card-row">
+        <strong className="pt-card-title">{perfil.organizacionNombre ?? "Consultorio"}</strong>
       </div>
 
       {/* Identidad · SÓLO LECTURA (no editable desde el portal). */}
-      <p style={{ margin: "6px 0 14px", color: "var(--ink-2)", fontSize: "var(--fs-sm)" }}>
+      <p className="pt-card-meta pt-perfil-id">
         {nombreCompleto}
         {perfil.documento ? ` · Doc. ${perfil.documento}` : ""}
       </p>
@@ -123,7 +125,7 @@ function PerfilCard({ perfil }: { perfil: PortalPerfilView }) {
         />
       </label>
 
-      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 8 }}>
+      <div className="pt-grid-2">
         <label className="au-field">
           <span>Calle</span>
           <input
@@ -146,7 +148,7 @@ function PerfilCard({ perfil }: { perfil: PortalPerfilView }) {
         </label>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "2fr 2fr 1fr", gap: 8 }}>
+      <div className="pt-grid-3">
         <label className="au-field">
           <span>Ciudad</span>
           <input
@@ -184,14 +186,7 @@ function PerfilCard({ perfil }: { perfil: PortalPerfilView }) {
       </button>
 
       {msg ? (
-        <p
-          role="status"
-          style={{
-            margin: "10px 0 0",
-            fontSize: "var(--fs-sm)",
-            color: msg.tone === "err" ? "var(--red)" : "var(--green, #2E7D5B)",
-          }}
-        >
+        <p role="status" className={`pt-msg ${msg.tone === "err" ? "pt-msg-err" : "pt-msg-ok"}`}>
           {msg.text}
         </p>
       ) : null}

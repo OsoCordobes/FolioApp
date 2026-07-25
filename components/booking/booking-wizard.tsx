@@ -15,6 +15,7 @@ import {
   createPedidoPublico,
   fetchSlotsPublico,
 } from "@/app/(public)/book/[slug]/actions";
+import { agruparPorDia, fmtDia, fmtHora } from "@/lib/booking/slots-format";
 import {
   buildGoogleCalendarUrl,
   buildIcsContent,
@@ -88,43 +89,8 @@ interface Slot {
 /** "profesional" solo se alcanza con >1 colegiado (lib/booking/wizard-profesional). */
 type Vista = BookingVista;
 
-const TZ_AR = "America/Argentina/Cordoba";
-
-function fmtHora(iso: string): string {
-  return new Date(iso).toLocaleTimeString("es-AR", {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: TZ_AR,
-  });
-}
-
-function fmtDia(iso: string): string {
-  const d = new Date(iso).toLocaleDateString("es-AR", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    timeZone: TZ_AR,
-  });
-  return d.charAt(0).toUpperCase() + d.slice(1);
-}
-
-function diaKey(iso: string): string {
-  // YYYY-MM-DD en AR para agrupar
-  return new Date(iso).toLocaleDateString("en-CA", { timeZone: TZ_AR });
-}
-
-function agruparPorDia(slots: Slot[]): Array<{ dia: string; items: Slot[] }> {
-  const map = new Map<string, Slot[]>();
-  for (const s of slots) {
-    const k = diaKey(s.inicio);
-    const arr = map.get(k);
-    if (arr) arr.push(s);
-    else map.set(k, [s]);
-  }
-  return Array.from(map.entries())
-    .sort(([a], [b]) => (a < b ? -1 : 1))
-    .map(([, items]) => ({ dia: fmtDia(items[0].inicio), items }));
-}
+// fmtHora/fmtDia/agruparPorDia viven en lib/booking/slots-format (compartidos
+// con el picker de reagenda del portal del paciente).
 
 export function BookingWizard({
   org,
@@ -254,31 +220,21 @@ export function BookingWizard({
             <h2
               ref={stepHeadingRef}
               tabIndex={-1}
-              className="a11y-focus-heading"
-              style={{ fontSize: 16, marginBottom: 16 }}
+              className="a11y-focus-heading bk-step-title"
             >
               Elegí el servicio
             </h2>
             {servicios.length === 0 ? (
-              <div
-                style={{
-                  padding: 24,
-                  background: "var(--surface)",
-                  border: "1px dashed var(--line)",
-                  borderRadius: "var(--r-md)",
-                  textAlign: "center",
-                  color: "var(--ink-3)",
-                }}
-              >
-                <p style={{ margin: 0, fontSize: 14 }}>
+              <div className="bk-empty">
+                <p className="bk-empty-title">
                   Este consultorio todavía no publicó servicios disponibles para reserva.
                 </p>
-                <p style={{ margin: "8px 0 0", fontSize: 13 }}>
+                <p className="bk-empty-sub">
                   Si el profesional te dijo de reservar acá, escribile por WhatsApp o probá más tarde.
                 </p>
               </div>
             ) : null}
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div className="bk-lista">
               {servicios.map((s) => (
                 <button
                   key={s.id}
@@ -288,21 +244,10 @@ export function BookingWizard({
                     setVista(pasoTrasServicio(multiProf));
                   }}
                   className="bk-servicio"
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    padding: "16px 20px",
-                    background: "var(--surface)",
-                    border: "1px solid var(--line-soft)",
-                    borderRadius: "var(--r-md)",
-                    cursor: "pointer",
-                    color: "var(--ink)",
-                    textAlign: "left",
-                  }}
                 >
                   <div>
                     <b>{s.nombre}</b>
-                    <div style={{ color: "var(--ink-3)", fontSize: 13 }}>
+                    <div className="bk-servicio-meta">
                       {s.duracion_min} min · ${(s.precio_cents / 100).toLocaleString("es-AR")}
                     </div>
                   </div>
@@ -323,26 +268,19 @@ export function BookingWizard({
           <section>
             <button
               type="button"
+              className="bk-back"
               onClick={() => setVista("servicio")}
-              style={{
-                background: "transparent",
-                border: 0,
-                color: "var(--ink-3)",
-                cursor: "pointer",
-                marginBottom: 12,
-              }}
             >
               ← Cambiar servicio
             </button>
             <h2
               ref={stepHeadingRef}
               tabIndex={-1}
-              className="a11y-focus-heading"
-              style={{ fontSize: 16, marginBottom: 16 }}
+              className="a11y-focus-heading bk-step-title"
             >
               Elegí profesional
             </h2>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div className="bk-lista">
               {profesionales.map((p) => (
                 <button
                   key={p.id}
@@ -353,18 +291,6 @@ export function BookingWizard({
                     setVista("slot");
                   }}
                   className="bk-servicio"
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    padding: "16px 20px",
-                    background: "var(--surface)",
-                    border: "1px solid var(--line-soft)",
-                    borderRadius: "var(--r-md)",
-                    cursor: "pointer",
-                    color: "var(--ink)",
-                    textAlign: "left",
-                  }}
                 >
                   <b>{p.displayName}</b>
                   <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -380,47 +306,30 @@ export function BookingWizard({
           <section>
             <button
               type="button"
+              className="bk-back"
               onClick={() => setVista(pasoPrevioASlot(multiProf))}
-              style={{
-                background: "transparent",
-                border: 0,
-                color: "var(--ink-3)",
-                cursor: "pointer",
-                marginBottom: 12,
-              }}
             >
               {multiProf ? "← Cambiar profesional" : "← Cambiar servicio"}
             </button>
             <h2
               ref={stepHeadingRef}
               tabIndex={-1}
-              className="a11y-focus-heading"
-              style={{ fontSize: 16, marginBottom: 16 }}
+              className="a11y-focus-heading bk-step-title"
             >
               Elegí un horario
               {multiProf && profesionalSelNombre ? (
-                <span style={{ display: "block", fontSize: 13, fontWeight: 400, color: "var(--ink-3)", marginTop: 4 }}>
-                  con {profesionalSelNombre}
-                </span>
+                <span className="bk-step-subtitle">con {profesionalSelNombre}</span>
               ) : null}
             </h2>
             {pending ? (
               // Placeholder de carga: misma grilla que los horarios reales,
               // con shimmer sobre tokens (.bk-skel en folio.css).
               <div role="status" aria-live="polite">
-                <p style={{ color: "var(--ink-3)", fontSize: 13, margin: "0 0 12px" }}>
-                  Buscando horarios libres…
-                </p>
+                <p className="bk-loading-hint">Buscando horarios libres…</p>
                 {[0, 1].map((g) => (
-                  <div key={g} style={{ marginBottom: 20 }}>
+                  <div key={g} className="bk-dia-grupo">
                     <div className="bk-skel bk-skel-label" />
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))",
-                        gap: 8,
-                      }}
-                    >
+                    <div className="bk-slot-grid">
                       {Array.from({ length: g === 0 ? 6 : 4 }).map((_, i) => (
                         <div key={i} className="bk-skel bk-skel-slot" />
                       ))}
@@ -431,20 +340,11 @@ export function BookingWizard({
             ) : null}
             {err ? <p className="au-err" role="alert">{err}</p> : null}
             {slots.length === 0 && !pending && !err ? (
-              <div
-                style={{
-                  padding: 24,
-                  background: "var(--surface)",
-                  border: "1px dashed var(--line)",
-                  borderRadius: "var(--r-md)",
-                  textAlign: "center",
-                  color: "var(--ink-3)",
-                }}
-              >
-                <p style={{ margin: 0, fontSize: 14, color: "var(--ink-2)" }}>
+              <div className="bk-empty">
+                <p className="bk-empty-title">
                   No encontramos horarios libres en los próximos 14 días.
                 </p>
-                <p style={{ margin: "8px 0 0", fontSize: 13 }}>
+                <p className="bk-empty-sub">
                   {(() => {
                     // Normaliza el teléfono público del consultorio a E.164 AR
                     // antes de armar el wa.me (auditoría L4).
@@ -452,12 +352,7 @@ export function BookingWizard({
                     return waLink ? (
                       <>
                         Escribile al consultorio por{" "}
-                        <a
-                          href={waLink}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{ color: "var(--accent-2)" }}
-                        >
+                        <a href={waLink} target="_blank" rel="noopener noreferrer">
                           WhatsApp
                         </a>{" "}
                         para coordinar un turno, o probá con otro servicio.
@@ -469,54 +364,28 @@ export function BookingWizard({
                 </p>
                 <button
                   type="button"
-                  className="fi-btn fi-btn-ghost"
-                  style={{ marginTop: 16 }}
+                  className="fi-btn fi-btn-ghost bk-empty-cta"
                   onClick={() => setVista("servicio")}
                 >
                   Elegir otro servicio
                 </button>
               </div>
             ) : null}
-            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            <div className="bk-dias">
               {(pending ? [] : agruparPorDia(slots)).map(({ dia, items }) => (
                 <div key={dia}>
-                  <h3
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 600,
-                      color: "var(--ink-2)",
-                      textTransform: "uppercase",
-                      letterSpacing: 0.4,
-                      marginBottom: 8,
-                    }}
-                  >
-                    {dia}
-                  </h3>
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))",
-                      gap: 8,
-                    }}
-                  >
+                  <h3 className="bk-dia-label">{dia}</h3>
+                  <div className="bk-slot-grid">
                     {items.map((s) => (
                       <button
                         key={s.inicio}
                         type="button"
+                        className="bk-slot"
                         aria-label={`${dia}, ${fmtHora(s.inicio)} hs`}
                         onClick={() => {
                           setSlotPicked(s);
                           setFieldErrs({});
                           setVista("datos");
-                        }}
-                        style={{
-                          padding: "10px 12px",
-                          background: "var(--surface)",
-                          border: "1px solid var(--line-soft)",
-                          borderRadius: "var(--r-sm)",
-                          cursor: "pointer",
-                          color: "var(--ink)",
-                          fontWeight: 500,
                         }}
                       >
                         {fmtHora(s.inicio)}
@@ -533,30 +402,43 @@ export function BookingWizard({
           <section>
             <button
               type="button"
+              className="bk-back"
               onClick={() => setVista("slot")}
-              style={{
-                background: "transparent",
-                border: 0,
-                color: "var(--ink-3)",
-                cursor: "pointer",
-                marginBottom: 12,
-              }}
             >
               ← Cambiar horario
             </button>
             <h2
               ref={stepHeadingRef}
               tabIndex={-1}
-              className="a11y-focus-heading"
-              style={{ fontSize: 16, marginBottom: 16 }}
+              className="a11y-focus-heading bk-step-title"
             >
               Tus datos
-              {multiProf && profesionalSelNombre ? (
-                <span style={{ display: "block", fontSize: 13, fontWeight: 400, color: "var(--ink-3)", marginTop: 4 }}>
-                  {fmtDia(slotPicked.inicio)} · {fmtHora(slotPicked.inicio)} hs con {profesionalSelNombre}
-                </span>
-              ) : null}
             </h2>
+            {/* Resumen SIEMPRE visible del turno elegido (antes sólo aparecía
+                en orgs multi-profesional): el paciente completa el form viendo
+                qué está reservando. */}
+            <div className="bk-resumen">
+              <b className="bk-resumen-fecha">
+                {fmtDia(slotPicked.inicio)} · {fmtHora(slotPicked.inicio)} hs
+              </b>
+              {(() => {
+                const servicioSel = servicios.find((s) => s.id === servicioId);
+                const partes: string[] = [];
+                if (servicioSel) {
+                  partes.push(
+                    `${servicioSel.nombre} · ${servicioSel.duracion_min} min · $${(
+                      servicioSel.precio_cents / 100
+                    ).toLocaleString("es-AR")}`,
+                  );
+                }
+                if (multiProf && profesionalSelNombre) {
+                  partes.push(`con ${profesionalSelNombre}`);
+                }
+                return partes.length > 0 ? (
+                  <span className="bk-resumen-detalle">{partes.join(" · ")}</span>
+                ) : null;
+              })()}
+            </div>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -643,7 +525,10 @@ export function BookingWizard({
                 />
               </label>
               <label className="au-field">
-                <span>Email <small>opcional</small></span>
+                <span>
+                  Email{" "}
+                  <small>opcional · para enviarte la confirmación y el recordatorio</small>
+                </span>
                 <input
                   type="email"
                   value={email}

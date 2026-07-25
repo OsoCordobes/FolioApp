@@ -1,5 +1,5 @@
 /**
- * Folio · Portal · resumen clínico curado — vista (Fase 3 · P5).
+ * Folio · Portal · resumen clínico curado — vista (Fase 3 · P5 · F2 identidad).
  *
  * Componente PRESENTACIONAL (sin estado, sin server actions): sólo formatea el
  * whitelist que arma getResumenPortal. NUNCA recibe SOAP/tool_data/riesgo — el
@@ -57,22 +57,24 @@ export function ResumenView({ resumen }: { resumen: PortalResumenView }) {
 
   if (vacio) {
     return (
-      <p className="pt-empty" style={{ color: "var(--ink-2)", fontSize: "var(--fs-sm)" }}>
-        Todavía no tenés atenciones ni consentimientos registrados.
-      </p>
+      <div className="pt-empty pt-empty-hero">
+        <p className="pt-empty-title">Todavía no hay nada para mostrar</p>
+        <p className="pt-empty-sub">
+          Después de tu primera atención vas a ver acá tu historial y tus
+          consentimientos firmados.
+        </p>
+      </div>
     );
   }
 
   return (
-    <div style={{ display: "grid", gap: 28 }}>
+    <div className="pt-stack">
       <section>
-        <h2 style={{ fontSize: "var(--fs-lg)", margin: "0 0 12px" }}>Atenciones pasadas</h2>
+        <h2 className="pt-section-title">Atenciones pasadas</h2>
         {turnosPasados.length === 0 ? (
-          <p className="pt-empty" style={{ color: "var(--ink-3)", fontSize: "var(--fs-sm)" }}>
-            No tenés atenciones pasadas registradas.
-          </p>
+          <p className="pt-empty">No tenés atenciones pasadas registradas.</p>
         ) : (
-          <ul className="pt-org-list" style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 10 }}>
+          <ul className="pt-org-list">
             {turnosPasados.map((t) => (
               <TurnoRow key={t.id} turno={t} />
             ))}
@@ -81,13 +83,11 @@ export function ResumenView({ resumen }: { resumen: PortalResumenView }) {
       </section>
 
       <section>
-        <h2 style={{ fontSize: "var(--fs-lg)", margin: "0 0 12px" }}>Consentimientos firmados</h2>
+        <h2 className="pt-section-title">Consentimientos firmados</h2>
         {consentimientos.length === 0 ? (
-          <p className="pt-empty" style={{ color: "var(--ink-3)", fontSize: "var(--fs-sm)" }}>
-            No tenés consentimientos firmados.
-          </p>
+          <p className="pt-empty">No tenés consentimientos firmados.</p>
         ) : (
-          <ul className="pt-org-list" style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 10 }}>
+          <ul className="pt-org-list">
             {consentimientos.map((c) => (
               <ConsentimientoRow key={c.id} consentimiento={c} />
             ))}
@@ -99,21 +99,16 @@ export function ResumenView({ resumen }: { resumen: PortalResumenView }) {
 }
 
 function TurnoRow({ turno }: { turno: PortalTurnoPasadoView }) {
+  const tone = turno.estado === "NO_ASISTIO" ? "amber" : "slate";
   return (
-    <li className="pt-card" style={{ padding: "14px 16px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
-        <strong style={{ textTransform: "capitalize" }}>{fmt(FMT_TURNO, turno.inicio)}</strong>
-        <span
-          style={{
-            fontSize: "var(--fs-xs, .78rem)",
-            color: turno.estado === "NO_ASISTIO" ? "var(--amber, #B5761F)" : "var(--ink-3)",
-            whiteSpace: "nowrap",
-          }}
-        >
+    <li className="pt-card">
+      <div className="pt-card-row">
+        <strong className="pt-card-title pt-cap">{fmt(FMT_TURNO, turno.inicio)}</strong>
+        <span className={`pt-chip pt-chip--${tone}`}>
           {ESTADO_LABEL[turno.estado] ?? turno.estado}
         </span>
       </div>
-      <p style={{ margin: "4px 0 0", color: "var(--ink-2)", fontSize: "var(--fs-sm)" }}>
+      <p className="pt-card-meta">
         {turno.organizacionNombre ?? "Consultorio"}
         {turno.modalidad === "telemedicina" ? " · Videoconsulta" : ""}
         {" · "}
@@ -126,26 +121,22 @@ function TurnoRow({ turno }: { turno: PortalTurnoPasadoView }) {
 function ConsentimientoRow({ consentimiento }: { consentimiento: PortalConsentimientoView }) {
   const revocado = consentimiento.revocadoEn != null;
   return (
-    <li className="pt-card" style={{ padding: "14px 16px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
-        <strong>{consentimiento.plantillaTitulo ?? consentimiento.tipoLabel}</strong>
-        <span
-          style={{
-            fontSize: "var(--fs-xs, .78rem)",
-            color: revocado ? "var(--red)" : "var(--green, #2E7D5B)",
-            whiteSpace: "nowrap",
-          }}
-        >
+    <li className="pt-card">
+      <div className="pt-card-row">
+        <strong className="pt-card-title">
+          {consentimiento.plantillaTitulo ?? consentimiento.tipoLabel}
+        </strong>
+        <span className={`pt-chip ${revocado ? "pt-chip--red" : "pt-chip--green"}`}>
           {revocado ? "Revocado" : "Vigente"}
         </span>
       </div>
-      <p style={{ margin: "4px 0 0", color: "var(--ink-2)", fontSize: "var(--fs-sm)" }}>
+      <p className="pt-card-meta">
         {consentimiento.organizacionNombre ?? "Consultorio"}
         {" · "}
         {consentimiento.tipoLabel}
         {consentimiento.plantillaVersion != null ? ` · v${consentimiento.plantillaVersion}` : ""}
       </p>
-      <p style={{ margin: "6px 0 0", color: "var(--ink-3)", fontSize: "var(--fs-xs, .78rem)" }}>
+      <p className="pt-footnote">
         Firmado el {fmt(FMT_FECHA, consentimiento.firmadoEn)}
         {revocado && consentimiento.revocadoEn
           ? ` · Revocado el ${fmt(FMT_FECHA, consentimiento.revocadoEn)}`

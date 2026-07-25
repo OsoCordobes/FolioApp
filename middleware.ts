@@ -4,6 +4,7 @@
  * Responsabilidades:
  *   1. Refrescar la sesión Supabase en cada request (cookies → JWT actualizado).
  *   2. Gating de auth: redirigir a /login si no hay sesión y la ruta está bajo (app).
+ *      Audiencia portal sin sesión: /portal/* → /portal/login; /api/portal/* → 401 JSON.
  *   3. Gating reverso: si hay sesión y el usuario va a /login, redirigir a /hoy.
  *
  * Fail-open: si Supabase NO está configurado (env vars vacías), todo pasa
@@ -81,6 +82,22 @@ export async function middleware(request: NextRequest) {
   // anónimo que pide /portal (o cualquier /portal/*) va a /portal/login, no al
   // login de staff (que pide password y es otro público).
   if (!user && !isPublicPath(pathname)) {
+    // /api/portal/* también es audiencia PORTAL, pero es API: con la sesión
+    // vencida respondemos 401 JSON (mismo shape de error que las routes de
+    // /api/portal/*) en vez de redirigir al login de STAFF — antes, descargar
+    // "Mis datos" con sesión vencida devolvía el HTML del login equivocado.
+    if (pathname.startsWith("/api/portal/")) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: {
+            code: "auth_required",
+            message: "Tu sesión expiró. Volvé a entrar al portal.",
+          },
+        },
+        { status: 401, headers: { "Cache-Control": "no-store" } },
+      );
+    }
     const url = request.nextUrl.clone();
     if (isPortalPath) {
       url.pathname = "/portal/login";

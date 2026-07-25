@@ -32,33 +32,19 @@ export default async function PortalConsentimientosPage() {
   }));
 
   return (
-    <main className="pt-main" style={{ maxWidth: 720, margin: "0 auto", padding: "48px 20px" }}>
-      <header
-        style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 16 }}
-      >
-        <div>
-          <h1 style={{ margin: 0 }}>Tus consentimientos</h1>
-          <p style={{ color: "var(--ink-2)", fontSize: "var(--fs-sm)", marginTop: 4 }}>
-            Los consentimientos que firmaste y los que podés firmar (Ley 26.529).
-          </p>
-        </div>
-        <a href="/portal" className="fi-btn fi-btn-ghost">
-          Volver
-        </a>
+    <main className="pt-main">
+      <header className="pt-page-head">
+        <h1 className="pt-page-title">Tus consentimientos</h1>
+        <p className="pt-page-sub">
+          Los consentimientos que firmaste y los que podés firmar (Ley 26.529).
+        </p>
       </header>
 
-      <section style={{ marginTop: 24 }}>
+      <section className="pt-section">
         <ConsentimientosView fichas={fichas} />
       </section>
 
-      <p
-        style={{
-          marginTop: 28,
-          color: "var(--ink-3)",
-          fontSize: "var(--fs-xs, .78rem)",
-          lineHeight: 1.5,
-        }}
-      >
+      <p className="pt-footnote pt-footnote-page">
         Tu firma se guarda de forma cifrada en tu ficha clínica. Podés revocar un
         consentimiento en cualquier momento (Ley 26.529 art. 11) desde tu consultorio;
         el ejemplar firmado se conserva por diez años.
