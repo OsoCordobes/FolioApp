@@ -23,7 +23,7 @@ import Script from "next/script";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
-import { runPortalLinkage } from "./actions";
+import { runPortalLinkage } from "../actions";
 
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
 
@@ -122,11 +122,11 @@ export function LinkagePanel({ hasLinks }: { hasLinks: boolean }) {
   };
 
   return (
-    <section className="pt-card" style={{ marginTop: 24 }}>
-      <h3 style={{ margin: "0 0 4px" }}>
+    <section className="pt-card pt-linkage">
+      <h3 className="pt-card-heading">
         {hasLinks ? "¿Faltan fichas?" : "Vinculá tus fichas"}
       </h3>
-      <p style={{ color: "var(--ink-2)", fontSize: "var(--fs-sm)", margin: "0 0 12px" }}>
+      <p className="pt-card-desc">
         Ingresá tu DNI y teléfono para que podamos encontrar tus fichas en los
         consultorios donde te atendés. Si no hay coincidencia exacta, el
         consultorio tendrá que aprobar la vinculación.
@@ -158,7 +158,7 @@ export function LinkagePanel({ hasLinks }: { hasLinks: boolean }) {
             <div ref={captchaContainerRef} style={{ marginTop: 4 }} />
           </>
         ) : null}
-        {msg ? <p className="au-notice" role="status" style={{ fontSize: "var(--fs-sm)", color: "var(--ink-2)" }}>{msg}</p> : null}
+        {msg ? <p className="au-notice pt-msg" role="status">{msg}</p> : null}
         <button
           type="submit"
           className="fi-btn fi-btn-primary au-submit"

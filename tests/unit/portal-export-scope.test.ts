@@ -36,7 +36,7 @@ test("sin fichas linkeadas → no_links (estado vacío, no un error de seguridad
 
 test("una sola ficha linkeada → scope de exactamente esa org", () => {
   const pacientes: PortalPaciente[] = [
-    { pacienteId: PAC_A, organizationId: ORG_A, organizacionNombre: "Consultorio A" },
+    { pacienteId: PAC_A, organizationId: ORG_A, organizacionNombre: "Consultorio A", bookingSlug: null },
   ];
   const verdict = assertLinkedOrgScope(pacientes);
   assert.equal(verdict.ok, true);
@@ -50,8 +50,8 @@ test("una sola ficha linkeada → scope de exactamente esa org", () => {
 
 test("varias fichas linkeadas → scope agrega TODAS las orgs linkeadas (una por org)", () => {
   const pacientes: PortalPaciente[] = [
-    { pacienteId: PAC_A, organizationId: ORG_A, organizacionNombre: "Consultorio A" },
-    { pacienteId: PAC_B, organizationId: ORG_B, organizacionNombre: "Consultorio B" },
+    { pacienteId: PAC_A, organizationId: ORG_A, organizacionNombre: "Consultorio A", bookingSlug: null },
+    { pacienteId: PAC_B, organizationId: ORG_B, organizacionNombre: "Consultorio B", bookingSlug: null },
   ];
   const verdict = assertLinkedOrgScope(pacientes);
   assert.equal(verdict.ok, true);
@@ -71,7 +71,7 @@ test("el scope NO puede incluir una org fuera del fan-out (gating por cuenta_id)
   // linkeado simplemente NO aparece en la lista ⇒ no puede entrar al export.
   // Reafirmamos que el verdict jamás inventa una org que no vino en el input.
   const pacientes: PortalPaciente[] = [
-    { pacienteId: PAC_A, organizationId: ORG_A, organizacionNombre: "Consultorio A" },
+    { pacienteId: PAC_A, organizationId: ORG_A, organizacionNombre: "Consultorio A", bookingSlug: null },
   ];
   const verdict = assertLinkedOrgScope(pacientes);
   assert.equal(verdict.ok, true);
@@ -86,7 +86,7 @@ test("el scope NO puede incluir una org fuera del fan-out (gating por cuenta_id)
 
 test("nombre de org null se preserva (ficha linkeada sin nombre visible)", () => {
   const pacientes: PortalPaciente[] = [
-    { pacienteId: PAC_A, organizationId: ORG_A, organizacionNombre: null },
+    { pacienteId: PAC_A, organizationId: ORG_A, organizacionNombre: null, bookingSlug: null },
   ];
   const verdict = assertLinkedOrgScope(pacientes);
   assert.equal(verdict.ok, true);

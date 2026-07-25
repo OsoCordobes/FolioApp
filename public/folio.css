@@ -19920,3 +19920,365 @@ input:focus { outline: none; }
 .fi-list.is-dense .fi-turno { padding-left: 14px; }
 .fi-turno.is-atendiendo { padding-left: 16px; }
 .fi-list.is-dense .fi-turno.is-atendiendo { padding-left: 16px; }
+
+/* ════════════════════════════════════════════════════════════════════════
+   BOOKING WIZARD · interacción real (.bk-*) — F2 · SOLO APPENDS.
+   Las cards de servicio/profesional y los chips de horario vivían con
+   estilos inline (cero hover/focus/transition). Acá se migran a clases con
+   estados reales, mismo patrón que .bl-service-card: borde → acento +
+   sombra al hover, focus-visible con outline, y transiciones cortas.
+   Solo tokens (--accent/--surface/--line-soft/--shadow-*): heredan dark
+   mode y el acento por consultorio que inyecta .bl-root.
+   ════════════════════════════════════════════════════════════════════════ */
+
+.bk-lista { display: flex; flex-direction: column; gap: 8px; }
+
+.bk-servicio {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 16px 20px;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  color: var(--ink);
+  text-align: left;
+  font: inherit;
+  transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+.bk-servicio:hover {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-2);
+  transform: translateY(-1px);
+}
+.bk-servicio:active { transform: translateY(0); }
+.bk-servicio:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.bk-servicio svg { color: var(--ink-3); flex-shrink: 0; transition: color .15s ease, transform .15s ease; }
+.bk-servicio:hover svg { color: var(--accent); transform: translateX(2px); }
+.bk-servicio-meta { color: var(--ink-3); font-size: 13px; }
+
+.bk-back {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin-bottom: 12px;
+  color: var(--ink-3);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--fs-sm, 13px);
+  transition: color .15s ease;
+}
+.bk-back:hover { color: var(--ink); }
+.bk-back:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-sm); }
+
+.bk-step-title { font-size: 16px; margin: 0 0 16px; }
+.bk-step-subtitle {
+  display: block;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--ink-3);
+  margin-top: 4px;
+}
+.bk-loading-hint { color: var(--ink-3); font-size: 13px; margin: 0 0 12px; }
+.bk-dia-grupo { margin-bottom: 20px; }
+
+.bk-dias { display: flex; flex-direction: column; gap: 20px; }
+.bk-dia-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  margin: 0 0 8px;
+}
+.bk-slot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+}
+.bk-slot {
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 500;
+  transition: border-color .15s ease, background .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+.bk-slot:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: var(--shadow-1);
+  transform: translateY(-1px);
+}
+.bk-slot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.bk-slot.is-selected,
+.bk-slot[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--surface);
+}
+.bk-slot:disabled { cursor: default; opacity: .6; }
+
+/* Empty states del wizard (sin servicios / sin horarios) */
+.bk-empty {
+  padding: 24px;
+  background: var(--surface);
+  border: 1px dashed var(--line);
+  border-radius: var(--r-md);
+  text-align: center;
+  color: var(--ink-3);
+}
+.bk-empty-title { margin: 0; font-size: 14px; color: var(--ink-2); }
+.bk-empty-sub { margin: 8px 0 0; font-size: 13px; }
+.bk-empty-sub a { color: var(--accent-2); }
+.bk-empty-cta { margin-top: 16px; }
+
+/* Resumen del turno elegido en el paso "Tus datos" (SIEMPRE visible) */
+.bk-resumen {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 16px;
+  margin: 0 0 16px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-soft-2);
+  border-radius: var(--r-md);
+}
+.bk-resumen-fecha { font-size: var(--fs-md, 15px); color: var(--ink); }
+.bk-resumen-detalle { font-size: var(--fs-sm, 13px); color: var(--ink-2); }
+
+@media (prefers-reduced-motion: reduce) {
+  .bk-servicio, .bk-slot, .bk-servicio svg { transition: none; }
+  .bk-servicio:hover, .bk-slot:hover { transform: none; }
+  .bk-servicio:hover svg { transform: none; }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   PORTAL DEL PACIENTE · identidad (.pt-*) — F2 · SOLO APPENDS.
+   Shell con header sticky + tabs, hero de bienvenida, cards con jerarquía,
+   chips de estado con tokens de status y estados vacíos con diseño — mismo
+   nivel que la book landing (.bl-*). Solo tokens brass/cream: dark mode
+   hereda de [data-theme] sin reglas extra.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* ── Shell: header sticky (marca + salir) + tabs ─────────────────────────── */
+.pt-shell-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line-soft);
+}
+.pt-shell-header-inner {
+  max-width: 760px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px clamp(16px, 4vw, 24px) 6px;
+}
+.pt-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: var(--ink);
+  text-decoration: none;
+}
+.pt-brand-text { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; }
+.pt-brand-name { font-weight: 600; font-size: var(--fs-md, 15px); letter-spacing: -0.01em; }
+.pt-brand-tag { font-size: var(--fs-xs, 11px); color: var(--ink-3); white-space: nowrap; }
+
+.pt-tabs {
+  max-width: 760px;
+  margin: 0 auto;
+  display: flex;
+  gap: 2px;
+  padding: 0 clamp(12px, 3vw, 20px);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.pt-tabs::-webkit-scrollbar { display: none; }
+.pt-tab {
+  padding: 10px 12px;
+  font-size: var(--fs-sm, 13px);
+  color: var(--ink-2);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  transition: color .15s ease, border-color .15s ease;
+}
+.pt-tab:hover { color: var(--ink); }
+.pt-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--r-sm); }
+.pt-tab[aria-current="page"] {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+/* ── Layout de página ────────────────────────────────────────────────────── */
+.pt-main {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 28px clamp(16px, 4vw, 24px) 72px;
+}
+.pt-page-title { margin: 0; }
+.pt-page-sub {
+  margin: 6px 0 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm, 13px);
+  line-height: 1.55;
+  max-width: 56ch;
+}
+.pt-section { margin-top: 28px; }
+.pt-section-divided { padding-top: 20px; border-top: 1px solid var(--line-soft); }
+.pt-section-title { margin: 0 0 12px; font-size: var(--fs-lg, 18px); }
+.pt-stack { display: grid; gap: 28px; }
+.pt-toolbar { display: flex; justify-content: flex-end; margin-bottom: 16px; }
+
+/* ── Hero de bienvenida (home) ───────────────────────────────────────────── */
+.pt-hero {
+  padding: 24px clamp(18px, 4vw, 28px) 22px;
+  background: linear-gradient(160deg, var(--accent-soft) 0%, var(--surface) 72%);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-1);
+}
+.pt-hero-eyebrow {
+  margin: 0 0 6px;
+  color: var(--accent);
+  font-size: var(--fs-xs, 11px);
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.pt-main h1.pt-hero-title {
+  margin: 0;
+  font-family: var(--font-display, Georgia, serif);
+  font-weight: 500;
+  font-size: clamp(1.7rem, 4.5vw, 2.2rem);
+  line-height: 1.1;
+}
+.pt-hero-sub {
+  margin: 8px 0 0;
+  color: var(--ink-2);
+  font-size: var(--fs-md, 15px);
+  line-height: 1.55;
+  max-width: 48ch;
+}
+.pt-hero-account { margin: 12px 0 0; color: var(--ink-3); font-size: var(--fs-sm, 12.5px); }
+
+/* ── Cards del portal: filas, jerarquía y chips de estado ────────────────── */
+.pt-org-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+.pt-card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.pt-card-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pt-card-title { font-size: var(--fs-md, 15px); color: var(--ink); }
+.pt-card-heading { margin: 0 0 4px; }
+.pt-card-meta { margin: 4px 0 0; color: var(--ink-2); font-size: var(--fs-sm, 13px); }
+.pt-card-desc { margin: 0 0 12px; color: var(--ink-2); font-size: var(--fs-sm, 13px); line-height: 1.55; }
+.pt-card-foot {
+  margin-top: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.pt-cap { text-transform: capitalize; }
+.pt-nowrap { white-space: nowrap; }
+
+.pt-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: var(--fs-xs, .72rem);
+  font-weight: 600;
+  letter-spacing: .02em;
+  white-space: nowrap;
+}
+.pt-chip--green { background: var(--green-soft); color: var(--green); }
+.pt-chip--amber { background: var(--amber-soft); color: var(--amber); }
+.pt-chip--red   { background: var(--red-soft);   color: var(--red); }
+.pt-chip--slate { background: var(--slate-soft); color: var(--slate); }
+
+.pt-actions { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+
+.pt-footnote { margin: 8px 0 0; color: var(--ink-3); font-size: var(--fs-xs, .78rem); line-height: 1.5; }
+.pt-footnote a { color: var(--accent-2); }
+.pt-footnote-page { margin-top: 24px; }
+
+.pt-msg { margin: 10px 0 0; font-size: var(--fs-sm, 13px); }
+.pt-msg-ok { color: var(--green); }
+.pt-msg-err { color: var(--red); }
+
+/* ── Estados vacíos con diseño ───────────────────────────────────────────── */
+.pt-empty { margin: 0; color: var(--ink-2); font-size: var(--fs-sm, 13px); }
+.pt-empty-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+  padding: 36px 24px;
+}
+.pt-empty-title { margin: 0; font-weight: 600; color: var(--ink); font-size: var(--fs-md, 15px); }
+.pt-empty-sub { margin: 0; color: var(--ink-2); font-size: var(--fs-sm, 13px); line-height: 1.55; max-width: 46ch; }
+.pt-empty-hero .fi-btn { margin-top: 10px; }
+
+/* ── Formularios del portal (perfil / reagenda / linkage) ────────────────── */
+.pt-grid-2 { display: grid; grid-template-columns: 2fr 1fr; gap: 8px; }
+.pt-grid-3 { display: grid; grid-template-columns: 2fr 2fr 1fr; gap: 8px; }
+.pt-perfil-id { margin: 6px 0 14px; }
+.pt-linkage { margin-top: 24px; }
+
+.pt-reagenda {
+  margin-top: 12px;
+  padding: 14px 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-md);
+}
+.pt-reagenda-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 4px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.pt-reagenda-loading { display: flex; flex-direction: column; gap: 8px; }
+
+.pt-link-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  margin-top: 10px;
+  color: var(--accent-2);
+  font: inherit;
+  font-size: var(--fs-sm, 13px);
+  cursor: pointer;
+  text-align: left;
+}
+.pt-link-btn:hover { text-decoration: underline; }
+.pt-link-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-sm); }
+
+@media (max-width: 480px) {
+  .pt-grid-2, .pt-grid-3 { grid-template-columns: 1fr; }
+}

@@ -164,10 +164,18 @@ export interface PortalTurnoView {
   id: string;
   organizationId: string;
   organizacionNombre: string | null;
+  /** Slug del booking público de la org (bookingSlug del fan-out de sesión) —
+   * lo usa el picker de reagenda para pedir slots REALES vía fetchSlotsPublico.
+   * null si la org no está listada/viva → el portal cae al horario libre. */
+  organizacionSlug: string | null;
   inicio: string;
   duracionMin: number;
   estado: string;
   modalidad: string;
+  /** Ids operativos del turno (NUNCA datos clínicos): alimentan el picker de
+   * slots de la reagenda con el MISMO servicio/profesional del turno. */
+  servicioId: string | null;
+  profesionalId: string | null;
   cutoffHoras: number;
   /** ¿El paciente puede cancelar/reagendar este turno ahora? (pura, para la UI). */
   cancelable: boolean;
@@ -191,7 +199,9 @@ export async function listTurnosPortal(): Promise<Result<PortalTurnoView[]>> {
   // portal_cancel_cutoff (RPC), no de un embed que la RLS devolvería NULL.
   const { data, error } = await supabase
     .from("turno")
-    .select("id, organization_id, inicio, duracion_min, estado, modalidad")
+    .select(
+      "id, organization_id, inicio, duracion_min, estado, modalidad, servicio_id, profesional_id",
+    )
     .order("inicio", { ascending: false });
 
   if (error) {
@@ -201,10 +211,12 @@ export async function listTurnosPortal(): Promise<Result<PortalTurnoView[]>> {
 
   const rows = (data ?? []) as Array<Record<string, unknown>>;
 
-  // Nombre de la org por id, desde el fan-out de la sesión (P3).
+  // Nombre + slug reservable de la org por id, desde el fan-out de la sesión (P3).
   const nombrePorOrg = new Map<string, string | null>();
+  const slugPorOrg = new Map<string, string | null>();
   for (const p of session.data.pacientes) {
     nombrePorOrg.set(p.organizationId, p.organizacionNombre);
+    slugPorOrg.set(p.organizationId, p.bookingSlug);
   }
 
   // Cutoff por org distinta, resuelto una vez cada uno vía el helper DEFINER.
@@ -234,10 +246,13 @@ export async function listTurnosPortal(): Promise<Result<PortalTurnoView[]>> {
       id: r.id as string,
       organizationId: orgId,
       organizacionNombre: nombrePorOrg.get(orgId) ?? null,
+      organizacionSlug: slugPorOrg.get(orgId) ?? null,
       inicio: r.inicio as string,
       duracionMin: r.duracion_min as number,
       estado: r.estado as string,
       modalidad: (r.modalidad as string | null) ?? "presencial",
+      servicioId: (r.servicio_id as string | null) ?? null,
+      profesionalId: (r.profesional_id as string | null) ?? null,
       cutoffHoras,
       cancelable,
     };
