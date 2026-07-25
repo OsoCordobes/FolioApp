@@ -14,10 +14,24 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import * as I from "@/components/icons";
-import { saveSesionFichaAction, saveSesionYCerrarAction } from "@/app/(app)/pacientes/actions";
+import {
+  listDocumentosPacienteAction,
+  refreshRadiografiaUrlAction,
+  saveSesionFichaAction,
+  saveSesionYCerrarAction,
+  uploadDocumentoPacienteAction,
+  type DocumentoFichaItem,
+} from "@/app/(app)/pacientes/actions";
+import {
+  AUTOSAVE_DEBOUNCE_MS,
+  anioDeFecha,
+  decidirAutosave,
+  esBorradorSucio,
+  type BorradorFicha,
+} from "@/lib/ficha/borrador";
 import { TurnoCreateModal } from "@/components/hoy/turno-create-modal";
 import { ConsentimientosCard } from "@/components/paciente/consentimientos-card";
 import { PacienteFichaProvider, usePacienteFicha } from "@/components/paciente/contexto";
@@ -263,7 +277,7 @@ function HistorialReciente() {
 // ─── Sub: Tab Plan ─────────────────────────────────────────────────────────
 
 function TabPlan() {
-  const { paciente, plan, especialidad } = usePacienteFicha();
+  const { paciente, plan, especialidad, organizacionNombre } = usePacienteFicha();
   const def = getEspecialidad(especialidad);
   const router = useRouter();
   const turnoActivo = plan.turnoActivo;
@@ -283,6 +297,11 @@ function TabPlan() {
     estudiosAdjuntos: plan.estudiosAdjuntos,
     // Cardiología la usa en el score de riesgo CV (≥60 suma); quiro/psico la ignoran.
     edad: paciente.edad > 0 ? paciente.edad : undefined,
+    // D2 · membrete de los imprimibles de la Tool (derivación cardio):
+    // paciente + consultorio, espejo del FichaPrintHeader. Las demás Tools
+    // ignoran ambos.
+    pacienteNombre: paciente.nombre,
+    organizacionNombre,
   };
 
   // Borrador local del toolData de la herramienta. Si el turno en curso ya
@@ -297,20 +316,69 @@ function TabPlan() {
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const handleGuardar = async () => {
+  // D1 · baseline del borrador = lo último GUARDADO (o lo hidratado del server
+  // al montar). Contra esto se computa `sucio`, que gatea el guard de
+  // beforeunload y el autosave. En cada guardado ok se actualiza a LO ENVIADO
+  // (no al estado actual: si se tipeó durante el request, eso sigue sucio y el
+  // autosave lo levanta después).
+  const [baseline, setBaseline] = useState<BorradorFicha>(() => ({
+    soap: plan.soap,
+    toolValue: turnoActivo?.toolDraft ?? null,
+  }));
+  const sucio = useMemo(
+    () => esBorradorSucio({ soap, toolValue }, baseline),
+    [soap, toolValue, baseline],
+  );
+
+  // Interacción REAL del profesional (tecla/click en el SOAP o la herramienta).
+  // Los seeds programáticos (onToolSeed) NO la setean: el autosave y el guard
+  // de beforeunload solo se arman después de una edición genuina — abrir la
+  // ficha jamás debe escribir la HC sola ni frenar el cierre de la pestaña.
+  const userEditoRef = useRef(false);
+
+  // Editar limpia un error de guardado previo: decidirAutosave frena con
+  // hayError (no reintenta en loop), así que el próximo cambio re-arma el
+  // autoguardado.
+  const onSoapChange = (s: SoapState) => {
+    userEditoRef.current = true;
+    setSoap(s);
+    if (saveError) setSaveError(null);
+  };
+  const onToolChange = (v: unknown) => {
+    userEditoRef.current = true;
+    setToolValue(v);
+    if (saveError) setSaveError(null);
+  };
+  // Seed PROGRAMÁTICO de la Tool (carry-forward quiro al montar): actualiza el
+  // borrador Y el baseline JUNTOS — el estado sembrado es la nueva línea de
+  // base, NO un borrador sucio (no dispara autosave/beforeunload ni marca
+  // interacción). "Guardar sesión" lo persiste junto con la primera edición
+  // real del profesional.
+  const onToolSeed = (v: unknown) => {
+    setToolValue(v);
+    setBaseline((b) => ({ ...b, toolValue: v }));
+  };
+
+  const handleGuardar = async (opts?: { autosave?: boolean }) => {
     if (!turnoActivo || saving) return;
+    // Snapshot de lo que se envía (ver comentario del baseline).
+    const enviado: BorradorFicha = { soap, toolValue };
     setSaving(true);
     setSaveError(null);
     const result = await saveSesionFichaAction({
       turnoId: turnoActivo.id,
       pacienteId: paciente.id,
-      toolValue,
-      soap,
+      toolValue: enviado.toolValue,
+      soap: enviado.soap,
+      // El autosave NUNCA transiciona el turno (empezar a atender es una
+      // decisión explícita: botón "Guardar sesión" / "Guardar y cerrar").
+      autosave: opts?.autosave === true,
     });
     setSaving(false);
     if (result.ok) {
       const d = new Date();
       setSavedAt(`${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`);
+      setBaseline(enviado);
       // La vuelta: refresca el Server Component → plan.toolHistorial trae la
       // sesión recién guardada (el borrador local no se resetea: useState).
       router.refresh();
@@ -319,20 +387,70 @@ function TabPlan() {
     }
   };
 
+  // D1 · guard: cerrar/recargar la pestaña con borrador sucio pide
+  // confirmación nativa del navegador (antes se perdía el SOAP + herramienta
+  // sin aviso). Navegación client-side (tabs/links de Next) no dispara
+  // beforeunload — para eso los panels quedan montados (hidden) en el root.
+  // Gateado por interacción REAL: un estado sembrado programáticamente no es
+  // trabajo del profesional y no debe frenar el cierre de la pestaña.
+  useEffect(() => {
+    if (!sucio || !userEditoRef.current) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      // Chrome legacy exige returnValue seteado para mostrar el diálogo.
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [sucio]);
+
+  // D1 · autosave: ~10 s después de la última tecla, SOLO con la atención EN
+  // CURSO (en por_iniciar guardaría horas antes del turno; en retroactivo
+  // persistiría cada typo sobre la sesión histórica de una visita cerrada),
+  // SOLO tras una interacción real del profesional (el seed del carry-forward
+  // no cuenta) y sin error pendiente. Cada edición reinicia el timer (debounce
+  // por deps). Reusa handleGuardar con autosave:true: misma action y feedback,
+  // pero SIN transicionar el turno (eso queda para el guardado manual).
+  useEffect(() => {
+    if (
+      !decidirAutosave({
+        sucio,
+        guardando: saving,
+        hayTurno: !!turnoActivo,
+        hayError: saveError != null,
+        modoTurno: turnoActivo?.modo ?? null,
+        huboInteraccion: userEditoRef.current,
+      })
+    ) {
+      return;
+    }
+    const t = window.setTimeout(() => {
+      void handleGuardar({ autosave: true });
+    }, AUTOSAVE_DEBOUNCE_MS);
+    return () => window.clearTimeout(t);
+    // handleGuardar se recrea por render; los deps que importan son los que
+    // reinician el debounce (soap/toolValue) + los gates de la decisión.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [soap, toolValue, sucio, saving, turnoActivo, saveError]);
+
   // "Guardar y cerrar": persiste la sesión Y cierra el turno (ATENDIENDO →
   // CERRADO) en un solo paso. La action devuelve ok({ cerrado }) — un err
   // significa que el guardado falló; ok({ cerrado: false }) que se guardó pero
   // el cierre no, sin perder el trabajo.
   const handleGuardarYCerrar = async () => {
     if (!turnoActivo || saving) return;
+    const enviado: BorradorFicha = { soap, toolValue };
     setSaving(true);
     setSaveError(null);
     const result = await saveSesionYCerrarAction({
       turnoId: turnoActivo.id,
       pacienteId: paciente.id,
-      toolValue,
-      soap,
+      toolValue: enviado.toolValue,
+      soap: enviado.soap,
     });
+    // Un ok (cerrado o no) implica que la sesión SE GUARDÓ: el baseline se
+    // actualiza para que el guard de beforeunload no frene la navegación.
+    if (result.ok) setBaseline(enviado);
     if (result.ok && result.data.cerrado) {
       // Turno cerrado: el lugar natural es la agenda del día (el turno ya no
       // está en curso). No reseteamos `saving` — navegamos fuera de la ficha.
@@ -350,20 +468,30 @@ function TabPlan() {
     }
   };
 
+  // D1 · el badge ahora refleja el ciclo del autosave: Guardando… → Guardado ✓
+  // (con hora) → Borrador sin guardar apenas se vuelve a editar. Mismas clases
+  // fm-save/tokens de siempre.
   const saveBadge: ReactNode = turnoActivo ? (
     saving ? (
       <span className="fm-save fm-save--saving">
         <span className="fm-save-spinner" />
         Guardando…
       </span>
+    ) : sucio ? (
+      <span
+        className="fm-save"
+        title="Hay cambios sin guardar — se autoguardan unos segundos después de dejar de escribir, o con «Guardar sesión»."
+      >
+        Borrador sin guardar
+      </span>
     ) : savedAt ? (
-      <span className="fm-save fm-save--saved">Guardado · {savedAt}</span>
+      <span className="fm-save fm-save--saved">Guardado ✓ · {savedAt}</span>
     ) : (
       <span
         className="fm-save"
-        title="El borrador se persiste con «Guardar sesión» en la visita indicada arriba."
+        title="El borrador se autoguarda mientras escribís; también podés usar «Guardar sesión»."
       >
-        Borrador sin guardar
+        Sin cambios
       </span>
     )
   ) : undefined;
@@ -422,7 +550,8 @@ function TabPlan() {
       {hideSoap ? (
         <def.Tool
           value={toolValue}
-          onChange={setToolValue}
+          onChange={onToolChange}
+          onSeed={onToolSeed}
           readOnly={!turnoActivo}
           historial={filtrarToolHistorial(plan.toolHistorial, especialidad)}
           {...toolExtras}
@@ -431,14 +560,15 @@ function TabPlan() {
         <div className="pc-plan-grid">
           <def.Tool
             value={toolValue}
-            onChange={setToolValue}
+            onChange={onToolChange}
+            onSeed={onToolSeed}
             readOnly={!turnoActivo}
             historial={filtrarToolHistorial(plan.toolHistorial, especialidad)}
             {...toolExtras}
           />
           <SoapStacked
             soap={soap}
-            setSoap={setSoap}
+            setSoap={onSoapChange}
             saveBadge={saveBadge}
             guia={def.soapGuia}
             eyebrow={
@@ -534,8 +664,11 @@ function TabInformacion() {
           <dd>{paciente.ocupacion || "—"}</dd>
           <dt>Recomendado por</dt>
           <dd>{paciente.recomendadoPor || "—"}</dd>
+          {/* D2 fix: "Particular" estaba hardcodeado para TODOS los pacientes
+              (dato inventado en una HC). "—" honesto hasta que el campo real
+              llegue en Fase 7. */}
           <dt>Obra social</dt>
-          <dd>Particular</dd>
+          <dd>—</dd>
         </dl>
       </section>
       <section className="pc-card">
@@ -628,8 +761,27 @@ function fmtIntakeValor(value: unknown): string {
   return String(value);
 }
 
+/** Labels de las 4 secciones del SOAP para el detalle expandible (D2). */
+const SOAP_DETALLE = [
+  ["s", "Subjetivo"],
+  ["o", "Objetivo"],
+  ["a", "Análisis"],
+  ["p", "Plan"],
+] as const;
+
 function TabSesiones() {
-  const { plan } = usePacienteFicha();
+  const { plan, paciente } = usePacienteFicha();
+  // D2 · filas expandibles: set de keys abiertas (estado local — el panel
+  // queda montado con `hidden`, así que sobrevive el cambio de tab).
+  const [abiertas, setAbiertas] = useState<ReadonlySet<string>>(new Set());
+  const toggle = (key: string) =>
+    setAbiertas((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
   return (
     <div className="pc-sesiones">
       <div className="pc-sesiones-toolbar">
@@ -647,64 +799,311 @@ function TabSesiones() {
         </button>
       </div>
       <div className="pc-sesiones-list">
-        {plan.sesiones.map((s, i) => (
-          <div key={s.fecha} className="pc-sesion-row">
-            <div className="pc-sesion-date">
-              <b className="fm-mono">{fmtFecha(s.fecha)}</b>
-              <span className="muted">2026</span>
-            </div>
-            <div className="pc-sesion-body">
-              <div className="pc-sesion-title">
-                <b>Sesión {plan.sesiones.length - i}</b>
-                <span className="muted">· {s.servicio}</span>
-                <span className="fi-pill fi-pill--mute fm-mono">{s.dur} min</span>
+        {plan.sesiones.map((s, i) => {
+          const key = s.sesionId ?? `${s.fecha}-${i}`;
+          const abierta = abiertas.has(key) && s.soap != null;
+          // Fix D2: el año salía hardcodeado "2026" — ahora se deriva de la
+          // fecha real de la sesión.
+          const anio = anioDeFecha(s.fecha);
+          const soapConContenido = s.soap
+            ? SOAP_DETALLE.filter(([k]) => s.soap![k].trim().length > 0)
+            : [];
+          return (
+            <div key={key} className="pc-sesion-item">
+              <div className="pc-sesion-row">
+                <div className="pc-sesion-date">
+                  <b className="fm-mono">{fmtFecha(s.fecha)}</b>
+                  {anio ? <span className="muted">{anio}</span> : null}
+                </div>
+                <div className="pc-sesion-body">
+                  <div className="pc-sesion-title">
+                    <b>Sesión {plan.sesiones.length - i}</b>
+                    <span className="muted">· {s.servicio}</span>
+                    <span className="fi-pill fi-pill--mute fm-mono">{s.dur} min</span>
+                  </div>
+                  <p>{s.cambio}</p>
+                  {s.vertebras.length ? (
+                    <div className="pc-sesion-tags">
+                      {s.vertebras.map((v) => (
+                        <span key={v} className="fi-pill fi-pill--mute fm-mono">{v}</span>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+                {s.soap ? (
+                  <button
+                    type="button"
+                    className="pc-link"
+                    onClick={() => toggle(key)}
+                    aria-expanded={abierta}
+                    title={abierta ? "Ocultar el detalle de esta sesión" : "Ver el SOAP completo de esta sesión"}
+                  >
+                    {abierta ? "Ocultar detalle" : "Ver detalle"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="pc-link"
+                    disabled
+                    title="Esta visita cerró sin sesión registrada"
+                    aria-disabled="true"
+                  >
+                    Ver detalle
+                  </button>
+                )}
               </div>
-              <p>{s.cambio}</p>
-              {s.vertebras.length ? (
-                <div className="pc-sesion-tags">
-                  {s.vertebras.map((v) => (
-                    <span key={v} className="fi-pill fi-pill--mute fm-mono">{v}</span>
-                  ))}
+              {abierta && s.soap ? (
+                <div className="pc-sesion-detalle">
+                  {soapConContenido.length > 0 ? (
+                    <div className="pc-sesion-soap">
+                      {soapConContenido.map(([k, label]) => (
+                        <div key={k} className="pc-sesion-soap-item">
+                          <b>{label}</b>
+                          <p>{s.soap![k]}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="pc-sesion-detalle-vacio">
+                      Sin nota SOAP registrada para esta sesión.
+                    </p>
+                  )}
+                  <p className="pc-sesion-detalle-resumen">
+                    <b>Herramienta:</b> {s.cambio}
+                  </p>
+                  {s.sesionId ? (
+                    <div className="pc-sesion-detalle-foot">
+                      <a
+                        href={`/api/pacientes/${paciente.id}/ficha-pdf?sesion=${s.sesionId}`}
+                        download
+                        className="fi-btn fi-btn-ghost"
+                        title="Descargar el PDF membretado de esta sesión"
+                      >
+                        <I.FileDown size={12} /> PDF de esta sesión
+                      </a>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </div>
-            <button
-              type="button"
-              className="pc-link"
-              disabled
-              title="Próximamente — vista detallada de cada sesión"
-              aria-disabled="true"
-            >
-              Ver detalle
-            </button>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
 }
 
-function TabDocumentos() {
+// D2 · tab Documentos real: lista transversal de documento_clinico del
+// paciente (todas las categorías — las galerías de las Tools filtran por la
+// suya) + subida generalizada. Labels es-AR del enum tipo_documento (M08);
+// FOTO_POSTURAL no se ofrece en el select (exige consentimiento FOTOS firmado
+// — flujo aparte) pero sí se muestra si ya existe.
+const TIPO_DOC_LABELS: Record<string, string> = {
+  RMN: "RMN",
+  TAC: "TAC",
+  RADIOGRAFIA: "Radiografía",
+  ECOGRAFIA: "Ecografía",
+  LABORATORIO: "Laboratorio",
+  RECETA_EXTERNA: "Receta externa",
+  INFORME_EXTERNO: "Informe externo",
+  FOTO_POSTURAL: "Foto postural",
+  OTRO: "Otro",
+};
+
+const TIPOS_DOC_SUBIBLES = [
+  "INFORME_EXTERNO",
+  "LABORATORIO",
+  "RADIOGRAFIA",
+  "RMN",
+  "TAC",
+  "ECOGRAFIA",
+  "RECETA_EXTERNA",
+  "OTRO",
+] as const;
+
+function TabDocumentos({ active }: { active: boolean }) {
+  const { paciente, plan } = usePacienteFicha();
+  const router = useRouter();
+  const turnoActivo = plan.turnoActivo;
+
+  const [items, setItems] = useState<DocumentoFichaItem[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [pedido, setPedido] = useState(false);
+
+  const cargar = async () => {
+    const result = await listDocumentosPacienteAction(paciente.id);
+    if (result.ok) {
+      setItems(result.data);
+      setLoadError(null);
+    } else {
+      setItems([]);
+      setLoadError(result.error.message);
+    }
+  };
+
+  // Lazy por diseño: la lista (y sus signed URLs de 5 min) se pide recién
+  // cuando el tab se ABRE por primera vez — el panel vive montado con `hidden`
+  // (D1) y no queremos pagar la query en cada carga de la ficha.
+  useEffect(() => {
+    if (!active || pedido) return;
+    setPedido(true);
+    void cargar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, pedido]);
+
+  // Subida (mismo gating que las galerías de las Tools: el documento cuelga de
+  // la sesión de la visita en curso).
+  const [file, setFile] = useState<File | null>(null);
+  const [tipo, setTipo] = useState<string>("INFORME_EXTERNO");
+  const [nota, setNota] = useState("");
+  const [subiendo, setSubiendo] = useState(false);
+  const [subirError, setSubirError] = useState<string | null>(null);
+  const [abriendoId, setAbriendoId] = useState<string | null>(null);
+
+  const puedeSubir = !!turnoActivo && turnoActivo.tieneSesionGuardada;
+
+  const handleUpload = async () => {
+    if (!puedeSubir || !file || !turnoActivo || subiendo) return;
+    setSubiendo(true);
+    setSubirError(null);
+    const fd = new FormData();
+    fd.set("file", file);
+    fd.set("pacienteId", paciente.id);
+    fd.set("turnoId", turnoActivo.id);
+    fd.set("tipo", tipo);
+    if (nota.trim() !== "") fd.set("descripcion", nota.trim());
+    const result = await uploadDocumentoPacienteAction(fd);
+    setSubiendo(false);
+    if (result.ok) {
+      setFile(null);
+      setNota("");
+      void cargar();
+      // Las galerías de las Tools (radiografías/estudios) también ven el
+      // documento nuevo.
+      router.refresh();
+    } else {
+      setSubirError(result.error.message);
+    }
+  };
+
+  const abrirDocumento = async (doc: DocumentoFichaItem) => {
+    if (abriendoId) return;
+    setAbriendoId(doc.id);
+    try {
+      // Los signed URLs expiran a los 5 min: se pide uno fresco al abrir
+      // (mismo patrón refresh de las galerías de las Tools). Si el refresh
+      // falla, se intenta con el URL que ya teníamos.
+      const result = await refreshRadiografiaUrlAction(doc.id);
+      const url = result.ok ? result.data.signedUrl : doc.signedUrl;
+      if (url) window.open(url, "_blank", "noopener,noreferrer");
+    } finally {
+      setAbriendoId(null);
+    }
+  };
+
   return (
-    <div className="fi-empty" style={{ marginTop: 16 }}>
-      <div className="fi-empty-glyph">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="5" y="3" width="14" height="18" rx="2.5" />
-          <path d="M9 8h6M9 12h6M9 16h4" />
-        </svg>
-      </div>
-      <h2>Sin documentos adjuntos.</h2>
-      <p>Subí RMN, estudios o consentimientos para tener todo del paciente en un lugar.</p>
-      <div className="fi-empty-actions">
-        <button
-          type="button"
-          className="fi-btn fi-btn-secondary"
-          disabled
-          title="Próximamente — Supabase Storage cifrado con audit log automático"
-          aria-disabled="true"
-        >
-          <I.Plus size={13} /> Subir documento
-        </button>
+    <div className="pc-docs">
+      {items === null ? (
+        <p className="pc-docs-cargando muted" aria-live="polite">Cargando documentos…</p>
+      ) : items.length === 0 ? (
+        <div className="fi-empty" style={{ marginTop: 16 }}>
+          <div className="fi-empty-glyph">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="5" y="3" width="14" height="18" rx="2.5" />
+              <path d="M9 8h6M9 12h6M9 16h4" />
+            </svg>
+          </div>
+          <h2>Sin documentos adjuntos.</h2>
+          <p>Subí radiografías, estudios o informes para tener todo del paciente en un lugar.</p>
+        </div>
+      ) : (
+        <div className="pc-docs-list">
+          {items.map((doc) => (
+            <div key={doc.id} className="pc-doc-row">
+              <span className="fi-pill fi-pill--mute pc-doc-tipo">
+                {TIPO_DOC_LABELS[doc.tipo] ?? doc.tipo}
+              </span>
+              <div className="pc-doc-meta">
+                <b className="fm-mono">{fmtFecha(doc.fecha)} {anioDeFecha(doc.fecha)}</b>
+                {doc.descripcion ? <span>{doc.descripcion}</span> : null}
+              </div>
+              <button
+                type="button"
+                className="fi-btn fi-btn-ghost"
+                onClick={() => void abrirDocumento(doc)}
+                disabled={abriendoId === doc.id}
+                aria-busy={abriendoId === doc.id}
+                title="Abrir el documento en una pestaña nueva (link temporal seguro)"
+              >
+                <I.ExternalLink size={12} /> {abriendoId === doc.id ? "Abriendo…" : "Abrir"}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {loadError ? (
+        <p role="alert" className="pc-docs-error">{loadError}</p>
+      ) : null}
+
+      <div className="pc-docs-upload">
+        <span className="fi-eyebrow">Subir documento</span>
+        <div className="pc-docs-upload-row">
+          <label className="pc-quiro-file-label">
+            <input
+              type="file"
+              accept="image/*,application/pdf,application/dicom"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              disabled={!puedeSubir || subiendo}
+            />
+            <span className="pc-quiro-pill">
+              <I.Plus size={13} />
+              {file ? file.name.slice(0, 28) : "Elegir archivo"}
+            </span>
+          </label>
+          <select
+            className="pc-docs-select"
+            value={tipo}
+            onChange={(e) => setTipo(e.target.value)}
+            disabled={!puedeSubir || subiendo}
+            aria-label="Tipo de documento"
+          >
+            {TIPOS_DOC_SUBIBLES.map((t) => (
+              <option key={t} value={t}>{TIPO_DOC_LABELS[t]}</option>
+            ))}
+          </select>
+          <input
+            type="text"
+            className="pc-quiro-input"
+            placeholder="Nota (opcional)"
+            value={nota}
+            maxLength={200}
+            onChange={(e) => setNota(e.target.value)}
+            disabled={!puedeSubir || subiendo}
+          />
+          <button
+            type="button"
+            className="fi-btn fi-btn-secondary"
+            onClick={() => void handleUpload()}
+            disabled={!puedeSubir || !file || subiendo}
+            title={
+              puedeSubir
+                ? "Adjuntar el documento a la sesión de la visita en curso"
+                : "Necesitás una visita con sesión guardada para adjuntar documentos"
+            }
+          >
+            {subiendo ? "Subiendo…" : "Subir documento"}
+          </button>
+        </div>
+        {!puedeSubir ? (
+          <p className="pc-docs-hint muted">
+            {turnoActivo
+              ? "Guardá la sesión de la visita (tab Plan) para poder adjuntar documentos."
+              : "Los documentos se adjuntan a una visita: sacá un turno o abrí la ficha desde /hoy."}
+          </p>
+        ) : null}
+        {subirError ? (
+          <p role="alert" className="pc-docs-error">{subirError}</p>
+        ) : null}
       </div>
     </div>
   );
@@ -833,6 +1232,17 @@ function PacienteHeader() {
         <div className="pc-actions">
           <PacienteWhatsAppButton telefono={paciente.tel} nombre={paciente.nombre} />
           <ImprimirFichaButton />
+          {/* D2 · export PDF de la HC (la route existía sin ningún botón que la
+              dispare). <a download> nativo: el server responde attachment con
+              membrete + evolución; el audit del export queda en audit_log. */}
+          <a
+            href={`/api/pacientes/${paciente.id}/ficha-pdf`}
+            download
+            className="fi-btn fi-btn-ghost no-print"
+            title="Descargar la historia clínica en PDF membretado (para compartir con un colega)"
+          >
+            <I.FileDown size={13} /> Exportar PDF
+          </a>
           <button
             type="button"
             className="fi-btn fi-btn-secondary"
@@ -961,26 +1371,25 @@ function PacienteDetalleInner() {
         ))}
       </nav>
 
-      {tab === "informacion" ? (
-        <div {...panelProps("informacion")}>
-          <TabInformacion />
-        </div>
-      ) : null}
-      {tab === "plan" ? (
-        <div {...panelProps("plan")}>
-          <TabPlan />
-        </div>
-      ) : null}
-      {tab === "sesiones" ? (
-        <div {...panelProps("sesiones")}>
-          <TabSesiones />
-        </div>
-      ) : null}
-      {tab === "documentos" ? (
-        <div {...panelProps("documentos")}>
-          <TabDocumentos />
-        </div>
-      ) : null}
+      {/* D1 · los panels quedan SIEMPRE montados y se ocultan con `hidden` en
+          vez de montarse/desmontarse: el borrador del tab Plan (SOAP +
+          herramienta a medio escribir) sobrevive el cambio de tab sin subir
+          estado al provider — la alternativa de menor re-arquitectura.
+          `hidden` = display:none nativo (no imprime, no recibe foco, no pinta);
+          el costo de mantener montados los otros 3 tabs es mínimo (Documentos
+          además difiere su fetch hasta la primera apertura). */}
+      <div {...panelProps("informacion")} hidden={tab !== "informacion"}>
+        <TabInformacion />
+      </div>
+      <div {...panelProps("plan")} hidden={tab !== "plan"}>
+        <TabPlan />
+      </div>
+      <div {...panelProps("sesiones")} hidden={tab !== "sesiones"}>
+        <TabSesiones />
+      </div>
+      <div {...panelProps("documentos")} hidden={tab !== "documentos"}>
+        <TabDocumentos active={tab === "documentos"} />
+      </div>
     </div>
   );
 }

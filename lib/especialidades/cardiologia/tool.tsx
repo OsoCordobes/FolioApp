@@ -465,13 +465,32 @@ function escapeHtml(s: string): string {
 }
 
 /**
+ * Membrete del imprimible (D2): identidad del documento clínico. Espejo del
+ * FichaPrintHeader de la ficha (consultorio · paciente · fecha) — sin esto la
+ * derivación era un papel anónimo, inservible para el receptor.
+ */
+interface MembreteDerivacion {
+  pacienteNombre?: string;
+  organizacionNombre?: string;
+}
+
+/**
  * Abre la derivación en una ventana nueva (vía Blob URL, sin document.write) y
  * dispara la impresión del navegador. Documento HTML mínimo y autocontenido —
  * sólo el contenido de ESTA derivación, nunca PHI de otros pacientes ni el resto
  * de la ficha. Todo el texto pasa por escapeHtml (defensa XSS). No persiste
  * nada; la derivación estructurada vive en el toolData de la sesión. C6.
+ *
+ * D2 · membrete: consultorio (header con la línea brass) + paciente + fecha,
+ * mismo patrón que FichaPrintHeader. Los colores son los valores canónicos de
+ * los tokens de folio.css (#1B1812 --ink, #8A6722 --accent, #DDD5C0 --line;
+ * mismos hex fijados en lib/pdf/theme.ts) — la ventana es un documento
+ * standalone y no puede resolver var(--*) de la app.
  */
-function imprimirDerivacion(derivacion: DerivacionCardio | null): void {
+function imprimirDerivacion(
+  derivacion: DerivacionCardio | null,
+  membrete: MembreteDerivacion = {},
+): void {
   if (!derivacion || derivacion.motivo.trim() === "") return;
   if (typeof window === "undefined") return;
 
@@ -482,6 +501,9 @@ function imprimirDerivacion(derivacion: DerivacionCardio | null): void {
   });
   const fechaLinea = derivacion.fecha ? escapeHtml(derivacion.fecha) : hoy;
   const filas: string[] = [];
+  if (membrete.pacienteNombre) {
+    filas.push(`<p><strong>Paciente:</strong> ${escapeHtml(membrete.pacienteNombre)}</p>`);
+  }
   if (derivacion.destinatario) {
     filas.push(`<p><strong>Para:</strong> ${escapeHtml(derivacion.destinatario)}</p>`);
   }
@@ -492,20 +514,27 @@ function imprimirDerivacion(derivacion: DerivacionCardio | null): void {
     `<p><strong>Prioridad:</strong> ${escapeHtml(URGENCIA_DERIVACION_LABELS[derivacion.urgencia])}</p>`,
   );
 
+  const org = membrete.organizacionNombre?.trim() || "Folio";
+  const docTitulo = membrete.pacienteNombre
+    ? `Derivación / Interconsulta — ${escapeHtml(membrete.pacienteNombre)}`
+    : "Derivación / Interconsulta";
+
   const doc = `<!doctype html><html lang="es"><head><meta charset="utf-8">
 <title>Derivación</title>
 <style>
-  body { font-family: Georgia, "Times New Roman", serif; color: #1a1a1a; margin: 48px; line-height: 1.6; }
-  h1 { font-size: 20px; letter-spacing: .04em; text-transform: uppercase; margin: 0 0 24px; }
-  .meta { font-size: 13px; color: #555; margin-bottom: 24px; }
+  body { font-family: -apple-system, "Segoe UI", system-ui, sans-serif; color: #1B1812; margin: 48px; line-height: 1.6; }
+  .membrete { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; border-bottom: 2px solid #8A6722; padding-bottom: 10px; margin-bottom: 20px; }
+  .membrete b { font-size: 16px; letter-spacing: -.01em; }
+  .membrete span { font-size: 11px; color: #6B6455; }
+  h1 { font-size: 19px; letter-spacing: .03em; text-transform: uppercase; margin: 0 0 20px; }
   .body p { margin: 0 0 8px; font-size: 14px; }
-  .motivo { margin-top: 20px; white-space: pre-wrap; font-size: 14px; }
-  .foot { margin-top: 64px; font-size: 12px; color: #777; }
+  .motivo { margin-top: 20px; white-space: pre-wrap; font-size: 14px; border-top: 1px solid #DDD5C0; padding-top: 14px; }
+  .foot { margin-top: 64px; font-size: 12px; color: #6B6455; }
   @media print { body { margin: 24mm; } }
 </style></head>
 <body onload="setTimeout(function(){window.print()},250)">
-  <h1>Derivación / Interconsulta</h1>
-  <div class="meta">Fecha: ${fechaLinea}</div>
+  <div class="membrete"><b>${escapeHtml(org)}</b><span>Fecha: ${fechaLinea}</span></div>
+  <h1>${docTitulo}</h1>
   <div class="body">${filas.join("")}</div>
   <div class="motivo"><strong>Motivo:</strong><br>${escapeHtml(derivacion.motivo)}</div>
   <div class="foot">Documento generado con Folio. Firma y sello del profesional: _______________________</div>
@@ -571,6 +600,8 @@ export function CardiologiaTool({
   pacienteId,
   turno,
   estudiosAdjuntos,
+  pacienteNombre,
+  organizacionNombre,
 }: SpecialtyToolProps) {
   const draft = useMemo(() => parseDraft(value), [value]);
   const series = useMemo(() => deriveCardioSeries(historial), [historial]);
@@ -1095,7 +1126,7 @@ export function CardiologiaTool({
               <button
                 type="button"
                 className="fi-btn fi-btn-secondary"
-                onClick={() => imprimirDerivacion(derivacion)}
+                onClick={() => imprimirDerivacion(derivacion, { pacienteNombre, organizacionNombre })}
                 disabled={!derivacion || derivacion.motivo.trim() === ""}
                 title={
                   derivacion && derivacion.motivo.trim() !== ""
@@ -1125,7 +1156,7 @@ export function CardiologiaTool({
               <button
                 type="button"
                 className="fi-btn fi-btn-secondary"
-                onClick={() => imprimirDerivacion(derivacion)}
+                onClick={() => imprimirDerivacion(derivacion, { pacienteNombre, organizacionNombre })}
               >
                 <I.Printer size={12} /> Imprimir
               </button>
