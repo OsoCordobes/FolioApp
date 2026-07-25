@@ -30,6 +30,7 @@ import {
   normalizeEspecialidadSlug,
   type EspecialidadSlug,
 } from "@/lib/especialidades/registry";
+import { OBRAS_SOCIALES_AR } from "@/lib/pacientes/cobertura";
 import { useModalA11y } from "@/lib/use-modal-a11y";
 
 interface PacienteCreateModalProps {
@@ -52,6 +53,10 @@ interface FormState {
   recomendadoPor: string;
   numeroDoc: string;
   motivoConsulta: string;
+  // F7a (M89) · cobertura (opcional): obra social/prepaga + plan + nº afiliado.
+  coberturaNombre: string;
+  coberturaPlan: string;
+  coberturaNroAfiliado: string;
 }
 
 const EMPTY: FormState = {
@@ -65,6 +70,9 @@ const EMPTY: FormState = {
   recomendadoPor: "",
   numeroDoc: "",
   motivoConsulta: "",
+  coberturaNombre: "",
+  coberturaPlan: "",
+  coberturaNroAfiliado: "",
 };
 
 export function PacienteCreateModal({
@@ -139,6 +147,9 @@ export function PacienteCreateModal({
         recomendadoPor: form.recomendadoPor.trim(),
         numeroDoc: form.numeroDoc.trim(),
         motivoConsulta: form.motivoConsulta.trim(),
+        coberturaNombre: form.coberturaNombre.trim(),
+        coberturaPlan: form.coberturaPlan.trim(),
+        coberturaNroAfiliado: form.coberturaNroAfiliado.trim(),
         intakeAvanzado,
       });
       if (!result.ok) {
@@ -295,6 +306,53 @@ export function PacienteCreateModal({
             maxLength={20}
           />
         </Field>
+
+        {/* ── Cobertura (opcional) ─────────────────────────────────────────────
+            F7a (M89) · obra social/prepaga + plan + nº de afiliado. Nunca
+            bloquea el alta: vacío = particular. El datalist sugiere las ~20
+            más comunes de AR pero acepta texto libre. */}
+        <section style={{ marginTop: 8, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
+          <span className="fi-eyebrow" style={{ display: "block", marginBottom: 10 }}>
+            Cobertura (opcional)
+          </span>
+          <Field
+            label="Obra social / prepaga"
+            hint="Elegí de la lista o tipeá la tuya. Dejalo vacío si es particular."
+          >
+            <input
+              type="text"
+              list="pac-create-os-datalist"
+              value={form.coberturaNombre}
+              onChange={(e) => setForm((f) => ({ ...f, coberturaNombre: e.target.value }))}
+              style={inputStyle}
+              maxLength={120}
+              placeholder="OSDE, Swiss Medical, PAMI…"
+            />
+          </Field>
+          <datalist id="pac-create-os-datalist">
+            {OBRAS_SOCIALES_AR.map((os) => (
+              <option key={os} value={os} />
+            ))}
+          </datalist>
+          <Field label="Plan" hint="Ej.: 210, SMG30.">
+            <input
+              type="text"
+              value={form.coberturaPlan}
+              onChange={(e) => setForm((f) => ({ ...f, coberturaPlan: e.target.value }))}
+              style={inputStyle}
+              maxLength={40}
+            />
+          </Field>
+          <Field label="Nº de afiliado" hint="Se cifra en la DB, como el DNI.">
+            <input
+              type="text"
+              value={form.coberturaNroAfiliado}
+              onChange={(e) => setForm((f) => ({ ...f, coberturaNroAfiliado: e.target.value }))}
+              style={inputStyle}
+              maxLength={40}
+            />
+          </Field>
+        </section>
 
         <Field label="Motivo de consulta" required>
           <textarea

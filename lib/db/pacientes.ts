@@ -13,6 +13,7 @@ import { capabilitiesFor } from "@/lib/auth/capabilities";
 import { blindIndex, blindIndexPhone, encryptColumn, tryDecrypt } from "@/lib/crypto";
 import { ESPECIALIDAD_SLUGS } from "@/lib/especialidades/meta";
 import { trackEvent } from "@/lib/observability/events";
+import { coberturaInputSchema, normalizarCobertura } from "@/lib/pacientes/cobertura";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import { err, mapSupabaseError, ok, type Result } from "./errors";
@@ -46,6 +47,9 @@ const createPacienteSchema = z.object({
   notasImportantes: z.string().max(2000).optional(),
   tags: z.array(z.string().max(40)).max(10).default([]),
   profesionalPrincipalId: z.string().uuid().optional(),
+  // F7a (M89) · cobertura del paciente: obra social/prepaga + plan (en claro)
+  // y nº de afiliado (se cifra). Todos opcionales — sin cobertura = particular.
+  ...coberturaInputSchema.shape,
   // Workstream 5 · intake avanzado por especialidad (opcional, M60). Se inserta
   // best-effort DESPUÉS del paciente — nunca bloquea el alta (ver createPaciente).
   intakeAvanzado: z
@@ -74,6 +78,14 @@ export interface PacienteDecoded {
   ultimaVisita: string | null;
   proximoTurno: string | null;
   sesionesCompletadas: number;
+  /**
+   * F7a (M89) · cobertura EN CLARO (nombre + plan) para columna/filtro/export
+   * del directorio. null = particular / sin informar. Solo la llena
+   * `listPacientesDirectorio` (la vista M14 no expone las columnas — se
+   * joinean acá contra paciente_identidad); `buscarPaciente` la deja en null.
+   */
+  coberturaNombre: string | null;
+  coberturaPlan: string | null;
 }
 
 // ─── Listar (vista paciente_directorio_lite) ──────────────────────────
@@ -92,23 +104,49 @@ export async function listPacientesDirectorio(): Promise<Result<PacienteDecoded[
 
   if (error) return err("db_error", "Error listando pacientes.", error.message);
 
-  const decoded: PacienteDecoded[] = (data ?? []).map((row: Record<string, unknown>) => ({
-    id: String(row.paciente_id),
-    identidadId: (row.identidad_id as string | null) ?? null,
-    nombre: tryDecrypt((row.nombre_cifrado as Buffer | null) ?? null, "paciente.nombre"),
-    apellido: tryDecrypt((row.apellido_cifrado as Buffer | null) ?? null, "paciente.apellido"),
-    telefono: tryDecrypt((row.telefono_cifrado as Buffer | null) ?? null, "paciente.telefono"),
-    email: tryDecrypt((row.email_cifrado as Buffer | null) ?? null, "paciente.email"),
-    tipo: (row.tipo_paciente as "NUEVO" | "RECURRENTE") ?? "NUEVO",
-    tags: (row.tags as string[]) ?? [],
-    pseudonimizado: row.pseudonimizado_en != null,
-    fechaNacimiento: (row.fecha_nacimiento as string | null) ?? null,
-    ciudad: (row.domicilio_ciudad as string | null) ?? null,
-    provincia: (row.domicilio_provincia as string | null) ?? null,
-    ultimaVisita: (row.ultima_visita as string | null) ?? null,
-    proximoTurno: (row.proximo_turno as string | null) ?? null,
-    sesionesCompletadas: Number(row.sesiones_completadas ?? 0),
-  }));
+  // F7a (M89) · cobertura del directorio. La vista `paciente_directorio_lite`
+  // (M14) no expone las columnas nuevas y las vistas son append-only-por-
+  // migración: en vez de redefinirla, un segundo SELECT barato sobre
+  // paciente_identidad (columnas EN CLARO, org-scoped por RLS) y join en
+  // memoria por identidad_id. Best-effort: si falla, el directorio sale sin
+  // cobertura (null = "Particular") en vez de romperse.
+  const coberturas = new Map<string, { nombre: string | null; plan: string | null }>();
+  {
+    const { data: cobRows } = await supabase
+      .from("paciente_identidad")
+      .select("id, cobertura_nombre, cobertura_plan")
+      .eq("organization_id", session.data.organizationId)
+      .is("deleted_at", null);
+    for (const c of (cobRows ?? []) as Array<Record<string, unknown>>) {
+      coberturas.set(String(c.id), {
+        nombre: (c.cobertura_nombre as string | null) ?? null,
+        plan: (c.cobertura_plan as string | null) ?? null,
+      });
+    }
+  }
+
+  const decoded: PacienteDecoded[] = (data ?? []).map((row: Record<string, unknown>) => {
+    const cobertura = row.identidad_id ? coberturas.get(String(row.identidad_id)) : undefined;
+    return {
+      id: String(row.paciente_id),
+      identidadId: (row.identidad_id as string | null) ?? null,
+      nombre: tryDecrypt((row.nombre_cifrado as Buffer | null) ?? null, "paciente.nombre"),
+      apellido: tryDecrypt((row.apellido_cifrado as Buffer | null) ?? null, "paciente.apellido"),
+      telefono: tryDecrypt((row.telefono_cifrado as Buffer | null) ?? null, "paciente.telefono"),
+      email: tryDecrypt((row.email_cifrado as Buffer | null) ?? null, "paciente.email"),
+      tipo: (row.tipo_paciente as "NUEVO" | "RECURRENTE") ?? "NUEVO",
+      tags: (row.tags as string[]) ?? [],
+      pseudonimizado: row.pseudonimizado_en != null,
+      fechaNacimiento: (row.fecha_nacimiento as string | null) ?? null,
+      ciudad: (row.domicilio_ciudad as string | null) ?? null,
+      provincia: (row.domicilio_provincia as string | null) ?? null,
+      ultimaVisita: (row.ultima_visita as string | null) ?? null,
+      proximoTurno: (row.proximo_turno as string | null) ?? null,
+      sesionesCompletadas: Number(row.sesiones_completadas ?? 0),
+      coberturaNombre: cobertura?.nombre ?? null,
+      coberturaPlan: cobertura?.plan ?? null,
+    };
+  });
 
   return ok(decoded);
 }
@@ -187,6 +225,10 @@ export async function buscarPaciente(query: string): Promise<Result<PacienteDeco
     ultimaVisita: (row.ultima_visita as string | null) ?? null,
     proximoTurno: (row.proximo_turno as string | null) ?? null,
     sesionesCompletadas: Number(row.sesiones_completadas ?? 0),
+    // La búsqueda no necesita cobertura (se usa para pickers/quick-search);
+    // solo el directorio la joinea. null = sin dato acá, no "particular".
+    coberturaNombre: null,
+    coberturaPlan: null,
   }));
 
   return ok(decoded);
@@ -236,6 +278,14 @@ export async function createPaciente(input: CreatePacienteInput): Promise<Result
 
   // 1. Insert paciente_identidad (PII cifrada)
   const nombreFull = `${d.nombre} ${d.apellido}`;
+  // F7a (M89) · cobertura normalizada: trim, vacío → null, "Particular" → null
+  // (el canónico de particular es cobertura_nombre NULL). El nº de afiliado se
+  // CIFRA (mismo tratamiento que el DNI); nombre y plan van en claro (filtro).
+  const cobertura = normalizarCobertura({
+    nombre: d.coberturaNombre,
+    plan: d.coberturaPlan,
+    nroAfiliado: d.coberturaNroAfiliado,
+  });
   const { data: identidad, error: idErr } = await supabase
     .from("paciente_identidad")
     .insert({
@@ -258,6 +308,10 @@ export async function createPaciente(input: CreatePacienteInput): Promise<Result
       domicilio_ciudad: d.domicilioCiudad ?? null,
       domicilio_provincia: d.domicilioProvincia ?? null,
       domicilio_cp: d.domicilioCp ?? null,
+      // F7a (M89) · cobertura: nombre/plan en claro, nº afiliado cifrado.
+      cobertura_nombre: cobertura.nombre,
+      cobertura_plan: cobertura.plan,
+      cobertura_nro_afiliado_cifrado: encryptColumn(cobertura.nroAfiliado),
       // Per-tenant salt (Sprint 1 T1.5.3 / audit A2)
       nombre_hash: blindIndex(nombreFull, session.data.organizationId),
       dni_hash: d.numeroDoc ? blindIndex(d.numeroDoc, session.data.organizationId) : null,
@@ -354,6 +408,81 @@ export async function getPacienteCompleto(pacienteId: string): Promise<Result<Re
     motivo_consulta: tryDecrypt(row.motivo_consulta_cifrado as Buffer | null, "paciente.motivo_consulta"),
     notas_importantes: tryDecrypt(row.notas_importantes_cifrado as Buffer | null, "paciente.notas_importantes"),
   });
+}
+
+// ─── Cobertura (obra social / prepaga) — F7a, M89 ────────────────────────────
+
+const updateCoberturaSchema = z.object({
+  pacienteId: z.string().uuid(),
+  ...coberturaInputSchema.shape,
+});
+
+export type UpdatePacienteCoberturaInput = z.infer<typeof updateCoberturaSchema>;
+
+/**
+ * Actualiza SOLO los 3 campos de cobertura de la identidad del paciente
+ * (edición desde la ficha, tab Información). Campos vacíos/"Particular" →
+ * NULL (borra el valor). El nº de afiliado se cifra app-side (M89 — mismo
+ * tratamiento que el DNI); nombre y plan quedan en claro para filtro/export.
+ *
+ * Tenancy: la identidad se resuelve vía `paciente_directorio_lite` (org
+ * activa) y el UPDATE va por el cliente RLS-aware — la policy
+ * `paciente_identidad_update_admin` (M03) es el gate real (OWNER, DIRECTOR,
+ * PROFESIONAL, ASISTENTE de la org).
+ */
+export async function updatePacienteCobertura(
+  input: UpdatePacienteCoberturaInput,
+): Promise<Result<{ identidadId: string }>> {
+  const parsed = updateCoberturaSchema.safeParse(input);
+  if (!parsed.success) {
+    return err("validation", "Datos de cobertura inválidos.", parsed.error.message);
+  }
+  const session = await getActiveSession();
+  if (!session.ok) return session;
+
+  const supabase = await createSupabaseServerClient();
+
+  // Resolver la identidad del paciente dentro de la org activa (guard IDOR:
+  // un pacienteId de otra org no matchea y devuelve not_found).
+  const { data: dirRow, error: dirErr } = await supabase
+    .from("paciente_directorio_lite")
+    .select("identidad_id")
+    .eq("paciente_id", parsed.data.pacienteId)
+    .eq("organization_id", session.data.organizationId)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (dirErr) return err("db_error", "Error leyendo el paciente.", dirErr.message);
+  const identidadId = (dirRow as { identidad_id: string | null } | null)?.identidad_id ?? null;
+  if (!identidadId) return err("not_found", "Paciente no encontrado o sin permisos.");
+
+  const cobertura = normalizarCobertura({
+    nombre: parsed.data.coberturaNombre,
+    plan: parsed.data.coberturaPlan,
+    nroAfiliado: parsed.data.coberturaNroAfiliado,
+  });
+
+  const { data: updated, error: updErr } = await supabase
+    .from("paciente_identidad")
+    .update({
+      cobertura_nombre: cobertura.nombre,
+      cobertura_plan: cobertura.plan,
+      cobertura_nro_afiliado_cifrado: encryptColumn(cobertura.nroAfiliado),
+    })
+    .eq("id", identidadId)
+    .eq("organization_id", session.data.organizationId)
+    .select("id");
+
+  if (updErr) {
+    const mapped = mapSupabaseError(updErr);
+    return err(mapped.code, mapped.message, updErr.message);
+  }
+  if (!updated || updated.length === 0) {
+    // RLS bloqueó el UPDATE (rol sin permiso de edición de identidad).
+    return err("forbidden", "Tu rol no permite editar la cobertura del paciente.");
+  }
+
+  return ok({ identidadId });
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

@@ -174,6 +174,9 @@ export function ImportarPacientesClient() {
         dni: mapeo.dni,
         email: mapeo.email,
         fechaNacimiento: mapeo.fechaNacimiento,
+        // F7a (M89) · cobertura (opcionales).
+        obraSocial: mapeo.obraSocial,
+        nroAfiliado: mapeo.nroAfiliado,
       },
     };
     setServerError(null);

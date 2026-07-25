@@ -45,7 +45,7 @@ import {
 } from "@/lib/db/documentos";
 import { listRespuestasPaciente, saveRespuesta } from "@/lib/db/instrumentos";
 import { savePacienteIntakeAvanzado } from "@/lib/db/paciente-intake";
-import { createPaciente } from "@/lib/db/pacientes";
+import { createPaciente, updatePacienteCobertura } from "@/lib/db/pacientes";
 import { savePlanTratamiento } from "@/lib/db/plan-tratamiento";
 import { getActiveSession } from "@/lib/db/session";
 import { upsertSesion } from "@/lib/db/sesiones";
@@ -81,6 +81,12 @@ const createPacienteActionSchema = z.object({
   // caracteres daba un "Datos inválidos" genérico recién en el writer (audit L5).
   // Vacío sigue permitido (el documento es opcional).
   numeroDoc: z.string().min(5, "El documento debe tener al menos 5 caracteres.").max(20).optional().or(z.literal("")),
+  // F7a (M89) · cobertura del paciente (obra social/prepaga). Opcionales y
+  // tolerantes a "" (el form manda strings vacíos). Límites del dominio en
+  // lib/pacientes/cobertura.ts; el writer normaliza y cifra el nº de afiliado.
+  coberturaNombre: z.string().max(120).optional().or(z.literal("")),
+  coberturaPlan: z.string().max(40).optional().or(z.literal("")),
+  coberturaNroAfiliado: z.string().max(40).optional().or(z.literal("")),
   // Workstream 5 · intake avanzado por especialidad (opcional). El shape de
   // `datos` lo valida el writer contra el schema de la especialidad.
   intakeAvanzado: z
@@ -118,6 +124,9 @@ export async function createPacienteAction(
     motivoConsulta: emptyToUndef(d.motivoConsulta),
     tipoDoc: d.tipoDoc ?? "DNI",
     numeroDoc: emptyToUndef(d.numeroDoc),
+    coberturaNombre: emptyToUndef(d.coberturaNombre),
+    coberturaPlan: emptyToUndef(d.coberturaPlan),
+    coberturaNroAfiliado: emptyToUndef(d.coberturaNroAfiliado),
     tags: [],
     intakeAvanzado: d.intakeAvanzado,
   });
@@ -126,6 +135,45 @@ export async function createPacienteAction(
 
   revalidatePath("/pacientes");
   return ok({ id: result.data.id });
+}
+
+// ─── Guardar cobertura desde la ficha (tab Información) — F7a, M89 ────────────
+
+const saveCoberturaSchema = z.object({
+  pacienteId: z.string().uuid(),
+  // Tolerantes a "" (vaciar un campo = borrar el valor → NULL en DB).
+  coberturaNombre: z.string().max(120).optional().or(z.literal("")),
+  coberturaPlan: z.string().max(40).optional().or(z.literal("")),
+  coberturaNroAfiliado: z.string().max(40).optional().or(z.literal("")),
+});
+
+export type SaveCoberturaActionInput = z.infer<typeof saveCoberturaSchema>;
+
+/**
+ * Persiste la cobertura (obra social/prepaga + plan + nº de afiliado) del
+ * paciente desde el modal de edición de la ficha. El writer normaliza
+ * ("Particular"/vacío → NULL) y cifra el nº de afiliado (M89).
+ */
+export async function savePacienteCoberturaAction(
+  input: SaveCoberturaActionInput,
+): Promise<Result<{ identidadId: string }>> {
+  const parsed = saveCoberturaSchema.safeParse(input);
+  if (!parsed.success) {
+    return err("validation", "Datos de cobertura inválidos.", parsed.error.message);
+  }
+
+  const result = await updatePacienteCobertura({
+    pacienteId: parsed.data.pacienteId,
+    coberturaNombre: parsed.data.coberturaNombre,
+    coberturaPlan: parsed.data.coberturaPlan,
+    coberturaNroAfiliado: parsed.data.coberturaNroAfiliado,
+  });
+  if (!result.ok) return result;
+
+  // La vuelta: la ficha y el directorio (columna/filtro Cobertura) se refrescan.
+  revalidatePath(`/pacientes/${parsed.data.pacienteId}`);
+  revalidatePath("/pacientes");
+  return result;
 }
 
 // ─── Guardar intake avanzado desde la ficha (tab Información) ─────────────────

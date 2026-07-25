@@ -43,6 +43,7 @@ import {
   type ImportResumen,
 } from "@/lib/import/pacientes-csv";
 import { trackEvent } from "@/lib/observability/events";
+import { normalizarCobertura } from "@/lib/pacientes/cobertura";
 import { createSupabaseServerClient, createSupabaseServiceClient } from "@/lib/supabase/server";
 
 // ─── Input ──────────────────────────────────────────────────────────────────
@@ -58,6 +59,9 @@ const importInputSchema = z.object({
     dni: indiceColumna.optional(),
     email: indiceColumna.optional(),
     fechaNacimiento: indiceColumna.optional(),
+    // F7a (M89) · cobertura: obra social (en claro) + nº afiliado (se cifra).
+    obraSocial: indiceColumna.optional(),
+    nroAfiliado: indiceColumna.optional(),
   }),
 });
 
@@ -276,6 +280,10 @@ async function fetchHashesExistentes(
 
 function buildIdentidadRow(v: FilaLista, orgId: string): Record<string, unknown> {
   const d = v.data;
+  // F7a (M89) · cobertura: normalización canónica ("Particular"/vacío → NULL)
+  // y CIFRADO del nº de afiliado (mismo tratamiento que el DNI). El plan no se
+  // importa (la planilla típica no lo trae) — queda NULL.
+  const cobertura = normalizarCobertura({ nombre: d.obraSocial, nroAfiliado: d.nroAfiliado });
   return {
     organization_id: orgId,
     nombre_cifrado: encryptColumn(d.nombre),
@@ -288,6 +296,8 @@ function buildIdentidadRow(v: FilaLista, orgId: string): Record<string, unknown>
     email_cifrado: encryptColumn(d.email),
     telefono_cifrado: encryptColumn(d.telefono),
     fecha_nacimiento: d.fechaNacimiento,
+    cobertura_nombre: cobertura.nombre,
+    cobertura_nro_afiliado_cifrado: encryptColumn(cobertura.nroAfiliado),
     nombre_hash: blindIndex(`${d.nombre} ${d.apellido}`, orgId),
     dni_hash: v.dniHash,
     telefono_hash: v.telHash,
