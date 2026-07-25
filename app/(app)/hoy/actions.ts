@@ -27,7 +27,7 @@ import { listProfesionalesLite } from "@/lib/db/members";
 import { getActiveSession } from "@/lib/db/session";
 import { listPacientesDirectorio } from "@/lib/db/pacientes";
 import { resolveProfesionalDestino } from "@/lib/db/profesional-destino";
-import { createTurno, reagendarTurno, transitionTurno } from "@/lib/db/turnos";
+import { createTurno, reagendarTurno, transitionTurno, type TransitionTurnoResult } from "@/lib/db/turnos";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { EstadoTurno } from "@/lib/types";
 
@@ -45,19 +45,38 @@ const ESTADO_UI_TO_DB: Record<
   reagendado: "REAGENDADO",
 };
 
+/**
+ * E1 · cobro elegido en el mini-diálogo al cerrar un turno. Espejo del
+ * `cobroCierreSchema` de lib/db/turnos.ts (la validación real vive allá).
+ * `pagado=false` = "quedó debiendo" → pago PENDIENTE visible en /finanzas.
+ */
+export interface CobroCierreActionInput {
+  montoCents: number;
+  metodo: "EFECTIVO" | "TRANSFERENCIA" | "MERCADOPAGO" | "TARJETA" | "OBRA_SOCIAL";
+  pagado: boolean;
+}
+
 export interface TransitionTurnoActionInput {
   turnoId: string;
   to: EstadoTurno;
   duracionRealMin?: number;
+  /** Solo con to === "cerrado": método/monto/estado del cobro registrado. */
+  cobro?: CobroCierreActionInput;
 }
 
+/**
+ * PR #118: el Result propaga `pagoRegistrado` de transitionTurno para que el
+ * cliente pueda avisar cuando el turno cerró pero el cobro NO se registró
+ * (cierre y pago no son atómicos — ver TransitionTurnoResult en lib/db/turnos).
+ */
 export async function transitionTurnoAction(
   input: TransitionTurnoActionInput,
-): Promise<Result<void>> {
+): Promise<Result<TransitionTurnoResult>> {
   const result = await transitionTurno({
     turnoId: input.turnoId,
     to: ESTADO_UI_TO_DB[input.to],
     duracionRealMin: input.duracionRealMin,
+    cobro: input.to === "cerrado" ? input.cobro : undefined,
   });
 
   if (result.ok) {

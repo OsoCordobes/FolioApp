@@ -31,6 +31,17 @@ export function formatArs(cents: number): string {
   return `${negative ? "-" : ""}$ ${miles}${dec}`;
 }
 
+/**
+ * Preheader oculto: el resumen que el inbox muestra al lado del subject
+ * (sin esto, Gmail/Outlook muestran "Hola Juan," como preview). Va como
+ * primer hijo del <body>. display:none + max-height:0 + mso-hide cubren
+ * los clientes principales; los &nbsp;&zwnj; del final evitan que el
+ * preview "chupe" el primer párrafo real del cuerpo.
+ */
+export function preheader(texto: string): string {
+  return `<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">${esc(texto)}${"&nbsp;&zwnj;".repeat(20)}</div>`;
+}
+
 /** Botón CTA (tabla, no <button> — los clientes de correo ignoran CSS externo). */
 export function ctaButton(url: string, label: string): string {
   return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">

@@ -19608,6 +19608,170 @@ input:focus { outline: none; }
   outline: none;
 }
 
+/* ───────────────────────────────────────────────────────────────────────────
+ * FICHA CLÍNICA · Consistencia entre herramientas (D3 · curvas que hablan)
+ * 1) Selects de la ficha: `.fi-wi-field select` + `.fi-select` reemplazan el
+ *    objeto inline SELECT_STYLE que las 5 tools copiaban (mismos valores que
+ *    los inputs de .fi-wi-field). `.fi-select` es para selects sueltos fuera
+ *    de un .fi-wi-field (ej. estado de un objetivo en ObjetivosBlock).
+ * 2) `.fi-escala-seg`: fila segmentada de botones para escalas cortas
+ *    (EscalaSegmentada — dolor EVA/VAS 0–10 de kinesiología): un valor = un
+ *    click, estado seleccionado vía aria-pressed. Solo tokens var() existentes;
+ *    append-only.
+ * ─────────────────────────────────────────────────────────────────────────── */
+.fi-wi-field select,
+.fi-select {
+  width: 100%;
+  padding: 9px 11px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--ink);
+  line-height: 1.5;
+  transition: border-color 120ms var(--ease-in), box-shadow 120ms var(--ease-in);
+}
+.fi-wi-field select:focus,
+.fi-select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.fi-escala-seg {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.fi-escala-seg-btn {
+  flex: 1 0 auto;
+  min-width: 26px;
+  padding: 7px 2px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-2);
+  text-align: center;
+  cursor: default;
+  transition: background 120ms var(--ease-in), color 120ms var(--ease-in),
+              border-color 120ms var(--ease-in);
+}
+.fi-escala-seg-btn:hover:not(:disabled) {
+  background: var(--surface-2);
+  border-color: var(--ink-4);
+}
+.fi-escala-seg-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.fi-escala-seg-btn[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent-2);
+  color: var(--surface);
+}
+.fi-escala-seg-btn[aria-pressed="true"]:hover:not(:disabled) {
+  background: var(--accent-2);
+  border-color: var(--accent-2);
+}
+.fi-escala-seg-btn:disabled {
+  opacity: 0.55;
+}
+.fi-escala-seg-anclas {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * FICHA · D1+D2 (feat/ficha-borrador-pdf) — borrador indestructible + la
+ * historia clínica se comparte. Append-only; solo tokens var() existentes.
+ *
+ *   - .pc-sesion-item / .pc-sesion-detalle*: fila expandible del tab Sesiones
+ *     ("Ver detalle" con el SOAP histórico + PDF por sesión). El wrapper
+ *     .pc-sesion-item hereda el borde que antes llevaba .pc-sesion-row para
+ *     que el detalle expandido quede DENTRO de la misma celda visual.
+ *   - .pc-docs*: tab Documentos real (lista transversal + subida).
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Sesiones · fila expandible ────────────────────────────────────────── */
+.pc-sesion-item { border-bottom: 1px solid var(--line-soft); }
+.pc-sesion-item:last-child { border-bottom: 0; }
+.pc-sesion-item .pc-sesion-row { border-bottom: 0; }
+.pc-sesion-detalle {
+  /* 138px = padding 22 + col fecha 96 + gap 20: alinea con el cuerpo de la fila. */
+  padding: 0 22px 18px 138px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.pc-sesion-soap { display: flex; flex-direction: column; gap: 10px; }
+.pc-sesion-soap-item { display: flex; flex-direction: column; gap: 2px; }
+.pc-sesion-soap-item b {
+  font-size: 10.5px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .06em;
+  color: var(--ink-3);
+}
+.pc-sesion-soap-item p {
+  margin: 0; font-size: 12.5px; line-height: 1.55;
+  color: var(--ink-2); white-space: pre-wrap;
+}
+.pc-sesion-detalle-vacio { margin: 0; font-size: 12.5px; color: var(--ink-3); }
+.pc-sesion-detalle-resumen { margin: 0; font-size: 12.5px; color: var(--ink-2); }
+.pc-sesion-detalle-resumen b { font-weight: 600; color: var(--ink-3); }
+.pc-sesion-detalle-foot { display: flex; justify-content: flex-start; }
+
+/* ── Documentos · lista + subida ───────────────────────────────────────── */
+.pc-docs { display: flex; flex-direction: column; gap: 16px; margin-top: 16px; }
+.pc-docs-cargando { font-size: 12.5px; padding: 8px 4px; }
+.pc-docs-list {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+.pc-doc-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 16px; align-items: center;
+  padding: 13px 22px;
+  border-bottom: 1px solid var(--line-soft);
+  transition: background 120ms var(--ease-in);
+}
+.pc-doc-row:last-child { border-bottom: 0; }
+.pc-doc-row:hover { background: var(--surface-2); }
+.pc-doc-tipo { flex-shrink: 0; }
+.pc-doc-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pc-doc-meta b { font-size: 13px; color: var(--ink); }
+.pc-doc-meta span {
+  font-size: 12px; color: var(--ink-3);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pc-docs-upload {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 16px 18px;
+  background: var(--surface);
+  border: 1px dashed var(--line);
+  border-radius: var(--r-lg);
+}
+.pc-docs-upload-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+/* Espejo de .pc-quiro-input para el select de tipo (folio.css no estila
+   selects de forma global — deuda conocida, se unifica en otro PR). */
+.pc-docs-select {
+  padding: 8px 11px;
+  background: var(--bg);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm);
+  font-family: 'Geist', sans-serif; font-size: 13px; color: var(--ink);
+  transition: border-color 120ms var(--ease-in), background 120ms var(--ease-in);
+}
+.pc-docs-select:focus { outline: none; border-color: var(--accent); background: var(--surface); }
+.pc-docs-select:disabled { opacity: .55; cursor: not-allowed; }
+.pc-docs-hint { margin: 0; font-size: 12.5px; }
+.pc-docs-error { margin: 0; font-size: 12.5px; color: var(--red); }
+
 /* ═══════════════════════════════════════════════════════════════════════════
  * SHELL MOBILE + FEEDBACK (C1+C4 · feat/shell-mobile) — append-only
  *
@@ -20293,4 +20457,249 @@ input:focus { outline: none; }
 
 @media (max-width: 480px) {
   .pt-grid-2, .pt-grid-3 { grid-template-columns: 1fr; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   E1+E2 · FINANZAS COMPLETAS — cobro real, deudores y números del período
+   (feat/finanzas-completas · append-only)
+   1) Mini-diálogo de cobro al cerrar turno en /hoy (.fi-cobro-*)
+   2) KPI strip a auto-fit (entra "Por cobrar"; la Proyección solo va en mes)
+   3) Chips Todos/Cobrados/Pendientes + chip de estado + botón Cobrar inline
+   4) Desglose por profesional bajo el donut (patrón fn-legend-row)
+   5) Responsive fn-*: /finanzas no tenía UNA sola regla mobile (audit)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* 1 · Mini-diálogo de cobro (components/hoy/cobro-cierre-dialog.tsx) */
+.fi-cobro-field { display: block; margin-bottom: 14px; }
+.fi-cobro-lbl {
+  display: block;
+  font-size: 11px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 6px;
+}
+.fi-cobro-monto {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 9px 12px;
+  background: var(--surface);
+  color: var(--ink-2);
+}
+.fi-cobro-monto:focus-within { border-color: var(--accent); }
+.fi-cobro-monto input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -.01em;
+  min-width: 0;
+}
+.fi-cobro-metodos { display: flex; flex-wrap: wrap; gap: 6px; }
+.fi-cobro-metodo {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-2);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: border-color .12s ease, color .12s ease, background .12s ease;
+}
+.fi-cobro-metodo:hover { border-color: var(--accent); color: var(--ink); }
+.fi-cobro-metodo.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-2);
+  font-weight: 600;
+}
+.fi-cobro-deuda {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px dashed var(--line);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+.fi-cobro-deuda input { margin-top: 2px; accent-color: var(--amber); }
+.fi-cobro-deuda small { display: block; color: var(--ink-3); font-size: 12px; margin-top: 2px; }
+
+/* 2 · KPI strip: auto-fit (5 cards en "Este mes", 4 en el resto) + tono deuda */
+.fn-kpis { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+.fn-kpi.is-warn .fn-kpi-val { color: var(--amber); }
+
+/* 3 · Chips de estado de la tabla + botón Cobrar inline */
+.fn-estado-chips {
+  display: inline-flex;
+  gap: 2px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px;
+  background: var(--surface);
+}
+.fn-estado-chip-btn {
+  border: none;
+  background: transparent;
+  color: var(--ink-3);
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color .12s ease, background .12s ease;
+}
+.fn-estado-chip-btn:hover { color: var(--ink); }
+.fn-estado-chip-btn.is-active { background: var(--surface-2); color: var(--ink); font-weight: 600; }
+.fn-estado-chip {
+  display: inline-block;
+  font-size: 11px;
+  letter-spacing: .02em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.fn-estado-chip.is-cobrado { color: var(--green); background: var(--green-soft); }
+.fn-estado-chip.is-pendiente { color: var(--amber); background: var(--amber-soft); }
+.fn-cobrar-btn { margin-left: 8px; padding: 3px 9px; font-size: 11.5px; }
+
+/* 4 · Desglose por profesional (bajo el donut, solo Director/dueño) */
+.fn-prof-breakdown {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
+}
+.fn-prof-rows { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.fn-prof-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+}
+.fn-prof-count { font-size: 11.5px; color: var(--ink-3); }
+
+/* 5 · Responsive fn-* (audit: la página más probable de abrirse en mobile) */
+@media (max-width: 767px) {
+  .fn-content { padding: 20px 16px 96px; }
+  .fn-kpis { grid-template-columns: repeat(2, 1fr); }
+  .fn-charts-grid { grid-template-columns: 1fr; }
+  .fn-head { flex-wrap: wrap; gap: 10px; }
+  .fn-head-controls { max-width: 100%; }
+  .fn-period { overflow-x: auto; max-width: 100%; }
+  .fn-table-wrap { overflow-x: auto; }
+  .fn-table { min-width: 640px; }
+  .fn-donut-wrap { flex-direction: column; align-items: center; }
+  .fn-table-head { flex-wrap: wrap; gap: 8px; }
+  .fn-table-tools { flex-wrap: wrap; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   E3 · Billing que vende — chip de trial, paywall hero y pantalla de miembro
+   - .fi-trial-chip: "Prueba: quedan N días" (solo OWNER) → link a
+     /configuracion/billing. Sidebar desktop (sobre el footer) y sheet «Más»
+     mobile. Tono neutro; .is-urgent (≤7 días) pasa a amber-soft.
+   - .fi-mnav-trial-dot: dot equivalente sobre el ícono "Más" del bottom-nav.
+   - .fi-paywall: hero de la pantalla de bloqueo (trial vencido) — reassurance
+     + bullets de valor + CTA. Vive arriba de la card de activación.
+   - .fi-billing-locked: pantalla para miembros NO-OWNER con gate bloqueado
+     ("avisale al titular"), sin datos de billing.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.fi-trial-chip {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-md);
+  font-size: 11.5px; font-weight: 500; line-height: 1.3;
+  color: var(--ink-2);
+  text-decoration: none;
+  transition: border-color 120ms var(--ease-in), color 120ms var(--ease-in);
+}
+.fi-trial-chip:hover { border-color: var(--line); color: var(--ink); }
+.fi-trial-chip-dot {
+  flex: none;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent);
+}
+.fi-trial-chip.is-urgent {
+  background: var(--amber-soft);
+  border-color: transparent;
+  color: var(--amber);
+}
+.fi-trial-chip.is-urgent:hover { color: var(--amber); border-color: var(--amber); }
+.fi-trial-chip.is-urgent .fi-trial-chip-dot { background: var(--amber); }
+
+/* Dot del bottom-nav: ancla sobre el ícono "Más" (el detalle vive en el sheet). */
+.fi-mnav-ico { position: relative; }
+.fi-mnav-trial-dot {
+  position: absolute; top: -2px; right: -5px;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--accent);
+  border: 1.5px solid var(--surface);
+}
+.fi-mnav-trial-dot.is-urgent { background: var(--amber); }
+
+/* Paywall hero (billing-page, gate bloqueado). */
+.fi-paywall {
+  display: flex; flex-direction: column; gap: 12px;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--r-lg);
+  margin-bottom: 16px;
+}
+.fi-paywall-title {
+  margin: 0;
+  font-size: 21px; font-weight: 600; letter-spacing: -.015em; line-height: 1.25;
+  color: var(--ink);
+}
+.fi-paywall-bullets {
+  list-style: none;
+  margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.fi-paywall-bullets li {
+  display: flex; align-items: flex-start; gap: 8px;
+  font-size: 13.5px; line-height: 1.5;
+  color: var(--ink-2);
+}
+.fi-paywall-bullets li svg { flex: none; margin-top: 3px; color: var(--accent); }
+.fi-paywall-cta {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin-top: 4px;
+}
+.fi-paywall-note { font-size: 12.5px; color: var(--ink-3); }
+.fi-paywall-support { margin: 0; font-size: 12.5px; color: var(--ink-3); }
+.fi-paywall-support a { color: var(--ink-2); text-decoration: underline; }
+.fi-paywall-support a:hover { color: var(--ink); }
+
+/* Miembro no-OWNER con gate bloqueado: aviso sin datos de billing. */
+.fi-billing-locked {
+  margin-top: 16px;
+  padding: 24px;
+  background: var(--amber-soft);
+  border-radius: var(--r-lg);
+}
+.fi-billing-locked h2 {
+  margin: 0 0 8px;
+  font-size: 18px; font-weight: 600; letter-spacing: -.01em;
+  color: var(--amber);
+}
+.fi-billing-locked p {
+  margin: 0;
+  font-size: 13.5px; line-height: 1.55;
+  color: var(--ink-2);
+  max-width: 56ch;
+}
+.fi-billing-locked .fi-billing-locked-note {
+  margin-top: 8px;
+  color: var(--ink-3);
 }

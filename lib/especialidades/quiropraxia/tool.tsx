@@ -17,8 +17,10 @@
  *      GENUINAMENTE fresco — no un vaciado deliberado / cross-tool / decrypt
  *      fallido sobre una sesión ya guardada),
  *   2. historial[0] existe.
- * El draft sembrado se emite UNA vez vía onChange para que "Guardar sesión" lo
- * persista.
+ * El draft sembrado se emite UNA vez vía onSeed (fallback onChange si el host
+ * no lo pasa): es un seed PROGRAMÁTICO, no una edición — el host lo toma como
+ * BASELINE (no marca sucio, no dispara autosave/beforeunload). "Guardar
+ * sesión" lo persiste junto con la primera edición real del profesional.
  *
  * Snapshot: con selectedVisit != null se rinde TODA la superficie read-only
  * desde ese toolData (migrado si es v1) + un banner "viendo visita del {fecha}"
@@ -62,6 +64,7 @@ function toV2(value: unknown): QuiropraxiaToolDataV2 {
 export function QuiropraxiaTool({
   value,
   onChange,
+  onSeed,
   readOnly,
   historial,
   pacienteId,
@@ -74,7 +77,10 @@ export function QuiropraxiaTool({
   const [selectedVisit, setSelectedVisit] = useState<number | null>(null);
 
   // CARRY-FORWARD: una sola vez, en un turno genuinamente fresco, sembrar el
-  // borrador con la última visita migrada a v2 y emitirlo para que se persista.
+  // borrador con la última visita migrada a v2. Se emite vía onSeed (el host
+  // lo toma como BASELINE — no marca el borrador sucio ni dispara
+  // autosave/beforeunload: abrir la ficha NO debe escribir la HC sola);
+  // fallback a onChange para hosts legacy sin onSeed.
   const seeded = useRef(false);
   useEffect(() => {
     if (seeded.current) return;
@@ -85,11 +91,11 @@ export function QuiropraxiaTool({
     if (valueVacio && turnoFresco && ultima) {
       const sembrado = migrateV1ToV2(ultima.toolData);
       // Solo emitir si aporta algo (vértebras de la visita anterior). Un draft
-      // vacío sembrado no agrega valor y dispararía un onChange inútil.
+      // vacío sembrado no agrega valor y dispararía una emisión inútil.
       const aportaAlgo = (sembrado.vertebras?.length ?? 0) > 0;
       if (aportaAlgo) {
         seeded.current = true;
-        onChange(sembrado);
+        (onSeed ?? onChange)(sembrado);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

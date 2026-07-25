@@ -22,7 +22,10 @@ import {
   refreshSubscriptionAction,
   syncClinicAmountAction,
 } from "@/app/(app)/configuracion/billing/actions";
+import { Check } from "@/components/icons";
+import { canOfferReactivate } from "@/lib/billing/reactivate";
 import { formatArs } from "@/lib/format/currency";
+import { SUPPORT_EMAIL, supportMailto } from "@/lib/support";
 
 interface ChargeRow {
   id: string;
@@ -98,6 +101,23 @@ export function BillingPage({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
+  // E3 · paywall que vende: el CTA del hero scrollea/enfoca el botón real de
+  // activación dentro de SubscriptionCard (no duplica el flujo de MP).
+  const subCardRef = useRef<HTMLDivElement | null>(null);
+  const focusActivate = () => {
+    const btn = subCardRef.current?.querySelector<HTMLButtonElement>("button.fi-btn-primary");
+    if (btn) {
+      btn.scrollIntoView({ behavior: "smooth", block: "center" });
+      btn.focus({ preventScroll: true });
+    } else {
+      // Fallback defensivo: con el gate bloqueado toda rama de la card tiene
+      // botón primario (review PR #117 sumó "Volver a activar" a PAUSADA y
+      // MOROSA-vencida), pero si algún estado futuro no lo tiene, al menos
+      // llevamos a la card en vez de no hacer nada.
+      subCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
   const onActivate = () => {
     setError(null);
     startTransition(async () => {
@@ -165,19 +185,35 @@ export function BillingPage({
       ) : null}
 
       <div className="cfg-section-body" style={{ marginTop: 16 }}>
+        {/* E3 · con el gate bloqueado, antes de pedir plata: reassurance de
+            que no se perdió nada + recap de valor + precio real. El banner
+            rojo de arriba explica el "por qué"; esto vende el "para qué". */}
+        {!accessGate.allowed ? (
+          <PaywallHero priceArs={displayPriceArs} onCta={focusActivate} />
+        ) : null}
+
         {orgTipo === "CLINICA" && clinicPricing ? (
           <ClinicPlanCard pricing={clinicPricing} pending={pending} onSyncAmount={onSyncAmount} />
         ) : null}
 
-        <SubscriptionCard
-          subscription={subscription}
-          planPriceArs={displayPriceArs}
-          planLabel={orgTipo === "CLINICA" ? "Plan Clínica" : "Plan Profesional"}
-          payerEmail={payerEmail}
-          pending={pending}
-          onActivate={onActivate}
-          onCancel={onCancel}
-        />
+        <div ref={subCardRef}>
+          <SubscriptionCard
+            subscription={subscription}
+            planPriceArs={displayPriceArs}
+            planLabel={orgTipo === "CLINICA" ? "Plan Clínica" : "Plan Profesional"}
+            payerEmail={payerEmail}
+            pending={pending}
+            canReactivate={
+              subscription != null &&
+              canOfferReactivate({
+                estado: subscription.estado,
+                gateAllowed: accessGate.allowed,
+              })
+            }
+            onActivate={onActivate}
+            onCancel={onCancel}
+          />
+        </div>
 
         <ChargesTable charges={charges} />
       </div>
@@ -321,6 +357,7 @@ function SubscriptionCard({
   planLabel,
   payerEmail,
   pending,
+  canReactivate,
   onActivate,
   onCancel,
 }: {
@@ -329,6 +366,8 @@ function SubscriptionCard({
   planLabel: string;
   payerEmail: string;
   pending: boolean;
+  /** canOfferReactivate: PAUSADA siempre; MOROSA solo con gate bloqueado. */
+  canReactivate: boolean;
   onActivate: () => void;
   onCancel: () => void;
 }) {
@@ -470,7 +509,23 @@ function SubscriptionCard({
             </div>
           </div>
         ) : null}
-        <div style={{ marginTop: 16, display: "flex", gap: 8, alignItems: "center" }}>
+        <div style={{ marginTop: 16, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          {/* Review PR #117 · CTA dead-end: el hero del paywall promete
+              "Reactivar" y focusActivate busca este botón primario. Para
+              PAUSADA (y MOROSA con gate bloqueado) reactivar = crear un
+              preapproval nuevo — mismo onActivate del flujo normal, el server
+              solo rechaza ACTIVA. Se oculta durante la confirmación de
+              cancelar para no mezclar dos decisiones opuestas. */}
+          {canReactivate && !confirming ? (
+            <button
+              type="button"
+              className="fi-btn fi-btn-primary"
+              onClick={onActivate}
+              disabled={pending}
+            >
+              {pending ? "Conectando con Mercado Pago…" : "Volver a activar"}
+            </button>
+          ) : null}
           {confirming ? (
             <>
               <span style={{ fontSize: 13, color: "var(--ink-2)" }}>
@@ -667,6 +722,52 @@ function GraceCountdownBanner({ days }: { days: number }) {
     >
       {txt} de prueba gratis. Activá tu suscripción para no perder acceso a tus turnos.
     </div>
+  );
+}
+
+/**
+ * E3 · hero de paywall para el gate bloqueado (trial vencido / cancelada /
+ * morosa vencida / pausada). La pantalla de bloqueo era la misma página de
+ * settings con un banner rojo — castigaba en vez de vender. Acá: reassurance
+ * ("no perdiste nada"), 3 bullets de valor, precio real computado
+ * (displayPriceArs: por-seat para CLINICA) y CTA que lleva al botón Activar
+ * de SubscriptionCard. Mailto de soporte como salida humana.
+ */
+function PaywallHero({ priceArs, onCta }: { priceArs: number; onCta: () => void }) {
+  return (
+    <section className="fi-paywall">
+      <span className="fi-eyebrow">tu consultorio te espera</span>
+      <h2 className="fi-paywall-title">
+        Tus pacientes, turnos e historias clínicas están guardados y te esperan.
+      </h2>
+      <ul className="fi-paywall-bullets">
+        <li>
+          <Check size={14} aria-hidden />
+          Agenda con recordatorios automáticos: menos ausencias, días más ordenados.
+        </li>
+        <li>
+          <Check size={14} aria-hidden />
+          Historias clínicas completas y seguras, disponibles en segundos.
+        </li>
+        <li>
+          <Check size={14} aria-hidden />
+          Reservas online y finanzas del consultorio en un solo lugar.
+        </li>
+      </ul>
+      <div className="fi-paywall-cta">
+        <button type="button" className="fi-btn fi-btn-primary" onClick={onCta}>
+          Reactivar por {formatArs(priceArs)}/mes
+        </button>
+        <span className="fi-paywall-note">Sin permanencia: cancelás cuando quieras.</span>
+      </div>
+      <p className="fi-paywall-support">
+        ¿Dudas o problemas con el pago?{" "}
+        <a href={supportMailto("Ayuda con mi suscripción de Folio")}>
+          Escribinos a {SUPPORT_EMAIL}
+        </a>
+        .
+      </p>
+    </section>
   );
 }
 
