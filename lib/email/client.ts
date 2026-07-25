@@ -25,9 +25,11 @@ interface SendEmailInput {
   subject: string;
   html: string;
   /**
-   * Reply-To opcional. Usarlo solo cuando la respuesta debe ir a Folio
-   * (ej. emails a profesionales). Los emails a pacientes NO lo setean:
-   * su interlocutor es el consultorio, no el soporte de Folio.
+   * Reply-To opcional. El from es un noreply, así que el Reply-To es el
+   * interlocutor REAL de cada email: soporte de Folio en los emails a
+   * profesionales (invitaciones, billing, pedidos), y el email de contacto
+   * del consultorio en los emails a pacientes (booking/recordatorios —
+   * resuelto por lib/email/notify.ts; si no hay, sale sin Reply-To).
    */
   replyTo?: string;
 }
