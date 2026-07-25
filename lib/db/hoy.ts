@@ -49,6 +49,10 @@ interface TurnoExtendidoRow {
   servicio_nombre: string;
   servicio_tipo_canonico: string;
   pago_id: string | null;
+  /** M09/M14 · monto REALMENTE registrado en `pago` (puede diferir del precio). */
+  pago_monto_cents: number | null;
+  pago_estado: "PENDIENTE" | "PAGADO" | "PARCIAL" | null;
+  pago_pagado_ts: string | null;
   profesional_id: string;
   /** M56 · motivo del booking público (PHI). Solo se descifra para roles clínicos. */
   nota_reserva_cifrado: string | null;
@@ -146,7 +150,11 @@ export async function getDashboardHoy(input: FetcherInput): Promise<Result<Dashb
         "gcal_event_id, atendiendo_desde, duracion_real_min, " +
         "paciente_id, paciente_nombre_cifrado, paciente_apellido_cifrado, paciente_telefono_cifrado, " +
         "paciente_tipo, paciente_tags, paciente_alerta_alergia, " +
-        "servicio_nombre, servicio_tipo_canonico, pago_id, profesional_id, nota_reserva_cifrado, " +
+        "servicio_nombre, servicio_tipo_canonico, " +
+        // El cobro REAL del turno (no el precio de lista): el KPI "Recaudado"
+        // de /hoy tiene que dar lo mismo que /finanzas, que lee `pago`.
+        "pago_id, pago_monto_cents, pago_estado, pago_pagado_ts, " +
+        "profesional_id, nota_reserva_cifrado, " +
         "modalidad",
     )
     .eq("organization_id", organizationId)
@@ -282,7 +290,17 @@ function rowToTurno(
     modalidad: normalizeModalidad(row.modalidad),
     // M90 · chip "Confirmó el paciente" (solo viene poblado para CONFIRMADO).
     confirmadoVia,
-    cobro: row.pago_id ? { estado: "pagado", ts: null } : { estado: "pendiente", ts: null },
+    // El cobro sale de `pago`, no del estado del turno: un turno CERRADO con
+    // "quedó debiendo" tiene pago PENDIENTE y NO es plata cobrada (mismo
+    // criterio que /finanzas). Sin fila en `pago` ⇒ montoCents null = "sin
+    // cobro registrado", que es distinto de una deuda de $0.
+    cobro: row.pago_id
+      ? {
+          estado: row.pago_estado === "PAGADO" ? "pagado" : "pendiente",
+          ts: row.pago_pagado_ts ?? null,
+          montoCents: row.pago_monto_cents ?? 0,
+        }
+      : { estado: "pendiente", ts: null, montoCents: null },
     profesionalId: row.profesional_id ?? null,
     profesionalNombre: profesionalesNombreById?.[row.profesional_id] ?? null,
     // M56 · gate PHI: solo desciframos la nota de reserva para roles clínicos;

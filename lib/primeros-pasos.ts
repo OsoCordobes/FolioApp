@@ -16,6 +16,9 @@
  *   - "Compartí tu link" se considera hecho cuando existe al menos una
  *     reserva con origen BOOKING — evidencia real de que el link circuló.
  *   - "Invitá a tu equipo" solo existe para orgs CLINICA.
+ *   - "Activá tu suscripción" solo existe para el OWNER: /configuracion/billing
+ *     es OWNER-only y devuelve 404 al resto — el paso era un dead-end para un
+ *     DIRECTOR. Cada paso del checklist tiene que ser accionable por quien lo ve.
  *
  * El fetch de los contadores vive en lib/db/primeros-pasos.ts; acá solo hay
  * lógica pura, testeable con node:test (tests/unit/primeros-pasos.test.ts).
@@ -54,6 +57,17 @@ export interface PrimerosPasosSnapshot {
   cobrosMpListos: boolean;
   /** CLINICA: hay más de un member activo o una invitación pendiente. */
   equipoInvitado: boolean;
+  /**
+   * ¿La sesión activa es la del titular (OWNER)?
+   *
+   * La card la ven OWNER y DIRECTOR (canManageTeam), pero
+   * /configuracion/billing hace `notFound()` para todo rol que no sea OWNER
+   * mientras el gate de billing esté permitido — exactamente el caso de una org
+   * joven en prueba, la ÚNICA en la que esta card existe. Un DIRECTOR que
+   * seguía el checklist aterrizaba en un 404. El paso es una acción del titular:
+   * para el resto de los roles simplemente no se ofrece.
+   */
+  esOwner: boolean;
 }
 
 export interface PrimerPaso {
@@ -92,8 +106,12 @@ export function computePrimerosPasos(
     { id: "primer_paciente", done: s.pacientesTotal > 0 },
     { id: "primer_turno", done: s.turnosTotal > 0 },
     { id: "google_calendar", done: s.gcalConectado },
-    { id: "cobros_mp", done: s.cobrosMpListos },
   ];
+  // Activar la suscripción es acción del titular: /configuracion/billing es
+  // OWNER-only (404 para el resto con el gate permitido). Ver `esOwner`.
+  if (s.esOwner) {
+    pasos.push({ id: "cobros_mp", done: s.cobrosMpListos });
+  }
   if (s.tipo === "CLINICA") {
     pasos.push({ id: "invitar_equipo", done: s.equipoInvitado });
   }

@@ -64,8 +64,20 @@ export interface PostVisita {
 }
 
 export interface Cobro {
+  /**
+   * Espejo de `pago.estado` (M09): "pagado" = PAGADO; "pendiente" = PENDIENTE /
+   * PARCIAL ("quedó debiendo") o directamente sin fila en `pago`. Mismo criterio
+   * que /finanzas: sólo PAGADO cuenta como ingreso.
+   */
   estado: "pendiente" | "pagado";
+  /** `pago.pagado_ts` — null mientras no esté cobrado. */
   ts: string | null;
+  /**
+   * `pago.monto_cents` — lo REALMENTE registrado, que puede diferir del precio
+   * del turno (el mini-diálogo de cobro deja editarlo). `null` = no hay pago
+   * registrado para el turno. Es lo que suma el KPI de /hoy (lib/hoy/kpi-cobro).
+   */
+  montoCents?: number | null;
 }
 
 /**

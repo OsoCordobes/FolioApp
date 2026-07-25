@@ -23,6 +23,7 @@ const base: PrimerosPasosSnapshot = {
   gcalConectado: false,
   cobrosMpListos: false,
   equipoInvitado: false,
+  esOwner: true,
 };
 
 // ─── esOrgJoven ─────────────────────────────────────────────────────────────
@@ -171,6 +172,42 @@ test("CLINICA con 5/6: sigue visible hasta completar invitar_equipo", () => {
   assert.equal(estado.completados, 5);
   assert.equal(estado.total, 6);
   assert.equal(estado.visible, true);
+});
+
+// ─── cobros_mp es OWNER-only (dead-end: /configuracion/billing da 404) ──────
+
+test("no-OWNER: el paso 'Activá tu suscripción' no se ofrece (la ruta es owner-only)", () => {
+  const estado = computePrimerosPasos({ ...base, esOwner: false }, NOW);
+  assert.equal(estado.pasos.some((p) => p.id === "cobros_mp"), false);
+  assert.equal(estado.total, 4);
+  assert.deepEqual(
+    estado.pasos.map((p) => p.id),
+    ["compartir_link", "primer_paciente", "primer_turno", "google_calendar"],
+  );
+});
+
+test("no-OWNER en CLINICA: 5 pasos, invitar_equipo sigue último", () => {
+  const estado = computePrimerosPasos({ ...base, tipo: "CLINICA", esOwner: false }, NOW);
+  assert.equal(estado.total, 5);
+  assert.equal(estado.pasos.at(-1)?.id, "invitar_equipo");
+});
+
+test("no-OWNER: sin suscripción activa, el checklist se completa igual (no queda colgado)", () => {
+  const estado = computePrimerosPasos(
+    {
+      ...base,
+      esOwner: false,
+      turnosTotal: 2,
+      reservasOnline: 1,
+      pacientesTotal: 3,
+      gcalConectado: true,
+      cobrosMpListos: false,
+    },
+    NOW,
+  );
+  assert.equal(estado.completados, 4);
+  assert.equal(estado.total, 4);
+  assert.equal(estado.visible, false);
 });
 
 test("INDEPENDIENTE ignora equipoInvitado (no existe el paso)", () => {
