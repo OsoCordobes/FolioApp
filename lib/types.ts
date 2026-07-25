@@ -37,6 +37,13 @@ export function normalizeModalidad(value: string | null | undefined): ModalidadT
   return value === "telemedicina" ? "telemedicina" : "presencial";
 }
 
+/**
+ * M90 · origen de la transición a CONFIRMADO: 'manual' (staff desde la app) |
+ * 'paciente' (1-click desde el email de recordatorio). Las filas previas a
+ * M90 quedan NULL en DB (= desconocido) y acá viajan como null/undefined.
+ */
+export type ConfirmadoVia = "manual" | "paciente";
+
 export type ActorTurno = "lorenzo" | "sistema" | "profesional";
 export type TriggerTurno = "manual" | "auto" | "webhook";
 
@@ -85,6 +92,12 @@ export interface Turno {
    * preservando el comportamiento histórico.
    */
   modalidad?: ModalidadTurno;
+  /**
+   * M90 · quién confirmó el turno ('manual' staff | 'paciente' 1-click).
+   * null/undefined = sin confirmar o fila pre-M90. Alimenta el chip
+   * "Confirmó el paciente" en /hoy y el detalle del turno.
+   */
+  confirmadoVia?: ConfirmadoVia | null;
   transiciones?: TransicionTurno[];
   cobro?: Cobro;
   /** member.id del profesional asignado (turno.profesional_id, vista M14). */
@@ -116,6 +129,8 @@ export interface TurnoSemana {
   origen?: OrigenTurno;
   /** M72 · modalidad (presencial | telemedicina). Default presencial. */
   modalidad?: ModalidadTurno;
+  /** M90 · quién confirmó ('manual' | 'paciente'); null = sin dato (ver Turno). */
+  confirmadoVia?: ConfirmadoVia | null;
   /** member.id del profesional asignado (turno.profesional_id, vista M14). */
   profesionalId?: string | null;
   /** Display name — solo seteado en vista "Todos" con >1 colegiado (ver Turno). */

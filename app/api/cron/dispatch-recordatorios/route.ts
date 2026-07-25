@@ -53,6 +53,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 
+import { buildConfirmToken } from "@/lib/booking/confirm-token";
+import { getAppUrl } from "@/lib/config/app-url";
 import { decryptColumn, tryDecrypt } from "@/lib/crypto";
 import {
   decideCanalRecordatorio,
@@ -349,6 +351,27 @@ async function processJob(
   }
 
   if (canal === "email" && email !== null) {
+    // F7b · links 1-click firmados para el email de 24h: "Confirmo mi turno"
+    // (primario) y "No puedo ir" (cancela). Tokens HMAC stateless
+    // (lib/booking/confirm-token) que expiran al INICIO del turno. Fail-soft:
+    // si la firma no se puede armar (HMAC key ausente/inválida) el email sale
+    // como siempre, con el CTA al portal (campos opcionales del template).
+    let confirmarUrl: string | null = null;
+    let cancelarUrl: string | null = null;
+    if (job.tipo === "CONFIRMACION_24H") {
+      try {
+        const base = getAppUrl();
+        const expMs = inicio.getTime();
+        confirmarUrl = `${base}/t/${buildConfirmToken({ turnoId: turno.id, accion: "confirmar", expMs })}`;
+        cancelarUrl = `${base}/t/${buildConfirmToken({ turnoId: turno.id, accion: "cancelar", expMs })}`;
+      } catch (e) {
+        // Sin PHI: solo el motivo operativo.
+        console.warn(
+          `[dispatch-recordatorios] links 1-click no disponibles: ${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
+    }
+
     const { subject, html } =
       job.tipo === "CONFIRMACION_24H"
         ? buildConfirmacion24hEmail({
@@ -358,6 +381,8 @@ async function processJob(
             fecha: fmtFecha,
             hora: fmtHora,
             direccion: direccion || null,
+            confirmarUrl,
+            cancelarUrl,
           })
         : job.tipo === "RECORDATORIO_2H"
           ? buildRecordatorio2hEmail({

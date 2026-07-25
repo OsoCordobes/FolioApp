@@ -225,3 +225,60 @@ test("buildPostVisitaEmail: preheader oculto con el resumen de la visita", () =>
   }).html;
   assert.ok(sinMemo.includes("Gracias por tu visita a Consultorio Lorenzo"));
 });
+
+// ─── F7b · CTAs 1-click del email de 24h (con y sin tokens) ─────────────────
+
+const CONFIRMAR_URL = "https://folio.example/t/token-confirmar";
+const CANCELAR_URL = "https://folio.example/t/token-cancelar";
+
+test("F7b · con confirmarUrl+cancelarUrl: CTA primario 'Confirmo mi turno' + link 'No puedo ir'", () => {
+  const { html } = buildConfirmacion24hEmail({
+    ...confirmacionBase,
+    confirmarUrl: CONFIRMAR_URL,
+    cancelarUrl: CANCELAR_URL,
+  });
+  assert.ok(html.includes("Confirmo mi turno"));
+  assert.ok(html.includes(`href="${CONFIRMAR_URL}"`));
+  assert.ok(html.includes("No puedo ir"));
+  assert.ok(html.includes(`href="${CANCELAR_URL}"`));
+  // El CTA al portal se reemplaza (no conviven dos botones primarios).
+  assert.ok(!html.includes("Gestionar mi turno"));
+  // El botón primario va ANTES del link secundario de cancelación.
+  assert.ok(html.indexOf(CONFIRMAR_URL) < html.indexOf(CANCELAR_URL));
+});
+
+test("F7b · con confirmarUrl sin cancelarUrl: botón sí, link 'No puedo ir' no", () => {
+  const { html } = buildConfirmacion24hEmail({
+    ...confirmacionBase,
+    confirmarUrl: CONFIRMAR_URL,
+    cancelarUrl: null,
+  });
+  assert.ok(html.includes("Confirmo mi turno"));
+  assert.ok(!html.includes("No puedo ir"));
+});
+
+test("F7b · SIN tokens el email sale como hoy (compat: CTA al portal)", () => {
+  const sinTokens = buildConfirmacion24hEmail(confirmacionBase).html;
+  const nulos = buildConfirmacion24hEmail({
+    ...confirmacionBase,
+    confirmarUrl: null,
+    cancelarUrl: null,
+  }).html;
+  // undefined y null se comportan idéntico (el dispatcher pasa null si la
+  // firma falla) y el output es el histórico.
+  assert.equal(sinTokens, nulos);
+  assert.ok(sinTokens.includes("Gestionar mi turno"));
+  assert.ok(!sinTokens.includes("Confirmo mi turno"));
+  assert.ok(!sinTokens.includes("No puedo ir"));
+});
+
+test("F7b · las URLs de los CTAs se escapan como atributo HTML", () => {
+  const { html } = buildConfirmacion24hEmail({
+    ...confirmacionBase,
+    confirmarUrl: "https://folio.example/t/abc?a=1&b=2",
+    cancelarUrl: 'https://folio.example/t/x"onmouseover="alert(1)',
+  });
+  assert.ok(html.includes("https://folio.example/t/abc?a=1&amp;b=2"));
+  assert.ok(!html.includes('x"onmouseover='));
+  assert.ok(html.includes("x&quot;onmouseover="));
+});

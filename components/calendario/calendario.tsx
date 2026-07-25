@@ -1182,6 +1182,7 @@ export function Calendario({
             profesionalNombre={selectedTurno.profesionalNombre ?? null}
             telefono={pac?.telefono ?? null}
             notaReserva={selectedTurno.notaReserva ?? null}
+            confirmadoVia={selectedTurno.confirmadoVia ?? null}
             onClose={() => setSelectedTurno(null)}
           />
         );

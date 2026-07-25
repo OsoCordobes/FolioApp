@@ -57,6 +57,11 @@ export interface TurnoDetalleModalProps {
    * roles clínicos. null/vacío → se muestra el placeholder "Sin nota de reserva".
    */
   notaReserva?: string | null;
+  /**
+   * M90 · quién confirmó el turno ('manual' | 'paciente'); null = sin dato.
+   * Con 'paciente' se muestra el chip "Confirmó el paciente" junto al estado.
+   */
+  confirmadoVia?: "manual" | "paciente" | null;
   onClose: () => void;
 }
 
@@ -72,6 +77,7 @@ export function TurnoDetalleModal({
   profesionalNombre = null,
   telefono = null,
   notaReserva = null,
+  confirmadoVia = null,
   onClose,
 }: TurnoDetalleModalProps) {
   // A11y de modal compartida: focus trap + Escape + foco inicial + restore.
@@ -152,6 +158,16 @@ export function TurnoDetalleModal({
               }}
             />
             {estadoConf.label}
+            {/* M90 · confirmación 1-click del paciente (solo mientras sigue
+                confirmado — en otros estados el dato histórico no se muestra). */}
+            {estado === "confirmado" && confirmadoVia === "paciente" ? (
+              <span
+                className="fi-chip-conf-paciente"
+                title="El paciente confirmó desde el email de recordatorio"
+              >
+                Confirmó el paciente
+              </span>
+            ) : null}
           </dd>
 
           {origenLabel ? (

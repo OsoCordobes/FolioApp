@@ -43,6 +43,7 @@ const PUBLIC_PATHS = [
 
 const PUBLIC_PREFIXES = [
   "/book/",              // booking público F7
+  "/t/",                 // confirmación 1-click de turno desde el email (F7b · M90) — token HMAC, sin sesión
   "/profesionales/",     // directorio público (Fase 3) — hubs por especialidad/provincia
   "/invitacion/",        // aceptación de invitación de equipo (M49/M51) — la página maneja ambos estados (con y sin sesión)
   "/api/auth/",          // OAuth callbacks Supabase
