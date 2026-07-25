@@ -11,11 +11,15 @@
  * conectan a Server Actions reales y la data viene de Supabase.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import * as I from "@/components/icons";
 import { TurnoCreateModal } from "@/components/hoy/turno-create-modal";
 import { PacienteCreateModal } from "@/components/pacientes/paciente-create-modal";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
+import { normalizarBusqueda } from "@/lib/format/busqueda";
 import { toWhatsappE164 } from "@/lib/format/phone";
 import type { PacienteDirRow } from "@/lib/db/pacientes-dir";
 import type { EspecialidadSlug } from "@/lib/especialidades/meta";
@@ -55,9 +59,11 @@ interface ToolbarProps {
   setFiltro: (v: string) => void;
   counts: Record<string, number>;
   onAddPaciente: () => void;
+  /** Ref del input de búsqueda — lo enfoca el atajo global "/". */
+  searchRef: React.RefObject<HTMLInputElement | null>;
 }
 
-function Toolbar({ q, setQ, filtro, setFiltro, counts, onAddPaciente }: ToolbarProps) {
+function Toolbar({ q, setQ, filtro, setFiltro, counts, onAddPaciente, searchRef }: ToolbarProps) {
   const filtros: [string, string, number][] = [
     ["todos",     "Todos",          counts.todos],
     ["activos",   "Activos",        counts.activos],
@@ -71,9 +77,11 @@ function Toolbar({ q, setQ, filtro, setFiltro, counts, onAddPaciente }: ToolbarP
       <div className="pd-search">
         <I.Search size={13} />
         <input
+          ref={searchRef}
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar nombre, teléfono, motivo…"
+          placeholder="Buscar nombre, teléfono, tag…"
+          aria-label="Buscar paciente (atajo: /)"
         />
         <span className="fi-kbd">/</span>
       </div>
@@ -164,7 +172,6 @@ function TablaPacientes({ pacientes, selected, setSelected, onOpen, onAgendar, t
             </label>
           </th>
           <th>Paciente</th>
-          <th>Motivo</th>
           <th>Tags</th>
           <th className="ta-r">Última</th>
           <th className="ta-r">Sesiones</th>
@@ -201,7 +208,6 @@ function TablaPacientes({ pacientes, selected, setSelected, onOpen, onAgendar, t
                   {p.tipo === "nuevo" ? <span className="fi-pill fi-pill--new">1ª visita</span> : null}
                 </div>
               </td>
-              <td className="pd-motivo">{p.motivoCorto}</td>
               <td>
                 <div className="pd-tags">
                   {p.tags.slice(0, 2).map((t) => (
@@ -266,15 +272,17 @@ function TablaPacientes({ pacientes, selected, setSelected, onOpen, onAgendar, t
 
 // ─── BulkBar ────────────────────────────────────────────────────────────────
 
+// Etiquetar/Archivar masivos NO existen todavía: los botones disabled
+// "Próximamente" que vivían acá eran affordances muertas (audit C3) — ambas
+// acciones se hacen individualmente desde la ficha del paciente. Cuando el
+// bulk real llegue, se agregan los botones con su handler de verdad.
 interface BulkBarProps {
   count: number;
   onClear: () => void;
   onWa: () => void;
-  onTag: () => void;
-  onArchivar: () => void;
 }
 
-function BulkBar({ count, onClear, onWa, onTag, onArchivar }: BulkBarProps) {
+function BulkBar({ count, onClear, onWa }: BulkBarProps) {
   return (
     <div className="pd-bulk">
       <div className="pd-bulk-l">
@@ -291,34 +299,6 @@ function BulkBar({ count, onClear, onWa, onTag, onArchivar }: BulkBarProps) {
         <button type="button" className="fi-btn fi-btn-secondary" onClick={onWa}>
           <I.Phone size={12} /> Enviar mensaje WhatsApp
         </button>
-        <button
-          type="button"
-          className="fi-btn fi-btn-secondary"
-          onClick={onTag}
-          disabled
-          title="Próximamente — editar tags individuales desde la ficha del paciente"
-          aria-disabled="true"
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
-            <circle cx="7" cy="7" r="1.2" fill="currentColor" />
-          </svg>
-          Etiquetar
-        </button>
-        <button
-          type="button"
-          className="fi-btn fi-btn-ghost"
-          onClick={onArchivar}
-          disabled
-          title="Próximamente — pseudonimización individual disponible desde la ficha del paciente"
-          aria-disabled="true"
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="4" width="18" height="4" rx="1" />
-            <path d="M5 8v11a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8M10 13h4" />
-          </svg>
-          Archivar
-        </button>
       </div>
     </div>
   );
@@ -326,7 +306,14 @@ function BulkBar({ count, onClear, onWa, onTag, onArchivar }: BulkBarProps) {
 
 // ─── Reactivar widget ──────────────────────────────────────────────────────
 
-function ReactivarWidget({ pacientes }: { pacientes: PacienteDir[] }) {
+function ReactivarWidget({
+  pacientes,
+  onWhatsApp,
+}: {
+  pacientes: PacienteDir[];
+  /** Delegado al root: valida teléfonos y pide confirmación (ConfirmDialog). */
+  onWhatsApp: (ids: Set<string>) => void;
+}) {
   if (pacientes.length === 0) return null;
   return (
     <section className="pd-reactivar">
@@ -340,7 +327,7 @@ function ReactivarWidget({ pacientes }: { pacientes: PacienteDir[] }) {
         <button
           type="button"
           className="fi-btn fi-btn-secondary"
-          onClick={() => handleBulkWhatsApp(new Set(pacientes.map((p) => p.id)), pacientes)}
+          onClick={() => onWhatsApp(new Set(pacientes.map((p) => p.id)))}
         >
           Enviar a todos →
         </button>
@@ -353,7 +340,7 @@ function ReactivarWidget({ pacientes }: { pacientes: PacienteDir[] }) {
               <div className="fi-avatar pd-avatar">{iniciales(p.nombre)}</div>
               <div className="pd-reactivar-body">
                 <b>{p.nombre}</b>
-                <span className="muted">{p.motivoCorto}</span>
+                <span className="muted fm-mono">{p.tel || "Sin teléfono cargado"}</span>
               </div>
               <span className="pd-reactivar-meta fm-mono">
                 última {fmtFechaCorta(p.ultima)} · hace {Math.floor(dias / 30)} meses
@@ -361,7 +348,7 @@ function ReactivarWidget({ pacientes }: { pacientes: PacienteDir[] }) {
               <button
                 type="button"
                 className="fi-btn fi-btn-secondary"
-                onClick={() => handleBulkWhatsApp(new Set([p.id]), pacientes)}
+                onClick={() => onWhatsApp(new Set([p.id]))}
                 disabled={!p.tel}
                 title={p.tel ? "Abrir WhatsApp" : "Sin teléfono cargado"}
                 aria-disabled={!p.tel}
@@ -452,11 +439,60 @@ export function PacientesDir({
   especialidad,
   permiteElegirEspecialidad = false,
 }: PacientesDirProps) {
+  const router = useRouter();
   const [q, setQ] = useState(initialQuery);
   const [filtro, setFiltro] = useState("todos");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [createOpen, setCreateOpen] = useState(false);
   const [agendarFor, setAgendarFor] = useState<PacienteDir | null>(null);
+  /** Confirmación pendiente del WhatsApp masivo (reemplaza confirm/alert nativos). */
+  const [waConfirm, setWaConfirm] = useState<string[] | null>(null);
+  const toast = useToast();
+
+  /**
+   * WhatsApp masivo (C4): resuelve teléfonos E.164 válidos y decide UI —
+   * 0 válidos → toast de error (antes: alert nativo); 1 → abre directo;
+   * >1 → ConfirmDialog (antes: confirm nativo) porque abre una pestaña por
+   * paciente y eso hay que anticiparlo.
+   */
+  const solicitarWhatsApp = (ids: Set<string>) => {
+    const e164s = pacientes
+      .filter((p) => ids.has(p.id))
+      .map((p) => toWhatsappE164(p.tel))
+      .filter((e): e is string => e !== null);
+    if (e164s.length === 0) {
+      toast.show({
+        titulo: "Ningún paciente seleccionado tiene un teléfono válido cargado.",
+        tono: "error",
+      });
+      return;
+    }
+    if (e164s.length === 1) {
+      abrirWhatsApp(e164s);
+      return;
+    }
+    setWaConfirm(e164s);
+  };
+
+  // Atajo "/" → enfoca el buscador (mismo patrón que el ⌘K del sidebar).
+  // Solo cuando el foco NO está en un campo editable y no hay modal abierto:
+  // dentro de un modal el "/" es texto, no atajo.
+  const searchRef = useRef<HTMLInputElement | null>(null);
+  const modalAbierto = createOpen || agendarFor != null;
+  useEffect(() => {
+    if (modalAbierto) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = e.target as HTMLElement | null;
+      const tag = el?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select" || el?.isContentEditable) return;
+      e.preventDefault();
+      searchRef.current?.focus();
+      searchRef.current?.select();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [modalAbierto]);
 
   const paraReactivar = useMemo(
     () =>
@@ -486,13 +522,16 @@ export function PacientesDir({
     if (filtro === "inactivos") list = list.filter((p) => p.estado === "inactivo");
     if (filtro === "alta") list = list.filter((p) => p.estado === "alta");
     if (q.trim()) {
-      const qq = q.toLowerCase();
+      // Normalizado en AMBOS lados (query y campos): "jose" encuentra a
+      // "José" — el caso más común del país. Ver lib/format/busqueda.ts.
+      const qq = normalizarBusqueda(q);
+      const digitos = qq.replace(/\D/g, "");
       list = list.filter(
         (p) =>
-          p.nombre.toLowerCase().includes(qq) ||
+          normalizarBusqueda(p.nombre).includes(qq) ||
+          (digitos.length >= 3 && p.tel.replace(/\D/g, "").includes(digitos)) ||
           p.tel.toLowerCase().includes(qq) ||
-          p.motivoCorto.toLowerCase().includes(qq) ||
-          p.tags.some((tag) => tag.toLowerCase().includes(qq)),
+          p.tags.some((tag) => normalizarBusqueda(tag).includes(qq)),
       );
     }
     return list;
@@ -509,7 +548,7 @@ export function PacientesDir({
         />
 
         {filtro !== "reactivar" && paraReactivar.length > 0 ? (
-          <ReactivarWidget pacientes={paraReactivar} />
+          <ReactivarWidget pacientes={paraReactivar} onWhatsApp={solicitarWhatsApp} />
         ) : null}
 
         <Toolbar
@@ -519,6 +558,7 @@ export function PacientesDir({
           setFiltro={setFiltro}
           counts={counts}
           onAddPaciente={() => setCreateOpen(true)}
+          searchRef={searchRef}
         />
 
         <div className="pd-table-wrap">
@@ -528,7 +568,9 @@ export function PacientesDir({
             selected={selected}
             setSelected={setSelected}
             onOpen={(p) => {
-              window.location.href = `/pacientes/${p.id}`;
+              // SPA nav (audit C3): window.location.href recargaba la app
+              // entera en la transición más frecuente del directorio.
+              router.push(`/pacientes/${p.id}`);
             }}
             onAgendar={(p) => setAgendarFor(p)}
           />
@@ -539,9 +581,17 @@ export function PacientesDir({
         <BulkBar
           count={selected.size}
           onClear={() => setSelected(new Set())}
-          onWa={() => handleBulkWhatsApp(selected, pacientes)}
-          onTag={() => undefined /* botón disabled, ver BulkBar */}
-          onArchivar={() => undefined /* botón disabled, ver BulkBar */}
+          onWa={() => solicitarWhatsApp(selected)}
+        />
+      ) : null}
+
+      {waConfirm ? (
+        <ConfirmDialog
+          titulo={`¿Abrir WhatsApp para ${waConfirm.length} pacientes?`}
+          mensaje="Se abre una pestaña de WhatsApp por paciente."
+          confirmLabel="Abrir pestañas"
+          onConfirm={() => abrirWhatsApp(waConfirm)}
+          onClose={() => setWaConfirm(null)}
         />
       ) : null}
 
@@ -552,8 +602,9 @@ export function PacientesDir({
           onClose={() => setCreateOpen(false)}
           onCreated={(id) => {
             // Tras crear, mandar al user a la ficha del paciente nuevo para
-            // que pueda completar motivo de consulta, tags, etc.
-            window.location.href = `/pacientes/${id}`;
+            // que pueda completar motivo de consulta, tags, etc. (SPA nav,
+            // sin full reload — audit C3.)
+            router.push(`/pacientes/${id}`);
           }}
         />
       ) : null}
@@ -570,24 +621,13 @@ export function PacientesDir({
   );
 }
 
-function handleBulkWhatsApp(selected: Set<string>, pacientes: PacienteDir[]): void {
-  // Normaliza a E.164 AR (54 + 9 móvil + NSN, sin 0/15): un teléfono cargado en
-  // formato local abriría un wa.me inválido sin esto (auditoría L4).
-  const elegidos = pacientes
-    .filter((p) => selected.has(p.id))
-    .map((p) => ({ p, e164: toWhatsappE164(p.tel) }))
-    .filter((x): x is { p: PacienteDir; e164: string } => x.e164 !== null);
-  if (elegidos.length === 0) {
-    alert("Ninguno de los pacientes seleccionados tiene un teléfono válido cargado.");
-    return;
-  }
-  if (elegidos.length > 1) {
-    const ok = confirm(
-      `WhatsApp masivo abre una pestaña por paciente (${elegidos.length}). ¿Continuar?`,
-    );
-    if (!ok) return;
-  }
-  for (const { e164 } of elegidos) {
+/**
+ * Abre wa.me por cada teléfono ya normalizado a E.164 AR (54 + 9 móvil + NSN,
+ * sin 0/15 — auditoría L4). La validación + confirmación viven en
+ * `solicitarWhatsApp` (root): acá solo se ejecuta la apertura.
+ */
+function abrirWhatsApp(e164s: string[]): void {
+  for (const e164 of e164s) {
     window.open(`https://wa.me/${e164}`, "_blank", "noopener");
   }
 }

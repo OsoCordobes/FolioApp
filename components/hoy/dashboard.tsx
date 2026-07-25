@@ -20,6 +20,7 @@ import { PageHeader } from "@/components/hoy/page-header";
 import { TurnoList } from "@/components/hoy/turno-list";
 import { TurnoCreateModal } from "@/components/hoy/turno-create-modal";
 import { TurnoReagendarModal } from "@/components/hoy/turno-reagendar-modal";
+import { useToast } from "@/components/ui/toast";
 import type { ProfesionalLite } from "@/lib/agenda/profesional";
 import { applyTransition } from "@/lib/turno-states";
 import { useAgendaAutoRefresh } from "@/lib/use-agenda-refresh";
@@ -53,8 +54,21 @@ interface DashboardProps {
   primerosPasos?: React.ReactNode;
 }
 
+/**
+ * C4 · feedback: título del toast por transición de estado confirmada por el
+ * server. "atendiendo" queda afuera adrede — abre la ficha, ESO es el feedback.
+ */
+const TRANSITION_TOAST: Partial<Record<EstadoTurno, string>> = {
+  confirmado: "Turno confirmado",
+  en_sala: "Llegada marcada",
+  cerrado: "Turno cerrado",
+  cancelado: "Turno cancelado",
+  no_asistio: "No asistió registrado",
+};
+
 export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fechaAnio, nowIso, timezone, organizationId, profesionales = [], profActivo = null, primerosPasos = null }: DashboardProps) {
   const router = useRouter();
+  const toast = useToast();
   const [turnos, setTurnos] = useState<Turno[]>(initialTurnos);
   const [walkInOpen, setWalkInOpen] = useState(false);
   /** Turno con el modal de reagendar abierto (null = cerrado). */
@@ -104,6 +118,14 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
           console.warn("[hoy] transición rechazada:", result.error.message);
           setTransitionError(result.error.message);
           setTurnos((curr) => curr.map((t) => (t.id === id ? before : t)));
+          return;
+        }
+        // C4 · feedback: toast de éxito recién cuando el server confirmó (el
+        // update optimista ya se ve en la lista; el toast asegura "se guardó").
+        const tituloToast = TRANSITION_TOAST[to];
+        if (tituloToast) {
+          const nombre = pacientes[before.pacienteId]?.nombre ?? "paciente";
+          toast.show({ titulo: `${tituloToast} · ${before.hora} · ${nombre}` });
         }
       });
 

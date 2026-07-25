@@ -115,6 +115,7 @@ export default async function CalendarioPage({ searchParams }: PageProps) {
       weekDates={data.data.weekDates}
       diasCerrados={data.data.diasCerrados}
       capacidadDiaMin={data.data.capacidadDiaMin}
+      rangoDisponibilidadMin={data.data.rangoDisponibilidadMin}
       weekRangeLabel={data.data.weekRangeLabel}
       hoyIso={data.data.hoyIso}
       nowHHMM={data.data.nowHHMM}
