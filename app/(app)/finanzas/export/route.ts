@@ -24,6 +24,7 @@ import { getActiveContext } from "@/lib/db/active-context";
 import {
   computeRangeOverride,
   getFinanzasExportRows,
+  MAX_FILAS_PERIODO,
   type FinanzasPeriodo,
 } from "@/lib/db/finanzas";
 // PR #118 · csvEscapeTexto neutraliza formula injection (=, +, -, @, TAB, CR)
@@ -78,6 +79,20 @@ export async function GET(req: Request): Promise<Response> {
       r.estado,
     ].join(","),
   );
+  // H7 · el pie de la tabla promete "el export CSV incluye el período
+  // completo". Con la paginación de H2 eso ya es cierto hasta el tope de
+  // seguridad; si igual se tocó el tope, el CSV lo DICE en su última fila en
+  // vez de mentir por omisión.
+  if (result.data.truncado) {
+    lines.push(
+      [
+        csvEscapeTexto(
+          `AVISO: export parcial. El período supera el máximo exportable (${MAX_FILAS_PERIODO} filas). Elegí un período más corto para bajarlo completo.`,
+        ),
+        "", "", "", "", "",
+      ].join(","),
+    );
+  }
   // BOM UTF-8 (U+FEFF): sin esto Excel es-AR abre "José" como mojibake.
   const BOM = String.fromCharCode(0xfeff);
   const csv = BOM + [headers.join(","), ...lines].join("\r\n");
