@@ -23,6 +23,7 @@ import {
   syncClinicAmountAction,
 } from "@/app/(app)/configuracion/billing/actions";
 import { Check } from "@/components/icons";
+import { canOfferReactivate } from "@/lib/billing/reactivate";
 import { formatArs } from "@/lib/format/currency";
 import { SUPPORT_EMAIL, supportMailto } from "@/lib/support";
 
@@ -109,7 +110,10 @@ export function BillingPage({
       btn.scrollIntoView({ behavior: "smooth", block: "center" });
       btn.focus({ preventScroll: true });
     } else {
-      // Estado sin botón primario (ej. PAUSADA): al menos llevamos a la card.
+      // Fallback defensivo: con el gate bloqueado toda rama de la card tiene
+      // botón primario (review PR #117 sumó "Volver a activar" a PAUSADA y
+      // MOROSA-vencida), pero si algún estado futuro no lo tiene, al menos
+      // llevamos a la card en vez de no hacer nada.
       subCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   };
@@ -199,6 +203,13 @@ export function BillingPage({
             planLabel={orgTipo === "CLINICA" ? "Plan Clínica" : "Plan Profesional"}
             payerEmail={payerEmail}
             pending={pending}
+            canReactivate={
+              subscription != null &&
+              canOfferReactivate({
+                estado: subscription.estado,
+                gateAllowed: accessGate.allowed,
+              })
+            }
             onActivate={onActivate}
             onCancel={onCancel}
           />
@@ -346,6 +357,7 @@ function SubscriptionCard({
   planLabel,
   payerEmail,
   pending,
+  canReactivate,
   onActivate,
   onCancel,
 }: {
@@ -354,6 +366,8 @@ function SubscriptionCard({
   planLabel: string;
   payerEmail: string;
   pending: boolean;
+  /** canOfferReactivate: PAUSADA siempre; MOROSA solo con gate bloqueado. */
+  canReactivate: boolean;
   onActivate: () => void;
   onCancel: () => void;
 }) {
@@ -495,7 +509,23 @@ function SubscriptionCard({
             </div>
           </div>
         ) : null}
-        <div style={{ marginTop: 16, display: "flex", gap: 8, alignItems: "center" }}>
+        <div style={{ marginTop: 16, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          {/* Review PR #117 · CTA dead-end: el hero del paywall promete
+              "Reactivar" y focusActivate busca este botón primario. Para
+              PAUSADA (y MOROSA con gate bloqueado) reactivar = crear un
+              preapproval nuevo — mismo onActivate del flujo normal, el server
+              solo rechaza ACTIVA. Se oculta durante la confirmación de
+              cancelar para no mezclar dos decisiones opuestas. */}
+          {canReactivate && !confirming ? (
+            <button
+              type="button"
+              className="fi-btn fi-btn-primary"
+              onClick={onActivate}
+              disabled={pending}
+            >
+              {pending ? "Conectando con Mercado Pago…" : "Volver a activar"}
+            </button>
+          ) : null}
           {confirming ? (
             <>
               <span style={{ fontSize: 13, color: "var(--ink-2)" }}>

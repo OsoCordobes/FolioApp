@@ -74,7 +74,14 @@ export default async function AppShellLayout({
       pathname,
     })
   ) {
-    redirect(`${BILLING_RECOVERY_PATH}?gate=${accessGate.reason ?? "denied"}`);
+    // Review PR #117 · `?gate=<reason>` alimenta el banner contextual de
+    // billing, pero expone la categoría del problema de cobro (moroso /
+    // cancelado / pausado). Solo el OWNER ve la página real de billing; el
+    // resto del staff cae en BillingLockedMember, que no usa el param →
+    // redirect pelado para no filtrarle la razón.
+    const gateSuffix =
+      session.role === "OWNER" ? `?gate=${accessGate.reason ?? "denied"}` : "";
+    redirect(`${BILLING_RECOVERY_PATH}${gateSuffix}`);
   }
 
   const googleSync = await loadGoogleSyncStatus(session.organizationId, session.memberId);
