@@ -83,6 +83,20 @@ export interface SesionPlan {
   dur: number;
   cambio: string;
   vertebras: string[];
+  /**
+   * D2 · id de la fila `sesion` de esta visita (o null si el turno cerró sin
+   * sesión registrada). Habilita el "Ver detalle" del tab Sesiones y el link
+   * al PDF de ESA sesión (/api/pacientes/[id]/ficha-pdf?sesion=<uuid>).
+   */
+  sesionId: string | null;
+  /**
+   * D2 · SOAP de la sesión YA DESCIFRADO server-side (costo cero extra: las
+   * columnas soap_*_cifrado ya venían en la misma query y se descartaban).
+   * null si la visita no tiene sesión. Los campos pueden ser "" (sección no
+   * escrita). NUNCA viaja ciphertext al cliente — solo el plaintext que la
+   * ficha ya muestra para la última sesión.
+   */
+  soap: { s: string; o: string; a: string; p: string } | null;
 }
 
 /**
@@ -528,6 +542,18 @@ export async function getPacienteFicha(
       dur: t.duracion_real_min ?? t.duracion_min,
       cambio: meta.resumenSesion(toolData),
       vertebras,
+      // D2 · SOAP por sesión ya descifrado (mismas filas que la query trajo;
+      // antes se descartaba). Habilita "Ver detalle" + la sección Evolución
+      // del PDF sin queries extra.
+      sesionId: sesion?.id ?? null,
+      soap: sesion
+        ? {
+            s: tryDecrypt(sesion.soap_s_cifrado, "soap.s") ?? "",
+            o: tryDecrypt(sesion.soap_o_cifrado, "soap.o") ?? "",
+            a: tryDecrypt(sesion.soap_a_cifrado, "soap.a") ?? "",
+            p: tryDecrypt(sesion.soap_p_cifrado, "soap.p") ?? "",
+          }
+        : null,
     };
   });
 

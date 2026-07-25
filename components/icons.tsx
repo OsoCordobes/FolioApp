@@ -251,6 +251,14 @@ export const Save = ({ size, ...rest }: IconProps) => (
   </svg>
 );
 
+export const FileDown = ({ size, ...rest }: IconProps) => (
+  <svg {...baseAttrs(size)} {...rest}>
+    <path d="M14 2.5H7a2 2 0 0 0-2 2v15a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7.5z" />
+    <path d="M14 2.5V7.5h5" />
+    <path d="M12 11v6M9.5 14.5 12 17l2.5-2.5" />
+  </svg>
+);
+
 export const History = ({ size, ...rest }: IconProps) => (
   <svg {...baseAttrs(size)} {...rest}>
     <path d="M1 4v6h6" />
@@ -298,5 +306,14 @@ export const Copy = ({ size, ...rest }: IconProps) => (
   <svg {...baseAttrs(size)} {...rest}>
     <rect x="9" y="9" width="13" height="13" rx="2" />
     <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+  </svg>
+);
+
+/** "Más" (ellipsis horizontal) — trigger del sheet de la bottom-nav mobile. */
+export const More = ({ size, ...rest }: IconProps) => (
+  <svg {...baseAttrs(size)} {...rest}>
+    <circle cx="5" cy="12" r="1" fill="currentColor" />
+    <circle cx="12" cy="12" r="1" fill="currentColor" />
+    <circle cx="19" cy="12" r="1" fill="currentColor" />
   </svg>
 );

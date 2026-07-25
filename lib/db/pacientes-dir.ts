@@ -3,17 +3,18 @@
  *
  * Wrapea `listPacientesDirectorio` (lib/db/pacientes.ts) y le da al cliente
  * el shape "directorio" compatible con la tabla del prototipo:
- *   { id, nombre, tel, email, tipo, sesiones, ultima, proximo, tags, estado, motivoCorto }
+ *   { id, nombre, tel, email, tipo, sesiones, ultima, proximo, tags, estado }
  *
  * Las decisiones de derivación:
  *   - `estado`: "activo" si proximoTurno != null, "inactivo" si último >60d
  *      sin próximo, "alta" si tags incluye "ALTA", "pausa" si tags incluye
  *      "PAUSA". Para MVP (sin tabla de estado propio).
  *   - `tipo`: mapeado desde tipo_paciente DB ('NUEVO' → "nuevo", 'ACTIVO' / 'EN_ESPERA' → "recurrente").
- *   - `motivoCorto`: por ahora vacío. La vista `paciente_directorio_lite`
- *     no incluye motivo_consulta_cifrado (PHI). Para mostrarlo necesitamos
- *     join con `paciente` que ya está aliased en la vista pero por ahora
- *     dejamos "—" — se puede expandir en T-1.7 (ficha).
+ *   - Motivo de consulta: NO viaja al directorio, a propósito. La vista
+ *     `paciente_directorio_lite` excluye motivo_consulta_cifrado porque es
+ *     PHI y el directorio es superficie PII accesible a ASISTENTE (ver
+ *     M14, supabase/migrations/20260518000014). Exponerlo acá rompería ese
+ *     boundary — el motivo se lee en la ficha, que sí es clinical-scoped.
  */
 
 import { listPacientesDirectorio } from "./pacientes";
@@ -30,7 +31,6 @@ export interface PacienteDirRow {
   proximo: string | null;
   tags: string[];
   estado: "activo" | "inactivo" | "pausa" | "alta";
-  motivoCorto: string;
 }
 
 export async function getPacientesDirectorio(): Promise<Result<PacienteDirRow[]>> {
@@ -61,7 +61,6 @@ export async function getPacientesDirectorio(): Promise<Result<PacienteDirRow[]>
       proximo: p.proximoTurno ? p.proximoTurno.slice(0, 10) : null,
       tags: p.tags ?? [],
       estado,
-      motivoCorto: "—",
     };
   });
 

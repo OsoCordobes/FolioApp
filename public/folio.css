@@ -19686,3 +19686,401 @@ input:focus { outline: none; }
   font-size: 10.5px;
   color: var(--ink-3);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * FICHA · D1+D2 (feat/ficha-borrador-pdf) — borrador indestructible + la
+ * historia clínica se comparte. Append-only; solo tokens var() existentes.
+ *
+ *   - .pc-sesion-item / .pc-sesion-detalle*: fila expandible del tab Sesiones
+ *     ("Ver detalle" con el SOAP histórico + PDF por sesión). El wrapper
+ *     .pc-sesion-item hereda el borde que antes llevaba .pc-sesion-row para
+ *     que el detalle expandido quede DENTRO de la misma celda visual.
+ *   - .pc-docs*: tab Documentos real (lista transversal + subida).
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Sesiones · fila expandible ────────────────────────────────────────── */
+.pc-sesion-item { border-bottom: 1px solid var(--line-soft); }
+.pc-sesion-item:last-child { border-bottom: 0; }
+.pc-sesion-item .pc-sesion-row { border-bottom: 0; }
+.pc-sesion-detalle {
+  /* 138px = padding 22 + col fecha 96 + gap 20: alinea con el cuerpo de la fila. */
+  padding: 0 22px 18px 138px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.pc-sesion-soap { display: flex; flex-direction: column; gap: 10px; }
+.pc-sesion-soap-item { display: flex; flex-direction: column; gap: 2px; }
+.pc-sesion-soap-item b {
+  font-size: 10.5px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .06em;
+  color: var(--ink-3);
+}
+.pc-sesion-soap-item p {
+  margin: 0; font-size: 12.5px; line-height: 1.55;
+  color: var(--ink-2); white-space: pre-wrap;
+}
+.pc-sesion-detalle-vacio { margin: 0; font-size: 12.5px; color: var(--ink-3); }
+.pc-sesion-detalle-resumen { margin: 0; font-size: 12.5px; color: var(--ink-2); }
+.pc-sesion-detalle-resumen b { font-weight: 600; color: var(--ink-3); }
+.pc-sesion-detalle-foot { display: flex; justify-content: flex-start; }
+
+/* ── Documentos · lista + subida ───────────────────────────────────────── */
+.pc-docs { display: flex; flex-direction: column; gap: 16px; margin-top: 16px; }
+.pc-docs-cargando { font-size: 12.5px; padding: 8px 4px; }
+.pc-docs-list {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+.pc-doc-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 16px; align-items: center;
+  padding: 13px 22px;
+  border-bottom: 1px solid var(--line-soft);
+  transition: background 120ms var(--ease-in);
+}
+.pc-doc-row:last-child { border-bottom: 0; }
+.pc-doc-row:hover { background: var(--surface-2); }
+.pc-doc-tipo { flex-shrink: 0; }
+.pc-doc-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pc-doc-meta b { font-size: 13px; color: var(--ink); }
+.pc-doc-meta span {
+  font-size: 12px; color: var(--ink-3);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pc-docs-upload {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 16px 18px;
+  background: var(--surface);
+  border: 1px dashed var(--line);
+  border-radius: var(--r-lg);
+}
+.pc-docs-upload-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+/* Espejo de .pc-quiro-input para el select de tipo (folio.css no estila
+   selects de forma global — deuda conocida, se unifica en otro PR). */
+.pc-docs-select {
+  padding: 8px 11px;
+  background: var(--bg);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm);
+  font-family: 'Geist', sans-serif; font-size: 13px; color: var(--ink);
+  transition: border-color 120ms var(--ease-in), background 120ms var(--ease-in);
+}
+.pc-docs-select:focus { outline: none; border-color: var(--accent); background: var(--surface); }
+.pc-docs-select:disabled { opacity: .55; cursor: not-allowed; }
+.pc-docs-hint { margin: 0; font-size: 12.5px; }
+.pc-docs-error { margin: 0; font-size: 12.5px; color: var(--red); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * SHELL MOBILE + FEEDBACK (C1+C4 · feat/shell-mobile) — append-only
+ *
+ * 1) C4 · Toasts (.fi-toast*): feedback de mutaciones de turnos, apilable,
+ *    región aria-live montada por ToastProvider (components/ui/toast.tsx).
+ * 2) C1 · Bottom-nav mobile (.fi-mnav*) + sheet "Más"
+ *    (components/mobile-nav.tsx). En desktop la nav existe pero está
+ *    display:none — cero branch de media query en JS.
+ * 3) C1 · @media (max-width: 920px): el shell .fi-app pasa a 1 columna, la
+ *    sidebar se oculta, y las tablas/grillas (pd-table-wrap, cal-grid) se
+ *    vuelven scrolleables por OVERRIDE — las reglas originales no se tocan.
+ *    Los media queries nuevos van acá al final (regla del repo).
+ * Solo tokens var() existentes; sin hex nuevos.
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── C4 · Toasts ─────────────────────────────────────────────────────────── */
+.fi-toasts {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  /* Sobre los modales (z 1000): la mutación suele dispararse desde uno y el
+     toast tiene que verse mientras el modal se desmonta. */
+  z-index: 1100;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  max-width: min(360px, calc(100vw - 32px));
+  /* La zona no intercepta clicks; cada toast individual sí (botón cerrar). */
+  pointer-events: none;
+}
+.fi-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--green);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-2);
+  font-size: 13px;
+  color: var(--ink);
+  animation: fi-toast-in var(--dur-snappy) var(--ease-standard-out);
+}
+.fi-toast--error { border-left-color: var(--red); }
+.fi-toast-ico {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--green-soft);
+  color: var(--green);
+}
+.fi-toast--error .fi-toast-ico { background: var(--red-soft); color: var(--red); }
+.fi-toast-txt { flex: 1; line-height: 1.45; padding-top: 2px; }
+.fi-toast-close {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r-sm);
+  border: 0;
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+.fi-toast-close:hover { background: var(--surface-2); color: var(--ink); }
+@keyframes fi-toast-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fi-toast { animation: none; }
+}
+
+/* ── C1 · Bottom-nav (base: oculta; el media query de abajo la muestra) ──── */
+.fi-mnav { display: none; }
+
+.fi-mnav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-height: 52px;
+  padding: 6px 2px;
+  border: 0;
+  background: transparent;
+  border-radius: var(--r-md);
+  color: var(--ink-3);
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: .01em;
+  text-decoration: none;
+  cursor: pointer;
+}
+.fi-mnav-item.is-active { color: var(--accent-2); }
+.fi-mnav-item.is-active .fi-mnav-ico { color: var(--accent); }
+.fi-mnav-ico { display: flex; }
+.fi-mnav-lbl { line-height: 1; }
+
+/* Sheet "Más": overlay + panel anclado abajo (búsqueda, switchers, config,
+   sitio público, logout — todo lo del sidebar que no entra en 5 tabs). */
+.fi-mnav-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 14, 8, 0.5);
+  /* Sobre la bottom-nav (90), bajo los modales (1000). */
+  z-index: 95;
+  display: flex;
+  align-items: flex-end;
+}
+.fi-mnav-sheet {
+  width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  box-shadow: var(--shadow-2);
+  padding: 10px 16px calc(16px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: fi-mnav-sheet-in var(--dur-snappy) var(--ease-standard-out);
+}
+@keyframes fi-mnav-sheet-in {
+  from { transform: translateY(24px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fi-mnav-sheet { animation: none; }
+}
+.fi-mnav-sheet-grip {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+  margin: 0 auto;
+}
+.fi-mnav-search { width: 100%; }
+/* Los switchers reusan los componentes del sidebar; sin su margin lateral. */
+.fi-mnav-sheet .fi-org-switcher,
+.fi-mnav-sheet .fi-esp-switcher { margin: 0; }
+.fi-mnav-sheet-links { display: flex; flex-direction: column; }
+.fi-mnav-sheet-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 6px;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.fi-mnav-sheet-link:last-child { border-bottom: 0; }
+.fi-mnav-sheet-link:hover { color: var(--ink); background: var(--surface-2); }
+
+/* ── C1 · Breakpoint mobile del shell (≤920px) ───────────────────────────── */
+@media (max-width: 920px) {
+  /* Shell a 1 columna: la sidebar desaparece, navega la bottom-nav. */
+  .fi-app { grid-template-columns: 1fr; }
+  .fi-sidebar { display: none; }
+
+  .fi-mnav {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    gap: 2px;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 90;
+    background: var(--surface);
+    border-top: 1px solid var(--line);
+    padding: 4px max(8px, env(safe-area-inset-left))
+             calc(4px + env(safe-area-inset-bottom))
+             max(8px, env(safe-area-inset-right));
+  }
+
+  /* Aire lateral razonable + espacio al fondo para la bottom-nav fija. */
+  .fi-content { padding: 20px 16px calc(96px + env(safe-area-inset-bottom)); }
+
+  /* La FAB de /hoy no puede quedar tapada por la bottom-nav. */
+  .fi-fab { right: 16px; bottom: calc(76px + env(safe-area-inset-bottom)); }
+
+  /* Toasts: arriba de la bottom-nav, a lo ancho. */
+  .fi-toasts {
+    left: 16px;
+    right: 16px;
+    bottom: calc(76px + env(safe-area-inset-bottom));
+    max-width: none;
+    align-items: stretch;
+  }
+
+  /* Headers de página: apilan en vez de desbordar. */
+  .fi-page-head,
+  .pd-head,
+  .cal-head-top { flex-wrap: wrap; align-items: flex-start; row-gap: 12px; }
+  .fi-page-head h1 { font-size: 30px; }
+  .pd-head h1,
+  .cal-head-top h1 { font-size: 26px; }
+
+  /* KPIs de /hoy: 2×2 en vez de 4 columnas apretadas. */
+  .fi-kpis { grid-template-columns: repeat(2, 1fr); }
+
+  /* Fila de turno: sin drag handle (no hay DnD, y en táctil es ruido) —
+     la grilla pasa de 5 a 4 tracks. Cerrados: track de hora más angosto. */
+  .fi-turno { grid-template-columns: 52px 14px 1fr auto; gap: 10px; padding: 12px 12px 12px 14px; }
+  .fi-turno .fi-drag { display: none; }
+  .fi-cerrado-row { grid-template-columns: 52px 14px 1fr auto auto; gap: 10px; padding: 11px 12px 11px 14px; }
+
+  /* /pacientes: tabla scrolleable (override; la regla original queda intacta)
+     + toolbar apilada. */
+  .pd-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .pd-table { min-width: 760px; }
+  .pd-toolbar { grid-template-columns: 1fr; align-items: stretch; }
+
+  /* /calendario: el nav envuelve; semana y mes scrollean horizontal SIN
+     desalinear headers y grilla (comparten min-width dentro del wrapper
+     scrolleable .cal-semana / .cal-mes). Overrides append-only. */
+  .cal-nav,
+  .cal-nav-r { flex-wrap: wrap; row-gap: 8px; }
+  .cal-semana { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .cal-day-headers,
+  .cal-grid { min-width: 664px; }
+  .cal-mes { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .cal-mes-headers,
+  .cal-mes-grid { min-width: 640px; }
+}
+
+/* ── Fase 3 fix review · mobile: BulkBar sobre la bottom-nav ─────────────────
+   .pd-bulk (fixed bottom:24px z-60) quedaba DETRAS de .fi-mnav (z-90, ~60px):
+   los botones de WhatsApp masivo eran inclickeables en telefono. Mismo offset
+   que .fi-fab/.fi-toasts + wrap para 375px. */
+@media (max-width: 920px) {
+  .pd-bulk {
+    bottom: calc(76px + env(safe-area-inset-bottom));
+    max-width: calc(100vw - 24px);
+    flex-wrap: wrap;
+    justify-content: center;
+    row-gap: 8px;
+    border-radius: var(--r-lg);
+  }
+}
+
+/* ─── C2 · Calendario: crear turno desde el slot (feat/calendario-pro) ────────
+   Click en un slot vacío de la columna del día crea un turno a esa hora
+   (redondeo 15'); el botón "+" del header de cada día es el mismo flujo por
+   teclado. Hint sutil: cursor pointer + tinte accent-soft en hover. */
+.cal-day-col.is-agendable { cursor: pointer; }
+.cal-day-col.is-agendable:hover {
+  background-color: color-mix(in oklab, var(--accent-soft) 45%, transparent);
+}
+.cal-day-add {
+  position: absolute;
+  top: 10px;
+  right: 8px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink-3);
+  cursor: pointer;
+  opacity: 0.4;
+  transition: opacity .12s ease, color .12s ease, border-color .12s ease;
+}
+.cal-day-head:hover .cal-day-add,
+.cal-day-add:focus-visible {
+  opacity: 1;
+}
+.cal-day-add:hover {
+  color: var(--accent-2);
+  border-color: var(--accent);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   C3 · /hoy — fila de turno SIN drag handle (audit grado A: affordance muerta)
+   El prototipo reservaba la primera columna (16px) de .fi-turno para .fi-drag,
+   pero el drag-and-drop nunca se implementó y el handle se quitó del markup.
+   La grilla pasa a 4 columnas; el padding-left compensa el track eliminado.
+   Si el DnD llega algún día: restaurar la columna de 16px junto con el
+   handler real y volver a montar .fi-drag (sus reglas siguen arriba).
+   ═══════════════════════════════════════════════════════════════════════════ */
+.fi-turno {
+  grid-template-columns: 64px 14px 1fr auto;
+  padding-left: 18px;
+}
+.fi-list.is-dense .fi-turno { padding-left: 14px; }
+.fi-turno.is-atendiendo { padding-left: 16px; }
+.fi-list.is-dense .fi-turno.is-atendiendo { padding-left: 16px; }

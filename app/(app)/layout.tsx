@@ -16,7 +16,9 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { EmailVerifyBanner } from "@/components/auth/email-verify-banner";
+import { MobileNav } from "@/components/mobile-nav";
 import { Sidebar, type GoogleSyncStatus } from "@/components/sidebar";
+import { ToastProvider } from "@/components/ui/toast";
 import { getActiveContext } from "@/lib/db/active-context";
 import { listUserMemberships } from "@/lib/db/session";
 import { BILLING_RECOVERY_PATH, shouldGateToBilling } from "@/lib/db/suscripcion";
@@ -97,39 +99,59 @@ export default async function AppShellLayout({
   }
 
   return (
-    <div className="fi-app">
-      {/* Skip-link (a11y): con nav + búsqueda + switchers antes del contenido,
-          un usuario de teclado tabula ~10 veces por página sin esto. Mismo
-          patrón .fl-skip del landing, espejado como .fi-skip para el shell. */}
-      <a className="fi-skip" href="#main">
-        Saltar al contenido
-      </a>
-      <Sidebar
-        organization={{
-          nombre: organization.nombre,
-          rubro: organization.rubro,
-          slug: organization.slug,
-          isInternalAccount: organization.isInternalAccount,
-        }}
-        profile={{
-          nombre: profile.nombre,
-          apellido: profile.apellido,
-        }}
-        role={session.role}
-        esColegiado={session.esColegiado}
-        googleSync={googleSync}
-        especialidad={organization.especialidad}
-        especialidadOverride={especialidadOverride}
-        memberships={memberships}
-        activeOrgId={session.organizationId}
-      />
-      <main className="fi-main" id="main" tabIndex={-1}>
-        {session.emailVerified === false ? (
-          <EmailVerifyBanner email={session.email} />
-        ) : null}
-        {children}
-      </main>
-    </div>
+    // ToastProvider (C4): feedback de mutaciones para TODO el shell — los
+    // modales de turno y el dashboard disparan useToast() desde cualquier ruta.
+    <ToastProvider>
+      <div className="fi-app">
+        {/* Skip-link (a11y): con nav + búsqueda + switchers antes del contenido,
+            un usuario de teclado tabula ~10 veces por página sin esto. Mismo
+            patrón .fl-skip del landing, espejado como .fi-skip para el shell. */}
+        <a className="fi-skip" href="#main">
+          Saltar al contenido
+        </a>
+        <Sidebar
+          organization={{
+            nombre: organization.nombre,
+            rubro: organization.rubro,
+            slug: organization.slug,
+            isInternalAccount: organization.isInternalAccount,
+          }}
+          profile={{
+            nombre: profile.nombre,
+            apellido: profile.apellido,
+          }}
+          role={session.role}
+          esColegiado={session.esColegiado}
+          googleSync={googleSync}
+          especialidad={organization.especialidad}
+          especialidadOverride={especialidadOverride}
+          memberships={memberships}
+          activeOrgId={session.organizationId}
+        />
+        <main className="fi-main" id="main" tabIndex={-1}>
+          {session.emailVerified === false ? (
+            <EmailVerifyBanner email={session.email} />
+          ) : null}
+          {children}
+        </main>
+        {/* Bottom-nav mobile (C1): display:none en desktop vía CSS; bajo
+            ≤920px reemplaza a la sidebar (que se oculta por el mismo media
+            query). position:fixed → no ocupa track del grid .fi-app. */}
+        <MobileNav
+          organization={{
+            nombre: organization.nombre,
+            slug: organization.slug,
+            isInternalAccount: organization.isInternalAccount,
+          }}
+          role={session.role}
+          esColegiado={session.esColegiado}
+          especialidad={organization.especialidad}
+          especialidadOverride={especialidadOverride}
+          memberships={memberships}
+          activeOrgId={session.organizationId}
+        />
+      </div>
+    </ToastProvider>
   );
 }
 
