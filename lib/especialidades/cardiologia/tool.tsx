@@ -7,7 +7,8 @@
  *   1. Panel cardiovascular — TA sistólica/diastólica (mmHg) y FC (lpm) de la
  *      sesión, checklist de factores de riesgo con chip de riesgo ORIENTATIVO
  *      (scoreRiesgoCV — conteo simplificado OMS/OPS, no diagnóstico) y curva
- *      de evolución TA/FC sobre el historial (SVG sparkline con tokens).
+ *      de evolución TA/FC sobre el historial (<SerieEvolucion> genérico de la
+ *      biblioteca C3 — el CardioSparkline propio se retiró en D3).
  *   2. Estudios — historial tipado (ECG/Eco/Ergometría/Holter/Laboratorio) en
  *      solo lectura + alta de estudios en el borrador de la sesión en curso.
  *
@@ -23,6 +24,11 @@
 import { useMemo, useState, type CSSProperties } from "react";
 
 import * as I from "@/components/icons";
+import {
+  SerieEvolucion,
+  type MetricaSerie,
+  type PuntoSerie,
+} from "@/lib/instrumentos/components";
 import type { SpecialtyToolProps } from "@/lib/especialidades/types";
 import { EstudiosAdjuntos } from "@/lib/especialidades/cardiologia/estudios-adjuntos";
 import {
@@ -98,19 +104,6 @@ const CHIP_URGENCIA: Record<UrgenciaDerivacion, CSSProperties> = {
 function medicacionActivas(meds: MedicamentoCardio[]): number {
   return meds.filter((m) => m.estado === "activa").length;
 }
-
-/** Mismo look que los inputs de .fi-wi-field (folio.css no estila selects). */
-const SELECT_STYLE: CSSProperties = {
-  width: "100%",
-  padding: "9px 11px",
-  background: "var(--surface)",
-  border: "1px solid var(--line)",
-  borderRadius: "var(--r-sm)",
-  font: "inherit",
-  fontSize: 13.5,
-  color: "var(--ink)",
-  lineHeight: 1.5,
-};
 
 /** Vitales primarios (TA/FC) — fila superior del panel. */
 const VITALES_TA_FC: Array<{ campo: CampoVital; label: string }> = [
@@ -220,103 +213,20 @@ function limpiarDraft(next: CardiologiaToolDataV3): CardiologiaToolDataV3 | null
   return out.panel || out.estudios || out.medicacion || out.derivacion ? out : null;
 }
 
-// ─── Sparkline de evolución TA/FC ───────────────────────────────────────────
+// ─── Serie de evolución TA/FC (SerieEvolucion genérico de la biblioteca) ────
 
-const METRICAS_SERIE = [
-  { key: "taS" as const, label: "TA sist.", color: "var(--red)" },
-  { key: "taD" as const, label: "TA diast.", color: "var(--amber)" },
-  { key: "fc" as const, label: "FC", color: "var(--slate)" },
+const METRICAS_SERIE: MetricaSerie[] = [
+  { key: "taS", label: "TA sist.", color: "var(--red)" },
+  { key: "taD", label: "TA diast.", color: "var(--amber)" },
+  { key: "fc", label: "FC", color: "var(--slate)" },
 ];
 
-function CardioSparkline({ series }: { series: CardioSeriesPoint[] }) {
-  const W = 320;
-  const H = 110;
-  const PX = 8;
-  const PY = 12;
-
-  const valores = series
-    .flatMap((p) => [p.taS, p.taD, p.fc])
-    .filter((n): n is number => n !== null);
-
-  if (series.length === 0 || valores.length === 0) {
-    return (
-      <p className="pc-card-text muted" style={{ fontSize: 12.5 }}>
-        Sin registros de TA/FC en el historial todavía. La curva aparece al
-        guardar sesiones con el panel cargado.
-      </p>
-    );
-  }
-
-  let min = Math.min(...valores);
-  let max = Math.max(...valores);
-  if (max - min < 10) {
-    min -= 5;
-    max += 5;
-  }
-  const x = (i: number) =>
-    series.length === 1 ? W / 2 : PX + (i * (W - 2 * PX)) / (series.length - 1);
-  const y = (v: number) => H - PY - ((v - min) * (H - 2 * PY)) / (max - min);
-
-  const metricas = METRICAS_SERIE.map((m) => ({
-    ...m,
-    puntos: series
-      .map((p, i) => ({ i, v: p[m.key] }))
-      .filter((p): p is { i: number; v: number } => p.v !== null),
-  })).filter((m) => m.puntos.length > 0);
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        preserveAspectRatio="xMidYMid meet"
-        role="img"
-        aria-label={`Evolución de tensión arterial y frecuencia cardíaca en ${series.length} ${series.length === 1 ? "sesión" : "sesiones"}`}
-        style={{ width: "100%", display: "block" }}
-      >
-        <line
-          x1={PX} y1={H - PY} x2={W - PX} y2={H - PY}
-          stroke="var(--line-soft)" strokeWidth="1"
-        />
-        {metricas.map((m) => (
-          <g key={m.key}>
-            {m.puntos.length > 1 ? (
-              <polyline
-                points={m.puntos.map((p) => `${x(p.i)},${y(p.v)}`).join(" ")}
-                fill="none"
-                stroke={m.color}
-                strokeWidth="1.5"
-                strokeLinejoin="round"
-                strokeLinecap="round"
-              />
-            ) : null}
-            {m.puntos.map((p, idx) => (
-              <circle
-                key={p.i}
-                cx={x(p.i)}
-                cy={y(p.v)}
-                r={idx === m.puntos.length - 1 ? 3 : 2}
-                fill={m.color}
-              />
-            ))}
-          </g>
-        ))}
-      </svg>
-      <div className="pc-spine-legend" style={{ marginTop: 0, justifyContent: "space-between" }}>
-        <span style={{ display: "inline-flex", gap: 12 }}>
-          {metricas.map((m) => (
-            <span key={m.key} className="pc-legend-item">
-              <span className="pc-legend-swatch" style={{ background: m.color }} />
-              <span>{m.label}</span>
-            </span>
-          ))}
-        </span>
-        <span className="fm-mono muted" style={{ fontSize: 10 }}>
-          {fmtFecha(series[0].fecha)}
-          {series.length > 1 ? ` → ${fmtFecha(series[series.length - 1].fecha)}` : ""}
-        </span>
-      </div>
-    </div>
-  );
+/** Adapta la serie tipada de cardiología al punto genérico de <SerieEvolucion>. */
+function aPuntosSerie(series: CardioSeriesPoint[]): PuntoSerie[] {
+  return series.map((p) => ({
+    fecha: p.fecha,
+    valores: { taS: p.taS, taD: p.taD, fc: p.fc },
+  }));
 }
 
 // ─── Fila de estudio (historial y borrador) ─────────────────────────────────
@@ -818,7 +728,13 @@ export function CardiologiaTool({
 
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <span className="fi-eyebrow">Evolución TA / FC</span>
-          <CardioSparkline series={series} />
+          <SerieEvolucion
+            serie={aPuntosSerie(series)}
+            metricas={METRICAS_SERIE}
+            pisoCero={false}
+            ariaLabel={`Evolución de tensión arterial y frecuencia cardíaca en ${series.length} ${series.length === 1 ? "sesión" : "sesiones"}`}
+            vacio="Sin registros de TA/FC en el historial todavía. La curva aparece al guardar sesiones con el panel cargado."
+          />
         </div>
       </section>
 
@@ -858,7 +774,6 @@ export function CardiologiaTool({
               <label className="fi-wi-field">
                 <span>Tipo de estudio</span>
                 <select
-                  style={SELECT_STYLE}
                   value={nuevo.tipo}
                   onChange={(e) => setNuevo({ ...nuevo, tipo: e.target.value })}
                 >
@@ -893,7 +808,6 @@ export function CardiologiaTool({
               <label className="fi-wi-field" style={{ flex: 1 }}>
                 <span>Conclusión</span>
                 <select
-                  style={SELECT_STYLE}
                   value={nuevo.conclusion}
                   onChange={(e) => setNuevo({ ...nuevo, conclusion: e.target.value })}
                 >
@@ -1016,7 +930,6 @@ export function CardiologiaTool({
               <label className="fi-wi-field" style={{ width: 130 }}>
                 <span>Estado</span>
                 <select
-                  style={SELECT_STYLE}
                   value={nuevoMed.estado}
                   onChange={(e) =>
                     setNuevoMed({ ...nuevoMed, estado: e.target.value as EstadoMedicacion })
@@ -1112,7 +1025,6 @@ export function CardiologiaTool({
               <label className="fi-wi-field" style={{ width: 160 }}>
                 <span>Urgencia</span>
                 <select
-                  style={SELECT_STYLE}
                   value={derivacion?.urgencia ?? "programada"}
                   onChange={(e) =>
                     setDerivacionCampo({ urgencia: e.target.value as UrgenciaDerivacion })

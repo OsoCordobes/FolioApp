@@ -157,6 +157,13 @@ export interface MetricaSerie {
   label: string;
   /** Color como var() de folio.css (ej. "var(--accent)"). Sin hex off-theme. */
   color: string;
+  /**
+   * Rango propio del instrumento (ej. EVA 0–10, ODI 0–100). Solo lo usa el modo
+   * `normalizado` de SerieEvolucion: la métrica se dibuja escalada a ESTE rango
+   * (posición = severidad dentro del instrumento) en vez de compartir el eje Y
+   * global. Sin declarar, el modo normalizado usa el min/max observado.
+   */
+  dominio?: { min: number; max: number };
 }
 
 /** Un punto de la serie: fecha + valores por métrica (null = sin dato ese día). */
@@ -220,4 +227,80 @@ export function puntosMetrica(
     if (typeof v === "number" && Number.isFinite(v)) out.push({ i, v });
   });
   return out;
+}
+
+// ─── Modo normalizado (escala propia por métrica) ────────────────────────────
+
+/**
+ * Escala vertical POR MÉTRICA para el modo `normalizado` de SerieEvolucion:
+ * métricas de rangos dispares (EVA 0–10 contra ODI 0–100, peso ~80 kg contra
+ * IMC ~25) comparten el mismo sparkline sin aplastarse, porque cada una se
+ * dibuja contra su propio [min, max]:
+ *   - con `dominio` declarado en la métrica → ese rango exacto (la posición
+ *     vertical refleja la severidad dentro del instrumento);
+ *   - sin dominio → min/max OBSERVADOS de esa métrica, con el margen mínimo de
+ *     escalaSerie (una serie plana no colapsa) — pensado para vitales/medidas
+ *     sin rango canónico (peso, cintura).
+ * Métrica sin ningún dato → default seguro de escalaSerie. Pura, nunca lanza.
+ */
+export function escalasPorMetrica(
+  serie: PuntoSerie[],
+  metricas: MetricaSerie[],
+): Record<string, { min: number; max: number }> {
+  const out: Record<string, { min: number; max: number }> = {};
+  for (const m of metricas) {
+    if (m.dominio && Number.isFinite(m.dominio.min) && Number.isFinite(m.dominio.max)) {
+      out[m.key] = { min: m.dominio.min, max: m.dominio.max };
+      continue;
+    }
+    const valores = puntosMetrica(serie, m.key).map((p) => p.v);
+    out[m.key] = escalaSerie(valores, { pisoCero: false });
+  }
+  return out;
+}
+
+/**
+ * Distribuye verticalmente las anotaciones de "último valor" del sparkline para
+ * que no se pisen entre sí: recibe las posiciones y ideales (px), garantiza una
+ * separación mínima `minSep` y las mantiene dentro de [top, bottom], moviendo lo
+ * MENOS posible y preservando el orden relativo. Devuelve las y ajustadas en el
+ * MISMO orden del input. Pura; si no entran todas (más etiquetas que espacio)
+ * degrada apilándolas desde `top` sin lanzar.
+ */
+export function distribuirEtiquetas(
+  ys: number[],
+  minSep: number,
+  top: number,
+  bottom: number,
+): number[] {
+  if (ys.length === 0) return [];
+  const orden = ys
+    .map((y, i) => ({ y, i }))
+    .sort((a, b) => a.y - b.y);
+  const ajustadas = orden.map(({ y }) => y);
+
+  // Pasada hacia abajo: separación mínima entre vecinas.
+  for (let k = 1; k < ajustadas.length; k++) {
+    ajustadas[k] = Math.max(ajustadas[k], ajustadas[k - 1] + minSep);
+  }
+  // Si la última se pasó del borde inferior, empujar hacia arriba.
+  if (ajustadas[ajustadas.length - 1] > bottom) {
+    ajustadas[ajustadas.length - 1] = bottom;
+    for (let k = ajustadas.length - 2; k >= 0; k--) {
+      ajustadas[k] = Math.min(ajustadas[k], ajustadas[k + 1] - minSep);
+    }
+  }
+  // Si la primera quedó arriba del borde superior, re-apilar desde top.
+  if (ajustadas[0] < top) {
+    ajustadas[0] = top;
+    for (let k = 1; k < ajustadas.length; k++) {
+      ajustadas[k] = Math.max(ajustadas[k], ajustadas[k - 1] + minSep);
+    }
+  }
+
+  const res = new Array<number>(ys.length);
+  orden.forEach(({ i }, k) => {
+    res[i] = ajustadas[k];
+  });
+  return res;
 }

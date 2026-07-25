@@ -19608,6 +19608,85 @@ input:focus { outline: none; }
   outline: none;
 }
 
+/* ───────────────────────────────────────────────────────────────────────────
+ * FICHA CLÍNICA · Consistencia entre herramientas (D3 · curvas que hablan)
+ * 1) Selects de la ficha: `.fi-wi-field select` + `.fi-select` reemplazan el
+ *    objeto inline SELECT_STYLE que las 5 tools copiaban (mismos valores que
+ *    los inputs de .fi-wi-field). `.fi-select` es para selects sueltos fuera
+ *    de un .fi-wi-field (ej. estado de un objetivo en ObjetivosBlock).
+ * 2) `.fi-escala-seg`: fila segmentada de botones para escalas cortas
+ *    (EscalaSegmentada — dolor EVA/VAS 0–10 de kinesiología): un valor = un
+ *    click, estado seleccionado vía aria-pressed. Solo tokens var() existentes;
+ *    append-only.
+ * ─────────────────────────────────────────────────────────────────────────── */
+.fi-wi-field select,
+.fi-select {
+  width: 100%;
+  padding: 9px 11px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--ink);
+  line-height: 1.5;
+  transition: border-color 120ms var(--ease-in), box-shadow 120ms var(--ease-in);
+}
+.fi-wi-field select:focus,
+.fi-select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.fi-escala-seg {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.fi-escala-seg-btn {
+  flex: 1 0 auto;
+  min-width: 26px;
+  padding: 7px 2px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-2);
+  text-align: center;
+  cursor: default;
+  transition: background 120ms var(--ease-in), color 120ms var(--ease-in),
+              border-color 120ms var(--ease-in);
+}
+.fi-escala-seg-btn:hover:not(:disabled) {
+  background: var(--surface-2);
+  border-color: var(--ink-4);
+}
+.fi-escala-seg-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.fi-escala-seg-btn[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent-2);
+  color: var(--surface);
+}
+.fi-escala-seg-btn[aria-pressed="true"]:hover:not(:disabled) {
+  background: var(--accent-2);
+  border-color: var(--accent-2);
+}
+.fi-escala-seg-btn:disabled {
+  opacity: 0.55;
+}
+.fi-escala-seg-anclas {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
  * FICHA · D1+D2 (feat/ficha-borrador-pdf) — borrador indestructible + la
  * historia clínica se comparte. Append-only; solo tokens var() existentes.
