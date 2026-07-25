@@ -156,3 +156,72 @@ test("buildPostVisitaEmail: escapa HTML en el memo", () => {
   assert.ok(!html.includes("<b>esto</b>"));
   assert.ok(html.includes("&lt;b&gt;esto&lt;/b&gt; &amp; &quot;aquello&quot;"));
 });
+
+// ─── Nivel de comunicación (auditoría portal-comms): preheader + header + CTA ──
+
+test("buildConfirmacion24hEmail: preheader oculto 'Tu turno del {fecha} a las {hora} en {consultorio}'", () => {
+  const { html } = buildConfirmacion24hEmail(confirmacionBase);
+  const preheader = `Tu turno del ${confirmacionBase.fecha} a las ${confirmacionBase.hora} en ${confirmacionBase.consultorioNombre}`;
+  assert.ok(html.includes(preheader));
+  assert.ok(html.includes("display:none;max-height:0"));
+  // El preview del inbox lee lo primero del body: el preheader va ANTES de "Hola".
+  assert.ok(html.indexOf(preheader) < html.indexOf("Hola Carlos Vega"));
+});
+
+test("buildConfirmacion24hEmail: header con nombre del consultorio y CTA al portal", () => {
+  const { html } = buildConfirmacion24hEmail({
+    ...confirmacionBase,
+    portalUrl: "https://folio.example/portal",
+  });
+  assert.ok(html.includes(`Recordatorio de turno · ${confirmacionBase.consultorioNombre}`));
+  assert.ok(html.includes("Gestionar mi turno"));
+  assert.ok(html.includes('href="https://folio.example/portal"'));
+});
+
+test("buildConfirmacion24hEmail: sin portalUrl inyectado el CTA cae a {APP_URL}/portal", () => {
+  // El dispatcher no pasa portalUrl: el default sale de getAppUrl() (que
+  // nunca lanza) + /portal. En el runtime de tests no hay envs de Vercel,
+  // así que basta con assertear el sufijo /portal en el href del CTA.
+  const { html } = buildConfirmacion24hEmail(confirmacionBase);
+  assert.ok(html.includes("Gestionar mi turno"));
+  assert.ok(/href="[^"]+\/portal"/.test(html));
+});
+
+test("buildConfirmacion24hEmail: telefonoPublico entra al copy de contacto", () => {
+  const { html } = buildConfirmacion24hEmail({
+    ...confirmacionBase,
+    telefonoPublico: "351 555-0000",
+  });
+  assert.ok(html.includes("contactá al consultorio al 351 555-0000"));
+  // Sin teléfono, copy genérico (input base no lo trae).
+  const sinTel = buildConfirmacion24hEmail(confirmacionBase).html;
+  assert.ok(sinTel.includes("contactá al consultorio."));
+});
+
+test("buildRecordatorio2hEmail: preheader, header con consultorio y CTA al portal", () => {
+  const { html } = buildRecordatorio2hEmail({
+    pacienteNombre: "Carlos Vega",
+    consultorioNombre: "Consultorio Lorenzo",
+    hora: "10:00",
+    portalUrl: "https://folio.example/portal",
+  });
+  assert.ok(html.includes("Tu turno de hoy a las 10:00 hs en Consultorio Lorenzo"));
+  assert.ok(html.includes("Tu turno es hoy · Consultorio Lorenzo"));
+  assert.ok(html.includes("Gestionar mi turno"));
+  assert.ok(html.includes('href="https://folio.example/portal"'));
+});
+
+test("buildPostVisitaEmail: preheader oculto con el resumen de la visita", () => {
+  const conMemo = buildPostVisitaEmail({
+    pacienteNombre: "Carlos Vega",
+    profesionalNombre: "Consultorio Lorenzo",
+    memoCorto: "Frío 10 min.",
+  }).html;
+  assert.ok(conMemo.includes("Indicaciones de tu visita a Consultorio Lorenzo"));
+  const sinMemo = buildPostVisitaEmail({
+    pacienteNombre: "Carlos Vega",
+    profesionalNombre: "Consultorio Lorenzo",
+    memoCorto: "",
+  }).html;
+  assert.ok(sinMemo.includes("Gracias por tu visita a Consultorio Lorenzo"));
+});

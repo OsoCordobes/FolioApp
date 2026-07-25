@@ -251,6 +251,14 @@ export const Save = ({ size, ...rest }: IconProps) => (
   </svg>
 );
 
+export const FileDown = ({ size, ...rest }: IconProps) => (
+  <svg {...baseAttrs(size)} {...rest}>
+    <path d="M14 2.5H7a2 2 0 0 0-2 2v15a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7.5z" />
+    <path d="M14 2.5V7.5h5" />
+    <path d="M12 11v6M9.5 14.5 12 17l2.5-2.5" />
+  </svg>
+);
+
 export const History = ({ size, ...rest }: IconProps) => (
   <svg {...baseAttrs(size)} {...rest}>
     <path d="M1 4v6h6" />

@@ -7,24 +7,32 @@
  * datos. El caller pre-computa `fecha`/`hora` con Intl en la timezone de la
  * org para que el template no dependa del entorno.
  *
+ * Nivel de comunicación (auditoría portal-comms): preheader oculto con el
+ * resumen del turno (lo que muestra el preview del inbox), nombre del
+ * consultorio en el header brass y CTA "Gestionar mi turno" al portal del
+ * paciente. `portalUrl` es inyectable (tests); si el caller no lo pasa
+ * (dispatcher), cae a `{APP_URL}/portal` vía getAppUrl() — que nunca lanza.
+ *
  * No importa folio.css: los emails se renderizan en clientes de correo que
  * ignoran hojas externas. Estilos inline mínimos, paleta brass/cream
  * (mismo esqueleto que booking-confirmada.ts).
  */
 
-function esc(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+import { getAppUrl } from "@/lib/config/app-url";
+
+import { ctaButton, esc, preheader } from "./billing-common";
+import { contactoConsultorioCopy } from "./booking-confirmada";
+
+function defaultPortalUrl(): string {
+  return `${getAppUrl()}/portal`;
 }
 
-/** Esqueleto compartido brass/cream: header + cuerpo + footer "Enviado por Folio". */
-function wrap(headerTitle: string, bodyHtml: string): string {
+/** Esqueleto compartido brass/cream: preheader + header + cuerpo + footer "Enviado por Folio". */
+function wrap(headerTitle: string, preheaderTexto: string, bodyHtml: string): string {
   return `<!DOCTYPE html>
 <html lang="es">
   <body style="margin:0;padding:0;background:#f5efe4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#2b2622;">
+    ${preheader(preheaderTexto)}
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5efe4;padding:24px 0;">
       <tr>
         <td align="center">
@@ -61,6 +69,10 @@ export interface Confirmacion24hEmailInput {
   fecha: string; // "mié 14 may" — pre-formateada es-AR con TZ de la org
   hora: string; // "10:00"
   direccion?: string | null;
+  /** Teléfono público del consultorio para el copy de contacto. */
+  telefonoPublico?: string | null;
+  /** URL absoluta del portal del paciente. Default: {APP_URL}/portal. */
+  portalUrl?: string | null;
 }
 
 export function buildConfirmacion24hEmail(input: Confirmacion24hEmailInput): {
@@ -68,6 +80,7 @@ export function buildConfirmacion24hEmail(input: Confirmacion24hEmailInput): {
   html: string;
 } {
   const subject = `Recordatorio: tu turno de mañana en ${input.consultorioNombre}`;
+  const preheaderTexto = `Tu turno del ${input.fecha} a las ${input.hora} en ${input.consultorioNombre}`;
   const direccionBlock = input.direccion
     ? `<p style="margin:4px 0;color:#6b5e4f;font-size:14px;">📍 ${esc(input.direccion)}</p>`
     : "";
@@ -81,9 +94,13 @@ export function buildConfirmacion24hEmail(input: Confirmacion24hEmailInput): {
                     ${direccionBlock}
                   </td></tr>
                 </table>
-                <p style="margin:0;color:#6b5e4f;font-size:13px;line-height:1.5;">Si necesitás reprogramar o cancelar, contactá al consultorio.</p>`;
+                ${ctaButton(input.portalUrl ?? defaultPortalUrl(), "Gestionar mi turno")}
+                <p style="margin:0;color:#6b5e4f;font-size:13px;line-height:1.5;">Si necesitás reprogramar o cancelar, ${contactoConsultorioCopy(input.telefonoPublico)}.</p>`;
 
-  return { subject, html: wrap("Recordatorio de turno", body) };
+  return {
+    subject,
+    html: wrap(`Recordatorio de turno · ${input.consultorioNombre}`, preheaderTexto, body),
+  };
 }
 
 // ─── RECORDATORIO_2H ────────────────────────────────────────────────────────
@@ -92,6 +109,10 @@ export interface Recordatorio2hEmailInput {
   pacienteNombre: string;
   consultorioNombre: string;
   hora: string; // "10:00" — pre-formateada es-AR con TZ de la org
+  /** Teléfono público del consultorio para el copy de contacto. */
+  telefonoPublico?: string | null;
+  /** URL absoluta del portal del paciente. Default: {APP_URL}/portal. */
+  portalUrl?: string | null;
 }
 
 export function buildRecordatorio2hEmail(input: Recordatorio2hEmailInput): {
@@ -99,12 +120,17 @@ export function buildRecordatorio2hEmail(input: Recordatorio2hEmailInput): {
   html: string;
 } {
   const subject = `Hoy a las ${input.hora} hs: tu turno en ${input.consultorioNombre}`;
+  const preheaderTexto = `Tu turno de hoy a las ${input.hora} hs en ${input.consultorioNombre}`;
 
   const body = `<p style="margin:0 0 16px;font-size:16px;">Hola ${esc(input.pacienteNombre)},</p>
                 <p style="margin:0 0 16px;font-size:15px;line-height:1.5;">Te esperamos hoy a las <strong>${esc(input.hora)} hs</strong> en <strong>${esc(input.consultorioNombre)}</strong>.</p>
-                <p style="margin:0;color:#6b5e4f;font-size:13px;line-height:1.5;">Si no llegás a venir, avisá al consultorio así liberamos el horario.</p>`;
+                ${ctaButton(input.portalUrl ?? defaultPortalUrl(), "Gestionar mi turno")}
+                <p style="margin:0;color:#6b5e4f;font-size:13px;line-height:1.5;">Si no llegás a venir, avisá al consultorio así liberamos el horario${input.telefonoPublico ? ` (${esc(input.telefonoPublico)})` : ""}.</p>`;
 
-  return { subject, html: wrap("Tu turno es hoy", body) };
+  return {
+    subject,
+    html: wrap(`Tu turno es hoy · ${input.consultorioNombre}`, preheaderTexto, body),
+  };
 }
 
 // ─── POST_VISITA ────────────────────────────────────────────────────────────
@@ -120,6 +146,9 @@ export function buildPostVisitaEmail(input: PostVisitaEmailInput): {
   html: string;
 } {
   const subject = `Indicaciones de tu visita — ${input.profesionalNombre}`;
+  const preheaderTexto = input.memoCorto
+    ? `Indicaciones de tu visita a ${input.profesionalNombre}`
+    : `Gracias por tu visita a ${input.profesionalNombre}`;
   const memoBlock = input.memoCorto
     ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5efe4;border-radius:8px;padding:16px;margin:0 0 16px;">
                   <tr><td style="padding:16px;">
@@ -133,5 +162,8 @@ export function buildPostVisitaEmail(input: PostVisitaEmailInput): {
                 ${memoBlock}
                 <p style="margin:0;color:#6b5e4f;font-size:13px;line-height:1.5;">Ante cualquier duda sobre las indicaciones, contactá al consultorio.</p>`;
 
-  return { subject, html: wrap("Gracias por tu visita", body) };
+  return {
+    subject,
+    html: wrap(`Gracias por tu visita · ${input.profesionalNombre}`, preheaderTexto, body),
+  };
 }

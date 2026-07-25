@@ -24,11 +24,20 @@
  *   - numerico       → number | null.
  * El score se recomputa en vivo con `def.score()` (contrato laxo: null si
  * incompleto) y se muestra con ResultadoBadge cuando la planilla está completa.
+ *
+ * `colapsable` (D3): sin ninguna respuesta arranca COLAPSADO con un botón
+ * "Cargar {def.nombre}" (espejo exacto de EscalaBlock de psicología, incluido el
+ * "Quitar" que vacía y colapsa); con respuestas, abierto. Evita el muro de
+ * fieldsets en las sesiones en que el instrumento no se administra.
  * PHI: nunca loguea respuestas.
+ *
+ * Estilos: el <select> del modo numérico se estila con `.fi-wi-field select`
+ * de folio.css (la copia inline SELECT_STYLE se retiró en D3).
  */
 
-import { useId, type CSSProperties } from "react";
+import { useId, useState } from "react";
 
+import * as I from "@/components/icons";
 import type { InstrumentoDef } from "../types";
 import { ResultadoBadge } from "./ResultadoBadge";
 import {
@@ -36,19 +45,6 @@ import {
   opcionesDeItem,
   type ModoInstrumento,
 } from "./planilla-core";
-
-/** Mismo look que los inputs de .fi-wi-field (folio.css no estila selects). */
-const SELECT_STYLE: CSSProperties = {
-  width: "100%",
-  padding: "9px 11px",
-  background: "var(--surface)",
-  border: "1px solid var(--line)",
-  borderRadius: "var(--r-sm)",
-  font: "inherit",
-  fontSize: 13.5,
-  color: "var(--ink)",
-  lineHeight: 1.5,
-};
 
 // ─── Respuestas: contrato controlado ─────────────────────────────────────────
 
@@ -75,6 +71,13 @@ export interface PlanillaRendererProps {
   readOnly?: boolean;
   /** Muestra la consigna del instrumento arriba de los ítems. Default true. */
   mostrarConsigna?: boolean;
+  /**
+   * true → sin ninguna respuesta la planilla arranca colapsada con el botón
+   * "Cargar {def.nombre}"; abierta muestra "Quitar" (vacía las respuestas y
+   * vuelve a colapsar). Con alguna respuesta, siempre abierta. Default false
+   * (comportamiento histórico: siempre expandida).
+   */
+  colapsable?: boolean;
 }
 
 // ─── Normalización del input al modo ─────────────────────────────────────────
@@ -104,8 +107,12 @@ export function PlanillaRenderer({
   onChange,
   readOnly,
   mostrarConsigna = true,
+  colapsable = false,
 }: PlanillaRendererProps) {
   const uid = useId();
+  // Abierta si ya hay respuestas; el profesional puede abrirla vacía (espejo de
+  // EscalaBlock de psicología). Solo aplica con `colapsable`.
+  const [abiertaLocal, setAbiertaLocal] = useState(false);
   const modo = modoDeInstrumento(def);
 
   if (modo === "estructurado") {
@@ -122,14 +129,63 @@ export function PlanillaRenderer({
     );
   }
 
+  const tieneRespuestas =
+    modo === "numerico"
+      ? normalizarNumerico(respuestas) !== null
+      : normalizarItems(respuestas, def.items.length).some((r) => r !== null);
+  const abierta = !colapsable || abiertaLocal || tieneRespuestas;
+
+  // "Quitar": vacía las respuestas (los consumidores descartan un array todo-null
+  // / un numérico null del borrador) y colapsa de nuevo.
+  const quitar = () => {
+    if (readOnly) return;
+    setAbiertaLocal(false);
+    onChange(
+      modo === "numerico" ? null : Array.from({ length: def.items.length }, () => null),
+    );
+  };
+
+  if (!abierta) {
+    return (
+      <div className="pc-card">
+        <header className="pc-card-head">
+          <span className="fi-eyebrow">{def.nombre}</span>
+        </header>
+        {readOnly ? (
+          <p className="pc-card-text muted" style={{ fontSize: 12.5 }}>
+            Sin cargar en esta sesión.
+          </p>
+        ) : (
+          <button
+            type="button"
+            className="fi-btn fi-btn-secondary"
+            onClick={() => setAbiertaLocal(true)}
+            style={{ alignSelf: "flex-start" }}
+          >
+            <I.Plus size={12} /> Cargar {def.nombre}
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  const puedeQuitar = colapsable && !readOnly;
+
   if (modo === "numerico") {
     return (
       <NumericoBlock
         def={def}
         valor={normalizarNumerico(respuestas)}
-        onChange={onChange}
+        // Interacción del usuario mantiene la card abierta: sin esto, elegir
+        // "—" (null) hacía tieneRespuestas=false y colapsaba a mitad de
+        // edición. Solo "Quitar" colapsa explícitamente.
+        onChange={(v) => {
+          if (colapsable) setAbiertaLocal(true);
+          onChange(v);
+        }}
         readOnly={readOnly}
         mostrarConsigna={mostrarConsigna}
+        onQuitar={puedeQuitar ? quitar : undefined}
       />
     );
   }
@@ -149,13 +205,25 @@ export function PlanillaRenderer({
     <div className="pc-card">
       <header className="pc-card-head">
         <span className="fi-eyebrow">{def.nombre}</span>
-        {score ? (
-          <ResultadoBadge banda={score.banda} def={def} total={score.total} />
-        ) : respondidas > 0 ? (
-          <span className="fm-mono muted" style={{ fontSize: 10.5 }}>
-            {respondidas}/{items.length}
-          </span>
-        ) : null}
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+          {score ? (
+            <ResultadoBadge banda={score.banda} def={def} total={score.total} />
+          ) : respondidas > 0 ? (
+            <span className="fm-mono muted" style={{ fontSize: 10.5 }}>
+              {respondidas}/{items.length}
+            </span>
+          ) : null}
+          {puedeQuitar ? (
+            <button
+              type="button"
+              className="pc-link"
+              onClick={quitar}
+              aria-label={`Quitar ${def.nombre} de esta sesión`}
+            >
+              Quitar
+            </button>
+          ) : null}
+        </span>
       </header>
 
       {mostrarConsigna && def.consigna ? (
@@ -284,12 +352,15 @@ function NumericoBlock({
   onChange,
   readOnly,
   mostrarConsigna,
+  onQuitar,
 }: {
   def: InstrumentoDef;
   valor: RespuestaNumerica;
   onChange(next: RespuestaNumerica): void;
   readOnly?: boolean;
   mostrarConsigna: boolean;
+  /** Presente → botón "Quitar" en el header (modo colapsable). */
+  onQuitar?: () => void;
 }) {
   const opciones = def.opciones ?? [];
   const score = def.score(valor);
@@ -299,9 +370,21 @@ function NumericoBlock({
     <div className="pc-card">
       <header className="pc-card-head">
         <span className="fi-eyebrow">{def.nombre}</span>
-        {score ? (
-          <ResultadoBadge banda={score.banda} def={def} total={score.total} />
-        ) : null}
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+          {score ? (
+            <ResultadoBadge banda={score.banda} def={def} total={score.total} />
+          ) : null}
+          {onQuitar ? (
+            <button
+              type="button"
+              className="pc-link"
+              onClick={onQuitar}
+              aria-label={`Quitar ${def.nombre} de esta sesión`}
+            >
+              Quitar
+            </button>
+          ) : null}
+        </span>
       </header>
 
       {mostrarConsigna && def.consigna ? (
@@ -313,7 +396,6 @@ function NumericoBlock({
       <label className="fi-wi-field">
         <span>{item?.enunciado ?? def.nombre}</span>
         <select
-          style={SELECT_STYLE}
           value={valor ?? ""}
           onChange={(e) => {
             if (readOnly) return;

@@ -19608,6 +19608,170 @@ input:focus { outline: none; }
   outline: none;
 }
 
+/* ───────────────────────────────────────────────────────────────────────────
+ * FICHA CLÍNICA · Consistencia entre herramientas (D3 · curvas que hablan)
+ * 1) Selects de la ficha: `.fi-wi-field select` + `.fi-select` reemplazan el
+ *    objeto inline SELECT_STYLE que las 5 tools copiaban (mismos valores que
+ *    los inputs de .fi-wi-field). `.fi-select` es para selects sueltos fuera
+ *    de un .fi-wi-field (ej. estado de un objetivo en ObjetivosBlock).
+ * 2) `.fi-escala-seg`: fila segmentada de botones para escalas cortas
+ *    (EscalaSegmentada — dolor EVA/VAS 0–10 de kinesiología): un valor = un
+ *    click, estado seleccionado vía aria-pressed. Solo tokens var() existentes;
+ *    append-only.
+ * ─────────────────────────────────────────────────────────────────────────── */
+.fi-wi-field select,
+.fi-select {
+  width: 100%;
+  padding: 9px 11px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--ink);
+  line-height: 1.5;
+  transition: border-color 120ms var(--ease-in), box-shadow 120ms var(--ease-in);
+}
+.fi-wi-field select:focus,
+.fi-select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.fi-escala-seg {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.fi-escala-seg-btn {
+  flex: 1 0 auto;
+  min-width: 26px;
+  padding: 7px 2px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-2);
+  text-align: center;
+  cursor: default;
+  transition: background 120ms var(--ease-in), color 120ms var(--ease-in),
+              border-color 120ms var(--ease-in);
+}
+.fi-escala-seg-btn:hover:not(:disabled) {
+  background: var(--surface-2);
+  border-color: var(--ink-4);
+}
+.fi-escala-seg-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.fi-escala-seg-btn[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent-2);
+  color: var(--surface);
+}
+.fi-escala-seg-btn[aria-pressed="true"]:hover:not(:disabled) {
+  background: var(--accent-2);
+  border-color: var(--accent-2);
+}
+.fi-escala-seg-btn:disabled {
+  opacity: 0.55;
+}
+.fi-escala-seg-anclas {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * FICHA · D1+D2 (feat/ficha-borrador-pdf) — borrador indestructible + la
+ * historia clínica se comparte. Append-only; solo tokens var() existentes.
+ *
+ *   - .pc-sesion-item / .pc-sesion-detalle*: fila expandible del tab Sesiones
+ *     ("Ver detalle" con el SOAP histórico + PDF por sesión). El wrapper
+ *     .pc-sesion-item hereda el borde que antes llevaba .pc-sesion-row para
+ *     que el detalle expandido quede DENTRO de la misma celda visual.
+ *   - .pc-docs*: tab Documentos real (lista transversal + subida).
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Sesiones · fila expandible ────────────────────────────────────────── */
+.pc-sesion-item { border-bottom: 1px solid var(--line-soft); }
+.pc-sesion-item:last-child { border-bottom: 0; }
+.pc-sesion-item .pc-sesion-row { border-bottom: 0; }
+.pc-sesion-detalle {
+  /* 138px = padding 22 + col fecha 96 + gap 20: alinea con el cuerpo de la fila. */
+  padding: 0 22px 18px 138px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.pc-sesion-soap { display: flex; flex-direction: column; gap: 10px; }
+.pc-sesion-soap-item { display: flex; flex-direction: column; gap: 2px; }
+.pc-sesion-soap-item b {
+  font-size: 10.5px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .06em;
+  color: var(--ink-3);
+}
+.pc-sesion-soap-item p {
+  margin: 0; font-size: 12.5px; line-height: 1.55;
+  color: var(--ink-2); white-space: pre-wrap;
+}
+.pc-sesion-detalle-vacio { margin: 0; font-size: 12.5px; color: var(--ink-3); }
+.pc-sesion-detalle-resumen { margin: 0; font-size: 12.5px; color: var(--ink-2); }
+.pc-sesion-detalle-resumen b { font-weight: 600; color: var(--ink-3); }
+.pc-sesion-detalle-foot { display: flex; justify-content: flex-start; }
+
+/* ── Documentos · lista + subida ───────────────────────────────────────── */
+.pc-docs { display: flex; flex-direction: column; gap: 16px; margin-top: 16px; }
+.pc-docs-cargando { font-size: 12.5px; padding: 8px 4px; }
+.pc-docs-list {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+.pc-doc-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 16px; align-items: center;
+  padding: 13px 22px;
+  border-bottom: 1px solid var(--line-soft);
+  transition: background 120ms var(--ease-in);
+}
+.pc-doc-row:last-child { border-bottom: 0; }
+.pc-doc-row:hover { background: var(--surface-2); }
+.pc-doc-tipo { flex-shrink: 0; }
+.pc-doc-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pc-doc-meta b { font-size: 13px; color: var(--ink); }
+.pc-doc-meta span {
+  font-size: 12px; color: var(--ink-3);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pc-docs-upload {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 16px 18px;
+  background: var(--surface);
+  border: 1px dashed var(--line);
+  border-radius: var(--r-lg);
+}
+.pc-docs-upload-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+/* Espejo de .pc-quiro-input para el select de tipo (folio.css no estila
+   selects de forma global — deuda conocida, se unifica en otro PR). */
+.pc-docs-select {
+  padding: 8px 11px;
+  background: var(--bg);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm);
+  font-family: 'Geist', sans-serif; font-size: 13px; color: var(--ink);
+  transition: border-color 120ms var(--ease-in), background 120ms var(--ease-in);
+}
+.pc-docs-select:focus { outline: none; border-color: var(--accent); background: var(--surface); }
+.pc-docs-select:disabled { opacity: .55; cursor: not-allowed; }
+.pc-docs-hint { margin: 0; font-size: 12.5px; }
+.pc-docs-error { margin: 0; font-size: 12.5px; color: var(--red); }
+
 /* ═══════════════════════════════════════════════════════════════════════════
  * SHELL MOBILE + FEEDBACK (C1+C4 · feat/shell-mobile) — append-only
  *

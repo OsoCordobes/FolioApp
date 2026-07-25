@@ -12,6 +12,8 @@ const base = {
   servicioNombre: "Consulta inicial",
   fechaHoraLabel: "miércoles, 10 de junio de 2026, 10:00",
   direccion: "Av. Siempreviva 742, Córdoba",
+  portalUrl: "https://folio.example/portal",
+  telefonoPublico: "351 555-0000",
 };
 
 test("booking-confirmada: subject y html no vacíos, contienen los datos", () => {
@@ -53,6 +55,86 @@ test("booking-recibida: no lanza con direccion null/undefined", () => {
     buildBookingRecibidaEmail({ ...base, direccion: null });
     buildBookingRecibidaEmail({ ...base, direccion: undefined });
   });
+});
+
+// ─── Nivel de comunicación (auditoría portal-comms): preheader + header + CTA ──
+
+test("booking-confirmada: preheader oculto con el resumen del turno, antes del saludo", () => {
+  const { html } = buildBookingConfirmadaEmail(base);
+  const preheader = `Tu turno del ${base.fechaHoraLabel} en ${base.organizationNombre}`;
+  assert.ok(html.includes(preheader));
+  assert.ok(html.includes("display:none;max-height:0"));
+  // El preview del inbox lee lo primero del body: el preheader va ANTES de "Hola".
+  assert.ok(html.indexOf(preheader) < html.indexOf(`Hola ${base.pacienteNombre}`));
+});
+
+test("booking-recibida: preheader oculto con el resumen de la solicitud", () => {
+  const { html } = buildBookingRecibidaEmail(base);
+  const preheader = `Tu solicitud para el ${base.fechaHoraLabel} en ${base.organizationNombre}`;
+  assert.ok(html.includes(preheader));
+  assert.ok(html.indexOf(preheader) < html.indexOf(`Hola ${base.pacienteNombre}`));
+});
+
+test("booking-confirmada/recibida: el header brass incluye el nombre del consultorio", () => {
+  const confirmada = buildBookingConfirmadaEmail(base).html;
+  const recibida = buildBookingRecibidaEmail(base).html;
+  assert.ok(confirmada.includes(`Turno confirmado · ${base.organizationNombre}`));
+  assert.ok(recibida.includes(`Solicitud recibida · ${base.organizationNombre}`));
+});
+
+test("booking-confirmada/recibida: CTA 'Gestionar mi turno' apunta al portal", () => {
+  for (const html of [
+    buildBookingConfirmadaEmail(base).html,
+    buildBookingRecibidaEmail(base).html,
+  ]) {
+    assert.ok(html.includes("Gestionar mi turno"));
+    assert.ok(html.includes(`href="${base.portalUrl}"`));
+  }
+});
+
+test("booking-confirmada/recibida: sin 'respondé este correo' (el from es noreply); contacto por teléfono", () => {
+  for (const html of [
+    buildBookingConfirmadaEmail(base).html,
+    buildBookingRecibidaEmail(base).html,
+  ]) {
+    assert.ok(!html.includes("respondé este correo"));
+    assert.ok(html.includes(`contactá al consultorio al ${base.telefonoPublico}`));
+  }
+});
+
+test("booking-confirmada/recibida: sin teléfono público cae al copy genérico", () => {
+  for (const html of [
+    buildBookingConfirmadaEmail({ ...base, telefonoPublico: null }).html,
+    buildBookingRecibidaEmail({ ...base, telefonoPublico: undefined }).html,
+  ]) {
+    assert.ok(html.includes("contactá al consultorio."));
+    assert.ok(!html.includes("contactá al consultorio al "));
+  }
+});
+
+test("booking-confirmada: incluye el link de Google Calendar cuando viene gcalUrl", () => {
+  const gcalUrl =
+    "https://calendar.google.com/calendar/render?action=TEMPLATE&text=Consulta&dates=20260610T130000Z/20260610T133000Z";
+  const { html } = buildBookingConfirmadaEmail({ ...base, gcalUrl });
+  assert.ok(html.includes("Agregar a Google Calendar"));
+  // esc() escapa el & de la query — el href queda con &amp; (HTML válido).
+  assert.ok(html.includes(gcalUrl.replace(/&/g, "&amp;")));
+});
+
+test("booking-confirmada: sin gcalUrl no deja link huérfano", () => {
+  const { html } = buildBookingConfirmadaEmail({ ...base, gcalUrl: null });
+  assert.ok(!html.includes("Agregar a Google Calendar"));
+});
+
+test("booking-confirmada: escapa HTML en nombre de org y teléfono", () => {
+  const { html } = buildBookingConfirmadaEmail({
+    ...base,
+    organizationNombre: 'Consultorio <script>alert("x")</script>',
+    telefonoPublico: '351 <img src=x onerror="p()">',
+  });
+  assert.ok(!html.includes("<script>"));
+  assert.ok(!html.includes("<img"));
+  assert.ok(html.includes("&lt;script&gt;"));
 });
 
 const invitacionBase = {
