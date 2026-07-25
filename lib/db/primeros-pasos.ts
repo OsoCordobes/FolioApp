@@ -34,6 +34,12 @@ export interface LoadPrimerosPasosInput {
   onboardingCompleted: boolean;
   /** ctx.subscription.estado — cualquier valor no-null implica alta en MP. */
   suscripcionEstado: string | null;
+  /**
+   * ctx.session.role === "OWNER". Decide si el checklist ofrece "Activá tu
+   * suscripción": /configuracion/billing es OWNER-only (404 para el resto
+   * mientras el gate esté permitido) — ver lib/primeros-pasos.ts.
+   */
+  esOwner: boolean;
 }
 
 /**
@@ -120,6 +126,7 @@ export async function loadPrimerosPasosHoy(
     // El titular cuenta como member: >1 significa que alguien más entró.
     equipoInvitado:
       esClinica && ((membersRes?.count ?? 0) > 1 || (invitesRes?.count ?? 0) > 0),
+    esOwner: input.esOwner,
   });
 
   return ok(estado.visible ? estado : null);

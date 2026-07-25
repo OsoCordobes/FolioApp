@@ -15,6 +15,7 @@ import { CerradoRow } from "@/components/hoy/cerrado-row";
 import { TurnoRow } from "@/components/hoy/turno-row";
 import { nombreCortoProfesional } from "@/lib/agenda/profesional";
 import { fmtMoney } from "@/lib/dashboard-helpers";
+import { computeCobroKpi } from "@/lib/hoy/kpi-cobro";
 import type { EstadoTurno, PacientesById, Turno } from "@/lib/types";
 
 import type { CobroCierreActionInput } from "@/app/(app)/hoy/actions";
@@ -85,7 +86,12 @@ export function TurnoList({ turnos, pacientes, nextId, now, timezone, canRegistr
     ];
   }, [activos]);
 
-  const cerradosTotal = cerrados.reduce((s, t) => s + t.precio, 0);
+  // MISMO criterio que el KPI de arriba (lib/hoy/kpi-cobro.ts): "recaudado" es
+  // lo que figura COBRADO en `pago`, no la suma de precios de lista. Sumar
+  // `t.precio` acá reponía la contradicción con /finanzas 30px debajo del KPI
+  // que la acababa de arreglar — un turno cerrado con "quedó debiendo" no es
+  // plata recaudada. La deuda se muestra aparte en vez de esconderse.
+  const cerradosCobro = useMemo(() => computeCobroKpi(cerrados), [cerrados]);
 
   const estadoLabel: Partial<Record<EstadoTurno, string>> = {
     cancelado: "Cancelado",
@@ -139,7 +145,13 @@ export function TurnoList({ turnos, pacientes, nextId, now, timezone, canRegistr
             <span className="fi-cerrados-meta">
               {cerrados.length} {cerrados.length === 1 ? "turno cerrado" : "turnos cerrados"}
               <span className="fi-cerrados-dot">·</span>
-              <span className="fi-mono">{fmtMoney(cerradosTotal)}</span> recaudado
+              <span className="fi-mono">{fmtMoney(cerradosCobro.cobradoPesos)}</span> cobrado
+              {cerradosCobro.deudaPesos > 0 ? (
+                <>
+                  <span className="fi-cerrados-dot">·</span>
+                  <span className="fi-mono">{fmtMoney(cerradosCobro.deudaPesos)}</span> a cobrar
+                </>
+              ) : null}
             </span>
             <span className="fi-block-line" />
           </header>
