@@ -19920,3 +19920,107 @@ input:focus { outline: none; }
 .fi-list.is-dense .fi-turno { padding-left: 14px; }
 .fi-turno.is-atendiendo { padding-left: 16px; }
 .fi-list.is-dense .fi-turno.is-atendiendo { padding-left: 16px; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   E3 · Billing que vende — chip de trial, paywall hero y pantalla de miembro
+   - .fi-trial-chip: "Prueba: quedan N días" (solo OWNER) → link a
+     /configuracion/billing. Sidebar desktop (sobre el footer) y sheet «Más»
+     mobile. Tono neutro; .is-urgent (≤7 días) pasa a amber-soft.
+   - .fi-mnav-trial-dot: dot equivalente sobre el ícono "Más" del bottom-nav.
+   - .fi-paywall: hero de la pantalla de bloqueo (trial vencido) — reassurance
+     + bullets de valor + CTA. Vive arriba de la card de activación.
+   - .fi-billing-locked: pantalla para miembros NO-OWNER con gate bloqueado
+     ("avisale al titular"), sin datos de billing.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.fi-trial-chip {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-md);
+  font-size: 11.5px; font-weight: 500; line-height: 1.3;
+  color: var(--ink-2);
+  text-decoration: none;
+  transition: border-color 120ms var(--ease-in), color 120ms var(--ease-in);
+}
+.fi-trial-chip:hover { border-color: var(--line); color: var(--ink); }
+.fi-trial-chip-dot {
+  flex: none;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent);
+}
+.fi-trial-chip.is-urgent {
+  background: var(--amber-soft);
+  border-color: transparent;
+  color: var(--amber);
+}
+.fi-trial-chip.is-urgent:hover { color: var(--amber); border-color: var(--amber); }
+.fi-trial-chip.is-urgent .fi-trial-chip-dot { background: var(--amber); }
+
+/* Dot del bottom-nav: ancla sobre el ícono "Más" (el detalle vive en el sheet). */
+.fi-mnav-ico { position: relative; }
+.fi-mnav-trial-dot {
+  position: absolute; top: -2px; right: -5px;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--accent);
+  border: 1.5px solid var(--surface);
+}
+.fi-mnav-trial-dot.is-urgent { background: var(--amber); }
+
+/* Paywall hero (billing-page, gate bloqueado). */
+.fi-paywall {
+  display: flex; flex-direction: column; gap: 12px;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--r-lg);
+  margin-bottom: 16px;
+}
+.fi-paywall-title {
+  margin: 0;
+  font-size: 21px; font-weight: 600; letter-spacing: -.015em; line-height: 1.25;
+  color: var(--ink);
+}
+.fi-paywall-bullets {
+  list-style: none;
+  margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.fi-paywall-bullets li {
+  display: flex; align-items: flex-start; gap: 8px;
+  font-size: 13.5px; line-height: 1.5;
+  color: var(--ink-2);
+}
+.fi-paywall-bullets li svg { flex: none; margin-top: 3px; color: var(--accent); }
+.fi-paywall-cta {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin-top: 4px;
+}
+.fi-paywall-note { font-size: 12.5px; color: var(--ink-3); }
+.fi-paywall-support { margin: 0; font-size: 12.5px; color: var(--ink-3); }
+.fi-paywall-support a { color: var(--ink-2); text-decoration: underline; }
+.fi-paywall-support a:hover { color: var(--ink); }
+
+/* Miembro no-OWNER con gate bloqueado: aviso sin datos de billing. */
+.fi-billing-locked {
+  margin-top: 16px;
+  padding: 24px;
+  background: var(--amber-soft);
+  border-radius: var(--r-lg);
+}
+.fi-billing-locked h2 {
+  margin: 0 0 8px;
+  font-size: 18px; font-weight: 600; letter-spacing: -.01em;
+  color: var(--amber);
+}
+.fi-billing-locked p {
+  margin: 0;
+  font-size: 13.5px; line-height: 1.55;
+  color: var(--ink-2);
+  max-width: 56ch;
+}
+.fi-billing-locked .fi-billing-locked-note {
+  margin-top: 8px;
+  color: var(--ink-3);
+}

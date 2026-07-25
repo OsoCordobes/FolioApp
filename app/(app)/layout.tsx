@@ -127,6 +127,7 @@ export default async function AppShellLayout({
           especialidadOverride={especialidadOverride}
           memberships={memberships}
           activeOrgId={session.organizationId}
+          graceDaysLeft={accessGate.graceDaysLeft}
         />
         <main className="fi-main" id="main" tabIndex={-1}>
           {session.emailVerified === false ? (
@@ -149,6 +150,7 @@ export default async function AppShellLayout({
           especialidadOverride={especialidadOverride}
           memberships={memberships}
           activeOrgId={session.organizationId}
+          graceDaysLeft={accessGate.graceDaysLeft}
         />
       </div>
     </ToastProvider>
