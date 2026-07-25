@@ -36,6 +36,7 @@ import {
   formatGeneradoTs,
   orDash,
   tieneSoap,
+  type EvolucionPdfEntrada,
 } from "./ficha-format";
 import {
   PDF_COLORS,
@@ -93,6 +94,12 @@ export interface FichaPdfData {
   especialidad: string | null;
   /** Resultados de instrumentos/planillas (score + banda). */
   instrumentos: FichaPdfInstrumento[];
+  /**
+   * D2 · Evolución: últimas N sesiones (DESC) con fecha · servicio · resumen y
+   * SOAP compacto (ya en claro, armado por evolucionDesdeSesiones en la route).
+   * [] = se omite la sección (paciente sin visitas cerradas).
+   */
+  evolucion: EvolucionPdfEntrada[];
   /** Timestamp de generación (ISO) — se muestra en el pie. */
   generadoTs: string;
 }
@@ -193,6 +200,33 @@ const styles = StyleSheet.create({
     fontSize: PDF_TYPE.h2,
     color: PDF_COLORS.accent,
   },
+  // Evolución (D2 · historial de sesiones)
+  evolucionRow: {
+    borderLeftWidth: 2,
+    borderLeftColor: PDF_COLORS.line,
+    paddingLeft: PDF_SPACE.s3,
+    marginBottom: PDF_SPACE.s3,
+  },
+  evolucionHead: {
+    fontFamily: PDF_TYPE.familyBold,
+    fontSize: PDF_TYPE.body,
+    color: PDF_COLORS.ink,
+    marginBottom: PDF_SPACE.s1,
+  },
+  evolucionResumen: {
+    fontSize: PDF_TYPE.small,
+    color: PDF_COLORS.ink2,
+    marginBottom: PDF_SPACE.s1,
+  },
+  evolucionSoapLinea: {
+    fontSize: PDF_TYPE.small,
+    color: PDF_COLORS.ink3,
+    marginBottom: 1,
+  },
+  evolucionSoapLetra: {
+    fontFamily: PDF_TYPE.familyBold,
+    color: PDF_COLORS.ink2,
+  },
   // Watermark
   watermark: {
     position: "absolute",
@@ -252,6 +286,7 @@ export function FichaPdfDocument({ data }: { data: FichaPdfData }): ReactElement
     resumenHerramienta,
     especialidad,
     instrumentos,
+    evolucion,
     generadoTs,
   } = data;
 
@@ -317,6 +352,47 @@ export function FichaPdfDocument({ data }: { data: FichaPdfData }): ReactElement
               {especialidad ? `Resumen — ${especialidad}` : "Resumen clínico"}
             </Text>
             <Text style={styles.body}>{resumenHerramienta}</Text>
+          </View>
+        ) : null}
+
+        {/* Evolución (D2): últimas N sesiones. wrap multipágina por defecto —
+            watermark y pie son fixed y se repiten en cada página. Las filas NO
+            llevan wrap={false}: un SOAP largo (hasta 4×5000 chars) puede superar
+            una página y wrap={false} lo clipearía; el borde izquierdo continúa
+            en el salto y mantiene la lectura. minPresenceAhead evita headers
+            huérfanos al pie de página. */}
+        {evolucion.length > 0 ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle} minPresenceAhead={40}>
+              {`Evolución — últimas ${evolucion.length} sesiones`}
+            </Text>
+            {evolucion.map((ev, i) => (
+              <View key={`${ev.fecha}-${i}`} style={styles.evolucionRow}>
+                <Text style={styles.evolucionHead}>
+                  {`${orDash(ev.fecha)}  ·  ${orDash(ev.servicio)}`}
+                </Text>
+                <Text style={styles.evolucionResumen}>{orDash(ev.resumen)}</Text>
+                {ev.soap ? (
+                  <>
+                    {(
+                      [
+                        ["S", ev.soap.s],
+                        ["O", ev.soap.o],
+                        ["A", ev.soap.a],
+                        ["P", ev.soap.p],
+                      ] as const
+                    )
+                      .filter(([, txt]) => txt.trim().length > 0)
+                      .map(([letra, txt]) => (
+                        <Text key={letra} style={styles.evolucionSoapLinea}>
+                          <Text style={styles.evolucionSoapLetra}>{`${letra} — `}</Text>
+                          {txt}
+                        </Text>
+                      ))}
+                  </>
+                ) : null}
+              </View>
+            ))}
           </View>
         ) : null}
 

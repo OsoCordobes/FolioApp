@@ -6,7 +6,9 @@
  * Paneles apilados en la columna del slot (pc-plan-grid, 380px):
  *   1. Antropometría — peso (kg) + talla (cm) de la sesión, IMC DERIVADO en vivo
  *      (chip coloreado por banda OMS) + curva longitudinal (peso / IMC / cintura)
- *      con el <SerieEvolucion> genérico de la biblioteca (C3).
+ *      con el <SerieEvolucion> genérico de la biblioteca (C3) en modo
+ *      NORMALIZADO (D3): peso ~80 kg, IMC ~25 y cintura ~95 cm no comparten
+ *      escala — cada métrica se dibuja contra su propio rango observado.
  *   2. Circunferencias — alta de perímetros por sitio (cintura, cadera…) en el
  *      borrador + historial de solo lectura.
  *   3. Pliegues cutáneos — alta de pliegues por sitio (tricipital…) + historial.
@@ -30,6 +32,7 @@
 import { useMemo, useState, type CSSProperties } from "react";
 
 import * as I from "@/components/icons";
+import { ObjetivosBlock } from "@/lib/instrumentos/components";
 import {
   SerieEvolucion,
   type MetricaSerie,
@@ -57,7 +60,6 @@ import {
   TALLA_CM_MAX,
   TALLA_CM_MIN,
   type Circunferencia,
-  type EstadoObjetivoNutri,
   type NutriSeriesPoint,
   type NutricionToolData,
   type ObjetivoNutri,
@@ -73,25 +75,6 @@ const CHIP_TONO_IMC: Record<TonoImc, CSSProperties> = {
   green: { color: "var(--green)", background: "var(--green-soft)", borderColor: "transparent" },
   amber: { color: "var(--amber)", background: "var(--amber-soft)", borderColor: "transparent" },
   red: { color: "var(--red)", background: "var(--red-soft)", borderColor: "transparent" },
-};
-
-const CHIP_ESTADO_OBJETIVO: Record<EstadoObjetivoNutri, CSSProperties> = {
-  en_curso: { color: "var(--slate)", background: "var(--slate-soft)", borderColor: "transparent" },
-  logrado: { color: "var(--green)", background: "var(--green-soft)", borderColor: "transparent" },
-  pausado: { color: "var(--amber)", background: "var(--amber-soft)", borderColor: "transparent" },
-};
-
-/** Mismo look que los inputs de .fi-wi-field (folio.css no estila selects). */
-const SELECT_STYLE: CSSProperties = {
-  width: "100%",
-  padding: "9px 11px",
-  background: "var(--surface)",
-  border: "1px solid var(--line)",
-  borderRadius: "var(--r-sm)",
-  font: "inherit",
-  fontSize: 13.5,
-  color: "var(--ink)",
-  lineHeight: 1.5,
 };
 
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
@@ -342,7 +325,6 @@ export function NutricionTool({
 
   const [nuevaCirc, setNuevaCirc] = useState(NUEVA_CIRC_INICIAL);
   const [nuevoPliegue, setNuevoPliegue] = useState(NUEVO_PLIEGUE_INICIAL);
-  const [nuevoObjetivo, setNuevoObjetivo] = useState("");
   const [circExpandido, setCircExpandido] = useState(false);
   const [plieguesExpandido, setPlieguesExpandido] = useState(false);
 
@@ -414,28 +396,11 @@ export function NutricionTool({
     emit({ ...draft, pliegues: plieguesDraft.filter((_, idx) => idx !== i) });
   };
 
-  // ── Objetivos ──
+  // ── Objetivos (ObjetivosBlock genérico de la biblioteca, D3) ──
   const objetivos = draft.objetivos ?? [];
-  const textoNuevoObjetivo = nuevoObjetivo.trim();
 
-  const agregarObjetivo = () => {
-    if (textoNuevoObjetivo === "" || readOnly) return;
-    const objetivo: ObjetivoNutri = { texto: textoNuevoObjetivo.slice(0, 500), estado: "en_curso" };
-    emit({ ...draft, objetivos: [...objetivos, objetivo] });
-    setNuevoObjetivo("");
-  };
-
-  const setEstadoObjetivo = (i: number, estado: EstadoObjetivoNutri) => {
-    emit({ ...draft, objetivos: objetivos.map((o, idx) => (idx === i ? { ...o, estado } : o)) });
-  };
-
-  const quitarObjetivo = (i: number) => {
-    emit({ ...draft, objetivos: objetivos.filter((_, idx) => idx !== i) });
-  };
-
-  const retomarObjetivos = () => {
-    if (!ultimosObjetivos || readOnly) return;
-    emit({ ...draft, objetivos: ultimosObjetivos.objetivos });
+  const setObjetivos = (next: ObjetivoNutri[]) => {
+    emit({ ...draft, objetivos: next });
   };
 
   const circVisibles = circExpandido ? circHistorial : circHistorial.slice(0, 4);
@@ -494,7 +459,8 @@ export function NutricionTool({
           <SerieEvolucion
             serie={aPuntosSerie(series)}
             metricas={METRICAS_SERIE}
-            ariaLabel={`Evolución de peso, IMC y cintura en ${series.length} ${series.length === 1 ? "sesión" : "sesiones"}`}
+            normalizado
+            ariaLabel={`Evolución de peso, IMC y cintura en ${series.length} ${series.length === 1 ? "sesión" : "sesiones"}, cada métrica en su propia escala`}
             vacio="Sin registros antropométricos en el historial todavía. La curva aparece al guardar sesiones con peso, talla o circunferencia de cintura."
           />
         </div>
@@ -531,7 +497,6 @@ export function NutricionTool({
             <label className="fi-wi-field" style={{ flex: 1 }}>
               <span>Sitio</span>
               <select
-                style={SELECT_STYLE}
                 value={nuevaCirc.sitio}
                 onChange={(e) => setNuevaCirc({ ...nuevaCirc, sitio: e.target.value as SitioCircunferencia | "" })}
               >
@@ -620,7 +585,6 @@ export function NutricionTool({
             <label className="fi-wi-field" style={{ flex: 1 }}>
               <span>Sitio</span>
               <select
-                style={SELECT_STYLE}
                 value={nuevoPliegue.sitio}
                 onChange={(e) => setNuevoPliegue({ ...nuevoPliegue, sitio: e.target.value as SitioPliegue | "" })}
               >
@@ -711,140 +675,18 @@ export function NutricionTool({
         </label>
       </section>
 
-      {/* ── Objetivos nutricionales ── */}
-      <section className="pc-card">
-        <header className="pc-card-head">
-          <span className="fi-eyebrow">Objetivos nutricionales</span>
-        </header>
-
-        {objetivos.length > 0 ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            <span className="muted" style={{ fontSize: 11, fontWeight: 500 }}>
-              En esta sesión
-            </span>
-            {objetivos.map((o, i) => (
-              <div
-                key={`${o.texto}-${i}`}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  padding: "7px 0",
-                  borderBottom: "1px solid var(--line-soft)",
-                }}
-              >
-                <span style={{ flex: 1, fontSize: 12.5, lineHeight: 1.45, color: "var(--ink)" }}>{o.texto}</span>
-                <select
-                  style={{ ...SELECT_STYLE, width: "auto", padding: "4px 6px", fontSize: 12 }}
-                  value={o.estado}
-                  onChange={(e) => setEstadoObjetivo(i, e.target.value as EstadoObjetivoNutri)}
-                  disabled={readOnly}
-                  aria-label={`Estado del objetivo: ${o.texto}`}
-                >
-                  {ESTADOS_OBJETIVO_NUTRI.map((estado) => (
-                    <option key={estado} value={estado}>
-                      {ESTADO_OBJETIVO_NUTRI_LABELS[estado]}
-                    </option>
-                  ))}
-                </select>
-                {!readOnly ? (
-                  <button
-                    type="button"
-                    className="pc-link"
-                    onClick={() => quitarObjetivo(i)}
-                    aria-label={`Quitar objetivo: ${o.texto}`}
-                  >
-                    Quitar
-                  </button>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        ) : null}
-
-        {!readOnly ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {objetivos.length === 0 && ultimosObjetivos ? (
-              <button
-                type="button"
-                className="fi-btn fi-btn-secondary"
-                onClick={retomarObjetivos}
-                style={{ alignSelf: "flex-start" }}
-                title={`Copia los ${ultimosObjetivos.objetivos.length} objetivos de la sesión del ${fmtFecha(ultimosObjetivos.fecha)} para actualizar su estado`}
-              >
-                <I.History size={12} /> Retomar de la última sesión ({ultimosObjetivos.objetivos.length})
-              </button>
-            ) : null}
-            <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
-              <label className="fi-wi-field" style={{ flex: 1 }}>
-                <span>Nuevo objetivo</span>
-                <input
-                  type="text"
-                  value={nuevoObjetivo}
-                  maxLength={500}
-                  onChange={(e) => setNuevoObjetivo(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      agregarObjetivo();
-                    }
-                  }}
-                  placeholder="Ej.: bajar 4 kg en 3 meses…"
-                  spellCheck={false}
-                />
-              </label>
-              <button
-                type="button"
-                className="fi-btn fi-btn-secondary"
-                onClick={agregarObjetivo}
-                disabled={textoNuevoObjetivo === ""}
-                title={
-                  textoNuevoObjetivo !== ""
-                    ? "Suma el objetivo al borrador de esta sesión (estado: en curso)"
-                    : "Escribí el objetivo para agregarlo"
-                }
-              >
-                <I.Plus size={12} /> Agregar
-              </button>
-            </div>
-          </div>
-        ) : null}
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          <span className="muted" style={{ fontSize: 11, fontWeight: 500 }}>
-            Última sesión registrada
-          </span>
-          {!ultimosObjetivos ? (
-            <p className="pc-card-text muted" style={{ fontSize: 12.5 }}>
-              Sin objetivos registrados todavía. Los guardados en sesiones
-              anteriores aparecen acá.
-            </p>
-          ) : (
-            <>
-              {ultimosObjetivos.objetivos.map((o, i) => (
-                <div
-                  key={`${ultimosObjetivos.fecha}-${i}`}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    padding: "7px 0",
-                    borderBottom: "1px solid var(--line-soft)",
-                  }}
-                >
-                  <span style={{ flex: 1, fontSize: 12.5, lineHeight: 1.45, color: "var(--ink-2)" }}>{o.texto}</span>
-                  <span className="fi-pill" style={CHIP_ESTADO_OBJETIVO[o.estado]}>
-                    {ESTADO_OBJETIVO_NUTRI_LABELS[o.estado]}
-                  </span>
-                </div>
-              ))}
-              <span className="muted" style={{ fontSize: 10.5, marginTop: 4 }}>
-                Registrados en la sesión del {fmtFecha(ultimosObjetivos.fecha)}
-              </span>
-            </>
-          )}
-        </div>
-      </section>
+      {/* ── Objetivos nutricionales (ObjetivosBlock genérico, D3) ── */}
+      <ObjetivosBlock
+        titulo="Objetivos nutricionales"
+        placeholder="Ej.: bajar 4 kg en 3 meses…"
+        estados={ESTADOS_OBJETIVO_NUTRI}
+        estadoLabels={ESTADO_OBJETIVO_NUTRI_LABELS}
+        estadoInicial="en_curso"
+        objetivos={objetivos}
+        ultimos={ultimosObjetivos}
+        onChange={setObjetivos}
+        readOnly={readOnly}
+      />
     </div>
   );
 }

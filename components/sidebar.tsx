@@ -22,6 +22,7 @@ import { FolioMark } from "@/components/folio-mark";
 import * as I from "@/components/icons";
 import { OrgSwitcher, type OrgSwitcherOption } from "@/components/org-switcher";
 import { capabilitiesFor, type Capabilities, type Role } from "@/lib/auth/capabilities";
+import { computeTrialChip, type TrialChipView } from "@/lib/billing/trial-chip";
 import type { EspecialidadSlug } from "@/lib/especialidades/meta";
 import { formatRubro, formatProfesionalDisplay } from "@/lib/format/identity";
 
@@ -81,6 +82,12 @@ export interface SidebarProps {
   memberships?: OrgSwitcherOption[];
   /** Org activa de la sesión (para preseleccionar el OrgSwitcher). */
   activeOrgId?: string;
+  /**
+   * E3 · días restantes del trial (accessGate.graceDaysLeft del layout).
+   * null/undefined = no aplica (suscripción activa). Con valor >0 el OWNER
+   * ve el chip "Prueba: quedan N días" sobre el footer.
+   */
+  graceDaysLeft?: number | null;
 }
 
 export function Sidebar({
@@ -93,10 +100,16 @@ export function Sidebar({
   especialidadOverride,
   memberships,
   activeOrgId,
+  graceDaysLeft,
 }: SidebarProps) {
   const caps = capabilitiesFor(role, esColegiado);
   const navItems = NAV_ITEMS.filter((item) => !item.requires || item.requires(caps));
   const pathname = usePathname() ?? "/";
+  const trialChip = computeTrialChip({
+    role,
+    graceDaysLeft: graceDaysLeft ?? null,
+    isInternalAccount: organization.isInternalAccount,
+  });
   const profesionalLine = formatProfesionalDisplay(profile, organization);
   const rubroLabel = formatRubro(organization.rubro);
   const publicHref = organization.slug ? `/book/${organization.slug}` : "/";
@@ -149,6 +162,10 @@ export function Sidebar({
       </nav>
 
       <div className="fi-side-bottom">
+        {/* E3 · aviso de trial (solo OWNER, nunca cuentas internas): hoy el
+            usuario pasa los 30 días sin una sola señal in-app y el primer
+            contacto con billing es el bloqueo duro. Lógica en trial-chip.ts. */}
+        <TrialChip chip={trialChip} />
         <GoogleSyncBadge status={googleSync} />
         <div className="fi-side-links">
           {organization.slug ? (
@@ -217,6 +234,26 @@ function SidebarSearch() {
       />
       <span className="fi-kbd" aria-hidden>⌘K</span>
     </form>
+  );
+}
+
+/**
+ * E3 · chip "Prueba: quedan N días" → link a /configuracion/billing.
+ * La decisión de mostrarlo (rol, días, cuenta interna) y el tono son de
+ * computeTrialChip (lib/billing/trial-chip.ts, pura y testeada); esto solo
+ * pinta. Exportado: el sheet «Más» del shell mobile lo reusa tal cual.
+ */
+export function TrialChip({ chip, onNavigate }: { chip: TrialChipView; onNavigate?: () => void }) {
+  if (!chip.show) return null;
+  return (
+    <Link
+      href="/configuracion/billing"
+      className={"fi-trial-chip" + (chip.urgent ? " is-urgent" : "")}
+      onClick={onNavigate}
+    >
+      <span className="fi-trial-chip-dot" aria-hidden />
+      <span>{chip.label}</span>
+    </Link>
   );
 }
 

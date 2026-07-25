@@ -12,6 +12,7 @@
 
 import { notFound } from "next/navigation";
 
+import { BillingLockedMember } from "@/components/billing/billing-locked-member";
 import { BillingPage, type ClinicPricingView } from "@/components/billing/billing-page";
 import { computeClinicBreakdownCents } from "@/lib/billing/pricing";
 import { getActiveContext } from "@/lib/db/active-context";
@@ -40,9 +41,20 @@ export default async function BillingRoutePage({
     throw new Error(`No se pudo cargar /configuracion/billing: ${ctx.error.message}`);
   }
 
-  // Solo OWNER ve billing. Cualquier otro rol → 404 (no leak de que existe).
+  // Solo OWNER ve los datos de billing. Para el resto:
+  //   - Gate bloqueado (E3): el layout redirige a TODOS los roles acá — un
+  //     404 pelado dejaba al staff sin ninguna explicación. Pantalla simple
+  //     "avisale al titular", sin precio/estado/cargos (eso sigue OWNER-only).
+  //     Cuentas internas quedan afuera: su gate está bypasseado (M37), un
+  //     miembro que llegue acá es acceso directo por URL → 404.
+  //   - Gate OK (acceso directo por URL) → 404 como siempre (no leak).
   if (ctx.data.session.role !== "OWNER") {
-    notFound();
+    const gateBlocked =
+      !ctx.data.accessGate.allowed && !ctx.data.organization.isInternalAccount;
+    if (!gateBlocked) {
+      notFound();
+    }
+    return <BillingLockedMember />;
   }
 
   const sp = await searchParams;

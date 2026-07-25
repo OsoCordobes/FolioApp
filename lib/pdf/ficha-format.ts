@@ -57,3 +57,48 @@ export function buildMembreteMeta(parts: {
 export function tieneSoap(soap: { s: string; o: string; a: string; p: string }): boolean {
   return Boolean(soap.s.trim() || soap.o.trim() || soap.a.trim() || soap.p.trim());
 }
+
+// ─── Evolución (D2 · últimas N sesiones en el PDF) ───────────────────────────
+
+/**
+ * Input estructural de una sesión del historial de la ficha (subset de
+ * SesionPlan, tipado acá para que este módulo siga siendo puro — sin importar
+ * lib/db, que arrastra crypto/supabase y rompería los tests de node:test).
+ */
+export interface EvolucionSesionInput {
+  fecha: string;
+  servicio: string;
+  /** Resumen humano de la herramienta de la especialidad ("cambio"). */
+  cambio: string;
+  soap: { s: string; o: string; a: string; p: string } | null;
+}
+
+/** Una entrada de la sección "Evolución" del PDF (todo ya en claro). */
+export interface EvolucionPdfEntrada {
+  fecha: string;
+  servicio: string;
+  resumen: string;
+  /** SOAP compacto de esa sesión, o null si no hay nada escrito. */
+  soap: { s: string; o: string; a: string; p: string } | null;
+}
+
+/** Tope de sesiones que entran a la sección Evolución del PDF. */
+export const EVOLUCION_PDF_MAX = 10;
+
+/**
+ * Mapea el historial de la ficha (DESC, más reciente primero) a las entradas
+ * de la sección "Evolución" del PDF: hasta `max` sesiones con fecha · servicio
+ * · resumen, y el SOAP compacto solo cuando tiene contenido (un SOAP vacío se
+ * omite en vez de imprimir cuatro "—").
+ */
+export function evolucionDesdeSesiones(
+  sesiones: EvolucionSesionInput[],
+  max: number = EVOLUCION_PDF_MAX,
+): EvolucionPdfEntrada[] {
+  return sesiones.slice(0, Math.max(0, max)).map((s) => ({
+    fecha: s.fecha,
+    servicio: s.servicio,
+    resumen: s.cambio,
+    soap: s.soap && tieneSoap(s.soap) ? s.soap : null,
+  }));
+}

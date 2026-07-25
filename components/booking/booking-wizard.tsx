@@ -16,6 +16,11 @@ import {
   fetchSlotsPublico,
 } from "@/app/(public)/book/[slug]/actions";
 import {
+  buildGoogleCalendarUrl,
+  buildIcsContent,
+  buildIcsDataUri,
+} from "@/lib/booking/calendar-links";
+import {
   esMultiProfesional,
   nombreProfesionalSeleccionado,
   pasoPrevioASlot,
@@ -759,7 +764,56 @@ export function BookingWizard({
                   </>
                 ) : null}
               </p>
-            ) : (
+            ) : null}
+            {/* Agregar al calendario: SOLO con turno confirmado — una solicitud
+                pendiente todavía puede ser rechazada/movida por el consultorio.
+                Todo client-side: link a GCal + .ics vía data-URI (cero backend). */}
+            {autoConfirmado
+              ? (() => {
+                  const servicioNombre =
+                    servicios.find((s) => s.id === servicioId)?.nombre ?? "Turno";
+                  const evento = {
+                    inicioIso: slotPicked.inicio,
+                    finIso: slotPicked.fin,
+                    titulo: `${servicioNombre} · ${org.nombre}`,
+                    ubicacion: org.direccionCompleta,
+                    // UID con slug: sin discriminador, dos turnos de orgs
+                    // distintas al mismo horario colisionarían en el
+                    // calendario del paciente (mismo UID = mismo evento).
+                    uid: `${org.slug}-${slotPicked.inicio}@foliosalud.com`,
+                  };
+                  return (
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 8,
+                        justifyContent: "center",
+                        flexWrap: "wrap",
+                        marginTop: 20,
+                      }}
+                    >
+                      <a
+                        className="fi-btn fi-btn-secondary"
+                        style={{ textDecoration: "none", cursor: "pointer" }}
+                        href={buildGoogleCalendarUrl(evento)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Agregar a Google Calendar
+                      </a>
+                      <a
+                        className="fi-btn fi-btn-secondary"
+                        style={{ textDecoration: "none", cursor: "pointer" }}
+                        href={buildIcsDataUri(buildIcsContent(evento))}
+                        download={`turno-${org.slug}.ics`}
+                      >
+                        Descargar .ics
+                      </a>
+                    </div>
+                  );
+                })()
+              : null}
+            {!autoConfirmado ? (
               <p style={{ color: "var(--ink-3)", marginTop: 8, fontSize: 13, lineHeight: 1.6 }}>
                 El consultorio va a revisar tu solicitud en las próximas horas.
                 {email ? (
@@ -772,7 +826,7 @@ export function BookingWizard({
                   </>
                 )}
               </p>
-            )}
+            ) : null}
             <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 24 }}>
               <button
                 type="button"
