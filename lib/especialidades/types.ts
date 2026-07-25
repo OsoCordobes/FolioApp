@@ -31,6 +31,14 @@ export interface SpecialtyToolProps {
   value: unknown;
   /** El Tool avisa cada cambio local con el toolData completo nuevo. */
   onChange(next: unknown): void;
+  /**
+   * Siembra PROGRAMÁTICA del borrador (p. ej. el carry-forward de quiropraxia
+   * al montar): el host debe setear el value Y el baseline JUNTOS, sin marcar
+   * el borrador como sucio — un seed no es una edición del profesional y jamás
+   * debe disparar autosave/beforeunload ni escribir la HC sola. Opcional por
+   * compat: si el host no lo pasa, la Tool cae a onChange (hosts legacy).
+   */
+  onSeed?(next: unknown): void;
   /** true = sesión bloqueada / sin permisos de edición. */
   readOnly?: boolean;
   /** Sesiones previas, ordenadas DESC por fecha (la más reciente primero). */

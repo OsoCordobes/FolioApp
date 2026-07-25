@@ -319,6 +319,13 @@ const saveSesionFichaSchema = z.object({
     analisis: z.string().max(5000),
     plan: z.string().max(5000),
   }),
+  /**
+   * true = guardado AUTOMÁTICO (debounce del borrador): persiste la sesión
+   * pero NO transiciona el turno a ATENDIENDO — empezar a atender es una
+   * decisión explícita del profesional (guardado manual / "Guardar y cerrar"),
+   * no un efecto colateral de tipear. Ausente/false = guardado manual.
+   */
+  autosave: z.boolean().optional(),
 });
 
 export type SaveSesionFichaActionInput = z.infer<typeof saveSesionFichaSchema>;
@@ -347,47 +354,52 @@ export async function saveSesionFichaAction(
   if (!ctx.ok) return ctx;
 
   // Feedback quiro (jul-2026): la ficha también guarda con el turno de hoy aún
-  // no iniciado (ancla por_iniciar de elegirTurnoAncla). Guardar ES empezar a
-  // atender: si el turno está AGENDADO/CONFIRMADO/EN_SALA se lo lleva a
-  // ATENDIENDO (matriz M09: AGENDADO|CONFIRMADO → EN_SALA → ATENDIENDO) ANTES
+  // no iniciado (ancla por_iniciar de elegirTurnoAncla). El guardado MANUAL es
+  // empezar a atender: si el turno está AGENDADO/CONFIRMADO/EN_SALA se lo lleva
+  // a ATENDIENDO (matriz M09: AGENDADO|CONFIRMADO → EN_SALA → ATENDIENDO) ANTES
   // del upsert, así atendiendo_desde marca el inicio real de la escritura y
-  // "Guardar y cerrar" puede derivar la duración. Best-effort deliberado: si
-  // una transición falla (el estado cambió en el medio / la matriz la
-  // rechaza), la sesión se guarda IGUAL — los datos clínicos mandan; el estado
-  // se corrige desde /hoy y el fallo queda en Sentry. El SELECT es org-scoped
-  // (un turno ajeno da estado null y no se transiciona; el guard IDOR real
-  // vive en upsertSesion).
-  const supabase = await createSupabaseServerClient();
-  const { data: turnoEstadoRow } = await supabase
-    .from("turno")
-    .select("estado")
-    .eq("id", parsed.data.turnoId)
-    .eq("organization_id", ctx.data.session.organizationId)
-    .maybeSingle();
-  const estadoTurno = (turnoEstadoRow as { estado: string } | null)?.estado ?? null;
+  // "Guardar y cerrar" puede derivar la duración. El AUTOSAVE NO transiciona
+  // NUNCA (audit jul-2026): una tecla a las 9:00 con turno a las 15:00 lo
+  // flipearía a ATENDIENDO con atendiendo_desde falso y duración real corrupta
+  // — empezar a atender es una decisión explícita, no un efecto de tipear.
+  // Best-effort deliberado: si una transición falla (el estado cambió en el
+  // medio / la matriz la rechaza), la sesión se guarda IGUAL — los datos
+  // clínicos mandan; el estado se corrige desde /hoy y el fallo queda en
+  // Sentry. El SELECT es org-scoped (un turno ajeno da estado null y no se
+  // transiciona; el guard IDOR real vive en upsertSesion).
+  if (parsed.data.autosave !== true) {
+    const supabase = await createSupabaseServerClient();
+    const { data: turnoEstadoRow } = await supabase
+      .from("turno")
+      .select("estado")
+      .eq("id", parsed.data.turnoId)
+      .eq("organization_id", ctx.data.session.organizationId)
+      .maybeSingle();
+    const estadoTurno = (turnoEstadoRow as { estado: string } | null)?.estado ?? null;
 
-  let huboTransicion = false;
-  if (estadoTurno === "AGENDADO" || estadoTurno === "CONFIRMADO" || estadoTurno === "EN_SALA") {
-    const pasos: Array<"EN_SALA" | "ATENDIENDO"> =
-      estadoTurno === "EN_SALA" ? ["ATENDIENDO"] : ["EN_SALA", "ATENDIENDO"];
-    for (const to of pasos) {
-      const trans = await transitionTurno({ turnoId: parsed.data.turnoId, to });
-      if (!trans.ok) {
-        const { captureException } = await import("@sentry/nextjs");
-        captureException(
-          new Error(
-            `saveSesionFicha: no se pudo iniciar la atención (→${to}): ${trans.error.message}`,
-          ),
-          { tags: { component: "pacientes-actions", op: "iniciarAtencionAlGuardar" } },
-        );
-        break;
+    let huboTransicion = false;
+    if (estadoTurno === "AGENDADO" || estadoTurno === "CONFIRMADO" || estadoTurno === "EN_SALA") {
+      const pasos: Array<"EN_SALA" | "ATENDIENDO"> =
+        estadoTurno === "EN_SALA" ? ["ATENDIENDO"] : ["EN_SALA", "ATENDIENDO"];
+      for (const to of pasos) {
+        const trans = await transitionTurno({ turnoId: parsed.data.turnoId, to });
+        if (!trans.ok) {
+          const { captureException } = await import("@sentry/nextjs");
+          captureException(
+            new Error(
+              `saveSesionFicha: no se pudo iniciar la atención (→${to}): ${trans.error.message}`,
+            ),
+            { tags: { component: "pacientes-actions", op: "iniciarAtencionAlGuardar" } },
+          );
+          break;
+        }
+        huboTransicion = true;
       }
-      huboTransicion = true;
     }
+    // El turno cambió de estado → /hoy debe dejar de mostrarlo como pendiente,
+    // haya salido bien o no el guardado de abajo.
+    if (huboTransicion) revalidatePath("/hoy");
   }
-  // El turno cambió de estado → /hoy debe dejar de mostrarlo como pendiente,
-  // haya salido bien o no el guardado de abajo.
-  if (huboTransicion) revalidatePath("/hoy");
 
   // F-AUTH (IDOR): turnoId/pacienteId vienen del cliente. El guard cross-org
   // (turno ∈ org activa + turno.paciente_id == pacienteId) vive ahora en

@@ -7,9 +7,10 @@
  *   - `esBorradorSucio`: ¿el borrador difiere de lo último guardado/hidratado?
  *     (gatea el guard de beforeunload y el autosave).
  *   - `decidirAutosave`: ¿corresponde programar un autoguardado ahora?
- *     (solo con turno ancla, borrador sucio, sin guardado en vuelo y sin un
- *     error pendiente — tras un fallo, el autosave se re-arma recién cuando
- *     el profesional vuelve a editar).
+ *     (solo con turno ancla EN CURSO, tras una interacción REAL del
+ *     profesional, borrador sucio, sin guardado en vuelo y sin un error
+ *     pendiente — tras un fallo, el autosave se re-arma recién cuando el
+ *     profesional vuelve a editar).
  *   - `anioDeFecha`: año display de una fecha YYYY-MM-DD (reemplaza el "2026"
  *     hardcodeado del tab Sesiones).
  *
@@ -40,6 +41,11 @@ export function esBorradorSucio(actual: BorradorFicha, baseline: BorradorFicha):
   ) {
     return true;
   }
+  // Short-circuit por IDENTIDAD antes de serializar: la MISMA referencia nunca
+  // está sucia. Sin esto, un toolValue no serializable (circular) caería en el
+  // fallback `no-serializable:${Math.random()}` de stringifyTool y quedaría
+  // "siempre distinto" — autosave infinito cada 10 s sin ningún cambio real.
+  if (actual.toolValue === baseline.toolValue) return false;
   return stringifyTool(actual.toolValue) !== stringifyTool(baseline.toolValue);
 }
 
@@ -55,6 +61,12 @@ function stringifyTool(value: unknown): string {
   }
 }
 
+/**
+ * Modo del turno ancla — espejo de TurnoAnclaModo (lib/db/paciente-ficha.ts),
+ * duplicado acá para que este módulo siga siendo puro y sin dependencias.
+ */
+export type ModoTurnoAncla = "en_curso" | "por_iniciar" | "retroactivo";
+
 export interface DecisionAutosaveInput {
   /** ¿Hay diferencias contra lo último guardado? */
   sucio: boolean;
@@ -68,11 +80,33 @@ export interface DecisionAutosaveInput {
    * limpia el error en el próximo cambio).
    */
   hayError: boolean;
+  /**
+   * Modo del turno ancla (null = sin turno). El autosave SOLO corre con la
+   * atención en curso ("en_curso"): en "por_iniciar" auto-guardaría horas antes
+   * del turno (y la action manual transiciona a ATENDIENDO — atendiendo_desde
+   * falso); en "retroactivo" persistiría cada typo sobre la sesión HISTÓRICA de
+   * una visita cerrada a los 10 s. En esos modos, guardar es una decisión
+   * explícita del profesional (botón "Guardar sesión").
+   */
+  modoTurno: ModoTurnoAncla | null;
+  /**
+   * ¿El profesional editó DE VERDAD (tecla/click en SOAP o herramienta)? El
+   * seed programático del carry-forward NO cuenta: abrir la ficha jamás debe
+   * escribir la HC sola.
+   */
+  huboInteraccion: boolean;
 }
 
 /** ¿Corresponde programar un autoguardado del borrador ahora? */
 export function decidirAutosave(input: DecisionAutosaveInput): boolean {
-  return input.hayTurno && input.sucio && !input.guardando && !input.hayError;
+  return (
+    input.hayTurno &&
+    input.modoTurno === "en_curso" &&
+    input.huboInteraccion &&
+    input.sucio &&
+    !input.guardando &&
+    !input.hayError
+  );
 }
 
 /** Debounce del autosave: ~10 s después de la última tecla (D1). */

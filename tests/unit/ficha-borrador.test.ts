@@ -7,6 +7,7 @@ import {
   decidirAutosave,
   esBorradorSucio,
   type BorradorFicha,
+  type DecisionAutosaveInput,
 } from "../../lib/ficha/borrador";
 
 const soapVacio = { subjetivo: "", objetivo: "", analisis: "", plan: "" };
@@ -58,38 +59,79 @@ test("esBorradorSucio: pasar de null a un toolValue real → sucio", () => {
   );
 });
 
+test("esBorradorSucio: seed programático (value Y baseline con el MISMO objeto) → limpio", () => {
+  // Contrato de onSeed (carry-forward quiro): el host setea toolValue y
+  // baseline JUNTOS con el objeto sembrado — abrir la ficha NO deja un
+  // borrador sucio (ni autosave, ni beforeunload, ni HC escrita sola).
+  const sembrado = { v: 2, vista: "posterior", vertebras: [{ id: "C4", estado: "leve" }] };
+  assert.equal(
+    esBorradorSucio(borrador({ toolValue: sembrado }), borrador({ toolValue: sembrado })),
+    false,
+  );
+});
+
+test("esBorradorSucio: toolValue idéntico por referencia, aunque NO serialice → limpio", () => {
+  // Sin el short-circuit por identidad, un valor circular caía en el fallback
+  // no-serializable:${Math.random()} de stringifyTool → "siempre distinto" →
+  // autosave infinito cada 10 s sin ningún cambio real.
+  const circular: Record<string, unknown> = { v: 2 };
+  circular.self = circular;
+  assert.equal(
+    esBorradorSucio(borrador({ toolValue: circular }), borrador({ toolValue: circular })),
+    false,
+  );
+});
+
+test("esBorradorSucio: no-serializables DISTINTOS por referencia → sucio (no perder cambios)", () => {
+  const a: Record<string, unknown> = { v: 2 };
+  a.self = a;
+  const b: Record<string, unknown> = { v: 2 };
+  b.self = b;
+  assert.equal(esBorradorSucio(borrador({ toolValue: a }), borrador({ toolValue: b })), true);
+});
+
 // ─── decidirAutosave ─────────────────────────────────────────────────────────
 
-test("decidirAutosave: solo con turno + sucio + sin guardado en vuelo + sin error", () => {
-  assert.equal(
-    decidirAutosave({ sucio: true, guardando: false, hayTurno: true, hayError: false }),
-    true,
-  );
+/** Caso feliz: atención en curso, edición real, sucio, sin request ni error. */
+function decision(overrides: Partial<DecisionAutosaveInput> = {}): DecisionAutosaveInput {
+  return {
+    sucio: true,
+    guardando: false,
+    hayTurno: true,
+    hayError: false,
+    modoTurno: "en_curso",
+    huboInteraccion: true,
+    ...overrides,
+  };
+}
+
+test("decidirAutosave: turno EN CURSO + interacción real + sucio + sin request ni error → sí", () => {
+  assert.equal(decidirAutosave(decision()), true);
 });
 
 test("decidirAutosave: sin turno ancla NUNCA autoguarda (borrador local)", () => {
-  assert.equal(
-    decidirAutosave({ sucio: true, guardando: false, hayTurno: false, hayError: false }),
-    false,
-  );
+  assert.equal(decidirAutosave(decision({ hayTurno: false, modoTurno: null })), false);
+});
+
+test("decidirAutosave: modo por_iniciar NUNCA autoguarda (una tecla a las 9:00 no inicia el turno de las 15:00)", () => {
+  assert.equal(decidirAutosave(decision({ modoTurno: "por_iniciar" })), false);
+});
+
+test("decidirAutosave: modo retroactivo NUNCA autoguarda (un typo no se persiste solo sobre la sesión histórica)", () => {
+  assert.equal(decidirAutosave(decision({ modoTurno: "retroactivo" })), false);
+});
+
+test("decidirAutosave: sin interacción REAL del profesional → no (el seed del carry-forward no cuenta)", () => {
+  assert.equal(decidirAutosave(decision({ huboInteraccion: false })), false);
 });
 
 test("decidirAutosave: limpio o guardando → no", () => {
-  assert.equal(
-    decidirAutosave({ sucio: false, guardando: false, hayTurno: true, hayError: false }),
-    false,
-  );
-  assert.equal(
-    decidirAutosave({ sucio: true, guardando: true, hayTurno: true, hayError: false }),
-    false,
-  );
+  assert.equal(decidirAutosave(decision({ sucio: false })), false);
+  assert.equal(decidirAutosave(decision({ guardando: true })), false);
 });
 
 test("decidirAutosave: tras un error NO reintenta en loop (espera una edición nueva)", () => {
-  assert.equal(
-    decidirAutosave({ sucio: true, guardando: false, hayTurno: true, hayError: true }),
-    false,
-  );
+  assert.equal(decidirAutosave(decision({ hayError: true })), false);
 });
 
 test("AUTOSAVE_DEBOUNCE_MS: ~10 s tras la última tecla (contrato D1)", () => {

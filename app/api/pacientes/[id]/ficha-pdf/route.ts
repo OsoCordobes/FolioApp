@@ -120,8 +120,14 @@ export async function GET(
   let soap = ficha.plan.soap;
   let fechaSesion: string | null = null;
   const url = new URL(_request.url);
-  const sesionId = url.searchParams.get("sesion");
-  if (sesionId && UUID_RE.test(sesionId)) {
+  const sesionIdRaw = url.searchParams.get("sesion");
+  // ¿El caller pidió el PDF de UNA sesión puntual (?sesion=<uuid> válido)? Ese
+  // documento está pensado para compartir UNA visita con un colega: no debe
+  // arrastrar la Evolución (SOAP de las últimas 10 sesiones) — sobre-exposición
+  // de PHI. Un valor no-uuid se ignora (export de la HC entera, como siempre).
+  const sesionId = sesionIdRaw != null && UUID_RE.test(sesionIdRaw) ? sesionIdRaw : null;
+  const pidioSesionPuntual = sesionId != null;
+  if (sesionId != null) {
     const sesionRes = await getSesionCompleta(sesionId);
     // La sesión debe pertenecer al MISMO paciente de la URL. getSesionCompleta
     // scopea por org (no por paciente): sin este check, un actor con acceso
@@ -182,7 +188,10 @@ export async function GET(
     // D2 · Evolución: últimas N sesiones cerradas (fecha · servicio · resumen +
     // SOAP compacto). plan.sesiones ya viene DESC con el SOAP descifrado
     // server-side (getPacienteFicha) — sin queries ni descifrados extra.
-    evolucion: evolucionDesdeSesiones(ficha.plan.sesiones),
+    // SOLO en el export de la HC entera: con ?sesion= (documento de UNA visita
+    // para compartir con un colega) la Evolución se OMITE — incluir el SOAP de
+    // las últimas 10 sesiones ahí sobre-expone PHI que el receptor no necesita.
+    evolucion: pidioSesionPuntual ? [] : evolucionDesdeSesiones(ficha.plan.sesiones),
     generadoTs: new Date().toISOString(),
   };
 
@@ -202,7 +211,7 @@ export async function GET(
     ip: h.get("x-forwarded-for") ?? h.get("x-real-ip") ?? null,
     userAgent: h.get("user-agent") ?? null,
     payload: {
-      sesion_id: sesionId && UUID_RE.test(sesionId) ? sesionId : null,
+      sesion_id: sesionId,
       formato: "pdf",
       basis: "Ley 26.529 art. 18 (registro de acceso a HC)",
     },

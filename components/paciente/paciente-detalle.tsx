@@ -14,7 +14,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import * as I from "@/components/icons";
 import {
@@ -330,19 +330,36 @@ function TabPlan() {
     [soap, toolValue, baseline],
   );
 
+  // Interacción REAL del profesional (tecla/click en el SOAP o la herramienta).
+  // Los seeds programáticos (onToolSeed) NO la setean: el autosave y el guard
+  // de beforeunload solo se arman después de una edición genuina — abrir la
+  // ficha jamás debe escribir la HC sola ni frenar el cierre de la pestaña.
+  const userEditoRef = useRef(false);
+
   // Editar limpia un error de guardado previo: decidirAutosave frena con
   // hayError (no reintenta en loop), así que el próximo cambio re-arma el
   // autoguardado.
   const onSoapChange = (s: SoapState) => {
+    userEditoRef.current = true;
     setSoap(s);
     if (saveError) setSaveError(null);
   };
   const onToolChange = (v: unknown) => {
+    userEditoRef.current = true;
     setToolValue(v);
     if (saveError) setSaveError(null);
   };
+  // Seed PROGRAMÁTICO de la Tool (carry-forward quiro al montar): actualiza el
+  // borrador Y el baseline JUNTOS — el estado sembrado es la nueva línea de
+  // base, NO un borrador sucio (no dispara autosave/beforeunload ni marca
+  // interacción). "Guardar sesión" lo persiste junto con la primera edición
+  // real del profesional.
+  const onToolSeed = (v: unknown) => {
+    setToolValue(v);
+    setBaseline((b) => ({ ...b, toolValue: v }));
+  };
 
-  const handleGuardar = async () => {
+  const handleGuardar = async (opts?: { autosave?: boolean }) => {
     if (!turnoActivo || saving) return;
     // Snapshot de lo que se envía (ver comentario del baseline).
     const enviado: BorradorFicha = { soap, toolValue };
@@ -353,6 +370,9 @@ function TabPlan() {
       pacienteId: paciente.id,
       toolValue: enviado.toolValue,
       soap: enviado.soap,
+      // El autosave NUNCA transiciona el turno (empezar a atender es una
+      // decisión explícita: botón "Guardar sesión" / "Guardar y cerrar").
+      autosave: opts?.autosave === true,
     });
     setSaving(false);
     if (result.ok) {
@@ -371,8 +391,10 @@ function TabPlan() {
   // confirmación nativa del navegador (antes se perdía el SOAP + herramienta
   // sin aviso). Navegación client-side (tabs/links de Next) no dispara
   // beforeunload — para eso los panels quedan montados (hidden) en el root.
+  // Gateado por interacción REAL: un estado sembrado programáticamente no es
+  // trabajo del profesional y no debe frenar el cierre de la pestaña.
   useEffect(() => {
-    if (!sucio) return;
+    if (!sucio || !userEditoRef.current) return;
     const handler = (e: BeforeUnloadEvent) => {
       e.preventDefault();
       // Chrome legacy exige returnValue seteado para mostrar el diálogo.
@@ -382,11 +404,13 @@ function TabPlan() {
     return () => window.removeEventListener("beforeunload", handler);
   }, [sucio]);
 
-  // D1 · autosave: ~10 s después de la última tecla, SOLO con turno ancla
-  // (sin ancla no hay sesión contra la cual guardar — el borrador es local) y
-  // sin error pendiente. Cada edición reinicia el timer (debounce por deps).
-  // Reusa handleGuardar: misma action, mismo feedback (badge Guardando…/
-  // Guardado ✓) y mismo baseline que el botón manual.
+  // D1 · autosave: ~10 s después de la última tecla, SOLO con la atención EN
+  // CURSO (en por_iniciar guardaría horas antes del turno; en retroactivo
+  // persistiría cada typo sobre la sesión histórica de una visita cerrada),
+  // SOLO tras una interacción real del profesional (el seed del carry-forward
+  // no cuenta) y sin error pendiente. Cada edición reinicia el timer (debounce
+  // por deps). Reusa handleGuardar con autosave:true: misma action y feedback,
+  // pero SIN transicionar el turno (eso queda para el guardado manual).
   useEffect(() => {
     if (
       !decidirAutosave({
@@ -394,12 +418,14 @@ function TabPlan() {
         guardando: saving,
         hayTurno: !!turnoActivo,
         hayError: saveError != null,
+        modoTurno: turnoActivo?.modo ?? null,
+        huboInteraccion: userEditoRef.current,
       })
     ) {
       return;
     }
     const t = window.setTimeout(() => {
-      void handleGuardar();
+      void handleGuardar({ autosave: true });
     }, AUTOSAVE_DEBOUNCE_MS);
     return () => window.clearTimeout(t);
     // handleGuardar se recrea por render; los deps que importan son los que
@@ -525,6 +551,7 @@ function TabPlan() {
         <def.Tool
           value={toolValue}
           onChange={onToolChange}
+          onSeed={onToolSeed}
           readOnly={!turnoActivo}
           historial={filtrarToolHistorial(plan.toolHistorial, especialidad)}
           {...toolExtras}
@@ -534,6 +561,7 @@ function TabPlan() {
           <def.Tool
             value={toolValue}
             onChange={onToolChange}
+            onSeed={onToolSeed}
             readOnly={!turnoActivo}
             historial={filtrarToolHistorial(plan.toolHistorial, especialidad)}
             {...toolExtras}
