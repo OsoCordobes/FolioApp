@@ -20829,3 +20829,25 @@ input:focus { outline: none; }
   display: inline-block; max-width: 160px;
   vertical-align: bottom;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   HOY · importe real del turno cerrado (H3 · honestidad del KPI)
+   La fila mostraba el precio de lista en verde y sin marca, así que un turno
+   con "quedó debiendo" se leía como cobro hecho. Ahora imprime el monto
+   REGISTRADO en `pago` y, si no está pagado, lo etiqueta. "sin cargo" = el
+   cierre no generó pago (monto 0), que no es lo mismo que $0 cobrado.
+   ══════════════════════════════════════════════════════════════════════════ */
+.fi-cerrado-debe {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: var(--r-sm);
+  background: var(--amber-soft);
+  color: var(--amber);
+  font-size: 10.5px; font-weight: 600;
+  letter-spacing: .02em; text-transform: uppercase;
+  vertical-align: middle;
+}
+.fi-cerrado-sincargo {
+  color: var(--ink-3);
+  font-size: 12px;
+}
