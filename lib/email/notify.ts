@@ -11,6 +11,7 @@
  */
 
 import type { TrialUmbralDias } from "@/lib/billing/lifecycle";
+import { addMinutesIso, buildGoogleCalendarUrl } from "@/lib/booking/calendar-links";
 import { getAppUrl } from "@/lib/config/app-url";
 import { recordEmailOnce } from "@/lib/db/email-notificacion";
 import { BILLING_RECOVERY_PATH } from "@/lib/db/suscripcion";
@@ -49,6 +50,47 @@ function formatFechaHora(inicioIso: string, timezone: string | null): string {
   }
 }
 
+/** URL absoluta del portal del paciente (CTA "Gestionar mi turno" de los emails). */
+function portalUrl(): string {
+  return `${getAppUrl()}/portal`;
+}
+
+/**
+ * Email de contacto del consultorio para el Reply-To de los emails a
+ * pacientes. La organization no tiene columna de email público, así que el
+ * contacto de facto es el email del OWNER — el mismo buzón que recibe los
+ * avisos de pedido nuevo (notifyPedidoNuevo), o sea el que el consultorio
+ * efectivamente lee. Lecturas ANGOSTAS vía service client (profile tiene RLS
+ * profile_select_self — mismo patrón que notifyPedidoNuevo). Fail-safe: ante
+ * cualquier falla devuelve undefined y el email sale sin Reply-To (nunca
+ * bloquea el envío).
+ */
+async function resolveOrgContactEmail(organizationId: string): Promise<string | undefined> {
+  try {
+    const service = createSupabaseServiceClient();
+    const { data: owner } = await service
+      .from("member")
+      .select("profile_id")
+      .eq("organization_id", organizationId)
+      .eq("role", "OWNER")
+      .is("deleted_at", null)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    const profileId = (owner?.profile_id as string | undefined) ?? null;
+    if (!profileId) return undefined;
+
+    const { data: profile } = await service
+      .from("profile")
+      .select("email")
+      .eq("id", profileId)
+      .maybeSingle();
+    return (profile?.email as string | undefined) || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 // ─── Confirmada: turno ya creado (auto-confirm o aceptarPedido) ────────────
 
 export async function notifyBookingConfirmada(input: {
@@ -64,7 +106,7 @@ export async function notifyBookingConfirmada(input: {
   try {
     const { data: org } = await client
       .from("organization")
-      .select("nombre, timezone, direccion_completa")
+      .select("nombre, timezone, direccion_completa, telefono_publico")
       .eq("id", organizationId)
       .maybeSingle();
 
@@ -84,16 +126,33 @@ export async function notifyBookingConfirmada(input: {
       .maybeSingle();
 
     const fechaHoraLabel = formatFechaHora(turno.inicio, org?.timezone ?? null);
+    const organizationNombre = org?.nombre ?? "Folio";
+    const servicioNombre = servicio?.nombre ?? "Turno";
+
+    // Link "agregar a Google Calendar": turno confirmado → evento real.
+    // DTEND = inicio + duración (fallback 30 min si la fila viniera rota).
+    const gcalUrl = buildGoogleCalendarUrl({
+      inicioIso: turno.inicio,
+      finIso: addMinutesIso(turno.inicio, Number(turno.duracion_min) || 30),
+      titulo: `${servicioNombre} · ${organizationNombre}`,
+      ubicacion: org?.direccion_completa ?? null,
+    });
 
     const { subject, html } = buildBookingConfirmadaEmail({
       pacienteNombre,
-      organizationNombre: org?.nombre ?? "Folio",
-      servicioNombre: servicio?.nombre ?? "Turno",
+      organizationNombre,
+      servicioNombre,
       fechaHoraLabel,
       direccion: org?.direccion_completa ?? null,
+      telefonoPublico: org?.telefono_publico ?? null,
+      portalUrl: portalUrl(),
+      gcalUrl,
     });
 
-    await sendEmail({ to: pacienteEmail, subject, html });
+    // Reply-To consultorio: el interlocutor del paciente es el consultorio
+    // (el from es un noreply). Sin contacto resoluble, sale sin Reply-To.
+    const replyTo = await resolveOrgContactEmail(organizationId);
+    await sendEmail({ to: pacienteEmail, subject, html, replyTo });
   } catch (e) {
     const { captureException } = await import("@sentry/nextjs");
     captureException(e, {
@@ -165,7 +224,7 @@ export async function notifyBookingRecibida(input: {
   try {
     const { data: org } = await client
       .from("organization")
-      .select("nombre, timezone, direccion_completa")
+      .select("nombre, timezone, direccion_completa, telefono_publico")
       .eq("id", organizationId)
       .maybeSingle();
 
@@ -177,9 +236,13 @@ export async function notifyBookingRecibida(input: {
       servicioNombre,
       fechaHoraLabel,
       direccion: org?.direccion_completa ?? null,
+      telefonoPublico: org?.telefono_publico ?? null,
+      portalUrl: portalUrl(),
     });
 
-    await sendEmail({ to: pacienteEmail, subject, html });
+    // Reply-To consultorio (mismo criterio que notifyBookingConfirmada).
+    const replyTo = await resolveOrgContactEmail(organizationId);
+    await sendEmail({ to: pacienteEmail, subject, html, replyTo });
   } catch (e) {
     const { captureException } = await import("@sentry/nextjs");
     captureException(e, {
