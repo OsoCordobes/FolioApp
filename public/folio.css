@@ -20721,6 +20721,20 @@ input:focus { outline: none; }
 }
 .fi-chip-conf-paciente svg { flex: none; }
 
+/* M91 · gemelo del lado de la baja: "Canceló el paciente". Neutro (--slate),
+   no rojo: es atribución de quién originó la cancelación, no un error — y vive
+   dentro de filas que ya están atenuadas (is-muted) por estar canceladas. */
+.fi-chip-canc-paciente {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--slate-soft);
+  color: var(--slate);
+  font-size: 11px; font-weight: 600; letter-spacing: .01em;
+  white-space: nowrap;
+}
+.fi-chip-canc-paciente svg { flex: none; }
+
 /* ─── Página /t/[token] ─────────────────────────────────────────────────── */
 
 .fi-confirm-wrap {
@@ -20849,3 +20863,74 @@ input:focus { outline: none; }
   line-height: 1.5;
 }
 .fn-aviso-parcial b { color: var(--ink); font-weight: 600; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CONSENT · Banner de cookies vs. bottom-nav mobile (fix/consent-nav-y-hora-12h)
+
+   El CookieBanner se monta en el ROOT layout, así que también aparece dentro
+   de las rutas autenticadas de (app). Su estilo era inline (fixed, bottom:16,
+   z-index:60) y bajo 920px la bottom-nav .fi-mnav (fixed bottom:0, z-index:90,
+   fondo OPACO var(--surface)) se pintaba encima de la franja inferior del
+   banner — exactamente donde viven "Aceptar analytics" y "Solo esenciales":
+   en un teléfono no se podía aceptar NI rechazar, y el banner no se iba nunca.
+   Un z-index inline no se puede corregir desde acá (inline gana siempre sobre
+   las clases), por eso el estilo se mudó a estas reglas.
+
+   Se hacen las dos cosas:
+     1) z-index 92 — arriba de .fi-mnav (90) y .pd-bulk (60), abajo del sheet
+        «Más» (95), los modales (1000) y los toasts (1100). Sólo con esto los
+        botones ya son clickeables (es el fallback si :has() no está).
+     2) el banner se APOYA sobre la nav (mismo offset de 76px que .fi-fab y
+        .fi-toasts) donde el shell la monta, así la nav tampoco queda tapada.
+
+   Y como el banner pasa a estar por encima de todo lo fijo del shell, esos
+   controles se corren por su alto real (--fi-consent-h, publicado en <html>
+   por components/cookie-banner.tsx; 0px cuando no hay banner) para que el
+   arreglo no tape a su vez la FAB de /hoy, los toasts ni la barra masiva.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.fi-cookie {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-2);
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.5;
+  z-index: 92;
+}
+.fi-cookie-title { font-size: 14px; }
+.fi-cookie-body { margin: 0; color: var(--ink-2); }
+.fi-cookie-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+@media (max-width: 920px) {
+  /* Sólo donde el shell autenticado monta la bottom-nav: en las rutas
+     públicas (landing, /login, /book, /t/[token]) y en el portal el banner
+     sigue pegado al borde inferior. */
+  body:has(.fi-mnav) .fi-cookie { bottom: calc(76px + env(safe-area-inset-bottom)); }
+
+  /* Overrides append-only de los offsets mobile ya definidos en la sección C1:
+     sin banner mandan los 76px de siempre (sobre la bottom-nav); con banner
+     manda su alto ocupado, que YA incluye ese offset + 8px de aire. max() en
+     vez de suma para no contar dos veces la altura de la nav. */
+  .fi-fab,
+  .fi-toasts,
+  .pd-bulk {
+    bottom: max(calc(76px + env(safe-area-inset-bottom)), var(--fi-consent-h, 0px));
+  }
+}
+
+/* La FAB de preview del onboarding se ve hasta 1023px y tiene su propio
+   offset (88px), fuera del breakpoint del shell. */
+@media (max-width: 1023px) {
+  .onb-preview-fab { bottom: max(88px, var(--fi-consent-h, 0px)); }
+}

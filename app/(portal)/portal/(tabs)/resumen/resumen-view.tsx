@@ -16,6 +16,9 @@ import type {
   PortalTurnoPasadoView,
 } from "@/lib/db/portal-resumen";
 
+// hourCycle explícito (mismo criterio que lib/booking/slots-format): el ICU de
+// Node resuelve es-AR como h12, así que el HTML del server decía "10:00 a. m."
+// y el del browser "10:00" — hora en formato ajeno + mismatch de hidratación.
 const FMT_TURNO = new Intl.DateTimeFormat("es-AR", {
   timeZone: "America/Argentina/Cordoba",
   weekday: "long",
@@ -24,6 +27,7 @@ const FMT_TURNO = new Intl.DateTimeFormat("es-AR", {
   year: "numeric",
   hour: "2-digit",
   minute: "2-digit",
+  hourCycle: "h23",
 });
 
 const FMT_FECHA = new Intl.DateTimeFormat("es-AR", {

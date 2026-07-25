@@ -204,6 +204,17 @@ export function TurnoList({ turnos, pacientes, nextId, now, timezone, canRegistr
                       ) : null}
                       <span className="fi-cerrados-dot">·</span>
                       <span>{estadoLabel[t.estado] ?? t.estado}</span>
+                      {/* M91 · atribución real de la cancelación: sin esto una
+                          baja hecha por el paciente (email 1-click o portal) se
+                          lee igual que una de mostrador. */}
+                      {t.estado === "cancelado" && t.canceladoPorPaciente ? (
+                        <span
+                          className="fi-chip-canc-paciente"
+                          title="El paciente canceló desde el email de recordatorio o el portal"
+                        >
+                          Canceló el paciente
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                   <div className="fi-cerrado-cta">

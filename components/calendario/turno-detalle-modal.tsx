@@ -62,6 +62,12 @@ export interface TurnoDetalleModalProps {
    * Con 'paciente' se muestra el chip "Confirmó el paciente" junto al estado.
    */
   confirmadoVia?: "manual" | "paciente" | null;
+  /**
+   * M91 · la cancelación la originó el paciente (1-click del email o portal),
+   * leído de `transicion.trigger_origin`. Con true se muestra el chip "Canceló
+   * el paciente" junto al estado.
+   */
+  canceladoPorPaciente?: boolean;
   onClose: () => void;
 }
 
@@ -78,6 +84,7 @@ export function TurnoDetalleModal({
   telefono = null,
   notaReserva = null,
   confirmadoVia = null,
+  canceladoPorPaciente = false,
   onClose,
 }: TurnoDetalleModalProps) {
   // A11y de modal compartida: focus trap + Escape + foco inicial + restore.
@@ -166,6 +173,15 @@ export function TurnoDetalleModal({
                 title="El paciente confirmó desde el email de recordatorio"
               >
                 Confirmó el paciente
+              </span>
+            ) : null}
+            {/* M91 · su espejo del lado de la baja: quién originó la cancelación. */}
+            {estado === "cancelado" && canceladoPorPaciente ? (
+              <span
+                className="fi-chip-canc-paciente"
+                title="El paciente canceló desde el email de recordatorio o el portal"
+              >
+                Canceló el paciente
               </span>
             ) : null}
           </dd>

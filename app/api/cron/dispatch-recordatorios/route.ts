@@ -54,6 +54,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { buildConfirmToken } from "@/lib/booking/confirm-token";
+import { fmtHora } from "@/lib/booking/slots-format";
 import { getAppUrl } from "@/lib/config/app-url";
 import { decryptColumn, tryDecrypt } from "@/lib/crypto";
 import {
@@ -279,11 +280,10 @@ async function processJob(
     month: "short",
     timeZone: tz,
   });
-  const fmtHora = inicio.toLocaleTimeString("es-AR", {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: tz,
-  });
+  // fmtHora (lib/booking/slots-format) fija hourCycle h23: sin él, el ICU de
+  // Node resuelve es-AR como h12 y los templates — que concatenan " hs" —
+  // mandaban al paciente "Hoy a las 10:00 a. m. hs".
+  const horaFmt = fmtHora(turno.inicio, tz);
   const direccion = [org.direccion_completa, org.ciudad].filter(Boolean).join(", ");
 
   // Memo del post-visita: lo necesitan ambos canales.
@@ -313,7 +313,7 @@ async function processJob(
           to: phoneE164,
           pacienteNombre: nombre,
           fecha: fmtFecha,
-          hora: fmtHora,
+          hora: horaFmt,
           consultorioNombre: org.nombre,
           direccion,
           servicio: servicio?.nombre ?? "Consulta",
@@ -322,7 +322,7 @@ async function processJob(
         await sendRecordatorio2h({
           to: phoneE164,
           pacienteNombre: nombre,
-          hora: fmtHora,
+          hora: horaFmt,
           consultorioNombre: org.nombre,
         });
       } else if (job.tipo === "POST_VISITA") {
@@ -379,7 +379,7 @@ async function processJob(
             consultorioNombre: org.nombre,
             servicioNombre: servicio?.nombre ?? "Consulta",
             fecha: fmtFecha,
-            hora: fmtHora,
+            hora: horaFmt,
             direccion: direccion || null,
             confirmarUrl,
             cancelarUrl,
@@ -388,7 +388,7 @@ async function processJob(
           ? buildRecordatorio2hEmail({
               pacienteNombre: nombre,
               consultorioNombre: org.nombre,
-              hora: fmtHora,
+              hora: horaFmt,
             })
           : buildPostVisitaEmail({
               pacienteNombre: nombre,
