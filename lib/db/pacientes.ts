@@ -90,6 +90,13 @@ export interface PacienteDecoded {
 
 // ─── Listar (vista paciente_directorio_lite) ──────────────────────────
 
+/**
+ * Tamaño de chunk del lookup `.in("id", …)` de coberturas (F7a · M89). Mismo
+ * valor que el LOOKUP_CHUNK del importador: mantiene la URL de PostgREST
+ * lejos del límite de largo sin multiplicar round-trips.
+ */
+const COBERTURA_LOOKUP_CHUNK = 100;
+
 export async function listPacientesDirectorio(): Promise<Result<PacienteDecoded[]>> {
   const session = await getActiveSession();
   if (!session.ok) return session;
@@ -109,14 +116,41 @@ export async function listPacientesDirectorio(): Promise<Result<PacienteDecoded[
   // migración: en vez de redefinirla, un segundo SELECT barato sobre
   // paciente_identidad (columnas EN CLARO, org-scoped por RLS) y join en
   // memoria por identidad_id. Best-effort: si falla, el directorio sale sin
-  // cobertura (null = "Particular") en vez de romperse.
+  // cobertura (null = "Particular") en vez de romperse — pero el fallo se
+  // reporta a Sentry: si no, una regresión de schema/RLS mostraría "Particular"
+  // en TODO el directorio sin una sola señal.
+  //
+  // Se busca por los identidad_id de ESTA página (chunks de LOOKUP_CHUNK, como
+  // el importador) en vez de "todas las identidades de la org": PostgREST
+  // corta en 1000 filas por request, y ese techo aplicado a un SELECT sin
+  // orden explícito desalinearía el join con el directorio (pacientes reales
+  // apareciendo como "Particular" a partir del paciente 1001).
   const coberturas = new Map<string, { nombre: string | null; plan: string | null }>();
-  {
-    const { data: cobRows } = await supabase
+  const identidadIds = Array.from(
+    new Set(
+      (data ?? [])
+        .map((row: Record<string, unknown>) => row.identidad_id as string | null)
+        .filter((id): id is string => typeof id === "string" && id.length > 0),
+    ),
+  );
+  for (let i = 0; i < identidadIds.length; i += COBERTURA_LOOKUP_CHUNK) {
+    const chunk = identidadIds.slice(i, i + COBERTURA_LOOKUP_CHUNK);
+    const { data: cobRows, error: cobErr } = await supabase
       .from("paciente_identidad")
       .select("id, cobertura_nombre, cobertura_plan")
       .eq("organization_id", session.data.organizationId)
+      .in("id", chunk)
       .is("deleted_at", null);
+    if (cobErr) {
+      // No rompemos el directorio, pero tampoco callamos: sin esto el modo
+      // degradado ("todos particulares") es indistinguible del dato real.
+      console.error(`[pacientes] lookup de cobertura falló: ${cobErr.message}`);
+      const { captureException } = await import("@sentry/nextjs");
+      captureException(new Error(`Cobertura lookup falló — ${cobErr.message}`), {
+        tags: { component: "pacientes", op: "listPacientesDirectorio.cobertura" },
+      });
+      break;
+    }
     for (const c of (cobRows ?? []) as Array<Record<string, unknown>>) {
       coberturas.set(String(c.id), {
         nombre: (c.cobertura_nombre as string | null) ?? null,

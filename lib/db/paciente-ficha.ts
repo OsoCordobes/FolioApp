@@ -70,6 +70,12 @@ export interface PacienteFichaInfo {
   coberturaPlan: string | null;
   /** F7a (M89) · nº de afiliado DESCIFRADO server-side (viaja como el resto de la PII de la ficha). */
   coberturaNroAfiliado: string | null;
+  /**
+   * F7a (M89) · false si el SELECT de cobertura falló. Distingue "no tiene
+   * cobertura" de "no pudimos leerla": con false la UI muestra el estado
+   * degradado y NO abre el editor (guardaría NULL sobre datos reales).
+   */
+  coberturaLeida: boolean;
 }
 
 /**
@@ -507,13 +513,27 @@ export async function getPacienteFicha(
   let coberturaNombre: string | null = null;
   let coberturaPlan: string | null = null;
   let coberturaNroAfiliado: string | null = null;
+  // false → el SELECT falló y los tres campos de arriba son "no sé", NO
+  // "particular". La UI lo usa para no ofrecer el modal de edición: prefillado
+  // en vacío, "Guardar cobertura" pisaría con NULL una cobertura real.
+  let coberturaLeida = true;
   if (row.identidad_id) {
-    const { data: cobRow } = await supabase
+    const { data: cobRow, error: cobErr } = await supabase
       .from("paciente_identidad")
       .select("cobertura_nombre, cobertura_plan, cobertura_nro_afiliado_cifrado")
       .eq("id", row.identidad_id)
       .eq("organization_id", organizationId)
       .maybeSingle();
+    if (cobErr) {
+      // Degradamos la ficha, no la rompemos — pero con señal: una regresión de
+      // schema/RLS acá se vería como "Particular" en todas las fichas.
+      coberturaLeida = false;
+      console.error(`[paciente-ficha] lookup de cobertura falló: ${cobErr.message}`);
+      const { captureException } = await import("@sentry/nextjs");
+      captureException(new Error(`Cobertura ficha falló — ${cobErr.message}`), {
+        tags: { component: "paciente-ficha", op: "cobertura" },
+      });
+    }
     if (cobRow) {
       const c = cobRow as {
         cobertura_nombre: string | null;
@@ -611,6 +631,7 @@ export async function getPacienteFicha(
     coberturaNombre,
     coberturaPlan,
     coberturaNroAfiliado,
+    coberturaLeida,
   };
 
   const proximoTurno = turnos.find((t) =>

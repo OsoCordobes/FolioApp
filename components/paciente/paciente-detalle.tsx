@@ -673,23 +673,34 @@ function TabInformacion() {
               paciente_identidad y se edita con el modal de al lado. */}
           <dt>Obra social</dt>
           <dd>
-            {formatCobertura(
-              paciente.coberturaNombre,
-              paciente.coberturaPlan,
-              paciente.coberturaNroAfiliado,
-            )}{" "}
-            <button
-              type="button"
-              className="pc-link"
-              onClick={() => setCoberturaOpen(true)}
-              title="Editar la obra social / prepaga del paciente"
-            >
-              Editar
-            </button>
+            {paciente.coberturaLeida ? (
+              <>
+                {formatCobertura(
+                  paciente.coberturaNombre,
+                  paciente.coberturaPlan,
+                  paciente.coberturaNroAfiliado,
+                )}{" "}
+                <button
+                  type="button"
+                  className="pc-link"
+                  onClick={() => setCoberturaOpen(true)}
+                  title="Editar la obra social / prepaga del paciente"
+                >
+                  Editar
+                </button>
+              </>
+            ) : (
+              // El SELECT falló: NO decimos "Particular" (sería inventar un
+              // dato clínico-administrativo) ni ofrecemos editar — el modal
+              // prefillaría vacío y guardaría NULL sobre la cobertura real.
+              <span style={{ color: "var(--ink-3)" }}>
+                No se pudo leer la cobertura. Recargá la página.
+              </span>
+            )}
           </dd>
         </dl>
       </section>
-      {coberturaOpen ? (
+      {coberturaOpen && paciente.coberturaLeida ? (
         <CoberturaModal
           pacienteId={paciente.id}
           prefill={{
