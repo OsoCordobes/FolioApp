@@ -73,6 +73,14 @@ export interface Confirmacion24hEmailInput {
   telefonoPublico?: string | null;
   /** URL absoluta del portal del paciente. Default: {APP_URL}/portal. */
   portalUrl?: string | null;
+  /**
+   * F7b · URL absoluta del 1-click "Confirmo mi turno" ({APP_URL}/t/<token>,
+   * token firmado por el dispatcher con lib/booking/confirm-token). Opcional:
+   * sin ella el email sale EXACTAMENTE como hoy (CTA al portal) — compat.
+   */
+  confirmarUrl?: string | null;
+  /** F7b · URL absoluta del 1-click "No puedo ir" (cancelación). Opcional. */
+  cancelarUrl?: string | null;
 }
 
 export function buildConfirmacion24hEmail(input: Confirmacion24hEmailInput): {
@@ -85,6 +93,19 @@ export function buildConfirmacion24hEmail(input: Confirmacion24hEmailInput): {
     ? `<p style="margin:4px 0;color:#6b5e4f;font-size:14px;">📍 ${esc(input.direccion)}</p>`
     : "";
 
+  // F7b · con confirmarUrl el CTA primario pasa a ser el 1-click "Confirmo mi
+  // turno" + link secundario "No puedo ir" (cancela). Sin URLs (compat: el
+  // dispatcher sin HMAC key, u otros callers) el bloque es el histórico
+  // "Gestionar mi turno" al portal.
+  const ctaBlock = input.confirmarUrl
+    ? `${ctaButton(input.confirmarUrl, "Confirmo mi turno")}
+                ${
+                  input.cancelarUrl
+                    ? `<p style="margin:0 0 16px;font-size:14px;"><a href="${esc(input.cancelarUrl)}" style="color:#6b5e4f;text-decoration:underline;">No puedo ir</a></p>`
+                    : ""
+                }`
+    : ctaButton(input.portalUrl ?? defaultPortalUrl(), "Gestionar mi turno");
+
   const body = `<p style="margin:0 0 16px;font-size:16px;">Hola ${esc(input.pacienteNombre)},</p>
                 <p style="margin:0 0 16px;font-size:15px;line-height:1.5;">Te recordamos tu turno de mañana en <strong>${esc(input.consultorioNombre)}</strong>.</p>
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5efe4;border-radius:8px;padding:16px;margin:0 0 16px;">
@@ -94,7 +115,7 @@ export function buildConfirmacion24hEmail(input: Confirmacion24hEmailInput): {
                     ${direccionBlock}
                   </td></tr>
                 </table>
-                ${ctaButton(input.portalUrl ?? defaultPortalUrl(), "Gestionar mi turno")}
+                ${ctaBlock}
                 <p style="margin:0;color:#6b5e4f;font-size:13px;line-height:1.5;">Si necesitás reprogramar o cancelar, ${contactoConsultorioCopy(input.telefonoPublico)}.</p>`;
 
   return {

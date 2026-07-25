@@ -20,10 +20,11 @@ import { capabilitiesFor } from "@/lib/auth/capabilities";
 import { decryptColumn } from "@/lib/crypto";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
+import { loadConfirmadoViaByTurnoId } from "./confirmado-via";
 import { err, ok, type Result } from "./errors";
 import { getActiveSession } from "./session";
 import { normalizeModalidad } from "@/lib/types";
-import type { Paciente, PacientesById, EstadoTurno, OrigenTurno, PostVisita, Turno } from "@/lib/types";
+import type { ConfirmadoVia, Paciente, PacientesById, EstadoTurno, OrigenTurno, PostVisita, Turno } from "@/lib/types";
 
 // ─── Tipo de fila de turno_extendido ───────────────────────────────────────
 
@@ -165,7 +166,16 @@ export async function getDashboardHoy(input: FetcherInput): Promise<Result<Dashb
   // Si hay turnos cerrados, levantamos las sesiones existentes para saber si
   // ya tienen post-visita registrada (M10: sesion.turno_id 1:1 con turno).
   const turnoIdsCerrados = rows.filter((r) => r.estado === "CERRADO").map((r) => r.id);
-  const postVisitaByTurno = await loadPostVisitaFlags(turnoIdsCerrados, organizationId);
+  // M90 · confirmado_via para el chip "Confirmó el paciente". Batch directo a
+  // `turno` (la vista turno_extendido no expone la columna — ver
+  // lib/db/confirmado-via.ts) y solo para los CONFIRMADO del día.
+  const [postVisitaByTurno, confirmadoViaByTurno] = await Promise.all([
+    loadPostVisitaFlags(turnoIdsCerrados, organizationId),
+    loadConfirmadoViaByTurnoId(
+      supabase,
+      rows.filter((r) => r.estado === "CONFIRMADO").map((r) => r.id),
+    ),
+  ]);
 
   // Agrupar pacientes únicos (set + desencripción una sola vez por paciente).
   const pacientesAcum = new Map<string, Paciente>();
@@ -180,6 +190,7 @@ export async function getDashboardHoy(input: FetcherInput): Promise<Result<Dashb
       timezone,
       profesionalesNombreById,
       canReadClinical,
+      confirmadoViaByTurno[row.id] ?? null,
     );
   });
 
@@ -247,6 +258,7 @@ function rowToTurno(
   timezone: string,
   profesionalesNombreById?: Record<string, string>,
   canReadClinical = false,
+  confirmadoVia: ConfirmadoVia | null = null,
 ): Turno {
   const estado = ESTADO_DB_TO_UI[row.estado];
   const origen = ORIGEN_DB_TO_UI[row.origen];
@@ -268,6 +280,8 @@ function rowToTurno(
     gcal: !!row.gcal_event_id,
     origen,
     modalidad: normalizeModalidad(row.modalidad),
+    // M90 · chip "Confirmó el paciente" (solo viene poblado para CONFIRMADO).
+    confirmadoVia,
     cobro: row.pago_id ? { estado: "pagado", ts: null } : { estado: "pendiente", ts: null },
     profesionalId: row.profesional_id ?? null,
     profesionalNombre: profesionalesNombreById?.[row.profesional_id] ?? null,

@@ -17,6 +17,7 @@ import { capabilitiesFor } from "@/lib/auth/capabilities";
 import { decryptColumn } from "@/lib/crypto";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
+import { loadConfirmadoViaByTurnoId } from "./confirmado-via";
 import { err, ok, type Result } from "./errors";
 import { getActiveSession } from "./session";
 import { normalizeModalidad } from "@/lib/types";
@@ -336,6 +337,14 @@ export async function getCalendarioSemana(input: FetcherInput): Promise<Result<C
   const bloqueoRows = (bloqueosRes.data ?? []) as unknown as BloqueoRow[];
   const pedidoRows = (pedidosRes.data ?? []) as unknown as PedidoRow[];
 
+  // M90 · confirmado_via para el chip "Confirmó el paciente" del detalle.
+  // Batch directo a `turno` (turno_extendido no expone la columna — ver
+  // lib/db/confirmado-via.ts), solo para los CONFIRMADO de la semana.
+  const confirmadoViaByTurno = await loadConfirmadoViaByTurnoId(
+    supabase,
+    turnoRows.filter((r) => r.estado === "CONFIRMADO").map((r) => r.id),
+  );
+
   // Convertir turnos + acumular pacientes.
   const pacientesAcum = new Map<string, Paciente>();
   const turnos: TurnoSemana[] = turnoRows.map((row) => {
@@ -354,6 +363,8 @@ export async function getCalendarioSemana(input: FetcherInput): Promise<Result<C
       profesionalId: row.profesional_id ?? null,
       profesionalNombre: profesionalesNombreById?.[row.profesional_id] ?? null,
       modalidad: normalizeModalidad(row.modalidad),
+      // M90 · chip "Confirmó el paciente" en el detalle del turno.
+      confirmadoVia: confirmadoViaByTurno[row.id] ?? null,
       // M56 · gate PHI: solo desciframos la nota de reserva para roles clínicos;
       // para el resto queda null y nunca sale del server (ni texto ni cifrado).
       notaReserva: canReadClinical
@@ -781,6 +792,13 @@ export async function getCalendarioMes(input: MesFetcherInput): Promise<Result<C
   if (turnosRes.error) return err("db_error", "Error leyendo turnos del mes.", turnosRes.error.message);
 
   const turnoRows = (turnosRes.data ?? []) as unknown as TurnoExtendidoRow[];
+
+  // M90 · confirmado_via (chip del detalle) — ver getCalendarioSemana.
+  const confirmadoViaByTurno = await loadConfirmadoViaByTurnoId(
+    supabase,
+    turnoRows.filter((r) => r.estado === "CONFIRMADO").map((r) => r.id),
+  );
+
   const pacientesAcum = new Map<string, Paciente>();
   const turnos: TurnoSemana[] = turnoRows.map((row) => {
     if (!pacientesAcum.has(row.paciente_id)) {
@@ -798,6 +816,8 @@ export async function getCalendarioMes(input: MesFetcherInput): Promise<Result<C
       profesionalId: row.profesional_id ?? null,
       profesionalNombre: profesionalesNombreById?.[row.profesional_id] ?? null,
       modalidad: normalizeModalidad(row.modalidad),
+      // M90 · chip "Confirmó el paciente" (ver getCalendarioSemana).
+      confirmadoVia: confirmadoViaByTurno[row.id] ?? null,
       // M56 · gate PHI (ver getCalendarioSemana).
       notaReserva: canReadClinical
         ? tryDecrypt(row.nota_reserva_cifrado, `turno.${row.id}.nota_reserva`)

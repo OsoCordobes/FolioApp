@@ -68,6 +68,14 @@ const transitionSchema = z.object({
   duracionRealMin: z.number().int().min(0).max(480).optional(),
   /** Solo aplica cuando to === "CERRADO"; se ignora en el resto. */
   cobro: cobroCierreSchema.optional(),
+  /**
+   * M90 · origen de la transición a CONFIRMADO. Solo aplica con
+   * to === "CONFIRMADO"; se ignora en el resto. Default "manual": los callers
+   * de staff (UI de /hoy) no lo mandan y quedan como confirmación manual.
+   * El 1-click público NO pasa por acá (no hay sesión — usa service client en
+   * app/(public)/t/[token]/actions.ts) pero comparte el mismo vocabulario.
+   */
+  confirmadoVia: z.enum(["manual", "paciente"]).optional(),
 });
 
 // `z.input` (no `z.infer`/`z.output`): los campos con `.default()` (origen,
@@ -469,6 +477,11 @@ export async function transitionTurno(
   }
   if (parsed.data.to === "CERRADO" && parsed.data.duracionRealMin != null) {
     patch.duracion_real_min = parsed.data.duracionRealMin;
+  }
+  // M90 · registrar quién confirmó. Solo al ENTRAR a CONFIRMADO; una
+  // cancelación posterior no lo borra (queda como constancia — ver M90).
+  if (parsed.data.to === "CONFIRMADO") {
+    patch.confirmado_via = parsed.data.confirmadoVia ?? "manual";
   }
 
   const { data: updatedRows, error } = await supabase

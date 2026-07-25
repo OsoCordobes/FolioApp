@@ -182,6 +182,19 @@ export function TurnoRow({ turno, paciente, isNext, now, timezone, canRegistrarC
         </div>
         <div className="fi-t-meta">
           <span>{turno.servicio}</span>
+          {/* M90 · el paciente confirmó desde el email (1-click). Solo se
+              muestra mientras el turno sigue confirmado — al avanzar de estado
+              el chip deja de aportar (y confirmadoVia solo viene poblado para
+              turnos CONFIRMADO desde el fetcher). */}
+          {turno.estado === "confirmado" && turno.confirmadoVia === "paciente" ? (
+            <span
+              className="fi-chip-conf-paciente"
+              title="El paciente confirmó desde el email de recordatorio"
+            >
+              <I.Check size={10} />
+              Confirmó el paciente
+            </span>
+          ) : null}
           {/* Atribución multi-profesional: profesionalNombre solo viene seteado
               en vista "Todos" con >1 colegiado — en orgs Solo o con filtro
               activo es null y este nodo no existe (render histórico intacto). */}
