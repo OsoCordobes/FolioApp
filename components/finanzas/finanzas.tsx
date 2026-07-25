@@ -490,12 +490,15 @@ function TablaTransacciones({
   periodo,
   canMarcarCobrado,
   cobradosNoListados,
+  datosParciales,
 }: {
   transacciones: FinanzasTransaccion[];
   mesLabel: string;
   periodo: string;
   canMarcarCobrado: boolean;
   cobradosNoListados: number;
+  /** true si la lectura tocó el tope de páginas: el pie NO puede prometer completitud. */
+  datosParciales: boolean;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -648,21 +651,28 @@ function TablaTransacciones({
       {/* H1+H4 · el pie ya no puede prometer "las últimas N": la tabla lista
           TODOS los pendientes del período (cada uno con su botón Cobrar, que no
           existe en ninguna otra pantalla) + los cobros más recientes. Decimos
-          exactamente cuántos cobros quedaron fuera y dónde están. */}
+          exactamente cuántos cobros quedaron fuera y dónde están.
+
+          Con `datosParciales` (la lectura tocó el tope de páginas) NINGUNA de
+          las dos promesas es cierta: pueden faltar pendientes y el CSV tampoco
+          trae el período entero. Antes que prometer de más, el pie lo dice. */}
       <footer className="fn-table-foot">
         <span className="muted">
           {pendientesCount === 0
-            ? "Sin pagos pendientes"
-            : pendientesCount === 1
-              ? "1 pago pendiente (todos listados)"
-              : `${pendientesCount} pagos pendientes (todos listados)`}
+            ? datosParciales
+              ? "Sin pagos pendientes entre los leídos"
+              : "Sin pagos pendientes"
+            : `${pendientesCount} pago${pendientesCount === 1 ? "" : "s"} pendiente${pendientesCount === 1 ? "" : "s"}${datosParciales ? "" : " (todos listados)"}`}
           {" · "}
           {cobradosCount === 1 ? "1 cobro reciente" : `${cobradosCount} cobros recientes`}
           {cobradosNoListados > 0
             ? ` (hay ${cobradosNoListados} cobro${cobradosNoListados === 1 ? "" : "s"} más en el CSV)`
             : ""}
           {" · "}
-          {mesLabel} · el export CSV incluye el período completo
+          {mesLabel}
+          {datosParciales
+            ? " · período demasiado grande: el CSV también sale recortado, achicá el rango"
+            : " · el export CSV incluye el período completo"}
         </span>
       </footer>
     </div>
@@ -792,6 +802,7 @@ export function Finanzas({ data, periodo = "mes", canMarcarCobrado = false }: Fi
         periodo={periodo}
         canMarcarCobrado={canMarcarCobrado}
         cobradosNoListados={data.cobradosNoListados}
+        datosParciales={data.datosParciales}
       />
     </div>
   );
