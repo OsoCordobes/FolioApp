@@ -176,7 +176,13 @@ export function PlanillaRenderer({
       <NumericoBlock
         def={def}
         valor={normalizarNumerico(respuestas)}
-        onChange={onChange}
+        // Interacción del usuario mantiene la card abierta: sin esto, elegir
+        // "—" (null) hacía tieneRespuestas=false y colapsaba a mitad de
+        // edición. Solo "Quitar" colapsa explícitamente.
+        onChange={(v) => {
+          if (colapsable) setAbiertaLocal(true);
+          onChange(v);
+        }}
         readOnly={readOnly}
         mostrarConsigna={mostrarConsigna}
         onQuitar={puedeQuitar ? quitar : undefined}
