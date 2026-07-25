@@ -203,7 +203,10 @@ export function TurnosList({ turnos }: { turnos: PortalTurnoView[] }) {
  *     (si es null y la org tiene varios colegiados, el server rechaza y caemos
  *     a manual).
  *   · "manual" — datetime-local libre (comportamiento histórico), fallback
- *     cuando la grilla no está disponible o ningún horario le sirve.
+ *     cuando la grilla no está disponible o ningún horario le sirve. Cuando la
+ *     caída a manual NO fue elegida por el paciente (grilla falló / no aplica),
+ *     lo decimos con una línea arriba del campo — sin aviso, el picker "pobre"
+ *     parece el diseño y no una degradación.
  */
 function ReagendaPicker({
   turno,
@@ -218,6 +221,10 @@ function ReagendaPicker({
   const [modo, setModo] = useState<"slots" | "manual">(
     puedeCargarSlots ? "slots" : "manual",
   );
+  // true sólo cuando caímos a manual SIN que el paciente lo elija (turno sin
+  // org/servicio reservable, o fetchSlotsPublico falló). Los switches
+  // voluntarios ("Proponer otro horario") no lo activan.
+  const [avisoSinGrilla, setAvisoSinGrilla] = useState(!puedeCargarSlots);
   const [cargando, setCargando] = useState(puedeCargarSlots);
   const [slots, setSlots] = useState<Slot[]>([]);
   const [slotSel, setSlotSel] = useState<string | null>(null);
@@ -238,7 +245,9 @@ function ReagendaPicker({
       setCargando(false);
       if (!res.ok) {
         // Grilla no disponible (org deslistada, profesional sin asignar en org
-        // multi-prof, error transitorio) → degradar al horario libre.
+        // multi-prof, error transitorio) → degradar al horario libre, AVISANDO
+        // que la grilla no cargó (si no, la degradación es invisible).
+        setAvisoSinGrilla(true);
         setModo("manual");
         return;
       }
@@ -328,19 +337,31 @@ function ReagendaPicker({
           )}
         </>
       ) : (
-        <label className="au-field">
-          <span>Nuevo horario preferido</span>
-          <input
-            type="datetime-local"
-            value={fechaManual}
-            onChange={(e) => setFechaManual(e.target.value)}
-            disabled={pending}
-            required
-          />
-          <small className="pt-footnote">
-            El consultorio va a revisar si ese horario está disponible.
-          </small>
-        </label>
+        <>
+          {avisoSinGrilla ? (
+            <p className="pt-footnote">
+              No pudimos cargar los horarios disponibles — proponé un horario y
+              el consultorio lo confirma.
+            </p>
+          ) : null}
+          <label className="au-field">
+            <span>Nuevo horario preferido</span>
+            <input
+              type="datetime-local"
+              value={fechaManual}
+              onChange={(e) => setFechaManual(e.target.value)}
+              disabled={pending}
+              required
+            />
+            {/* Con el aviso arriba ya dijimos "el consultorio lo confirma";
+                repetirlo abajo del campo sería ruido. */}
+            {!avisoSinGrilla ? (
+              <small className="pt-footnote">
+                El consultorio va a revisar si ese horario está disponible.
+              </small>
+            ) : null}
+          </label>
+        </>
       )}
 
       <label className="au-field">

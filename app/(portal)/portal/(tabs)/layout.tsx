@@ -9,12 +9,13 @@
  *
  * El gating de sesión NO vive acá: lo hace el middleware y cada page hija
  * re-resuelve `getPacienteSession()` como defensa en profundidad. Este layout
- * es chrome puro (el botón Salir usa la server action signOut existente).
+ * es chrome puro (el botón Salir usa `signOutPortal`, que cierra sesión y
+ * vuelve a /portal/login — no a la landing de profesionales).
  */
 
 import Link from "next/link";
 
-import { signOut } from "@/app/(public)/login/actions";
+import { signOutPortal } from "@/app/(portal)/portal/actions";
 import { FolioMark } from "@/components/folio-mark";
 
 import { PortalNav } from "./portal-nav";
@@ -33,7 +34,7 @@ export default function PortalTabsLayout({
               <span className="pt-brand-tag">Portal del paciente</span>
             </span>
           </Link>
-          <form action={signOut}>
+          <form action={signOutPortal}>
             <button type="submit" className="fi-btn fi-btn-ghost">
               Salir
             </button>

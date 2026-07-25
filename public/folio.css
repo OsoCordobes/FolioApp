@@ -20228,6 +20228,10 @@ input:focus { outline: none; }
 .pt-msg-err { color: var(--red); }
 
 /* ── Estados vacíos con diseño ───────────────────────────────────────────── */
+/* OJO cascada: .pt-empty ya existe más arriba (~L18935) y aporta el panel
+   punteado (surface-2 + borde dashed + padding). Ese panel ES el look buscado
+   para los vacíos sueltos y el hero — este bloque sólo ajusta tipografía y
+   layout encima (append-only: NO tocar la regla vieja). */
 .pt-empty { margin: 0; color: var(--ink-2); font-size: var(--fs-sm, 13px); }
 .pt-empty-hero {
   display: flex;
@@ -20240,6 +20244,14 @@ input:focus { outline: none; }
 .pt-empty-title { margin: 0; font-weight: 600; color: var(--ink); font-size: var(--fs-md, 15px); }
 .pt-empty-sub { margin: 0; color: var(--ink-2); font-size: var(--fs-sm, 13px); line-height: 1.55; max-width: 46ch; }
 .pt-empty-hero .fi-btn { margin-top: 10px; }
+/* ÚNICA colisión real del panel heredado: el pt-empty ANIDADO en .pt-reagenda
+   quedaba surface-2 sobre surface-2 (caja punteada redundante del mismo color
+   que su panel padre). Acá sí lo neutralizamos, verificado visualmente. */
+.pt-reagenda .pt-empty {
+  border: 0;
+  background: transparent;
+  padding: 6px 2px;
+}
 
 /* ── Formularios del portal (perfil / reagenda / linkage) ────────────────── */
 .pt-grid-2 { display: grid; grid-template-columns: 2fr 1fr; gap: 8px; }
