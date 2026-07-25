@@ -1183,6 +1183,7 @@ export function Calendario({
             telefono={pac?.telefono ?? null}
             notaReserva={selectedTurno.notaReserva ?? null}
             confirmadoVia={selectedTurno.confirmadoVia ?? null}
+            canceladoPorPaciente={selectedTurno.canceladoPorPaciente ?? false}
             onClose={() => setSelectedTurno(null)}
           />
         );
