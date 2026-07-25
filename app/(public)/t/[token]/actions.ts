@@ -110,6 +110,11 @@ export async function ejecutarConfirmacion1Click(
     .from("turno")
     .update(patch)
     .eq("id", turno.id)
+    // El service client bypassea RLS: el `deleted_at` hay que re-filtrarlo acá
+    // igual que en el SELECT de arriba. Sin esto, un soft-delete entre el
+    // fetch y el UPDATE (o un turno borrado por staff mientras el paciente
+    // tenía la página abierta) se "resucitaría" a CONFIRMADO.
+    .is("deleted_at", null)
     .in("estado", CONFIRM_CAS_FROM[v.accion] as string[])
     .select("id");
 
@@ -121,6 +126,7 @@ export async function ejecutarConfirmacion1Click(
       .from("turno")
       .select("estado, inicio")
       .eq("id", turno.id)
+      .is("deleted_at", null)
       .maybeSingle();
     if (!fresh) return { resultado: "link_invalido" };
     const redecision = decideResultadoConfirmacion({

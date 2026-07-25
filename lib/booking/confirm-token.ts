@@ -150,7 +150,19 @@ export function verifyConfirmToken(
 
   // Firma primero (timing-safe), DESPUÉS semántica: un token adulterado nunca
   // distingue entre "acción rara" y "firma rota" más allá de "invalido".
-  if (!timingSafeEqualStrings(sign(payload), sig64)) return INVALIDO;
+  //
+  // `sign` lanza si FOLIO_ENC_HMAC_KEY falta o es inválida (misconfiguración
+  // del entorno, no input hostil). Sin este catch la promesa "nunca lanza" del
+  // contrato se rompe justo en un endpoint público sin sesión: el GET de
+  // /t/[token] daría 500 en vez de la página "link inválido". Con la key rota
+  // NINGÚN token puede ser válido, así que degradar a INVALIDO es correcto.
+  let esperada: string;
+  try {
+    esperada = sign(payload);
+  } catch {
+    return INVALIDO;
+  }
+  if (!timingSafeEqualStrings(esperada, sig64)) return INVALIDO;
 
   if (!(ACCIONES as readonly string[]).includes(accion)) return INVALIDO;
 
