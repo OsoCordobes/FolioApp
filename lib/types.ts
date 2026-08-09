@@ -64,8 +64,20 @@ export interface PostVisita {
 }
 
 export interface Cobro {
+  /**
+   * Espejo de `pago.estado` (M09): "pagado" = PAGADO; "pendiente" = PENDIENTE /
+   * PARCIAL ("quedó debiendo") o directamente sin fila en `pago`. Mismo criterio
+   * que /finanzas: sólo PAGADO cuenta como ingreso.
+   */
   estado: "pendiente" | "pagado";
+  /** `pago.pagado_ts` — null mientras no esté cobrado. */
   ts: string | null;
+  /**
+   * `pago.monto_cents` — lo REALMENTE registrado, que puede diferir del precio
+   * del turno (el mini-diálogo de cobro deja editarlo). `null` = no hay pago
+   * registrado para el turno. Es lo que suma el KPI de /hoy (lib/hoy/kpi-cobro).
+   */
+  montoCents?: number | null;
 }
 
 /**
@@ -98,6 +110,14 @@ export interface Turno {
    * "Confirmó el paciente" en /hoy y el detalle del turno.
    */
   confirmadoVia?: ConfirmadoVia | null;
+  /**
+   * M91 · la cancelación la originó el paciente (1-click del email o
+   * self-service del portal), leído de `transicion.trigger_origin='paciente'`.
+   * false = la canceló el consultorio, todavía no está cancelado, o es una
+   * cancelación previa a M91 (sin origen registrable). Alimenta el chip
+   * "Canceló el paciente".
+   */
+  canceladoPorPaciente?: boolean;
   transiciones?: TransicionTurno[];
   cobro?: Cobro;
   /** member.id del profesional asignado (turno.profesional_id, vista M14). */
@@ -131,6 +151,8 @@ export interface TurnoSemana {
   modalidad?: ModalidadTurno;
   /** M90 · quién confirmó ('manual' | 'paciente'); null = sin dato (ver Turno). */
   confirmadoVia?: ConfirmadoVia | null;
+  /** M91 · la cancelación la originó el paciente (ver Turno). */
+  canceladoPorPaciente?: boolean;
   /** member.id del profesional asignado (turno.profesional_id, vista M14). */
   profesionalId?: string | null;
   /** Display name — solo seteado en vista "Todos" con >1 colegiado (ver Turno). */

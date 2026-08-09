@@ -91,6 +91,10 @@ export default async function HoyPage({ searchParams }: PageProps) {
           orgCreatedAt: ctx.data.organization.createdAt,
           onboardingCompleted: ctx.data.organization.onboardingCompleted,
           suscripcionEstado: ctx.data.subscription.estado,
+          // El paso "Activá tu suscripción" apunta a /configuracion/billing,
+          // que es OWNER-only (404 para un DIRECTOR con el gate permitido —
+          // justo el caso de la org joven donde vive esta card).
+          esOwner: ctx.data.session.role === "OWNER",
         })
       : Promise.resolve({ ok: true as const, data: null }),
   ]);

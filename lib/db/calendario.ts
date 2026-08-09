@@ -17,6 +17,7 @@ import { capabilitiesFor } from "@/lib/auth/capabilities";
 import { decryptColumn } from "@/lib/crypto";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
+import { loadCanceladoPorPacienteIds } from "./cancelado-por-paciente";
 import { loadConfirmadoViaByTurnoId } from "./confirmado-via";
 import { err, ok, type Result } from "./errors";
 import { getActiveSession } from "./session";
@@ -340,10 +341,19 @@ export async function getCalendarioSemana(input: FetcherInput): Promise<Result<C
   // M90 · confirmado_via para el chip "Confirmó el paciente" del detalle.
   // Batch directo a `turno` (turno_extendido no expone la columna — ver
   // lib/db/confirmado-via.ts), solo para los CONFIRMADO de la semana.
-  const confirmadoViaByTurno = await loadConfirmadoViaByTurnoId(
-    supabase,
-    turnoRows.filter((r) => r.estado === "CONFIRMADO").map((r) => r.id),
-  );
+  // M91 · su gemelo para "Canceló el paciente", desde el log de transiciones
+  // (ver lib/db/cancelado-por-paciente.ts), solo para los CANCELADO. La vista
+  // semanal es la única que los trae: getCalendarioMes los filtra.
+  const [confirmadoViaByTurno, canceladoPorPaciente] = await Promise.all([
+    loadConfirmadoViaByTurnoId(
+      supabase,
+      turnoRows.filter((r) => r.estado === "CONFIRMADO").map((r) => r.id),
+    ),
+    loadCanceladoPorPacienteIds(
+      supabase,
+      turnoRows.filter((r) => r.estado === "CANCELADO").map((r) => r.id),
+    ),
+  ]);
 
   // Convertir turnos + acumular pacientes.
   const pacientesAcum = new Map<string, Paciente>();
@@ -365,6 +375,8 @@ export async function getCalendarioSemana(input: FetcherInput): Promise<Result<C
       modalidad: normalizeModalidad(row.modalidad),
       // M90 · chip "Confirmó el paciente" en el detalle del turno.
       confirmadoVia: confirmadoViaByTurno[row.id] ?? null,
+      // M91 · chip "Canceló el paciente" en el detalle del turno.
+      canceladoPorPaciente: canceladoPorPaciente.has(row.id),
       // M56 · gate PHI: solo desciframos la nota de reserva para roles clínicos;
       // para el resto queda null y nunca sale del server (ni texto ni cifrado).
       notaReserva: canReadClinical

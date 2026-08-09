@@ -33,6 +33,21 @@ import { useCallback, useEffect, useRef, useState } from "react";
  * agreguen área scrolleable — se la comen. Un elemento en flujo sí la agrega,
  * y funciona igual en los 5 layouts (landing, auth, booking, portal, app) sin
  * tener que enumerar la clase raíz de cada uno.
+ *
+ * El estilo vive en folio.css (`.fi-cookie*`, sección al final) y NO inline:
+ * el banner se monta en el root layout, así que también aplica a las rutas
+ * de (app), donde la bottom-nav mobile (`.fi-mnav`, fixed bottom:0 z-90 con
+ * fondo OPACO bajo 920px) se pintaba ENCIMA de la franja inferior del banner
+ * — justo la de "Aceptar analytics" / "Solo esenciales": en un teléfono, y
+ * dentro de la app, el consent quedaba imposible de aceptar Y de rechazar.
+ * Un `zIndex` inline no se puede corregir desde el CSS (inline gana siempre),
+ * y el offset depende del breakpoint. Ahora el banner va por ENCIMA de la nav
+ * (z 92) y además se APOYA sobre ella (mismo offset que .fi-fab/.fi-toasts).
+ *
+ * `--fi-consent-h` (alto que el banner ocupa contra el borde inferior, el
+ * mismo número que el spacer) se publica en <html> para que los controles
+ * fijos del shell (.fi-fab, .fi-toasts, .pd-bulk, .onb-preview-fab) se corran
+ * por encima mientras el banner está en pantalla y no queden tapados a su vez.
  */
 
 const STORAGE_KEY = "folio.cookieConsent";
@@ -53,30 +68,56 @@ export function CookieBanner() {
     }
   }, []);
 
-  // Alto del banner → alto del spacer. El ref callback mide en el primer
-  // paint y un ResizeObserver lo sigue ante rotación del teléfono o reflow
-  // del texto. 0 = todavía sin medir (o banner ausente).
+  // Espacio que el banner ocupa contra el borde inferior → alto del spacer y
+  // valor de --fi-consent-h. El ref callback mide en el primer paint, un
+  // ResizeObserver sigue el reflow del texto / rotación del teléfono, y el
+  // listener de resize cubre el cruce del breakpoint de 920px (que cambia el
+  // `bottom` aplicado SIN cambiar la caja del banner, así que el RO no salta).
+  // 0 = todavía sin medir (o banner ausente).
   const [spacerH, setSpacerH] = useState(0);
+  const bannerRef = useRef<HTMLDivElement | null>(null);
   const observerRef = useRef<ResizeObserver | null>(null);
-  const setBannerRef = useCallback((node: HTMLDivElement | null) => {
-    observerRef.current?.disconnect();
-    observerRef.current = null;
-    if (!node) {
-      setSpacerH(0);
-      return;
-    }
-    // +16 del `bottom: 16` del banner + 8 de aire, para que el último control
-    // no quede pegado al borde superior del banner.
-    const publish = () => setSpacerH(Math.ceil(node.getBoundingClientRect().height) + 24);
-    publish();
-    if (typeof ResizeObserver !== "undefined") {
-      const ro = new ResizeObserver(publish);
-      ro.observe(node);
-      observerRef.current = ro;
-    }
+
+  const publish = useCallback(() => {
+    const node = bannerRef.current;
+    if (!node) return;
+    // Se mide contra el viewport, no `height`: así entra también el `bottom`
+    // que decidió el CSS (16px suelto, 76px apoyado sobre la bottom-nav) sin
+    // duplicar el breakpoint en JS. +8 de aire para que el último control no
+    // quede pegado al borde superior del banner.
+    const alto = Math.max(0, Math.ceil(window.innerHeight - node.getBoundingClientRect().top)) + 8;
+    setSpacerH(alto);
+    document.documentElement.style.setProperty("--fi-consent-h", `${alto}px`);
   }, []);
 
-  useEffect(() => () => observerRef.current?.disconnect(), []);
+  const setBannerRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      observerRef.current?.disconnect();
+      observerRef.current = null;
+      bannerRef.current = node;
+      if (!node) {
+        setSpacerH(0);
+        document.documentElement.style.removeProperty("--fi-consent-h");
+        return;
+      }
+      publish();
+      if (typeof ResizeObserver !== "undefined") {
+        const ro = new ResizeObserver(publish);
+        ro.observe(node);
+        observerRef.current = ro;
+      }
+    },
+    [publish],
+  );
+
+  useEffect(() => {
+    window.addEventListener("resize", publish);
+    return () => {
+      window.removeEventListener("resize", publish);
+      observerRef.current?.disconnect();
+      document.documentElement.style.removeProperty("--fi-consent-h");
+    };
+  }, [publish]);
 
   const accept = () => {
     try {
@@ -106,38 +147,19 @@ export function CookieBanner() {
     <div aria-hidden="true" style={{ height: spacerH }} />
     <div
       ref={setBannerRef}
+      className="fi-cookie"
       role="dialog"
       aria-labelledby="cookie-banner-title"
       aria-describedby="cookie-banner-body"
-      style={{
-        position: "fixed",
-        bottom: 16,
-        left: 16,
-        right: 16,
-        maxWidth: 720,
-        margin: "0 auto",
-        padding: 16,
-        background: "var(--surface)",
-        border: "1px solid var(--line)",
-        borderRadius: 12,
-        boxShadow: "0 18px 40px rgba(20,17,11,0.08), 0 3px 10px rgba(138,103,34,0.06)",
-        zIndex: 60,
-        display: "flex",
-        flexDirection: "column",
-        gap: 12,
-        fontSize: 13,
-        lineHeight: 1.5,
-        color: "var(--ink)",
-      }}
     >
-      <strong id="cookie-banner-title" style={{ fontSize: 14 }}>Cookies y privacidad</strong>
-      <p id="cookie-banner-body" style={{ margin: 0, color: "var(--ink-2)" }}>
+      <strong id="cookie-banner-title" className="fi-cookie-title">Cookies y privacidad</strong>
+      <p id="cookie-banner-body" className="fi-cookie-body">
         Folio usa cookies esenciales para mantener tu sesión (Supabase Auth) y, opcionalmente,
         analytics anónimo (PostHog) para entender qué partes del producto funcionan mejor.
         Podés rechazar analytics — la sesión sigue funcionando igual.{" "}
         <a href="/privacidad" className="au-link">Aviso de Privacidad</a> (Ley 25.326).
       </p>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      <div className="fi-cookie-actions">
         <button type="button" className="fi-btn fi-btn-primary" onClick={accept}>
           Aceptar analytics
         </button>

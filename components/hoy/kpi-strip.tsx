@@ -7,6 +7,7 @@
  */
 
 import { fmtMoney, minutesTo, relativeTo } from "@/lib/dashboard-helpers";
+import { computeCobroKpi } from "@/lib/hoy/kpi-cobro";
 import type { PacientesById, Turno } from "@/lib/types";
 
 interface KpiStripProps {
@@ -30,12 +31,11 @@ interface KpiItem {
 export function KpiStrip({ turnos, pacientes, now, timezone }: KpiStripProps) {
   const total = turnos.length;
   const cerrados = turnos.filter((t) => t.estado === "cerrado").length;
-  const recaudado = turnos
-    .filter((t) => t.estado === "cerrado")
-    .reduce((s, t) => s + t.precio, 0);
-  const esperado = turnos
-    .filter((t) => !["cerrado", "cancelado", "no_asistio"].includes(t.estado))
-    .reduce((s, t) => s + t.precio, 0);
+  // Dinero: el cálculo vive en lib/hoy/kpi-cobro.ts (puro + testeado) y sale de
+  // `pago`, no del estado del turno — un turno cerrado con deuda NO es plata
+  // cobrada. Antes /hoy sumaba el precio de todo turno cerrado y contradecía a
+  // /finanzas para el mismo día.
+  const dinero = computeCobroKpi(turnos);
 
   const proximo = turnos.find(
     (t) =>
@@ -62,15 +62,22 @@ export function KpiStrip({ turnos, pacientes, now, timezone }: KpiStripProps) {
     },
     {
       lbl: "Recaudado",
-      val: fmtMoney(recaudado),
+      val: fmtMoney(dinero.cobradoPesos),
+      // "cobrado hoy" ahora es literal: sólo pagos en estado PAGADO.
       sub: "cobrado hoy",
       kind: "money",
       tone: "green",
     },
     {
       lbl: "Por cobrar",
-      val: fmtMoney(esperado),
-      sub: "restante del día",
+      val: fmtMoney(dinero.porCobrarPesos),
+      // La deuda registrada al cerrar ("quedó debiendo") es plata que falta
+      // entrar: se declara acá, y el sub dice cuánta parte es deuda para no
+      // confundirla con los turnos que todavía no se atendieron.
+      sub:
+        dinero.deudaPesos > 0
+          ? `incluye ${fmtMoney(dinero.deudaPesos)} de deuda`
+          : "restante del día",
       kind: "money",
     },
   ];
