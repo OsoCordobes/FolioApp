@@ -22,6 +22,7 @@ import { TurnoCreateModal } from "@/components/hoy/turno-create-modal";
 import { TurnoReagendarModal } from "@/components/hoy/turno-reagendar-modal";
 import { useToast } from "@/components/ui/toast";
 import type { ProfesionalLite } from "@/lib/agenda/profesional";
+import { cobroOptimistaAlCerrar } from "@/lib/hoy/kpi-cobro";
 import { applyTransition } from "@/lib/turno-states";
 import { useAgendaAutoRefresh } from "@/lib/use-agenda-refresh";
 import { useNow } from "@/lib/use-now";
@@ -113,7 +114,14 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
       const idx = prev.findIndex((t) => t.id === id);
       if (idx === -1) return prev;
       const before = prev[idx];
-      const next = applyTransition(before, to, { extra });
+      // Al cerrar, el KPI de dinero tiene que moverse con el cobro REAL que va
+      // a quedar en `pago` (monto editado / "quedó debiendo"), no con el precio
+      // de lista. El helper es el espejo puro de lo que hace transitionTurno.
+      const extraConCobro =
+        to === "cerrado"
+          ? { ...extra, cobro: cobroOptimistaAlCerrar(before, cobro, new Date().toISOString()) }
+          : extra;
+      const next = applyTransition(before, to, { extra: extraConCobro });
       // Si el estado no cambió (transición inválida), no hacer server call.
       if (next === before) return prev;
 
@@ -135,6 +143,13 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
           return;
         }
         const nombre = pacientes[before.pacienteId]?.nombre ?? "paciente";
+        // El cobro NO se registró: revertir SOLO el cobro optimista (el cierre
+        // del turno sí valió). Sin esto el KPI "Recaudado" seguía sumando plata
+        // que nunca llegó a la tabla `pago` — la misma mentira que este PR
+        // vino a eliminar, en versión transitoria.
+        if (to === "cerrado" && result.data.pagoRegistrado === false) {
+          setTurnos((curr) => curr.map((t) => (t.id === id ? { ...t, cobro: before.cobro } : t)));
+        }
         // PR #118 · el server confirma si el cobro quedó registrado: cierre y
         // pago NO son atómicos. Si el usuario cargó un cobro y el upsert de
         // `pago` falló (RLS u otro error), el toast de éxito mentía "deuda
