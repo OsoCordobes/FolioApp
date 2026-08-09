@@ -20845,6 +20845,26 @@ input:focus { outline: none; }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
+   FINANZAS · AVISO DE DATOS PARCIALES   (review /finanzas · H2)
+   Se muestra cuando la lectura paginada de pagos toca el tope de seguridad:
+   los KPIs / chart / donut de abajo son parciales y hay que decirlo en
+   pantalla en vez de truncar en silencio.
+   APPEND-ONLY — no editar reglas de arriba.
+   ══════════════════════════════════════════════════════════════════════════ */
+.fn-aviso-parcial {
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  border: 1px solid var(--amber);
+  border-left-width: 3px;
+  border-radius: var(--r-md);
+  background: var(--amber-soft);
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.fn-aviso-parcial b { color: var(--ink); font-weight: 600; }
+
+/* ══════════════════════════════════════════════════════════════════════════
    HOY · importe real del turno cerrado (H3 · honestidad del KPI)
    La fila mostraba el precio de lista en verde y sin marca, así que un turno
    con "quedó debiendo" se leía como cobro hecho. Ahora imprime el monto
