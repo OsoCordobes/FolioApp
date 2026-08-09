@@ -12,7 +12,9 @@
  *   - primer_paciente:  abre PacienteCreateModal (el alta real del directorio).
  *   - primer_turno:     abre TurnoCreateModal (origen MANUAL).
  *   - google_calendar:  link a /configuracion#integraciones.
- *   - cobros_mp:        link a /configuracion/billing.
+ *   - cobros_mp:        link a /configuracion/billing (SOLO OWNER — la ruta es
+ *                       owner-only y devolvía 404 a un DIRECTOR; el server ya
+ *                       omite el paso para el resto, ver lib/primeros-pasos.ts).
  *   - invitar_equipo:   link a /configuracion#equipo (solo CLINICA — el server
  *                       ya omite el paso en INDEPENDIENTE).
  *
