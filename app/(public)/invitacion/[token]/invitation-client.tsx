@@ -94,13 +94,15 @@ function ConsentCheckbox({
 // ─── Sin sesión: crear cuenta / iniciar sesión inline ───────────────────────
 
 export function InvitationAuth({ token }: { token: string }) {
-  void token; // la página se re-renderiza con el mismo token tras autenticar
   const router = useRouter();
   const [modo, setModo] = useState<"signup" | "login">("signup");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [consent, setConsent] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // F-AUTH: con "Confirm email" ON, el alta no abre sesión — hay que mandar al
+  // invitado al mail en vez de refrescar una página que se va a ver igual.
+  const [confirmarEmail, setConfirmarEmail] = useState(false);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const captchaContainerRef = useRef<HTMLDivElement | null>(null);
   const captchaWidgetIdRef = useRef<string | null>(null);
@@ -164,11 +166,11 @@ export function InvitationAuth({ token }: { token: string }) {
     startTransition(async () => {
       const result =
         modo === "signup"
-          ? await signUpForInvitationAction(email, password, {
+          ? await signUpForInvitationAction(token, email, password, {
               consent: true,
               turnstileToken: captchaToken,
             })
-          : await signInWithPassword(email, password);
+          : await signInWithPassword(email, password, { turnstileToken: captchaToken });
       if (!result.ok) {
         setErr(result.error ?? "No pudimos autenticarte. Probá de nuevo.");
         // Turnstile es single-use: tras un fallo, reseteamos para forzar un
@@ -177,6 +179,10 @@ export function InvitationAuth({ token }: { token: string }) {
           window.turnstile.reset(captchaWidgetIdRef.current);
           setCaptchaToken(null);
         }
+        return;
+      }
+      if ("needsConfirmation" in result && result.needsConfirmation) {
+        setConfirmarEmail(true);
         return;
       }
       // Con sesión, el Server Component ya puede previsualizar la invitación.
@@ -235,6 +241,12 @@ export function InvitationAuth({ token }: { token: string }) {
           </>
         ) : null}
 
+        {confirmarEmail ? (
+          <p className="au-ok" role="status">
+            Te mandamos un mail para confirmar tu cuenta. Abrilo desde este mismo
+            dispositivo y volvés acá para aceptar la invitación.
+          </p>
+        ) : null}
         {err ? <p className="au-err">{err}</p> : null}
 
         <button

@@ -117,6 +117,14 @@ function Login({ setVista, prefilledEmail, notice, clearNotice }: LoginProps) {
   // "email_not_confirmed" mostramos el botón "Reenviar link" bajo el error.
   const [errCode, setErrCode] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  // Captcha PROGRESIVO (F-AUTH): el server no lo pide en los primeros intentos
+  // de la hora — un profesional que entra a su consultorio no ve nada. Recién
+  // cuando responde `captcha_required` montamos el widget y reintentamos con
+  // el token. Ver LOGIN_CAPTCHA_AFTER en app/(public)/login/actions.ts.
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const captchaContainerRef = useRef<HTMLDivElement | null>(null);
+  const captchaWidgetIdRef = useRef<string | null>(null);
+  const captchaVisible = errCode === "captcha_required";
 
   // Si la URL trae ?error=<code> (típicamente desde el OAuth callback),
   // traducir y mostrar el mensaje amigable en el banner de error.
@@ -127,6 +135,28 @@ function Login({ setVista, prefilledEmail, notice, clearNotice }: LoginProps) {
       setErr(msg);
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    if (!captchaVisible) return;
+    if (!TURNSTILE_SITE_KEY) return;
+    if (!captchaContainerRef.current) return;
+    const tryRender = () => {
+      if (!window.turnstile) return false;
+      if (captchaWidgetIdRef.current) return true;
+      captchaWidgetIdRef.current = window.turnstile.render(captchaContainerRef.current!, {
+        sitekey: TURNSTILE_SITE_KEY,
+        theme: "auto",
+        size: "flexible",
+        callback: (token) => setCaptchaToken(token),
+        "expired-callback": () => setCaptchaToken(null),
+        "error-callback": () => setCaptchaToken(null),
+      });
+      return true;
+    };
+    if (tryRender()) return;
+    const id = setInterval(() => { if (tryRender()) clearInterval(id); }, 200);
+    return () => clearInterval(id);
+  }, [captchaVisible]);
 
   const submit = (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -144,10 +174,18 @@ function Login({ setVista, prefilledEmail, notice, clearNotice }: LoginProps) {
     setErr("");
     setErrCode(null);
     startTransition(async () => {
-      const result = await signInWithPassword(email, password);
+      const result = await signInWithPassword(email, password, {
+        turnstileToken: captchaToken,
+      });
       if (!result.ok) {
         setErr(result.error ?? "Error al entrar");
         setErrCode(result.code ?? null);
+        // Los tokens de Turnstile son de un solo uso: tras un fallo hay que
+        // pedir uno fresco o el reintento siguiente falla por token consumido.
+        if (captchaWidgetIdRef.current && window.turnstile) {
+          window.turnstile.reset(captchaWidgetIdRef.current);
+          setCaptchaToken(null);
+        }
         return;
       }
       // Mitigate open-redirect (Ley 25.326 + OWASP A01). Only same-origin
@@ -260,8 +298,15 @@ function Login({ setVista, prefilledEmail, notice, clearNotice }: LoginProps) {
         {errCode === "email_not_confirmed" ? (
           <ResendConfirmationInline email={email} />
         ) : null}
+        {captchaVisible && TURNSTILE_SITE_KEY ? (
+          <div ref={captchaContainerRef} style={{ marginTop: 4 }} />
+        ) : null}
 
-        <button type="submit" className="fi-btn fi-btn-primary au-submit" disabled={pending}>
+        <button
+          type="submit"
+          className="fi-btn fi-btn-primary au-submit"
+          disabled={pending || (captchaVisible && Boolean(TURNSTILE_SITE_KEY) && !captchaToken)}
+        >
           {pending ? "Entrando..." : "Entrar"}
           <ArrowRightTiny />
         </button>
@@ -623,8 +668,6 @@ function Forgot({ setVista }: { setVista: (v: Vista) => void }) {
       setSent(true);
     });
   };
-  // pending exposed via disabled below
-  void pending;
 
   if (sent) {
     return (
@@ -683,8 +726,8 @@ function Forgot({ setVista }: { setVista: (v: Vista) => void }) {
             autoFocus
           />
         </label>
-        <button type="submit" className="fi-btn fi-btn-primary au-submit">
-          Enviar link
+        <button type="submit" className="fi-btn fi-btn-primary au-submit" disabled={pending}>
+          {pending ? "Enviando…" : "Enviar link"}
           <ArrowRightTiny />
         </button>
       </form>
