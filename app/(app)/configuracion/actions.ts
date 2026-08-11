@@ -7,6 +7,7 @@
  */
 
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import {
@@ -40,6 +41,12 @@ import {
 } from "@/lib/db/suscripcion";
 import { notifyMemberInvitation } from "@/lib/email/notify";
 import { getAuthUrl as getGoogleAuthUrl } from "@/lib/google/oauth";
+import {
+  buildGoogleOAuthState,
+  googleOAuthStateCookieOptions,
+  GOOGLE_OAUTH_STATE_COOKIE,
+  GOOGLE_OAUTH_STATE_TTL_S,
+} from "@/lib/google/oauth-state";
 import {
   createSupabaseServerClient,
   createSupabaseServiceClient,
@@ -340,10 +347,20 @@ export async function upgradeOrgTipoAction(): Promise<Result<UpgradeOrgTipoResul
 }
 
 /**
- * Inicia el OAuth de Google Calendar. `returnTo="onboarding"` marca el state
- * (`<memberId>:onb`) para que /api/google/callback devuelva al wizard
- * (/onboarding?gcal=ok|error) en vez de expulsar a /configuracion — antes el
- * Step 7 del onboarding cortaba el flujo y el resume rebotaba al Step 6.
+ * Inicia el OAuth de Google Calendar.
+ *
+ * El `state` es un nonce aleatorio (NO el memberId, que es adivinable: se ve
+ * en Equipo y en el `?prof=` de la agenda). Su copia —con el memberId y el
+ * flag de onboarding— queda en la cookie httpOnly `folio.gcal_oauth`, que el
+ * callback exige antes de hacer el exchange. Sin eso, cualquiera podía
+ * autorizar SU Google y mandarle a un colega logueado un callback con el
+ * memberId del colega: los turnos del colega terminaban sincronizando al
+ * calendario del atacante (ver lib/google/oauth-state.ts).
+ *
+ * `returnTo="onboarding"` marca el flag `onb` DENTRO de la cookie para que
+ * /api/google/callback devuelva al wizard (/onboarding?gcal=ok|error) en vez
+ * de expulsar a /configuracion — antes el Step 7 del onboarding cortaba el
+ * flujo y el resume rebotaba al Step 6.
  */
 export async function connectGoogleCalendar(
   returnTo?: "onboarding",
@@ -362,11 +379,18 @@ export async function connectGoogleCalendar(
   // redirect() hace su throw normal y Next navega al consent de Google.
   let url: string;
   try {
-    const state =
-      returnTo === "onboarding"
-        ? `${session.data.memberId}:onb`
-        : session.data.memberId;
+    const { state, cookieValue } = buildGoogleOAuthState({
+      memberId: session.data.memberId,
+      fromOnboarding: returnTo === "onboarding",
+    });
+    // URL primero: si faltan las envs de Google no dejamos una cookie huérfana.
     url = getGoogleAuthUrl(state);
+    const cookieStore = await cookies();
+    cookieStore.set(
+      GOOGLE_OAUTH_STATE_COOKIE,
+      cookieValue,
+      googleOAuthStateCookieOptions(GOOGLE_OAUTH_STATE_TTL_S),
+    );
   } catch (e) {
     const detail = e instanceof Error ? e.message : String(e);
     return err(
