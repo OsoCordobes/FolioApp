@@ -2,169 +2,103 @@
  * Folio · middleware raíz.
  *
  * Responsabilidades:
- *   1. Refrescar la sesión Supabase en cada request (cookies → JWT actualizado).
- *   2. Gating de auth: redirigir a /login si no hay sesión y la ruta está bajo (app).
- *      Audiencia portal sin sesión: /portal/* → /portal/login; /api/portal/* → 401 JSON.
- *   3. Gating reverso: si hay sesión y el usuario va a /login, redirigir a /hoy.
+ *   1. Refrescar la sesión de Supabase en cada request (cookies → JWT al día).
+ *   2. Gating de auth: sin sesión y bajo (app) → /login. Audiencia portal:
+ *      /portal/* → /portal/login; /api/portal/* → 401 JSON.
+ *   3. Ruteo de precedencia staff vs paciente en las rutas de entrada.
  *
- * Fail-open: si Supabase NO está configurado (env vars vacías), todo pasa
- * sin redirects — esto permite visual regression con mock data y modo
- * dev pre-F3 setup.
+ * Este archivo es un ADAPTADOR delgado. La decisión de ruteo (qué es público,
+ * a dónde va cada caso) vive pura y testeada en `lib/auth/route-decision.ts`;
+ * el manejo de cookies y del client, en `lib/supabase/middleware.ts`.
  *
- * Skip patterns:
- *   - /_next/* — assets de Next
- *   - /api/auth/callback — Supabase OAuth callbacks
- *   - /folio.css, favicons, public assets — estáticos
- *   - /book/* — booking público (no requiere auth, F7)
- *   - /dev/* — preview routes para QA visual; en producción cada page
- *     responde 404 vía notFound() (defensa en profundidad).
+ * ⚠️ INVARIANTE: **toda** response que sale de acá tiene que llevar las cookies
+ * de sesión refrescadas. El refresh token de Supabase rota, así que una
+ * response que las pierde deja el token viejo en el browser y la próxima
+ * request muere con "Invalid Refresh Token: Already Used" → sesión caída →
+ * landing. Ese era el loop de login que reportó el cliente. Por eso no hay ni
+ * un `NextResponse.redirect` pelado en este archivo: todos pasan por
+ * `redirectWithCookies` / `jsonWithCookies`.
+ *
+ * Fail-open: sin Supabase configurado (env vars vacías) todo pasa sin
+ * redirects — permite la visual regression con mock data y el dev pre-setup.
  */
 
-import { NextResponse, type NextRequest } from "next/server";
+import { type NextRequest } from "next/server";
 
-import { resolveAudience, updateSupabaseSession } from "@/lib/supabase/middleware";
-
-const PUBLIC_PATHS = [
-  "/",                      // landing de marketing
-  "/login",
-  "/onboarding",
-  "/forgot",
-  "/reset-password",        // Supabase password-recovery email landing (Phase 4)
-  "/privacidad",            // Aviso de privacidad (Ley 25.326) — linkeado desde consent del signup
-  "/terminos",              // Términos del servicio — linkeado desde consent del signup
-  "/cookies",               // Política de cookies — bugfix: la página es pública (app/(public)/cookies) pero anónimos eran redirigidos a /login
-  "/api/health",            // healthcheck (load balancer, uptime monitoring)
-  "/api/analytics/refresh", // cron diario (validado por CRON_SECRET bearer)
-  "/sitemap.xml",           // SEO — generado por app/sitemap.ts; los crawlers no tienen sesión
-  "/robots.txt",            // SEO — generado por app/robots.ts; ídem
-  "/profesionales",         // directorio público (Fase 3) — índice; los hubs van por PUBLIC_PREFIXES
-  "/portal/login",          // login del portal del paciente (Fase 3 · P3) — magic-link, sin sesión
-];
-
-const PUBLIC_PREFIXES = [
-  "/book/",              // booking público F7
-  "/t/",                 // confirmación 1-click de turno desde el email (F7b · M90) — token HMAC, sin sesión
-  "/profesionales/",     // directorio público (Fase 3) — hubs por especialidad/provincia
-  "/invitacion/",        // aceptación de invitación de equipo (M49/M51) — la página maneja ambos estados (con y sin sesión)
-  "/api/auth/",          // OAuth callbacks Supabase
-  "/api/cron/",          // Vercel Cron (validado por CRON_SECRET bearer)
-  "/api/admin/",         // admin one-shot ops (migrate, etc; validado por CRON_SECRET bearer)
-  "/api/whatsapp/",      // webhook Meta WhatsApp (validado por X-Hub-Signature)
-  "/api/google/",        // OAuth callback Google + watch renew
-  "/api/mercadopago/",   // webhook Mercado Pago (validado por x-signature HMAC)
-  "/dev/",               // dev-only preview routes (decoration, card-moods, etc.) — pages themselves 404 in NODE_ENV=production
-  "/opengraph-image",    // imagen OG del landing — Next sirve la ruta con sufijo hash (p.ej. /opengraph-image-pwu6ef), por eso prefix
-];
-
-function isPublicPath(pathname: string): boolean {
-  if (PUBLIC_PATHS.includes(pathname)) return true;
-  return PUBLIC_PREFIXES.some((p) => pathname.startsWith(p));
-}
+import {
+  decideRouteGate,
+  entryDestination,
+  portalDestination,
+  portalLoginDestination,
+} from "@/lib/auth/route-decision";
+import {
+  jsonWithCookies,
+  redirectWithCookies,
+  resolveAudience,
+  updateSupabaseSession,
+} from "@/lib/supabase/middleware";
 
 export async function middleware(request: NextRequest) {
-  const { response, user } = await updateSupabaseSession(request);
+  const { response, user, supabase } = await updateSupabaseSession(request);
   const { pathname } = request.nextUrl;
 
-  // El `x-pathname` lo inyecta `updateSupabaseSession` sobre los REQUEST
-  // headers (no el response) para que el layout lo lea vía `headers()`. El
-  // layout lo usa para el gating de suscripción: cuando ya estás en billing
-  // no podés redirigir a billing — sería loop infinito.
-
-  // Sin Supabase configurado, no aplicamos auth gating
+  // Sin Supabase configurado no aplicamos gating.
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
     return response;
   }
 
-  const isPortalPath = pathname === "/portal" || pathname.startsWith("/portal/");
-  const isPortalLogin = pathname === "/portal/login";
+  const gate = decideRouteGate(pathname, Boolean(user));
 
-  // ─── Sin sesión ─────────────────────────────────────────────────────────────
-  // Ruta no pública → login. El portal tiene SU PROPIO login (magic-link): un
-  // anónimo que pide /portal (o cualquier /portal/*) va a /portal/login, no al
-  // login de staff (que pide password y es otro público).
-  if (!user && !isPublicPath(pathname)) {
-    // /api/portal/* también es audiencia PORTAL, pero es API: con la sesión
-    // vencida respondemos 401 JSON (mismo shape de error que las routes de
-    // /api/portal/*) en vez de redirigir al login de STAFF — antes, descargar
-    // "Mis datos" con sesión vencida devolvía el HTML del login equivocado.
-    if (pathname.startsWith("/api/portal/")) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: {
-            code: "auth_required",
-            message: "Tu sesión expiró. Volvé a entrar al portal.",
-          },
+  if (gate.kind === "pass") return response;
+
+  if (gate.kind === "json_401") {
+    return jsonWithCookies(
+      response,
+      {
+        ok: false,
+        error: {
+          code: "auth_required",
+          message: "Tu sesión expiró. Volvé a entrar al portal.",
         },
-        { status: 401, headers: { "Cache-Control": "no-store" } },
-      );
-    }
+      },
+      { status: 401, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+
+  if (gate.kind === "redirect") {
     const url = request.nextUrl.clone();
-    if (isPortalPath) {
-      url.pathname = "/portal/login";
-    } else {
-      url.pathname = "/login";
+    url.pathname = gate.to;
+    if (gate.keepRedirectParam) {
       url.searchParams.set("redirect", pathname);
     }
-    return NextResponse.redirect(url);
+    return redirectWithCookies(response, url);
   }
 
-  // ─── Con sesión · ruteo de PRECEDENCIA staff vs paciente (P3) ────────────────
-  // Un humano puede ser member (staff) Y paciente_cuenta (portal) a la vez. La
-  // precedencia se resuelve SÓLO en las rutas de entrada ambiguas para no pagar
-  // el costo de resolveAudience() en cada request:
-  //   · /login, / (raíz)  → si es SÓLO paciente (no staff) → /portal; si es
-  //     staff (aunque también sea paciente) → /hoy. STAFF gana en la app.
-  //   · /portal/login      → si ya hay sesión con cuenta de portal → /portal.
-  //   · /portal/* (no login) → si el user NO es cuenta de portal pero SÍ es
-  //     staff → /hoy (un profesional sin ficha no tiene nada que hacer en el
-  //     portal); si no es ninguno → /portal/login (defensa; no debería pasar
-  //     con sesión válida de portal).
-  if (user) {
-    if (pathname === "/login" || pathname === "/") {
-      const { isMember, isPortalAccount } = await resolveAudience(request);
-      const url = request.nextUrl.clone();
-      url.search = "";
-      url.pathname = isPortalAccount && !isMember ? "/portal" : "/hoy";
-      return NextResponse.redirect(url);
-    }
+  // needs_audience: las únicas ramas que cuestan queries.
+  const audiencia = await resolveAudience(supabase);
 
-    if (isPortalLogin) {
-      const { isPortalAccount } = await resolveAudience(request);
-      if (isPortalAccount) {
-        const url = request.nextUrl.clone();
-        url.search = "";
-        url.pathname = "/portal";
-        return NextResponse.redirect(url);
-      }
-      // Sesión de staff en /portal/login: no lo forzamos a portal. Lo dejamos
-      // ver el login del portal (puede querer entrar a un buzón distinto).
-      return response;
-    }
+  const destino =
+    gate.scope === "entry"
+      ? entryDestination(audiencia)
+      : gate.scope === "portal_login"
+        ? portalLoginDestination(audiencia)
+        : portalDestination(audiencia);
 
-    if (isPortalPath) {
-      const { isMember, isPortalAccount } = await resolveAudience(request);
-      if (!isPortalAccount) {
-        const url = request.nextUrl.clone();
-        url.search = "";
-        url.pathname = isMember ? "/hoy" : "/portal/login";
-        return NextResponse.redirect(url);
-      }
-      // Cuenta de portal en /portal/* → dejar pasar.
-      return response;
-    }
-  }
+  if (destino === null) return response;
 
-  return response;
+  const url = request.nextUrl.clone();
+  url.search = "";
+  url.pathname = destino;
+  return redirectWithCookies(response, url);
 }
 
 export const config = {
   matcher: [
     /*
-     * Match all request paths excepto:
+     * Todas las rutas excepto:
      * - _next/static, _next/image
-     * - favicon, folio.css, archivos estáticos
-     * - rutas que start con `/_` (internal Next.js)
+     * - favicon, folio.css, estáticos
+     * - rutas que empiezan con `/_` (internas de Next)
      */
     "/((?!_next/static|_next/image|favicon\\.ico|folio\\.css|.*\\.(?:svg|png|jpg|jpeg|gif|webp|woff|woff2)$).*)",
   ],

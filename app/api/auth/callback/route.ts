@@ -99,6 +99,19 @@ export async function GET(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (!user) {
+    // Si venía un `code` o un `token_hash` y el canje NO tiró error pero
+    // igual no hay sesión, algo se rompió del lado de las cookies (el
+    // code_verifier de PKCE se perdió, el Set-Cookie no llegó, el dominio del
+    // callback no es el canónico…). Antes esto redirigía al login pelado y el
+    // usuario volvía a ver el formulario sin ninguna explicación — el síntoma
+    // exacto de "me devuelve a la página de inicio". Ahora deja rastro y le
+    // dice algo accionable.
+    if (code || tokenHash) {
+      console.error(
+        `[auth callback] canje sin sesión resultante (code=${Boolean(code)} token_hash=${Boolean(tokenHash)} path=${loginPath})`,
+      );
+      return NextResponse.redirect(`${origin}${loginPath}?error=session_missing`);
+    }
     return NextResponse.redirect(`${origin}${loginPath}`);
   }
 
