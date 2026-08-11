@@ -4,7 +4,10 @@
  * Flow:
  *   1. /configuracion/integraciones · Conectar Google → redirige a Google con
  *      scopes calendar + offline_access (refresh_token).
- *   2. Google → /api/google/callback?code=...&state=memberId
+ *   2. Google → /api/google/callback?code=...&state=<nonce>
+ *      El `state` es un nonce aleatorio con copia en la cookie httpOnly
+ *      `folio.gcal_oauth` (lib/google/oauth-state.ts) — el callback exige que
+ *      coincidan antes del exchange y saca el memberId de ahí.
  *   3. Server exchange code → access_token + refresh_token, cifrar y guardar
  *      en tabla `integration`.
  *   4. Crear watch channel para que Google avise cambios (push notifications
@@ -40,14 +43,17 @@ export function makeOAuth2Client(refreshToken?: string) {
   return client;
 }
 
-/** URL para enviar al user (start de OAuth). */
+/**
+ * URL para enviar al user (start de OAuth). `state` es el nonce opaco que
+ * genera buildGoogleOAuthState — NUNCA un identificador de negocio adivinable.
+ */
 export function getAuthUrl(state: string): string {
   const client = makeOAuth2Client();
   return client.generateAuthUrl({
     access_type: "offline",     // garantiza refresh_token
     prompt: "consent",          // siempre re-pide consent (asegura refresh_token)
     scope: SCOPES,
-    state,                      // memberId u otro identificador (verificado en callback)
+    state,                      // nonce anti-CSRF (verificado contra la cookie en el callback)
     include_granted_scopes: true,
   });
 }
