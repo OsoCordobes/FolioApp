@@ -274,14 +274,25 @@ BEGIN
   RAISE NOTICE 'M95 spec · P5 OK: el OWNER sigue editando la ficha de su clínica';
 END $$;
 
+-- ── P6. El trigger no le pisa la manguera a un admin ────────────────────────
+-- El OWNER pone la caja fuerte apuntando a SU PROPIO member: es la operación
+-- legítima que el trigger de M95 no puede romper.
+--
+-- Ojo con lo que NO se testea acá: asignarle la caja fuerte a un TERCERO ya
+-- estaba bloqueado ANTES de M95 por `paciente_update_clinical` (M03), cuyo
+-- predicado `caja_fuerte_profesional IS NULL OR = user_member_id_in(org)`
+-- termina aplicándose también sobre la fila nueva — verificado reproduciendo el
+-- UPDATE contra el esquema de producción, donde M95 ni siquiera está aplicada.
+-- O sea: la única asignación posible es "a mí mismo", y es exactamente la que
+-- M95 restringe a OWNER/DIRECTOR.
 DO $$
 DECLARE v int;
 BEGIN
-  UPDATE paciente SET caja_fuerte_profesional = 'b1950000-0000-4000-8000-0000000095b1'
+  UPDATE paciente SET caja_fuerte_profesional = 'b1950000-0000-4000-8000-0000000095a1'
    WHERE id = 'd1950000-0000-4000-8000-0000000095d1';
   GET DIAGNOSTICS v = ROW_COUNT;
   IF v <> 1 THEN
-    RAISE EXCEPTION 'M95 FAIL P6: el OWNER no pudo poner la caja fuerte (filas=%)', v;
+    RAISE EXCEPTION 'M95 FAIL P6: el trigger bloqueó al OWNER (filas=%)', v;
   END IF;
   RAISE NOTICE 'M95 spec · P6 OK: el OWNER sí administra la caja fuerte';
 END $$;
