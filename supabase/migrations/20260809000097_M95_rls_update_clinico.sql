@@ -180,7 +180,12 @@ COMMENT ON POLICY documento_update_clinical ON public.documento_clinico IS
 CREATE OR REPLACE FUNCTION public.paciente_caja_fuerte_solo_admin()
 RETURNS trigger
 LANGUAGE plpgsql
-SECURITY INVOKER
+-- DEFINER como todos los helpers de RLS del esquema (user_role_in,
+-- can_read_clinical, paciente_owns): el cuerpo llama a auth.uid(), y bajo
+-- INVOKER eso exige USAGE sobre el schema `auth` al rol que dispara el UPDATE.
+-- No decide nada por sí mismo — sólo consulta quién es el actor y delega en
+-- user_role_in, que ya es DEFINER.
+SECURITY DEFINER
 SET search_path = public
 AS $fn$
 BEGIN

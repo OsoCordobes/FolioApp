@@ -229,20 +229,25 @@ END $$;
 
 -- ── N5. PROF-1 ve la ficha, pero no puede auto-asignarse la caja fuerte ──────
 DO $$
-DECLARE v_caught boolean := false; v_state text;
+DECLARE v_caught boolean := false; v_state text; v_msg text;
 BEGIN
   BEGIN
     UPDATE paciente SET caja_fuerte_profesional = 'b1950000-0000-4000-8000-0000000095b1'
      WHERE id = 'd1950000-0000-4000-8000-0000000095d1';
   EXCEPTION WHEN others THEN
-    v_caught := true; v_state := SQLSTATE;
+    v_caught := true; v_state := SQLSTATE; v_msg := SQLERRM;
   END;
 
   IF NOT v_caught THEN
     RAISE EXCEPTION 'M95 FAIL N5: un PROFESIONAL se auto-asignó la caja fuerte y dejó al OWNER afuera';
   END IF;
   IF v_state <> '42501' THEN
-    RAISE EXCEPTION 'M95 FAIL N5: rechazado con SQLSTATE % (esperado 42501)', v_state;
+    RAISE EXCEPTION 'M95 FAIL N5: rechazado con SQLSTATE % (esperado 42501): %', v_state, v_msg;
+  END IF;
+  -- El mensaje importa: 'permission denied for schema auth' también es 42501 y
+  -- haría pasar este caso sin que el guard hubiera intervenido (pasó de verdad).
+  IF v_msg NOT LIKE '%caja fuerte%' THEN
+    RAISE EXCEPTION 'M95 FAIL N5: rechazado por el motivo equivocado (no fue el guard): %', v_msg;
   END IF;
   RAISE NOTICE 'M95 spec · N5 OK: la caja fuerte no se la puede poner el propio profesional';
 END $$;
