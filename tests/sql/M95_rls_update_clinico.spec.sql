@@ -106,7 +106,10 @@ BEGIN
     (id, organization_id, paciente_id, tipo, storage_path, mime_type, tamanio_bytes, subido_por_id) VALUES
     ('04950000-0000-4000-8000-0000000095d1', 'a1950000-0000-4000-8000-000000000951',
      'd1950000-0000-4000-8000-0000000095d1', 'RADIOGRAFIA',
-     'a1950000-0000-4000-8000-000000000951/d1950000-0000-4000-8000-0000000095d1/rx.jpg',
+     -- CHECK documento_path_format: storage_path SÍ lleva el prefijo del bucket.
+     -- (En storage.objects.name NO va: la app lo strippea antes de llamar a
+     -- storage.from() — ver lib/db/documentos.ts:293.)
+     'documentos-clinicos/a1950000-0000-4000-8000-000000000951/d1950000-0000-4000-8000-0000000095d1/rx.jpg',
      'image/jpeg', 1024, 'b1950000-0000-4000-8000-0000000095b1')
   ON CONFLICT (id) DO NOTHING;
 
