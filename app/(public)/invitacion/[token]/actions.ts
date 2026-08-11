@@ -10,14 +10,18 @@
  *     todavía no existe en auth.users. A diferencia de
  *     signUpAndInitOrganization (onboarding), NO crea organización ni member
  *     OWNER — el member se materializa recién al aceptar la invitación.
+ *     Exige una invitación PENDIENTE, vigente y con el mismo email antes de
+ *     crear nada.
  *
  * Tokens: el token crudo solo transita como argumento hacia la RPC (que lo
- * hashea). NUNCA se persiste ni se loguea acá.
+ * hashea) o hacia hashInvitationToken (sha256 local). NUNCA se persiste ni se
+ * loguea acá.
  */
 
 import { headers } from "next/headers";
 
-import { findUserByEmail } from "@/lib/auth/find-user-by-email";
+import { classifySignUpOutcome } from "@/lib/auth/signup-outcome";
+import { getAppUrl } from "@/lib/config/app-url";
 import { writeAuditEntry } from "@/lib/db/audit";
 import { err, ok, type Result } from "@/lib/db/errors";
 import { setActiveOrg } from "@/lib/db/session";
@@ -30,6 +34,12 @@ import {
   createSupabaseServerClient,
   createSupabaseServiceClient,
 } from "@/lib/supabase/server";
+
+import {
+  checkInvitationForSignup,
+  hashInvitationToken,
+  isWellFormedInvitationToken,
+} from "./invitation-guard";
 
 // M2 (docs/AUDIT.md · anti-enumeración): mensaje condicional único — no
 // confirma ni niega que la cuenta exista.
@@ -150,9 +160,38 @@ export async function acceptInvitationAction(
 export interface InviteeSignUpResult {
   ok: boolean;
   error?: string;
+  /**
+   * "Confirm email" ON en Supabase: la cuenta quedó creada pero SIN sesión
+   * hasta que el invitado abra el link del mail. La UI muestra "Revisá tu
+   * email" en vez de refrescar la página.
+   */
+  needsConfirmation?: boolean;
 }
 
+/**
+ * Alta de cuenta de un invitado.
+ *
+ * F-AUTH (auditoría): esta action creaba la cuenta con
+ * `service.auth.admin.createUser({ email_confirm: true })` — service-role, o
+ * sea salteando GoTrue — SIN mirar la invitación, y si el email ya existía
+ * FORZABA `email_confirm: true` sobre la cuenta ajena ANTES de validar la
+ * password. Cualquiera con la URL de la action podía crear cuentas
+ * auto-confirmadas y anular el toggle "Confirm email" de producción.
+ *
+ * Ahora:
+ *   1. rate-limit + Turnstile (como antes);
+ *   2. la invitación tiene que existir, estar PENDIENTE, no vencida y con el
+ *      MISMO email (mismas condiciones que accept_member_invitation, M49);
+ *   3. el alta va por `supabase.auth.signUp` — el camino canónico del repo,
+ *      que respeta el toggle "Confirm email";
+ *   4. jamás tocamos el estado de confirmación de una cuenta ajena.
+ *
+ * Todos los caminos de fallo responden SIGNUP_GENERIC_ERROR (anti-enumeración:
+ * no se distingue "token inválido" de "email que no coincide" ni de "la cuenta
+ * ya existe").
+ */
 export async function signUpForInvitationAction(
+  token: string,
   email: string,
   password: string,
   options: { consent?: boolean; turnstileToken?: string | null } = {},
@@ -172,8 +211,9 @@ export async function signUpForInvitationAction(
   // alta automatizada de cuentas para sondear emails / inflar auth.users. Se
   // exige Turnstile igual que el signup de onboarding (mismo helper, mismo
   // flujo: el cliente emite el token y el server lo verifica ANTES de crear
-  // la cuenta). El argumento token de invitación no es un control de abuso:
-  // un atacante con UN token válido podría reusar esta pantalla N veces.
+  // la cuenta). El token de invitación tampoco es por sí solo un control de
+  // abuso —un atacante con UN token válido podría reusar la pantalla— pero sí
+  // acota el alta al email exacto que fue invitado (gate de abajo).
   const ip = await callerIp();
   const ipLimit = await limitByIp("invitation-signup", ip, 30);
   if (!ipLimit.ok) {
@@ -200,38 +240,74 @@ export async function signUpForInvitationAction(
     };
   }
 
-  const service = createSupabaseServiceClient();
-
-  // Crear el auth.user (auto-confirm, mismo criterio que el signup actual).
-  // Si ya existía, intentamos abrir sesión con la password recibida — si no
-  // coincide, mensaje genérico anti-enumeración.
-  const { error: createErr } = await service.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-  });
-
-  if (createErr) {
-    const lower = createErr.message.toLowerCase();
-    if (lower.includes("already") || lower.includes("registered")) {
-      const existing = await findUserByEmail(service, email);
-      if (!existing) return { ok: false, error: SIGNUP_GENERIC_ERROR };
-      if (!existing.email_confirmed_at) {
-        await service.auth.admin.updateUserById(existing.id, { email_confirm: true });
-      }
-      // cae al signIn de abajo
-    } else {
-      return { ok: false, error: SIGNUP_GENERIC_ERROR };
-    }
+  // ─── Gate de invitación (F-AUTH) ────────────────────────────────────────
+  // Sin esto la action era un alta de cuentas abierta al público. Leemos la
+  // fila con el service client (el invitado todavía NO es member: la RLS de
+  // member_invitation solo deja ver la fila a OWNER/DIRECTOR de la org, y la
+  // RPC get_invitation_preview es authenticated-only). Las condiciones de
+  // vigencia son las mismas que accept_member_invitation (M49): PENDIENTE, no
+  // vencida y lower(email) coincidente. El token crudo solo se hashea.
+  if (!isWellFormedInvitationToken(token)) {
+    return { ok: false, error: SIGNUP_GENERIC_ERROR };
   }
-
-  const supabase = await createSupabaseServerClient();
-  const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
-  if (signInErr) {
+  const service = createSupabaseServiceClient();
+  const { data: invitation, error: invErr } = await service
+    .from("member_invitation")
+    .select("email, estado, expires_at")
+    .eq("token_hash", hashInvitationToken(token))
+    .maybeSingle();
+  if (invErr) {
+    return { ok: false, error: SIGNUP_GENERIC_ERROR };
+  }
+  const gate = checkInvitationForSignup(invitation, email);
+  if (!gate.ok) {
+    // El motivo NO se filtra al cliente (anti-enumeración): "no existe",
+    // "expiró" y "es para otro email" responden idéntico.
     return { ok: false, error: SIGNUP_GENERIC_ERROR };
   }
 
-  // NO bootstrapeamos org: el invitado no es OWNER de nada. Su profile +
-  // member se materializan al aceptar (accept_member_invitation, M49).
-  return { ok: true };
+  // ─── Alta por el camino canónico (GoTrue signUp) ─────────────────────────
+  // Respeta el toggle "Confirm email" del dashboard (ON en producción):
+  //   - Confirm OFF → signUp devuelve session y el ssr client setea cookies.
+  //   - Confirm ON  → user sin session ⇒ needsConfirmation, la UI dice
+  //     "Revisá tu email". Nunca auto-confirmamos por atrás.
+  const supabase = await createSupabaseServerClient();
+  const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
+    email,
+    password,
+    options: { emailRedirectTo: `${getAppUrl()}/api/auth/callback` },
+  });
+  const outcome = classifySignUpOutcome({
+    error: signUpErr,
+    user: signUpData?.user ?? null,
+    session: signUpData?.session ?? null,
+  });
+
+  if (outcome.kind === "error") {
+    return { ok: false, error: SIGNUP_GENERIC_ERROR };
+  }
+  if (outcome.kind === "session") {
+    // NO bootstrapeamos org: el invitado no es OWNER de nada. Su profile +
+    // member se materializan al aceptar (accept_member_invitation, M49).
+    return { ok: true };
+  }
+
+  // existing_try_password (confirm OFF + email ya registrado) o
+  // needs_confirmation (confirm ON). Si puede existir la cuenta, probamos la
+  // password recibida: "re-signup con la password correcta = login", el mismo
+  // flujo histórico de signUpAndInitOrganization.
+  const shouldTryPassword =
+    outcome.kind === "existing_try_password" ||
+    (outcome.kind === "needs_confirmation" && outcome.maybeExisting);
+  if (shouldTryPassword) {
+    const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
+    if (!signInErr) return { ok: true };
+    if (outcome.kind === "existing_try_password") {
+      return { ok: false, error: SIGNUP_GENERIC_ERROR };
+    }
+    // Confirm ON + user ofuscado por GoTrue + password que no abre sesión:
+    // respuesta idéntica a la de un alta fresca (anti-enumeración).
+    return { ok: true, needsConfirmation: true };
+  }
+  return { ok: true, needsConfirmation: true };
 }

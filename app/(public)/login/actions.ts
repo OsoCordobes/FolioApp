@@ -15,6 +15,7 @@ import { redirect } from "next/navigation";
 
 import { getAppUrl } from "@/lib/config/app-url";
 import { formatResetMessage, limitByIp, limitByKey } from "@/lib/security/rate-limit";
+import { verifyTurnstile } from "@/lib/security/turnstile";
 import {
   createSupabaseServerClient,
   createSupabaseServiceClient,
@@ -31,9 +32,32 @@ export interface AuthResult {
   code?: string;
 }
 
+/**
+ * Mensaje ÚNICO para todo fallo de credenciales: no confirma ni niega que la
+ * cuenta exista (misma política anti-enumeración que SIGNUP_GENERIC_ERROR en
+ * onboarding / invitación). No agregar variantes acá.
+ */
+const LOGIN_GENERIC_ERROR = "Email o contraseña incorrectos.";
+
+/** Intentos de login por hora y por email antes del corte duro. */
+const LOGIN_EMAIL_MAX = 10;
+/**
+ * Intentos "gratis" (sin captcha) por hora y por email. A partir del siguiente,
+ * `signInWithPassword` devuelve `code: "captcha_required"`.
+ */
+const LOGIN_CAPTCHA_AFTER = 5;
+
+/** IP del caller según los headers de Vercel (mismo helper que invitación). */
+async function callerIp(): Promise<string | null> {
+  const reqHeaders = await headers();
+  const ipRaw = reqHeaders.get("x-forwarded-for") ?? reqHeaders.get("x-real-ip") ?? null;
+  return ipRaw ? ipRaw.split(",")[0].trim() : null;
+}
+
 export async function signInWithPassword(
   email: string,
   password: string,
+  options: { turnstileToken?: string | null } = {},
 ): Promise<AuthResult> {
   if (!email || !email.match(/^[^@\s]+@[^@\s]+\.[^@\s]+$/)) {
     return { ok: false, error: "Email inválido." };
@@ -44,6 +68,68 @@ export async function signInWithPassword(
   // que Supabase responda con "contraseña incorrecta" si no matchea.
   if (!password || password.length === 0) {
     return { ok: false, error: "Ingresá tu contraseña." };
+  }
+
+  // ─── Freno propio de brute-force (F-AUTH) ─────────────────────────────────
+  //
+  // El login salía del server SIN límite propio. El rate-limit por IP de GoTrue
+  // contabiliza la IP de EGRESS de Vercel (no la del atacante), así que su 429
+  // le caía al usuario legítimo —y encima disfrazado de "Email o contraseña
+  // incorrectos"—, mientras el atacante seguía probando passwords gratis.
+  //
+  //   - 20/h por IP: tolera wifi compartido de clínica (varios profesionales
+  //     entrando desde la misma red) pero corta el barrido.
+  //   - 10/h por email: defensa contra credential-stuffing distribuido en N IPs
+  //     contra una misma cuenta.
+  //
+  // Ambos límites se consumen ANTES de tocar Supabase y ANTES del oráculo de
+  // proveedor (maybeProviderSpecificError), que era la otra vía para confirmar
+  // la existencia de una cuenta sin fricción.
+  const ip = await callerIp();
+  const ipLimit = await limitByIp("login", ip, 20);
+  if (!ipLimit.ok) {
+    return {
+      ok: false,
+      error: `Demasiados intentos desde tu red. ${formatResetMessage(ipLimit.resetIn)}`,
+      code: "rate_limited",
+    };
+  }
+  const emailLimit = await limitByKey("login-email", email, LOGIN_EMAIL_MAX);
+  if (!emailLimit.ok) {
+    return {
+      ok: false,
+      error: `Demasiados intentos para esta cuenta. ${formatResetMessage(emailLimit.resetIn)}`,
+      code: "rate_limited",
+    };
+  }
+
+  // ─── Captcha PROGRESIVO ───────────────────────────────────────────────────
+  //
+  // Turnstile en cada login sería fricción diaria sobre el usuario legítimo
+  // (un profesional entra a su consultorio todos los días) y encima frágil: si
+  // el widget no carga, nadie entra. Y con los límites de arriba ya puestos, su
+  // valor marginal contra el atacante es bajo.
+  //
+  // Así que se pide recién cuando el comportamiento deja de parecer humano: a
+  // partir del intento LOGIN_CAPTCHA_AFTER de la hora para ESE email. Un
+  // profesional que entra 1-3 veces por hora no lo ve nunca; un barrido sobre
+  // una cuenta tiene que resolver un captcha para los intentos 6 a 10 y después
+  // se topa con el límite duro.
+  //
+  // El cliente reacciona a `code: "captcha_required"` montando el widget y
+  // reintentando con el token.
+  const captchaRequerido = emailLimit.remaining < LOGIN_EMAIL_MAX - LOGIN_CAPTCHA_AFTER;
+  if (captchaRequerido) {
+    // En dev (sin TURNSTILE_SECRET_KEY) el verifier es no-op (true) para no
+    // romper el dev loop — mismo criterio que signUpAndInitOrganization.
+    const captchaOk = await verifyTurnstile(options.turnstileToken, ip);
+    if (!captchaOk) {
+      return {
+        ok: false,
+        error: "Verificá que no sos un robot para seguir intentando.",
+        code: "captcha_required",
+      };
+    }
   }
 
   const supabase = await createSupabaseServerClient();
@@ -71,8 +157,13 @@ export async function signInWithPassword(
     // failed sign-in so we don't leak whether an email is registered for
     // arbitrary lookups (the failed sign-in already confirms a session can't
     // be opened; we're only refining the *reason*).
+    //
+    // F-AUTH: este branch SÍ revela existencia de cuenta ("entra con Google"),
+    // así que corre detrás del rate-limit + captcha de arriba: cada sondeo
+    // consume cupo de las dos ventanas (IP y email) y dispara el query
+    // service-role solo después de pasar el captcha.
     const specific = await maybeProviderSpecificError(email);
-    return { ok: false, error: specific ?? "Email o contraseña incorrectos." };
+    return { ok: false, error: specific ?? LOGIN_GENERIC_ERROR };
   }
   return { ok: true };
 }
@@ -139,9 +230,38 @@ export async function signInWithGoogle(): Promise<AuthResult> {
   return { ok: true };
 }
 
+/**
+ * Recuperar contraseña. Anti-enumeración: salvo rate-limit, SIEMPRE responde
+ * `{ ok: true }` (no confirma si el email existe).
+ *
+ * Rate-limit (F-AUTH): cada llamada gatilla un mail de Supabase Auth. Con el
+ * SMTP built-in (2-4 mails/hora POR PROYECTO) unos pocos requests anónimos
+ * dejaban sin mails de auth a TODO el producto — incluido el portal del
+ * paciente, que es magic-link-only y sin mail no entra nadie. Mismos números
+ * que `resendSignupConfirmation` (10/h por IP + 5/h por email), que comparte
+ * exactamente el mismo recurso escaso.
+ */
 export async function requestPasswordReset(email: string): Promise<AuthResult> {
   if (!email || !email.match(/^[^@\s]+@[^@\s]+\.[^@\s]+$/)) {
     return { ok: false, error: "Email inválido." };
+  }
+
+  const ip = await callerIp();
+  const ipLimit = await limitByIp("password-reset", ip, 10);
+  if (!ipLimit.ok) {
+    return {
+      ok: false,
+      error: `Demasiados pedidos de recuperación. ${formatResetMessage(ipLimit.resetIn)}`,
+      code: "rate_limited",
+    };
+  }
+  const emailLimit = await limitByKey("password-reset-email", email, 5);
+  if (!emailLimit.ok) {
+    return {
+      ok: false,
+      error: `Demasiados pedidos de recuperación. ${formatResetMessage(emailLimit.resetIn)}`,
+      code: "rate_limited",
+    };
   }
 
   const supabase = await createSupabaseServerClient();
@@ -181,9 +301,7 @@ export async function resendSignupConfirmation(email: string): Promise<AuthResul
     return { ok: false, error: "Email inválido." };
   }
 
-  const reqHeaders = await headers();
-  const ipRaw = reqHeaders.get("x-forwarded-for") ?? reqHeaders.get("x-real-ip") ?? null;
-  const ip = ipRaw ? ipRaw.split(",")[0].trim() : null;
+  const ip = await callerIp();
   const ipLimit = await limitByIp("resend-confirm", ip, 10);
   if (!ipLimit.ok) {
     return {
