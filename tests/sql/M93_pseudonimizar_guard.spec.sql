@@ -150,7 +150,9 @@ LANGUAGE sql STABLE AS $$
     (SELECT count(*) FROM tutor_legal              WHERE paciente_id = p_pac),
     (SELECT count(*) FROM paciente_intake_avanzado WHERE paciente_id = p_pac),
     (SELECT count(*) FROM instrumento_respuesta    WHERE paciente_id = p_pac),
-    (SELECT (pseudonimizado_en IS NOT NULL) FROM paciente WHERE id = p_pac),
+    -- ::text explícito: format('%s', bool) usa bool_out y rinde 't'/'f', no
+    -- 'true'/'false'. El cast deja las aserciones de abajo legibles.
+    (SELECT (pseudonimizado_en IS NOT NULL)::text FROM paciente WHERE id = p_pac),
     (SELECT count(*) FROM pseudonimizacion_event   WHERE paciente_id = p_pac)
   )
 $$;
