@@ -104,6 +104,11 @@ const OAUTH_ERROR_MESSAGES: Record<string, string> = {
   code_expired:  "El link expiró o ya fue usado. Pedí uno nuevo.",
   code_invalid:  "El código de Google no es válido. Reintentá el ingreso.",
   network:       "Hubo un problema de red al validar tu ingreso. Reintentá.",
+  // El canje del link funcionó pero la sesión no quedó guardada (cookies
+  // bloqueadas, ventana de incógnito que se cerró, o el link abierto en un
+  // navegador distinto del que lo pidió). Decirlo así evita el "probé y no
+  // pasa nada" y le da al usuario algo concreto que cambiar.
+  session_missing: "El link se validó pero no pudimos guardar tu sesión. Abrilo en el mismo navegador donde pediste el acceso, con las cookies habilitadas.",
 };
 
 function Login({ setVista, prefilledEmail, notice, clearNotice }: LoginProps) {
