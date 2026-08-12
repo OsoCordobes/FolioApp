@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  aportaAlgoQuiroV2,
+  derivarSeedQuiro,
   deriveSpineState,
   extractVertebras,
   migrateV1ToV2,
@@ -235,4 +237,118 @@ test("resumenSesionQuiropraxia: v1 conserva el formato; v2 cuenta vértebras con
     "1 vértebra con notas",
   );
   assert.equal(resumenSesionQuiropraxia(null), "Sin notas vertebrales");
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// B1 · el carry-forward de la ficha de quiropraxia
+// ═══════════════════════════════════════════════════════════════════════════
+// El cliente reportó que la ficha aparecía EN BLANCO en cada visita. La causa:
+// el seed llamaba a migrateV1ToV2 sobre la ficha anterior, y esa función pasa
+// por extractVertebras, que corta los v2 en la raíz. Como el formato de
+// escritura actual ES v2, la semilla salía siempre vacía. Y en quiropraxia el
+// SOAP está oculto, así que no quedaba nada en pantalla.
+
+test("PIN · migrateV1ToV2 sobre un v2 devuelve vacío — el gate de extractVertebras es correcto", () => {
+  // Este test NO describe un bug: fija el comportamiento a propósito. El gate
+  // `v === 2` de extractVertebras evita meter ids v2 (sin `estado`) en el mapa
+  // acumulado legacy. Si alguien "arregla" esto para hacer andar el
+  // carry-forward, rompe deriveSpineState. La solución correcta es discriminar
+  // la versión ANTES de migrar — que es lo que hace derivarSeedQuiro.
+  const v2 = {
+    v: 2 as const,
+    vista: "posterior" as const,
+    vertebras: [{ id: "C1", tecnicaAjuste: "diversificada" }],
+    palpacionEstatica: "hipertonía paravertebral cervical",
+  };
+  const migrado = migrateV1ToV2(v2);
+  assert.equal(migrado.vertebras, undefined, "por eso la semilla salía vacía");
+  assert.equal(aportaAlgoQuiroV2(migrado), false);
+});
+
+test("derivarSeedQuiro: una ficha v2 completa vuelve entera", () => {
+  const v2 = {
+    v: 2 as const,
+    vista: "lateral" as const,
+    vertebras: [
+      { id: "C1", tecnicaAjuste: "diversificada" },
+      { id: "L5", listado: "PI" },
+    ],
+    palpacionEstatica: "hipertonía paravertebral",
+    palpacionDinamica: "restricción C1-C2",
+    tecnicaAjuste: "thompson",
+    termografia: "asimetría C5",
+    notasLibres: "el paciente refiere mejora",
+    legCheck: { modo: "supino" as const, supinoNota: "pierna corta derecha 5mm" },
+    postura: { strokes: [[{ x: 1, y: 2 }, { x: 3, y: 4 }]], nota: "hombro derecho elevado" },
+  };
+  const seed = derivarSeedQuiro(v2);
+  assert.ok(seed, "la ficha de la visita anterior tiene que volver");
+  assert.deepEqual(seed, v2, "y volver COMPLETA, no sólo las vértebras");
+});
+
+test("derivarSeedQuiro: un v1 legacy migra a v2 conservando los ids", () => {
+  const seed = derivarSeedQuiro({
+    v: 1,
+    vertebras: [{ id: "T3", estado: "moderado" }, { id: "L1", estado: "leve" }],
+  });
+  assert.ok(seed);
+  assert.equal(seed.v, 2);
+  assert.deepEqual(seed.vertebras?.map((x) => x.id), ["T3", "L1"]);
+});
+
+test("derivarSeedQuiro: nada que sembrar → null", () => {
+  assert.equal(derivarSeedQuiro(null), null);
+  assert.equal(derivarSeedQuiro(undefined), null);
+  // v2 vacío: válido pero sin contenido.
+  assert.equal(derivarSeedQuiro({ v: 2, vista: "posterior" }), null);
+  // v1 sin vértebras.
+  assert.equal(derivarSeedQuiro({ v: 1, vertebras: [] }), null);
+  // Payload de otra especialidad: no se siembra la ficha de un cardiólogo en
+  // la de un quiropráctico.
+  assert.equal(derivarSeedQuiro({ v: 3, tensionSistolica: 120 }), null);
+  assert.equal(derivarSeedQuiro("no soy un objeto"), null);
+});
+
+test("aportaAlgoQuiroV2: campo por campo, no sólo vértebras", () => {
+  const base = { v: 2 as const, vista: "posterior" as const };
+  assert.equal(aportaAlgoQuiroV2(base), false);
+  assert.equal(aportaAlgoQuiroV2(null), false);
+  assert.equal(aportaAlgoQuiroV2(undefined), false);
+
+  // Cada uno de estos, SOLO, tiene que alcanzar. Antes el seed sólo miraba
+  // vértebras: una visita entera de palpaciones y notas se descartaba.
+  assert.equal(aportaAlgoQuiroV2({ ...base, vertebras: [{ id: "C1" }] }), true);
+  assert.equal(aportaAlgoQuiroV2({ ...base, palpacionEstatica: "hipertonía" }), true);
+  assert.equal(aportaAlgoQuiroV2({ ...base, palpacionDinamica: "restricción" }), true);
+  assert.equal(aportaAlgoQuiroV2({ ...base, tecnicaAjuste: "thompson" }), true);
+  assert.equal(aportaAlgoQuiroV2({ ...base, termografia: "asimetría C5" }), true);
+  assert.equal(aportaAlgoQuiroV2({ ...base, notasLibres: "refiere mejora" }), true);
+  assert.equal(
+    aportaAlgoQuiroV2({ ...base, postura: { strokes: [[{ x: 0, y: 0 }, { x: 1, y: 1 }]] } }),
+    true,
+  );
+  assert.equal(aportaAlgoQuiroV2({ ...base, postura: { strokes: [], nota: "hombro alto" } }), true);
+  assert.equal(
+    aportaAlgoQuiroV2({ ...base, legCheck: { modo: "supino", supinoNota: "corta derecha" } }),
+    true,
+  );
+
+  // Texto en blanco no es contenido.
+  assert.equal(aportaAlgoQuiroV2({ ...base, notasLibres: "   " }), false);
+  assert.equal(aportaAlgoQuiroV2({ ...base, legCheck: { modo: "supino" } }), false);
+});
+
+test("derivarSeedQuiro es idempotente: sembrar lo sembrado da lo mismo", () => {
+  // La semilla se persiste tal cual si el profesional no toca nada, así que la
+  // visita siguiente la vuelve a leer. Si el round-trip perdiera datos, la
+  // ficha se iría vaciando de a poco visita a visita.
+  const original = {
+    v: 2 as const,
+    vista: "posterior" as const,
+    vertebras: [{ id: "C1", tecnicaAjuste: "diversificada" }],
+    notasLibres: "control mensual",
+  };
+  const uno = derivarSeedQuiro(original);
+  const dos = derivarSeedQuiro(uno);
+  assert.deepEqual(dos, uno);
 });

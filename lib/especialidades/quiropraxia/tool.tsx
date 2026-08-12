@@ -33,6 +33,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { SpecialtyToolProps } from "@/lib/especialidades/types";
 import {
+  derivarSeedQuiro,
   migrateV1ToV2,
   parseQuiropraxiaToolData,
   quiropraxiaToolDataV2Schema,
@@ -82,6 +83,11 @@ export function QuiropraxiaTool({
   // autosave/beforeunload: abrir la ficha NO debe escribir la HC sola);
   // fallback a onChange para hosts legacy sin onSeed.
   const seeded = useRef(false);
+  // Fecha de la visita de la que salió la ficha precargada. Se muestra SIEMPRE
+  // que hubo carry-forward: sin fecha, el profesional no puede distinguir lo que
+  // encontró hoy de lo que arrastró de la visita anterior — y eso, en una
+  // historia clínica, es exactamente lo que no puede pasar.
+  const [seedDesde, setSeedDesde] = useState<string | null>(null);
   useEffect(() => {
     if (seeded.current) return;
     const valueVacio =
@@ -89,13 +95,18 @@ export function QuiropraxiaTool({
     const turnoFresco = !!turno && !turno.tieneSesionGuardada;
     const ultima = historial[0];
     if (valueVacio && turnoFresco && ultima) {
-      const sembrado = migrateV1ToV2(ultima.toolData);
-      // Solo emitir si aporta algo (vértebras de la visita anterior). Un draft
-      // vacío sembrado no agrega valor y dispararía una emisión inútil.
-      const aportaAlgo = (sembrado.vertebras?.length ?? 0) > 0;
-      if (aportaAlgo) {
+      // derivarSeedQuiro discrimina la versión ANTES de migrar. La versión
+      // anterior llamaba directo a migrateV1ToV2, que pasa por extractVertebras
+      // y ahí hay un gate `if (v === 2) return []`: como el formato de escritura
+      // actual ES v2, la semilla salía siempre vacía y la ficha arrancaba en
+      // blanco en cada visita.
+      const sembrado = derivarSeedQuiro(ultima.toolData);
+      if (sembrado) {
         seeded.current = true;
+        // onSeed entra como BASELINE: no marca el borrador sucio ni dispara
+        // autosave/beforeunload. Abrir la ficha no puede escribir la HC sola.
         (onSeed ?? onChange)(sembrado);
+        setSeedDesde(ultima.fecha);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -129,6 +140,18 @@ export function QuiropraxiaTool({
 
   return (
     <div className="pc-quiro-tool">
+      {seedDesde && !snapshot ? (
+        <div className="pc-sin-turno pc-sin-turno--info" role="note">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 8h.01M11 12h1v4h1" />
+          </svg>
+          <p>
+            Ficha cargada desde la visita del <b>{fmtFecha(seedDesde)}</b> — actualizá lo que cambió.
+          </p>
+        </div>
+      ) : null}
+
       {snapshot ? (
         <div className="pc-quiro-snapshot-banner" role="status">
           <span>Viendo visita del {fmtFecha(snapshot.fecha)} · solo lectura</span>
