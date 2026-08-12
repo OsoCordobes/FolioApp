@@ -36,7 +36,7 @@ funciona; **DEGRADA** = sigue andando con capacidad reducida.
 
 > **Nota cifrado**: `FOLIO_ENC_KEY` y `FOLIO_ENC_HMAC_KEY` son las "keys de
 > cifrado app-side". NUNCA se commitean. Si ya hay datos cifrados en prod, NO
-> las cambies sin re-encrypt (ver `scripts/rotate-enc-key.ts`).
+> las cambies sin re-encrypt. ⚠️ **No hay script de rotación** — `scripts/rotate-enc-key.ts` no existe; el re-encrypt es manual y está registrado como gap en `docs/audit/known-gaps.md`.
 
 ### 1.2 OPCIONALES — la app arranca sin ellas; habilitan o endurecen features
 

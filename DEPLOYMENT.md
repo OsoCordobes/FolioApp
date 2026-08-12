@@ -8,7 +8,7 @@ Guía paso-a-paso para deployar Folio a producción en Vercel + Supabase + servi
 
 ## 1. Pre-requisitos
 
-- Cuenta Vercel (Pro recomendado para crons cada 15min — Hobby permite máximo 2 crons/día)
+- Cuenta Vercel (Pro **requerido** para crons sub-diarios; ver §5 — Hobby permite hasta 100 crons por proyecto, pero sólo con frecuencia diaria)
 - Cuenta Supabase (Free alcanza al inicio; upgrade a Pro cuando aparezca el límite de 500 MB)
 - Dominio propio (Vercel-managed o externo apuntando con CNAME)
 - WhatsApp Business Account aprobada (Meta, 24-48h proceso de review)
@@ -169,7 +169,18 @@ Vercel → Domains → Add. Apuntar el DNS según las instrucciones (CNAME `cnam
 
 Vercel valida que el job tenga env `CRON_SECRET` y inyecta el header `Authorization: Bearer ...` automáticamente.
 
-> **Plan tier:** Hobby permite solo 2 cron jobs/día con frecuencia diaria. Para `*/15 * * * *` necesitás **Pro plan** ($20/mo).
+> **Plan tier:** el límite de Hobby es de **frecuencia, no de cantidad**: permite hasta
+> 100 crons por proyecto, pero sólo con schedules **diarios** — el deploy RECHAZA
+> `*/15 * * * *`. Y como `master` auto-deploya, mergear un schedule sub-diario en
+> Hobby rompe todos los deploys.
+>
+> Por eso los recordatorios los dispara **GitHub Actions** cada 15 minutos
+> (`.github/workflows/dispatch-recordatorios.yml`) y el cron diario de
+> `vercel.json` queda como backstop idempotente. Al pasar a Pro: mover el
+> schedule `*/15 * * * *` a `vercel.json` y borrar el workflow.
+>
+> (Corrección de una afirmación previa de este documento, que decía "Hobby
+> permite solo 2 cron jobs". Son 100; lo que bloquea es la frecuencia.)
 
 ---
 
@@ -211,12 +222,25 @@ Si `/api/health` retorna 503 con `env.ok=false`, falta alguna env var crítica.
 
 Si la key se filtra:
 
-1. Generar nueva key: `openssl rand -base64 32`
-2. Setearla como `FOLIO_ENC_KEY_NEW` en Vercel
-3. Correr el script `scripts/rotate-enc-key.ts` (F12) que re-cifra todas las columnas `*_cifrado` con la nueva.
-4. Una vez completado, swap `FOLIO_ENC_KEY` ← `FOLIO_ENC_KEY_NEW` y deletear la vieja.
+> ⚠️ **`scripts/rotate-enc-key.ts` NO EXISTE.** Este documento y otros tres lo
+> citaban como si fuera el procedimiento vigente. No lo es: hoy **no hay
+> rotación de claves automatizada**. Está registrado como gap explícito en
+> `docs/audit/known-gaps.md`.
 
-Mientras no haya el script (F12), restore desde backup pre-leak es la única opción.
+**Procedimiento real hoy (manual, con downtime):**
+
+1. Generar la nueva key: `openssl rand -base64 32`.
+2. **Snapshot de la base ANTES de tocar nada.** Una rotación a medias deja
+   filas cifradas con dos keys distintas y la app muestra fichas vacías sin
+   avisar (el `tryDecrypt` canónico reporta a Sentry, pero degrada a null).
+3. Re-cifrar cada columna `*_cifrado` leyendo con la key vieja y escribiendo
+   con la nueva. **Esto no está scriptado**: hay que escribirlo contra el
+   inventario de columnas de `docs/audit/encryption-exceptions.md`.
+4. Recién con el paso 3 completo y verificado, swap `FOLIO_ENC_KEY` y borrar la
+   vieja.
+
+Si la key se filtró y no hay tiempo para lo anterior, **restore desde backup
+pre-leak es la única opción segura**.
 
 ### Backups
 

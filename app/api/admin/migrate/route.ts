@@ -55,6 +55,13 @@ import { verifyBearer } from "@/lib/security/verify-bearer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// ⚠️ En plan Hobby el techo real de una función es 60 s: Vercel IGNORA este 300
+// y corta igual. Se deja declarado a propósito —es lo correcto cuando la cuenta
+// pase a Pro— pero no confíes en él: si la tanda de migraciones pasa del minuto,
+// esta route se corta a la mitad. El camino canónico del repo NO es este
+// endpoint sino `node --env-file=.env.local scripts/push-pending-migrations.mjs`,
+// que corre en tu máquina sin techo de tiempo y aplica cada migración en su
+// propia transacción.
 export const maxDuration = 300;
 
 const MIGRATIONS_DIR = path.join(process.cwd(), "supabase", "migrations");
@@ -73,6 +80,44 @@ async function listSql(dir: string): Promise<string[]> {
   return files.filter((f) => f.endsWith(".sql")).sort();
 }
 
+/**
+ * Registra la migración en `supabase_migrations.schema_migrations`.
+ *
+ * Este endpoint aplicaba el SQL y NO anotaba nada. Esa tabla es la fuente de
+ * verdad de `scripts/diff-migrations.mjs` y `scripts/push-pending-migrations.mjs`
+ * (el flujo canónico del repo), así que una migración aplicada por acá quedaba
+ * invisible para el ledger: `diff-migrations` la reportaba como pendiente y
+ * `push-pending` la volvía a correr. Re-ejecutar un `CREATE TABLE` falla ruidoso
+ * —eso se nota—, pero re-ejecutar un `INSERT` de seed o un `UPDATE` de backfill
+ * duplica datos en silencio.
+ *
+ * Best-effort deliberado: si el registro falla, la migración YA se aplicó y
+ * abortar sería peor. Queda en el resultado para que el operador lo vea.
+ */
+async function registrarEnLedger(client: Client, file: string): Promise<string | undefined> {
+  // Formato: 20260518000001_M01_extensions_and_helpers.sql
+  const version = file.split("_")[0];
+  if (!/^\d{8,}$/.test(version)) return `sin prefijo de versión, no se registró`;
+  const name = file.replace(/\.sql$/, "").slice(version.length + 1);
+  try {
+    await client.query(`
+      CREATE SCHEMA IF NOT EXISTS supabase_migrations;
+      CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (
+        version text PRIMARY KEY,
+        statements text[],
+        name text
+      );
+    `);
+    await client.query(
+      "INSERT INTO supabase_migrations.schema_migrations (version, name) VALUES ($1, $2) ON CONFLICT (version) DO NOTHING",
+      [version, name],
+    );
+    return undefined;
+  } catch (e) {
+    return `ledger no actualizado: ${e instanceof Error ? e.message : String(e)}`;
+  }
+}
+
 async function runFiles(client: Client, dir: string, label: string, fromPrefix?: string | null): Promise<FileResult[]> {
   const results: FileResult[] = [];
   let files = await listSql(dir);
@@ -84,7 +129,16 @@ async function runFiles(client: Client, dir: string, label: string, fromPrefix?:
     const sql = await readFile(path.join(dir, file), "utf8");
     try {
       await client.query(sql);
-      results.push({ file: `${label}/${file}`, ok: true, ms: Date.now() - start, bytes: sql.length });
+      // Sólo las migraciones llevan ledger; los seeds y otros directorios no.
+      const ledgerWarn =
+        label === "migrations" ? await registrarEnLedger(client, file) : undefined;
+      results.push({
+        file: `${label}/${file}`,
+        ok: true,
+        ms: Date.now() - start,
+        bytes: sql.length,
+        ...(ledgerWarn ? { error: ledgerWarn } : {}),
+      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       results.push({ file: `${label}/${file}`, ok: false, ms: Date.now() - start, bytes: sql.length, error: msg });

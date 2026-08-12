@@ -55,6 +55,13 @@ export const dynamic = "force-dynamic";
 // 300s: ?especialidad=all son 5 orgs × ~150 inserts REST (cifrado incluido).
 // La invocación recomendada igual es POR especialidad (5 curls) — acota el
 // blast radius si una falla a mitad — pero el techo alto cubre el peor caso.
+// ⚠️ En plan Hobby el techo real de una función es 60 s: Vercel IGNORA este 300
+// y corta igual. Se deja declarado a propósito —es lo correcto cuando la cuenta
+// pase a Pro— pero no confíes en él: si la tanda de migraciones pasa del minuto,
+// esta route se corta a la mitad. El camino canónico del repo NO es este
+// endpoint sino `node --env-file=.env.local scripts/push-pending-migrations.mjs`,
+// que corre en tu máquina sin techo de tiempo y aplica cada migración en su
+// propia transacción.
 export const maxDuration = 300;
 
 const DEFAULT_EMAIL = "amiunelautaro@gmail.com";

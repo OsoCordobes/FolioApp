@@ -78,7 +78,7 @@ Supabase Pro tier provides:
 - **Geo-redundant storage** for the database
 
 For the audit-prep sprint, no additional backup config is needed. Post-launch:
-- Snapshot the DB before any encryption-key rotation (`scripts/rotate-enc-key.ts`).
+- Snapshot the DB before any encryption-key rotation. ⚠️ There is **no rotation script** (`scripts/rotate-enc-key.ts` does not exist): rotation is manual today — see `known-gaps.md`. The snapshot is not a formality, it is the rollback.
 - Pre-cron-purge snapshot once `ACCOUNT_PURGE_ENABLED=1`.
 
 ## Verification
