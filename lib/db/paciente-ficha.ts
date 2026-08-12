@@ -160,6 +160,30 @@ export interface TurnoActivoFicha {
    */
   toolDraft: unknown;
   /**
+   * SOAP ya guardado para ESTE turno (el ancla), o null si el ancla todavía no
+   * tiene fila `sesion`.
+   *
+   * Existe porque el editor se hidrataba de `plan.soap`, que es el SOAP de la
+   * ÚLTIMA sesión DEL PACIENTE — no de esta visita. Como iniciar la atención no
+   * crea la fila `sesion`, en cada visita nueva los cuatro campos aparecían con
+   * el texto de la visita anterior bajo el título "Nota SOAP · sesión de hoy" y
+   * se persistían como hallazgos de hoy: la historia clínica terminaba
+   * afirmando que hoy se auscultó un soplo que nunca se auscultó.
+   *
+   * `null` significa "esta visita todavía no tiene nota", y el editor arranca
+   * vacío. La continuidad con la visita anterior se ofrece aparte, explícita y
+   * fechada.
+   */
+  soapDraft: { subjetivo: string; objetivo: string; analisis: string; plan: string } | null;
+  /**
+   * SOAP de la visita ANTERIOR + su fecha, para ofrecer la continuidad de forma
+   * explícita cuando el ancla no tiene nota propia. Nunca se aplica solo.
+   */
+  soapPrevio: {
+    fecha: string;
+    soap: { subjetivo: string; objetivo: string; analisis: string; plan: string };
+  } | null;
+  /**
    * Workstream 6 · ¿existe YA una fila sesion para este turno? (cualquier
    * sesion.turno_id == turnoEnCurso.id). La Tool quiro lo usa para dos cosas:
    *   1. habilitar el adjunto de radiografías (necesitan una sesión donde
@@ -554,14 +578,23 @@ export async function getPacienteFicha(
   // Cuando T-1.7 expanda a leer tabla `diagnostico`, mostraremos el principal activo.
   const diagnostico = motivo || "—";
 
-  // SOAP: si hay última sesión, leer su contenido; sino vacío.
+  const leerSoap = (row: {
+    soap_s_cifrado: string | null;
+    soap_o_cifrado: string | null;
+    soap_a_cifrado: string | null;
+    soap_p_cifrado: string | null;
+  }) => ({
+    subjetivo: tryDecrypt(row.soap_s_cifrado, "soap.s") ?? "",
+    objetivo: tryDecrypt(row.soap_o_cifrado, "soap.o") ?? "",
+    analisis: tryDecrypt(row.soap_a_cifrado, "soap.a") ?? "",
+    plan: tryDecrypt(row.soap_p_cifrado, "soap.p") ?? "",
+  });
+
+  // SOAP de la ÚLTIMA sesión del paciente. Es dato de DISPLAY ("última
+  // sesión"): NO es lo que edita el profesional hoy. Lo editable sale de
+  // `turnoActivo.soapDraft`, que corresponde al turno ancla.
   const soap = lastSesion
-    ? {
-        subjetivo: tryDecrypt(lastSesion.soap_s_cifrado, "soap.s") ?? "",
-        objetivo: tryDecrypt(lastSesion.soap_o_cifrado, "soap.o") ?? "",
-        analisis: tryDecrypt(lastSesion.soap_a_cifrado, "soap.a") ?? "",
-        plan: tryDecrypt(lastSesion.soap_p_cifrado, "soap.p") ?? "",
-      }
+    ? leerSoap(lastSesion)
     : { subjetivo: "", objetivo: "", analisis: "", plan: "" };
 
   // Historial genérico de la herramienta (Fase B): toolData por sesión,
@@ -712,6 +745,15 @@ export async function getPacienteFicha(
           sesionTurnoAncla.tool_data_cifrado != null &&
           toolPerteneceAEspecialidad(sesionTurnoAncla.tool_id, especialidadActiva)
             ? sesionToolData(sesionTurnoAncla)
+            : null,
+        // El SOAP editable es el de ESTA visita, no el de la última del
+        // paciente. Sin fila `sesion` para el ancla, la nota de hoy está vacía.
+        soapDraft: sesionTurnoAncla ? leerSoap(sesionTurnoAncla) : null,
+        // Y si está vacía, ofrecemos la anterior aparte: con fecha, y sólo si
+        // es de OTRA sesión (no la del propio ancla).
+        soapPrevio:
+          !sesionTurnoAncla && lastSesion
+            ? { fecha: lastSesion.created_at, soap: leerSoap(lastSesion) }
             : null,
       }
     : null;

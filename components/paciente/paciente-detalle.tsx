@@ -93,6 +93,25 @@ const SOAP_SECTIONS = [
 
 type SoapState = PlanData["soap"];
 
+function esSoapVacio(s: SoapState): boolean {
+  return !s.subjetivo.trim() && !s.objetivo.trim() && !s.analisis.trim() && !s.plan.trim();
+}
+
+/** Fecha de una sesión previa, en es-AR y legible. */
+function fmtSoapPrevio(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("es-AR", { day: "numeric", month: "long", year: "numeric" });
+}
+
+/** Nota de hoy sin escribir. Congelada para que no cambie de identidad entre renders. */
+const SOAP_VACIO: SoapState = Object.freeze({
+  subjetivo: "",
+  objetivo: "",
+  analisis: "",
+  plan: "",
+});
+
 function SoapStacked({
   soap,
   setSoap,
@@ -313,7 +332,27 @@ function TabPlan() {
   // un tool_id de OTRA especialidad, el writer preserva esas columnas en los
   // guardados solo-SOAP (debePreservarToolData, lib/db/sesiones.ts).
   const [toolValue, setToolValue] = useState<unknown>(turnoActivo?.toolDraft ?? null);
-  const [soap, setSoap] = useState<SoapState>(plan.soap);
+
+  // ─── El SOAP editable es el de la visita ANCLA, no el de la última sesión ──
+  //
+  // Antes esto arrancaba en `plan.soap`, que es el SOAP de la última sesión DEL
+  // PACIENTE. Como iniciar la atención no crea la fila `sesion`, en cada visita
+  // nueva los cuatro campos aparecían con el texto de la visita anterior bajo el
+  // título "Nota SOAP · sesión de hoy" y se persistían como hallazgos de hoy: la
+  // historia clínica terminaba afirmando que hoy se auscultó un soplo que nunca
+  // se auscultó.
+  //
+  // Peor: como el baseline también incluía ese texto heredado, bastaba tocar la
+  // herramienta para que el autosave persistiera el SOAP viejo sin que el
+  // profesional escribiera una sola letra en un textarea. En quiropraxia era
+  // 100% invisible: hideSoap oculta el render, pero el estado viajaba igual.
+  //
+  // La continuidad se ofrece abajo, explícita y fechada.
+  const soapInicial = turnoActivo?.soapDraft ?? SOAP_VACIO;
+  const [soap, setSoap] = useState<SoapState>(soapInicial);
+  // Fecha de la visita de la que se cargó el SOAP anterior, si el profesional
+  // aceptó la continuidad. Null = la nota de hoy es propia.
+  const [soapDesde, setSoapDesde] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -324,13 +363,37 @@ function TabPlan() {
   // (no al estado actual: si se tipeó durante el request, eso sigue sucio y el
   // autosave lo levanta después).
   const [baseline, setBaseline] = useState<BorradorFicha>(() => ({
-    soap: plan.soap,
+    soap: soapInicial,
     toolValue: turnoActivo?.toolDraft ?? null,
   }));
   const sucio = useMemo(
     () => esBorradorSucio({ soap, toolValue }, baseline),
     [soap, toolValue, baseline],
   );
+
+  // La oferta de continuidad sólo aparece si: el ancla no tiene nota propia, hay
+  // una visita anterior con algo escrito, el SOAP se rinde (no quiro) y el
+  // profesional todavía no la trajo ni escribió nada.
+  const soapPrevioOfrecido =
+    !hideSoap &&
+    turnoActivo?.soapPrevio &&
+    !soapDesde &&
+    esSoapVacio(soap) &&
+    !esSoapVacio(turnoActivo.soapPrevio.soap)
+      ? turnoActivo.soapPrevio
+      : null;
+
+  // Traer la nota anterior entra como BASELINE, igual que el seed de la
+  // herramienta: no marca el borrador sucio ni dispara el autosave. Que el
+  // profesional decida guardarla es una acción suya, no un efecto de abrir la
+  // ficha.
+  const cargarSoapAnterior = () => {
+    const previo = turnoActivo?.soapPrevio;
+    if (!previo) return;
+    setSoap(previo.soap);
+    setBaseline((b) => ({ ...b, soap: previo.soap }));
+    setSoapDesde(previo.fecha);
+  };
 
   // Interacción REAL del profesional (tecla/click en el SOAP o la herramienta).
   // Los seeds programáticos (onToolSeed) NO la setean: el autosave y el guard
@@ -568,6 +631,39 @@ function TabPlan() {
             historial={filtrarToolHistorial(plan.toolHistorial, especialidad)}
             {...toolExtras}
           />
+          {/* Continuidad EXPLÍCITA. La nota de hoy arranca vacía (el SOAP
+              editable es el del turno ancla); si el profesional quiere seguir
+              desde la visita anterior, la trae él, con la fecha a la vista. En
+              quiropraxia no se ofrece: hideSoap no rinde el editor, así que
+              sembrar ahí sería volver a mover la historia clínica sin que nadie
+              pueda verlo ni corregirlo. */}
+          {soapPrevioOfrecido ? (
+            <div className="pc-sin-turno pc-sin-turno--info" role="note">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+                <path d="M3 3v5h5" />
+              </svg>
+              <p>
+                La nota de hoy está en blanco.{" "}
+                <button type="button" className="pc-link pc-link--accion" onClick={cargarSoapAnterior}>
+                  Traer la de la visita del {fmtSoapPrevio(soapPrevioOfrecido.fecha)}
+                </button>{" "}
+                para actualizar lo que cambió.
+              </p>
+            </div>
+          ) : null}
+          {soapDesde ? (
+            <div className="pc-sin-turno pc-sin-turno--info" role="status">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M12 8h.01M11 12h1v4h1" />
+              </svg>
+              <p>
+                Nota cargada desde la visita del <b>{fmtSoapPrevio(soapDesde)}</b> — actualizá lo que
+                cambió antes de guardar.
+              </p>
+            </div>
+          ) : null}
           <SoapStacked
             soap={soap}
             setSoap={onSoapChange}
