@@ -29,6 +29,8 @@ import {
 } from "@/lib/consentimientos/helpers";
 import { tryDecrypt } from "@/lib/crypto";
 import { getActiveContext } from "@/lib/db/active-context";
+import { getFichaTimeline } from "@/lib/db/ficha-timeline";
+import type { EventoTimeline } from "@/lib/ficha/timeline-core";
 import { addNotaClinica } from "@/lib/db/notas-clinicas";
 import {
   createConsentimiento,
@@ -1215,4 +1217,15 @@ export async function addNotaFichaAction(
   if (!result.ok) return result;
   revalidatePath(`/pacientes/${pacienteId}`);
   return result;
+}
+
+/**
+ * Historial de cambios de la ficha (lazy: sólo cuando el profesional despliega
+ * la card). Devuelve labels de campos, nunca valores — ver
+ * lib/ficha/timeline-core.
+ */
+export async function getFichaTimelineAction(
+  pacienteId: string,
+): Promise<Result<EventoTimeline[]>> {
+  return getFichaTimeline(pacienteId);
 }
