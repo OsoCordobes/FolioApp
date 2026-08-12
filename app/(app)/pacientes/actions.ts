@@ -29,6 +29,7 @@ import {
 } from "@/lib/consentimientos/helpers";
 import { tryDecrypt } from "@/lib/crypto";
 import { getActiveContext } from "@/lib/db/active-context";
+import { addNotaClinica } from "@/lib/db/notas-clinicas";
 import {
   createConsentimiento,
   getSignedFirmaUrl,
@@ -1192,4 +1193,26 @@ export async function getFirmaConsentimientoUrlAction(
   const url = await getSignedFirmaUrl(path);
   if (!url.ok) return url;
   return ok({ signedUrl: url.data });
+}
+
+// ─── Notas de la ficha (M96) ───────────────────────────────────────────────
+
+/**
+ * Anota en la ficha de un paciente, sin turno de por medio.
+ *
+ * Es el pedido del quiropráctico: la ficha de papel "la agarra, la lee y la
+ * modifica cuando quiere". La llamada telefónica y el WhatsApp no esperan a que
+ * haya un turno abierto.
+ *
+ * Append-only: no hay action para editar ni borrar, y no la va a haber. Para
+ * corregir se agrega otra nota (Ley 26.529 art. 15).
+ */
+export async function addNotaFichaAction(
+  pacienteId: string,
+  texto: string,
+): Promise<Result<{ id: string }>> {
+  const result = await addNotaClinica({ pacienteId, texto });
+  if (!result.ok) return result;
+  revalidatePath(`/pacientes/${pacienteId}`);
+  return result;
 }

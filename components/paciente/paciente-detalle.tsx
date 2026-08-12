@@ -47,6 +47,9 @@ import {
 } from "@/lib/especialidades/registry";
 import { toWhatsappE164 } from "@/lib/format/phone";
 import { formatCobertura } from "@/lib/pacientes/cobertura";
+import { NotasFichaCard } from "@/components/paciente/notas-ficha-card";
+import { addNotaFichaAction } from "@/app/(app)/pacientes/actions";
+import type { NotaClinicaFicha } from "@/lib/ficha/nota-clinica";
 import type { IntakeAvanzadoFicha, PacienteFichaInfo, PlanData } from "@/lib/db/paciente-ficha";
 
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
@@ -298,7 +301,7 @@ function HistorialReciente() {
 // ─── Sub: Tab Plan ─────────────────────────────────────────────────────────
 
 function TabPlan() {
-  const { paciente, plan, especialidad, organizacionNombre } = usePacienteFicha();
+  const { paciente, plan, especialidad, organizacionNombre, notas } = usePacienteFicha();
   const def = getEspecialidad(especialidad);
   const router = useRouter();
   const turnoActivo = plan.turnoActivo;
@@ -724,6 +727,23 @@ function TabPlan() {
           </p>
         </div>
       ) : null}
+
+      {/* M96 · SIEMPRE visible, con turno o sin turno. Es el pedido literal del
+          quiropráctico: la ficha de papel "la agarra, la lee y la modifica
+          cuando quiere". Una llamada telefónica ocurre aunque el próximo turno
+          sea recién mañana — y hasta ahora no tenía dónde quedar registrada. */}
+      <NotasFichaCard
+        notas={notas}
+        onAnotar={async (texto) => {
+          const r = await addNotaFichaAction(paciente.id, texto);
+          if (r.ok) {
+            // revalidatePath ya corrió server-side; refresh trae la nota nueva.
+            router.refresh();
+            return null;
+          }
+          return r.error.message;
+        }}
+      />
 
       {turnoActivo ? (
         <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 12 }}>
@@ -1460,6 +1480,8 @@ interface PacienteDetalleProps {
   intakeAvanzado: IntakeAvanzadoFicha | null;
   /** X7 · nombre del consultorio/clínica para el membrete de impresión. */
   organizacionNombre: string;
+  /** M96 · notas de la ficha (sin turno). */
+  notas: NotaClinicaFicha[];
 }
 
 export function PacienteDetalle({
@@ -1469,10 +1491,11 @@ export function PacienteDetalle({
   especialidad,
   intakeAvanzado,
   organizacionNombre,
+  notas,
 }: PacienteDetalleProps) {
   return (
     <PacienteFichaProvider
-      value={{ paciente, plan, cumple, especialidad, intakeAvanzado, organizacionNombre }}
+      value={{ paciente, plan, cumple, especialidad, intakeAvanzado, organizacionNombre, notas }}
     >
       <PacienteDetalleInner />
     </PacienteFichaProvider>
