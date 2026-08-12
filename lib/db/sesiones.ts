@@ -65,6 +65,18 @@ const upsertSesionSchema = z.object({
   evaAntes: z.number().int().min(0).max(10).nullable().optional(),
   evaDespues: z.number().int().min(0).max(10).nullable().optional(),
   notas: z.string().max(10000).optional(),
+  /**
+   * `sesion.updated_at` que el borrador tenía cuando se hidrató.
+   *
+   * Control de concurrencia optimista. Sin esto el guardado era last-write-wins
+   * ciego: el profesional escribe en la tablet durante la consulta y después,
+   * desde la PC con la ficha abierta desde antes, agrega una palabra — y el
+   * autosave pisa con NULL el hallazgo de la tablet, mostrando "Guardado ✓".
+   *
+   * `undefined` = el caller no sabe contra qué versión escribe (callers legacy
+   * y creación de sesión nueva): se comporta como antes.
+   */
+  updatedAtEsperado: z.string().optional(),
 });
 
 export type UpsertSesionInput = z.infer<typeof upsertSesionSchema>;
@@ -266,11 +278,11 @@ export async function upsertSesion(input: UpsertSesionInput): Promise<Result<{ i
   // decidir preservación — tool_data_cifrado viaja opaco, nunca se descifra acá)
   const { data: existingRow } = await supabase
     .from("sesion")
-    .select("id, locked_at, tool_id, tool_data_cifrado, vertebras_json")
+    .select("id, locked_at, updated_at, tool_id, tool_data_cifrado, vertebras_json")
     .eq("turno_id", d.turnoId)
     .maybeSingle();
   const existing = existingRow as
-    | ({ id: string; locked_at: string | null } & SesionToolColumnsRow)
+    | ({ id: string; locked_at: string | null; updated_at: string } & SesionToolColumnsRow)
     | null;
 
   if (existing && existing.locked_at) {
@@ -359,14 +371,22 @@ export async function upsertSesion(input: UpsertSesionInput): Promise<Result<{ i
     }
   }
 
-  const basePayload = {
-    organization_id: session.data.organizationId,
-    turno_id: d.turnoId,
-    paciente_id: d.pacienteId,
+  // Mismo criterio que las columnas tool: un guardado que NO manda `soap` no
+  // está diciendo "vaciá el SOAP", está diciendo "no lo toqué". Antes esas
+  // cuatro columnas se escribían igual, con NULL encima del ciphertext — un
+  // caller que sólo actualiza la herramienta borraba la nota clínica.
+  const soapColumns = {
     soap_s_cifrado: encryptColumn(d.soap?.s ?? null),
     soap_o_cifrado: encryptColumn(d.soap?.o ?? null),
     soap_a_cifrado: encryptColumn(d.soap?.a ?? null),
     soap_p_cifrado: encryptColumn(d.soap?.p ?? null),
+  };
+  const preservarSoap = d.soap === undefined;
+
+  const basePayload = {
+    organization_id: session.data.organizationId,
+    turno_id: d.turnoId,
+    paciente_id: d.pacienteId,
     notas_cifrado: encryptColumn(d.notas ?? null),
     eva_antes: d.evaAntes ?? null,
     eva_despues: d.evaDespues ?? null,
@@ -381,15 +401,33 @@ export async function upsertSesion(input: UpsertSesionInput): Promise<Result<{ i
   };
 
   if (existing) {
-    const payload = preservarToolColumns ? basePayload : { ...basePayload, ...toolColumns };
-    const { error } = await supabase.from("sesion").update(payload).eq("id", existing.id);
+    const payload = {
+      ...basePayload,
+      ...(preservarSoap ? {} : soapColumns),
+      ...(preservarToolColumns ? {} : toolColumns),
+    };
+
+    // Concurrencia optimista: si el caller dijo contra qué versión escribe, el
+    // UPDATE sólo entra si esa versión sigue siendo la vigente. Otra pestaña que
+    // guardó en el medio movió `updated_at` (trigger sesion_set_updated_at), así
+    // que este UPDATE afecta 0 filas y devolvemos `conflict` en vez de pisar
+    // trabajo ajeno con un "Guardado ✓" mentiroso.
+    let q = supabase.from("sesion").update(payload).eq("id", existing.id);
+    if (d.updatedAtEsperado) q = q.eq("updated_at", d.updatedAtEsperado);
+    const { data: filas, error } = await q.select("id");
     if (error) return err(mapSupabaseError(error).code, mapSupabaseError(error).message, error.message);
+    if (d.updatedAtEsperado && (filas?.length ?? 0) === 0) {
+      return err(
+        "conflict",
+        "Alguien más guardó esta ficha mientras la editabas. Recargá para ver lo último antes de escribir encima.",
+      );
+    }
     return ok({ id: existing.id });
   }
 
   const { data, error } = await supabase
     .from("sesion")
-    .insert({ ...basePayload, ...toolColumns })
+    .insert({ ...basePayload, ...soapColumns, ...toolColumns })
     .select("id")
     .single();
 

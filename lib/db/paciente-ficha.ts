@@ -184,6 +184,16 @@ export interface TurnoActivoFicha {
     soap: { subjetivo: string; objetivo: string; analisis: string; plan: string };
   } | null;
   /**
+   * `sesion.updated_at` de la sesión del ancla (null si todavía no hay fila).
+   *
+   * Control de concurrencia optimista: viaja de vuelta en cada guardado. Sin
+   * esto el writer era last-write-wins ciego — el profesional escribe en la
+   * tablet durante la consulta y después, desde la PC con la ficha abierta
+   * desde antes, agrega una palabra: el autosave pisaba el hallazgo de la
+   * tablet y mostraba "Guardado ✓".
+   */
+  sesionUpdatedAt: string | null;
+  /**
    * Workstream 6 · ¿existe YA una fila sesion para este turno? (cualquier
    * sesion.turno_id == turnoEnCurso.id). La Tool quiro lo usa para dos cosas:
    *   1. habilitar el adjunto de radiografías (necesitan una sesión donde
@@ -328,6 +338,8 @@ interface SesionRow {
   tool_data_cifrado: string | null;
   notas_cifrado: string | null;
   created_at: string;
+  /** Versión de la fila (trigger sesion_set_updated_at): control de concurrencia. */
+  updated_at: string;
   /** Ancla retroactiva: una sesión lockeada NO se puede re-editar (M10). */
   locked_at: string | null;
 }
@@ -512,7 +524,7 @@ export async function getPacienteFicha(
     // tool_data por ficha (vs 10) — aceptable para una sola ficha por request.
     supabase
       .from("sesion")
-      .select("id, turno_id, paciente_id, soap_s_cifrado, soap_o_cifrado, soap_a_cifrado, soap_p_cifrado, vertebras_json, tool_id, tool_data_cifrado, notas_cifrado, created_at, locked_at")
+      .select("id, turno_id, paciente_id, soap_s_cifrado, soap_o_cifrado, soap_a_cifrado, soap_p_cifrado, vertebras_json, tool_id, tool_data_cifrado, notas_cifrado, created_at, updated_at, locked_at")
       .eq("paciente_id", pacienteId)
       .eq("organization_id", organizationId)
       .order("created_at", { ascending: false })
@@ -792,6 +804,7 @@ export async function getPacienteFicha(
           !sesionTurnoAncla && lastSesion
             ? { fecha: lastSesion.created_at, soap: leerSoap(lastSesion) }
             : null,
+        sesionUpdatedAt: sesionTurnoAncla?.updated_at ?? null,
       }
     : null;
 

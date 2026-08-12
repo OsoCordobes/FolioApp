@@ -74,3 +74,48 @@ test("toolValue != null → toolData OPACO, sin toolId ni vertebras legacy (M55)
   assert.deepEqual(inputPsico.toolData, psico);
   assert.ok(!("toolId" in inputPsico));
 });
+
+// ─── B4 · versión de la sesión (control de concurrencia optimista) ───────────
+//
+// Sin esto el guardado era last-write-wins ciego: el profesional escribe en la
+// tablet durante la consulta y después, desde la PC con la ficha abierta desde
+// antes, agrega una palabra — y el autosave pisaba el hallazgo de la tablet
+// mostrando "Guardado ✓".
+
+test("B4 · el borrador transporta updatedAtEsperado cuando lo conoce", () => {
+  const input = buildUpsertSesionInput({
+    turnoId: "11111111-1111-4111-8111-111111111111",
+    pacienteId: "22222222-2222-4222-8222-222222222222",
+    toolValue: null,
+    soap: { subjetivo: "dolor lumbar", objetivo: "", analisis: "", plan: "" },
+    updatedAtEsperado: "2026-08-11T12:00:00.000Z",
+  });
+  assert.equal(input.updatedAtEsperado, "2026-08-11T12:00:00.000Z");
+});
+
+test("B4 · sin versión conocida el campo NO viaja (sesión nueva / caller legacy)", () => {
+  // Importa que sea ausente y no undefined explícito: el writer sólo agrega el
+  // `.eq("updated_at", …)` cuando el caller dijo contra qué versión escribe;
+  // una sesión que todavía no existe no tiene versión contra la cual comparar.
+  const input = buildUpsertSesionInput({
+    turnoId: "11111111-1111-4111-8111-111111111111",
+    pacienteId: "22222222-2222-4222-8222-222222222222",
+    toolValue: null,
+    soap: { subjetivo: "dolor lumbar", objetivo: "", analisis: "", plan: "" },
+  });
+  assert.equal("updatedAtEsperado" in input, false);
+});
+
+test("B4 · la versión no se cuela en el payload clínico", () => {
+  // Es metadato de concurrencia, no contenido: no puede terminar cifrado en
+  // una columna de la historia clínica.
+  const input = buildUpsertSesionInput({
+    turnoId: "11111111-1111-4111-8111-111111111111",
+    pacienteId: "22222222-2222-4222-8222-222222222222",
+    toolValue: { v: 2, vista: "posterior" },
+    soap: { subjetivo: "s", objetivo: "o", analisis: "a", plan: "p" },
+    updatedAtEsperado: "2026-08-11T12:00:00.000Z",
+  });
+  assert.deepEqual(input.soap, { s: "s", o: "o", a: "a", p: "p" });
+  assert.deepEqual(input.toolData, { v: 2, vista: "posterior" });
+});

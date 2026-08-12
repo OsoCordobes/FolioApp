@@ -356,6 +356,11 @@ function TabPlan() {
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // Versión de la sesión con la que se hidrató el borrador. Viaja en cada
+  // guardado; si otra pestaña movió la fila, el writer devuelve `conflict` en
+  // vez de pisar. Se actualiza sola en el router.refresh() del guardado ok.
+  const versionSesion = turnoActivo?.sesionUpdatedAt ?? undefined;
+  const [conflicto, setConflicto] = useState(false);
 
   // D1 · baseline del borrador = lo último GUARDADO (o lo hidratado del server
   // al montar). Contra esto se computa `sucio`, que gatea el guard de
@@ -438,6 +443,7 @@ function TabPlan() {
       // El autosave NUNCA transiciona el turno (empezar a atender es una
       // decisión explícita: botón "Guardar sesión" / "Guardar y cerrar").
       autosave: opts?.autosave === true,
+      updatedAtEsperado: versionSesion,
     });
     setSaving(false);
     if (result.ok) {
@@ -447,6 +453,13 @@ function TabPlan() {
       // La vuelta: refresca el Server Component → plan.toolHistorial trae la
       // sesión recién guardada (el borrador local no se resetea: useState).
       router.refresh();
+    } else if (result.error.code === "conflict") {
+      // Otra pestaña (o la tablet del consultorio) guardó esta misma ficha
+      // mientras la editábamos. NO reintentamos ni pisamos: se le muestra la
+      // salida y decide él. El borrador local queda intacto para que pueda
+      // copiar lo que escribió antes de recargar.
+      setConflicto(true);
+      setSaveError(null);
     } else {
       setSaveError(`No se pudo guardar: ${result.error.message}`);
     }
@@ -682,6 +695,34 @@ function TabPlan() {
           al bloque de acciones de guardado de abajo. */}
       {hideSoap && saveBadge ? (
         <div style={{ display: "flex", justifyContent: "flex-end" }}>{saveBadge}</div>
+      ) : null}
+
+      {/* Conflicto de escritura: otra pestaña guardó esta ficha mientras la
+          editábamos. No se reintenta ni se pisa — el borrador local queda
+          intacto para que el profesional pueda copiar lo que escribió antes de
+          recargar. Antes esto era last-write-wins ciego con "Guardado ✓". */}
+      {conflicto ? (
+        <div className="pc-sin-turno pc-sin-turno--warn" role="alert">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+            <path d="M12 9v4M12 17h.01" />
+          </svg>
+          <p>
+            Esta ficha se guardó desde otro lado mientras la editabas, así que no
+            escribimos encima. Copiá lo que agregaste y{" "}
+            <button
+              type="button"
+              className="pc-link pc-link--accion"
+              onClick={() => {
+                setConflicto(false);
+                router.refresh();
+              }}
+            >
+              recargá la ficha
+            </button>{" "}
+            para ver lo último.
+          </p>
+        </div>
       ) : null}
 
       {turnoActivo ? (
