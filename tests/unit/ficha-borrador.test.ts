@@ -154,3 +154,58 @@ test("anioDeFecha: inválida o vacía → '' (no mentir un año)", () => {
   assert.equal(anioDeFecha("—"), "");
   assert.equal(anioDeFecha("no-es-fecha"), "");
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// B2 · el SOAP heredado no puede persistirse solo
+// ═══════════════════════════════════════════════════════════════════════════
+// El editor se hidrataba de `plan.soap` — el SOAP de la ÚLTIMA sesión DEL
+// PACIENTE, no de esta visita. Como iniciar la atención no crea la fila
+// `sesion`, en cada visita nueva los cuatro campos venían con el texto de la
+// visita anterior bajo el título "Nota SOAP · sesión de hoy" y se persistían
+// como hallazgos de hoy.
+//
+// Y como el BASELINE también incluía ese texto heredado, el borrador arrancaba
+// "limpio" con contenido ajeno adentro: bastaba tocar la herramienta para que
+// el autosave se llevara el SOAP viejo a la historia clínica sin que el
+// profesional escribiera una sola letra.
+
+test("B2 · con el SOAP anterior en el baseline, tocar SOLO la herramienta arrastra la nota ajena", () => {
+  // Reproducción del mecanismo: baseline contaminado con el texto de la visita
+  // anterior. Al editar únicamente la herramienta, el borrador queda sucio y lo
+  // que se envía incluye el SOAP heredado.
+  const heredado = { ...soapVacio, objetivo: "soplo sistólico 2/6 en foco aórtico" };
+  const baselineContaminado = borrador({ soap: heredado, toolValue: { v: 2 } });
+  const soloToolEditado = borrador({ soap: heredado, toolValue: { v: 2, vertebras: [{ id: "C1" }] } });
+
+  assert.equal(esBorradorSucio(soloToolEditado, baselineContaminado), true);
+  // El payload que viajaría lleva el hallazgo de la visita anterior fechado hoy.
+  assert.equal(soloToolEditado.soap.objetivo, "soplo sistólico 2/6 en foco aórtico");
+});
+
+test("B2 · con la nota de hoy vacía, tocar la herramienta no arrastra ningún SOAP", () => {
+  // El comportamiento después del fix: el editable sale del turno ANCLA, que
+  // sin fila `sesion` es vacío. Editar la herramienta ensucia el borrador (hay
+  // que guardar), pero el SOAP que viaja está en blanco: la historia clínica no
+  // afirma nada que no haya pasado hoy.
+  const base = borrador({ soap: { ...soapVacio }, toolValue: { v: 2 } });
+  const soloTool = borrador({ soap: { ...soapVacio }, toolValue: { v: 2, vertebras: [{ id: "C1" }] } });
+
+  assert.equal(esBorradorSucio(soloTool, base), true);
+  assert.deepEqual(soloTool.soap, soapVacio);
+});
+
+test("B2 · traer la nota anterior como BASELINE no ensucia el borrador", () => {
+  // La continuidad se ofrece explícita: el profesional aprieta "traer la de la
+  // visita del …". Eso entra como baseline —igual que el seed de la
+  // herramienta—, así que no dispara el autosave ni el guard de beforeunload:
+  // se guarda si el profesional decide guardar, no por haber abierto la ficha.
+  const anterior = { ...soapVacio, subjetivo: "lumbalgia mecánica", plan: "control en 15 días" };
+  const traido = borrador({ soap: anterior });
+  const baselineTrasTraer = borrador({ soap: anterior });
+
+  assert.equal(esBorradorSucio(traido, baselineTrasTraer), false);
+
+  // Y en cuanto el profesional lo actualiza, sí queda sucio.
+  const editado = borrador({ soap: { ...anterior, subjetivo: "lumbalgia, mejoró 60%" } });
+  assert.equal(esBorradorSucio(editado, baselineTrasTraer), true);
+});
