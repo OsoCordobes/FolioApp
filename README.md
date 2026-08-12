@@ -1,8 +1,14 @@
 # Folio
 
-SaaS vertical para gestión de turnos, agenda clínica y finanzas para profesionales independientes de la salud en Argentina (hoy: quiropraxia, cardiología y psicología — registry extensible en `lib/especialidades/`).
+SaaS vertical para gestión de turnos, agenda clínica y finanzas para profesionales independientes de la salud en Argentina (hoy: quiropraxia, cardiología, psicología, kinesiología y nutrición — registry extensible en `lib/especialidades/`).
 
 Multi-tenant + clinic-ready desde día 1. Cumple Ley 25.326 (Habeas Data) y Ley 26.529 (Historia Clínica AR). Encriptación columnar AES-256-GCM app-side con blind indexes HMAC-SHA256.
+
+Tres superficies, con fronteras de datos distintas:
+
+- **App del profesional** (`app/(app)/`) — agenda, ficha clínica, finanzas, configuración.
+- **Booking público** (`app/(public)/book/`) — reserva sin cuenta, con captcha y rate-limit.
+- **Portal del paciente** (`app/(portal)/`) — login por magic-link; ve sus turnos, sus datos y sus consentimientos, y **nada** de lo clínico: la RLS no le da ninguna policy sobre `sesion`, `sesion_enmienda` ni `nota_clinica`.
 
 > **Snapshot pre-audit (2026-05-21):** [`docs/audit/pre-audit-self-assessment.md`](./docs/audit/pre-audit-self-assessment.md). El estado VIVO de gaps y excepciones es [`docs/audit/known-gaps.md`](./docs/audit/known-gaps.md).
 
@@ -59,7 +65,19 @@ El template completo vive en [`.env.local.example`](./.env.local.example) con co
 
 Migrations: se aplican vía `/api/admin/migrate` (Bearer + escape hatch) o vía Supabase CLI (`supabase db push`). Prisma quedó removido en Sprint 2 — el schema vivo está en `supabase/migrations/`.
 
-## Estado actual de fases (post-audit Sprint 0 — 2026-05-24)
+## Estado actual de fases
+
+> **Checkpoint 2026-08-12.** Las 12 fases del plan maestro original están
+> cerradas; lo que sigue vive en `docs/audit/known-gaps.md`, que es el estado
+> **vivo** de gaps y excepciones. La lista de abajo es histórica — se conserva
+> porque documenta el orden en que se construyó el producto, no porque sea un
+> tablero de trabajo.
+>
+> Lo que se cerró después de esta lista (agosto 2026): guard de la RPC de
+> pseudonimización (M93), policies de Storage por paciente (M94), UPDATE clínico
+> con visibilidad (M95), notas clínicas sin turno (M96), estabilidad del login,
+> carry-forward de la ficha, control de concurrencia del guardado y timeline de
+> modificaciones de la historia clínica.
 
 El plan maestro original (`docs/superpowers/plans/...`) divide el trabajo en 12 fases. La realidad post-Sprint 0 de pre-launch hardening:
 
@@ -81,11 +99,32 @@ El plan maestro original (`docs/superpowers/plans/...`) divide el trabajo en 12 
 - [ ] **Sprint 1** post-audit (en curso) — README, 404/500 styled, HMAC salt per-tenant (A2), 1.6 olvidé email, audit cleanup
 - [x] **Sprint 2 (parcial)** post-audit — auth callback perf, PostHog events tipados (`lib/observability/events.ts`), pgTAP CI (`.github/workflows/pgtap.yml`), Prisma cleanup (commit 06df9fe); pendiente: bundle reduction
 
-## Migrations (M01–M35 · fundación)
+## Migrations
 
-Aplican en orden lexicográfico. Todas con RLS `FORCE`d en la misma migration que crea la tabla (regla inviolable #4). Header de cada SQL documenta propósito + dependencias + reversibilidad.
+**90 migraciones aplicadas (M01–M96)** al 2026-08-12. La tabla de abajo detalla
+sólo M01–M35, la fundación del esquema; el resto vive en
+`supabase/migrations/` con su header explicando propósito, dependencias y
+reversibilidad.
 
-Desde M36 en adelante (hardening, multi-especialidad M50/M55, clínica M49/M51, booking M53, pseudonimización M61/M63, ...) la lista completa vive en `supabase/migrations/`; el diff canónico contra prod se controla con `scripts/diff-migrations.mjs`.
+Aplican en orden lexicográfico. Todas con RLS `FORCE`d en la misma migration que crea la tabla (regla inviolable #4).
+
+**El flujo canónico** (no negociable, hubo un incidente por saltearlo):
+
+```bash
+node scripts/diff-migrations.mjs                              # qué falta contra prod
+node --env-file=.env.local scripts/push-pending-migrations.mjs # aplicarlas
+node scripts/diff-migrations.mjs                              # confirmar el ledger
+```
+
+La migración va a producción **antes** de mergear el código que la usa: `master`
+auto-deploya y el client de Supabase está tipado `<any>`, así que una columna
+faltante no da error de compilación — falla en silencio en producción.
+
+Hitos posteriores a M35: multi-especialidad (M50/M55), clínica y equipos
+(M49/M51), booking público (M53), pseudonimización (M61/M63), portal del
+paciente (M70/M71/M84-M88), y el bloque de seguridad de agosto 2026
+(M93 guard de pseudonimización, M94 Storage por paciente, M95 UPDATE clínico,
+M96 notas clínicas append-only).
 
 | ID | Propósito |
 |---|---|
