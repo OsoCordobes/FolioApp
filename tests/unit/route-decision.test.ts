@@ -35,6 +35,15 @@ test("los PUBLIC_PREFIXES cubren sus subrutas", () => {
   }
 });
 
+test("/cuenta-error es pública: el usuario tiene sesión pero su contexto no resuelve", () => {
+  // Salida del ping-pong /hoy ↔ /onboarding. Si esta ruta pasara por un gate
+  // que depende del contexto de app, el usuario volvería al loop del que
+  // justamente lo estamos sacando.
+  assert.equal(isPublicPath("/cuenta-error"), true);
+  assert.deepEqual(decideRouteGate("/cuenta-error", true), { kind: "pass" });
+  assert.deepEqual(decideRouteGate("/cuenta-error", false), { kind: "pass" });
+});
+
 test("una ruta de la app no es pública", () => {
   for (const p of ["/hoy", "/pacientes", "/pacientes/abc", "/configuracion", "/finanzas", "/agenda"]) {
     assert.equal(isPublicPath(p), false, `${p} NO debería ser pública`);

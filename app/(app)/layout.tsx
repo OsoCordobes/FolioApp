@@ -38,6 +38,14 @@ export default async function AppShellLayout({
       redirect("/login");
     }
     if (ctx.error.code === "no_org" || ctx.error.code === "not_found") {
+      // El otro extremo del ping-pong: si /onboarding decide que el wizard está
+      // completo y nos devuelve acá, y acá volvemos a mandarlo allá, el usuario
+      // rebota para siempre. /onboarding ahora corta ese loop mandando a
+      // /cuenta-error; este log es lo que permite reconstruir por qué el
+      // contexto no resolvía (RLS, org sin member, member soft-deleted…).
+      console.warn(
+        `[app layout] getActiveContext ${ctx.error.code} → /onboarding: ${ctx.error.message}`,
+      );
       redirect("/onboarding");
     }
     // db_error / forbidden / network: fail-fast con error boundary del segment.
