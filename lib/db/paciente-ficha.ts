@@ -359,6 +359,13 @@ interface PlanTratamientoRow {
 
 const TZ_DEFAULT = "America/Argentina/Buenos_Aires";
 
+/**
+ * Cuánto tiempo después de su hora un turno AGENDADO sigue contando como "por
+ * iniciar". Dos horas: cubre a un profesional que arranca tarde o se extiende,
+ * y descarta el turno de la mañana que quedó sin marcar cuando ya es la tarde.
+ */
+const MARGEN_TURNO_VENCIDO_MS = 2 * 60 * 60 * 1000;
+
 /** Subset de turno que necesita la elección del ancla (turno_extendido). */
 export interface TurnoAnclaCandidato {
   id: string;
@@ -409,26 +416,56 @@ export function elegirTurnoAncla<T extends TurnoAnclaCandidato>(
   };
   const hoy = fmt.format(ahora);
 
+  const cerrado = turnos.find((t) => t.estado === "CERRADO");
+  const cerradoEditable =
+    cerrado && !sesiones.find((s) => s.turno_id === cerrado.id)?.locked_at ? cerrado : null;
+
   const deHoy = turnos.filter(
     (t) => (t.estado === "AGENDADO" || t.estado === "CONFIRMADO") && fechaOrg(t.inicio) === hoy,
   );
-  if (deHoy.length > 0) {
+
+  // Un turno AGENDADO cuya hora ya pasó hace rato NO es "por iniciar": es, casi
+  // siempre, un ausente que nadie marcó. Antes cualquier AGENDADO de hoy ganaba
+  // sin mirar la hora, así que con dos turnos el mismo día —un no-show a las
+  // 08:00 y la visita real de las 16:00— a las 19:00 la ficha anclaba al
+  // no-show: la nota se colgaba del turno equivocado y, al guardar, la action
+  // lo empujaba a EN_SALA→ATENDIENDO. Con "Guardar y cerrar" quedaba CERRADO y
+  // con fila `pago`: un ausente facturado, contaminando /finanzas y la métrica
+  // de ausentismo.
+  //
+  // El margen es generoso a propósito: una consulta que empieza tarde o se
+  // extiende sigue siendo la visita de hoy.
+  const limite = ahora.getTime() - MARGEN_TURNO_VENCIDO_MS;
+  const vigentes = deHoy.filter((t) => {
+    const ms = new Date(t.inicio).getTime();
+    return isNaN(ms) || ms >= limite;
+  });
+
+  if (vigentes.length > 0) {
     // Varios turnos del mismo paciente en el día es raro; gana el más cercano
     // a ahora para que la ficha edite la visita que está pasando.
-    const masCercano = deHoy.reduce((a, b) =>
+    const masCercano = vigentes.reduce((a, b) =>
       Math.abs(new Date(a.inicio).getTime() - ahora.getTime()) <=
       Math.abs(new Date(b.inicio).getTime() - ahora.getTime())
         ? a
         : b,
     );
+    // Si además hay un CERRADO de hoy MÁS TARDE que el candidato, esa es la
+    // visita que realmente se atendió: la ficha se escribe sobre ella.
+    const cerradoPosterior =
+      cerradoEditable &&
+      fechaOrg(cerradoEditable.inicio) === hoy &&
+      new Date(cerradoEditable.inicio).getTime() > new Date(masCercano.inicio).getTime()
+        ? cerradoEditable
+        : null;
+    if (cerradoPosterior) return { turno: cerradoPosterior, modo: "retroactivo" };
     return { turno: masCercano, modo: "por_iniciar" };
   }
 
-  const cerrado = turnos.find((t) => t.estado === "CERRADO");
-  if (cerrado) {
-    const sesion = sesiones.find((s) => s.turno_id === cerrado.id);
-    if (!sesion || sesion.locked_at == null) return { turno: cerrado, modo: "retroactivo" };
-  }
+  // Sin candidato vigente: el CERRADO más reciente editable. Si su sesión está
+  // lockeada NO se cae a un turno más viejo (editar una visita anterior a la
+  // última sería confuso) — la ficha queda read-only.
+  if (cerradoEditable) return { turno: cerradoEditable, modo: "retroactivo" };
   return null;
 }
 

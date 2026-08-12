@@ -589,8 +589,8 @@ function TabPlan() {
           <p>
             Turno de hoy a las{" "}
             {fmtTurnoAncla(turnoActivo.inicio, { hour: "2-digit", minute: "2-digit", hour12: false })}{" "}
-            hs, todavía sin iniciar — podés escribir la ficha ya: al guardar, el
-            turno pasa a «Atendiendo» automáticamente.
+            hs, sin iniciar — podés escribir la ficha ya: al guardar, el turno
+            pasa a «Atendiendo» automáticamente.
           </p>
         </div>
       ) : turnoActivo.modo === "retroactivo" ? (
