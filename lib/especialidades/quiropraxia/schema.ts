@@ -162,6 +162,66 @@ export function parseQuiropraxiaToolData(
 }
 
 /**
+ * ¿Una ficha v2 tiene ALGO cargado?
+ *
+ * Es la pregunta del carry-forward: sembrar un objeto vacío no le sirve a
+ * nadie, pero la versión anterior de esa pregunta era
+ * `(sembrado.vertebras?.length ?? 0) > 0` — o sea que sólo miraba vértebras. Una
+ * visita entera de palpaciones, postura, termografía y notas libres, sin ni una
+ * vértebra marcada, contaba como "no aporta nada" y se descartaba.
+ */
+export function aportaAlgoQuiroV2(data: QuiropraxiaToolDataV2 | null | undefined): boolean {
+  if (!data) return false;
+  if ((data.vertebras ?? []).some((v) => Boolean(v.tecnicaAjuste?.trim() || v.listado?.trim()))) {
+    return true;
+  }
+  // Una vértebra sin texto igual es información: el profesional la marcó en el
+  // mapa. Cuenta.
+  if ((data.vertebras?.length ?? 0) > 0) return true;
+  if ((data.postura?.strokes?.length ?? 0) > 0) return true;
+  if (data.postura?.nota?.trim()) return true;
+  if (data.palpacionEstatica?.trim()) return true;
+  if (data.palpacionDinamica?.trim()) return true;
+  if (data.tecnicaAjuste?.trim()) return true;
+  if (data.termografia?.trim()) return true;
+  if (data.notasLibres?.trim()) return true;
+  if (data.legCheck) {
+    const lc = data.legCheck;
+    if (lc.supinoNota?.trim() || lc.pronoExtensionNota?.trim() || lc.pronoFlexionNota?.trim()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Semilla del carry-forward: la ficha de la visita anterior, lista para editar.
+ *
+ * ─── El bug que arregla ────────────────────────────────────────────────────
+ * El carry-forward llamaba a `migrateV1ToV2(ultima.toolData)`. Esa función pasa
+ * por `extractVertebras`, que tiene un gate explícito `if (v === 2) return []`.
+ * Como el formato de ESCRITURA actual es v2, la semilla salía siempre vacía:
+ * `{ v: 2, vista: "posterior" }`. Y como en quiropraxia el SOAP está oculto
+ * (`hideSoap`), la ficha entera arrancaba en blanco **en cada visita** — el
+ * quiropráctico abría la ficha de un paciente que venía atendiendo hace meses y
+ * no veía nada de lo anterior.
+ *
+ * El gate de `extractVertebras` NO es el error: es correcto para el mapa
+ * acumulado legacy (una vértebra v2 no tiene `estado`, así que aportaría
+ * estados inventados) y está pinneado por tests. Lo que faltaba era discriminar
+ * la versión ANTES de migrar, que es justo lo que hace `parseQuiropraxiaToolData`.
+ *
+ * Devuelve `null` cuando no hay nada que sembrar: sin data, con una ficha vacía,
+ * o con el payload de otra especialidad.
+ */
+export function derivarSeedQuiro(ultimaToolData: unknown): QuiropraxiaToolDataV2 | null {
+  const parsed = parseQuiropraxiaToolData(ultimaToolData);
+  if (parsed.kind === "empty") return null;
+  const v2 = parsed.kind === "v2" ? parsed.data : migrateV1ToV2(parsed.data);
+  return aportaAlgoQuiroV2(v2) ? v2 : null;
+}
+
+/**
  * Extracción laxa de la lista de vértebras de un toolData v1 desconocido.
  * Tolera estados fuera del enum (data legacy de vertebras_json) — el caller
  * decide si normaliza. Devuelve [] si el shape no es v1-quiro.
