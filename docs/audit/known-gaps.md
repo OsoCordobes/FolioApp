@@ -12,6 +12,41 @@ Tracked here so auditors see explicit ownership + planned remediation. Each entr
 
 ## Deferred to post-audit (DEFER)
 
+### Rotación de claves de cifrado (`FOLIO_ENC_KEY`)
+
+- **Status**: **no implementada.** Cuatro documentos (`DEPLOYMENT.md`,
+  `docs/audit/encryption-exceptions.md`, `docs/audit/retention.md`,
+  `docs/LAUNCH-RUNBOOK.md`) citaban `scripts/rotate-enc-key.ts` como el
+  procedimiento vigente. **Ese archivo no existe y nunca existió.** Corregido en
+  los cuatro (2026-08-12); esta entrada es ahora la fuente de verdad.
+- **Por qué no se improvisó**: el script tiene que leer con la key vieja y
+  reescribir con la nueva **cada** columna `*_cifrado` del esquema. Un bug ahí
+  no se nota hasta que alguien abre una ficha, y para entonces el ciphertext
+  original ya se pisó. Escribirlo a ciegas y sin un ensayo contra datos reales
+  es peor que declarar el gap.
+- **Mitigation**: la key vive sólo en Vercel (no en el repo, no en backups de
+  código) y el acceso a ese proyecto está limitado al founder. Ante una
+  filtración, el camino seguro hoy es **restore desde backup pre-leak**, no una
+  rotación a medias — una rotación incompleta deja filas cifradas con dos keys
+  distintas y la app muestra fichas vacías (degrada a null, con reporte a
+  Sentry vía `tryDecrypt`, pero el profesional ve la ficha en blanco).
+- **Qué hace falta para cerrarlo**: el inventario de columnas ya está en
+  `encryption-exceptions.md`; falta el script + un ensayo completo contra una
+  copia de producción, con verificación fila por fila antes de promover la key.
+- **Closes in**: sin fecha. Es un pre-requisito de cualquier incidente de
+  seguridad que involucre la key, no de una release.
+
+### Source maps de Sentry en el cliente
+
+- **Status**: los errores del browser **ya llegan** a Sentry desde
+  `instrumentation-client.ts` (antes no llegaba ninguno: `sentry.client.config.ts`
+  existía y nadie lo cargaba). Lo que falta es **subir source maps**, que
+  requiere `withSentryConfig` + `SENTRY_AUTH_TOKEN`/org/project en build.
+- **Mitigation**: los stack traces llegan minificados. Sirven para detectar y
+  contar errores; no para leer la línea exacta sin cruzarlos a mano con el
+  build.
+- **Closes in**: cuando se decida acoplar el build al token de Sentry.
+
 ### Sesion_enmienda UI
 
 - **Status**: table + RLS + append-only triggers exist (M10), y el data layer también (`lib/db/sesiones.ts`). No UI to record an enmienda desde la ficha del paciente (`/pacientes/[id]`). (La ruta demo `/focus` fue eliminada del producto — commit f292b9c.)

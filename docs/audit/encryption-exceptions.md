@@ -4,7 +4,7 @@ Audit-prep deliverable for the 2-week pre-audit sprint. Catalogues every column 
 
 > **Algorithm**: AES-256-GCM, application-side. Key = `FOLIO_ENC_KEY` (32 bytes, base64, env-only, Vercel-encrypted at rest). HMAC blind-index key = `FOLIO_ENC_HMAC_KEY` (separate 32-byte secret, HMAC-SHA256). Implementation: `lib/crypto.ts`. Round-trip integration test: `tests/unit/crypto-roundtrip.test.ts` (12 cases, 100% pass).
 >
-> **Why app-side instead of pgsodium TCE**: documented in `memory/decision_supabase_free_pgcrypto.md`. Short version: Supabase Free tier doesn't expose pgsodium key-management at the level we'd need; app-side AES-GCM under Vercel-managed keys gives us equivalent security with simpler rotation (`scripts/rotate-enc-key.ts`).
+> **Why app-side instead of pgsodium TCE**: documented in `memory/decision_supabase_free_pgcrypto.md`. Short version: Supabase Free tier doesn't expose pgsodium key-management at the level we'd need; app-side AES-GCM under Vercel-managed keys gives us equivalent security with a rotation path that is *conceptually* simpler — though it is **not implemented yet** (see the Rotation note below and `known-gaps.md`).
 
 ---
 
@@ -193,7 +193,7 @@ Run: `pnpm test:unit` (or `node --import tsx --test tests/unit/crypto-roundtrip.
 - **Storage**: `FOLIO_ENC_KEY` + `FOLIO_ENC_HMAC_KEY` live in Vercel env vars, encrypted at rest by Vercel KMS. Never committed.
 - **`.gitignore`**: `.env*` is excluded.
 - **Generation**: `openssl rand -base64 32` (one-time, before first deploy).
-- **Rotation**: `scripts/rotate-enc-key.ts` (referenced in `lib/crypto.ts` comments) re-encrypts every `*_cifrado` column with the new key column-by-column. The script is run with `FOLIO_ENC_KEY_NEXT` set; once complete, the new key is promoted to `FOLIO_ENC_KEY`.
+- **Rotation**: ⚠️ **NOT IMPLEMENTED.** Earlier revisions of this document described `scripts/rotate-enc-key.ts` as an existing procedure. That file does not exist and never did. Key rotation today is a **manual, downtime-requiring** operation: snapshot the DB, re-encrypt every `*_cifrado` column reading with the old key and writing with the new one, verify, then promote. The column inventory in this document is the input for whoever writes it. Tracked in `known-gaps.md` → *Rotación de claves de cifrado*.
 - **Recovery script**: `scripts/reset-user-password.mjs` (shipped in this sprint) lets an admin set a new password for a stuck account without revealing keys.
 
 ---

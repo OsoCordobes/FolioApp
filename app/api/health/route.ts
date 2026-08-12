@@ -7,13 +7,30 @@
  *   - checks: status individual por dependencia (db, env, rate_limit)
  *   - version: SHA del commit deployado (Vercel inyecta `VERCEL_GIT_COMMIT_SHA`)
  *
- * No expone secrets ni datos del tenant. Safe para exponer en GET sin auth.
+ * ─── Dos niveles, a propósito ──────────────────────────────────────────────
+ * Nunca expuso secrets, pero sí exponía —sin auth— el INVENTARIO de qué
+ * controles están configurados y cuáles no: `turnstile: false`,
+ * `cron_secret: false`, `upstash_redis: false`, los nombres de las envs que
+ * faltan, y el mensaje crudo del error de Postgres. Eso no es un secreto, es
+ * un mapa de reconocimiento: le dice a cualquiera qué defensa está apagada y
+ * qué stack corre debajo.
+ *
+ * Ahora:
+ *   - **público** (lo que un monitor de uptime necesita): `ok`, `env`,
+ *     `timestamp` y el status 200/503. Nada más.
+ *   - **con `Authorization: Bearer $CRON_SECRET`** (el mismo que gatea
+ *     /api/cron/* y /api/admin/*): el detalle completo — checks, integraciones,
+ *     versión y región.
+ *
+ * El 503 sigue siendo público: un monitor tiene que poder detectar la caída sin
+ * credenciales. Lo que deja de ser público es POR QUÉ.
  */
 
 import { captureMessage } from "@sentry/nextjs";
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 
 import { isUpstashConfigured } from "@/lib/security/rate-limit";
+import { verifyBearer } from "@/lib/security/verify-bearer";
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -36,7 +53,11 @@ export function __resetHealthAlertState() {
   alertedUpstashMissing = false;
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const detallado = verifyBearer(
+    request.headers.get("authorization"),
+    process.env.CRON_SECRET,
+  );
   const checks: Record<string, CheckResult> = {};
 
   // 1. Database ping
@@ -129,17 +150,26 @@ export async function GET() {
 
   const ok = Object.values(checks).every((c) => c.ok);
 
+  // Público: lo justo para que un monitor sepa si está vivo. El 503 se mantiene
+  // para que la caída se detecte sin credenciales — lo que se reserva es el
+  // detalle de POR QUÉ.
+  const publico = {
+    ok,
+    env: process.env.VERCEL_ENV ?? "development",
+    timestamp: new Date().toISOString(),
+  };
+
   return NextResponse.json(
-    {
-      ok,
-      version: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "dev",
-      env: process.env.VERCEL_ENV ?? "development",
-      region: process.env.VERCEL_REGION ?? "unknown",
-      checks,
-      integrations,
-      timestamp: new Date().toISOString(),
-    },
-    { status: ok ? 200 : 503 },
+    detallado
+      ? {
+          ...publico,
+          version: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "dev",
+          region: process.env.VERCEL_REGION ?? "unknown",
+          checks,
+          integrations,
+        }
+      : publico,
+    { status: ok ? 200 : 503, headers: { "Cache-Control": "no-store" } },
   );
 }
 
