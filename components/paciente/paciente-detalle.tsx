@@ -47,8 +47,9 @@ import {
 } from "@/lib/especialidades/registry";
 import { toWhatsappE164 } from "@/lib/format/phone";
 import { formatCobertura } from "@/lib/pacientes/cobertura";
+import { HistorialCambiosCard } from "@/components/paciente/historial-cambios-card";
 import { NotasFichaCard } from "@/components/paciente/notas-ficha-card";
-import { addNotaFichaAction } from "@/app/(app)/pacientes/actions";
+import { addNotaFichaAction, getFichaTimelineAction } from "@/app/(app)/pacientes/actions";
 import type { NotaClinicaFicha } from "@/lib/ficha/nota-clinica";
 import type { IntakeAvanzadoFicha, PacienteFichaInfo, PlanData } from "@/lib/db/paciente-ficha";
 
@@ -1096,6 +1097,16 @@ function TabSesiones() {
           );
         })}
       </div>
+
+      {/* Al pie de la Historia: quién tocó la historia clínica y cuándo.
+          Colapsado y con lazy-fetch — leer el audit cuesta un service client y
+          varias queries, y nadie abre una ficha para auditarla. */}
+      <HistorialCambiosCard
+        cargar={async () => {
+          const r = await getFichaTimelineAction(paciente.id);
+          return r.ok ? { ok: true as const, eventos: r.data } : { ok: false as const, error: r.error.message };
+        }}
+      />
     </div>
   );
 }
