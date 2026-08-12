@@ -190,3 +190,59 @@ test("isBillingRecoveryPath: matching robusto a query, hash y trailing slash", (
   assert.equal(isBillingRecoveryPath("/hoy"), false);
   assert.equal(isBillingRecoveryPath(""), false);
 });
+
+// ─── C1 · los dos casos que expulsaban a un cliente que ya pagó ─────────────
+//
+// Ninguno de los dos es un bug del gate en sí: el gate hace lo correcto con los
+// datos que recibe. Lo que fallaba era QUÉ datos le llegaban. Estos tests fijan
+// el comportamiento del gate en esos dos escenarios para que un cambio futuro
+// en `applySubscriptionUpdate` o en `getActiveContext` los vuelva a romper con
+// un test rojo y no con un cliente afuera.
+
+test("C1 · cancelar conserva el período pagado, salvo que se le borre proxima_cobro", () => {
+  // El cliente cancela el día 5 de un ciclo mensual: le quedan ~25 días pagados.
+  const pagadoHasta = "2026-06-26T00:00:00.000Z";
+  const conservado = computeAccessGate(
+    ORG_OLD,
+    sub({ estado: "CANCELADA", proximaCobro: pagadoHasta }),
+    NOW,
+  );
+  assert.equal(conservado.allowed, true, "cancelar no puede cortar el acceso ya pagado");
+
+  // Lo que pasaba antes: MercadoPago deja de informar next_payment_date cuando
+  // el preapproval queda `cancelled`, y applySubscriptionUpdate escribía ese
+  // null encima. Con proxima_cobro en null el mismo cliente queda AFUERA en el
+  // acto — y el paywall le dice que su prueba terminó.
+  const borrado = computeAccessGate(ORG_OLD, sub({ estado: "CANCELADA", proximaCobro: null }), NOW);
+  assert.equal(borrado.allowed, false);
+  assert.equal(borrado.reason, "subscription_cancelled");
+});
+
+test("C1 · una fecha vieja de proxima_cobro no regala acceso", () => {
+  // Contraparte del fix: dejar de pisar proxima_cobro no puede convertirse en
+  // acceso eterno. El gate exige que sea futura.
+  const vencido = computeAccessGate(
+    ORG_OLD,
+    sub({ estado: "CANCELADA", proximaCobro: "2026-05-01T00:00:00.000Z" }),
+    NOW,
+  );
+  assert.equal(vencido.allowed, false);
+  assert.equal(vencido.reason, "subscription_cancelled");
+});
+
+test("C1 · sin suscripción legible, el grace NO alcanza para una org vieja", () => {
+  // Este es el motivo por el que getActiveContext no puede pasarle `null` al
+  // gate cuando el lookup de suscripción FALLA: cae en la rama de grace de
+  // GRACE_PERIOD_DAYS contados desde organization.created_at, así que cualquier
+  // org de más de un mes —o sea, todo cliente real— queda bloqueada por un
+  // hiccup transitorio de Supabase. El fail-open explícito vive en
+  // lib/db/active-context.ts; esto documenta por qué es necesario.
+  const gate = computeAccessGate(ORG_OLD, null, NOW);
+  assert.equal(gate.allowed, false);
+  assert.equal(gate.reason, "grace_expired");
+
+  // Una org recién creada sí zafa por grace — por eso el bug era invisible en
+  // desarrollo y en cuentas nuevas, y solo aparecía con clientes de verdad.
+  const reciente = new Date(NOW.getTime() - 2 * 24 * 60 * 60 * 1000).toISOString();
+  assert.equal(computeAccessGate(reciente, null, NOW).allowed, true);
+});

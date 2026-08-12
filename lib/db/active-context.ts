@@ -26,6 +26,8 @@
  *   ```
  */
 
+import { captureException } from "@sentry/nextjs";
+
 import { decryptColumn } from "@/lib/crypto";
 import { normalizeEspecialidadSlug, type EspecialidadSlug } from "@/lib/especialidades/meta";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -226,15 +228,28 @@ export async function getActiveContext(): Promise<Result<ActiveContext>> {
     avatarUrl: profRow.avatar_url,
   };
 
-  // Suscripción + gate. Si el lookup falla (db_error), no bloqueamos al usuario:
-  // tratamos como sin suscripción y dejamos que el grace period decida. Loguear
-  // pero no fail-fast — un hiccup en la tabla suscripcion no debería tirar
-  // toda la app abajo.
+  // Suscripción + gate.
+  //
+  // Si el lookup falla (db_error) el gate es fail-OPEN de verdad. El comentario
+  // viejo decía "dejamos que el grace period decida", pero pasarle `null` a
+  // computeAccessGate cae en la rama de grace de 30 días contados desde
+  // `organization.created_at`: cualquier org de más de un mes —o sea, todo
+  // cliente real— quedaba BLOQUEADA ante un hiccup transitorio de Supabase, en
+  // medio de una consulta y con la historia clínica inaccesible. Un error de
+  // lectura nuestro no puede dejar a un profesional sin la ficha del paciente
+  // que tiene sentado enfrente.
   const subscriptionRow = subRes.ok ? subRes.data : null;
+  const accessGate = subRes.ok
+    ? computeAccessGate(orgRow.created_at, subscriptionRow)
+    : { allowed: true as const, reason: null, graceDaysLeft: null };
   if (!subRes.ok) {
     console.warn(`[active-context] loadSubscriptionForOrg falló: ${subRes.error.message}`);
+    // A Sentry sin PHI: solo la org y el mensaje del error de DB.
+    captureException(new Error(`loadSubscriptionForOrg: ${subRes.error.message}`), {
+      tags: { area: "billing", gate: "fail_open" },
+      extra: { organizationId: orgRow.id },
+    });
   }
-  const accessGate = computeAccessGate(orgRow.created_at, subscriptionRow);
   const subscription: ActiveSubscription = {
     estado: subscriptionRow?.estado ?? null,
     proximaCobro: subscriptionRow?.proximaCobro ?? null,

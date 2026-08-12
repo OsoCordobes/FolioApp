@@ -407,9 +407,23 @@ export async function applySubscriptionUpdate(
 
   const patch: Record<string, unknown> = {
     estado: newEstado,
-    proxima_cobro: info.nextChargeDate ?? null,
     mp_last_modified: info.lastModified ?? null,
   };
+  // `proxima_cobro` es la fecha "pagado hasta": es lo único que le deja a
+  // computeAccessGate darle al cliente los días que YA pagó cuando el estado
+  // pasa a CANCELADA o MOROSA.
+  //
+  // MercadoPago deja de informar next_payment_date en cuanto el preapproval
+  // queda `cancelled`. Escribir ese null acá le borraba al cliente el período
+  // pagado: el que cancelaba el día 5 perdía los 25 días restantes en el acto,
+  // y el paywall le decía que su prueba había terminado. Peor error posible
+  // para un producto que se vende.
+  //
+  // Por eso solo se pisa cuando MP manda una fecha nueva. Una fecha vieja no
+  // regala acceso: el gate exige `proximaCobro > now`.
+  if (info.nextChargeDate) {
+    patch.proxima_cobro = info.nextChargeDate;
+  }
   if (newEstado === "ACTIVA") {
     // fecha_activacion solo se setea la primera vez (COALESCE en SQL no aplica
     // acá; lo manejamos leyendo y escribiendo si era null).
