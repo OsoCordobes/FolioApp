@@ -91,6 +91,7 @@ export default async function PacientePage({ params }: PageProps) {
       especialidad={especialidad}
       intakeAvanzado={data.data.intakeAvanzado}
       organizacionNombre={ctx.data.organization.nombre}
+      notas={data.data.notas}
     />
   );
 }

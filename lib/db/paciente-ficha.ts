@@ -23,6 +23,7 @@
  */
 
 import { tryDecrypt as tryDecryptCanonico } from "@/lib/crypto";
+import { listNotasClinicas, type NotaClinicaFicha } from "@/lib/db/notas-clinicas";
 import { esToolDataRehidratable } from "@/lib/db/sesiones";
 import {
   ESPECIALIDADES_META,
@@ -286,6 +287,14 @@ export interface PlanData {
 export interface PacienteFichaData {
   paciente: PacienteFichaInfo;
   plan: PlanData;
+  /**
+   * M96 · notas de la ficha (sin turno), de la más nueva a la más vieja.
+   *
+   * Best-effort: si la lectura falla, la ficha se rinde igual con `[]`. Que un
+   * error leyendo las notas deje al profesional sin la historia clínica entera
+   * sería un mal negocio.
+   */
+  notas: NotaClinicaFicha[];
   cumple: string; // "18 may" o "—"
   /**
    * Workstream 5 · intake avanzado de la especialidad ACTIVA (M60), o null si no
@@ -889,7 +898,15 @@ export async function getPacienteFicha(
 
   const cumple = row.fecha_nacimiento ? formatCumple(row.fecha_nacimiento) : "—";
 
-  return ok({ paciente, plan, cumple, intakeAvanzado });
+  // M96 · notas de la ficha. Best-effort: un error leyéndolas no puede dejar al
+  // profesional sin la historia clínica entera.
+  const notasRes = await listNotasClinicas(pacienteId);
+  const notasFicha = notasRes.ok ? notasRes.data : [];
+  if (!notasRes.ok) {
+    console.warn(`[paciente-ficha] listNotasClinicas falló: ${notasRes.error.message}`);
+  }
+
+  return ok({ paciente, plan, cumple, intakeAvanzado, notas: notasFicha });
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────

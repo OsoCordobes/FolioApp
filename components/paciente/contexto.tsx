@@ -16,6 +16,7 @@
 import { createContext, useContext, type ReactNode } from "react";
 
 import type { EspecialidadSlug } from "@/lib/especialidades/meta";
+import type { NotaClinicaFicha } from "@/lib/ficha/nota-clinica";
 import type { IntakeAvanzadoFicha, PacienteFichaInfo, PlanData } from "@/lib/db/paciente-ficha";
 
 interface PacienteFichaContextValue {
@@ -39,6 +40,11 @@ interface PacienteFichaContextValue {
    * impresa identifique de dónde salió el documento.
    */
   organizacionNombre: string;
+  /**
+   * M96 · notas de la ficha (sin turno), de la más nueva a la más vieja. Es la
+   * parte de la historia clínica que ocurre ENTRE turnos.
+   */
+  notas: NotaClinicaFicha[];
 }
 
 const PacienteFichaContext = createContext<PacienteFichaContextValue | null>(null);
