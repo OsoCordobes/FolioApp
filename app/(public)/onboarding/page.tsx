@@ -18,6 +18,7 @@ import { Suspense } from "react";
 
 import { OnboardingApp } from "@/components/onboarding/onboarding-app";
 import { MotionProvider } from "@/components/motion/motion-provider";
+import { getActiveContext } from "@/lib/db/active-context";
 import { getOnboardingResumeState } from "@/lib/db/onboarding-resume";
 // Server-only (resuelve MP_PLAN_PRICE_CENTS de env). Se baja como prop para
 // que el wizard (client) muestre el MISMO precio que el cobro real — antes
@@ -48,7 +49,26 @@ export default async function OnboardingPage() {
     const result = await getOnboardingResumeState(user.id, user.email ?? "");
     if (result.ok) {
       if (!result.data.shouldShowOnboarding) {
-        // Onboarding ya completado → no debería estar acá. Mandar a /hoy.
+        // Onboarding ya completado → no debería estar acá. Pero antes de
+        // mandarlo a /hoy hay que confirmar que /hoy lo va a poder recibir:
+        // getOnboardingResumeState usa un service client y ve cosas que el
+        // usuario NO puede leer bajo RLS. Cuando decía "completo" y el layout
+        // de (app) resolvía `not_found` con el client del usuario, ese layout
+        // devolvía a /onboarding, que volvía a decir "completo": el usuario
+        // quedaba rebotando entre dos pantallas para siempre, sin ningún
+        // mensaje.
+        //
+        // El chequeo va acá y no en el layout porque acá todavía hay a dónde
+        // mandarlo. redirect() lanza NEXT_REDIRECT, así que NO puede ir dentro
+        // de un try/catch — por eso se resuelve el contexto primero y se
+        // redirige después, fuera de cualquier captura.
+        const ctx = await getActiveContext();
+        if (!ctx.ok) {
+          console.error(
+            `[onboarding] resume dice completo pero getActiveContext falló para user ${user.id}: ${ctx.error.code} ${ctx.error.message}`,
+          );
+          redirect("/cuenta-error");
+        }
         redirect("/hoy");
       }
       initialStep = result.data.initialStep;

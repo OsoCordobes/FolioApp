@@ -32,6 +32,7 @@ export const PUBLIC_PATHS = [
   "/robots.txt",            // SEO — ídem
   "/profesionales",         // directorio público (Fase 3) — índice; los hubs van por prefijo
   "/portal/login",          // login del portal del paciente (P3) — magic-link, sin sesión
+  "/cuenta-error",          // salida del ping-pong /hoy ↔ /onboarding: el usuario TIENE sesión pero su contexto de app no resuelve, así que no puede pasar por un gate que dependa de ese contexto
 ] as const;
 
 /** Prefijos públicos. */
