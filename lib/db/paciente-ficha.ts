@@ -22,7 +22,8 @@
  * gating: si ASISTENTE, redirigir a `/pacientes`.
  */
 
-import { decryptColumn } from "@/lib/crypto";
+import { tryDecrypt as tryDecryptCanonico } from "@/lib/crypto";
+import { esToolDataRehidratable } from "@/lib/db/sesiones";
 import {
   ESPECIALIDADES_META,
   getEspecialidadMetaByToolId,
@@ -790,9 +791,20 @@ export async function getPacienteFicha(
           // la otra herramienta: el writer detecta el guardado solo-SOAP
           // sobre una fila no re-hidratable y PRESERVA las columnas tool
           // (debePreservarToolData, lib/db/sesiones.ts).
+          // MISMA regla que el writer (esToolDataRehidratable): sólo se
+          // re-hidrata el payload de la versión de ESCRITURA vigente. Una fila
+          // guardada con un shape anterior (cardio/psico pre-v3, quiro pre-v2)
+          // se trata como ilegible: el borrador arranca sin herramienta y el
+          // writer preserva esas columnas. Antes esa fila llegaba tal cual al
+          // borrador, el zod .strict() de la versión actual la rechazaba y el
+          // guardado se cortaba ENTERO — el profesional no podía registrar ni
+          // el SOAP de la visita.
           sesionTurnoAncla &&
-          sesionTurnoAncla.tool_data_cifrado != null &&
-          toolPerteneceAEspecialidad(sesionTurnoAncla.tool_id, especialidadActiva)
+          esToolDataRehidratable(
+            sesionTurnoAncla.tool_id,
+            sesionTurnoAncla.tool_data_cifrado,
+            especialidadActiva,
+          )
             ? sesionToolData(sesionTurnoAncla)
             : null,
         // El SOAP editable es el de ESTA visita, no el de la última del
@@ -882,20 +894,16 @@ export async function getPacienteFicha(
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
+// El tryDecrypt canónico vive en lib/crypto.ts. El duplicado que había acá era
+// una versión DEGRADADA: sólo logueaba en desarrollo, así que en producción una
+// rotación de key a medias mostraría todas las fichas vacías sin que nadie se
+// entere — y el profesional reescribiría encima, destruyendo ciphertext que
+// todavía era recuperable. El canónico reporta a Sentry sin PHI (sólo el label
+// del campo y la razón categórica).
+//
+// Este wrapper existe sólo para prefijar el label con el módulo.
 function tryDecrypt(value: string | null | undefined, label: string): string | null {
-  if (value == null) return null;
-  try {
-    return decryptColumn(value);
-  } catch (e) {
-    // PHI: en producción degradamos en silencio (fallback null). Loguear el
-    // fallo atado a un label/ID de sesión crea metadata enlazable a PHI en
-    // los logs del server — solo se loguea en desarrollo.
-    if (process.env.NODE_ENV === "development") {
-      const msg = e instanceof Error ? e.message : String(e);
-      console.warn(`[paciente-ficha] decrypt falló (${label}): ${msg}`);
-    }
-    return null;
-  }
+  return tryDecryptCanonico(value, `paciente-ficha.${label}`);
 }
 
 /**
@@ -918,7 +926,16 @@ function sesionToolData(s: SesionRow): unknown {
         }
       }
     }
-    // cae al fallback legacy de abajo
+    // No se pudo leer el payload real. El fallback legacy de abajo es el shape
+    // de QUIROPRAXIA, así que sólo aplica si la fila es de quiropraxia.
+    if (!toolPerteneceAEspecialidad(s.tool_id, "quiropraxia")) {
+      // Devolver `{v:1,vertebras:[]}` para una sesión de cardio o psico le
+      // entregaba a la Tool —y de vuelta al writer— un payload de OTRA
+      // herramienta: el zod .strict() lo rechazaba y bloqueaba el guardado
+      // ENTERO, SOAP incluido. null = "ilegible", y el writer preserva las
+      // columnas tool en vez de pisarlas (debePreservarToolData).
+      return null;
+    }
   }
   return {
     v: 1,
