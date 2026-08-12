@@ -196,3 +196,88 @@ test("CANCELADO, NO_ASISTIO y REAGENDADO nunca anclan", () => {
 test("sin turnos → null (la ficha queda read-only con CTA)", () => {
   assert.equal(elegirTurnoAncla([], [], AHORA, TZ), null);
 });
+
+// ─── 5. B3 · el ancla no roba la visita atendida ni factura un ausente ───────
+//
+// Antes, CUALQUIER turno AGENDADO de hoy ganaba sin mirar la hora. Con dos
+// turnos el mismo día —un no-show a las 08:00 y la visita real de las 16:00—,
+// a las 19:00 la ficha anclaba al no-show: la nota se colgaba del turno
+// equivocado y, al guardar, la action lo empujaba a EN_SALA→ATENDIENDO. Con
+// "Guardar y cerrar" quedaba CERRADO y con fila `pago`: un ausente facturado,
+// contaminando /finanzas y la métrica de ausentismo.
+
+// 19:00 AR = 22:00Z.
+const TARDE = new Date("2026-07-03T22:00:00.000Z");
+
+test("doble turno: el no-show de la mañana no le roba el ancla a la visita cerrada", () => {
+  const res = elegirTurnoAncla(
+    [
+      // DESC por inicio, como los lee getPacienteFicha.
+      turno("visita-real", "CERRADO", "2026-07-03T19:00:00+00:00"), // 16:00 AR
+      turno("no-show", "AGENDADO", "2026-07-03T11:00:00+00:00"), //    08:00 AR
+    ],
+    [],
+    TARDE,
+    TZ,
+  );
+  assert.equal(res?.turno.id, "visita-real");
+  assert.equal(res?.modo, "retroactivo");
+});
+
+test("un AGENDADO de hoy que ya venció no ancla como 'por iniciar'", () => {
+  // Sin ningún CERRADO: el turno de la mañana que nadie marcó ya no es la
+  // visita de hoy, así que la ficha queda read-only en vez de mentir con
+  // "turno de hoy, sin iniciar" y empujar a ATENDIENDO al guardar.
+  const res = elegirTurnoAncla(
+    [turno("no-show", "AGENDADO", "2026-07-03T11:00:00+00:00")],
+    [],
+    TARDE,
+    TZ,
+  );
+  assert.equal(res, null);
+});
+
+test("el margen cubre al profesional que arranca tarde", () => {
+  // 12:00 AR y el turno era 11:00 AR: una hora de atraso sigue siendo la visita
+  // de hoy. Si el margen fuera demasiado corto, la ficha dejaría de anclar
+  // justo cuando el profesional la necesita.
+  const res = elegirTurnoAncla(
+    [turno("turno-11", "AGENDADO", "2026-07-03T14:00:00+00:00")], // 11:00 AR
+    [],
+    AHORA, // 12:00 AR
+    TZ,
+  );
+  assert.equal(res?.turno.id, "turno-11");
+  assert.equal(res?.modo, "por_iniciar");
+});
+
+test("un turno próximo del mismo día gana sobre un CERRADO anterior", () => {
+  // Regresión del comportamiento correcto: si el turno de hoy todavía no pasó,
+  // la ficha edita ESA visita, no la anterior.
+  const res = elegirTurnoAncla(
+    [
+      turno("turno-16", "AGENDADO", "2026-07-03T19:00:00+00:00"), // 16:00 AR, futuro
+      turno("cerrado-viejo", "CERRADO", "2026-06-20T14:00:00+00:00"),
+    ],
+    [],
+    AHORA, // 12:00 AR
+    TZ,
+  );
+  assert.equal(res?.turno.id, "turno-16");
+  assert.equal(res?.modo, "por_iniciar");
+});
+
+test("con el CERRADO de hoy lockeado, un AGENDADO vencido no se cuela", () => {
+  // La sesión de la visita real está cerrada bajo llave (locked_at): la ficha
+  // tiene que quedar read-only, NO caer al no-show de la mañana.
+  const res = elegirTurnoAncla(
+    [
+      turno("visita-real", "CERRADO", "2026-07-03T19:00:00+00:00"),
+      turno("no-show", "AGENDADO", "2026-07-03T11:00:00+00:00"),
+    ],
+    [{ turno_id: "visita-real", locked_at: "2026-07-03T20:00:00.000Z" }],
+    TARDE,
+    TZ,
+  );
+  assert.equal(res, null);
+});
