@@ -374,6 +374,11 @@ const saveSesionFichaSchema = z.object({
    * no un efecto colateral de tipear. Ausente/false = guardado manual.
    */
   autosave: z.boolean().optional(),
+  /**
+   * `sesion.updated_at` que la ficha tenía al hidratarse. Si otra pestaña
+   * guardó en el medio, el writer devuelve `conflict` en vez de pisarla.
+   */
+  updatedAtEsperado: z.string().optional(),
 });
 
 export type SaveSesionFichaActionInput = z.infer<typeof saveSesionFichaSchema>;
@@ -460,6 +465,7 @@ export async function saveSesionFichaAction(
       pacienteId: parsed.data.pacienteId,
       toolValue: parsed.data.toolValue ?? null,
       soap: parsed.data.soap,
+      updatedAtEsperado: parsed.data.updatedAtEsperado,
     }),
   );
   if (!result.ok) return result;
@@ -541,6 +547,7 @@ export async function saveSesionYCerrarAction(
       pacienteId: parsed.data.pacienteId,
       toolValue: parsed.data.toolValue ?? null,
       soap: parsed.data.soap,
+      updatedAtEsperado: parsed.data.updatedAtEsperado,
     }),
   );
   if (!saved.ok) return saved;

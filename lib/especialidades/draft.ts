@@ -43,6 +43,12 @@ export interface SesionFichaDraft {
   /** Borrador del Tool del slot, o null si no se tocó la herramienta. */
   toolValue: unknown;
   soap: FichaSoapDraft;
+  /**
+   * `sesion.updated_at` con el que se hidrató el borrador (control de
+   * concurrencia optimista). `undefined` = la ficha no conocía la versión —
+   * sesión nueva o caller legacy — y el writer se comporta como antes.
+   */
+  updatedAtEsperado?: string;
 }
 
 function campoSoap(value: string | null | undefined): string | undefined {
@@ -60,6 +66,7 @@ export function buildUpsertSesionInput(draft: SesionFichaDraft): UpsertSesionInp
       a: campoSoap(draft.soap.analisis),
       p: campoSoap(draft.soap.plan),
     },
+    ...(draft.updatedAtEsperado ? { updatedAtEsperado: draft.updatedAtEsperado } : {}),
   };
   if (draft.toolValue == null) return input;
 

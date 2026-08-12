@@ -17553,6 +17553,11 @@ input:focus { outline: none; }
    empty state, acento suave para leerse como aviso y no como bloqueo. */
 .pc-sin-turno--info { background: var(--accent-soft); color: var(--ink-2); }
 .pc-sin-turno--info svg { color: var(--accent); }
+/* Variante de advertencia: algo que el profesional TIENE que atender antes de
+   seguir (conflicto de escritura entre dos pestañas). Mismo layout; el ámbar
+   la distingue del info sin gritar como el rojo de un error fatal. */
+.pc-sin-turno--warn { background: var(--amber-soft); color: var(--ink-2); border-color: var(--amber); }
+.pc-sin-turno--warn svg { color: var(--amber); }
 
 /* ════════════════════════════════════════════════════════════════════════════
    M-quiropraxia v2 (Workstream 6) — ficha quiropráctica reestructurada.
