@@ -187,10 +187,43 @@ export function debePreservarToolData(
   especialidadEfectiva: EspecialidadSlug,
 ): boolean {
   if (!existing || !sesionTieneToolData(existing)) return false; // nada que pisar
-  const rehidratable =
-    existing.tool_data_cifrado != null &&
-    toolPerteneceAEspecialidad(existing.tool_id, especialidadEfectiva);
-  return !rehidratable;
+  return !esToolDataRehidratable(existing.tool_id, existing.tool_data_cifrado, especialidadEfectiva);
+}
+
+/**
+ * ¿La ficha puede re-hidratar el borrador con estas columnas tool?
+ *
+ * Fuente de verdad ÚNICA de la regla, compartida por el reader
+ * (lib/db/paciente-ficha.ts → turnoActivo.toolDraft) y el writer
+ * (debePreservarToolData). Estaban duplicadas y se desincronizaron: una fila
+ * guardada con una versión ANTERIOR del shape (cardio/psico pre-v3, o
+ * quiropraxia pre-v2) tiene un tool_id que SÍ pertenece a la especialidad, así
+ * que el writer la consideraba re-hidratable y, ante un guardado solo-SOAP, le
+ * escribía NULL encima — mientras el reader nunca había podido mostrarla.
+ *
+ * Peor todavía: si esa fila llegaba al borrador tal cual, el zod `.strict()` de
+ * la versión ACTUAL la rechazaba y el writer cortaba con "toolData inválido"
+ * ANTES de escribir nada, así que el profesional no podía guardar **ni el
+ * SOAP**. La nota clínica de la visita quedaba imposible de registrar por una
+ * fila vieja de la herramienta.
+ *
+ * Ahora la regla es una sola y estrecha: se re-hidrata sólo el payload de la
+ * versión de ESCRITURA vigente. Cualquier otra versión se trata como ilegible →
+ * el borrador arranca sin herramienta y el writer PRESERVA las columnas: el
+ * SOAP se guarda, y el dato viejo sigue intacto y visible en el historial.
+ */
+export function esToolDataRehidratable(
+  toolId: string | null,
+  /** Opaco a propósito: sólo interesa si HAY payload, nunca su contenido. */
+  toolDataCifrado: unknown,
+  especialidadEfectiva: EspecialidadSlug,
+): boolean {
+  if (toolDataCifrado == null) return false;
+  if (!toolPerteneceAEspecialidad(toolId, especialidadEfectiva)) return false;
+  // Versión de escritura vigente de esa especialidad. Una fila legacy quiro sin
+  // tool_id (pre-M50) tampoco es re-hidratable: su contenido vive en
+  // vertebras_json, no en tool_data_cifrado.
+  return toolId === ESPECIALIDADES_META[especialidadEfectiva].toolId;
 }
 
 // ─── Especialidad efectiva del turno (M55) ─────────────────────────────

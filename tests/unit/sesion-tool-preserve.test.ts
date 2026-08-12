@@ -11,18 +11,23 @@
  * vertebras_json — pérdida silenciosa de PHI con badge "guardado".
  *
  * Semántica (espejo del criterio de re-hidratación de paciente-ficha.ts):
- *   - fila RE-HIDRATABLE (tool_data_cifrado != null + tool_id de la
- *     especialidad efectiva) → la UI mostró los datos; un toolValue null es un
- *     vaciado deliberado (los Tools cardio/psico emiten null al quedar vacíos)
- *     → NO preservar.
- *   - fila NO re-hidratable con datos (tool_id ajeno / desconocido / legacy
- *     quiro solo-vertebras_json) → la UI nunca los mostró → PRESERVAR.
+ *   - fila RE-HIDRATABLE (tool_data_cifrado != null + tool_id igual al de
+ *     ESCRITURA vigente de la especialidad efectiva) → la UI mostró los datos;
+ *     un toolValue null es un vaciado deliberado (los Tools cardio/psico
+ *     emiten null al quedar vacíos) → NO preservar.
+ *   - fila NO re-hidratable con datos (tool_id ajeno / desconocido / de una
+ *     VERSIÓN anterior del shape / legacy quiro solo-vertebras_json) → la UI
+ *     nunca los mostró → PRESERVAR.
  */
 
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { debePreservarToolData, sesionTieneToolData } from "../../lib/db/sesiones";
+import {
+  debePreservarToolData,
+  esToolDataRehidratable,
+  sesionTieneToolData,
+} from "../../lib/db/sesiones";
 
 const CIFRADO = "\\x6f70616375"; // ciphertext opaco — solo importa la nulidad
 
@@ -61,7 +66,8 @@ test("sesionTieneToolData: detecta tool_data_cifrado, tool_id o vertebras_json c
 
 test("cross-tool: sesión cardio + especialidad efectiva psico → PRESERVAR (no se pisa PHI)", () => {
   const existente = {
-    tool_id: "cardiologia.cv.v1",
+    // Versión de ESCRITURA vigente: es la única que la ficha re-hidrata.
+    tool_id: "cardiologia.cv.v3",
     tool_data_cifrado: CIFRADO,
     vertebras_json: [],
   };
@@ -74,9 +80,9 @@ test("cross-tool: sesión cardio + especialidad efectiva psico → PRESERVAR (no
 
 test("cross-tool: las tres especialidades preservan los datos de las otras dos", () => {
   const filas = [
-    { toolId: "quiropraxia.spine.v1", propia: "quiropraxia" as const },
-    { toolId: "cardiologia.cv.v1", propia: "cardiologia" as const },
-    { toolId: "psicologia.escalas.v1", propia: "psicologia" as const },
+    { toolId: "quiropraxia.ficha.v2", propia: "quiropraxia" as const },
+    { toolId: "cardiologia.cv.v3", propia: "cardiologia" as const },
+    { toolId: "psicologia.escalas.v3", propia: "psicologia" as const },
   ];
   for (const fila of filas) {
     const existente = { tool_id: fila.toolId, tool_data_cifrado: CIFRADO, vertebras_json: [] };
@@ -88,6 +94,46 @@ test("cross-tool: las tres especialidades preservan los datos de las otras dos",
       );
     }
   }
+});
+
+// ─── B5 · una VERSIÓN anterior del shape tampoco es re-hidratable ────────────
+//
+// El reader sólo puede mostrar el payload de la versión de escritura vigente:
+// el zod `.strict()` de la actual rechaza los shapes anteriores. La regla del
+// writer se había quedado en "¿pertenece a la especialidad?", que para
+// `cardiologia.cv.v1` da true — así que ante un guardado solo-SOAP le escribía
+// NULL encima a datos que la UI NUNCA mostró. Y si ese payload llegaba al
+// borrador, el writer cortaba con "toolData inválido" ANTES de escribir nada:
+// el profesional no podía guardar **ni el SOAP** de la visita.
+
+test("B5 · fila de una versión anterior de la MISMA especialidad → PRESERVAR", () => {
+  for (const [toolId, propia] of [
+    ["cardiologia.cv.v1", "cardiologia"],
+    ["cardiologia.cv.v2", "cardiologia"],
+    ["psicologia.escalas.v1", "psicologia"],
+    ["psicologia.escalas.v2", "psicologia"],
+    ["quiropraxia.spine.v1", "quiropraxia"],
+  ] as const) {
+    assert.equal(
+      debePreservarToolData(
+        { tool_id: toolId, tool_data_cifrado: CIFRADO, vertebras_json: [] },
+        propia,
+      ),
+      true,
+      `${toolId} con efectiva ${propia} tiene que preservarse`,
+    );
+  }
+});
+
+test("B5 · esToolDataRehidratable: sólo la versión de escritura vigente", () => {
+  assert.equal(esToolDataRehidratable("cardiologia.cv.v3", CIFRADO, "cardiologia"), true);
+  assert.equal(esToolDataRehidratable("cardiologia.cv.v1", CIFRADO, "cardiologia"), false);
+  // De otra especialidad: no, aunque sea su versión vigente.
+  assert.equal(esToolDataRehidratable("cardiologia.cv.v3", CIFRADO, "psicologia"), false);
+  // Sin payload no hay nada que re-hidratar (fila legacy quiro: su contenido
+  // vive en vertebras_json, no en tool_data_cifrado).
+  assert.equal(esToolDataRehidratable("quiropraxia.ficha.v2", null, "quiropraxia"), false);
+  assert.equal(esToolDataRehidratable(null, CIFRADO, "quiropraxia"), false);
 });
 
 test("tool_id desconocido para el registry → PRESERVAR siempre (no se mezcla con la tool activa)", () => {
@@ -131,7 +177,11 @@ test("sin datos de herramienta (o sin fila existente) → NO preservar: nada que
 test("vaciado deliberado: fila re-hidratable de la MISMA especialidad → NO preservar (se honra el null)", () => {
   assert.equal(
     debePreservarToolData(
-      { tool_id: "psicologia.escalas.v1", tool_data_cifrado: CIFRADO, vertebras_json: [] },
+      // Versión de ESCRITURA vigente: es la única que la ficha re-hidrata, así
+      // que es la única sobre la que un toolValue null puede ser una decisión
+      // del profesional. Con `escalas.v1` la UI nunca mostró nada — ver el caso
+      // B5 de arriba.
+      { tool_id: "psicologia.escalas.v3", tool_data_cifrado: CIFRADO, vertebras_json: [] },
       "psicologia",
     ),
     false,
