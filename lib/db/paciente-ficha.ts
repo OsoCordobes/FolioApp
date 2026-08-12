@@ -252,6 +252,12 @@ export interface PlanData {
    */
   turnoActivo: TurnoActivoFicha | null;
   /**
+   * Cuántas visitas cerradas tiene el paciente EN TOTAL (COUNT server-side),
+   * contra las `sesiones.length` que efectivamente se cargaron. La UI necesita
+   * las dos: mostrar 10 y llamarlas "el total" era la parte que mentía.
+   */
+  historialTotal: number;
+  /**
    * Workstream 6 · galería de radiografías del paciente (documento_clinico tipo
    * RADIOGRAFIA) para la Tool quiro, con signed URLs de vida corta. Solo se
    * llena cuando la especialidad ACTIVA es quiropraxia (otras orgs: []) — la
@@ -515,6 +521,19 @@ export async function getPacienteFicha(
    * Ausente/inválida → America/Argentina/Buenos_Aires (default del producto).
    */
   orgTimezone?: string,
+  /**
+   * `true` = traer la historia ENTERA, sin el recorte de las últimas visitas.
+   *
+   * Lo usa el export de la historia clínica completa (Ley 26.529 art. 14,
+   * derecho de acceso): el PDF entregaba las últimas 10 visitas mientras el
+   * audit lo registraba como "export de la historia clínica". Un paciente con
+   * 62 visitas recibía 10 y nadie se lo decía.
+   *
+   * Para la pantalla se deja el recorte: descifrar cientos de sesiones por
+   * request no le sirve a nadie. Lo que se arregló ahí es que los NÚMEROS ya no
+   * mienten (ver historialTotal / sesionesCompletadas, que salen de un COUNT).
+   */
+  historialCompleto?: boolean,
 ): Promise<Result<PacienteFichaData>> {
   if (!/^[0-9a-f-]{36}$/i.test(pacienteId)) {
     return err("validation", "ID de paciente inválido.");
@@ -538,14 +557,14 @@ export async function getPacienteFicha(
       .eq("paciente_id", pacienteId)
       .eq("organization_id", organizationId)
       .order("created_at", { ascending: false })
-      .limit(50),
+      .limit(historialCompleto ? 2000 : 50),
     supabase
       .from("turno_extendido")
       .select("id, inicio, duracion_min, duracion_real_min, estado, servicio_nombre, profesional_id, atendiendo_desde")
       .eq("paciente_id", pacienteId)
       .eq("organization_id", organizationId)
       .order("inicio", { ascending: false })
-      .limit(50),
+      .limit(historialCompleto ? 2000 : 50),
     // M58 · plan de tratamiento persistido (1:1 por paciente). maybeSingle:
     // la mayoría de los pacientes no tiene fila todavía → el card cae a los
     // valores derivados de los turnos.
@@ -630,7 +649,32 @@ export async function getPacienteFicha(
   }
 
   const cerrados = turnos.filter((t) => t.estado === "CERRADO");
-  const sesionesCompletadas = cerrados.length;
+  // `turnos` viene recortado (limit), así que contar sobre el array daba un
+  // total que MIENTE en cuanto el paciente pasa las 50 visitas — y la UI lo
+  // presentaba como el total real: "10 sesiones · desde 12 jul" para alguien
+  // con 62, header "50ª sesión", barra de plan al 100%. El total y la fecha de
+  // inicio salen de la DB, no del recorte.
+  const [countRes, primeraRes] = await Promise.all([
+    supabase
+      .from("turno")
+      .select("id", { count: "exact", head: true })
+      .eq("paciente_id", pacienteId)
+      .eq("organization_id", organizationId)
+      .eq("estado", "CERRADO"),
+    supabase
+      .from("turno")
+      .select("inicio")
+      .eq("paciente_id", pacienteId)
+      .eq("organization_id", organizationId)
+      .eq("estado", "CERRADO")
+      .order("inicio", { ascending: true })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  // Si el COUNT falla, se degrada al conteo del recorte: es un número peor pero
+  // no rompe la ficha.
+  const sesionesCompletadas = countRes.count ?? cerrados.length;
+  const primeraVisita = (primeraRes.data as { inicio: string } | null)?.inicio ?? null;
   const lastSesion = sesiones[0] ?? null;
 
   // Diagnóstico: para MVP usamos el motivo de consulta como diagnóstico de display.
@@ -674,7 +718,11 @@ export async function getPacienteFicha(
   // Historial de sesiones (top 10 cerradas para visual del tab). El resumen
   // lo genera la especialidad dueña del tool_id (fallback quiro para filas
   // legacy/sin sesión — mismo output que antes de Fase B).
-  const historial: SesionPlan[] = cerrados.slice(0, 10).map((t) => {
+  // Cuántas visitas se RINDEN en pantalla. El total real va en historialTotal.
+  const HISTORIAL_EN_PANTALLA = 10;
+  const historial: SesionPlan[] = (
+    historialCompleto ? cerrados : cerrados.slice(0, HISTORIAL_EN_PANTALLA)
+  ).map((t) => {
     const sesion = sesiones.find((s) => s.turno_id === t.id);
     const toolData = sesion ? sesionToolData(sesion) : null;
     const meta =
@@ -702,7 +750,12 @@ export async function getPacienteFicha(
     };
   });
 
-  const inicio = historial[historial.length - 1]?.fecha ?? new Date().toISOString().slice(0, 10);
+  // "desde" = la PRIMERA visita cerrada de verdad, no la más vieja de las que
+  // entraron en el recorte.
+  const inicio =
+    primeraVisita?.slice(0, 10) ??
+    historial[historial.length - 1]?.fecha ??
+    new Date().toISOString().slice(0, 10);
   const tipoUI: PacienteFichaInfo["tipo"] = sesionesCompletadas > 1 ? "recurrente" : "nuevo";
 
   const paciente: PacienteFichaInfo = {
@@ -882,6 +935,7 @@ export async function getPacienteFicha(
     ultimoAjuste,
     soap,
     sesiones: historial,
+    historialTotal: sesionesCompletadas,
     toolHistorial,
     turnoActivo,
     radiografias,

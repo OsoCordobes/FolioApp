@@ -266,6 +266,7 @@ function HistorialReciente() {
         <span className="fi-eyebrow">Historial reciente</span>
         <button type="button" className="pc-link" onClick={() => setExpanded((v) => !v)}>
           {expanded ? "Mostrar menos" : `Ver todas (${plan.sesiones.length})`}
+
         </button>
       </header>
       <div className="pc-historial-list">
@@ -983,7 +984,16 @@ function TabSesiones() {
     <div className="pc-sesiones">
       <div className="pc-sesiones-toolbar">
         <span className="fi-eyebrow">
-          {plan.sesiones.length} sesiones · desde {fmtFecha(plan.inicio)}
+          {plan.historialTotal} {plan.historialTotal === 1 ? "sesión" : "sesiones"} · desde{" "}
+          {fmtFecha(plan.inicio)}
+          {plan.historialTotal > plan.sesiones.length ? (
+            // Decir "10 sesiones" cuando hay 62 no es un detalle de UI: cambia
+            // lo que el profesional cree de la historia del paciente.
+            <span className="au-fine">
+              {" "}
+              · mostrando las últimas {plan.sesiones.length}
+            </span>
+          ) : null}
         </span>
         <button
           type="button"
@@ -1014,7 +1024,7 @@ function TabSesiones() {
                 </div>
                 <div className="pc-sesion-body">
                   <div className="pc-sesion-title">
-                    <b>Sesión {plan.sesiones.length - i}</b>
+                    <b>Sesión {plan.historialTotal - i}</b>
                     <span className="muted">· {s.servicio}</span>
                     <span className="fi-pill fi-pill--mute fm-mono">{s.dur} min</span>
                   </div>
@@ -1509,7 +1519,8 @@ function PacienteDetalleInner() {
   const tabs: [TabId, string, boolean?][] = [
     ["informacion", "Información"],
     ["plan", "Plan", true],
-    ["sesiones", `Sesiones (${plan.sesiones.length})`],
+    // El total REAL (COUNT server-side), no las que entraron en el recorte.
+    ["sesiones", `Sesiones (${plan.historialTotal})`],
     ["documentos", "Documentos"],
   ];
 

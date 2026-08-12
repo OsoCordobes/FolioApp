@@ -87,6 +87,12 @@ export async function GET(
     ctx.data.organization.especialidad,
     null,
     ctx.data.organization.timezone,
+    // Historia COMPLETA: este PDF es el ejercicio del derecho de acceso (Ley
+    // 26.529 art. 14) y el audit lo registra como tal. Entregaba las últimas 10
+    // visitas: un paciente con 62 recibía 10 y nadie se lo decía.
+    // El export de UNA sesión (?sesion=) no necesita el resto, pero pedirlo
+    // completo acá es más simple y no lo usa.
+    true,
   );
   if (!fichaRes.ok) {
     if (fichaRes.error.code === "not_found") {
