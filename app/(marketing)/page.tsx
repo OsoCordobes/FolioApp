@@ -29,6 +29,7 @@ import { Pricing } from "@/components/landing/sections/pricing";
 import { SpecialtyStrip } from "@/components/landing/sections/specialty-strip";
 import { Testimonials } from "@/components/landing/sections/testimonials";
 import { Vault } from "@/components/landing/sections/vault";
+import { AuthRetornoAviso } from "@/components/landing/auth-retorno-aviso";
 import { StickyCta } from "@/components/landing/sticky-cta";
 import { getAppUrl } from "@/lib/config/app-url";
 import { resolveClinicBasePriceCents } from "@/lib/billing/pricing";
@@ -98,6 +99,12 @@ export default function LandingPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: buildJsonLd() }}
       />
+      {/* Un retorno de OAuth que no llegó al callback termina depositado acá
+          por GoTrue (Site URL). Sin esto, la landing lo ignora y el usuario ve
+          "toqué Continuar con Google y volví al inicio", sin explicación y sin
+          que quede registro en ningún lado. Rinde null en el 99.9% de las
+          visitas, que no traen nada en la URL. */}
+      <AuthRetornoAviso />
       <Hero />
       <DayTimeline />
       <SpecialtyStrip />

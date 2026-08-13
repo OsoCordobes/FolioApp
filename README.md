@@ -188,8 +188,15 @@ Baselines: `tests/visual/baseline.spec.ts-snapshots/` (PNGs light/dark a 1440×9
 
 Vercel auto-deploy desde `master`. Pre-deploy checklist exhaustiva en [`docs/audit/2026-05-23-deploy-checklist.md`](./docs/audit/2026-05-23-deploy-checklist.md).
 
-Producción: https://folio-app-ten.vercel.app
-Health: https://folio-app-ten.vercel.app/api/health (público, sin auth, safe)
+Producción: https://foliosalud.com
+Health: https://foliosalud.com/api/health (público, sin auth, safe)
+
+> El dominio canónico es `foliosalud.com`. `folio-app-ten.vercel.app` sigue
+> resolviendo (308 al canónico) pero **no** es la URL de producción. Cuando el
+> dominio cambió, la allow-list de Supabase Auth quedó apuntando al viejo y
+> el login con Google, la confirmación de email y el reset de contraseña
+> quedaron rotos **en silencio** durante días. Antes de tocar dominios:
+> `node --env-file=.env.local scripts/check-auth-redirect.mjs`.
 
 ## Reglas inviolables
 
