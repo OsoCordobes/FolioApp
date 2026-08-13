@@ -63,6 +63,7 @@ import {
   decideMarcaEmailRecordatorio,
   decideSkipRecordatorioOrgInterna,
 } from "@/lib/db/recordatorios";
+import { ESTADOS_CANCELAN_SIDE_EFFECTS } from "@/lib/db/turnos";
 import { sendEmail } from "@/lib/email/client";
 import {
   buildConfirmacion24hEmail,
@@ -206,7 +207,12 @@ async function processJob(
 
   if (error) throw new Error(`turno fetch: ${error.message}`);
   if (!turno) throw new Error("turno no encontrado (borrado?)");
-  if (job.tipo !== "POST_VISITA" && ["CANCELADO", "NO_ASISTIO", "CERRADO"].includes(turno.estado)) {
+  // El literal duplicado omitía REAGENDADO: si el `after()` que borra los
+  // recordatorios se pierde, el paciente recibía el recordatorio del turno
+  // VIEJO y se presentaba el día equivocado. Se importa la constante canónica
+  // (lib/db/turnos.ts) en vez de mantener dos listas que se desincronizan.
+  const ESTADOS_SKIP: readonly string[] = [...ESTADOS_CANCELAN_SIDE_EFFECTS, "CERRADO"];
+  if (job.tipo !== "POST_VISITA" && ESTADOS_SKIP.includes(turno.estado)) {
     // El turno fue cancelado/cerrado antes del recordatorio: marcar como enviado
     // (sin enviar) para no reintentar.
     await service
