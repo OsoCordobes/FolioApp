@@ -21,6 +21,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import * as I from "@/components/icons";
 import { CobroCierreDialog } from "@/components/hoy/cobro-cierre-dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { activable } from "@/lib/a11y/activable";
 import { nombreCortoProfesional } from "@/lib/agenda/profesional";
 import { minutesTo, STATE_CONF } from "@/lib/dashboard-helpers";
 import { canTransition, TURNO_STATE_CONF } from "@/lib/turno-states";
@@ -139,7 +140,8 @@ export function TurnoRow({ turno, paciente, isNext, now, timezone, canRegistrarC
 
   return (
     <div
-      onClick={() => onOpenFicha(turno.id)}
+      {...activable(() => onOpenFicha(turno.id))}
+      aria-label={`Abrir ficha de ${paciente?.nombre ?? "el paciente"}, turno de las ${turno.hora}`}
       className={[
         "fi-turno",
         "fi-turno--" + turno.estado,
