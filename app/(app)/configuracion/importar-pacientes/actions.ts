@@ -14,7 +14,9 @@
  *      salt per-org, más el hash legacy sin salt de la transición A2 — mismo
  *      doble lookup que buscarPaciente) y dedupe interno del archivo.
  *   4. INSERT batch (identidades → pacientes) vía el server client RLS-aware,
- *      en chunks. Transaccionalidad best-effort: si el insert de `paciente`
+ *      en chunks. El par fila ↔ identidad se resuelve por blind index
+ *      (lib/import/emparejar-identidades.ts), NUNCA por la posición en el
+ *      RETURNING. Transaccionalidad best-effort: si el insert de `paciente`
  *      falla después del de identidades, las identidades de ESE chunk se
  *      borran con el service client (la policy paciente_identidad_no_delete
  *      bloquea el DELETE RLS-aware; el service client es el único camino y se
@@ -31,6 +33,11 @@ import { capabilitiesFor } from "@/lib/auth/capabilities";
 import { blindIndex, blindIndexPhone, encryptColumn } from "@/lib/crypto";
 import { err, isUniqueViolation, mapSupabaseError, ok, type Result } from "@/lib/db/errors";
 import { getActiveSession } from "@/lib/db/session";
+import {
+  emparejarIdentidades,
+  type IdentidadInsertada,
+  type MotivoSinIdentidad,
+} from "@/lib/import/emparejar-identidades";
 import {
   claveDni,
   decidirDedupe,
@@ -304,12 +311,24 @@ function buildIdentidadRow(v: FilaLista, orgId: string): Record<string, unknown>
   };
 }
 
+/** Motivo por fila cuando no se pudo atribuir la identidad recién creada. */
+const MOTIVO_SIN_IDENTIDAD: Record<MotivoSinIdentidad, string> = {
+  clave_ambigua:
+    "Hay otra fila con el mismo DNI y teléfono: no se pudo determinar cuál ficha es cuál y no se importó ninguna de las dos.",
+  sin_returning:
+    "La base no confirmó la ficha de esta fila y no se importó. Volvé a subir el archivo: lo que ya se importó se saltea como duplicado.",
+};
+
 /**
  * Inserta un chunk (identidades batch → pacientes batch). Muta `resumen`.
  *
  *   - 23505 en el batch de identidades (carrera con un alta concurrente o con
  *     otro import): reintenta FILA POR FILA para reportar el duplicado exacto
  *     sin perder el resto del chunk.
+ *   - El `paciente` de cada fila se cuelga de la identidad que le corresponde
+ *     por blind index, no por el orden del RETURNING (ver
+ *     lib/import/emparejar-identidades.ts). Emparejar por posición podía dejar
+ *     a un paciente con el nombre, el DNI y el teléfono cifrados de otro.
  *   - Falla el batch de pacientes: borra las identidades de ESTE chunk con el
  *     service client (huérfanas de este import, acotadas por id + org).
  */
@@ -324,10 +343,13 @@ async function importarChunk(
 ): Promise<void> {
   const { orgId, profesionalPrincipalId, resumen } = ctx;
 
+  // Se piden los blind indexes junto al id: son la clave con la que se empareja
+  // cada identidad con su fila del CSV (misma policy de SELECT que `id` — RLS
+  // es por fila, no por columna).
   const { data: idents, error: idErr } = await supabase
     .from("paciente_identidad")
     .insert(chunk.map((v) => buildIdentidadRow(v, orgId)))
-    .select("id");
+    .select("id, dni_hash, telefono_hash");
 
   if (idErr || !idents || idents.length !== chunk.length) {
     if (isUniqueViolation(idErr)) {
@@ -341,27 +363,46 @@ async function importarChunk(
     return;
   }
 
+  const { porFila, identidadesSinFila } = emparejarIdentidades(
+    chunk,
+    idents as IdentidadInsertada[],
+  );
+
+  const pares: Array<{ v: FilaLista; identidadId: string }> = [];
+  chunk.forEach((v, i) => {
+    const r = porFila[i];
+    if (r.estado === "emparejada") pares.push({ v, identidadId: r.identidadId });
+    else resumen.errores.push({ fila: v.fila, motivo: MOTIVO_SIN_IDENTIDAD[r.motivo] });
+  });
+
+  // Identidades que no se pudieron atribuir a ninguna fila: se borran acá
+  // mismo. Vivas quedarían con datos de un paciente sin ficha (invisible en la
+  // app) y encima ocupando el slot del UNIQUE parcial de M30 — el reintento del
+  // import las contaría como "duplicado" y ese paciente no entraría nunca.
+  await limpiarIdentidadesHuerfanas(orgId, identidadesSinFila);
+  if (pares.length === 0) return;
+
   // SIN .select(): con RETURNING, Postgres aplica las policies de SELECT de
   // `paciente` (can_read_clinical, M46), que excluyen a DIRECTOR no colegiado
   // — el INSERT pasaba el WITH CHECK pero el RETURNING volvía vacío y el
   // import entero se reportaba como error. El insert sin select va con
   // Prefer: return=minimal (no dispara SELECT) y es atómico: pacErr alcanza.
   const { error: pacErr } = await supabase.from("paciente").insert(
-    chunk.map((v, i) => ({
+    pares.map((p) => ({
       organization_id: orgId,
-      identidad_id: idents[i].id,
+      identidad_id: p.identidadId,
       profesional_principal_id: profesionalPrincipalId,
     })),
   );
 
   if (pacErr) {
-    await limpiarIdentidadesHuerfanas(orgId, idents.map((x) => x.id as string));
+    await limpiarIdentidadesHuerfanas(orgId, pares.map((p) => p.identidadId));
     const mapped = mapSupabaseError(pacErr);
-    for (const v of chunk) resumen.errores.push({ fila: v.fila, motivo: mapped.message });
+    for (const p of pares) resumen.errores.push({ fila: p.v.fila, motivo: mapped.message });
     return;
   }
 
-  resumen.importados += chunk.length;
+  resumen.importados += pares.length;
 }
 
 /**
