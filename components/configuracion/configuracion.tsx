@@ -783,11 +783,9 @@ function SecBookingPrefs({ initialAutoConfirmar, canEdit }: { initialAutoConfirm
 
 // ─── Sección: Horarios ─────────────────────────────────────────────────────
 
-function SecHorarios({ dias, setDias, slotMin, setSlotMin, slotMargenMin, onMargenChange, margenPending, canEdit }: {
+function SecHorarios({ dias, setDias, slotMargenMin, onMargenChange, margenPending, canEdit }: {
   dias: Record<DiaId, Dia>;
   setDias: (d: Record<DiaId, Dia>) => void;
-  slotMin: number;
-  setSlotMin: (n: number) => void;
   slotMargenMin: number;
   onMargenChange: (n: number) => void;
   margenPending: boolean;
@@ -850,21 +848,7 @@ function SecHorarios({ dias, setDias, slotMin, setSlotMin, slotMargenMin, onMarg
         </div>
       </Section>
 
-      <Section title="Slot" sub="Duración por defecto de cada turno ofrecido en tu link.">
-        <Row label="Duración">
-          <div className="cfg-radio-group">
-            {[30, 45, 60].map((m) => (
-              <button
-                key={m}
-                type="button"
-                className={"cfg-radio-btn " + (slotMin === m ? "is-on" : "")}
-                onClick={() => setSlotMin(m)}
-              >
-                {m} min
-              </button>
-            ))}
-          </div>
-        </Row>
+      <Section title="Slot" sub="Cómo se espacian los turnos que se ofrecen en tu link. La duración la define cada servicio.">
         <Row
           label="Margen entre turnos"
           sub={margenPending ? "Guardando…" : "Tiempo libre entre dos turnos consecutivos"}
@@ -1799,7 +1783,6 @@ interface ConfiguracionProps {
   initialConsultorio: ConsultorioData;
   initialServicios: ServicioCfg[];
   initialDias: Record<DiaSemanaId, DiaHorarios>;
-  initialSlotMin: number;
   initialAutoConfirmar: boolean;
   initialSlotMargenMin: number;
   googleCalendar: IntegrationStatus;
@@ -1856,7 +1839,6 @@ export function Configuracion({
   initialConsultorio,
   initialServicios,
   initialDias,
-  initialSlotMin,
   initialAutoConfirmar,
   initialSlotMargenMin,
   googleCalendar,
@@ -1906,8 +1888,6 @@ export function Configuracion({
   const [consultorioSnap, setConsultorioSnap] = useState<ConsultorioData>(initialConsultorio);
   const [dias, setDias] = useState<Record<DiaId, Dia>>(initialDias);
   const [diasSnap, setDiasSnap] = useState<Record<DiaId, Dia>>(initialDias);
-  const [slotMin, setSlotMin] = useState(initialSlotMin);
-  const [slotMinSnap, setSlotMinSnap] = useState(initialSlotMin);
   const [servicios, setServicios] = useState<ServicioCfg[]>(initialServicios);
   const [serviciosSnap, setServiciosSnap] = useState<ServicioCfg[]>(initialServicios);
   const [dirty, setDirty] = useState<DirtyState>(NO_DIRTY);
@@ -1966,13 +1946,12 @@ export function Configuracion({
       }
 
       if (dirty.horarios) {
-        const result = await saveHorariosAction({ dias, slotMin });
+        const result = await saveHorariosAction({ dias });
         if (!result.ok) {
           setSaveError(`Horarios: ${result.error.message}`);
           return;
         }
         setDiasSnap(dias);
-        setSlotMinSnap(slotMin);
       }
 
       if (dirty.servicios) {
@@ -1992,7 +1971,6 @@ export function Configuracion({
     if (dirty.consultorio) setConsultorio(consultorioSnap);
     if (dirty.horarios) {
       setDias(diasSnap);
-      setSlotMin(slotMinSnap);
     }
     if (dirty.servicios) setServicios(serviciosSnap);
     setDirty(NO_DIRTY);
@@ -2053,8 +2031,6 @@ export function Configuracion({
               <SecHorarios
                 dias={dias}
                 setDias={(d) => { setDias(d); setDirty((dd) => ({ ...dd, horarios: true })); }}
-                slotMin={slotMin}
-                setSlotMin={(n) => { setSlotMin(n); setDirty((dd) => ({ ...dd, horarios: true })); }}
                 slotMargenMin={slotMargenMin}
                 onMargenChange={onMargenChange}
                 margenPending={margenPending}
