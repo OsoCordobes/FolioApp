@@ -10,8 +10,9 @@
  *
  * Ya implementados: VistaSemana/VistaMes/VistaBandeja, modal de pedido
  * (confirmar/rechazar) y modal de detalle de turno (M56). Diferidos a sprints
- * futuros (UI, no data layer): drag & drop para mover/duplicar turnos y la
- * selección por arrastre para crear bloqueos.
+ * futuros (UI, no data layer): drag & drop para mover/duplicar turnos, y la
+ * selección por arrastre para crear bloqueos (el bloqueo YA se puede crear
+ * desde el botón "Bloquear" — lo diferido es sólo el gesto de arrastre).
  */
 
 import Link from "next/link";
@@ -20,6 +21,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { ProfFilterChips } from "@/components/agenda/prof-filter-chips";
 import * as I from "@/components/icons";
+import { BloqueoModal } from "@/components/calendario/bloqueo-modal";
 import { PedidoModal } from "@/components/calendario/pedido-modal";
 import { TurnoDetalleModal } from "@/components/calendario/turno-detalle-modal";
 import { TurnoCreateModal } from "@/components/hoy/turno-create-modal";
@@ -464,6 +466,7 @@ function CalHeader({
   nextMonthIso,
   hoyMonthIso,
   onAgendar,
+  onBloquear,
   profesionales,
   profActivo,
   profHrefFor,
@@ -484,6 +487,7 @@ function CalHeader({
   nextMonthIso: string;
   hoyMonthIso: string;
   onAgendar: () => void;
+  onBloquear: () => void;
   profesionales: ProfesionalLite[];
   profActivo: string | null;
   profHrefFor: (id: string | null) => string;
@@ -560,6 +564,14 @@ function CalHeader({
             <ProfFilterChips profesionales={profesionales} profActivo={profActivo} hrefFor={profHrefFor} />
           ) : null}
           <CalFilters estados={estados} setEstados={setEstados} pedidosPendientesCount={pedidosPendientesCount} mostrarPedidos={mostrarPedidos} setMostrarPedidos={setMostrarPedidos} />
+          <button
+            type="button"
+            className="fi-btn fi-btn-ghost"
+            onClick={onBloquear}
+            title="Marcar vacaciones, una ausencia o una franja no disponible"
+          >
+            Bloquear
+          </button>
           <button type="button" className="fi-btn fi-btn-primary" onClick={onAgendar}>
             <I.Plus size={12} /> Agendar
           </button>
@@ -1042,6 +1054,7 @@ export function Calendario({
   const [selectedPedido, setSelectedPedido] = useState<Pedido | null>(null);
   const [selectedTurno, setSelectedTurno] = useState<TurnoSemana | null>(null);
   const [agendarOpen, setAgendarOpen] = useState(false);
+  const [bloqueoOpen, setBloqueoOpen] = useState(false);
   // "Crear turno manual" desde el PedidoModal: abre el TurnoCreateModal CON el
   // pedido vinculado — al crear el turno, el server marca el pedido CONFIRMADO
   // (cierra el dead-end en que quedaba PENDIENTE para siempre).
@@ -1111,6 +1124,7 @@ export function Calendario({
         nextMonthIso={nextMonthIso}
         hoyMonthIso={hoyMonthIso}
         onAgendar={() => setAgendarOpen(true)}
+        onBloquear={() => setBloqueoOpen(true)}
         profesionales={profesionales}
         profActivo={profActivo}
         profHrefFor={profHrefFor}
@@ -1194,6 +1208,7 @@ export function Calendario({
           re-render inmediato del SC para que el turno aparezca sin F5.
           defaultProfesionalId: con filtro de profesional activo, el turno cae
           en ESA agenda y no en la del usuario de sesión (CLINICA-3, F). */}
+      {bloqueoOpen ? <BloqueoModal onClose={() => setBloqueoOpen(false)} /> : null}
       {agendarOpen ? (
         <TurnoCreateModal
           origen="MANUAL"

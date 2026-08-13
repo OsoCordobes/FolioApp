@@ -807,7 +807,7 @@ function SecHorarios({ dias, setDias, slotMin, setSlotMin, slotMargenMin, onMarg
 
   return (
     <>
-      <Section title="Disponibilidad semanal" sub="Slots que se ofrecen en tu link público. Bloqueos puntuales se hacen desde el Calendario.">
+      <Section title="Disponibilidad semanal" sub="Slots que se ofrecen en tu link público. Para vacaciones o una ausencia puntual, usá «Bloquear» en el Calendario.">
         <div className="cfg-horarios">
           {(Object.keys(dias) as DiaId[]).map((id) => {
             const d = dias[id];

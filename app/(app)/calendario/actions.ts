@@ -16,6 +16,12 @@ import {
   aceptarPedidoConHorario,
   rechazarPedido,
 } from "@/lib/db/pedidos";
+import {
+  crearBloqueo,
+  eliminarBloqueoManual,
+  type CrearBloqueoInput,
+  type CrearBloqueoResult,
+} from "@/lib/db/bloqueos";
 import { err, ok, type Result } from "@/lib/db/errors";
 import { getActiveSession } from "@/lib/db/session";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -115,5 +121,37 @@ export async function rechazarPedidoAction(
   if (result.ok) {
     revalidatePath("/calendario");
   }
+  return result;
+}
+
+// ─── Bloqueos de agenda (D1) ───────────────────────────────────────────────
+
+/**
+ * Crea un bloqueo (vacaciones, ausencia, franja no disponible).
+ *
+ * Hasta ahora la ÚNICA escritura a `bloqueo` era el sync de Google — y ahí los
+ * eventos all-day se descartaban, que es exactamente como se marcan las
+ * vacaciones. La pantalla de Configuración decía que "los bloqueos puntuales se
+ * hacen desde el Calendario" y el Calendario no tenía la función. Con
+ * `auto_confirmar_reservas` en true, cada paciente que reservaba durante la
+ * ausencia quedaba confirmado.
+ */
+export async function crearBloqueoAction(
+  input: CrearBloqueoInput,
+): Promise<Result<CrearBloqueoResult>> {
+  const result = await crearBloqueo(input);
+  if (!result.ok) return result;
+  revalidatePath("/calendario");
+  // El bloqueo saca slots del booking público y cambia lo que ve /hoy.
+  revalidatePath("/hoy");
+  return result;
+}
+
+/** Borra un bloqueo creado a mano. Los de Google se manejan desde Google. */
+export async function eliminarBloqueoAction(bloqueoId: string): Promise<Result<void>> {
+  const result = await eliminarBloqueoManual(bloqueoId);
+  if (!result.ok) return result;
+  revalidatePath("/calendario");
+  revalidatePath("/hoy");
   return result;
 }
