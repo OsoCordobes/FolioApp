@@ -229,7 +229,7 @@ function SidebarSearch() {
       <input
         ref={inputRef}
         name="q"
-        placeholder="Buscar paciente, turno…"
+        placeholder="Buscar paciente…"
         aria-label="Buscar paciente (Cmd+K)"
       />
       <span className="fi-kbd" aria-hidden>⌘K</span>

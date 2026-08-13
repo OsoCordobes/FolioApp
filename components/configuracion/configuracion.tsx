@@ -18,7 +18,10 @@ import * as I from "@/components/icons";
 import { PermissionMatrix } from "@/components/configuracion/permission-matrix";
 import { PhotoUpload } from "@/components/configuracion/photo-upload";
 import { UpgradeClinicaModal } from "@/components/configuracion/upgrade-clinica-modal";
+import { LogoUpload } from "@/components/public-card/logo-upload";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { contar } from "@/lib/format/plural";
+import { useConfirm } from "@/lib/use-confirm";
 import {
   connectGoogleCalendar,
   countSesionesOtraEspecialidadAction,
@@ -329,10 +332,13 @@ function SecCuenta({
   c,
   set,
   showVinculaciones,
+  showAuditLog,
 }: {
   c: ConsultorioData;
   set: (patch: Partial<ConsultorioData>) => void;
   showVinculaciones: boolean;
+  /** OWNER/DIRECTOR: espejo del gate de listAuditEntries. La página igual 404ea. */
+  showAuditLog: boolean;
 }) {
   return (
     <>
@@ -376,6 +382,21 @@ function SecCuenta({
             Abrir mis datos →
           </a>
         </Row>
+        {/* /admin/audit existía, funcionaba y NO estaba linkeado desde ningún
+            lado: había que tipear la URL. Es el registro que exigen la Ley
+            25.326 (art. 11) y la 26.529 (art. 15) — quién miró y quién tocó
+            cada historia clínica. Un registro de auditoría al que no se llega
+            no cumple nada. */}
+        {showAuditLog ? (
+          <Row
+            label="Registro de actividad"
+            sub="Quién accedió y quién modificó cada ficha. Es la trazabilidad que exige la ley para historias clínicas."
+          >
+            <a href="/admin/audit" className="fi-btn fi-btn-ghost">
+              Ver registro →
+            </a>
+          </Row>
+        ) : null}
       </Section>
 
       {/* P9 · acceso a la cola de aprobación de vinculaciones del portal del
@@ -402,14 +423,18 @@ function SecCuenta({
 
 function CambiarPasswordButton({ email }: { email: string }) {
   const [state, setState] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const { confirmar, dialogo } = useConfirm();
   const handler = async () => {
     if (!email) {
-      alert("Email del perfil no disponible.");
+      setState("error");
       return;
     }
-    if (!confirm(`Te vamos a enviar un email a ${email} con un link para resetear la contraseña. ¿Continuar?`)) {
-      return;
-    }
+    const ok = await confirmar({
+      titulo: "¿Cambiar tu contraseña?",
+      mensaje: `Te mandamos un mail a ${email} con un link para elegir una nueva. La actual sigue funcionando hasta que la cambies.`,
+      confirmLabel: "Mandar el link",
+    });
+    if (!ok) return;
     setState("sending");
     try {
       const { createSupabaseBrowserClient } = await import("@/lib/supabase/client");
@@ -426,9 +451,17 @@ function CambiarPasswordButton({ email }: { email: string }) {
   };
   if (state === "sent") return <span style={{ color: "var(--green)", fontSize: 13 }}>Email enviado. Revisá tu casilla.</span>;
   return (
-    <button type="button" className="fi-btn fi-btn-secondary" onClick={handler} disabled={state === "sending"}>
-      {state === "sending" ? "Enviando…" : state === "error" ? "Reintentar" : "Cambiar contraseña"}
-    </button>
+    <>
+      <button type="button" className="fi-btn fi-btn-secondary" onClick={handler} disabled={state === "sending"}>
+        {state === "sending" ? "Enviando…" : state === "error" ? "Reintentar" : "Cambiar contraseña"}
+      </button>
+      {state === "error" && !email ? (
+        <p role="alert" style={{ color: "var(--red)", fontSize: 13, margin: "6px 0 0" }}>
+          No tenemos tu email en el perfil. Cargalo arriba y guardá antes de cambiar la contraseña.
+        </p>
+      ) : null}
+      {dialogo}
+    </>
   );
 }
 
@@ -450,6 +483,7 @@ function SecConsultorio({
   montoActualCents,
   montoClinicaCents,
   showImportarPacientes,
+  logoUrl,
 }: {
   c: ConsultorioData;
   set: (patch: Partial<ConsultorioData>) => void;
@@ -471,6 +505,8 @@ function SecConsultorio({
   montoClinicaCents: number;
   /** ¿Mostrar el acceso al importador CSV? (espejo de canCreatePacienteClinical). */
   showImportarPacientes: boolean;
+  /** Foto del consultorio ya subida (organization.logo_url), o null. */
+  logoUrl: string | null;
 }) {
   const router = useRouter();
   const [upgradeOpen, setUpgradeOpen] = useState(false);
@@ -501,21 +537,23 @@ function SecConsultorio({
         <Row label="Nombre del consultorio">
           <TextInput value={c.nombre} onChange={(v) => set({ nombre: v })} />
         </Row>
-        <Row label="Foto del consultorio" sub="Opcional · 1200×600 recomendado">
-          <button
-            type="button"
-            className="cfg-upload"
-            disabled
-            title="Próximamente — el logo se sube desde Onboarding > Identidad visual"
-            aria-disabled="true"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2.5" />
-              <circle cx="8.5" cy="9" r="1.5" />
-              <path d="M21 15l-5-5L5 21" />
-            </svg>
-            <span>Subir imagen</span>
-          </button>
+        {/* El botón que había acá estaba `disabled` con el tooltip "el logo se
+            sube desde Onboarding > Identidad visual" — una pantalla a la que no
+            se vuelve una vez terminado el onboarding. Es decir: la única forma
+            de cambiar la foto era no haber terminado de configurar la cuenta.
+            El componente que sube de verdad ya existía (LogoUpload, el mismo
+            del paso 4) y su action resuelve la org desde la sesión, así que
+            persiste sola: no pasa por la save-bar. */}
+        <Row label="Foto del consultorio" sub="Opcional · PNG hasta 500 KB · se ve en tu link público">
+          <LogoUpload
+            currentLogoUrl={logoUrl}
+            // La action persiste sola; el componente ya muestra su propio
+            // preview. Un router.refresh() acá volvería a montar toda la
+            // pantalla de Configuración y perdería lo que el usuario esté
+            // editando sin guardar en la save-bar.
+            onUploaded={() => {}}
+            onRemoved={() => {}}
+          />
         </Row>
       </Section>
 
@@ -706,6 +744,11 @@ function DirectorioToggleRow({ initialListar, canEdit }: { initialListar: boolea
 
 function PublicLinkRow({ slug }: { slug: string }) {
   const [copied, setCopied] = useState(false);
+  // El clipboard falla sin permiso o fuera de HTTPS. Antes eso disparaba un
+  // alert() del sistema con la URL adentro, para que la copiaras del cuadro
+  // gris. El link ya está en pantalla, en <code>, seleccionable: alcanza con
+  // decirlo.
+  const [copyFail, setCopyFail] = useState(false);
   // Slug REAL de la org (organization.slug, pasado por el Server Component).
   // Antes se derivaba del nombre del consultorio y el link copiado era un 404.
   // getAppUrl() prioriza NEXT_PUBLIC_APP_URL: el link copiado es el canónico
@@ -715,12 +758,13 @@ function PublicLinkRow({ slug }: { slug: string }) {
   const display = url.replace(/^https?:\/\//, "");
 
   const copy = async () => {
+    setCopyFail(false);
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      alert(`No pude copiar automáticamente. Copialo a mano:\n\n${url}`);
+      setCopyFail(true);
     }
   };
 
@@ -734,6 +778,11 @@ function PublicLinkRow({ slug }: { slug: string }) {
         </svg>
         {copied ? "¡Copiado!" : "Copiar"}
       </button>
+      {copyFail ? (
+        <span role="alert" style={{ fontSize: 12.5, color: "var(--ink-3)" }}>
+          Tu navegador no nos deja copiar. Seleccioná el link de acá arriba.
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -999,17 +1048,27 @@ function suscripcionStatusLabel(estado: EstadoSuscripcion | null): { label: stri
 
 function SecIntegraciones({
   googleCalendar,
+  gcalError,
   suscripcionEstado,
   whatsappConfigured,
   isOwner,
 }: {
   googleCalendar: IntegrationStatus;
+  /**
+   * Falla del OAuth de Google que viene del callback por `?error=`, ya
+   * traducida. Se muestra en el mismo lugar que los errores de las acciones
+   * de esta sección; el usuario la borra al reintentar.
+   */
+  gcalError: string | null;
   suscripcionEstado: EstadoSuscripcion | null;
   whatsappConfigured: boolean;
   isOwner: boolean;
 }) {
   const [pending, startTransition] = useTransition();
-  const [actionError, setActionError] = useState<string | null>(null);
+  const { confirmar, dialogo } = useConfirm();
+  // Arranca con lo que dijo el callback: volver de un OAuth fallido y no ver
+  // NADA era indistinguible de no haber intentado conectarse.
+  const [actionError, setActionError] = useState<string | null>(gcalError);
 
   const onConnectGoogle = () => {
     setActionError(null);
@@ -1024,10 +1083,15 @@ function SecIntegraciones({
     });
   };
 
-  const onDisconnectGoogle = () => {
-    if (!window.confirm("¿Desconectar Google Calendar? Los eventos sincronizados quedan en tu Google. Vas a poder reconectar cuando quieras.")) {
-      return;
-    }
+  const onDisconnectGoogle = async () => {
+    const ok = await confirmar({
+      titulo: "¿Desconectar Google Calendar?",
+      mensaje:
+        "Tu agenda deja de bloquear slots con tus eventos personales y las reservas nuevas no se crean en tu Google. Los eventos ya sincronizados quedan donde están, y podés reconectar cuando quieras.",
+      confirmLabel: "Desconectar",
+      variant: "danger",
+    });
+    if (!ok) return;
     setActionError(null);
     startTransition(async () => {
       const result = await disconnectGoogleCalendar();
@@ -1146,6 +1210,7 @@ function SecIntegraciones({
           statusKind="ok"
         />
       ) : null}
+      {dialogo}
     </Section>
   );
 }
@@ -1254,6 +1319,12 @@ async function cambiarEspecialidadConAviso(
   memberId: string,
   nueva: EspecialidadSlug | null,
   sujeto: string,
+  /**
+   * Confirmador de useConfirm. Se inyecta en vez de llamar a `window.confirm`
+   * acá adentro: esto es una función suelta, no un componente, y el diálogo
+   * con diseño necesita vivir en el árbol de quien la llama.
+   */
+  confirmar: (o: { titulo: string; mensaje?: string; confirmLabel?: string; variant?: "default" | "danger" }) => Promise<boolean>,
 ): Promise<{ ok: true } | { ok: false; message: string | null }> {
   // Best-effort: si el count falla, no bloqueamos el cambio (el gate real y
   // la validación del slug viven server-side en updateMemberEspecialidad).
@@ -1261,10 +1332,14 @@ async function cambiarEspecialidadConAviso(
   const n = count.ok ? count.data : 0;
   if (n > 0) {
     const destino = nueva ? ESPECIALIDADES_META[nueva].nombre : "la especialidad de la clínica";
-    const confirmado = window.confirm(
-      `${sujeto} ${n} ${n === 1 ? "sesión cargada" : "sesiones cargadas"} con otra herramienta. ` +
-      `Esos datos clínicos se conservan, pero la ficha pasa a usar ${destino} y deja de mostrarlos. ¿Cambiar igual?`,
-    );
+    const confirmado = await confirmar({
+      titulo: "¿Cambiar la especialidad?",
+      mensaje:
+        `${sujeto} ${contar(n, "sesión cargada", "sesiones cargadas")} con otra herramienta clínica. ` +
+        `Esos datos NO se borran —la historia clínica no se toca—, pero la ficha pasa a usar ${destino} y deja de mostrarlos.`,
+      confirmLabel: "Cambiar igual",
+      variant: "danger",
+    });
     if (!confirmado) return { ok: false, message: null };
   }
   const result = await updateMemberEspecialidadAction(memberId, nueva);
@@ -1281,12 +1356,13 @@ function SecEquipoSelf({ self }: { self: EquipoSelf }) {
   const [especialidad, setEspecialidad] = useState<EspecialidadSlug | null>(self.especialidad);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const { confirmar, dialogo } = useConfirm();
 
   const onChange = (nueva: EspecialidadSlug | null) => {
     if (nueva === especialidad) return;
     setError(null);
     startTransition(async () => {
-      const result = await cambiarEspecialidadConAviso(self.memberId, nueva, "Tenés");
+      const result = await cambiarEspecialidadConAviso(self.memberId, nueva, "Tenés", confirmar);
       if (!result.ok) {
         if (result.message) setError(result.message);
         return;
@@ -1311,6 +1387,7 @@ function SecEquipoSelf({ self }: { self: EquipoSelf }) {
           <p role="alert" style={{ color: "var(--red)", fontSize: 12.5, marginTop: 6 }}>{error}</p>
         ) : null}
       </Row>
+      {dialogo}
     </Section>
   );
 }
@@ -1339,6 +1416,9 @@ function SecEquipo({
   const [lastAcceptUrl, setLastAcceptUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [pending, startTransition] = useTransition();
+  // Antes de los early returns de abajo: las reglas de hooks no admiten que
+  // este llamado dependa de orgTipo ni de canManageTeam.
+  const { confirmar, dialogo } = useConfirm();
 
   // Form de invitación.
   const [invEmail, setInvEmail] = useState("");
@@ -1419,12 +1499,20 @@ function SecEquipo({
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      alert(`No pude copiar automáticamente. Copialo a mano:\n\n${lastAcceptUrl}`);
+      // El link de aceptación ya está en pantalla y es seleccionable: no hace
+      // falta un cuadro del sistema para volver a mostrárselo.
+      setError("Tu navegador no nos deja copiar. Seleccioná el link de acá arriba.");
     }
   };
 
-  const onRevoke = (inv: TeamInvitationRow) => {
-    if (!window.confirm(`¿Revocar la invitación a ${inv.email}? El link que recibió deja de funcionar.`)) return;
+  const onRevoke = async (inv: TeamInvitationRow) => {
+    const ok = await confirmar({
+      titulo: "¿Revocar la invitación?",
+      mensaje: `El link que le mandamos a ${inv.email} deja de funcionar. Si todavía la necesita, vas a tener que invitarla de nuevo.`,
+      confirmLabel: "Revocar",
+      variant: "danger",
+    });
+    if (!ok) return;
     setError(null);
     startTransition(async () => {
       const result = await revokeInvitationAction(inv.id);
@@ -1446,6 +1534,7 @@ function SecEquipo({
         m.memberId,
         nueva,
         m.esVos ? "Tenés" : `${nombre} tiene`,
+        confirmar,
       );
       if (!result.ok) {
         if (result.message) setError(result.message);
@@ -1457,9 +1546,16 @@ function SecEquipo({
     });
   };
 
-  const onRemove = (m: TeamMemberRow) => {
+  const onRemove = async (m: TeamMemberRow) => {
     const nombre = [m.nombre, m.apellido].filter(Boolean).join(" ") || m.email || "este miembro";
-    if (!window.confirm(`¿Dar de baja a ${nombre}? Pierde el acceso a la organización (sus datos clínicos cargados se conservan).`)) return;
+    const ok = await confirmar({
+      titulo: `¿Dar de baja a ${nombre}?`,
+      mensaje:
+        "Pierde el acceso a la organización de inmediato. Todo lo que cargó en las historias clínicas se conserva: la ley no permite borrarlo, y sigue firmado con su nombre.",
+      confirmLabel: "Dar de baja",
+      variant: "danger",
+    });
+    if (!ok) return;
     setError(null);
     startTransition(async () => {
       const result = await removeMemberAction(m.memberId);
@@ -1645,6 +1741,7 @@ function SecEquipo({
       {/* X4 · matriz rol × capacidad (vista) — solo en el camino de gestión de
           equipo (canManageTeam). Derivada de capabilitiesFor; sin overrides. */}
       <PermissionMatrix />
+      {dialogo}
     </>
   );
 }
@@ -1786,6 +1883,8 @@ interface ConfiguracionProps {
   initialAutoConfirmar: boolean;
   initialSlotMargenMin: number;
   googleCalendar: IntegrationStatus;
+  /** Falla del OAuth de Google traducida (viene de `?error=` del callback), o null. */
+  gcalError: string | null;
   /** M49 · tipo de organización. PR 1.4 · el OWNER de una INDEPENDIENTE puede upgradear a Clínica desde acá. */
   orgTipo: "INDEPENDIENTE" | "CLINICA";
   canEdit: boolean;
@@ -1820,6 +1919,8 @@ interface ConfiguracionProps {
    * rol clínico (OWNER/PROFESIONAL/DIRECTOR colegiado — espeja can_read_clinical).
    * La página destino igual role-gatea (redirige a /configuracion); esto es UX. */
   showVinculaciones: boolean;
+  /** Foto del consultorio ya subida (organization.logo_url), o null. */
+  logoUrl: string | null;
   /** ¿Mostrar el acceso al importador CSV de pacientes? Espeja
    * canCreatePacienteClinical (OWNER/PROFESIONAL/DIRECTOR) — la página destino
    * igual role-gatea y el server action re-chequea. */
@@ -1842,6 +1943,7 @@ export function Configuracion({
   initialAutoConfirmar,
   initialSlotMargenMin,
   googleCalendar,
+  gcalError,
   orgTipo,
   canEdit,
   membersActivos,
@@ -1859,6 +1961,7 @@ export function Configuracion({
   whatsappConfigured,
   showVinculaciones,
   showImportarPacientes,
+  logoUrl,
 }: ConfiguracionProps) {
   const [seccion, setSeccion] = useState<SeccionId>("consultorio");
 
@@ -1996,7 +2099,7 @@ export function Configuracion({
           showPerfilPublico={esColegiado && initialPerfilPublico != null}
         />
         <div className="cfg-pane">
-          {seccion === "cuenta"        ? <SecCuenta c={consultorio} set={setC} showVinculaciones={showVinculaciones} /> : null}
+          {seccion === "cuenta"        ? <SecCuenta c={consultorio} set={setC} showVinculaciones={showVinculaciones} showAuditLog={canEdit} /> : null}
           {seccion === "perfil-publico" && initialPerfilPublico ? (
             <SecPerfilPublico initial={initialPerfilPublico} matricula={consultorio.matricula} />
           ) : null}
@@ -2014,6 +2117,7 @@ export function Configuracion({
               montoActualCents={montoActualCents}
               montoClinicaCents={montoClinicaCents}
               showImportarPacientes={showImportarPacientes}
+              logoUrl={logoUrl}
             />
           ) : null}
           {seccion === "equipo" && (canManageTeam || equipoSelf != null) ? (
@@ -2048,6 +2152,7 @@ export function Configuracion({
           {seccion === "integraciones" ? (
             <SecIntegraciones
               googleCalendar={googleCalendar}
+              gcalError={gcalError}
               suscripcionEstado={suscripcionEstado}
               whatsappConfigured={whatsappConfigured}
               isOwner={isOwner}

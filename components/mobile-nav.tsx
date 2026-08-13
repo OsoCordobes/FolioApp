@@ -204,7 +204,7 @@ function MobileMoreSheet({
           <span className="fi-search-ico" aria-hidden>
             <I.Search size={14} />
           </span>
-          <input name="q" placeholder="Buscar paciente, turno…" aria-label="Buscar paciente" />
+          <input name="q" placeholder="Buscar paciente…" aria-label="Buscar paciente" />
         </form>
 
         {/* Switchers contextuales — mismos componentes que el sidebar. El

@@ -2,6 +2,8 @@
 
 import { useState, useTransition } from "react";
 
+import { useConfirm } from "@/lib/use-confirm";
+
 import {
   cancelAccountDeletionAction,
   exportMyDataAction,
@@ -28,6 +30,7 @@ export function DatosClient({
   const [deleteErr, setDeleteErr] = useState<string | null>(null);
   const [showDeleteForm, setShowDeleteForm] = useState(false);
   const [deletionReasonInput, setDeletionReasonInput] = useState("");
+  const { confirmar, dialogo } = useConfirm();
 
   const onExport = () => {
     setExportErr(null);
@@ -51,16 +54,16 @@ export function DatosClient({
     });
   };
 
-  const onRequestDelete = () => {
+  const onRequestDelete = async () => {
     setDeleteErr(null);
-    if (
-      typeof window !== "undefined" &&
-      !window.confirm(
-        "Vamos a programar la eliminación de tu cuenta en 30 días. Podés cancelarla en cualquier momento dentro de ese plazo. ¿Continuamos?",
-      )
-    ) {
-      return;
-    }
+    const ok = await confirmar({
+      titulo: "¿Programar la eliminación de tu cuenta?",
+      mensaje:
+        "Tu cuenta queda marcada para eliminarse en 30 días. Durante ese plazo seguís entrando y podés cancelarla desde acá mismo. Pasados los 30 días no hay vuelta atrás.",
+      confirmLabel: "Programar eliminación",
+      variant: "danger",
+    });
+    if (!ok) return;
     startTransition(async () => {
       const result = await requestAccountDeletionAction(deletionReasonInput || undefined);
       if (!result.ok) {
@@ -189,6 +192,7 @@ export function DatosClient({
         )}
         {deleteErr ? <p className="au-err" style={{ marginTop: 12 }}>{deleteErr}</p> : null}
       </section>
+      {dialogo}
     </div>
   );
 }

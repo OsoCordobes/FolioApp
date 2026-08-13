@@ -47,6 +47,7 @@ import {
   type EspecialidadSlug,
   type SoapGuia,
 } from "@/lib/especialidades/registry";
+import { contar } from "@/lib/format/plural";
 import { toWhatsappE164 } from "@/lib/format/phone";
 import { formatCobertura } from "@/lib/pacientes/cobertura";
 import { HistorialCambiosCard } from "@/components/paciente/historial-cambios-card";
@@ -1000,26 +1001,31 @@ function TabSesiones() {
     <div className="pc-sesiones">
       <div className="pc-sesiones-toolbar">
         <span className="fi-eyebrow">
-          {plan.historialTotal} {plan.historialTotal === 1 ? "sesión" : "sesiones"} · desde{" "}
-          {fmtFecha(plan.inicio)}
-          {plan.historialTotal > plan.sesiones.length ? (
-            // Decir "10 sesiones" cuando hay 62 no es un detalle de UI: cambia
-            // lo que el profesional cree de la historia del paciente.
-            <span className="au-fine">
-              {" "}
-              · mostrando las últimas {plan.sesiones.length}
-            </span>
-          ) : null}
+          {plan.historialTotal === 0 ? (
+            // Un paciente recién cargado mostraba "0 sesiones · desde 12 ago",
+            // que es una fecha de inicio de un tratamiento que todavía no
+            // empezó: la del alta. Sin sesiones no hay "desde" que contar.
+            "Todavía no hay sesiones"
+          ) : (
+            <>
+              {contar(plan.historialTotal, "sesión", "sesiones")} · desde {fmtFecha(plan.inicio)}
+              {plan.historialTotal > plan.sesiones.length ? (
+                // Decir "10 sesiones" cuando hay 62 no es un detalle de UI: cambia
+                // lo que el profesional cree de la historia del paciente.
+                <span className="au-fine">
+                  {" "}
+                  · mostrando las últimas {plan.sesiones.length}
+                </span>
+              ) : null}
+            </>
+          )}
         </span>
-        <button
-          type="button"
-          className="fi-btn fi-btn-secondary"
-          disabled
-          title="Próximamente — las sesiones se generan al cerrar un turno desde /hoy"
-          aria-disabled="true"
-        >
-          <I.Plus size={12} /> Nueva sesión
-        </button>
+        {/* Acá había un botón "Nueva sesión" permanentemente `disabled`, con
+            un tooltip que explicaba que las sesiones se generan al cerrar un
+            turno. Eso sigue siendo cierto, y para anotar sin turno ya está la
+            nota de ficha (M96) en la pestaña Información. Un botón que no se
+            puede apretar nunca no es una función próxima: es ruido en la
+            pantalla donde el profesional trabaja. */}
       </div>
       <div className="pc-sesiones-list">
         {plan.sesiones.map((s, i) => {

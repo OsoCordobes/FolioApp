@@ -96,6 +96,11 @@ export interface ConfiguracionData {
   autoConfirmarReservas: boolean;
   /** M43 · minutos de margen entre slots ofrecidos en el booking público. */
   slotMargenMin: number;
+  /**
+   * Foto del consultorio ya subida (organization.logo_url), o null. La sube
+   * LogoUpload, cuya action persiste sola: acá solo se lee para pintarla.
+   */
+  logoUrl: string | null;
   /** M49 · tipo de organización. Solo lectura en /configuracion (el upgrade llega con billing por seats — Fase E). */
   tipo: "INDEPENDIENTE" | "CLINICA";
 }
@@ -147,7 +152,9 @@ export async function getConfiguracionData(): Promise<Result<ConfiguracionData>>
   // 3. Organization fields nuevos (M20 agregó telefono_publico / direccion_completa / instagram_handle).
   const { data: orgExtra } = await supabase
     .from("organization")
-    .select("telefono_publico, direccion_completa, instagram_handle, auto_confirmar_reservas, slot_margen_min")
+    .select(
+      "telefono_publico, direccion_completa, instagram_handle, auto_confirmar_reservas, slot_margen_min, logo_url",
+    )
     .eq("id", ctx.data.organization.id)
     .maybeSingle();
 
@@ -227,6 +234,10 @@ export async function getConfiguracionData(): Promise<Result<ConfiguracionData>>
     autoConfirmarReservas: (orgExtra?.auto_confirmar_reservas as boolean | null) ?? true,
     // M43 · default 0 (sin margen) si la org es anterior a la migración o null.
     slotMargenMin: (orgExtra?.slot_margen_min as number | null) ?? 0,
+    // La foto del consultorio se sube con LogoUpload, que persiste sola (la
+    // action resuelve la org desde la sesión). No pasa por la save-bar: acá
+    // solo se lee para pintar la que ya está.
+    logoUrl: (orgExtra?.logo_url as string | null) ?? null,
     tipo: ctx.data.organization.tipo,
   });
 }

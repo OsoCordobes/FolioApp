@@ -644,7 +644,17 @@ async function slotsOfrecidosPortal(
     return ok(slots);
   } catch (e) {
     if (e instanceof AvailabilityDbError) {
-      return err("db_error", e.message, typeof e.cause === "string" ? e.cause : undefined);
+      // `e.message` es el mensaje CRUDO de Postgres (availability.ts lo
+      // construye con `dispsErr.message` y hermanos), y el `message` de un
+      // Result es lo que se le muestra al usuario. Un paciente del portal
+      // intentando sacar turno terminaba leyendo un error de base de datos en
+      // inglés. El crudo se conserva en `detail`, que es donde va a parar el
+      // log y nunca a la pantalla.
+      return err(
+        "db_error",
+        "No pudimos consultar los horarios disponibles. Probá de nuevo en un momento.",
+        e.message,
+      );
     }
     throw e;
   }
