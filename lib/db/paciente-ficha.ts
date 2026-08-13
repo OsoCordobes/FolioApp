@@ -51,7 +51,15 @@ export type { EstadoVertebra } from "@/lib/especialidades/quiropraxia/schema";
 
 export interface PacienteFichaInfo {
   id: string;
+  /** Nombre + apellido, ya armado, para mostrar. */
   nombre: string;
+  /**
+   * Nombre y apellido POR SEPARADO, para el modal de edición de contacto.
+   * Partir `nombre` por el primer espacio rompería con apellidos compuestos
+   * ("Ana María Pérez García") — y la ficha ya los tiene descifrados aparte.
+   */
+  nombrePila: string;
+  apellido: string;
   tipo: "nuevo" | "recurrente";
   sesiones: number;
   edad: number;
@@ -761,6 +769,8 @@ export async function getPacienteFicha(
   const paciente: PacienteFichaInfo = {
     id: row.id,
     nombre: fullName,
+    nombrePila: nombre ?? "",
+    apellido: apellido ?? "",
     tipo: tipoUI,
     sesiones: sesionesCompletadas,
     edad: row.fecha_nacimiento ? calcularEdad(row.fecha_nacimiento) : 0,

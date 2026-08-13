@@ -34,6 +34,8 @@ import {
 } from "@/lib/ficha/borrador";
 import { TurnoCreateModal } from "@/components/hoy/turno-create-modal";
 import { CoberturaModal } from "@/components/paciente/cobertura-modal";
+import { ContactoModal } from "@/components/paciente/contacto-modal";
+import { EnmiendaModal } from "@/components/paciente/enmienda-modal";
 import { ConsentimientosCard } from "@/components/paciente/consentimientos-card";
 import { PacienteFichaProvider, usePacienteFicha } from "@/components/paciente/contexto";
 import { IntakeAvanzadoModal } from "@/components/paciente/intake-avanzado-modal";
@@ -801,20 +803,19 @@ function TabInformacion() {
   const { paciente, cumple } = usePacienteFicha();
   // F7a (M89) · edición de la cobertura desde la ficha (modal chico).
   const [coberturaOpen, setCoberturaOpen] = useState(false);
+  const [contactoOpen, setContactoOpen] = useState(false);
   return (
     <div className="pc-info-grid">
       <section className="pc-card">
         <header className="pc-card-head">
           <span className="fi-eyebrow">Contacto</span>
           <button
-          type="button"
-          className="pc-link"
-          disabled
-          title="Próximamente — editá desde Configuración o agregá nota en Sesiones"
-          aria-disabled="true"
-        >
-          Editar
-        </button>
+            type="button"
+            className="pc-link pc-link--accion"
+            onClick={() => setContactoOpen(true)}
+          >
+            Editar
+          </button>
         </header>
         <dl className="pc-dl">
           <dt>Teléfono</dt>
@@ -868,6 +869,19 @@ function TabInformacion() {
             coberturaNroAfiliado: paciente.coberturaNroAfiliado,
           }}
           onClose={() => setCoberturaOpen(false)}
+        />
+      ) : null}
+      {contactoOpen ? (
+        <ContactoModal
+          pacienteId={paciente.id}
+          prefill={{
+            nombre: paciente.nombrePila,
+            apellido: paciente.apellido,
+            telefono: paciente.tel,
+            email: paciente.email,
+            ocupacion: paciente.ocupacion,
+          }}
+          onClose={() => setContactoOpen(false)}
         />
       ) : null}
       <section className="pc-card">
@@ -973,6 +987,7 @@ function TabSesiones() {
   // D2 · filas expandibles: set de keys abiertas (estado local — el panel
   // queda montado con `hidden`, así que sobrevive el cambio de tab).
   const [abiertas, setAbiertas] = useState<ReadonlySet<string>>(new Set());
+  const [enmienda, setEnmienda] = useState<{ sesionId: string; fecha: string } | null>(null);
   const toggle = (key: string) =>
     setAbiertas((prev) => {
       const next = new Set(prev);
@@ -1089,6 +1104,17 @@ function TabSesiones() {
                       >
                         <I.FileDown size={12} /> PDF de esta sesión
                       </a>
+                      {/* La nota original no se toca: la corrección se agrega
+                          aparte (Ley 26.529 art. 15). La tabla existía desde
+                          M10 y no tenía forma de usarse desde la app. */}
+                      <button
+                        type="button"
+                        className="fi-btn fi-btn-ghost"
+                        onClick={() => setEnmienda({ sesionId: s.sesionId!, fecha: s.fecha })}
+                        title="Agregar una corrección sin modificar la nota original"
+                      >
+                        Corregir
+                      </button>
                     </div>
                   ) : null}
                 </div>
@@ -1101,6 +1127,15 @@ function TabSesiones() {
       {/* Al pie de la Historia: quién tocó la historia clínica y cuándo.
           Colapsado y con lazy-fetch — leer el audit cuesta un service client y
           varias queries, y nadie abre una ficha para auditarla. */}
+      {enmienda ? (
+        <EnmiendaModal
+          pacienteId={paciente.id}
+          sesionId={enmienda.sesionId}
+          fechaSesion={fmtFecha(enmienda.fecha)}
+          onClose={() => setEnmienda(null)}
+        />
+      ) : null}
+
       <HistorialCambiosCard
         cargar={async () => {
           const r = await getFichaTimelineAction(paciente.id);

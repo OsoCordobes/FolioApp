@@ -32,6 +32,7 @@ import { getActiveContext } from "@/lib/db/active-context";
 import { getFichaTimeline } from "@/lib/db/ficha-timeline";
 import type { EventoTimeline } from "@/lib/ficha/timeline-core";
 import { addNotaClinica } from "@/lib/db/notas-clinicas";
+import { updatePacienteContacto, type UpdatePacienteContactoInput } from "@/lib/db/pacientes";
 import {
   createConsentimiento,
   getSignedFirmaUrl,
@@ -51,7 +52,7 @@ import { savePacienteIntakeAvanzado } from "@/lib/db/paciente-intake";
 import { createPaciente, updatePacienteCobertura } from "@/lib/db/pacientes";
 import { savePlanTratamiento } from "@/lib/db/plan-tratamiento";
 import { getActiveSession } from "@/lib/db/session";
-import { upsertSesion } from "@/lib/db/sesiones";
+import { addEnmienda, sesionPerteneceAPaciente, upsertSesion } from "@/lib/db/sesiones";
 import { transitionTurno } from "@/lib/db/turnos";
 import { err, ok, type Result } from "@/lib/db/errors";
 import { buildUpsertSesionInput } from "@/lib/especialidades/draft";
@@ -1228,4 +1229,75 @@ export async function getFichaTimelineAction(
   pacienteId: string,
 ): Promise<Result<EventoTimeline[]>> {
   return getFichaTimeline(pacienteId);
+}
+
+// ─── Contacto y enmiendas de la ficha (B8) ─────────────────────────────────
+
+/** Edita los datos de contacto del paciente desde la ficha. */
+export async function updateContactoPacienteAction(
+  input: UpdatePacienteContactoInput,
+): Promise<Result<{ identidadId: string }>> {
+  const result = await updatePacienteContacto(input);
+  if (!result.ok) return result;
+  revalidatePath(`/pacientes/${input.pacienteId}`);
+  // El nombre y el teléfono viven también en el directorio: sin esto, la lista
+  // sigue mostrando el dato viejo hasta el próximo hard refresh.
+  revalidatePath("/pacientes");
+  return result;
+}
+
+/**
+ * Agrega una enmienda a una sesión ya cerrada (Ley 26.529 art. 15).
+ *
+ * `addEnmienda` existía desde M10 —con su tabla, su RLS y sus triggers
+ * append-only— y **nunca tuvo un caller**: una vez que la sesión quedaba
+ * lockeada, corregir un error era imposible desde la app. La ley no permite
+ * reescribir la historia clínica, pero sí exige poder enmendarla.
+ *
+ * El guard de pertenencia va acá y no en `addEnmienda`: el sesionId viene del
+ * cliente, así que hay que confirmar que esa sesión es del paciente cuya ficha
+ * se está mirando antes de colgarle nada.
+ */
+export async function addEnmiendaSesionAction(
+  pacienteId: string,
+  sesionId: string,
+  motivo: string,
+  texto: string,
+): Promise<Result<{ id: string }>> {
+  const motivoLimpio = motivo.trim();
+  // Espejo del CHECK de la tabla (sesion_enmienda_motivo_len, 10-500): validar
+  // acá da un mensaje entendible en vez de un error de constraint de Postgres.
+  if (motivoLimpio.length < 10 || motivoLimpio.length > 500) {
+    return err(
+      "validation",
+      "El motivo de la enmienda tiene que tener entre 10 y 500 caracteres — es lo que queda registrado como justificación.",
+    );
+  }
+  const textoLimpio = texto.trim();
+  if (textoLimpio.length === 0) {
+    return err("validation", "Escribí la corrección antes de guardar la enmienda.");
+  }
+
+  const ctx = await getActiveContext();
+  if (!ctx.ok) return ctx;
+
+  // Guard IDOR: la sesión tiene que ser de ESTE paciente y de la org activa.
+  // Se lee con el client del usuario (bajo RLS), así que una sesión que no
+  // puede ver no existe para él.
+  const supabase = await createSupabaseServerClient();
+  const { data: sesionRow } = await supabase
+    .from("sesion")
+    .select("id, paciente_id")
+    .eq("id", sesionId)
+    .eq("organization_id", ctx.data.organization.id)
+    .maybeSingle();
+  const row = sesionRow as { id: string; paciente_id: string } | null;
+  if (!row || !sesionPerteneceAPaciente(row.paciente_id, pacienteId)) {
+    return err("not_found", "No encontramos esa sesión en la ficha.");
+  }
+
+  const result = await addEnmienda(sesionId, motivoLimpio, textoLimpio);
+  if (!result.ok) return result;
+  revalidatePath(`/pacientes/${pacienteId}`);
+  return result;
 }

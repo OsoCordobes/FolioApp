@@ -519,6 +519,108 @@ export async function updatePacienteCobertura(
   return ok({ identidadId });
 }
 
+// ─── Contacto (nombre, apellido, teléfono, email, ocupación) — B8 ────────────
+
+const updateContactoSchema = z.object({
+  pacienteId: z.string().uuid(),
+  nombre: z.string().min(1).max(120),
+  apellido: z.string().min(1).max(120),
+  telefono: z.string().min(6).max(30),
+  email: z.string().email().max(320).optional().or(z.literal("")),
+  ocupacion: z.string().max(120).optional().or(z.literal("")),
+});
+
+export type UpdatePacienteContactoInput = z.infer<typeof updateContactoSchema>;
+
+/**
+ * Payload del UPDATE de contacto. **Puro y exportado a propósito**: la parte
+ * que se puede olvidar sin que nada falle es el recálculo de los blind
+ * indexes, así que merece un test y no una revisión visual.
+ *
+ * ─── Por qué los hashes no son opcionales ──────────────────────────────────
+ * `nombre_hash` y `telefono_hash` son los índices ciegos con los que el
+ * directorio BUSCA (el nombre está cifrado: Postgres no puede hacer LIKE sobre
+ * el ciphertext). Si se actualiza el nombre y no el hash, el paciente sigue
+ * existiendo pero **desaparece del buscador** — y nadie se entera hasta que
+ * alguien lo busca y concluye que no está cargado. Espejo exacto de lo que hace
+ * `createPaciente` al dar de alta.
+ *
+ * `dni_hash` NO se toca acá: el documento no se edita desde este modal.
+ */
+export function buildContactoUpdatePayload(
+  input: Omit<UpdatePacienteContactoInput, "pacienteId">,
+  orgId: string,
+): Record<string, unknown> {
+  const nombre = input.nombre.trim();
+  const apellido = input.apellido.trim();
+  const telefono = input.telefono.trim();
+  const email = (input.email ?? "").trim();
+  const ocupacion = (input.ocupacion ?? "").trim();
+  // El hash del nombre se calcula sobre "nombre apellido", igual que en el alta.
+  const nombreFull = `${nombre} ${apellido}`.trim();
+
+  return {
+    nombre_cifrado: encryptColumn(nombre),
+    apellido_cifrado: encryptColumn(apellido),
+    telefono_cifrado: encryptColumn(telefono),
+    email_cifrado: encryptColumn(email || null),
+    ocupacion: ocupacion || null,
+    // Los dos índices ciegos, recalculados con la MISMA sal (la org) que usa el alta.
+    nombre_hash: blindIndex(nombreFull, orgId),
+    telefono_hash: blindIndexPhone(telefono, orgId),
+  };
+}
+
+/**
+ * Edita los datos de contacto de la identidad del paciente desde la ficha.
+ *
+ * El botón existía y estaba `disabled`: los datos de contacto de un paciente
+ * cambian —se muda, cambia de teléfono— y no había forma de corregirlos sin
+ * tocar la base a mano.
+ */
+export async function updatePacienteContacto(
+  input: UpdatePacienteContactoInput,
+): Promise<Result<{ identidadId: string }>> {
+  const parsed = updateContactoSchema.safeParse(input);
+  if (!parsed.success) {
+    return err("validation", "Datos de contacto inválidos.", parsed.error.message);
+  }
+  const session = await getActiveSession();
+  if (!session.ok) return session;
+
+  const supabase = await createSupabaseServerClient();
+
+  // Guard IDOR: un pacienteId de otra org no matchea acá y devuelve not_found.
+  const { data: dirRow, error: dirErr } = await supabase
+    .from("paciente_directorio_lite")
+    .select("identidad_id")
+    .eq("paciente_id", parsed.data.pacienteId)
+    .eq("organization_id", session.data.organizationId)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (dirErr) return err("db_error", "Error leyendo el paciente.", dirErr.message);
+  const identidadId = (dirRow as { identidad_id: string | null } | null)?.identidad_id ?? null;
+  if (!identidadId) return err("not_found", "Paciente no encontrado o sin permisos.");
+
+  const { data: updated, error: updErr } = await supabase
+    .from("paciente_identidad")
+    .update(buildContactoUpdatePayload(parsed.data, session.data.organizationId))
+    .eq("id", identidadId)
+    .eq("organization_id", session.data.organizationId)
+    .select("id");
+
+  if (updErr) {
+    const mapped = mapSupabaseError(updErr);
+    return err(mapped.code, mapped.message, updErr.message);
+  }
+  if (!updated || updated.length === 0) {
+    return err("forbidden", "Tu rol no permite editar los datos del paciente.");
+  }
+
+  return ok({ identidadId });
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /**
