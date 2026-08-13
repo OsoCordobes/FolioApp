@@ -23,6 +23,7 @@ import { SUPPORT_EMAIL } from "@/lib/support";
 
 import { sendEmail } from "./client";
 import { buildBookingConfirmadaEmail } from "./templates/booking-confirmada";
+import { tryDecrypt } from "@/lib/crypto";
 import { buildBookingRecibidaEmail } from "./templates/booking-recibida";
 import { buildMemberInvitationEmail } from "./templates/member-invitation";
 import { buildPagoFallidoEmail } from "./templates/pago-fallido";
@@ -247,6 +248,70 @@ export async function notifyBookingRecibida(input: {
     const { captureException } = await import("@sentry/nextjs");
     captureException(e, {
       tags: { component: "email", op: "notifyBookingRecibida" },
+      extra: { organizationId },
+    });
+  }
+}
+
+/**
+ * Le avisa al consultorio que un paciente canceló su turno desde el portal.
+ *
+ * Ninguna cancelación hecha por el paciente le avisaba al profesional: el hueco
+ * se liberaba en silencio y él se enteraba cuando el paciente no aparecía —
+ * habiendo perdido la chance de ofrecerle ese horario a otro.
+ *
+ * Fail-safe como el resto del módulo: NUNCA throwea. La cancelación del turno
+ * ya ocurrió; un email caído no puede desandarla.
+ */
+export async function notifyTurnoCanceladoPorPaciente(input: {
+  client: ServerClient;
+  turnoId: string;
+  organizationId: string;
+  /** Reservado: hoy el aviso va al contacto de la org. */
+  profesionalId?: string | null;
+}): Promise<void> {
+  const { client, turnoId, organizationId } = input;
+
+  try {
+    const destino = await resolveOrgContactEmail(organizationId);
+    if (!destino) return;
+
+    // El caller (cancelarTurnoPortal) no descifra nada: los datos del turno se
+    // resuelven acá, que es donde se decide qué entra en el email.
+    const { data: turno } = await client
+      .from("turno_extendido")
+      .select("inicio, servicio_nombre, paciente_nombre_cifrado")
+      .eq("id", turnoId)
+      .maybeSingle();
+    if (!turno) return;
+
+    const { data: org } = await client
+      .from("organization")
+      .select("nombre, timezone")
+      .eq("id", organizationId)
+      .maybeSingle();
+
+    // El nombre está cifrado en la vista (M14): se descifra acá, server-side.
+    // Si no se puede leer, el aviso sale igual sin nombre — que el profesional
+    // se entere de la cancelación importa más que el detalle.
+    const pacienteNombre =
+      tryDecrypt(turno.paciente_nombre_cifrado as string | null, "turno.paciente_nombre") ??
+      "Un paciente";
+    const servicioNombre = (turno.servicio_nombre as string | null) ?? null;
+    const fechaHoraLabel = formatFechaHora(turno.inicio as string, org?.timezone ?? null);
+    const servicio = servicioNombre ? ` (${servicioNombre})` : "";
+
+    await sendEmail({
+      to: destino,
+      subject: `Turno cancelado: ${pacienteNombre} — ${fechaHoraLabel}`,
+      html: `<p><b>${pacienteNombre}</b> canceló su turno del <b>${fechaHoraLabel}</b>${servicio} desde el portal.</p>
+<p>El horario quedó libre en tu agenda.</p>
+<p style="color:#666;font-size:13px">${org?.nombre ?? "Folio"}</p>`,
+    });
+  } catch (e) {
+    const { captureException } = await import("@sentry/nextjs");
+    captureException(e, {
+      tags: { component: "email", op: "notifyTurnoCanceladoPorPaciente" },
       extra: { organizationId },
     });
   }
