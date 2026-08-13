@@ -346,10 +346,25 @@ async function importarChunk(
   // — el INSERT pasaba el WITH CHECK pero el RETURNING volvía vacío y el
   // import entero se reportaba como error. El insert sin select va con
   // Prefer: return=minimal (no dispara SELECT) y es atómico: pacErr alcanza.
+  //
+  // Se mapea sobre `idents`, NO sobre `chunk` con el índice. Postgres no
+  // garantiza que el RETURNING de un INSERT multi-fila conserve el orden de
+  // entrada, y `chunk.map((v, i) => … idents[i].id …)` PARECE emparejar fila
+  // del CSV ↔ identidad cuando en realidad no lo hace: hoy da igual, porque
+  // las otras dos columnas son constantes de todo el import (`orgId`, y
+  // `profesionalPrincipalId` que se resuelve una vez en el caller), así que
+  // cualquier permutación produce exactamente el mismo conjunto de filas.
+  //
+  // Pero es una trampa cargada: el día que alguien agregue a `paciente` una
+  // columna que salga de `v` —una etiqueta, un profesional por fila— el
+  // emparejamiento por posición se vuelve real y silencioso, y un paciente
+  // termina apuntando a la identidad (nombre, DNI, teléfono) de OTRA persona.
+  // Iterar `idents` dice lo que de verdad pasa: un `paciente` por identidad
+  // creada, y ninguna correspondencia con el orden del archivo.
   const { error: pacErr } = await supabase.from("paciente").insert(
-    chunk.map((v, i) => ({
+    idents.map((ident) => ({
       organization_id: orgId,
-      identidad_id: idents[i].id,
+      identidad_id: ident.id,
       profesional_principal_id: profesionalPrincipalId,
     })),
   );
