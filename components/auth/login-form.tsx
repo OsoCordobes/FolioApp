@@ -30,6 +30,7 @@ import {
 import { signUpAndInitOrganization } from "@/app/(public)/onboarding/actions";
 import { CheckEmailPanel } from "@/components/auth/check-email-panel";
 import { PasswordStrengthMeter } from "@/components/auth/password-strength-meter";
+import { MENSAJE_OAUTH_GENERICO, mensajeOauth } from "@/lib/auth/oauth-messages";
 import { safeRedirect } from "@/lib/security/safe-redirect";
 import { supportMailto } from "@/lib/support";
 
@@ -96,20 +97,6 @@ interface LoginProps extends SubViewProps {
  * app/api/auth/callback/route.ts:mapAuthError) a mensajes user-facing.
  * El callback redirige a /login?error=<code> cuando exchangeCodeForSession falla.
  */
-const OAUTH_ERROR_MESSAGES: Record<string, string> = {
-  oauth_failed:  "No pude completar el ingreso con Google. Reintentá.",
-  rate_limited:  "Demasiados intentos seguidos. Esperá un minuto y reintentá.",
-  // Neutral: este código ahora también lo emiten los links de confirmación
-  // de email (otp_expired / verifyOtp), no solo el exchange de Google.
-  code_expired:  "El link expiró o ya fue usado. Pedí uno nuevo.",
-  code_invalid:  "El código de Google no es válido. Reintentá el ingreso.",
-  network:       "Hubo un problema de red al validar tu ingreso. Reintentá.",
-  // El canje del link funcionó pero la sesión no quedó guardada (cookies
-  // bloqueadas, ventana de incógnito que se cerró, o el link abierto en un
-  // navegador distinto del que lo pidió). Decirlo así evita el "probé y no
-  // pasa nada" y le da al usuario algo concreto que cambiar.
-  session_missing: "El link se validó pero no pudimos guardar tu sesión. Abrilo en el mismo navegador donde pediste el acceso, con las cookies habilitadas.",
-};
 
 function Login({ setVista, prefilledEmail, notice, clearNotice }: LoginProps) {
   const router = useRouter();
@@ -136,8 +123,7 @@ function Login({ setVista, prefilledEmail, notice, clearNotice }: LoginProps) {
   useEffect(() => {
     const errorCode = searchParams.get("error");
     if (errorCode) {
-      const msg = OAUTH_ERROR_MESSAGES[errorCode] ?? "Algo salió mal con el ingreso. Reintentá.";
-      setErr(msg);
+      setErr(mensajeOauth(errorCode));
     }
   }, [searchParams]);
 
@@ -203,10 +189,16 @@ function Login({ setVista, prefilledEmail, notice, clearNotice }: LoginProps) {
   };
 
   const handleGoogle = () => {
+    setErr("");
+    setErrCode(null);
     startTransition(async () => {
-      await signInWithGoogle();
-      // Si redirige al provider, no llegamos acá; si falla, el error se muestra
-      // recargando la página con ?error= (middleware no captura esto en F3).
+      // En el camino feliz `signInWithGoogle` hace un redirect() del server y
+      // esta línea no se alcanza. Si devuelve, devuelve un fallo — y hasta
+      // ahora se descartaba: el usuario apretaba el botón y no pasaba
+      // absolutamente nada, ni un mensaje. Ese silencio es lo que hizo
+      // indistinguible "Google está mal configurado" de "el botón no anda".
+      const result = await signInWithGoogle();
+      if (result && !result.ok) setErr(result.error ?? MENSAJE_OAUTH_GENERICO);
     });
   };
 
@@ -512,8 +504,12 @@ function Signup({ setVista, switchToLoginWith }: SignupProps) {
     });
   };
   const handleGoogle = () => {
+    setErr("");
     startTransition(async () => {
-      await signInWithGoogle();
+      // Mismo motivo que en el login: el Result se descartaba y el botón
+      // parecía muerto cuando el OAuth no estaba bien configurado.
+      const result = await signInWithGoogle();
+      if (result && !result.ok) setErr(result.error ?? MENSAJE_OAUTH_GENERICO);
     });
   };
 

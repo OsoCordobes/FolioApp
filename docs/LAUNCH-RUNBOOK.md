@@ -262,9 +262,39 @@ el flip** — pero los 4 pasos van juntos, en este orden:
    canjea en el **mismo browser** que inició el signup (cookie
    `code_verifier`) — un user que se registra en el celular y abre el mail en
    la PC vería "link inválido". El callback soporta ambos formatos.
-3. **Redirect URLs allow-list** (Supabase → Auth → URL Configuration):
-   agregar la URL de prod + `/api/auth/callback` (y verificar que Site URL
-   apunte al dominio de prod).
+3. **Redirect URLs allow-list** (Supabase → Auth → URL Configuration).
+   **Esto ya rompió producción una vez** y no dio ni un error: GoTrue valida
+   el `redirect_to` contra esta lista y, si no está, **lo descarta y manda al
+   Site URL**. Con el Site URL en la raíz del dominio, el síntoma es "toqué
+   Continuar con Google, elegí mi cuenta y volví a la página de inicio", sin
+   mensaje y sin log. Rompe las tres cosas a la vez: login con Google,
+   confirmación de email y reset de contraseña.
+
+   **Site URL**
+   ```
+   https://foliosalud.com
+   ```
+   **Redirect URLs**
+   ```
+   https://foliosalud.com/api/auth/callback
+   https://foliosalud.com/api/auth/callback?redirect=/portal
+   https://foliosalud.com/reset-password
+   https://folio-app-git-*-osocordobes-projects.vercel.app/api/auth/callback
+   ```
+   La última deja andando el login en los previews. **Verificar siempre con:**
+   ```
+   node --env-file=.env.local scripts/check-auth-redirect.mjs
+   ```
+   Sale con código 1 y nombra qué se rompe si alguna URL no está permitida.
+   Correrlo después de CUALQUIER cambio de dominio.
+
+3b. **Provider Google de Supabase Auth** — no estaba documentado en ningún
+   lado del repo, y no es el mismo OAuth que el de Google Calendar
+   (`DEPLOYMENT.md` §4.2, que apunta a `/api/google/callback`). Vive en
+   Supabase → Auth → Providers → Google, con su propio Client ID/Secret, y en
+   Google Cloud Console ese cliente tiene que tener autorizado el redirect
+   `https://grkpayhxndztlfwxobnt.supabase.co/auth/v1/callback` — el de
+   Supabase, no el de la app.
 4. **Recién entonces** activar **Confirm email** (Auth → Sign In / Up →
    Email). Verificar en el mismo panel que **Enable email signups** siga ON y
    que **Captcha protection de Supabase Auth** siga OFF (nuestro Turnstile es
