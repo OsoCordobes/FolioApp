@@ -4053,6 +4053,11 @@ input:focus { outline: none; }
   .pc-dl { grid-template-columns: 1fr; row-gap: 4px; }
   .pc-dl dt { align-self: start; margin-top: 8px; }
   .pc-dl dt:first-of-type { margin-top: 0; }
+  /* Un email largo es una sola palabra para el navegador: sin esto estira la
+     columna del grid por min-content y empuja la tarjeta fuera del padding.
+     Los datos de contacto son justo donde aparecen esas cadenas. */
+  .pc-dl dd { overflow-wrap: anywhere; }
+  .pc-info-grid > *, .pc-plan-grid > *, .pc-bottom-grid > * { min-width: 0; }
 
   /* Tres métricas del plan en 343px salen a ~100px cada una: dos y dos. */
   .pc-plan-meta { grid-template-columns: 1fr 1fr; gap: 12px; }
