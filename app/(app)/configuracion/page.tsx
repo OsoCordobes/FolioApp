@@ -17,6 +17,7 @@ import { computeMonthlyPriceCents } from "@/lib/billing/pricing";
 import { getActiveContext } from "@/lib/db/active-context";
 import { getConfiguracionData } from "@/lib/db/configuracion";
 import { isOrgListedInDirectory } from "@/lib/db/directorio";
+import { mensajeErrorOauthGoogle } from "@/lib/google/oauth-error";
 import { puedeResolverClaims } from "@/lib/db/paciente-claims";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
@@ -32,7 +33,17 @@ import type { EquipoSelf } from "@/components/configuracion/configuracion";
 
 export const dynamic = "force-dynamic";
 
-export default async function ConfiguracionPage() {
+export default async function ConfiguracionPage({
+  searchParams,
+}: {
+  // El callback de Google redirige acá con `?error=<code>#integraciones`
+  // cuando la conexión falla. Hasta ahora la página no leía el param: el
+  // profesional volvía a Integraciones, veía el mismo botón "Conectar" y no
+  // se enteraba de que había fallado. El código crudo no se muestra nunca —
+  // lo traduce mensajeErrorOauthGoogle.
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const gcalError = mensajeErrorOauthGoogle((await searchParams).error);
   const ctx = await getActiveContext();
   if (!ctx.ok) {
     throw new Error(`No se pudo cargar /configuracion: ${ctx.error.message}`);
@@ -112,7 +123,9 @@ export default async function ConfiguracionPage() {
       initialDias={data.data.dias}
       initialAutoConfirmar={data.data.autoConfirmarReservas}
       initialSlotMargenMin={data.data.slotMargenMin}
+      logoUrl={data.data.logoUrl}
       googleCalendar={data.data.googleCalendar}
+      gcalError={gcalError}
       orgTipo={data.data.tipo}
       canEdit={canEdit}
       membersActivos={membersActivos}

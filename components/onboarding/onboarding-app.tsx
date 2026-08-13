@@ -329,9 +329,15 @@ export function OnboardingApp({
           setSaveState({ status: "error", message: result.error });
         }
       } catch (e) {
+        // Lo que cae acá es una excepción de red o del runtime, con el texto en
+        // inglés que le puso el browser ("Failed to fetch", "NetworkError when
+        // attempting to fetch resource"). Mostrárselo a alguien que está
+        // dando de alta su consultorio no le dice nada y parece que se rompió
+        // Folio. El detalle va a la consola, que es donde sirve.
+        console.error("[onboarding autosave]", e);
         setSaveState({
           status: "error",
-          message: e instanceof Error ? e.message : "Error guardando.",
+          message: "No pudimos guardar. Revisá tu conexión — tus datos siguen acá.",
         });
       }
     },

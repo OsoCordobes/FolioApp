@@ -15,6 +15,7 @@ import { CerradoRow } from "@/components/hoy/cerrado-row";
 import { TurnoRow } from "@/components/hoy/turno-row";
 import { nombreCortoProfesional } from "@/lib/agenda/profesional";
 import { fmtMoney } from "@/lib/dashboard-helpers";
+import { contar } from "@/lib/format/plural";
 import { computeCobroKpi } from "@/lib/hoy/kpi-cobro";
 import type { EstadoTurno, PacientesById, Turno } from "@/lib/types";
 
@@ -108,7 +109,7 @@ export function TurnoList({ turnos, pacientes, nextId, now, timezone, canRegistr
               <span className="fi-block-lbl">{g.label}</span>
               {g.hoursRange ? <span className="fi-block-hours">{g.hoursRange}</span> : null}
               <span className="fi-block-line" />
-              <span className="fi-block-count">{g.turnos.length} turnos</span>
+              <span className="fi-block-count">{contar(g.turnos.length, "turno")}</span>
             </header>
             <div className="fi-block-rows">
               {g.turnos.map((t) => (

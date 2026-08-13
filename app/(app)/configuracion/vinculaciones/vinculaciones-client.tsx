@@ -17,6 +17,7 @@
 import { useState, useTransition } from "react";
 
 import type { PacienteClaimView } from "@/lib/db/paciente-claims";
+import { useConfirm } from "@/lib/use-confirm";
 
 import { resolverClaimAction } from "./actions";
 
@@ -31,21 +32,27 @@ export function VinculacionesClient({ initialClaims }: Props) {
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [errorById, setErrorById] = useState<Record<string, string>>({});
   const [, startTransition] = useTransition();
+  const { confirmar, dialogo } = useConfirm();
 
-  const resolve = (claim: ClaimView, aprobar: boolean) => {
+  const resolve = async (claim: ClaimView, aprobar: boolean) => {
     // Confirmación explícita: aprobar da acceso del portal a la ficha clínica.
     const verbo = aprobar ? "vincular" : "rechazar";
     const nombre = claim.pacienteNombre ?? "esta ficha";
-    if (
-      typeof window !== "undefined" &&
-      !window.confirm(
-        aprobar
-          ? `Vas a vincular la cuenta ${claim.cuentaEmail} a la ficha de ${nombre}. Esa persona podrá ver desde su portal los datos de esta ficha (turnos y consentimientos). ¿Confirmás?`
-          : `Vas a rechazar la solicitud de ${claim.cuentaEmail} para la ficha de ${nombre}. ¿Confirmás?`,
-      )
-    ) {
-      return;
-    }
+    const ok = await confirmar(
+      aprobar
+        ? {
+            titulo: `¿Vincular la ficha de ${nombre}?`,
+            mensaje: `${claim.cuentaEmail} va a poder ver desde su portal los turnos y consentimientos de esta ficha. Confirmá solo si estás seguro de que es la misma persona.`,
+            confirmLabel: "Vincular",
+          }
+        : {
+            titulo: "¿Rechazar la solicitud?",
+            mensaje: `${claim.cuentaEmail} no accede a la ficha de ${nombre}. Puede volver a solicitarlo más adelante.`,
+            confirmLabel: "Rechazar",
+            variant: "danger",
+          },
+    );
+    if (!ok) return;
     setPendingId(claim.claimId);
     setErrorById((prev) => {
       const next = { ...prev };
@@ -149,6 +156,7 @@ export function VinculacionesClient({ initialClaims }: Props) {
           </section>
         );
       })}
+      {dialogo}
     </div>
   );
 }

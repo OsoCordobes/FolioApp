@@ -32,6 +32,7 @@ import {
   type EventoHorario,
   type RangoMin,
 } from "@/lib/agenda/rango-horario";
+import { contar } from "@/lib/format/plural";
 import { useAgendaAutoRefresh } from "@/lib/use-agenda-refresh";
 import type { MonthGridCell } from "@/lib/db/calendario";
 import type {
@@ -729,7 +730,7 @@ function VistaSemana({
               <span className="cal-day-name">{DIAS[i]}</span>
               <span className="cal-day-num">{numero}</span>
               <span className="cal-day-sub">
-                {cerrado ? "cerrado" : `${dayTs.length} turnos · ${pctCapacidad}%`}
+                {cerrado ? "cerrado" : `${contar(dayTs.length, "turno")} · ${pctCapacidad}%`}
               </span>
               {!cerrado ? (
                 <div className="cal-day-cap" aria-label={`${pctCapacidad}% ocupado`}>
@@ -919,7 +920,7 @@ function VistaMes({
               <div className="cal-mes-cell-head">
                 <span className="cal-mes-num">{numero}</span>
                 {dayTurnos.length > 0 ? (
-                  <span className="cal-mes-count" aria-label={`${dayTurnos.length} turnos`}>
+                  <span className="cal-mes-count" aria-label={contar(dayTurnos.length, "turno")}>
                     {dayTurnos.length}
                   </span>
                 ) : null}
