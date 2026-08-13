@@ -123,66 +123,104 @@ test("sync: expectedCents coherente con computeMonthlyPriceCents (CLINICA, 3 sea
   assert.deepEqual(d, { action: "sync", fromCents: 12_500_000, toCents: 15_000_000 });
 });
 
-// ─── validateChargeAmount (M-BILL-2 per-org) ─────────────────────────────────
+// ─── validateChargeAmount (M-BILL-2 per-org · C2) ────────────────────────────
+//
+// C2 cambió la firma de `string | null` a `{ aceptado, warning }`. El motivo no
+// es cosmético: antes cualquier desvío rechazaba el cargo y BLOQUEABA la
+// activación, así que un pago perfectamente legítimo dejaba al cliente afuera
+// de la app. Ahora se separan dos preguntas distintas: "¿esto habilita el
+// cambio de estado?" y "¿hay algo raro que valga la pena mirar?".
+//
+// El criterio: sólo se rechaza lo que NO se puede explicar. Un cliente que pagó
+// y queda igual afuera es el peor resultado posible.
 
-test("cargo Solo: 30.000 ARS contra monto_cents del plan Solo → válido", () => {
-  assert.equal(
-    validateChargeAmount({ amountCents: SOLO_CENTS, currency: "ARS", expectedCents: SOLO_CENTS }),
-    null,
-  );
+test("cargo Solo: 30.000 ARS contra monto_cents del plan Solo → aceptado sin warning", () => {
+  const r = validateChargeAmount({ amountCents: SOLO_CENTS, currency: "ARS", expectedCents: SOLO_CENTS });
+  assert.equal(r.aceptado, true);
+  assert.equal(r.warning, null);
+
   // El plan vigente real (env-aware) también valida contra sí mismo.
-  assert.equal(
-    validateChargeAmount({
-      amountCents: MP_PLAN_PRICE_CENTS,
-      currency: "ARS",
-      expectedCents: MP_PLAN_PRICE_CENTS,
-    }),
-    null,
-  );
+  const r2 = validateChargeAmount({
+    amountCents: MP_PLAN_PRICE_CENTS,
+    currency: "ARS",
+    expectedCents: MP_PLAN_PRICE_CENTS,
+  });
+  assert.equal(r2.aceptado, true);
+  assert.equal(r2.warning, null);
 });
 
-test("cargo Clinic: 150.000 ARS (base + 2 seats extra) contra monto_cents de ESA org → válido", () => {
+test("cargo Clinic: 150.000 ARS (base + 2 seats extra) contra monto_cents de ESA org → aceptado", () => {
   clearPricingEnv();
   const expected = computeMonthlyPriceCents("CLINICA", 3);
   assert.equal(expected, CLINIC_3_SEATS_CENTS);
-  assert.equal(
-    validateChargeAmount({ amountCents: CLINIC_3_SEATS_CENTS, currency: "ARS", expectedCents: expected }),
-    null,
-  );
-  // Un cargo Clinic NO valida contra el plan Solo global (el bug que esta fase elimina).
-  assert.notEqual(
-    validateChargeAmount({ amountCents: CLINIC_3_SEATS_CENTS, currency: "ARS", expectedCents: SOLO_CENTS }),
-    null,
-  );
+  const r = validateChargeAmount({ amountCents: CLINIC_3_SEATS_CENTS, currency: "ARS", expectedCents: expected });
+  assert.equal(r.aceptado, true);
+  assert.equal(r.warning, null);
+
+  // Un cargo Clinic NO valida contra el plan Solo global (el bug que esta fase
+  // eliminó): debitaron MUCHO de más respecto de lo esperado.
+  const contraSolo = validateChargeAmount({
+    amountCents: CLINIC_3_SEATS_CENTS,
+    currency: "ARS",
+    expectedCents: SOLO_CENTS,
+  });
+  assert.ok(contraSolo.warning, "tiene que avisar del desvío");
 });
 
-test("cargo: tolerancia de ±1 centavo (redondeos MP)", () => {
-  assert.equal(
-    validateChargeAmount({ amountCents: CLINIC_3_SEATS_CENTS + 1, currency: "ARS", expectedCents: CLINIC_3_SEATS_CENTS }),
-    null,
-  );
-  assert.equal(
-    validateChargeAmount({ amountCents: CLINIC_3_SEATS_CENTS - 1, currency: "ARS", expectedCents: CLINIC_3_SEATS_CENTS }),
-    null,
-  );
+test("cargo: tolerancia de ±1 centavo (redondeos MP) → aceptado y silencioso", () => {
+  for (const delta of [1, -1]) {
+    const r = validateChargeAmount({
+      amountCents: CLINIC_3_SEATS_CENTS + delta,
+      currency: "ARS",
+      expectedCents: CLINIC_3_SEATS_CENTS,
+    });
+    assert.equal(r.aceptado, true, `desvío de ${delta} centavo`);
+    assert.equal(r.warning, null);
+  }
 });
 
-test("cargo: monto inesperado (>1 centavo de desvío) → warning con esperado, sin PII", () => {
-  const warning = validateChargeAmount({
-    amountCents: SOLO_CENTS, // a la org Clinic le debitaron el monto Solo
+test("C2 · debitaron de MENOS por múltiplos exactos del seat → ACEPTADO con warning", () => {
+  // El caso que este PR arregla. En una org Clínica, dar de baja a un
+  // integrante actualiza monto_cents y el preapproval, pero el débito que MP ya
+  // tenía en curso sale con el monto VIEJO. Antes eso se rechazaba: el cliente
+  // pagaba y la suscripción no se activaba.
+  clearPricingEnv();
+  const esperado = computeMonthlyPriceCents("CLINICA", 3);
+  const unSeatMenos = computeMonthlyPriceCents("CLINICA", 2);
+  const r = validateChargeAmount({ amountCents: unSeatMenos, currency: "ARS", expectedCents: esperado });
+  assert.equal(r.aceptado, true, "un desfasaje de seats no puede bloquear al que pagó");
+  assert.ok(r.warning, "pero tiene que quedar registrado");
+  assert.match(r.warning, /integrante/);
+});
+
+test("C2 · debitaron de MÁS → aceptado con warning (la plata entró)", () => {
+  const r = validateChargeAmount({
+    amountCents: CLINIC_3_SEATS_CENTS + 500_00,
     currency: "ARS",
     expectedCents: CLINIC_3_SEATS_CENTS,
   });
-  assert.ok(warning, "debe devolver warning");
-  assert.match(warning, /Monto inesperado \(30000 ARS\); esperado 150000 ARS\./);
+  assert.equal(r.aceptado, true, "bloquear al que pagó de más sería castigarlo dos veces");
+  assert.match(r.warning ?? "", /de más/);
 });
 
-test("cargo: moneda distinta de ARS → warning de moneda (gana sobre el monto)", () => {
-  const warning = validateChargeAmount({
+test("C2 · un faltante que NO se explica → rechazado", () => {
+  // Lo único que sigue bloqueando: un monto que no coincide con nada.
+  clearPricingEnv();
+  const r = validateChargeAmount({
+    amountCents: CLINIC_3_SEATS_CENTS - 777,
+    currency: "ARS",
+    expectedCents: CLINIC_3_SEATS_CENTS,
+  });
+  assert.equal(r.aceptado, false);
+  assert.ok(r.warning);
+});
+
+test("cargo: moneda distinta de ARS → rechazado (gana sobre el monto)", () => {
+  const r = validateChargeAmount({
     amountCents: CLINIC_3_SEATS_CENTS,
     currency: "USD",
     expectedCents: CLINIC_3_SEATS_CENTS,
   });
-  assert.ok(warning);
-  assert.match(warning, /moneda inesperada \(USD\); esperado ARS\./);
+  assert.equal(r.aceptado, false, "no es nuestro cobro");
+  assert.match(r.warning ?? "", /moneda inesperada \(USD\); esperado ARS\./);
 });

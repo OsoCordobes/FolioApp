@@ -10,6 +10,12 @@
  *   - syncSubscriptionAmount()             · Fase E: monto variable Clínica por seats
  *   - computeAccessGate()                  · Pura: decide si bloquear acceso a la app
  *
+ * Las decisiones de estado son puras y se testean sin Supabase:
+ *   - decideEstadoFromProvider()  · qué estado gana cuando el proveedor informa
+ *                                   el suyo (MOROSA no se pisa con ACTIVA).
+ *   - decideCargoEffect()         · qué le hace un cargo a la suscripción.
+ *   - validateChargeAmount()      · si el monto de un cargo es aceptable.
+ *
  * El proveedor de cobros se consume vía PaymentProvider (lib/payments) — este
  * módulo solo habla tipos de dominio (SubscriptionInfo / ChargeAttemptInfo).
  * Source of truth del estado: webhook del proveedor → DB. La UI solo lee.
@@ -17,7 +23,12 @@
 
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
 
-import { computeMonthlyPriceCents, type OrganizacionTipo } from "@/lib/billing/pricing";
+import {
+  computeMonthlyPriceCents,
+  resolveClinicBasePriceCents,
+  resolveClinicSeatPriceCents,
+  type OrganizacionTipo,
+} from "@/lib/billing/pricing";
 import {
   getPaymentProvider,
   type ChargeAttemptInfo,
@@ -255,6 +266,14 @@ export interface CreatePendingInput {
  * Si ya existe una suscripción ACTIVA para la org, devuelve conflict.
  * Si existe en PENDIENTE_ACTIVACION o CANCELADA, la actualiza (no crea segunda fila —
  * la UNIQUE constraint lo impide de todos modos).
+ *
+ * "Volver a activar" (PAUSADA / MOROSA con período vencido / PENDIENTE a medias)
+ * pisa `mp_preapproval_id` con el nuevo. Antes de eso hay que CANCELAR el
+ * anterior en MP: si no, quedan dos preapprovals vivos sobre la misma tarjeta
+ * (MP puede debitar los dos) y la DB pierde para siempre la referencia al
+ * viejo — sus cargos llegan al webhook, no matchean ninguna fila y devuelven
+ * 503 en loop. La cancelación es best-effort: si MP falla, se registra
+ * (log + Sentry) pero NO bloquea la reactivación del cliente.
  */
 export async function createOrRenewPendingSubscription(
   input: CreatePendingInput,
@@ -275,8 +294,19 @@ export async function createOrRenewPendingSubscription(
   if (!expected.ok) return expected;
   const montoCents = expected.data.expectedCents;
 
-  // 2. Crear la suscripción en el proveedor de cobros (hoy: MP preapproval).
   const provider = getPaymentProvider();
+
+  // 2. Cancelar el preapproval anterior ANTES de crear el nuevo (ver docblock).
+  // CANCELADA se saltea: ese preapproval ya está terminal en MP (cancelSubscription
+  // cancela primero allá y recién después escribe el estado local), y pedir la
+  // cancelación de nuevo solo generaría ruido.
+  await cancelPreviousPreapproval({
+    organizationId: input.organizationId,
+    preapprovalId: existing.data?.mpPreapprovalId ?? null,
+    estado: existing.data?.estado ?? null,
+  });
+
+  // 3. Crear la suscripción en el proveedor de cobros (hoy: MP preapproval).
   let created: CreateSubscriptionOutput;
   try {
     created = await provider.createSubscription({
@@ -290,7 +320,7 @@ export async function createOrRenewPendingSubscription(
     return err("network", "No se pudo iniciar el cobro en Mercado Pago.", msg);
   }
 
-  // 3. Upsert local. UNIQUE(organization_id) garantiza una sola fila.
+  // 4. Upsert local. UNIQUE(organization_id) garantiza una sola fila.
   // monto_cents es el monto que el preapproval va a debitar — la validación
   // de cada cargo (recordChargeAttempt) compara contra ESTE valor por-org.
   const upsertPayload = {
@@ -302,6 +332,12 @@ export async function createOrRenewPendingSubscription(
     estado: subscriptionStatusToEstado(created.subscription.status),
     ultimo_error: null,
     fecha_cancelacion: null,
+    // El episodio de morosidad del preapproval viejo se cierra acá: la
+    // suscripción arranca de cero (PENDIENTE_ACTIVACION) sobre un preapproval
+    // nuevo. Dejarlo abierto hacía que un futuro rechazo NO abriera episodio
+    // (recordChargeAttempt solo lo abre si está null) y el email de suspensión
+    // se dedupeara contra un episodio viejo — nunca llegaba.
+    morosa_desde: null,
     // M-E: reseteamos el watermark monotónico (CR-3) al escribir un nuevo
     // mp_preapproval_id. Si no, applySubscriptionUpdate compararía el
     // last_modified del nuevo preapproval contra el del anterior y podría
@@ -320,6 +356,48 @@ export async function createOrRenewPendingSubscription(
     subscription: mapSuscripcion(upserted as SuscripcionDbRow),
     initPoint: created.checkoutUrl,
   });
+}
+
+/**
+ * Cancela en el proveedor el preapproval que la reactivación está por
+ * reemplazar. Best-effort por diseño: un cliente que quiere volver a pagarnos
+ * NO puede quedar bloqueado porque MP no responde. Pero el fallo tiene que
+ * quedar registrado — un preapproval huérfano vivo es plata que se le puede
+ * seguir debitando al cliente sin que Folio lo vea, así que va a logs y a
+ * Sentry con el id para cancelarlo a mano desde el panel de MP.
+ *
+ * No devuelve nada: el caller sigue adelante pase lo que pase.
+ */
+async function cancelPreviousPreapproval(args: {
+  organizationId: string;
+  preapprovalId: string | null;
+  estado: EstadoSuscripcion | null;
+}): Promise<void> {
+  if (!args.preapprovalId) return;
+  if (args.estado === "CANCELADA") return;
+
+  try {
+    await getPaymentProvider().cancelSubscription(args.preapprovalId);
+    console.log(
+      `[billing] preapproval anterior ${args.preapprovalId} cancelado antes de reactivar org=${args.organizationId} (estado previo ${args.estado ?? "desconocido"}).`,
+    );
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error(
+      `[billing] no se pudo cancelar el preapproval anterior ${args.preapprovalId} de org=${args.organizationId}: ${msg}. Puede seguir debitando en paralelo al nuevo — cancelarlo a mano en el panel de Mercado Pago.`,
+    );
+    const { captureMessage } = await import("@sentry/nextjs");
+    captureMessage("[billing] preapproval anterior sin cancelar en una reactivación", {
+      level: "error",
+      tags: { component: "billing", op: "cancel-preapproval-anterior" },
+      extra: {
+        organizationId: args.organizationId,
+        preapprovalId: args.preapprovalId,
+        estadoPrevio: args.estado,
+        detail: msg,
+      },
+    });
+  }
 }
 
 /**
@@ -364,16 +442,55 @@ export async function cancelSubscription(
 // ─── Writes (Webhook) ──────────────────────────────────────────────────────
 
 /**
+ * Resultado de reconciliar el estado local con el que informa el proveedor.
+ */
+export interface EstadoReconciliado {
+  estado: EstadoSuscripcion;
+  /** true si se descartó un `ACTIVA` del proveedor para conservar MOROSA. */
+  morosaPreservada: boolean;
+}
+
+/**
+ * Pura: decide con qué estado se queda la fila cuando el proveedor informa el
+ * suyo (webhook de preapproval, cron de reconciliación, refresh manual).
+ *
+ * Regla dura — **MOROSA solo sale por un cargo aprobado**:
+ * MOROSA es un estado LOCAL, derivado de cargos rechazados; el proveedor no lo
+ * conoce. Mientras MP reintenta el débito, su preapproval sigue `authorized`,
+ * o sea que el reconcile traía "ACTIVA" y pisaba la morosidad: el moroso
+ * recuperaba el acceso sin haber pagado un peso y el dunning (emails de
+ * suspensión, episodio `morosa_desde`) quedaba roto. La única vía legítima
+ * MOROSA→ACTIVA es `recordChargeAttempt` con un cargo APROBADO nuevo.
+ *
+ * El resto del tiempo el proveedor manda, porque es la fuente de verdad de lo
+ * que existe de su lado: una MOROSA que MP pasó a `cancelled` (agotó los
+ * reintentos) o a `paused` SÍ se escribe — son estados que solo él puede
+ * informar y que no le regalan acceso a nadie.
+ */
+export function decideEstadoFromProvider(input: {
+  estadoLocal: EstadoSuscripcion;
+  estadoProveedor: EstadoSuscripcion;
+}): EstadoReconciliado {
+  if (input.estadoLocal === "MOROSA" && input.estadoProveedor === "ACTIVA") {
+    return { estado: "MOROSA", morosaPreservada: true };
+  }
+  return { estado: input.estadoProveedor, morosaPreservada: false };
+}
+
+/**
  * Aplica un update de la suscripción que recibimos por webhook (o por lazy
  * reconcile / cron), ya mapeado a dominio por el PaymentProvider.
  * Idempotente: actualizar dos veces con el mismo payload deja la fila igual.
+ *
+ * La decisión de estado es `decideEstadoFromProvider` (pura, testeada): el
+ * proveedor manda salvo que quiera resucitar una MOROSA.
  */
 export async function applySubscriptionUpdate(
   info: SubscriptionInfo,
 ): Promise<Result<SuscripcionRow | null>> {
   const supabase = createSupabaseServiceClient();
 
-  const newEstado = subscriptionStatusToEstado(info.status);
+  const estadoProveedor = subscriptionStatusToEstado(info.status);
 
   // CR-3 (orden no monotónico): MP no garantiza el orden de entrega de los
   // webhooks. Leemos el estado actual + el último last_modified aplicado y
@@ -405,6 +522,18 @@ export async function applySubscriptionUpdate(
     return ok(null);
   }
 
+  const reconciliado = decideEstadoFromProvider({
+    estadoLocal: (current as { estado: EstadoSuscripcion }).estado,
+    estadoProveedor,
+  });
+  const newEstado = reconciliado.estado;
+
+  if (reconciliado.morosaPreservada) {
+    console.warn(
+      `[mp] preapproval ${info.providerSubscriptionId}: el proveedor informa ACTIVA pero la suscripción está MOROSA (reintentos en curso). Se conserva MOROSA — solo un cargo aprobado la recupera.`,
+    );
+  }
+
   const patch: Record<string, unknown> = {
     estado: newEstado,
     mp_last_modified: info.lastModified ?? null,
@@ -421,7 +550,13 @@ export async function applySubscriptionUpdate(
   //
   // Por eso solo se pisa cuando MP manda una fecha nueva. Una fecha vieja no
   // regala acceso: el gate exige `proximaCobro > now`.
-  if (info.nextChargeDate) {
+  //
+  // Excepción: con MOROSA preservada tampoco se toca. MP corre el
+  // next_payment_date con cada reintento y el gate deja pasar a la MOROSA
+  // mientras `proxima_cobro > now` — extenderlo sería regalarle período pagado
+  // a quien no pagó, por la puerta de al lado. Cuando el cargo entre de verdad
+  // la suscripción vuelve a ACTIVA y el siguiente evento la actualiza.
+  if (info.nextChargeDate && !reconciliado.morosaPreservada) {
     patch.proxima_cobro = info.nextChargeDate;
   }
   if (newEstado === "ACTIVA") {
@@ -446,25 +581,96 @@ export async function applySubscriptionUpdate(
   return ok(data ? mapSuscripcion(data as SuscripcionDbRow) : null);
 }
 
+export interface ChargeAmountCheck {
+  /**
+   * true si el cargo cuenta como pago legítimo de esta suscripción y por lo
+   * tanto habilita la transición de estado (activación / recuperación).
+   * false = sospechoso: el cargo se registra igual, pero NO mueve el estado.
+   */
+  aceptado: boolean;
+  /** Texto para el log (y para `ultimo_error` si no se aceptó). Sin PII. */
+  warning: string | null;
+}
+
+/** Redondeos de MP: hasta 1 centavo de desvío es ruido, no una anomalía. */
+const TOLERANCIA_REDONDEO_CENTS = 1;
+
+/**
+ * true si la diferencia entre lo debitado y lo esperado se explica por un
+ * cambio de equipo en una org CLINICA. El precio Clínica es
+ * `base + (seats - 1) × seat` (computeMonthlyPriceCents), así que cualquier
+ * alta/baja de integrantes mueve el monto en múltiplos EXACTOS del precio por
+ * seat. Cuando se suma gente, `syncSubscriptionAmount` actualiza monto_cents y
+ * el preapproval, pero el débito que MP ya tenía en curso sale con el monto
+ * viejo: un pago perfectamente legítimo que llegaba "corto".
+ *
+ * Se exige que ambos montos cubran la base de Clínica para que la tolerancia
+ * no toque al plan Solo (cuyo precio está muy por debajo de esa base).
+ */
+function esDesfasajePorSeats(input: { amountCents: number; expectedCents: number }): boolean {
+  const baseCents = resolveClinicBasePriceCents();
+  const seatCents = resolveClinicSeatPriceCents();
+  if (seatCents <= 0) return false;
+  if (input.expectedCents < baseCents || input.amountCents < baseCents) return false;
+  const faltante = input.expectedCents - input.amountCents;
+  return faltante > 0 && faltante % seatCents === 0;
+}
+
 /**
  * M-BILL-2 · Pura: valida moneda y monto de un cargo contra el monto esperado
- * de la suscripción de esa org (`suscripcion.monto_cents`). Tolerancia de
- * ±1 centavo (redondeos de MP). Devuelve el texto del warning (sin PII) o
- * null si el cargo es consistente. Exportada para tests
- * (tests/unit/suscripcion-sync.test.ts).
+ * de la suscripción de esa org (`suscripcion.monto_cents`). Exportada para
+ * tests (tests/unit/suscripcion-sync.test.ts).
+ *
+ * Qué se acepta (y por qué): el objetivo de esta validación es no dejar que un
+ * cargo ajeno o desprolijo active una suscripción, NO castigar al que pagó.
+ * Un cliente que pagó y queda igual afuera de la app es el peor resultado
+ * posible, así que solo se rechaza lo que no se puede explicar:
+ *
+ *   - moneda ≠ ARS                          → rechazado (no es nuestro cobro).
+ *   - desvío ≤ 1 centavo                    → aceptado, sin warning.
+ *   - debitaron de MÁS                      → aceptado con warning: la plata
+ *     entró; el exceso es un problema de soporte, no motivo para bloquear.
+ *   - debitaron de MENOS por múltiplos      → aceptado con warning: es el
+ *     exactos del precio por seat            desfasaje de seats de Clínica
+ *                                            (ver `esDesfasajePorSeats`).
+ *   - cualquier otro faltante               → rechazado, va a `ultimo_error`
+ *                                            para revisión manual.
  */
 export function validateChargeAmount(input: {
   amountCents: number;
   currency: string;
   expectedCents: number;
-}): string | null {
+}): ChargeAmountCheck {
   if (input.currency !== "ARS") {
-    return `Cargo en moneda inesperada (${input.currency}); esperado ARS.`;
+    return {
+      aceptado: false,
+      warning: `Cargo en moneda inesperada (${input.currency}); esperado ARS.`,
+    };
   }
-  if (Math.abs(input.amountCents - input.expectedCents) > 1) {
-    return `Monto inesperado (${input.amountCents / 100} ${input.currency}); esperado ${input.expectedCents / 100} ARS.`;
+
+  const desvio = input.amountCents - input.expectedCents;
+  if (Math.abs(desvio) <= TOLERANCIA_REDONDEO_CENTS) {
+    return { aceptado: true, warning: null };
   }
-  return null;
+
+  const inesperado = `Monto inesperado (${input.amountCents / 100} ${input.currency}); esperado ${input.expectedCents / 100} ARS.`;
+
+  if (desvio > 0) {
+    return {
+      aceptado: true,
+      warning: `${inesperado} Se debitó de más: el cobro se acredita igual y queda para revisión manual.`,
+    };
+  }
+
+  if (esDesfasajePorSeats(input)) {
+    const seatsDeDiferencia = -desvio / resolveClinicSeatPriceCents();
+    return {
+      aceptado: true,
+      warning: `${inesperado} Coincide con ${seatsDeDiferencia} integrante(s) de diferencia: el débito de Mercado Pago todavía no tomó el último cambio de equipo.`,
+    };
+  }
+
+  return { aceptado: false, warning: inesperado };
 }
 
 /**
@@ -484,6 +690,11 @@ export interface ChargeAttemptOutcome {
    * true SOLO la primera vez que vemos este mp_payment_id. Una re-entrega del
    * webhook (23505 en el INSERT) reporta false y NO muta estado ni debe
    * disparar emails.
+   *
+   * Ojo: un reembolso/contracargo llega como cambio de status del MISMO
+   * payment, así que reporta `isNewCharge: false` y aun así puede mover el
+   * estado (ACTIVA → MOROSA). Los emails de lifecycle no cubren ese caso hoy;
+   * si alguno lo cubre, mirar `estadoAntes/estadoDespues`, no este flag.
    */
   isNewCharge: boolean;
   /** Estado de la suscripción ANTES de procesar este cargo. */
@@ -511,10 +722,91 @@ export interface ChargeAttemptOutcome {
 }
 
 /**
+ * Efecto de un cargo sobre la fila de la suscripción.
+ *
+ *   - `sin_cambios`      · no se toca la suscripción (re-entrega, cargo sin
+ *                          resolver, o evento que no aplica a este estado).
+ *   - `registrar_cobro`  · se anota el cobro (ultimo_cobro_ts) sin mover el
+ *                          estado. `warning` va a `ultimo_error` — es null
+ *                          cuando el cobro fue normal.
+ *   - `activar`          · única transición hacia ACTIVA; cierra el episodio
+ *                          de morosidad.
+ *   - `morosa`           · transición a MOROSA con el motivo visible al OWNER.
+ */
+export type CargoEffect =
+  | { accion: "sin_cambios" }
+  | { accion: "registrar_cobro"; warning: string | null }
+  | { accion: "activar" }
+  | { accion: "morosa"; motivo: string };
+
+/** Motivo por default de una MOROSA abierta por reembolso/contracargo. */
+const MOTIVO_REEMBOLSO =
+  "El cobro fue reembolsado o revertido: la suscripción quedó sin pago que la respalde.";
+
+/**
+ * Pura: qué le hace un cargo al estado de la suscripción. Exportada para tests
+ * (tests/unit/suscripcion-estado.test.ts) — la matriz completa se verifica sin
+ * mockear Supabase.
+ *
+ * Reglas:
+ *   - Un cargo que no es nuevo (re-entrega del mismo mp_payment_id) NUNCA
+ *     muta nada (CR-4).
+ *   - APROBADO recupera MOROSA y activa PENDIENTE_ACTIVACION — y es la ÚNICA
+ *     vía hacia ACTIVA. Sobre CANCELADA/PAUSADA solo se registra el cobro: un
+ *     cargo no resucita algo que el cliente o MP dieron de baja.
+ *   - APROBADO con monto no aceptado (`validateChargeAmount`) se registra pero
+ *     no transiciona: queda con warning para revisión manual.
+ *   - RECHAZADO abre/mantiene la morosidad (dunning).
+ *   - REFUNDED (reembolso o contracargo) desactiva: la plata volvió al
+ *     cliente, así que una ACTIVA pasa a MOROSA y vuelve a depender de un
+ *     cargo aprobado. Sobre PENDIENTE_ACTIVACION / MOROSA no hay nada que
+ *     bajar, y CANCELADA/PAUSADA se respetan igual que con APROBADO.
+ *   - PENDIENTE (el pago todavía no se resolvió) no mueve nada.
+ */
+export function decideCargoEffect(input: {
+  estadoActual: EstadoSuscripcion;
+  cargoEstado: EstadoCargo;
+  /** false en re-entregas: el evento ya se procesó una vez. */
+  esNuevo: boolean;
+  /** Resultado de `validateChargeAmount` para este cargo. */
+  monto: ChargeAmountCheck;
+  /** `status_detail` del proveedor (motivo del rechazo). Sin PII. */
+  motivo: string | null;
+}): CargoEffect {
+  if (!input.esNuevo) return { accion: "sin_cambios" };
+
+  switch (input.cargoEstado) {
+    case "APROBADO": {
+      if (!input.monto.aceptado) {
+        return { accion: "registrar_cobro", warning: input.monto.warning };
+      }
+      if (input.estadoActual === "MOROSA" || input.estadoActual === "PENDIENTE_ACTIVACION") {
+        return { accion: "activar" };
+      }
+      return { accion: "registrar_cobro", warning: null };
+    }
+    case "RECHAZADO":
+      return { accion: "morosa", motivo: input.motivo ?? "Cobro rechazado por Mercado Pago." };
+    case "REFUNDED":
+      if (input.estadoActual === "ACTIVA") {
+        return { accion: "morosa", motivo: input.motivo ?? MOTIVO_REEMBOLSO };
+      }
+      return { accion: "sin_cambios" };
+    case "PENDIENTE":
+      return { accion: "sin_cambios" };
+  }
+}
+
+/**
  * Registra un intento de cobro recibido por webhook.
  * Idempotente vía UNIQUE(mp_payment_id) — INSERT que choca por conflict
  * se ignora silenciosamente y devolvemos la fila existente con
  * `isNewCharge: false` (la re-entrega NO muta estado — CR-4).
+ *
+ * Excepción: si el evento repetido trae el pago REEMBOLSADO, el cargo local se
+ * actualiza a REFUNDED y la suscripción se trata como si el evento fuera nuevo
+ * (una ACTIVA cae a MOROSA). Es el único caso en que MP cambia el desenlace de
+ * un payment que ya conocíamos, y antes se descartaba junto con la re-entrega.
  *
  * Episodios de morosidad (M65): al transicionar a MOROSA setea
  * `morosa_desde = now()` SOLO si estaba null (un episodio ya abierto no se
@@ -582,15 +874,17 @@ export async function recordChargeAttempt(
   // M-BILL-2 (per-org desde Fase E · E2): validar moneda y monto contra
   // `suscripcion.monto_cents` de ESA org — que es lo que su preapproval debita
   // (plan Solo fijo o Clínica base+seats), no contra una constante global.
-  // Un cargo en moneda distinta de ARS, o con un monto que se desvía más de 1
-  // centavo del esperado, NO debe activar/recuperar la suscripción: lo
-  // registramos pero marcamos warning para revisión manual.
+  // Un cargo que no se puede explicar NO debe activar/recuperar la suscripción:
+  // lo registramos pero marcamos warning para revisión manual.
   const montoCents = charge.amountCents;
-  const montoWarning = validateChargeAmount({
+  const montoCheck = validateChargeAmount({
     amountCents: montoCents,
     currency: charge.currency,
     expectedCents: expectedMontoCents,
   });
+  if (montoCheck.warning) {
+    console.warn(`[mp] cargo ${mpPaymentId}: ${montoCheck.warning}`);
+  }
 
   // INSERT idempotente. `select` + ausencia de error nos dice si creó fila nueva
   // (data presente) vs duplicado (23505 → data null). En duplicado SALTEAMOS la
@@ -625,75 +919,76 @@ export async function recordChargeAttempt(
 
   const isNewCharge = !insErr && !!inserted;
 
-  // CR-4: solo mutamos el estado de la suscripción si el cargo es NUEVO. En una
-  // re-entrega (duplicado) no tocamos nada — evita que un "rejected" reenviado
-  // tire a MOROSA una org ya recuperada, o que un "approved" reenviado limpie un
-  // ultimo_error legítimo.
+  // Reembolso / contracargo sobre un cargo YA registrado: MP no emite un
+  // payment nuevo, le cambia el status al mismo. El INSERT de arriba choca por
+  // UNIQUE, así que sin esto el evento se perdía entero — la plata volvía al
+  // cliente, el cargo seguía figurando APROBADO y la suscripción, ACTIVA.
+  // Actualizamos la fila y lo tratamos como evento nuevo. El filtro por estado
+  // hace la operación idempotente frente a las re-entregas de MP.
+  let reembolsoAplicado = false;
+  if (!isNewCharge && estado === "REFUNDED") {
+    const { data: reembolsado, error: refErr } = await supabase
+      .from("cargo_suscripcion")
+      .update({ estado: "REFUNDED" })
+      .eq("mp_payment_id", mpPaymentId)
+      .neq("estado", "REFUNDED")
+      .select("id")
+      .maybeSingle();
+    if (refErr) {
+      console.warn(`[mp] cargo ${mpPaymentId}: no se pudo marcar el reembolso: ${refErr.message}`);
+    } else if (reembolsado) {
+      reembolsoAplicado = true;
+      console.warn(`[mp] cargo ${mpPaymentId}: reembolso/contracargo registrado sobre un cobro ya acreditado.`);
+    }
+  }
+
+  // CR-4: solo mutamos el estado de la suscripción si el evento es NUEVO. En
+  // una re-entrega no tocamos nada — evita que un "rejected" reenviado tire a
+  // MOROSA una org ya recuperada, o que un "approved" reenviado limpie un
+  // ultimo_error legítimo. La matriz completa vive en `decideCargoEffect`.
   //
   // `estadoDespues` refleja SOLO transiciones efectivamente escritas: si el
   // UPDATE falla queda igual a `estadoAntes` (un email de "reactivada" sobre
   // una transición que no se persistió sería mentirle al cliente).
   let estadoDespues: EstadoSuscripcion = currentEstado;
-  if (isNewCharge && estado === "APROBADO") {
-    if (montoWarning) {
-      // Cargo aprobado pero sospechoso: registramos el warning y NO marcamos ACTIVA.
-      console.warn(`[mp] cargo ${mpPaymentId} aprobado pero ${montoWarning}`);
-      const { error: updErr } = await supabase
-        .from("suscripcion")
-        .update({
-          ultimo_cobro_ts: new Date().toISOString(),
-          ultimo_error: montoWarning,
-        })
-        .eq("id", sus.id);
-      if (updErr) {
-        console.warn(`[mp] cargo ${mpPaymentId}: update de suscripción falló: ${updErr.message}`);
-      }
-    } else if (currentEstado === "MOROSA" || currentEstado === "PENDIENTE_ACTIVACION") {
-      // Solo recuperación MOROSA->ACTIVA y activación pending->ACTIVA. NO forzamos
-      // ACTIVA si la suscripción está CANCELADA o PAUSADA (CR-4). La
-      // recuperación cierra el episodio de morosidad → morosa_desde = null.
-      const { error: updErr } = await supabase
-        .from("suscripcion")
-        .update({
-          ultimo_cobro_ts: new Date().toISOString(),
-          estado: "ACTIVA",
-          ultimo_error: null,
-          morosa_desde: null,
-        })
-        .eq("id", sus.id);
-      if (updErr) {
-        console.warn(`[mp] cargo ${mpPaymentId}: update de suscripción falló: ${updErr.message}`);
-      } else {
-        estadoDespues = "ACTIVA";
-      }
+  const efecto = decideCargoEffect({
+    estadoActual: currentEstado,
+    cargoEstado: estado,
+    esNuevo: isNewCharge || reembolsoAplicado,
+    monto: montoCheck,
+    motivo: charge.payment.statusDetail,
+  });
+
+  if (efecto.accion !== "sin_cambios") {
+    const patch: Record<string, unknown> = {};
+    if (efecto.accion === "registrar_cobro") {
+      patch.ultimo_cobro_ts = new Date().toISOString();
+      // Un monto tolerado (débito de más, desfasaje de seats) no es un error
+      // del cliente: se logueó arriba y no ensucia la pantalla de billing.
+      patch.ultimo_error = efecto.warning;
+    } else if (efecto.accion === "activar") {
+      patch.ultimo_cobro_ts = new Date().toISOString();
+      patch.estado = "ACTIVA";
+      patch.ultimo_error = null;
+      // La recuperación cierra el episodio de morosidad.
+      patch.morosa_desde = null;
     } else {
-      // ACTIVA u otro estado terminal: solo registramos el cobro, sin forzar estado.
-      const { error: updErr } = await supabase
-        .from("suscripcion")
-        .update({
-          ultimo_cobro_ts: new Date().toISOString(),
-          ultimo_error: null,
-        })
-        .eq("id", sus.id);
-      if (updErr) {
-        console.warn(`[mp] cargo ${mpPaymentId}: update de suscripción falló: ${updErr.message}`);
+      patch.estado = "MOROSA";
+      patch.ultimo_error = efecto.motivo;
+      // Abrir episodio de morosidad SOLO si no había uno abierto: rechazos
+      // subsiguientes del mismo episodio no re-abren (el dedupe de los emails
+      // de suspensión/reactivación depende de que el ISO sea estable).
+      if (morosaDesdeAntes === null) {
+        patch.morosa_desde = new Date().toISOString();
       }
     }
-  } else if (isNewCharge && estado === "RECHAZADO") {
-    const patch: Record<string, unknown> = {
-      estado: "MOROSA",
-      ultimo_error: charge.payment.statusDetail ?? "Cobro rechazado por Mercado Pago.",
-    };
-    // Abrir episodio de morosidad SOLO si no había uno abierto: rechazos
-    // subsiguientes del mismo episodio no re-abren (el dedupe de los emails
-    // de suspensión/reactivación depende de que el ISO sea estable).
-    if (morosaDesdeAntes === null) {
-      patch.morosa_desde = new Date().toISOString();
-    }
+
     const { error: updErr } = await supabase.from("suscripcion").update(patch).eq("id", sus.id);
     if (updErr) {
       console.warn(`[mp] cargo ${mpPaymentId}: update de suscripción falló: ${updErr.message}`);
-    } else {
+    } else if (efecto.accion === "activar") {
+      estadoDespues = "ACTIVA";
+    } else if (efecto.accion === "morosa") {
       estadoDespues = "MOROSA";
     }
   }
