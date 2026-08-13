@@ -86,8 +86,12 @@ export interface ConfiguracionData {
   googleCalendar: IntegrationStatus;
   /** Disponibilidad semanal del profesional actual (M04 disponibilidad_profesional). */
   dias: Record<DiaSemanaId, DiaHorarios>;
-  /** Duración por defecto de slots en el booking público. */
-  slotMin: number;
+  /**
+   * true si el profesional no tiene NINGUNA franja cargada. No es un detalle
+   * cosmético: sin franjas el link público no ofrece un solo turno. La UI lo
+   * muestra como anomalía en Horarios en vez de dejar la sección en blanco.
+   */
+  sinDisponibilidad: boolean;
   /** M43 · si true, las reservas del link público se confirman automáticamente. */
   autoConfirmarReservas: boolean;
   /** M43 · minutos de margen entre slots ofrecidos en el booking público. */
@@ -148,12 +152,15 @@ export async function getConfiguracionData(): Promise<Result<ConfiguracionData>>
     .maybeSingle();
 
   // 4. Disponibilidad del profesional activo (member actual).
-  const { data: disponibilidad } = await supabase
+  const { data: disponibilidad, error: dispErr } = await supabase
     .from("disponibilidad_profesional")
     .select("dia_semana, hora_inicio, hora_fin")
     .eq("organization_id", ctx.data.organization.id)
     .eq("member_id", ctx.data.session.memberId)
     .order("dia_semana");
+  if (dispErr) {
+    console.warn(`[configuracion] disponibilidad_profesional falló: ${dispErr.message}`);
+  }
 
   const dias: Record<DiaSemanaId, DiaHorarios> = JSON.parse(JSON.stringify(DEFAULT_DIAS));
   for (const row of disponibilidad ?? []) {
@@ -210,7 +217,11 @@ export async function getConfiguracionData(): Promise<Result<ConfiguracionData>>
         }),
     },
     dias,
-    slotMin: 45,
+    // Cero franjas = agenda pública en cero. Se calcula sobre las filas leídas,
+    // no sobre los toggles: un día "encendido" sin franjas tampoco ofrece nada.
+    // Con `dispErr` no afirmamos nada (no sabemos si hay franjas): avisar "no
+    // tenés horarios" por un fallo transitorio sería una alarma falsa.
+    sinDisponibilidad: !dispErr && (disponibilidad ?? []).length === 0,
     // M43 · default true (igual que el DEFAULT de la columna) si la org es
     // anterior a la migración o el campo viene null.
     autoConfirmarReservas: (orgExtra?.auto_confirmar_reservas as boolean | null) ?? true,
@@ -324,16 +335,21 @@ const saveHorariosSchema = z.object({
       franjas: z.array(z.tuple([z.string().regex(HHMM), z.string().regex(HHMM)])),
     }),
   ),
-  slotMin: z.number().int().min(5).max(240),
 });
 
 export type SaveHorariosInput = z.infer<typeof saveHorariosSchema>;
 
 /**
  * Reemplaza la disponibilidad semanal del profesional activo en
- * disponibilidad_profesional. Es delete-all + insert-all dentro del
- * member_id corriente. Idempotente en el sentido de que llamarla con la
- * misma data dos veces produce el mismo resultado final.
+ * disponibilidad_profesional. Idempotente: llamarla dos veces con la misma
+ * data produce el mismo resultado final.
+ *
+ * El reemplazo va por el RPC `reemplazar_disponibilidad` (M97) y NO por un
+ * DELETE + INSERT desde acá. El par suelto viaja como dos requests PostgREST
+ * ⇒ dos transacciones: si el INSERT fallaba, el DELETE ya estaba commiteado y
+ * el profesional se quedaba con CERO franjas mientras la UI le decía que no se
+ * había guardado — con la agenda pública sin ofrecer un solo turno hasta que
+ * volviera a entrar acá. Con el RPC es todo o nada.
  */
 export async function saveHorarios(input: SaveHorariosInput): Promise<Result<void>> {
   const parsed = saveHorariosSchema.safeParse(input);
@@ -348,21 +364,10 @@ export async function saveHorarios(input: SaveHorariosInput): Promise<Result<voi
     return err("forbidden", "No tenés permisos para editar horarios.");
   }
 
-  const supabase = await createSupabaseServerClient();
-
-  await supabase
-    .from("disponibilidad_profesional")
-    .delete()
-    .eq("organization_id", ctx.data.organization.id)
-    .eq("member_id", ctx.data.session.memberId);
-
-  const rows: Array<{
-    organization_id: string;
-    member_id: string;
-    dia_semana: number;
-    hora_inicio: string;
-    hora_fin: string;
-  }> = [];
+  // La org y el member NO viajan en el payload: son parámetros del RPC y la
+  // función los re-escribe en cada fila, así que una franja no puede colarse en
+  // otro tenant aunque el cliente la mande manipulada.
+  const franjas: Array<{ dia_semana: number; hora_inicio: string; hora_fin: string }> = [];
 
   for (const [diaKey, dia] of Object.entries(d.dias)) {
     if (!dia || !dia.on) continue;
@@ -371,27 +376,23 @@ export async function saveHorarios(input: SaveHorariosInput): Promise<Result<voi
     for (const [hi, hf] of dia.franjas) {
       if (!hi || !hf) continue;
       if (hi >= hf) continue;
-      rows.push({
-        organization_id: ctx.data.organization.id,
-        member_id: ctx.data.session.memberId,
-        dia_semana: dow,
-        hora_inicio: hi,
-        hora_fin: hf,
-      });
+      franjas.push({ dia_semana: dow, hora_inicio: hi, hora_fin: hf });
     }
   }
 
-  if (rows.length > 0) {
-    const { error } = await supabase.from("disponibilidad_profesional").insert(rows);
-    if (error) {
-      const mapped = mapSupabaseError(error);
-      return err(mapped.code, mapped.message, error.message);
-    }
-  }
+  const supabase = await createSupabaseServerClient();
 
-  // slotMin no tiene columna dedicada en el schema actual — se persiste como
-  // metadata local del cliente. Si en el futuro queremos persistirlo (para que
-  // el booking público use el slot configurado), agregamos organization.slot_min.
+  // M97 · DELETE + INSERT en una sola transacción. Si algo falla, la semana
+  // vieja queda intacta: nunca "error en pantalla + agenda en cero".
+  const { error } = await supabase.rpc("reemplazar_disponibilidad", {
+    p_organization_id: ctx.data.organization.id,
+    p_member_id: ctx.data.session.memberId,
+    p_franjas: franjas,
+  });
+  if (error) {
+    const mapped = mapSupabaseError(error);
+    return err(mapped.code, mapped.message, error.message);
+  }
 
   return ok(undefined);
 }
