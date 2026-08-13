@@ -6,7 +6,11 @@ import { planInboundSync, type BloqueoGoogleRow } from "../../lib/google/inbound
 
 const T0 = Date.parse("2026-06-10T12:00:00.000Z");
 const DAY = 24 * 60 * 60_000;
-const WINDOW = { windowStartMs: T0, windowEndMs: T0 + 30 * DAY };
+// Timezone de la organización: define dónde cae la medianoche que corta los
+// eventos all-day de Google (su `end.date` es EXCLUSIVO).
+const TZ_TEST = "America/Argentina/Buenos_Aires";
+
+const WINDOW = { windowStartMs: T0, windowEndMs: T0 + 30 * DAY, timeZone: TZ_TEST };
 
 function ev(overrides: Partial<GoogleEvent> & { id: string }): GoogleEvent {
   return {
@@ -114,19 +118,36 @@ test("eventos fuera de la ventana o con fechas inválidas se ignoran", () => {
   assert.deepEqual(plan.upserts, []);
 });
 
-test("duración se clampa al CHECK de bloqueo (5..1440 min)", () => {
+test("duración se clampa al mínimo del CHECK de bloqueo (5 min)", () => {
   const plan = planInboundSync({
-    events: [
-      ev({ id: "corto", end: new Date(T0 + DAY + 60_000).toISOString() }),          // 1 min
-      ev({ id: "larguisimo", end: new Date(T0 + DAY + 3 * DAY).toISOString() }),    // 3 días
-    ],
+    events: [ev({ id: "corto", end: new Date(T0 + DAY + 60_000).toISOString() })], // 1 min
     existing: [],
     folioEventIds: new Set(),
     ...WINDOW,
   });
   const byId = new Map(plan.upserts.map((u) => [u.gcal_event_id, u]));
   assert.equal(byId.get("corto")?.duracion_min, 5);
-  assert.equal(byId.get("larguisimo")?.duracion_min, 1440);
+});
+
+test("un evento de varios días se PARTE en un bloqueo por día, no se trunca", () => {
+  // Antes se recortaba a 1440 min y los otros dos días quedaban SIN bloquear:
+  // la agenda seguía ofreciendo turnos en medio de las vacaciones. El CHECK de
+  // `bloqueo` topa la duración en un día, así que un rango largo se expande.
+  const plan = planInboundSync({
+    events: [ev({ id: "larguisimo", end: new Date(T0 + DAY + 3 * DAY).toISOString() })],
+    existing: [],
+    folioEventIds: new Set(),
+    ...WINDOW,
+  });
+  const segmentos = plan.upserts.filter((u) => u.gcal_event_id.startsWith("larguisimo"));
+  assert.ok(segmentos.length > 1, "tiene que haber más de un bloqueo");
+  for (const seg of segmentos) {
+    assert.ok(seg.duracion_min >= 5 && seg.duracion_min <= 1440, `duración fuera del CHECK: ${seg.duracion_min}`);
+  }
+  // La clave lleva la fecha para que el upsert por (org, prof, gcal_event_id)
+  // siga siendo idempotente: re-sincronizar no duplica bloqueos.
+  const claves = new Set(segmentos.map((s) => s.gcal_event_id));
+  assert.equal(claves.size, segmentos.length, "cada segmento necesita su propia clave");
 });
 
 test("título se trunca a 200 chars y summary vacío queda null", () => {

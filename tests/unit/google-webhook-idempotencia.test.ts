@@ -36,7 +36,11 @@ import {
 
 const T0 = Date.parse("2026-06-10T12:00:00.000Z");
 const DAY = 24 * 60 * 60_000;
-const WINDOW = { windowStartMs: T0, windowEndMs: T0 + 30 * DAY };
+// Timezone de la organización: define dónde cae la medianoche que corta los
+// eventos all-day de Google (su `end.date` es EXCLUSIVO).
+const TZ_TEST = "America/Argentina/Buenos_Aires";
+
+const WINDOW = { windowStartMs: T0, windowEndMs: T0 + 30 * DAY, timeZone: TZ_TEST };
 
 function ev(overrides: Partial<GoogleEvent> & { id: string }): GoogleEvent {
   return {
