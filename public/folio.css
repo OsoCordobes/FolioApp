@@ -4005,6 +4005,75 @@ input:focus { outline: none; }
 .pc-sesion-body p { font-size: 12.5px; color: var(--ink-2); margin: 0; line-height: 1.5; }
 .pc-sesion-tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
 
+/* ── La ficha en el teléfono (E2) ──────────────────────────────────────────
+   Toda la sección de arriba se escribió para una pantalla ancha y NO tenía
+   una sola regla responsive: `.pc-plan-grid` pide 380px + 1fr, `.pc-dl` pide
+   140px para el label, `.pc-info-grid` y `.pc-bottom-grid` son de dos
+   columnas fijas. En un teléfono eso no se achica: desborda, y la página
+   entera scrollea de costado.
+
+   No es una pantalla cualquiera. Es DONDE el profesional trabaja: la abre al
+   lado del paciente, muchas veces de parado y con el teléfono en la mano.
+
+   Un solo breakpoint (767px, el que ya usa el resto del archivo) y una sola
+   idea: todo lo que es una grilla de columnas fijas pasa a una columna. Nada
+   se oculta — en una historia clínica, esconder un dato para que entre es
+   cambiar lo que el profesional ve del paciente. */
+@media (max-width: 767px) {
+  /* 40px de padding lateral en 375px de ancho se comen una quinta parte de
+     la pantalla. El bottom deja lugar a la nav mobile. */
+  .pc-content { padding: 20px 16px 96px; }
+
+  /* El avatar arriba y el nombre abajo: a 28px, un nombre largo al lado de un
+     avatar de 56px se parte en tres líneas. */
+  .pc-id-row { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .pc-id-body h1 { font-size: 22px; }
+  /* Los botones de acción ocupan el ancho y bajan a su propia línea. */
+  .pc-actions { width: 100%; flex-wrap: wrap; }
+  .pc-actions > * { flex: 1 1 auto; justify-content: center; }
+
+  /* Las tabs se scrollean de costado en vez de apretarse o cortarse. La
+     barra se oculta porque el borde inferior ya marca dónde termina. */
+  .pc-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .pc-tabs::-webkit-scrollbar { display: none; }
+  .pc-tab { flex: 0 0 auto; padding: 10px 12px; font-size: 13px; }
+
+  /* Las tres grillas de columnas fijas → una columna. */
+  .pc-plan-grid { grid-template-columns: 1fr; min-height: 0; gap: 16px; }
+  .pc-bottom-grid { grid-template-columns: 1fr; gap: 16px; }
+  .pc-info-grid { grid-template-columns: 1fr; gap: 16px; }
+
+  /* Definición arriba, valor abajo: 140px de label dejaban al valor sin
+     espacio para respirar. */
+  .pc-dl { grid-template-columns: 1fr; row-gap: 4px; }
+  .pc-dl dt { align-self: start; margin-top: 8px; }
+  .pc-dl dt:first-of-type { margin-top: 0; }
+  /* Un email largo es una sola palabra para el navegador: sin esto estira la
+     columna del grid por min-content y empuja la tarjeta fuera del padding.
+     Los datos de contacto son justo donde aparecen esas cadenas. */
+  .pc-dl dd { overflow-wrap: anywhere; }
+  .pc-info-grid > *, .pc-plan-grid > *, .pc-bottom-grid > * { min-width: 0; }
+
+  /* Tres métricas del plan en 343px salen a ~100px cada una: dos y dos. */
+  .pc-plan-meta { grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  /* La fecha de la sesión pasa a ser una línea propia arriba del resumen. */
+  .pc-sesion-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    padding: 14px 16px;
+  }
+  .pc-sesion-date { flex-direction: row; align-items: baseline; gap: 6px; }
+
+  .pc-card { padding: 16px; }
+  .pc-sesiones-toolbar { flex-wrap: wrap; gap: 8px; }
+}
+
 /* ═════════════════════════ RESERVAS ═════════════════════════ */
 .rs-content { max-width: 1080px; padding: 32px 32px 80px; }
 

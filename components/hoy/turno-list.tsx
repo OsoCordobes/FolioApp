@@ -15,6 +15,7 @@ import { CerradoRow } from "@/components/hoy/cerrado-row";
 import { TurnoRow } from "@/components/hoy/turno-row";
 import { nombreCortoProfesional } from "@/lib/agenda/profesional";
 import { fmtMoney } from "@/lib/dashboard-helpers";
+import { activable } from "@/lib/a11y/activable";
 import { contar } from "@/lib/format/plural";
 import { computeCobroKpi } from "@/lib/hoy/kpi-cobro";
 import type { EstadoTurno, PacientesById, Turno } from "@/lib/types";
@@ -135,9 +136,8 @@ export function TurnoList({ turnos, pacientes, nextId, now, timezone, canRegistr
         <section className="fi-cerrados">
           <header
             className="fi-cerrados-head"
-            onClick={() => setShowCerrados((v) => !v)}
-            role="button"
-            tabIndex={0}
+            {...activable(() => setShowCerrados((v) => !v))}
+            aria-expanded={showCerrados}
           >
             <span className="fi-cerrados-chev" data-open={showCerrados}>
               <I.ChevronDown size={12} />
@@ -175,9 +175,8 @@ export function TurnoList({ turnos, pacientes, nextId, now, timezone, canRegistr
         <section className="fi-cerrados">
           <header
             className="fi-cerrados-head"
-            onClick={() => setShowCancelados((v) => !v)}
-            role="button"
-            tabIndex={0}
+            {...activable(() => setShowCancelados((v) => !v))}
+            aria-expanded={showCancelados}
           >
             <span className="fi-cerrados-chev" data-open={showCancelados}>
               <I.ChevronDown size={12} />
@@ -194,9 +193,8 @@ export function TurnoList({ turnos, pacientes, nextId, now, timezone, canRegistr
                 <div
                   key={t.id}
                   className="fi-cerrado-row is-muted"
-                  onClick={() => onOpenFicha(t.id)}
-                  role="button"
-                  tabIndex={0}
+                  {...activable(() => onOpenFicha(t.id))}
+                  aria-label={`Abrir ficha de ${pacientes[t.pacienteId]?.nombre ?? "el paciente"}, turno cancelado de las ${t.hora}`}
                 >
                   <div className="fi-t-time">
                     <b>{t.hora}</b>

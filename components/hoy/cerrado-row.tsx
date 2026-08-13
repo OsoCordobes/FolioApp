@@ -7,6 +7,7 @@
  */
 
 import * as I from "@/components/icons";
+import { activable } from "@/lib/a11y/activable";
 import { nombreCortoProfesional } from "@/lib/agenda/profesional";
 import { fmtMoney } from "@/lib/dashboard-helpers";
 import { montoRegistradoCents } from "@/lib/hoy/kpi-cobro";
@@ -26,7 +27,11 @@ export function CerradoRow({ turno, paciente, onOpenFicha }: CerradoRowProps) {
   const montoCents = montoRegistradoCents(turno);
   const debe = montoCents != null && turno.cobro?.estado !== "pagado";
   return (
-    <div className="fi-cerrado-row" onClick={() => onOpenFicha(turno.id)}>
+    <div
+      className="fi-cerrado-row"
+      {...activable(() => onOpenFicha(turno.id))}
+      aria-label={`Abrir ficha de ${paciente?.nombre ?? "el paciente"}, turno cerrado de las ${turno.hora}`}
+    >
       <div className="fi-t-time">
         <b>{turno.hora}</b>
       </div>
