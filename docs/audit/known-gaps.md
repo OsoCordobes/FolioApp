@@ -30,11 +30,23 @@ Tracked here so auditors see explicit ownership + planned remediation. Each entr
   rotación a medias — una rotación incompleta deja filas cifradas con dos keys
   distintas y la app muestra fichas vacías (degrada a null, con reporte a
   Sentry vía `tryDecrypt`, pero el profesional ve la ficha en blanco).
-- **Qué hace falta para cerrarlo**: el inventario de columnas ya está en
-  `encryption-exceptions.md`; falta el script + un ensayo completo contra una
-  copia de producción, con verificación fila por fila antes de promover la key.
-- **Closes in**: sin fecha. Es un pre-requisito de cualquier incidente de
-  seguridad que involucre la key, no de una release.
+- **Qué hace falta para cerrarlo**: el procedimiento completo, el inventario
+  correcto (50 columnas en 22 tablas) y la lista de lo que falta están ahora en
+  **`docs/ROTACION-CLAVES.md`**, que es la fuente de verdad operativa.
+  ⚠️ El inventario de `encryption-exceptions.md` **NO sirve**: lista cinco
+  columnas inexistentes y omite unas veinte reales.
+- **Avance 2026-08-13**: `lib/crypto.ts` ya soporta **doble clave**
+  (`FOLIO_ENC_KEY_NEXT` / `FOLIO_ENC_HMAC_KEY_NEXT`), con tests. Eso permite
+  rotar **sin downtime**, que era el bloqueo conceptual. Falta el job de
+  re-cifrado, migrar los lectores de blind index a `.in(candidatos)` y la sonda
+  de cobertura — detalle en `docs/ROTACION-CLAVES.md`.
+- **Urgencia real (2026-08-13)**: las dos claves están en Vercel como
+  `sensitive` = write-only, y la única copia legible se perdió al sobrescribirse
+  el `.env.local` del founder. **No existe backup de las claves.** Si Vercel las
+  pierde, las 50 columnas cifradas quedan ilegibles para siempre. Esto dejó de
+  ser un gap de compliance y pasó a ser riesgo de pérdida total de PHI.
+- **Closes in**: sin fecha comprometida, pero ya no es "sin apuro": la ventana
+  para rotar existe sólo mientras producción siga teniendo la clave vieja.
 
 ### Source maps de Sentry en el cliente
 
