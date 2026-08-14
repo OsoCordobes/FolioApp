@@ -10,6 +10,24 @@ Audit-prep deliverable for the 2-week pre-audit sprint. Catalogues every column 
 
 ## Encrypted columns (full inventory)
 
+> ⚠️ **ESTE INVENTARIO ESTÁ DESACTUALIZADO Y ES INCORRECTO** (verificado contra
+> el DDL el 2026-08-13). Lista al menos cinco columnas que **no existen**
+> (`sesion.signos_vitales_cifrado`, `sesion.audio_url_cifrado`,
+> `contacto_emergencia.parentesco_cifrado`, `consentimiento.signature_image`,
+> `paciente.motivo_consulta_breve`) y **omite unas veinte que sí existen**
+> (todo M50/M56/M58/M59/M60/M72/M73/M89/M96, `pedido.*`,
+> `post_visita.memo_cifrado`, `cobertura_paciente.numero_afiliado_cifrado`,
+> `organization.certificado_arca_cifrado`, `paciente_identidad.email_hash`,
+> `paciente_cuenta.telefono_hash`). El total real es **50 columnas en 22
+> tablas**.
+>
+> También afirma más abajo que el trigger de auditoría excluye las columnas
+> `*_cifrado` del payload: **es falso**, `to_jsonb(OLD)`/`to_jsonb(NEW)` copian
+> la fila entera.
+>
+> **No lo uses como base para una rotación de claves.** La fuente correcta es
+> **`docs/ROTACION-CLAVES.md`**.
+
 ### `profile` (the professional / authenticated user)
 
 | Column | Plaintext? | Notes |
