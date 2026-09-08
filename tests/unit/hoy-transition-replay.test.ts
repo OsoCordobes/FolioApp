@@ -53,7 +53,7 @@ function harness(transport: (input: { turnoId: string; to: string }) => Promise<
     cursor = 0;
     const tree = exports.Dashboard!({ initialTurnos: snapshot, pacientes: { "synthetic-patient": { nombre: "Paciente de prueba" } }, fechaIso: "2026-09-08", fechaLarga: "martes", nowIso: "2026-09-08T12:00:00Z", timezone: "America/Argentina/Cordoba" });
     effects.splice(0).forEach(effect => effect());
-    return find(tree)!.props.onTransition as (id: string, to: string, extra?: Record<string, unknown>, cobro?: { montoCents: number; pagado: boolean }) => void;
+    return find(tree)!.props.onTransition as (id: string, to: string, extra?: Record<string, unknown>, cobro?: { montoCents: number; pagado: boolean }) => boolean;
   };
   const transition = render();
   return { transition, fixture, render, slots, notices, requests: () => requests, settle: () => Promise.allSettled(pending) };
@@ -116,6 +116,20 @@ test("a paid SSR row does not produce a debt-created toast from a late close req
   await view.settle();
   assert.equal(view.notices.length, 1);
   assert.ok(!(view.notices[0] as { titulo: string }).titulo.includes("deuda registrada"));
+});
+
+test("a pending transition explicitly rejects a successor so its caller cannot navigate as if started", async () => {
+  let finish!: () => void;
+  const wait = new Promise<void>(resolve => { finish = resolve; });
+  const view = harness(async () => { await wait; return { ok: true, data: {} }; });
+  assert.equal(view.transition(view.fixture.id, "en_sala"), true);
+  assert.equal(view.transition(view.fixture.id, "atendiendo"), false);
+  assert.equal(view.requests(), 1);
+  finish();
+  await view.settle();
+  assert.equal(view.transition(view.fixture.id, "atendiendo"), true);
+  await view.settle();
+  assert.equal(view.requests(), 2);
 });
 
 test("a predecessor SSR snapshot keeps updated metadata and real payment while close is pending and after ACK", async () => {

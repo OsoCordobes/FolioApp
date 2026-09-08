@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const http = require('node:http');
 const os = require('node:os');
 const assert = require('node:assert/strict');
-const esbuild = require('../../node_modules/.pnpm/node_modules/esbuild');
+const esbuild = require('esbuild');
 const { chromium } = require('@playwright/test');
 const cwd = path.resolve(__dirname, '../..');
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'folio-walkin-browser-'));
@@ -17,7 +17,7 @@ window.qa={calls:[],jobs:[],refreshes:0,state:[],server:initial,settle(result){t
 function App(){const[turnos,setTurnos]=useState([initial]);window.qa.refresh=(updates={})=>setTurnos(Array.isArray(updates)?updates.map(t=>({...initial,...t})):[{...initial,...updates}]);return <ToastProvider><Dashboard initialTurnos={turnos} pacientes={{'synthetic-patient':{id:'synthetic-patient',nombre:'Paciente de prueba',edad:30,tel:'',notasImportantes:''}}} fechaIso='2026-09-08' fechaLarga='martes 8 de septiembre' fechaAnio={2026} nowIso='2026-09-08T15:00:00Z' timezone='America/Argentina/Cordoba'/></ToastProvider>};
 createRoot(document.getElementById('root')).render(<StrictMode><App/></StrictMode>);`;
 const stubs = {
-    'next/navigation': `export const useRouter=()=>({push(){},refresh(){window.qa.refreshes++}});`,
+    'next/navigation': `export const useRouter=()=>({push(){window.qa.navigations=(window.qa.navigations??0)+1},refresh(){window.qa.refreshes++}});`,
     '@/app/(app)/hoy/actions': `export const transitionTurnoAction=(input)=>{window.qa.calls.push(input);return new Promise((resolve,reject)=>window.qa.jobs.push({resolve,reject}))};`,
     '@/lib/use-agenda-refresh': `export function useAgendaAutoRefresh(){}`,
     '@/components/hoy/turno-create-modal': `export const TurnoCreateModal=()=>null;`,
@@ -50,6 +50,21 @@ const stubs = {
             const errors = [];
             page.on('pageerror', e => errors.push(e.message));
             const reset = async () => { await page.goto(`http://127.0.0.1:${server.address().port}/${mode}`); await page.getByRole('button', { name: 'Marcar llegada', exact: true }).waitFor(); };
+            await reset();
+            await page.getByRole('button', { name: 'Marcar llegada', exact: true }).click();
+            await page.waitForFunction(() => qa.state[0].estado === 'en_sala');
+            await page.getByRole('button', { name: /^(Abrir ficha|Guardando…)$/ }).evaluate(el => el.click());
+            assert.equal(await page.evaluate(() => qa.navigations ?? 0), 0, 'pending arrival must not navigate without starting attention');
+            const savingRow = page.locator('.fi-turno[aria-busy="true"]');
+            assert.equal(await savingRow.getByRole('button', { name: 'Guardando…', exact: true }).isDisabled(), true);
+            await savingRow.press('Enter');
+            assert.equal(await page.evaluate(() => qa.navigations ?? 0), 0);
+            assert.equal(await page.evaluate(() => qa.calls.length), 1);
+            await page.evaluate(() => qa.settle({ ok: true, data: {} }));
+            await page.getByRole('button', { name: 'Abrir ficha', exact: true }).click();
+            assert.equal(await page.evaluate(() => qa.calls.length), 2);
+            assert.equal(await page.evaluate(() => qa.calls[1].to), 'atendiendo');
+            result.push({ mode, case: 'pending arrival blocks dependent navigation until ACK then starts attention', pass: true });
             await reset();
             await page.evaluate(() => { window.toastPeak = 0; new MutationObserver(() => { window.toastPeak = Math.max(window.toastPeak, document.querySelectorAll('.fi-toast').length); }).observe(document.body, { childList: true, subtree: true }); });
             await page.getByRole('button', { name: 'Marcar llegada', exact: true }).evaluate(el => { el.click(); el.click(); });

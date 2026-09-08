@@ -98,6 +98,7 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
   /** Turno con el modal de reagendar abierto (null = cerrado). */
   const [reagendarFor, setReagendarFor] = useState<Turno | null>(null);
   const [transitionError, setTransitionError] = useState<string | null>(null);
+  const [pendingIds, setPendingIds] = useState<ReadonlySet<string>>(new Set());
   const [, startTransition] = useTransition();
   const now = useNow(nowIso, 60_000);
   const currentTurnos = useRef(initialTurnos);
@@ -144,14 +145,14 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
     extra: Partial<Turno> = {},
     cobro?: CobroCierreActionInput,
   ) => {
-    if (pendingTurnos.current.has(id)) return;
+    if (pendingTurnos.current.has(id)) return false;
     const before = currentTurnos.current.find((turno) => turno.id === id);
-    if (!before) return;
+    if (!before) return false;
     const extraConCobro = to === "cerrado"
       ? { ...extra, cobro: cobroOptimistaAlCerrar(before, cobro, new Date().toISOString()) }
       : extra;
     const next = applyTransition(before, to, { extra: extraConCobro });
-    if (next === before) return;
+    if (next === before) return false;
 
     // Network calls and notifications belong to the event, never to a React
     // state updater: React can replay updaters during concurrent rendering.
@@ -160,6 +161,7 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
       patch: { ...extraConCobro, estado: next.estado, transiciones: next.transiciones },
     };
     pendingTurnos.current.set(id, pending);
+    setPendingIds(new Set(pendingTurnos.current.keys()));
     const replaceTurno = (replacement: Turno) => {
       const updated = currentTurnos.current.map((turno) => turno.id === id ? replacement : turno);
       currentTurnos.current = updated;
@@ -233,8 +235,10 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
         router.refresh();
       } finally {
         pendingTurnos.current.delete(id);
+        setPendingIds(new Set(pendingTurnos.current.keys()));
       }
     });
+    return true;
   };
 
   const nextId = useMemo<string | undefined>(() => {
@@ -308,12 +312,15 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
             now={now}
             timezone={timezone}
             canRegistrarCobro={canRegistrarCobro}
+            pendingIds={pendingIds}
             onTransition={handleTransition}
             onReagendar={(turnoId) => {
+              if (pendingTurnos.current.has(turnoId)) return;
               const turno = turnos.find((t) => t.id === turnoId);
               if (turno) setReagendarFor(turno);
             }}
-            onOpenFicha={(turnoId) => {
+            onOpenFicha={(turnoId, transitionStarted) => {
+              if (pendingTurnos.current.has(turnoId) && !transitionStarted) return;
               // Side panel-style ficha planeado para sprint posterior. Mientras
               // tanto, navegar a la ficha completa del paciente — toda la info
               // clínica + plan + sesiones está allí.

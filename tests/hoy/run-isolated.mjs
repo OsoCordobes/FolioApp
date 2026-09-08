@@ -52,8 +52,6 @@ if (process.argv[1] && path.resolve(process.argv[1]) === self) {
   }
   Object.assign(env, {
     NODE_OPTIONS: `--import ${pathToFileURL(self).href}`,
-    // Match pnpm's executable shim without inheriting a user NODE_PATH.
-    NODE_PATH: path.join(root, "node_modules/.pnpm/node_modules"),
     NEXT_TELEMETRY_DISABLED: "1",
     FOLIO_ENC_KEY: Buffer.alloc(32, 17).toString("base64"),
     FOLIO_ENC_HMAC_KEY: Buffer.alloc(32, 23).toString("base64"),
@@ -63,7 +61,13 @@ if (process.argv[1] && path.resolve(process.argv[1]) === self) {
     NEXT_PUBLIC_APP_URL: "http://127.0.0.1:3010",
     CRON_SECRET: "synthetic-cron-not-a-credential",
   });
-  const child = spawn(process.execPath, commands[mode], { cwd: root, env, stdio: "inherit", windowsHide: true });
+  // Let the package manager resolve its own build/lint dependencies through its
+  // supported executable, rather than injecting an internal module path.
+  const packageManager = mode === "lint" || mode === "build";
+  const args = mode === "lint" ? ["exec", "eslint"] : mode === "build" ? ["exec", "next", "build", "--turbopack"] : commands[mode];
+  const child = spawn(packageManager ? "pnpm" : process.execPath, args, {
+    cwd: root, env, stdio: "inherit", windowsHide: true, shell: packageManager && process.platform === "win32",
+  });
   child.on("error", () => { process.exitCode = 1; });
   child.on("exit", (code) => { process.exitCode = code ?? 1; });
 } else {
