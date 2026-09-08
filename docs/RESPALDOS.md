@@ -1,6 +1,6 @@
 # Respaldos de Folio: preparación y ensayo local
 
-Estado al 8 de septiembre de 2026: **implementación local ensayada; todavía no hay respaldo programado ni restauración completa de Supabase certificada**. Esta tarea no consultó producción, no usó sus secretos y no inició servicios nuevos.
+Estado actualizado al 8 de septiembre de 2026: **hay una copia cifrada de producción verificada y una tarea de Windows registrada; la restauración completa de Supabase sigue pendiente**. La tarea funciona sin Codex y su primera ejecución comprobó que la copia todavía no estaba vencida. Véase [programación y evidencia actual](RESPALDOS-RUNTIME-PRIVADO.md). Los apartados siguientes distinguen el diseño y los ensayos sintéticos de la captura real; no deben interpretarse como una certificación de recuperación integral.
 
 ## Qué se conserva
 
@@ -21,7 +21,7 @@ Cada artefacto se cifra mientras se recibe, antes de escribirlo en disco: AES-25
 
 El manifest también está cifrado. Nombres de objetos, destinatarios, cuentas, valores de configuración y SQL no quedan en recibos ni logs. Los archivos visibles se llaman `artifact_N.sealed`. El recibo público contiene únicamente identificador del respaldo, fechas y hashes del contenido cifrado. Restringir la carpeta mediante ACL del sistema: el `mode` de Node no sustituye ACL de Windows. La integridad comprueba corrupción/mezcla de artefactos; no constituye firma del origen frente a alguien que controla la carpeta y posee la clave pública.
 
-El custodio entrega sólo la **clave pública** al proceso de respaldo. La clave privada real no se leyó durante este trabajo. El ensayo generó claves ficticias en memoria.
+El capturador cifra con la **clave pública**. Los primeros ensayos generaron claves ficticias en memoria. La verificación del paquete real utiliza la privada cifrada y la frase protegida por DPAPI del propietario; el runtime privado sólo las abre en memoria cuando corresponde verificar una captura. No publica sus valores.
 
 Antes de restaurar se validan todos los archivos, su manifest, tamaños y AEAD. Ningún consumidor recibe un byte descifrado hasta verificar la etiqueta GCM completa. Después el dump autenticado pasa por memoria a `pg_restore`, sin archivo temporal de SQL/PHI en claro.
 
