@@ -47,6 +47,9 @@ jobs:
       - name: Unit tests
         run: pnpm test:unit
 
+      - name: Render long clinical PDFs with synthetic data
+        run: node tests/pdf/render-real.cjs
+
       # Gate de build: una regresión de `next build` no debe descubrirse en
       # Vercel post-merge (master auto-deploya a prod). El build NO exige
       # envs de Supabase hoy (los accesos son lazy y las páginas SSG están

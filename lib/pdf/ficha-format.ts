@@ -58,7 +58,7 @@ export function tieneSoap(soap: { s: string; o: string; a: string; p: string }):
   return Boolean(soap.s.trim() || soap.o.trim() || soap.a.trim() || soap.p.trim());
 }
 
-// ─── Evolución (D2 · últimas N sesiones en el PDF) ───────────────────────────
+// ─── Evolución de las sesiones autorizadas en el PDF ────────────────────────
 
 /**
  * Input estructural de una sesión del historial de la ficha (subset de
@@ -85,12 +85,14 @@ export interface EvolucionPdfEntrada {
   soap: { s: string; o: string; a: string; p: string } | null;
 }
 
-/** Tope de sesiones que entran a la sección Evolución del PDF. */
+/** @deprecated Legacy preview size for callers explicitly requesting a subset.
+ * Full exports do not use this constant; the default preserves every session. */
 export const EVOLUCION_PDF_MAX = 10;
 
 /**
  * Mapea el historial de la ficha (DESC, más reciente primero) a las entradas
- * de la sección "Evolución" del PDF: hasta `max` sesiones con fecha · servicio
+ * de la sección "Evolución" del PDF: todas por defecto, o hasta `max` sólo
+ * cuando el consumidor pide explícitamente una vista parcial, con fecha · servicio
  * · resumen, y el SOAP compacto solo cuando tiene contenido (un SOAP vacío se
  * omite en vez de imprimir cuatro "—").
  */

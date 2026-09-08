@@ -116,7 +116,8 @@ const styles = StyleSheet.create({
     paddingTop: PDF_PAGE.paddingTop,
     paddingBottom: PDF_PAGE.paddingBottom,
     paddingHorizontal: PDF_PAGE.paddingHorizontal,
-    lineHeight: 1.4,
+    // Keep line height unset here: fixed footer relayouts can multiply an inherited
+    // numeric line height across pages until PDF coordinates become invalid.
   },
   // Membrete
   header: {

@@ -6,9 +6,9 @@
  * `application/pdf`. Server-side, Node runtime — @react-pdf/renderer usa APIs de
  * Node y necesita margen de cold-start.
  *
- * ── PHI NUNCA sale sin cifrar al cliente ──────────────────────────────────────
+ * ── Entrega clínica autorizada ──────────────────────────────────────────────
  * Toda la PII/PHI se desencripta SERVER-SIDE (getPacienteFicha / getSesionCompleta
- * → lib/crypto) y sólo los BYTES ya renderizados del PDF viajan al cliente. En
+ * → lib/crypto) y los bytes del PDF contienen información clínica legible. En
  * ningún momento se serializa una columna `*_cifrado` cruda ni el plaintext en un
  * JSON de respuesta.
  *
@@ -19,9 +19,9 @@
  * not_found si el paciente no pertenece a la org / el rol no puede leerlo).
  *
  * ── Audit del export (Ley 26.529 art. 18 · 25.326 art. 14) ────────────────────
- * Cada export deja una fila `paciente_ficha.export_pdf` en audit_log con actor,
- * rol, IP/UA y el id de la sesión exportada (si se pidió una puntual). Deja
- * constancia de QUIÉN exportó PHI de QUIÉN y DESDE DÓNDE.
+ * La preparación deja `paciente_ficha.export_pdf_prepared` en audit_log con
+ * actor, rol e id de sesión. No confirma recepción por el cliente: un cambio
+ * de permisos posterior puede impedir la entrega.
  */
 
 import { headers } from "next/headers";
@@ -51,7 +51,7 @@ export const maxDuration = 60;
 // la DB).
 const ROLES_PUEDEN_VER_PHI = new Set(["OWNER", "DIRECTOR", "PROFESIONAL"]);
 
-const UUID_RE = /^[0-9a-f-]{36}$/i;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function jsonError(code: string, message: string, status: number): NextResponse {
   return NextResponse.json({ ok: false, error: { code, message } }, { status, headers: { "Cache-Control": "no-store" } });
@@ -171,15 +171,15 @@ export async function GET(
   const pdf = await buildFichaPdf(pdfData);
   if (pdf.length > PDF_MAX_BYTES) return jsonError("validation", "El PDF supera 4 MB. Solicitá una entrega por sesión; no se generó un archivo incompleto.", 413);
 
-  // Audit del export (best-effort, fail-safe: no rompe el export si falla). Deja
-  // constancia de QUIÉN exportó PHI de QUIÉN, DESDE DÓNDE, y qué sesión (si se
-  // pidió una puntual). Nunca incluye PHI en el payload.
+  // Record preparation, not successful delivery: authorization can still change
+  // during this audit write and the final guard must then deny the response.
+  // Receiving bytes at the client cannot be proven by preparing an HTTP response.
   const h = await headers();
   await writeAuditEntry({
     organizationId: ctx.data.organization.id,
     actorId: ctx.data.session.userId,
     actorRole: ctx.data.session.role,
-    action: "paciente_ficha.export_pdf",
+    action: "paciente_ficha.export_pdf_prepared",
     resourceType: "paciente",
     resourceId: pacienteId,
     ip: h.get("x-forwarded-for") ?? h.get("x-real-ip") ?? null,
@@ -187,6 +187,7 @@ export async function GET(
     payload: {
       sesion_id: sesionId,
       formato: "pdf",
+      delivery_confirmed: false,
       basis: "Ley 26.529 art. 18 (registro de acceso a HC)",
     },
   });
@@ -204,7 +205,7 @@ export async function GET(
     const scope = await supabase.from("paciente").select("id").eq("id", pacienteId).eq("organization_id", ctx.data.organization.id).is("deleted_at", null).maybeSingle();
     if (scope.error || scope.data?.id !== pacienteId) return jsonError("forbidden", "No se pudo confirmar el acceso al paciente.", 403);
     for (let index = 0; index < history.length; index += 100) {
-      const ids = history.slice(index, index + 100).map(row => row.sesionId!);
+      const ids = history.slice(index, index + 100).map(row => row.sesionId);
       const allowed = await readPdfCollection<{ id: string }>((from, to) => supabase.from("sesion").select("id", { count: "exact" })
         .eq("organization_id", ctx.data.organization.id).eq("paciente_id", pacienteId).in("id", ids).order("id", { ascending: true }).range(from, to));
       if (allowed.length !== ids.length || allowed.some(row => !ids.includes(row.id))) return jsonError("forbidden", "Cambió el acceso a una sesión durante la entrega.", 403);

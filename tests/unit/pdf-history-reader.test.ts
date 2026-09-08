@@ -25,7 +25,36 @@ function client(corrupt=false,missing=false){
  };return query;}} as unknown as Awaited<ReturnType<typeof createSupabaseServerClient>>;
 }
 test("PDF includes all 62 sessions and amendment preserving original SOAP",async()=>{
- const rows=await readPdfHistory(client(),"org","patient",null);assert.equal(rows.length,62);assert.equal(rows[61].soap?.s,"original 61");assert.equal(rows[61].enmiendas?.[0].texto,"Enmienda original");assert.equal(rows[0].fecha,"2026-09-07");
+ const rows=await readPdfHistory(client(),"org","patient",null);assert.equal(rows.length,62);assert.equal(rows.find(r => r.sesionId === "s61")?.soap?.s,"original 61");assert.equal(rows.find(r => r.sesionId === "s61")?.enmiendas?.[0].texto,"Enmienda original");assert.equal(rows[0].fecha,"2026-09-07");
 });
 test("PDF refuses unreadable amendment",async()=>{await assert.rejects(()=>readPdfHistory(client(true),"org","patient",null))});
 test("PDF punctual request cannot fall back to a different session",async()=>{await assert.rejects(()=>readPdfHistory(client(),"org","patient","not-matching"))});
+
+type FixtureRow = { id: string } & Record<string, unknown>;
+function historyFixture(sessions: FixtureRow[], visits: FixtureRow[]) {
+ return { from(table: string) { let ids: string[] = []; const query = {
+  select(columns: string) { if (table === "sesion") for (const field of ["tool_id", "tool_data_cifrado", "vertebras_json"]) assert.ok(columns.split(",").includes(field), `missing ${field}`); return query; },
+  eq() { return query; }, order() { return query; }, in(_key: string, value: string[]) { ids = value; return query; },
+  range(from: number, to: number) { const rows = table === "sesion" ? sessions : table === "turno" ? visits.filter(v => ids.includes(v.id)) : []; return Promise.resolve({ data: rows.slice(from, to + 1), count: rows.length, error: null }); }
+ }; return query; } } as unknown as Awaited<ReturnType<typeof createSupabaseServerClient>>;
+}
+function session(id: string, extra: Record<string, unknown> = {}): FixtureRow { return { id, organization_id: "org", paciente_id: "patient", turno_id: `t-${id}`, tool_id: null, tool_data_cifrado: null, vertebras_json: [], ...extra }; }
+function visit(id: string, inicio = "2026-09-08T12:00:00Z"): FixtureRow { return { id: `t-${id}`, inicio, servicio: { nombre: "Consulta sintética" } }; }
+test("PDF clinical chronology uses visit time across retroactively created sessions and stable ties", async () => {
+ const sessions = [session("retro", { created_at: "2026-09-10", soap_s_cifrado: encryptColumn("older encounter") }), session("a", { created_at: "2026-09-01" }), session("z", { created_at: "2026-08-01", soap_s_cifrado: encryptColumn("latest encounter") })];
+ const rows = await readPdfHistory(historyFixture(sessions, [visit("retro", "2026-09-01T12:00:00Z"), visit("a"), visit("z")]), "org", "patient", null);
+ assert.deepEqual(rows.map(r => r.sesionId), ["z", "a", "retro"]); assert.equal(rows[0].soap?.s, "latest encounter");
+});
+test("PDF restores encrypted tool summary and legacy vertebra summary without losing notes or SOAP", async () => {
+ const rows = await readPdfHistory(historyFixture([
+  session("v2", { tool_id: "quiropraxia.ficha.v2", tool_data_cifrado: encryptColumn(JSON.stringify({ v: 2, vertebras: [{ id: "C4", tecnicaAjuste: "nota sintética" }] })), notas_cifrado: encryptColumn("nota original"), soap_p_cifrado: encryptColumn("plan original") }),
+  session("legacy", { vertebras_json: [{ id: "L5", estado: "ajustada" }] })
+ ], [visit("v2"), visit("legacy")]), "org", "patient", null);
+ assert.equal(rows.find(r => r.sesionId === "v2")?.resumen, "1 vértebra con notas");
+ assert.equal(rows.find(r => r.sesionId === "v2")?.notas, "nota original");
+ assert.equal(rows.find(r => r.sesionId === "v2")?.soap?.p, "plan original");
+ assert.equal(rows.find(r => r.sesionId === "legacy")?.resumen, "L5 ajustadas");
+});
+for (const [name, extra] of Object.entries({ ciphertext: { tool_id: "quiropraxia.ficha.v2", tool_data_cifrado: "\\x" }, json: { tool_id: "quiropraxia.ficha.v2", tool_data_cifrado: encryptColumn("not-json") }, shape: { tool_id: "quiropraxia.ficha.v2", tool_data_cifrado: encryptColumn('{"v":2,"vertebras":"invalid"}') }, version: { tool_id: "quiropraxia.ficha.v2", tool_data_cifrado: encryptColumn('{"v":1,"vertebras":[]}') }, unknown: { tool_id: "unknown.tool.v1" }, legacy: { vertebras_json: [{ id: 42 }] } })) test(`PDF refuses unreadable tool ${name}`, async () => {
+ await assert.rejects(() => readPdfHistory(historyFixture([session("bad", extra)], [visit("bad")]), "org", "patient", null), /pdf_(tool|unreadable)/);
+});

@@ -14,7 +14,11 @@ Este corte parte de `a6eecc55a78c20310e30b2e1498aa28e11bc59b4` (#160), que corri
 
 ## Verificación y recuperación
 
-Ejecutar `pnpm test:unit`, `pnpm typecheck`, `pnpm lint`, `pnpm test:build` y `node tests/hoy/run-isolated.mjs browser`. Las pruebas del PDF simulan consultas desde el servidor; no crean pacientes ni envían mensajes. La prueba de navegador ejercita las llegadas y sus estados pendientes en React de desarrollo y producción.
+Ejecutar `pnpm test:unit`, `pnpm typecheck`, `pnpm lint`, `pnpm test:build`, `node tests/pdf/render-real.cjs` y `node tests/hoy/run-isolated.mjs browser`. Las pruebas de autorización simulan consultas desde el servidor; no crean pacientes ni envían mensajes. La prueba de navegador ejercita las llegadas y sus estados pendientes en React de desarrollo y producción.
+
+La prueba del renderer real encontró un desbordamiento del pie al heredar el interlineado de la página; se corrigió retirando esa herencia. Verificación: 62 sesiones y 62 enmiendas en 13 páginas, y una sesión extensa de nueve páginas con 540 marcadores de texto conservados. Un inspector sintético de streams y una lectura independiente con pypdf confirmaron el contenido. CI ejecuta el renderer real para evitar que las pruebas con mocks oculten una regresión de paginación.
+
+La auditoría registra la preparación del PDF con entrega no confirmada. Una revocación posterior puede impedir enviar la respuesta y no debe aparecer como una exportación recibida con éxito.
 
 La publicación depende de CI y de un despliegue READY del mismo commit fusionado. El registro final debe incluir PR, SHA, despliegue y comprobaciones públicas. Las comprobaciones públicas no certifican acceso clínico autenticado ni uso real de proveedores.
 
