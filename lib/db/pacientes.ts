@@ -1,3 +1,5 @@
+
+import { safeLog } from "@/lib/observability/safe-log";
 /**
  * Folio · queries y mutations de Paciente.
  *
@@ -144,7 +146,7 @@ export async function listPacientesDirectorio(): Promise<Result<PacienteDecoded[
     if (cobErr) {
       // No rompemos el directorio, pero tampoco callamos: sin esto el modo
       // degradado ("todos particulares") es indistinguible del dato real.
-      console.error(`[pacientes] lookup de cobertura falló: ${cobErr.message}`);
+      safeLog("error", "lib.db.pacientes.L147", { error: cobErr });
       const { captureException } = await import("@sentry/nextjs");
       captureException(new Error(`Cobertura lookup falló — ${cobErr.message}`), {
         tags: { component: "pacientes", op: "listPacientesDirectorio.cobertura" },

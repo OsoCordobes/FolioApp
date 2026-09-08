@@ -58,7 +58,8 @@ export interface SpecialtyToolProps {
     id: string;
     fecha: string;
     descripcion: string | null;
-    signedUrl: string;
+    downloadUrl: string;
+  mimeType?: string;
     sesionId: string | null;
   }>;
   /**
@@ -73,14 +74,18 @@ export interface SpecialtyToolProps {
     id: string;
     fecha: string;
     descripcion: string | null;
-    signedUrl: string;
+    downloadUrl: string;
+  mimeType?: string;
     sesionId: string | null;
   }>;
   /**
-   * Edad del paciente (años). La usa cardiología en el score de riesgo CV
-   * (scoreRiesgoCV suma riesgo si edad ≥ 60); quiro/psico la ignoran.
+   * Edad del paciente (años), para comprobar la población admitida por cada
+   * instrumento. Su presencia no acredita validación clínica de una escala.
    */
   edad?: number;
+  /** Patient DOB and encounter timestamp supplied by the server for instruments. */
+  fechaNacimiento?: string | null;
+  fechaAtencion?: string | null;
   /**
    * D2 · nombre completo del paciente de la ficha. Lo usa cardiología para
    * membretar los documentos imprimibles de la Tool (derivación /

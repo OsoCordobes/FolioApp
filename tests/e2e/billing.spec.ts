@@ -1,42 +1,14 @@
 /**
- * Folio · E2E · activación de suscripción (/configuracion/billing) con MP mockeado.
- *
- * La activación real redirige a Mercado Pago (init_point externo) y el webhook
- * subscription_preapproval marca ACTIVA. Este spec NUNCA pega a MP real:
- *
- *   - Intercepta cualquier navegación a mercadopago.com / .com.ar con
- *     page.route → una página de éxito falsa, así el click "Activar
- *     suscripción" no abandona el dominio de prueba ni carga el checkout real.
- *   - Tolera el caso sin credenciales MP en dev: si MP_ACCESS_TOKEN falta,
- *     createOrRenewPendingSubscription devuelve un error y la UI muestra el
- *     banner inline — el spec acepta CUALQUIERA de los dos desenlaces
- *     (redirect interceptado ó error honesto), porque el "verde" real de la
- *     creación de preapproval necesita credenciales que no viven en CI.
- *
- * Dos niveles, igual que demo-path.spec.ts:
- *
- *   1. SMOKE (siempre, gated por login): la página de billing carga para el
- *      OWNER y ofrece "Activar suscripción" (o el estado de la sub existente).
- *      Solo lee — no crea ni cancela nada.
- *
- *   2. ACTIVAR (gated por E2E_BILLING_ACTIVATE=1): hace click en "Activar
- *      suscripción" con MP interceptado y verifica que el flujo termina en la
- *      URL mock (creds presentes) o en el banner de error (creds ausentes),
- *      SIN tocar MP real. No autoriza ningún cobro.
- *
- * Requiere un usuario OWNER existente (no crea cuentas) vía envs — típicamente
- * el owner de la org de prueba. Ver tests/e2e/README.md.
- *
- * Run (PowerShell):
- *   $env:E2E_LOGIN_EMAIL="lautaro-folio-test@folio.app"
- *   $env:E2E_LOGIN_PASSWORD="<password>"
- *   pnpm exec playwright test tests/e2e/billing.spec.ts --project=e2e
- *   # + ejercitar el click de activación con MP mockeado:
- *   $env:E2E_BILLING_ACTIVATE="1"
- *   pnpm exec playwright test tests/e2e/billing.spec.ts --project=e2e
+ * Billing para un OWNER sintético de Supabase local. Ver README.md.
+ * La lectura requiere FOLIO_TEST_LOGIN_* y la instancia local configurada.
+ * El escenario histórico de activación permanece deshabilitado: page.route
+ * sólo intercepta el navegador, no simula pagos ejecutados por el servidor.
+ * El bootstrap bloquea proveedores también en Node y elimina sus claves.
+ * Un banner por proveedor ausente no verifica una suscripción real.
+ * Ejecutar: pnpm test:e2e -- tests/e2e/billing.spec.ts
  */
 
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "../fixtures/local-test";
 
 const EMAIL = process.env.E2E_LOGIN_EMAIL ?? "";
 const PASSWORD = process.env.E2E_LOGIN_PASSWORD ?? "";

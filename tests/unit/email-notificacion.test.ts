@@ -81,7 +81,7 @@ test("otro error de DB → err(db_error) con detail (el caller NO envía)", asyn
 
   assert.ok(!res.ok);
   assert.equal(res.error.code, "db_error");
-  assert.equal(res.error.detail, "violates foreign key constraint");
+  assert.equal(res.error.detail, "db_error");
 });
 
 test("meta ausente → se persiste null (columna jsonb nullable)", async () => {

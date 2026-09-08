@@ -29,6 +29,7 @@ import { useEffect, useState } from "react";
 import { listOutcomeSeriesAction, type OutcomeSeriePunto } from "@/app/(app)/pacientes/actions";
 import { SerieEvolucion, type PuntoSerie } from "@/lib/instrumentos/components";
 import type { ToolHistorialEntry } from "@/lib/especialidades/types";
+import { instrumentPopulationEligibility } from "@/lib/instrumentos/population-policy";
 import {
   deriveEstadoObjetivos,
   deriveOutcomeSeries,
@@ -95,6 +96,7 @@ function ObjetivosResumen({ estado }: { estado: EstadoObjetivos }) {
 // ─── Dashboard ───────────────────────────────────────────────────────────────
 
 export interface OutcomesDashboardProps {
+  fechaNacimiento?: string | null;
   /** Historial de sesiones psico (toolData) — para objetivos + fallback de escalas. */
   historial: ToolHistorialEntry[];
   /** Id del paciente — habilita la carga de instrumento_respuesta. Sin él, fallback. */
@@ -106,10 +108,11 @@ export interface OutcomesDashboardProps {
  * instrumento_respuesta cuando hay pacienteId; si no, cae a la serie derivada del
  * historial del toolData. El estado de objetivos siempre sale del historial.
  */
-export function OutcomesDashboard({ historial, pacienteId }: OutcomesDashboardProps) {
+export function OutcomesDashboard({ historial, pacienteId, fechaNacimiento }: OutcomesDashboardProps) {
   const [respuestas, setRespuestas] = useState<OutcomeSeriePunto[] | null>(null);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [intento, setIntento] = useState(0);
 
   useEffect(() => {
     if (!pacienteId) {
@@ -118,22 +121,26 @@ export function OutcomesDashboard({ historial, pacienteId }: OutcomesDashboardPr
     }
     let vivo = true;
     setCargando(true);
+    setRespuestas(null);
     setError(null);
     listOutcomeSeriesAction(pacienteId).then((result) => {
       if (!vivo) return;
-      setCargando(false);
       if (result.ok) setRespuestas(result.data);
-      else setError(result.error.message);
+      else setError("No pudimos cargar las escalas. Podés volver a intentarlo.");
+    }).catch(() => {
+      if(vivo)setError("No pudimos cargar las escalas. Podés volver a intentarlo.");
+    }).finally(() => {
+      if(vivo)setCargando(false);
     });
     return () => {
       vivo = false;
     };
-  }, [pacienteId]);
+  }, [pacienteId,intento]);
 
   // Serie de instrumento_respuesta si se cargó; si no, fallback al historial
   // (PHQ-9/GAD-7 embebidos en las sesiones — solo esas dos métricas tendrán dato).
   const serie: PuntoSerie[] =
-    respuestas !== null ? deriveOutcomeSeries(respuestas) : serieDeHistorial(historial);
+    respuestas !== null ? deriveOutcomeSeries(respuestas) : serieDeHistorial(historial.filter(entry=>instrumentPopulationEligibility({fechaNacimiento,fechaAtencion:entry.fecha}).allowed));
 
   const estadoObjetivos = deriveEstadoObjetivos(historial);
 
@@ -145,13 +152,13 @@ export function OutcomesDashboard({ historial, pacienteId }: OutcomesDashboardPr
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <span className="muted" style={{ fontSize: 11, lineHeight: 1.5 }}>
-          Puntajes de escalas de tamizaje a lo largo del tratamiento. Orientativo,
-          no diagnóstico.
+          Puntajes históricos conservados como registro original, no como una nueva clasificación.
+          La validación de cada instrumento para su población sigue pendiente de revisión profesional.
         </span>
         {error ? (
           <p role="alert" style={{ margin: 0, fontSize: 11.5, color: "var(--red)" }}>
-            No se pudo cargar la serie de escalas: {error}. Se muestran las escalas
-            registradas en las sesiones.
+            {error} Se muestran los registros disponibles de las sesiones.
+            {" "}<button type="button" className="pc-link" disabled={cargando} onClick={()=>setIntento(value=>value+1)}>Reintentar</button>
           </p>
         ) : null}
         <SerieEvolucion

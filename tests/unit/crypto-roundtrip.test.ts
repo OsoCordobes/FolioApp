@@ -1,24 +1,5 @@
-/**
- * Load .env.local synchronously BEFORE importing lib/crypto so the AES keys
- * are present when the module's lazy getters fire (the helpers are
- * lazy-evaluated, but a defensive load up-front avoids any test that hits
- * them at import time from failing).
- */
-import { readFileSync } from "node:fs";
-
-if (!process.env.FOLIO_ENC_KEY || !process.env.FOLIO_ENC_HMAC_KEY) {
-  try {
-    const raw = readFileSync(".env.local", "utf8");
-    for (const line of raw.split(/\r?\n/)) {
-      const m = /^([A-Z_]+)="?([^"\r\n]+)"?$/.exec(line.trim());
-      if (!m) continue;
-      const [, k, v] = m;
-      if (!process.env[k]) process.env[k] = v;
-    }
-  } catch {
-    // .env.local missing — tests will fail loudly when keys are needed.
-  }
-}
+/** Central synthetic keys and network isolation; no environment files. */
+import "../../scripts/testing/unit-bootstrap.mjs";
 
 import assert from "node:assert/strict";
 import test from "node:test";

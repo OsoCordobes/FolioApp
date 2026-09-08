@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../fixtures/local-test";
 
 /**
  * Folio · /dev/identidad-visual e2e.

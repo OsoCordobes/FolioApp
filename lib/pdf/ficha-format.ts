@@ -58,7 +58,7 @@ export function tieneSoap(soap: { s: string; o: string; a: string; p: string }):
   return Boolean(soap.s.trim() || soap.o.trim() || soap.a.trim() || soap.p.trim());
 }
 
-// ─── Evolución (D2 · últimas N sesiones en el PDF) ───────────────────────────
+// ─── Evolución clínica en el PDF ───────────────────────────
 
 /**
  * Input estructural de una sesión del historial de la ficha (subset de
@@ -66,6 +66,10 @@ export function tieneSoap(soap: { s: string; o: string; a: string; p: string }):
  * lib/db, que arrastra crypto/supabase y rompería los tests de node:test).
  */
 export interface EvolucionSesionInput {
+  enmiendas?: import("@/lib/ficha/enmienda").EnmiendaClinica[];
+  notas?: string | null;
+  profesionalId?: string | null;
+  lockedAt?: string | null;
   fecha: string;
   servicio: string;
   /** Resumen humano de la herramienta de la especialidad ("cambio"). */
@@ -75,6 +79,10 @@ export interface EvolucionSesionInput {
 
 /** Una entrada de la sección "Evolución" del PDF (todo ya en claro). */
 export interface EvolucionPdfEntrada {
+  enmiendas?: import("@/lib/ficha/enmienda").EnmiendaClinica[];
+  notas?: string | null;
+  profesionalId?: string | null;
+  lockedAt?: string | null;
   fecha: string;
   servicio: string;
   resumen: string;
@@ -82,23 +90,28 @@ export interface EvolucionPdfEntrada {
   soap: { s: string; o: string; a: string; p: string } | null;
 }
 
-/** Tope de sesiones que entran a la sección Evolución del PDF. */
+/** Límite opcional para resúmenes explícitos; la historia completa no lo usa. */
 export const EVOLUCION_PDF_MAX = 10;
 
 /**
  * Mapea el historial de la ficha (DESC, más reciente primero) a las entradas
- * de la sección "Evolución" del PDF: hasta `max` sesiones con fecha · servicio
+ * de la sección "Evolución" del PDF: todas las sesiones por defecto; un resumen
+ * puede pedir `max` explícitamente. Incluye fecha · servicio
  * · resumen, y el SOAP compacto solo cuando tiene contenido (un SOAP vacío se
  * omite en vez de imprimir cuatro "—").
  */
 export function evolucionDesdeSesiones(
   sesiones: EvolucionSesionInput[],
-  max: number = EVOLUCION_PDF_MAX,
+  max: number = sesiones.length,
 ): EvolucionPdfEntrada[] {
   return sesiones.slice(0, Math.max(0, max)).map((s) => ({
     fecha: s.fecha,
     servicio: s.servicio,
     resumen: s.cambio,
     soap: s.soap && tieneSoap(s.soap) ? s.soap : null,
+    enmiendas: s.enmiendas,
+    notas: s.notas,
+    profesionalId: s.profesionalId,
+    lockedAt: s.lockedAt,
   }));
 }

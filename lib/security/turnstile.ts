@@ -1,3 +1,5 @@
+
+import { safeLog } from "@/lib/observability/safe-log";
 /**
  * Folio · Cloudflare Turnstile (captcha) server-side verification.
  *
@@ -30,7 +32,7 @@ export async function verifyTurnstile(
   // Dev mode: sin secret seteada → permitir (warning visible en build/start)
   if (!secret) {
     if (process.env.NODE_ENV === "production") {
-      console.error("[turnstile] TURNSTILE_SECRET_KEY no configurada en producción");
+      safeLog("error", "lib.security.turnstile.L33", "[turnstile] TURNSTILE_SECRET_KEY no configurada en producción");
       return false;
     }
     return true;

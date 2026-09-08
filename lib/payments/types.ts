@@ -69,6 +69,8 @@ export interface SubscriptionInfo {
 
 /** Intento de cobro recurrente, ya mapeado a dominio (MP: authorized_payment). */
 export interface ChargeAttemptInfo {
+  /** Authoritative provider modification timestamp; required to settle a payment. */
+  lastModified?: string | null;
   /** ID del intento en el proveedor (MP: authorized_payment.id). */
   providerChargeId: string;
   /** Suscripción a la que pertenece (MP: preapproval_id). */
@@ -94,6 +96,8 @@ export interface ChargeAttemptInfo {
 // ─── Inputs / outputs ────────────────────────────────────────────────────────
 
 export interface CreateSubscriptionInput {
+  /** Stable identity of the activation being retried. */
+  idempotencyKey?: string;
   payerEmail: string;
   /** Referencia nuestra para correlacionar (p. ej. `org_<uuid>`). */
   externalReference: string;
@@ -123,6 +127,9 @@ export interface CreateSubscriptionOutput {
 export interface PaymentProvider {
   /** Nombre canónico del proveedor (p. ej. "mercadopago"). Para logs/config. */
   readonly name: string;
+
+  /** Read-only recovery after an uncertain subscription POST. */
+  findSubscriptionsForOperation?(payerEmail: string, externalReference: string): Promise<SubscriptionInfo[]>;
 
   /** Crea la suscripción en el proveedor y devuelve la URL de checkout. */
   createSubscription(input: CreateSubscriptionInput): Promise<CreateSubscriptionOutput>;

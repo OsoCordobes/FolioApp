@@ -18,6 +18,7 @@
  * loguea acá.
  */
 
+import { verifyMfaSession } from "@/lib/auth/mfa-access";
 import { headers } from "next/headers";
 
 import { classifySignUpOutcome } from "@/lib/auth/signup-outcome";
@@ -72,10 +73,9 @@ export async function acceptInvitationAction(
   }
 
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return err("auth_required", "Sesión expirada. Volvé a entrar.");
+  const verified = await verifyMfaSession(supabase);
+  if (!verified.ok) return verified;
+  const { user } = verified.data;
 
   const ip = await callerIp();
   const ipLimit = await limitByIp("invitation-accept-ip", ip, 30);

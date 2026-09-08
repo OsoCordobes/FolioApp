@@ -1,4 +1,6 @@
 "use server";
+import { safeLog } from "@/lib/observability/safe-log";
+
 
 /**
  * Folio · /hoy · Server Actions.
@@ -23,6 +25,7 @@ import type { ProfesionalLite } from "@/lib/agenda/profesional";
 import { blindIndex, blindIndexPhone, encryptColumn } from "@/lib/crypto";
 import { normalizarBusqueda } from "@/lib/format/busqueda";
 import { err, mapSupabaseError, ok, type Result } from "@/lib/db/errors";
+import { aceptarPedidoConHorario } from "@/lib/db/pedidos";
 import { listProfesionalesLite } from "@/lib/db/members";
 import { getActiveSession } from "@/lib/db/session";
 import { listPacientesDirectorio } from "@/lib/db/pacientes";
@@ -184,7 +187,7 @@ export async function loadCreateTurnoMeta(): Promise<Result<CreateTurnoMeta>> {
   // la validación server-side de createTurnoAction es el gate real.
   const profsRes = await listProfesionalesLite(session.data.organizationId);
   if (!profsRes.ok) {
-    console.warn(`[hoy] loadCreateTurnoMeta: listProfesionalesLite falló: ${profsRes.error.message}`);
+    safeLog("warn", "app.app.hoy.actions.L187", { error: profsRes.error });
   }
 
   return ok({
@@ -297,6 +300,15 @@ export async function createTurnoAction(
     return err("validation", "Datos del turno inválidos.", parsed.error.message);
   }
   const d = parsed.data;
+  if (d.pedidoId) {
+    // A request owns its identity; the manual picker cannot adopt another patient.
+    const converted = await aceptarPedidoConHorario(d.pedidoId, {
+      fechaHora: d.inicio, servicioId: d.servicioId, profesionalId: d.profesionalId,
+      expectedPacienteId: d.pacienteId, pacienteNuevo: d.pacienteNuevo,
+    });
+    if (converted.ok) { revalidatePath("/hoy"); revalidatePath("/calendario"); }
+    return converted;
+  }
 
   const session = await getActiveSession();
   if (!session.ok) return session;
@@ -386,37 +398,6 @@ export async function createTurnoAction(
   });
 
   if (!result.ok) return result;
-
-  // 4. Vincular el pedido de origen (si vino): CAS PENDIENTE→CONFIRMADO con
-  //    confirmado_ts + paciente_id, org-scoped. NO-fatal deliberado: el turno
-  //    ya existe y es válido — si el pedido fue resuelto por otro en el medio
-  //    (0 filas) o el update falla, warn + Sentry y el action devuelve ok.
-  if (d.pedidoId) {
-    const { data: casRows, error: casErr } = await supabase
-      .from("pedido")
-      .update({
-        estado: "CONFIRMADO",
-        confirmado_ts: new Date().toISOString(),
-        paciente_id: pacienteId,
-      })
-      .eq("id", d.pedidoId)
-      .eq("organization_id", session.data.organizationId)
-      .eq("estado", "PENDIENTE")
-      .select("id");
-    if (casErr || !casRows || casRows.length === 0) {
-      console.warn(
-        `[hoy] createTurnoAction: no se pudo confirmar el pedido ${d.pedidoId} vinculado al turno ${result.data.id}: ${casErr?.message ?? "0 filas (ya resuelto?)"}`,
-      );
-      const { captureException } = await import("@sentry/nextjs");
-      captureException(
-        new Error(`pedido vinculado no confirmado: ${casErr?.message ?? "0 filas"}`),
-        {
-          tags: { component: "turno-create", op: "confirmarPedidoVinculado" },
-          extra: { pedidoId: d.pedidoId, turnoId: result.data.id },
-        },
-      );
-    }
-  }
 
   revalidatePath("/hoy");
   revalidatePath("/calendario");

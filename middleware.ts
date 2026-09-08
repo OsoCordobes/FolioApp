@@ -24,6 +24,7 @@
  */
 
 import { type NextRequest } from "next/server";
+import { MFA_PATH, MFA_MESSAGE, mfaRouteDecision, readMfaStatus } from "@/lib/auth/mfa-access";
 
 import {
   decideRouteGate,
@@ -46,6 +47,29 @@ export async function middleware(request: NextRequest) {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
     return response;
   }
+
+  // getUser was verified during refresh. DB reads current membership, factors
+  // and session revocation before audience routing can send a dual user to portal.
+  if (user && supabase && mfaRouteDecision(pathname, false) !== "pass") {
+    const mfa = await readMfaStatus(supabase);
+    if (!mfa.ok || !mfa.data.allowed) {
+      if (pathname.startsWith("/api/")) {
+        return jsonWithCookies(response, { ok: false, error: {
+          code: mfa.ok ? "mfa_required" : "security_unavailable",
+          message: mfa.ok ? MFA_MESSAGE : mfa.error.message,
+        } }, { status: mfa.ok ? 403 : 503, headers: { "Cache-Control": "no-store" } });
+      }
+      const url = request.nextUrl.clone();
+      url.pathname = MFA_PATH;
+      url.search = "";
+      url.searchParams.set("next", pathname + request.nextUrl.search);
+      return redirectWithCookies(response, url);
+    }
+  }
+
+  // MFA/recovery pages provide their own first-factor check, without org/billing
+  // gates. Authenticated users may also choose another login or sign out.
+  if (user && mfaRouteDecision(pathname, false) === "pass") return response;
 
   const gate = decideRouteGate(pathname, Boolean(user));
 

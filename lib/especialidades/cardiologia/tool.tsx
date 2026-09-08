@@ -5,8 +5,7 @@
  *
  * Dos paneles apilados en la columna del slot (pc-plan-grid, 380px):
  *   1. Panel cardiovascular — TA sistólica/diastólica (mmHg) y FC (lpm) de la
- *      sesión, checklist de factores de riesgo con chip de riesgo ORIENTATIVO
- *      (scoreRiesgoCV — conteo simplificado OMS/OPS, no diagnóstico) y curva
+ *      sesión, checklist descriptivo de factores registrados y curva
  *      de evolución TA/FC sobre el historial (<SerieEvolucion> genérico de la
  *      biblioteca C3 — el CardioSparkline propio se retiró en D3).
  *   2. Estudios — historial tipado (ECG/Eco/Ergometría/Holter/Laboratorio) en
@@ -40,7 +39,7 @@ import {
   FACTOR_LABELS,
   FACTORES_RIESGO,
   RANGOS_PANEL,
-  scoreRiesgoCV,
+  contarFactoresCV,
   TIPOS_ESTUDIO,
   URGENCIA_DERIVACION_LABELS,
   URGENCIAS_DERIVACION,
@@ -57,18 +56,11 @@ import {
   type EstudioCardio,
   type FactorRiesgo,
   type MedicamentoCardio,
-  type NivelRiesgoCV,
   type TipoEstudio,
   type UrgenciaDerivacion,
 } from "@/lib/especialidades/cardiologia/schema";
 
 // ─── Helpers de presentación (tokens, sin hex off-theme) ────────────────────
-
-const CHIP_RIESGO: Record<NivelRiesgoCV, CSSProperties> = {
-  bajo: { color: "var(--green)", background: "var(--green-soft)", borderColor: "transparent" },
-  moderado: { color: "var(--amber)", background: "var(--amber-soft)", borderColor: "transparent" },
-  alto: { color: "var(--red)", background: "var(--red-soft)", borderColor: "transparent" },
-};
 
 const CHIP_CONCLUSION: Record<ConclusionEstudio, CSSProperties> = {
   normal: { color: "var(--green)", background: "var(--green-soft)", borderColor: "transparent" },
@@ -506,7 +498,6 @@ export function CardiologiaTool({
   onChange,
   readOnly,
   historial,
-  edad,
   pacienteId,
   turno,
   estudiosAdjuntos,
@@ -566,8 +557,7 @@ export function CardiologiaTool({
 
   // ── Panel CV: factores ──
   const factores = draft.panel?.factores ?? {};
-  const nFactores = FACTORES_RIESGO.filter((f) => factores[f] === true).length;
-  const riesgo = scoreRiesgoCV(factores, edad);
+  const nFactores = contarFactoresCV(factores);
 
   const toggleFactor = (f: FactorRiesgo) => {
     const next = { ...factores };
@@ -655,10 +645,9 @@ export function CardiologiaTool({
           {nFactores > 0 ? (
             <span
               className="fi-pill"
-              style={CHIP_RIESGO[riesgo.nivel]}
-              title={`Clasificación orientativa por conteo de factores (${nFactores} de ${FACTORES_RIESGO.length}). No es diagnóstico ni reemplaza el criterio clínico.`}
+              style={{ color: "var(--slate)", background: "var(--slate-soft)" }}
             >
-              {riesgo.etiqueta}
+              {nFactores} {nFactores === 1 ? "factor registrado" : "factores registrados"}
             </span>
           ) : null}
         </header>
@@ -719,11 +708,9 @@ export function CardiologiaTool({
               </label>
             ))}
           </div>
-          {nFactores === 0 ? (
-            <p className="muted" style={{ margin: 0, fontSize: 11.5 }}>
-              Marcá los factores presentes para estimar el riesgo (orientativo).
-            </p>
-          ) : null}
+          <p className="muted" style={{ margin: 0, fontSize: 11.5 }}>
+            Registrá los factores presentes. Este conteo no estima el riesgo cardiovascular.
+          </p>
         </fieldset>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>

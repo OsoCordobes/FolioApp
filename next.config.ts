@@ -46,6 +46,11 @@ const SUPABASE_HOST = process.env.NEXT_PUBLIC_SUPABASE_URL
   ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).host
   : "*.supabase.co";
 
+// Only the isolated automated-test server permits local HTTP/WS Supabase.
+const TEST_LOCAL_ORIGIN=process.env.FOLIO_TEST_ISOLATED==="1"&&process.env.NEXT_PUBLIC_SUPABASE_URL?new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).origin:null;
+const SUPABASE_HTTP=TEST_LOCAL_ORIGIN??`https://${SUPABASE_HOST}`;
+const SUPABASE_WS=TEST_LOCAL_ORIGIN?TEST_LOCAL_ORIGIN.replace(/^http/,"ws"):`wss://${SUPABASE_HOST}`;
+
 const CSP_DIRECTIVES = [
   `default-src 'self'`,
   // browser.sentry-cdn.com: Session Replay se carga lazy vía
@@ -54,16 +59,16 @@ const CSP_DIRECTIVES = [
   `script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://*.posthog.com https://app.posthog.com https://*.sentry.io https://*.ingest.sentry.io https://browser.sentry-cdn.com https://sdk.mercadopago.com`,
   `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`,
   `font-src 'self' https://fonts.gstatic.com data:`,
-  `img-src 'self' data: blob: https://${SUPABASE_HOST} https://www.mercadopago.com https://*.posthog.com`,
+  `img-src 'self' data: blob: ${SUPABASE_HTTP} https://www.mercadopago.com https://*.posthog.com`,
   // `connect-src` incluye los hosts de Google Fonts porque `<link rel="preconnect">`
   // cuenta como conexión bajo CSP L3 estricto (warning sino).
-  `connect-src 'self' https://${SUPABASE_HOST} wss://${SUPABASE_HOST} https://*.sentry.io https://*.ingest.sentry.io https://*.posthog.com https://app.posthog.com https://api.mercadopago.com https://fonts.googleapis.com https://fonts.gstatic.com`,
+  `connect-src 'self' ${SUPABASE_HTTP} ${SUPABASE_WS} https://*.sentry.io https://*.ingest.sentry.io https://*.posthog.com https://app.posthog.com https://api.mercadopago.com https://fonts.googleapis.com https://fonts.gstatic.com`,
   `frame-src 'self' https://challenges.cloudflare.com https://www.mercadopago.com https://www.mercadopago.com.ar`,
   `form-action 'self' https://www.mercadopago.com https://www.mercadopago.com.ar`,
   `frame-ancestors 'none'`,
   `base-uri 'self'`,
   `object-src 'none'`,
-  `upgrade-insecure-requests`,
+  ...(TEST_LOCAL_ORIGIN?[]:[`upgrade-insecure-requests`]),
 ].join("; ");
 
 const SECURITY_HEADERS = [
@@ -82,6 +87,8 @@ const SECURITY_HEADERS = [
 ];
 
 const nextConfig: NextConfig = {
+  distDir: process.env.FOLIO_TEST_ISOLATED === "1" ? ".next-test" : ".next",
+  experimental: { serverActions: { bodySizeLimit: "4.25mb" } },
   /**
    * Desactiva el badge "Building / Ready" del DevTools indicator de Next
    * en pantallas que se capturan para visual regression. El indicator
@@ -111,9 +118,6 @@ const nextConfig: NextConfig = {
         pathname: "/storage/v1/object/public/**",
       },
     ],
-  },
-  outputFileTracingIncludes: {
-    "/api/admin/migrate": ["./supabase/migrations/*.sql", "./supabase/seed/*.sql"],
   },
   async headers() {
     return [

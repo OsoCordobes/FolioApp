@@ -11,9 +11,10 @@
  */
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import { ProfFilterChips } from "@/components/agenda/prof-filter-chips";
+import { AgendaSyncNotice } from "@/components/agenda/agenda-sync-notice";
 import * as I from "@/components/icons";
 import { KpiStrip } from "@/components/hoy/kpi-strip";
 import { PageHeader } from "@/components/hoy/page-header";
@@ -23,7 +24,7 @@ import { TurnoReagendarModal } from "@/components/hoy/turno-reagendar-modal";
 import { useToast } from "@/components/ui/toast";
 import type { ProfesionalLite } from "@/lib/agenda/profesional";
 import { cobroOptimistaAlCerrar } from "@/lib/hoy/kpi-cobro";
-import { applyTransition } from "@/lib/turno-states";
+import { applyTransition, isTurnoStatePredecessor } from "@/lib/turno-states";
 import { useAgendaAutoRefresh } from "@/lib/use-agenda-refresh";
 import { useNow } from "@/lib/use-now";
 import type { EstadoTurno, PacientesById, Turno } from "@/lib/types";
@@ -41,6 +42,7 @@ interface DashboardProps {
   timezone: string;
   /** Org activa — habilita el live update (polling / realtime tras flag). */
   organizationId?: string;
+  agendaRevision?: string | null;
   /**
    * Modo clínica: colegiados para el selector de profesional. Lista vacía
    * (default) = sin selector — el render histórico de orgs Solo no cambia.
@@ -74,7 +76,23 @@ const TRANSITION_TOAST: Partial<Record<EstadoTurno, string>> = {
   no_asistio: "No asistió registrado",
 };
 
-export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fechaAnio, nowIso, timezone, organizationId, profesionales = [], profActivo = null, primerosPasos = null, canRegistrarCobro = true }: DashboardProps) {
+interface PendingTransition {
+  turno: Turno;
+  patch: Partial<Turno>;
+}
+
+function overlayPending(current: Turno, pending: PendingTransition): Turno {
+  return {
+    ...current,
+    ...pending.patch,
+    // A recorded payment wins over the proposed payment, including when SSR
+    // still shows the previous appointment state (upsert ignores duplicates).
+    cobro: current.cobro?.montoCents != null || !Object.hasOwn(pending.patch, "cobro")
+      ? current.cobro : pending.turno.cobro,
+  };
+}
+
+export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fechaAnio, nowIso, timezone, organizationId, agendaRevision = null, profesionales = [], profActivo = null, primerosPasos = null, canRegistrarCobro = true }: DashboardProps) {
   const router = useRouter();
   const toast = useToast();
   const [turnos, setTurnos] = useState<Turno[]>(initialTurnos);
@@ -82,8 +100,12 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
   /** Turno con el modal de reagendar abierto (null = cerrado). */
   const [reagendarFor, setReagendarFor] = useState<Turno | null>(null);
   const [transitionError, setTransitionError] = useState<string | null>(null);
+  const [pendingIds, setPendingIds] = useState<ReadonlySet<string>>(new Set());
   const [, startTransition] = useTransition();
   const now = useNow(nowIso, 60_000);
+  const currentTurnos = useRef(initialTurnos);
+  const pendingTurnos = useRef(new Map<string, PendingTransition>());
+  const confirmedTurnos = useRef(new Map<string, Turno>());
 
   // Resincronizar el estado local cuando el Server Component re-renderiza
   // (revalidatePath tras crear/transicionar un turno, router.refresh del
@@ -91,11 +113,26 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
   // turno nuevo no aparecía hasta F5. `initialTurnos` es una referencia nueva
   // en cada pasada RSC, así que el efecto corre exactamente en cada refresh.
   useEffect(() => {
-    setTurnos(initialTurnos);
+    // State transitions cannot go backwards in the DB (M91). A pre-save
+    // snapshot stays stale even after an equal-state snapshot has arrived.
+    const refreshed = initialTurnos.map((turno) => {
+      const confirmed = confirmedTurnos.current.get(turno.id);
+      const current = confirmed && isTurnoStatePredecessor(turno.estado, confirmed.estado)
+        ? confirmed : turno;
+      confirmedTurnos.current.set(turno.id, current);
+      const pending = pendingTurnos.current.get(turno.id);
+      // A later server state (including cancellation) takes precedence over
+      // our in-flight optimism. Unrelated appointments remain independent.
+      // Once SSR has reached the requested state, all of its fields are
+      // authoritative, including payment and metadata while ACK is pending.
+      return pending && isTurnoStatePredecessor(current.estado, pending.turno.estado)
+        ? overlayPending(current, pending) : current;
+    });
+    currentTurnos.current = refreshed;
+    setTurnos(refreshed);
   }, [initialTurnos]);
 
-  // Live update: polling 25s con pestaña visible (+ realtime detrás de flag).
-  useAgendaAutoRefresh(organizationId ?? null);
+  const agendaSync = useAgendaAutoRefresh(organizationId ?? null, agendaRevision);
 
   /**
    * Optimistic transition + persistencia via Server Action.
@@ -109,26 +146,32 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
     extra: Partial<Turno> = {},
     cobro?: CobroCierreActionInput,
   ) => {
+    if (pendingTurnos.current.has(id)) return false;
+    const before = currentTurnos.current.find((turno) => turno.id === id);
+    if (!before) return false;
+    const extraConCobro = to === "cerrado"
+      ? { ...extra, cobro: cobroOptimistaAlCerrar(before, cobro, new Date().toISOString()) }
+      : extra;
+    const next = applyTransition(before, to, { extra: extraConCobro });
+    if (next === before) return false;
+
+    // Network calls and notifications belong to the event, never to a React
+    // state updater: React can replay updaters during concurrent rendering.
+    const pending: PendingTransition = {
+      turno: next,
+      patch: { ...extraConCobro, estado: next.estado, transiciones: next.transiciones },
+    };
+    pendingTurnos.current.set(id, pending);
+    setPendingIds(new Set(pendingTurnos.current.keys()));
+    const replaceTurno = (replacement: Turno) => {
+      const updated = currentTurnos.current.map((turno) => turno.id === id ? replacement : turno);
+      currentTurnos.current = updated;
+      setTurnos(updated);
+    };
     setTransitionError(null);
-    setTurnos((prev) => {
-      const idx = prev.findIndex((t) => t.id === id);
-      if (idx === -1) return prev;
-      const before = prev[idx];
-      // Al cerrar, el KPI de dinero tiene que moverse con el cobro REAL que va
-      // a quedar en `pago` (monto editado / "quedó debiendo"), no con el precio
-      // de lista. El helper es el espejo puro de lo que hace transitionTurno.
-      const extraConCobro =
-        to === "cerrado"
-          ? { ...extra, cobro: cobroOptimistaAlCerrar(before, cobro, new Date().toISOString()) }
-          : extra;
-      const next = applyTransition(before, to, { extra: extraConCobro });
-      // Si el estado no cambió (transición inválida), no hacer server call.
-      if (next === before) return prev;
-
-      const optimistic = [...prev];
-      optimistic[idx] = next;
-
-      startTransition(async () => {
+    replaceTurno(next);
+    startTransition(async () => {
+      try {
         const result = await transitionTurnoAction({
           turnoId: id,
           to,
@@ -137,9 +180,9 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
           cobro,
         });
         if (!result.ok) {
-          console.warn("[hoy] transición rechazada:", result.error.message);
           setTransitionError(result.error.message);
-          setTurnos((curr) => curr.map((t) => (t.id === id ? before : t)));
+          replaceTurno(confirmedTurnos.current.get(id) ?? before);
+          router.refresh();
           return;
         }
         const nombre = pacientes[before.pacienteId]?.nombre ?? "paciente";
@@ -148,31 +191,55 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
         // que nunca llegó a la tabla `pago` — la misma mentira que este PR
         // vino a eliminar, en versión transitoria.
         if (to === "cerrado" && result.data.pagoRegistrado === false) {
-          setTurnos((curr) => curr.map((t) => (t.id === id ? { ...t, cobro: before.cobro } : t)));
+          const withoutPayment = { ...next, cobro: before.cobro };
+          pendingTurnos.current.set(id, { turno: withoutPayment, patch: { ...pending.patch, cobro: before.cobro } });
         }
+        const settled = pendingTurnos.current.get(id) ?? pending;
+        const acknowledged = settled.turno;
+        const seen = confirmedTurnos.current.get(id);
+        // Keep the barrier after ACK, without keeping the request pending:
+        // the user may immediately advance en_sala -> atendiendo -> cerrado.
+        let confirmed = seen ? overlayPending(seen, settled) : acknowledged;
+        if (seen && !isTurnoStatePredecessor(seen.estado, acknowledged.estado)) {
+          // A numeric amount came from a real payment row in the refreshed
+          // snapshot. A late ACK has no payment row of its own and must not
+          // replace that evidence with the optimistic amount (or rollback).
+          confirmed = seen.estado === acknowledged.estado && to === "cerrado" && seen.cobro?.montoCents == null
+            ? { ...seen, cobro: acknowledged.cobro } : seen;
+        }
+        confirmedTurnos.current.set(id, confirmed);
+        replaceTurno(confirmed);
+        if (confirmed.estado !== to) return;
         // PR #118 · el server confirma si el cobro quedó registrado: cierre y
         // pago NO son atómicos. Si el usuario cargó un cobro y el upsert de
         // `pago` falló (RLS u otro error), el toast de éxito mentía "deuda
         // registrada" — ahora avisa con tono error que hay que cargarlo a mano.
         if (to === "cerrado" && cobro && result.data.pagoRegistrado === false) {
           toast.show({
-            titulo: `Turno cerrado, pero el cobro NO se registró — cargalo desde Finanzas · ${before.hora} · ${nombre}`,
+            titulo: `Turno cerrado, pero no pudimos confirmar el cobro solicitado — revisalo en Finanzas · ${before.hora} · ${nombre}`,
             tono: "error",
           });
           return;
         }
         // C4 · feedback: toast de éxito recién cuando el server confirmó (el
         // update optimista ya se ve en la lista; el toast asegura "se guardó").
-        const tituloToast = to === "cerrado" && cobro && !cobro.pagado
+        const tituloToast = to === "cerrado" && result.data.pagoRegistrado === true &&
+          confirmed.cobro?.estado === "pendiente" && (confirmed.cobro.montoCents ?? 0) > 0
           ? "Turno cerrado · deuda registrada"
           : TRANSITION_TOAST[to];
         if (tituloToast) {
           toast.show({ titulo: `${tituloToast} · ${before.hora} · ${nombre}` });
         }
-      });
-
-      return optimistic;
+      } catch {
+        replaceTurno(confirmedTurnos.current.get(id) ?? before);
+        setTransitionError("Se interrumpió la conexión. Estamos comprobando el estado del turno; revisalo antes de volver a intentar.");
+        router.refresh();
+      } finally {
+        pendingTurnos.current.delete(id);
+        setPendingIds(new Set(pendingTurnos.current.keys()));
+      }
     });
+    return true;
   };
 
   const nextId = useMemo<string | undefined>(() => {
@@ -208,6 +275,7 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
           />
         ) : null}
         {primerosPasos}
+        <AgendaSyncNotice sync={agendaSync} />
         <KpiStrip turnos={turnos} pacientes={pacientes} now={now} timezone={timezone} />
         {transitionError ? (
           <div
@@ -246,12 +314,15 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
             now={now}
             timezone={timezone}
             canRegistrarCobro={canRegistrarCobro}
+            pendingIds={pendingIds}
             onTransition={handleTransition}
             onReagendar={(turnoId) => {
+              if (pendingTurnos.current.has(turnoId)) return;
               const turno = turnos.find((t) => t.id === turnoId);
               if (turno) setReagendarFor(turno);
             }}
-            onOpenFicha={(turnoId) => {
+            onOpenFicha={(turnoId, transitionStarted) => {
+              if (pendingTurnos.current.has(turnoId) && !transitionStarted) return;
               // Side panel-style ficha planeado para sprint posterior. Mientras
               // tanto, navegar a la ficha completa del paciente — toda la info
               // clínica + plan + sesiones está allí.

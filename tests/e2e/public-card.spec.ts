@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../fixtures/local-test";
 
 /**
  * Folio · <PublicCard> structural + variant smoke — Playwright e2e.

@@ -1,3 +1,5 @@
+
+import { safeLog } from "@/lib/observability/safe-log";
 /**
  * Folio · resolver organization desde el phone_number_id de Meta WhatsApp.
  *
@@ -28,7 +30,7 @@ export async function resolveOrgByPhoneNumberId(phoneNumberId: string): Promise<
     .maybeSingle();
 
   if (error) {
-    console.warn(`[whatsapp] error resolviendo org para phone_number_id=${phoneNumberId}: ${error.message}`);
+    safeLog("warn", "lib.whatsapp.resolve.org.L31", { error: error });
     return null;
   }
   if (!data) return null;

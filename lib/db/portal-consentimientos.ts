@@ -18,14 +18,12 @@
  *   a `sesion` (M71) — esto sólo toca `consentimiento`, que él ya podía leer.
  */
 
-import { pathSinBucket, tipoConsentimientoLabel } from "@/lib/consentimientos/helpers";
+import { tipoConsentimientoLabel } from "@/lib/consentimientos/helpers";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import { err, mapSupabaseError, ok, type Result } from "./errors";
 import { getPacienteSession } from "./paciente-session";
 
-const CONSENT_BUCKET = "consentimientos-firmados";
-const SIGNED_URL_TTL_SECONDS = 300; // 5 min (mismo TTL que el flujo staff)
 
 /**
  * Un consentimiento firmado tal como lo ve el paciente en el portal. WHITELIST de
@@ -176,12 +174,5 @@ export async function getFirmaUrlPortal(
     return err("not_found", "No encontramos ese consentimiento.");
   }
 
-  const { data: signed, error: signErr } = await supabase.storage
-    .from(CONSENT_BUCKET)
-    .createSignedUrl(pathSinBucket(path), SIGNED_URL_TTL_SECONDS);
-
-  if (signErr || !signed) {
-    return err("not_found", "No se pudo generar el link de la firma.", signErr?.message);
-  }
-  return ok({ signedUrl: signed.signedUrl });
+  return ok({ signedUrl: `/api/consentimientos/${consentimientoId}/firma` });
 }

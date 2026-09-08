@@ -27,6 +27,8 @@ import {
   revokeConsentimientoAction,
 } from "@/app/(app)/pacientes/actions";
 import { FirmaCanvasModal } from "@/components/paciente/firma-canvas-modal";
+import { RepresentacionesCard } from "@/components/paciente/representaciones-card";
+import { EvaluacionesConsentimiento } from "@/components/paciente/evaluaciones-consentimiento";
 import type {
   ConsentimientoListItem,
   PlantillaVigente,
@@ -73,6 +75,7 @@ export function ConsentimientosCard({ pacienteId, pacienteNombre }: Consentimien
   const [motivo, setMotivo] = useState("");
   const [revocarPending, setRevocarPending] = useState(false);
   const [firmaPendingId, setFirmaPendingId] = useState<string | null>(null);
+  const [revision,setRevision]=useState(0);
 
   const cargar = async () => {
     const result = await listConsentimientosPacienteAction(pacienteId);
@@ -104,15 +107,14 @@ export function ConsentimientosCard({ pacienteId, pacienteNombre }: Consentimien
         setAccionError(plantillas.error.message);
         return;
       }
-      // Sin tutores no se bloquea nada — el selector simplemente no aparece.
-      const tutoresData = tutores.ok ? tutores.data : [];
-      setModalData({ plantillas: plantillas.data, tutores: tutoresData });
+      if (!tutores.ok) { setAccionError(tutores.error.message); return; }
+      setModalData({ plantillas: plantillas.data, tutores: tutores.data });
     } finally {
       setAbriendoModal(false);
     }
   };
 
-  const verFirma = async (id: string) => {
+  const verFirma = async (id: string, participante=0) => {
     if (firmaPendingId) return;
     setFirmaPendingId(id);
     setAccionError(null);
@@ -124,7 +126,7 @@ export function ConsentimientosCard({ pacienteId, pacienteNombre }: Consentimien
       }
       // Signed URL de 5 min en pestaña nueva (noopener: la pestaña no puede
       // navegar a la ficha).
-      window.open(result.data.signedUrl, "_blank", "noopener,noreferrer");
+      window.open(result.data.signedUrl+(participante?"?participante=1":""), "_blank", "noopener,noreferrer");
     } finally {
       setFirmaPendingId(null);
     }
@@ -159,6 +161,8 @@ export function ConsentimientosCard({ pacienteId, pacienteNombre }: Consentimien
   const vigentes = items?.filter((c) => c.vigente).length ?? 0;
 
   return (
+    <>
+    <RepresentacionesCard pacienteId={pacienteId}/>
     <section className="pc-card pc-consent-card">
       <header className="pc-card-head">
         <span className="fi-eyebrow">Consentimientos</span>
@@ -235,11 +239,11 @@ export function ConsentimientosCard({ pacienteId, pacienteNombre }: Consentimien
                         (c.vigente ? "pc-consent-pill--vigente" : "pc-consent-pill--revocado")
                       }
                     >
-                      {c.vigente ? "Vigente" : "Revocado"}
+                      {c.vigente ? c.evidenciaRegistrada ? "Registrado" : "Registro previo · revisar evidencia" : "Revocado"}
                     </span>
                     <span className="muted">
                       Firmado el {fmtFechaFirma(c.firmadoEn)} por{" "}
-                      {c.firmadoPorTutor ? "el tutor legal" : "el paciente"}
+                      {c.evidenciaRegistrada ? c.participantes.join(" y ").toLowerCase() : "firmante consignado en el registro previo (evidencia por revisar)"}
                     </span>
                   </div>
                   {!c.vigente ? (
@@ -248,6 +252,7 @@ export function ConsentimientosCard({ pacienteId, pacienteNombre }: Consentimien
                       {c.revocadoMotivo ? ` — «${c.revocadoMotivo}»` : ""}
                     </p>
                   ) : null}
+                  {c.textoSnapshot&&<details><summary>Texto y versión registrados</summary><p style={{whiteSpace:"pre-wrap"}}>{c.textoSnapshot}</p></details>}
                 </div>
                 <div className="pc-consent-row-actions">
                   <button
@@ -257,10 +262,11 @@ export function ConsentimientosCard({ pacienteId, pacienteNombre }: Consentimien
                       void verFirma(c.id);
                     }}
                     disabled={firmaPendingId !== null}
-                    title="Abrir la imagen de la firma en una pestaña nueva (link válido 5 minutos)"
+                    title="Abrir evidencia comprobando nuevamente la sesión y los permisos"
                   >
                     {firmaPendingId === c.id ? "Abriendo…" : "Ver firma"}
                   </button>
+                  {c.participantes.length>1&&<button type="button" className="pc-link" disabled={firmaPendingId!==null} onClick={()=>void verFirma(c.id,1)}>Ver firma del representante</button>}
                   {c.vigente ? (
                     <button
                       type="button"
@@ -322,8 +328,8 @@ export function ConsentimientosCard({ pacienteId, pacienteNombre }: Consentimien
             ))}
           </ul>
           <p className="pc-consent-foot muted">
-            {vigentes === 1 ? "1 consentimiento vigente" : `${vigentes} consentimientos vigentes`}
-            {" · "}los links de firma expiran a los 5 minutos.
+            {vigentes === 1 ? "1 registro sin revocar" : `${vigentes} registros sin revocar`}
+            {" · "}cada lectura de evidencia vuelve a comprobar la sesión y los permisos.
           </p>
         </>
       )}
@@ -333,6 +339,7 @@ export function ConsentimientosCard({ pacienteId, pacienteNombre }: Consentimien
           {accionError}
         </p>
       ) : null}
+      <EvaluacionesConsentimiento pacienteId={pacienteId} revision={revision}/>
 
       {modalData ? (
         <FirmaCanvasModal
@@ -342,11 +349,13 @@ export function ConsentimientosCard({ pacienteId, pacienteNombre }: Consentimien
           tutores={modalData.tutores}
           onClose={() => setModalData(null)}
           onCreated={() => {
+            setRevision(r=>r+1);
             setModalData(null);
             void cargar();
           }}
         />
       ) : null}
     </section>
+    </>
   );
 }

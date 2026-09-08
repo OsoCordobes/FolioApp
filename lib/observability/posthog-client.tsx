@@ -1,25 +1,11 @@
 "use client";
 
-/**
- * Folio · PostHog browser init.
- *
- * Carga el SDK posthog-js solo en el cliente. Privacy-first:
- *   - `mask_all_text_inputs` y `mask_all_element_attributes` evitan capturar
- *     contenido sensible (nombres, telefonos, notas clínicas).
- *   - Session recording está OFF por default; se puede activar feature-gated.
- *   - DNT (Do Not Track) del browser se respeta.
- *
- * Perf (R4): posthog-js (~40-50 KB gz) NO entra al bundle inicial.
- *   - El SDK se carga con `import("posthog-js")` dinámico DENTRO del flujo
- *     post-consent: sin consent (o sin key / con DNT) el chunk ni se pide.
- *   - El provider/hook viene de `posthog-js/react/slim`, que —a diferencia de
- *     `posthog-js/react`— no importa posthog-js por valor (solo tipos): los
- *     consumidores (usePostHog) tampoco arrastran el SDK.
- *   - Montamos SIEMPRE el mismo <PostHogContext.Provider> (con client
- *     undefined hasta el init) para que el árbol de React no se desmonte
- *     cuando llega la instancia. Los consumidores ya toleran la ausencia:
- *     chequean `ph && ph.__loaded` antes de capturar (landing-analytics.tsx).
+/** Marketing-only analytics, gated by current consent and DNT on every event.
+ * No clinical initialization, replay, page URLs, profiles, flags or persisted IDs.
+ * The SDK is loaded after consent; every payload is rebuilt from an allowlist.
  */
+
+import { sanitizeBrowserAnalyticsEvent } from "./privacy";
 
 import { PostHogContext } from "posthog-js/react/slim";
 import { useEffect, useMemo, useState } from "react";
@@ -32,6 +18,10 @@ const KEY = process.env.NEXT_PUBLIC_POSTHOG_KEY;
 const HOST = process.env.NEXT_PUBLIC_POSTHOG_HOST ?? "https://us.i.posthog.com";
 
 let initialized = false;
+function mayCaptureMarketing(): boolean {
+  try { return window.location.pathname === "/" && navigator.doNotTrack !== "1" && navigator.doNotTrack !== "yes" && window.localStorage.getItem("folio.cookieConsent") === "granted"; }
+  catch { return false; }
+}
 
 export function FolioPostHogProvider({ children }: { children: React.ReactNode }) {
   const [client, setClient] = useState<PostHog | undefined>(undefined);
@@ -46,6 +36,8 @@ export function FolioPostHogProvider({ children }: { children: React.ReactNode }
     // evento `folio:cookie-consent` del CookieBanner (aceptar ya NO recarga la
     // página — un paciente a mitad del wizard de booking perdía su progreso).
     const tryInit = () => {
+      // Marketing only: no SDK initialization on clinical, portal or token routes.
+      if (!mayCaptureMarketing()) return;
       if (initialized) return;
       if (navigator.doNotTrack === "1" || navigator.doNotTrack === "yes") return;
       let granted = false;
@@ -58,16 +50,35 @@ export function FolioPostHogProvider({ children }: { children: React.ReactNode }
       // acá (post-consent). Si falla (offline/adblock), queda todo no-op.
       void import("posthog-js")
         .then(({ default: posthog }) => {
+          if (cancelled || !mayCaptureMarketing()) { initialized = false; return; }
           posthog.init(KEY, {
             api_host: HOST,
-            capture_pageview: true,
-            capture_pageleave: true,
+            capture_pageview: false,
+            capture_pageleave: false,
             autocapture: false,                               // explicit captures only
-            persistence: "localStorage+cookie",
-            mask_all_text: false,                             // permitimos texto general pero...
+            persistence: "memory",
+            disable_persistence: true,
+            person_profiles: "never",
+            advanced_disable_flags: true,
+            advanced_disable_feature_flags: true,
+            disable_external_dependency_loading: true,
+            disable_surveys: true,
+            disable_conversations: true,
+            disable_product_tours: true,
+            save_campaign_params: false,
+            save_referrer: false,
+            capture_performance: false,
+            before_send: (event) => {
+              if (!mayCaptureMarketing()) return null;
+              const safe = sanitizeBrowserAnalyticsEvent(event);
+              // Public ingestion key comes from configured SDK routing, never event input.
+              if (safe) safe.properties.token = KEY;
+              return safe;
+            },
+            mask_all_text: true,                             // permitimos texto general pero...
             mask_personal_data_properties: true,
-            session_recording: { maskAllInputs: true, maskTextSelector: "[data-sensitive]" },
-            disable_session_recording: true,                  // OFF por default; toggleable luego
+            session_recording: { maskAllInputs: true, maskTextSelector: "*" },
+            disable_session_recording: true,                  // Global privacy boundary.
           });
           if (!cancelled) setClient(posthog);
         })

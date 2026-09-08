@@ -13,7 +13,7 @@
 --   4. same-org guard de paciente_claim: paciente de otra org → el trigger
 --      rechaza.
 --   5. RLS FORCE + estado FINAL de policies del stack (post-M71..M87):
---      paciente_cuenta sigue CERRADA (CERO policies — el acceso sancionado es
+--      paciente_cuenta sigue CERRADA (CERO policies PERMISSIVE — el acceso sancionado es
 --      SOLO vía funciones DEFINER: paciente_cuenta_actual M70,
 --      listar_paciente_claims_pendientes M87); paciente_claim tiene EXACTAMENTE
 --      las 4 policies de M71 (self-select/self-insert del paciente +
@@ -222,7 +222,8 @@ BEGIN
 
   -- paciente_cuenta: CERRADA también en el estado final (M71..M87 no le agregan
   -- policies a propósito).
-  IF EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'paciente_cuenta') THEN
+  -- M101 adds only a RESTRICTIVE gate, which grants no access by itself.
+  IF EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'paciente_cuenta' AND permissive='PERMISSIVE') THEN
     RAISE EXCEPTION 'M70 spec FAIL: paciente_cuenta tiene policies (debe seguir cerrada; el acceso sancionado es sólo vía funciones DEFINER)';
   END IF;
 
@@ -267,9 +268,9 @@ BEGIN
     RAISE EXCEPTION 'M70 spec FAIL: falta paciente_claim_update_clinical (UPDATE, gate can_read_clinical en USING y WITH CHECK) — M71';
   END IF;
 
-  -- Ni una policy más que esas 4 (una quinta = superficie no revisada).
+  -- Exactly four granting policies; M101's restrictive MFA gate grants nothing.
   SELECT count(*) INTO v_cnt FROM pg_policies
-   WHERE schemaname = 'public' AND tablename = 'paciente_claim';
+   WHERE schemaname = 'public' AND tablename = 'paciente_claim' AND permissive='PERMISSIVE';
   IF v_cnt <> 4 THEN
     RAISE EXCEPTION 'M70 spec FAIL: paciente_claim tiene % policies (esperadas EXACTAMENTE las 4 de M71)', v_cnt;
   END IF;
@@ -277,7 +278,7 @@ BEGIN
   -- Y NUNCA DELETE/ALL: la cola de claims es append-only (se resuelve por estado).
   IF EXISTS (
     SELECT 1 FROM pg_policies
-    WHERE schemaname = 'public' AND tablename = 'paciente_claim' AND cmd IN ('DELETE','ALL')
+    WHERE schemaname = 'public' AND tablename = 'paciente_claim' AND cmd IN ('DELETE','ALL') AND permissive='PERMISSIVE'
   ) THEN
     RAISE EXCEPTION 'M70 spec FAIL: paciente_claim tiene una policy DELETE/ALL (cola append-only: prohibido)';
   END IF;

@@ -13,6 +13,8 @@
  */
 
 import Link from "next/link";
+import type { ClinicalRevisionPreview } from "@/lib/db/sesiones";
+import { ClinicalSaveCoordinator, type ClinicalSaveMode } from "@/lib/ficha/clinical-save-coordinator";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
@@ -21,6 +23,7 @@ import {
   listDocumentosPacienteAction,
   refreshRadiografiaUrlAction,
   saveSesionFichaAction,
+  readClinicalSessionRevisionAction,
   saveSesionYCerrarAction,
   uploadDocumentoPacienteAction,
   type DocumentoFichaItem,
@@ -125,8 +128,10 @@ function SoapStacked({
   saveBadge,
   eyebrow,
   guia,
+  readOnly=false,
 }: {
   soap: SoapState;
+  readOnly?:boolean;
   setSoap: (s: SoapState) => void;
   /** Indicador de guardado (lo pasa TabPlan cuando hay turno ancla). */
   saveBadge?: ReactNode;
@@ -179,6 +184,7 @@ function SoapStacked({
               </div>
             ) : null}
             <textarea
+              readOnly={readOnly}
               className="pc-soap-textarea"
               value={soap[s.id]}
               onChange={(e) => setSoap({ ...soap, [s.id]: e.target.value })}
@@ -326,6 +332,8 @@ function TabPlan() {
     estudiosAdjuntos: plan.estudiosAdjuntos,
     // Cardiología la usa en el score de riesgo CV (≥60 suma); quiro/psico la ignoran.
     edad: paciente.edad > 0 ? paciente.edad : undefined,
+    fechaNacimiento: paciente.fechaNacimiento ?? null,
+    fechaAtencion: turnoActivo?.inicio ?? null,
     // D2 · membrete de los imprimibles de la Tool (derivación cardio):
     // paciente + consultorio, espejo del FichaPrintHeader. Las demás Tools
     // ignoran ambos.
@@ -364,10 +372,15 @@ function TabPlan() {
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
-  // Versión de la sesión con la que se hidrató el borrador. Viaja en cada
-  // guardado; si otra pestaña movió la fila, el writer devuelve `conflict` en
-  // vez de pisar. Se actualiza sola en el router.refresh() del guardado ok.
-  const versionSesion = turnoActivo?.sesionUpdatedAt ?? undefined;
+  const editorAnchorRef=useRef({turnoId:turnoActivo?.id??null,pacienteId:paciente.id});
+  const anchorChanged=editorAnchorRef.current.turnoId!==(turnoActivo?.id??null)||editorAnchorRef.current.pacienteId!==paciente.id;
+  const saveCoordinatorRef=useRef<ClinicalSaveCoordinator|null>(null);
+  if(!saveCoordinatorRef.current)saveCoordinatorRef.current=new ClinicalSaveCoordinator(turnoActivo?.sesionRevision??0,{soap:soapInicial,toolValue:turnoActivo?.toolDraft??null});
+  const coordinator=saveCoordinatorRef.current;
+  const latestDraftRef=useRef<BorradorFicha>({soap,toolValue});
+  latestDraftRef.current={soap,toolValue};
+  const [recoveryCopied,setRecoveryCopied]=useState(false);
+  const [serverComparison,setServerComparison]=useState<ClinicalRevisionPreview|null>(null);
   const [conflicto, setConflicto] = useState(false);
 
   // D1 · baseline del borrador = lo último GUARDADO (o lo hidratado del server
@@ -405,6 +418,7 @@ function TabPlan() {
     if (!previo) return;
     setSoap(previo.soap);
     setBaseline((b) => ({ ...b, soap: previo.soap }));
+    coordinator.baseline={...coordinator.baseline,soap:structuredClone(previo.soap)};
     setSoapDesde(previo.fecha);
   };
 
@@ -420,11 +434,13 @@ function TabPlan() {
   const onSoapChange = (s: SoapState) => {
     userEditoRef.current = true;
     setSoap(s);
+    setRecoveryCopied(false);
     if (saveError) setSaveError(null);
   };
   const onToolChange = (v: unknown) => {
     userEditoRef.current = true;
     setToolValue(v);
+    setRecoveryCopied(false);
     if (saveError) setSaveError(null);
   };
   // Seed PROGRAMÁTICO de la Tool (carry-forward quiro al montar): actualiza el
@@ -433,44 +449,52 @@ function TabPlan() {
   // interacción). "Guardar sesión" lo persiste junto con la primera edición
   // real del profesional.
   const onToolSeed = (v: unknown) => {
+    if(userEditoRef.current||coordinator.inFlight||coordinator.uncertain||coordinator.closed)return;
+    coordinator.baseline={...coordinator.baseline,toolValue:structuredClone(v)};
     setToolValue(v);
     setBaseline((b) => ({ ...b, toolValue: v }));
   };
 
-  const handleGuardar = async (opts?: { autosave?: boolean }) => {
-    if (!turnoActivo || saving) return;
-    // Snapshot de lo que se envía (ver comentario del baseline).
-    const enviado: BorradorFicha = { soap, toolValue };
-    setSaving(true);
-    setSaveError(null);
-    const result = await saveSesionFichaAction({
-      turnoId: turnoActivo.id,
-      pacienteId: paciente.id,
-      toolValue: enviado.toolValue,
-      soap: enviado.soap,
-      // El autosave NUNCA transiciona el turno (empezar a atender es una
-      // decisión explícita: botón "Guardar sesión" / "Guardar y cerrar").
-      autosave: opts?.autosave === true,
-      updatedAtEsperado: versionSesion,
-    });
-    setSaving(false);
-    if (result.ok) {
-      const d = new Date();
-      setSavedAt(`${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`);
-      setBaseline(enviado);
-      // La vuelta: refresca el Server Component → plan.toolHistorial trae la
-      // sesión recién guardada (el borrador local no se resetea: useState).
-      router.refresh();
-    } else if (result.error.code === "conflict") {
-      // Otra pestaña (o la tablet del consultorio) guardó esta misma ficha
-      // mientras la editábamos. NO reintentamos ni pisamos: se le muestra la
-      // salida y decide él. El borrador local queda intacto para que pueda
-      // copiar lo que escribió antes de recargar.
-      setConflicto(true);
-      setSaveError(null);
-    } else {
-      setSaveError(`No se pudo guardar: ${result.error.message}`);
-    }
+  const runClinicalSave=async(mode:ClinicalSaveMode,retry=false)=>{
+    const anchor=editorAnchorRef.current;
+    if(!anchor.turnoId||(!retry&&(!turnoActivo||anchorChanged||coordinator.uncertain))||(retry&&!coordinator.uncertain))return;
+    const op=coordinator.begin(latestDraftRef.current,mode,crypto.randomUUID());
+    if(!op)return;
+    setSaving(true);setSaveError(null);setRecoveryCopied(false);
+    try{
+      const input={turnoId:anchor.turnoId,pacienteId:anchor.pacienteId,toolValue:op.draft.toolValue,soap:op.draft.soap,
+        revisionEsperada:op.expectedRevision,operacionId:op.operationId,autosave:op.mode==="AUTOSAVE"};
+      const result=op.mode==="CLOSE"?await saveSesionYCerrarAction(input):await saveSesionFichaAction(input);
+      if(result.ok){
+        if(result.data.operationId!==op.operationId||result.data.cerrado!==(op.mode==="CLOSE")||!coordinator.acknowledge(op,{revision:result.data.revision,closed:result.data.cerrado})){
+          coordinator.reject(op,"uncertain");setSaveError("La respuesta no confirmó esta operación. Conservá el borrador y reintentá la confirmación.");return;
+        }
+        setBaseline(op.draft);
+        setSavedAt(new Date(result.data.updatedAt).toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"}));
+        if(result.data.cerrado){
+          if(coordinator.isDirty(latestDraftRef.current)){setConflicto(true);setSaveError("La atención quedó cerrada con el texto enviado. Hay cambios posteriores en este borrador: conservalos para una enmienda; no fueron guardados.");return;}
+          if("aviso" in result.data&&result.data.aviso){setSaveError(String(result.data.aviso));return;}
+          router.push("/hoy");return;
+        }
+        router.refresh(); // The acknowledged coordinator revision never comes from refreshed props.
+      }else{
+        const kind=result.error.code==="conflict"||result.error.code==="locked"?"conflict":result.error.code==="network"||result.error.code==="db_error"?"uncertain":"rejected";
+        coordinator.reject(op,kind);if(kind==="conflict")setConflicto(true);
+        setSaveError(result.error.message);
+      }
+    }catch{coordinator.reject(op,"uncertain");setSaveError("Se interrumpió la respuesta. El borrador sigue acá: confirmá la misma operación antes de guardar otros cambios o cerrar.");}
+    finally{setSaving(false);}
+  };
+  const handleGuardar=(opts?:{autosave?:boolean})=>runClinicalSave(opts?.autosave?"AUTOSAVE":"SAVE");
+  const handleGuardarYCerrar=()=>runClinicalSave("CLOSE");
+  const compareSaved=async()=>{
+    const anchor=editorAnchorRef.current;if(!anchor.turnoId)return;
+    try{const result=await readClinicalSessionRevisionAction(anchor.turnoId,anchor.pacienteId);if(!result.ok){setSaveError(result.error.message);return;}setServerComparison(result.data);}
+    catch{setSaveError("No pudimos leer la versión guardada. Tu borrador sigue intacto.");}
+  };
+  const downloadRecovery=()=>{
+    const file=new Blob([JSON.stringify({estado:"BORRADOR_PENDIENTE_NO_ES_HISTORIA_CONFIRMADA",pacienteId:editorAnchorRef.current.pacienteId,turnoId:editorAnchorRef.current.turnoId,revisionConfirmada:coordinator.revision,operacionPendiente:coordinator.uncertain,borrador:latestDraftRef.current},null,2)],{type:"application/json"});
+    const url=URL.createObjectURL(file),link=document.createElement("a");link.href=url;link.download="borrador-clinico-pendiente.json";link.click();URL.revokeObjectURL(url);setRecoveryCopied(true);
   };
 
   // D1 · guard: cerrar/recargar la pestaña con borrador sucio pide
@@ -480,15 +504,26 @@ function TabPlan() {
   // Gateado por interacción REAL: un estado sembrado programáticamente no es
   // trabajo del profesional y no debe frenar el cierre de la pestaña.
   useEffect(() => {
-    if (!sucio || !userEditoRef.current) return;
+    if (!saving && !coordinator.uncertain && (!sucio || !userEditoRef.current)) return;
     const handler = (e: BeforeUnloadEvent) => {
       e.preventDefault();
       // Chrome legacy exige returnValue seteado para mostrar el diálogo.
       e.returnValue = "";
     };
+    const leaveViaLink = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const link = event.target instanceof Element ? event.target.closest("a[href]") as HTMLAnchorElement | null : null;
+      if (!link || link.target === "_blank" || link.hasAttribute("download")) return;
+      const destination = new URL(link.href, window.location.href);
+      if (destination.pathname === window.location.pathname && destination.search === window.location.search) return;
+      if (!window.confirm("Hay cambios pendientes o una operación sin confirmar. Si salís, podés perder el borrador. Cancelá para conservar una copia o confirmar el guardado.")) {
+        event.preventDefault(); event.stopPropagation();
+      }
+    };
     window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, [sucio]);
+    document.addEventListener("click", leaveViaLink, true);
+    return () => { window.removeEventListener("beforeunload", handler); document.removeEventListener("click", leaveViaLink, true); };
+  }, [sucio,saving,coordinator]);
 
   // D1 · autosave: ~10 s después de la última tecla, SOLO con la atención EN
   // CURSO (en por_iniciar guardaría horas antes del turno; en retroactivo
@@ -503,7 +538,7 @@ function TabPlan() {
         sucio,
         guardando: saving,
         hayTurno: !!turnoActivo,
-        hayError: saveError != null,
+        hayError: saveError != null || conflicto || anchorChanged || coordinator.uncertain!==null || coordinator.closed,
         modoTurno: turnoActivo?.modo ?? null,
         huboInteraccion: userEditoRef.current,
       })
@@ -517,42 +552,7 @@ function TabPlan() {
     // handleGuardar se recrea por render; los deps que importan son los que
     // reinician el debounce (soap/toolValue) + los gates de la decisión.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [soap, toolValue, sucio, saving, turnoActivo, saveError]);
-
-  // "Guardar y cerrar": persiste la sesión Y cierra el turno (ATENDIENDO →
-  // CERRADO) en un solo paso. La action devuelve ok({ cerrado }) — un err
-  // significa que el guardado falló; ok({ cerrado: false }) que se guardó pero
-  // el cierre no, sin perder el trabajo.
-  const handleGuardarYCerrar = async () => {
-    if (!turnoActivo || saving) return;
-    const enviado: BorradorFicha = { soap, toolValue };
-    setSaving(true);
-    setSaveError(null);
-    const result = await saveSesionYCerrarAction({
-      turnoId: turnoActivo.id,
-      pacienteId: paciente.id,
-      toolValue: enviado.toolValue,
-      soap: enviado.soap,
-    });
-    // Un ok (cerrado o no) implica que la sesión SE GUARDÓ: el baseline se
-    // actualiza para que el guard de beforeunload no frene la navegación.
-    if (result.ok) setBaseline(enviado);
-    if (result.ok && result.data.cerrado) {
-      // Turno cerrado: el lugar natural es la agenda del día (el turno ya no
-      // está en curso). No reseteamos `saving` — navegamos fuera de la ficha.
-      router.push("/hoy");
-      return;
-    }
-    setSaving(false);
-    if (result.ok) {
-      // Sesión guardada pero el cierre falló — copy explícito, el trabajo no se
-      // pierde y el turno sigue en curso (se puede reintentar cerrar).
-      setSaveError(`Sesión guardada, pero no se pudo cerrar el turno: ${result.data.cierreError ?? "intentá de nuevo."}`);
-    } else {
-      // El guardado mismo falló: nunca se intentó cerrar.
-      setSaveError(`No se pudo guardar: ${result.error.message}`);
-    }
-  };
+  }, [soap, toolValue, sucio, saving, turnoActivo, saveError, conflicto, coordinator, anchorChanged]);
 
   // D1 · el badge ahora refleja el ciclo del autosave: Guardando… → Guardado ✓
   // (con hora) → Borrador sin guardar apenas se vuelve a editar. Mismas clases
@@ -563,6 +563,10 @@ function TabPlan() {
         <span className="fm-save-spinner" />
         Guardando…
       </span>
+    ) : coordinator.uncertain ? (
+      <span className="fm-save">Confirmación pendiente</span>
+    ) : conflicto || anchorChanged ? (
+      <span className="fm-save">Revisión necesaria</span>
     ) : sucio ? (
       <span
         className="fm-save"
@@ -638,7 +642,7 @@ function TabPlan() {
           value={toolValue}
           onChange={onToolChange}
           onSeed={onToolSeed}
-          readOnly={!turnoActivo}
+          readOnly={!turnoActivo||coordinator.closed||anchorChanged}
           historial={filtrarToolHistorial(plan.toolHistorial, especialidad)}
           {...toolExtras}
         />
@@ -648,7 +652,7 @@ function TabPlan() {
             value={toolValue}
             onChange={onToolChange}
             onSeed={onToolSeed}
-            readOnly={!turnoActivo}
+            readOnly={!turnoActivo||coordinator.closed||anchorChanged}
             historial={filtrarToolHistorial(plan.toolHistorial, especialidad)}
             {...toolExtras}
           />
@@ -687,6 +691,7 @@ function TabPlan() {
           ) : null}
           <SoapStacked
             soap={soap}
+            readOnly={coordinator.closed||anchorChanged}
             setSoap={onSoapChange}
             saveBadge={saveBadge}
             guia={def.soapGuia}
@@ -705,38 +710,18 @@ function TabPlan() {
         <div style={{ display: "flex", justifyContent: "flex-end" }}>{saveBadge}</div>
       ) : null}
 
-      {/* Conflicto de escritura: otra pestaña guardó esta ficha mientras la
-          editábamos. No se reintenta ni se pisa — el borrador local queda
-          intacto para que el profesional pueda copiar lo que escribió antes de
-          recargar. Antes esto era last-write-wins ciego con "Guardado ✓". */}
-      {conflicto ? (
-        <div className="pc-sin-turno pc-sin-turno--warn" role="alert">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-            <path d="M12 9v4M12 17h.01" />
-          </svg>
-          <p>
-            Esta ficha se guardó desde otro lado mientras la editabas, así que no
-            escribimos encima. Copiá lo que agregaste y{" "}
-            <button
-              type="button"
-              className="pc-link pc-link--accion"
-              onClick={() => {
-                setConflicto(false);
-                router.refresh();
-              }}
-            >
-              recargá la ficha
-            </button>{" "}
-            para ver lo último.
-          </p>
+      {(conflicto||anchorChanged||coordinator.closed||coordinator.uncertain)&&<div className="pc-sin-turno pc-sin-turno--warn" role="alert" data-sensitive>
+        <div><p>{anchorChanged?"La ficha actual cambió de atención. Conservá este borrador antes de recargar; no se enviará a otra visita.":coordinator.uncertain?"La operación tiene una respuesta pendiente de confirmar. Ningún cambio posterior se considera guardado.":coordinator.closed?"La atención está cerrada. Los cambios pendientes deben revisarse como una enmienda.":"Otra operación cambió esta sesión. Tu borrador se conserva y no se escribirá encima de la versión del servidor."}</p>
+        {coordinator.uncertain&&<button type="button" className="fi-btn fi-btn-primary" disabled={saving} onClick={()=>void runClinicalSave(coordinator.uncertain!.mode,true)}>Confirmar operación pendiente{coordinator.uncertain.mode==="CLOSE"?" de guardado y cierre":""}</button>}
+        <details><summary>Ver mi borrador sin confirmar</summary><p>Subjetivo: {soap.subjetivo}</p><p>Objetivo: {soap.objetivo}</p><p>Análisis: {soap.analisis}</p><p>Plan: {soap.plan}</p><pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{JSON.stringify(toolValue,null,2)}</pre></details>
+        <button type="button" className="fi-btn fi-btn-ghost" disabled={saving} onClick={()=>void compareSaved()}>Comparar con la versión guardada</button>
+        {serverComparison&&<details open><summary>Versión guardada {serverComparison.revision}{serverComparison.locked?" · cerrada":""} (sólo lectura)</summary><p>Subjetivo: {serverComparison.soap.subjetivo}</p><p>Objetivo: {serverComparison.soap.objetivo}</p><p>Análisis: {serverComparison.soap.analisis}</p><p>Plan: {serverComparison.soap.plan}</p><pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{JSON.stringify(serverComparison.toolValue,null,2)}</pre></details>}
+        <button type="button" className="fi-btn fi-btn-ghost" onClick={downloadRecovery}>Descargar copia del borrador</button>
+        <label><input type="checkbox" checked={recoveryCopied} onChange={e=>setRecoveryCopied(e.target.checked)}/> Conservé una copia de los cambios pendientes.</label>
+        <button type="button" className="fi-btn fi-btn-ghost" disabled={!recoveryCopied||saving||coordinator.uncertain!==null} onClick={()=>window.location.reload()}>Recargar la versión guardada para revisar</button>
         </div>
-      ) : null}
+      </div>}
 
-      {/* M96 · SIEMPRE visible, con turno o sin turno. Es el pedido literal del
-          quiropráctico: la ficha de papel "la agarra, la lee y la modifica
-          cuando quiere". Una llamada telefónica ocurre aunque el próximo turno
-          sea recién mañana — y hasta ahora no tenía dónde quedar registrada. */}
       <NotasFichaCard
         notas={notas}
         onAnotar={async (texto) => {
@@ -763,7 +748,7 @@ function TabPlan() {
             onClick={() => {
               void handleGuardar();
             }}
-            disabled={saving}
+            disabled={saving||conflicto||anchorChanged||coordinator.closed||coordinator.uncertain!==null}
             aria-busy={saving}
             title="Guarda la herramienta y el SOAP como la sesión de este turno (editable hasta el cierre)"
           >
@@ -780,7 +765,7 @@ function TabPlan() {
               onClick={() => {
                 void handleGuardarYCerrar();
               }}
-              disabled={saving}
+              disabled={saving||conflicto||anchorChanged||coordinator.closed||coordinator.uncertain!==null}
               aria-busy={saving}
               title="Guarda la sesión y cierra el turno (suma a la recaudación del día)"
             >
@@ -1097,6 +1082,15 @@ function TabSesiones() {
                       Sin nota SOAP registrada para esta sesión.
                     </p>
                   )}
+                  {s.notas ? <p>{s.notas}</p> : null}
+                  {(s.enmiendas ?? []).map((e) => (
+                    <div key={e.id} className="pc-sesion-soap-item">
+                      <b>Enmienda · {new Date(e.createdAt).toLocaleString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" })}</b>
+                      <p>Autor (registro): {e.autorId}</p>
+                      <p><b>Motivo:</b> {e.motivo}</p>
+                      <p>{e.texto}</p>
+                    </div>
+                  ))}
                   <p className="pc-sesion-detalle-resumen">
                     <b>Herramienta:</b> {s.cambio}
                   </p>
@@ -1200,7 +1194,7 @@ function TabDocumentos({ active }: { active: boolean }) {
     }
   };
 
-  // Lazy por diseño: la lista (y sus signed URLs de 5 min) se pide recién
+  // La lista se pide recién
   // cuando el tab se ABRE por primera vez — el panel vive montado con `hidden`
   // (D1) y no queremos pagar la query en cada carga de la ficha.
   useEffect(() => {
@@ -1231,7 +1225,7 @@ function TabDocumentos({ active }: { active: boolean }) {
     fd.set("turnoId", turnoActivo.id);
     fd.set("tipo", tipo);
     if (nota.trim() !== "") fd.set("descripcion", nota.trim());
-    const result = await uploadDocumentoPacienteAction(fd);
+    const result = await uploadDocumentoPacienteAction(fd).catch(() => ({ ok: false as const, error: { message: "Se interrumpió la subida. Intentá nuevamente." } }));
     setSubiendo(false);
     if (result.ok) {
       setFile(null);
@@ -1249,12 +1243,14 @@ function TabDocumentos({ active }: { active: boolean }) {
     if (abriendoId) return;
     setAbriendoId(doc.id);
     try {
-      // Los signed URLs expiran a los 5 min: se pide uno fresco al abrir
+      // Revalidar el acceso antes de abrir la ruta autenticada
       // (mismo patrón refresh de las galerías de las Tools). Si el refresh
       // falla, se intenta con el URL que ya teníamos.
       const result = await refreshRadiografiaUrlAction(doc.id);
-      const url = result.ok ? result.data.signedUrl : doc.signedUrl;
-      if (url) window.open(url, "_blank", "noopener,noreferrer");
+      if (!result.ok) { setLoadError(result.error.message); return; }
+      window.open(result.data.downloadUrl, "_blank", "noopener,noreferrer");
+    } catch {
+      setLoadError("No pudimos abrir el documento. Intentá nuevamente.");
     } finally {
       setAbriendoId(null);
     }
@@ -1310,13 +1306,13 @@ function TabDocumentos({ active }: { active: boolean }) {
           <label className="pc-quiro-file-label">
             <input
               type="file"
-              accept="image/*,application/pdf,application/dicom"
+              accept="application/pdf,image/jpeg,image/png,image/webp,image/heic,image/tiff,application/dicom"
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               disabled={!puedeSubir || subiendo}
             />
             <span className="pc-quiro-pill">
               <I.Plus size={13} />
-              {file ? file.name.slice(0, 28) : "Elegir archivo"}
+              {file ? file.name.slice(0, 28) : "Elegir archivo (máx. 4 MiB)"}
             </span>
           </label>
           <select
@@ -1454,7 +1450,7 @@ function PacienteWhatsAppButton({ telefono, nombre }: { telefono: string; nombre
   );
 }
 
-function PacienteHeader() {
+function PacienteHeader({ canExportCompleteHistory }: { canExportCompleteHistory: boolean }) {
   const { paciente, plan, cumple } = usePacienteFicha();
   const ultimaVisita = plan.sesiones[0]?.fecha ?? null;
   const [agendarOpen, setAgendarOpen] = useState(false);
@@ -1491,17 +1487,21 @@ function PacienteHeader() {
         <div className="pc-actions">
           <PacienteWhatsAppButton telefono={paciente.tel} nombre={paciente.nombre} />
           <ImprimirFichaButton />
-          {/* D2 · export PDF de la HC (la route existía sin ningún botón que la
-              dispare). <a download> nativo: el server responde attachment con
-              membrete + evolución; el audit del export queda en audit_log. */}
-          <a
-            href={`/api/pacientes/${paciente.id}/ficha-pdf`}
-            download
-            className="fi-btn fi-btn-ghost no-print"
-            title="Descargar la historia clínica en PDF membretado (para compartir con un colega)"
-          >
-            <I.FileDown size={13} /> Exportar PDF
-          </a>
+          {canExportCompleteHistory ? (
+            <a
+              href={`/api/pacientes/${paciente.id}/ficha-pdf`}
+              download
+              className="fi-btn fi-btn-ghost no-print"
+              title="Descargar la historia clínica en PDF"
+            >
+              <I.FileDown size={13} /> Exportar PDF
+            </a>
+          ) : (
+            <span className="muted no-print">
+              Para la historia completa, pedí la entrega al responsable del consultorio.
+              Podés exportar cada visita desde Sesiones.
+            </span>
+          )}
           <button
             type="button"
             className="fi-btn fi-btn-secondary"
@@ -1533,6 +1533,7 @@ function PacienteHeader() {
 // ─── Root ──────────────────────────────────────────────────────────────────
 
 interface PacienteDetalleProps {
+  canExportCompleteHistory?: boolean;
   paciente: PacienteFichaInfo;
   plan: PlanData;
   cumple: string;
@@ -1547,6 +1548,7 @@ interface PacienteDetalleProps {
 }
 
 export function PacienteDetalle({
+  canExportCompleteHistory = false,
   paciente,
   plan,
   cumple,
@@ -1559,12 +1561,12 @@ export function PacienteDetalle({
     <PacienteFichaProvider
       value={{ paciente, plan, cumple, especialidad, intakeAvanzado, organizacionNombre, notas }}
     >
-      <PacienteDetalleInner />
+      <PacienteDetalleInner canExportCompleteHistory={canExportCompleteHistory} />
     </PacienteFichaProvider>
   );
 }
 
-function PacienteDetalleInner() {
+function PacienteDetalleInner({ canExportCompleteHistory }: { canExportCompleteHistory: boolean }) {
   const { plan, paciente, organizacionNombre } = usePacienteFicha();
   const [tab, setTab] = useState<TabId>("plan");
 
@@ -1612,7 +1614,7 @@ function PacienteDetalleInner() {
         pacienteNombre={paciente.nombre}
         seccion={tabLabel}
       />
-      <PacienteHeader />
+      <PacienteHeader canExportCompleteHistory={canExportCompleteHistory} />
 
       <nav className="pc-tabs" role="tablist" aria-label="Secciones de la ficha">
         {tabs.map(([id, lbl, isModule]) => (

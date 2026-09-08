@@ -1,0 +1,12 @@
+import {spawn} from 'node:child_process';
+import {createRequire} from 'node:module';
+import {testAppConfig} from './app-config.mjs';
+import {safeEnvironment,isolationError} from './isolation-policy.mjs';
+const require=createRequire(import.meta.url);
+const config=testAppConfig(process.env);
+const args=process.argv.slice(2).filter(value=>value!=='--');
+if(args.some(value=>value.startsWith('--config')||value.startsWith('-c')||value==='--global-setup'))throw isolationError('The isolated Playwright configuration is mandatory.');
+if(args.includes('--project=prototype')&&!config.prototypeRoot)throw isolationError('Set FOLIO_TEST_PROTOTYPE_ROOT to the local static prototype directory.');
+const env={...safeEnvironment(process.env,config),FOLIO_TEST_APP_CONFIG:JSON.stringify(config),NODE_OPTIONS:`--import=${new URL('./app-bootstrap.mjs',import.meta.url).href}`};
+const child=spawn(process.execPath,[require.resolve('@playwright/test/cli'),'test',...args],{stdio:'inherit',env});
+child.on('error',()=>{process.exitCode=1;});child.on('exit',code=>{process.exitCode=code??1;});

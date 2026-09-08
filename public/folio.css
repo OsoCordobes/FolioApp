@@ -21049,3 +21049,18 @@ input:focus { outline: none; }
 @media (max-width: 1023px) {
   .onb-preview-fab { bottom: max(88px, var(--fi-consent-h, 0px)); }
 }
+
+/* Agenda: failed change checks remain visible without hiding appointments. */
+.agenda-sync-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  margin-block: var(--space-3);
+  border-radius: var(--r-md);
+  background: var(--amber-soft);
+  color: var(--ink);
+  font-size: 14px;
+}

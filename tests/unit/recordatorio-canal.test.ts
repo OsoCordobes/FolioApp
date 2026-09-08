@@ -126,7 +126,7 @@ test("buildRecordatorio2hEmail: subject y html contienen hora y consultorio", ()
   assert.ok(html.includes("10:00"));
 });
 
-test("buildPostVisitaEmail: incluye el memo cuando está presente", () => {
+test("buildPostVisitaEmail: omite el memo clínico y conserva sólo el aviso administrativo", () => {
   const { subject, html } = buildPostVisitaEmail({
     pacienteNombre: "Carlos Vega",
     profesionalNombre: "Consultorio Lorenzo",
@@ -134,7 +134,7 @@ test("buildPostVisitaEmail: incluye el memo cuando está presente", () => {
   });
   assert.ok(subject.includes("Consultorio Lorenzo"));
   assert.ok(html.includes("Carlos Vega"));
-  assert.ok(html.includes("Tomar 2L de agua"));
+  assert.ok(!html.includes("Tomar 2L de agua"));
 });
 
 test("buildPostVisitaEmail: memo vacío no rompe ni deja bloque huérfano", () => {
@@ -147,14 +147,14 @@ test("buildPostVisitaEmail: memo vacío no rompe ni deja bloque huérfano", () =
   assert.ok(!html.includes("indicaciones de hoy"));
 });
 
-test("buildPostVisitaEmail: escapa HTML en el memo", () => {
+test("buildPostVisitaEmail: omite también el memo en HTML", () => {
   const { html } = buildPostVisitaEmail({
     pacienteNombre: "Carlos Vega",
     profesionalNombre: "Consultorio Lorenzo",
     memoCorto: 'Ver <b>esto</b> & "aquello"',
   });
   assert.ok(!html.includes("<b>esto</b>"));
-  assert.ok(html.includes("&lt;b&gt;esto&lt;/b&gt; &amp; &quot;aquello&quot;"));
+  assert.ok(!html.includes("&lt;b&gt;esto&lt;/b&gt;"));
 });
 
 // ─── Nivel de comunicación (auditoría portal-comms): preheader + header + CTA ──
@@ -217,7 +217,7 @@ test("buildPostVisitaEmail: preheader oculto con el resumen de la visita", () =>
     profesionalNombre: "Consultorio Lorenzo",
     memoCorto: "Frío 10 min.",
   }).html;
-  assert.ok(conMemo.includes("Indicaciones de tu visita a Consultorio Lorenzo"));
+  assert.ok(conMemo.includes("Gracias por tu visita a Consultorio Lorenzo"));
   const sinMemo = buildPostVisitaEmail({
     pacienteNombre: "Carlos Vega",
     profesionalNombre: "Consultorio Lorenzo",

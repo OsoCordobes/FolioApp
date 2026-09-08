@@ -238,6 +238,7 @@ export interface Database {
       [_ in never]: never;
     };
     Functions: {
+      mfa_access_status: { Args: Record<string, never>; Returns: Json };
       pseudonimizar_paciente: {
         Args: { p_paciente_id: string; p_motivo: string; p_dry_run?: boolean };
         Returns: Json;

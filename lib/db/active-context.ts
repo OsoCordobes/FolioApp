@@ -1,3 +1,5 @@
+
+import { safeLog } from "@/lib/observability/safe-log";
 /**
  * Folio · contexto activo del request (session + organization + profile).
  *
@@ -243,7 +245,7 @@ export async function getActiveContext(): Promise<Result<ActiveContext>> {
     ? computeAccessGate(orgRow.created_at, subscriptionRow)
     : { allowed: true as const, reason: null, graceDaysLeft: null };
   if (!subRes.ok) {
-    console.warn(`[active-context] loadSubscriptionForOrg falló: ${subRes.error.message}`);
+    safeLog("warn", "lib.db.active.context.L246", { error: subRes.error });
     // A Sentry sin PHI: solo la org y el mensaje del error de DB.
     captureException(new Error(`loadSubscriptionForOrg: ${subRes.error.message}`), {
       tags: { area: "billing", gate: "fail_open" },
@@ -270,7 +272,7 @@ function tryDecrypt(value: string | null, label: string): string | null {
     return decryptColumn(value);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    console.warn(
+    safeLog("warn", "lib.db.active.context.L273",
       `[active-context] ${label}: decrypt falló (${msg}). len=${value.length}, sample="${value.slice(0, 40)}"`,
     );
     return null;

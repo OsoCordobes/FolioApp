@@ -19,8 +19,8 @@ import { TurnoCreateModal } from "@/components/hoy/turno-create-modal";
 import { PacienteCreateModal } from "@/components/pacientes/paciente-create-modal";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
-import { normalizarBusqueda } from "@/lib/format/busqueda";
-import { csvEscape, csvEscapeTexto } from "@/lib/format/csv";
+import { loadDirectoryPage } from "@/app/(app)/pacientes/directorio-actions";
+import type { DirectoryPage } from "@/lib/pacientes/directory";
 import { toWhatsappE164 } from "@/lib/format/phone";
 import { formatCobertura } from "@/lib/pacientes/cobertura";
 import type { PacienteDirRow } from "@/lib/db/pacientes-dir";
@@ -98,7 +98,7 @@ function Toolbar({
           ref={searchRef}
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar nombre, teléfono, tag…"
+          placeholder="Nombre completo, DNI o teléfono exacto"
           aria-label="Buscar paciente (atajo: /)"
         />
         <span className="fi-kbd">/</span>
@@ -178,7 +178,7 @@ function TablaPacientes({ pacientes, selected, setSelected, onOpen, onAgendar, t
           </p>
           <p>
             ¿Venís de una planilla o de otro sistema? Importá tu cartera completa desde un CSV —
-            Folio detecta duplicados por DNI y teléfono.
+            Folio detecta coincidencias de DNI. Un teléfono puede compartirse entre familiares.
           </p>
           <div className="fi-empty-actions">
             <a href="/configuracion/importar-pacientes" className="fi-btn fi-btn-secondary">
@@ -360,7 +360,7 @@ function ReactivarWidget({
       <header>
         <div>
           <span className="fi-eyebrow">
-            Para reactivar · {pacientes.length} {pacientes.length === 1 ? "paciente" : "pacientes"}
+            Para reactivar en esta página · {pacientes.length} {pacientes.length === 1 ? "paciente" : "pacientes"}
           </span>
           <h3>Hace más de 60 días sin contacto.</h3>
         </div>
@@ -369,7 +369,7 @@ function ReactivarWidget({
           className="fi-btn fi-btn-secondary"
           onClick={() => onWhatsApp(new Set(pacientes.map((p) => p.id)))}
         >
-          Enviar a todos →
+          Enviar a los de esta página →
         </button>
       </header>
       <div className="pd-reactivar-list">
@@ -416,7 +416,7 @@ function PageHeader({ total, activos, paraReactivarCount, onExport }: { total: n
         </p>
       </div>
       <div className="pd-head-actions">
-        <button type="button" className="fi-btn fi-btn-ghost" onClick={onExport} title="Descargar CSV con la lista visible">
+        <button type="button" className="fi-btn fi-btn-ghost" onClick={onExport} title="Exportar todos los resultados de estos filtros (máximo 10.000 filas y 4 MB)">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
           </svg>
@@ -427,41 +427,10 @@ function PageHeader({ total, activos, paraReactivarCount, onExport }: { total: n
   );
 }
 
-function exportPacientesToCsv(pacientes: PacienteDir[]): void {
-  // F7a · columna Cobertura (nombre + plan, en claro — el nº de afiliado NO
-  // viaja al export: queda cifrado y solo se ve en la ficha). El escape usa
-  // lib/format/csv.ts: csvEscapeTexto para texto libre (nombres/tags/cobertura
-  // pueden nacer de terceros → neutraliza fórmulas de Excel), csvEscape para
-  // valores controlados por la app (fechas, enums).
-  const headers = ["Nombre", "Telefono", "Email", "Cobertura", "Tipo", "Sesiones", "Ultima", "Proximo", "Estado", "Tags"];
-  const rows = pacientes.map((p) => [
-    csvEscapeTexto(p.nombre),
-    csvEscapeTexto(p.tel),
-    csvEscapeTexto(p.email),
-    csvEscapeTexto(formatCobertura(p.cobertura, p.coberturaPlan)),
-    csvEscape(p.tipo),
-    String(p.sesiones),
-    csvEscape(p.ultima ?? ""),
-    csvEscape(p.proximo ?? ""),
-    csvEscape(p.estado),
-    csvEscapeTexto(p.tags.join("; ")),
-  ].join(","));
-  const csv = [headers.join(","), ...rows].join("\r\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `pacientes-folio-${new Date().toISOString().slice(0, 10)}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
 // ─── Root ──────────────────────────────────────────────────────────────────
 
 interface PacientesDirProps {
-  pacientes: PacienteDir[];
+  initialPage: DirectoryPage;
   initialQuery?: string;
   /**
    * Workstream 5 · especialidad EFECTIVA del usuario — decide qué campos
@@ -473,13 +442,24 @@ interface PacientesDirProps {
 }
 
 export function PacientesDir({
-  pacientes,
+  initialPage,
   initialQuery = "",
   especialidad,
   permiteElegirEspecialidad = false,
 }: PacientesDirProps) {
   const router = useRouter();
+  const [page, setPage] = useState(initialPage);
+  const pacientes = page.rows;
   const [q, setQ] = useState(initialQuery);
+  const [history, setHistory] = useState<(string | null)[]>([null]);
+  const [pageIndex, setPageIndex] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [retry, setRetry] = useState(0);
+  const [exporting, setExporting] = useState(false);
+  const requestSequence = useRef(0);
+  const previousServerPage = useRef(initialPage);
+  const initialRequest = useRef(true);
   const [filtro, setFiltro] = useState("todos");
   // F7a · filtro por cobertura: "todas" | "__particular" | nombre exacto.
   const [cobFiltro, setCobFiltro] = useState("todas");
@@ -543,85 +523,111 @@ export function PacientesDir({
     [pacientes],
   );
 
-  const counts = useMemo(
-    () => ({
-      todos:     pacientes.length,
-      activos:   pacientes.filter((p) => p.estado === "activo").length,
-      nuevos:    pacientes.filter((p) => p.tipo === "nuevo").length,
-      reactivar: paraReactivar.length,
-      inactivos: pacientes.filter((p) => p.estado === "inactivo").length,
-      alta:      pacientes.filter((p) => p.estado === "alta").length,
-    }),
-    [pacientes, paraReactivar],
-  );
+  const counts = page.counts;
+  const coberturas = page.coberturas;
+  const filtered = page.rows;
+  const cursor = history[pageIndex] ?? null;
+  // Any filter edit hides the old snapshot immediately. Late responses cannot
+  // replace results for a newer request; a failed request remains retryable.
+  useEffect(() => {
+    if (initialRequest.current) { initialRequest.current = false; return; }
+    const sequence = ++requestSequence.current;
+    let cancelled = false;
+    setLoading(true);
+    setLoadError(false);
+    setSelected(new Set());
+    const timer = setTimeout(() => {
+      void loadDirectoryPage({ query: q, status: filtro, coverage: cobFiltro, cursor })
+        .then((result) => {
+          if (cancelled || sequence !== requestSequence.current) return;
+          if (result.ok) setPage(result.data);
+          else setLoadError(true);
+        }).catch(() => {
+          if (!cancelled && sequence === requestSequence.current) setLoadError(true);
+        }).finally(() => {
+          if (!cancelled && sequence === requestSequence.current) setLoading(false);
+        });
+    }, 300);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [q, filtro, cobFiltro, cursor, retry]);
 
-  // F7a · valores distintos de cobertura de la org para el select del filtro
-  // (orden alfabético es-AR; null NO entra — el bucket "Particular" es fijo).
-  const coberturas = useMemo(() => {
-    const set = new Set<string>();
-    for (const p of pacientes) {
-      if (p.cobertura) set.add(p.cobertura);
-    }
-    return [...set].sort((a, b) => a.localeCompare(b, "es"));
-  }, [pacientes]);
+  useEffect(() => {
+    if (previousServerPage.current === initialPage) return;
+    previousServerPage.current = initialPage;
+    requestSequence.current++;
+    setLoading(true);
+    setLoadError(false);
+    setSelected(new Set());
+    setHistory([null]);
+    setPageIndex(0);
+    // A refreshed SSR page can belong to another active context or have no
+    // search filter. Reload the user's current filters instead of showing it.
+    setRetry((n) => n + 1);
+  }, [initialPage]);
 
-  const filtered = useMemo(() => {
-    let list: PacienteDir[] = pacientes;
-    if (filtro === "activos") list = list.filter((p) => p.estado === "activo");
-    if (filtro === "nuevos") list = list.filter((p) => p.tipo === "nuevo");
-    if (filtro === "reactivar") list = paraReactivar;
-    if (filtro === "inactivos") list = list.filter((p) => p.estado === "inactivo");
-    if (filtro === "alta") list = list.filter((p) => p.estado === "alta");
-    // F7a · filtro por cobertura (AND con el filtro de estado y la búsqueda).
-    if (cobFiltro === "__particular") list = list.filter((p) => p.cobertura == null);
-    else if (cobFiltro !== "todas") list = list.filter((p) => p.cobertura === cobFiltro);
-    if (q.trim()) {
-      // Normalizado en AMBOS lados (query y campos): "jose" encuentra a
-      // "José" — el caso más común del país. Ver lib/format/busqueda.ts.
-      const qq = normalizarBusqueda(q);
-      const digitos = qq.replace(/\D/g, "");
-      list = list.filter(
-        (p) =>
-          normalizarBusqueda(p.nombre).includes(qq) ||
-          (digitos.length >= 3 && p.tel.replace(/\D/g, "").includes(digitos)) ||
-          p.tel.toLowerCase().includes(qq) ||
-          p.tags.some((tag) => normalizarBusqueda(tag).includes(qq)),
-      );
-    }
-    return list;
-  }, [filtro, cobFiltro, q, paraReactivar, pacientes]);
+  const resetPages = () => {
+    requestSequence.current++;
+    setLoading(true);
+    setLoadError(false);
+    setSelected(new Set());
+    setHistory([null]);
+    setPageIndex(0);
+  };
+  const exportAll = async () => {
+    if (loading || loadError || exporting) return;
+    setExporting(true);
+    try {
+      const response = await fetch("/pacientes/export", {
+        method: "POST", body: new URLSearchParams({ query: q, status: filtro, coverage: cobFiltro }),
+      });
+      if (!response.ok) throw new Error("export_failed");
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "pacientes-folio.csv";
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.show({ titulo: "No se generó el archivo completo. Reintentá; máximo 10.000 filas y 4 MB.", tono: "error" });
+    } finally { setExporting(false); }
+  };
 
   return (
     <>
       <div className="fi-content pd-content">
         <PageHeader
-          total={pacientes.length}
+          total={counts.todos}
           activos={counts.activos}
-          paraReactivarCount={paraReactivar.length}
-          onExport={() => exportPacientesToCsv(filtered)}
+          paraReactivarCount={counts.reactivar}
+          onExport={() => void exportAll()}
         />
 
-        {filtro !== "reactivar" && paraReactivar.length > 0 ? (
+        {!loading && !loadError && filtro !== "reactivar" && paraReactivar.length > 0 ? (
           <ReactivarWidget pacientes={paraReactivar} onWhatsApp={solicitarWhatsApp} />
         ) : null}
 
         <Toolbar
           q={q}
-          setQ={setQ}
+          setQ={(value) => { if (value !== q) { resetPages(); setQ(value); } }}
           filtro={filtro}
-          setFiltro={setFiltro}
+          setFiltro={(value) => { if (value !== filtro) { resetPages(); setFiltro(value); } }}
           counts={counts}
           onAddPaciente={() => setCreateOpen(true)}
           searchRef={searchRef}
           cobFiltro={cobFiltro}
-          setCobFiltro={setCobFiltro}
+          setCobFiltro={(value) => { if (value !== cobFiltro) { resetPages(); setCobFiltro(value); } }}
           coberturas={coberturas}
         />
 
-        <div className="pd-table-wrap">
+        <p className="pd-head-sub">Búsqueda exacta en todos los pacientes accesibles: nombre y apellido completos (con tildes), DNI o teléfono completo. No busca por fragmentos ni tags.</p>
+        {exporting ? <p role="status">Preparando el archivo completo…</p> : null}
+        {loading ? <p role="status">Buscando pacientes…</p> : loadError ? (
+          <div role="alert">No se pudo cargar el directorio. <button type="button" className="fi-btn fi-btn-ghost" onClick={() => { setLoading(true); setRetry((n) => n + 1); }}>Reintentar</button></div>
+        ) : <div className="pd-table-wrap">
           <TablaPacientes
             pacientes={filtered}
-            totalOrg={pacientes.length}
+            totalOrg={counts.todos}
             selected={selected}
             setSelected={setSelected}
             onOpen={(p) => {
@@ -631,7 +637,17 @@ export function PacientesDir({
             }}
             onAgendar={(p) => setAgendarFor(p)}
           />
-        </div>
+        </div>}
+        {!loading && !loadError ? <nav aria-label="Páginas del directorio" className="pd-head-actions">
+          <button type="button" className="fi-btn fi-btn-ghost" disabled={pageIndex === 0} onClick={() => { setLoading(true); setSelected(new Set()); setPageIndex((n) => n - 1); }}>Anterior</button>
+          <span role="status">{page.total === 0 ? "0 resultados" : `${pageIndex * 50 + 1}–${pageIndex * 50 + page.rows.length} de ${page.total}`} · más recientes primero</span>
+          <button type="button" className="fi-btn fi-btn-ghost" disabled={!page.nextCursor} onClick={() => {
+            if (!page.nextCursor) return;
+            setLoading(true); setSelected(new Set());
+            setHistory((old) => [...old.slice(0, pageIndex + 1), page.nextCursor]);
+            setPageIndex((n) => n + 1);
+          }}>Siguiente</button>
+        </nav> : null}
       </div>
 
       {selected.size > 0 ? (

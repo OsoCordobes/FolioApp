@@ -1,3 +1,5 @@
+import { diagnosticCode } from "@/lib/observability/error-codes";
+
 /**
  * Folio · errores tipados del data layer.
  *
@@ -8,6 +10,7 @@
 
 export type FolioErrorCode =
   | "auth_required"          // no hay sesión Supabase
+  | "mfa_required"           // sesión válida que necesita segundo factor
   | "no_org"                 // user no es member de ninguna org
   | "forbidden"              // RLS bloqueó (rol insuficiente / caja fuerte / etc.)
   | "not_found"              // recurso no existe o RLS no lo deja ver
@@ -21,7 +24,7 @@ export type FolioErrorCode =
 export interface FolioError {
   code: FolioErrorCode;
   message: string;           // mensaje user-facing en español
-  detail?: string;           // técnico, para logs
+  detail?: string;           // código de diagnóstico de catálogo; nunca SQL/mensajes crudos
 }
 
 export type Result<T> = { ok: true; data: T } | { ok: false; error: FolioError };
@@ -29,7 +32,7 @@ export type Result<T> = { ok: true; data: T } | { ok: false; error: FolioError }
 export const ok = <T>(data: T): Result<T> => ({ ok: true, data });
 export const err = (code: FolioErrorCode, message: string, detail?: string): Result<never> => ({
   ok: false,
-  error: { code, message, detail },
+  error: { code, message, detail: detail === undefined ? undefined : diagnosticCode(detail, code) },
 });
 
 /**
@@ -56,6 +59,7 @@ export function isUniqueViolation(
 export function mapSupabaseError(error: { message: string; code?: string; details?: string }): FolioError {
   const msg = error.message ?? "";
   const code = error.code ?? "";
+  const safeDetail = diagnosticCode(code);
 
   // ─── Permisos: RLS / insufficient_privilege (SQLSTATE 42501) ──────────────
   // PostgREST reporta violaciones de RLS y de GRANT con 42501
@@ -66,14 +70,14 @@ export function mapSupabaseError(error: { message: string; code?: string; detail
   // invitar equipo cuando la org no es CLINICA). Ahora el SQLSTATE manda; el
   // substring queda de fallback para drivers que dropean `code`.
   if (code === "42501" || msg.includes("violates row-level security")) {
-    return { code: "forbidden", message: "No tenés permiso para esa acción.", detail: msg };
+    return { code: "forbidden", message: "No tenés permiso para esa acción.", detail: safeDetail };
   }
   // ─── Auth: JWT vencido / no autenticado ───────────────────────────────────
   // PostgREST usa PGRST301 (JWT expirado/inválido) y PGRST302 (no autenticado)
   // para fallas de credenciales. `code` primero; el substring "JWT" queda de
   // fallback. Ya NO se incluye 42501 acá (ver rama de permisos arriba).
   if (code === "PGRST301" || code === "PGRST302" || msg.includes("JWT")) {
-    return { code: "auth_required", message: "Volvé a iniciar sesión.", detail: msg };
+    return { code: "auth_required", message: "Volvé a iniciar sesión.", detail: safeDetail };
   }
   // ─── Excepciones de dominio levantadas por triggers (SQLSTATE P0001) ───────
   // `RAISE EXCEPTION` sin `USING ERRCODE` cae en P0001 (raise_exception), que es
@@ -84,10 +88,10 @@ export function mapSupabaseError(error: { message: string; code?: string; detail
   // un mensaje ajeno que casualmente contenga estas frases se malinterprete.
   if (code === "P0001" || code === "") {
     if (msg.includes("Sesión bloqueada")) {
-      return { code: "locked", message: "La sesión está bloqueada. Usá una enmienda para corregir.", detail: msg };
+      return { code: "locked", message: "La sesión está bloqueada. Usá una enmienda para corregir.", detail: safeDetail };
     }
     if (msg.includes("Invalid turno transition")) {
-      return { code: "transition_invalid", message: "Esa transición no está permitida.", detail: msg };
+      return { code: "transition_invalid", message: "Esa transición no está permitida.", detail: safeDetail };
     }
   }
   if (code === "23505") {
@@ -97,29 +101,32 @@ export function mapSupabaseError(error: { message: string; code?: string; detail
       return {
         code: "conflict",
         message: "Ya existe un paciente con ese DNI en tu organización.",
-        detail: msg,
+        detail: safeDetail,
       };
     }
     if (detail.includes("paciente_identidad_telefono_unique_active")) {
       return {
         code: "conflict",
-        message: "Ya existe un paciente con ese teléfono en tu organización.",
-        detail: msg,
+        message: "Este contacto compartido requiere actualizar la configuración del consultorio. Pedí ayuda a soporte; no uses la ficha de otra persona.",
+        detail: safeDetail,
       };
     }
-    return { code: "conflict", message: "Ya existe un registro con esos datos.", detail: msg };
+    return { code: "conflict", message: "Ya existe un registro con esos datos.", detail: safeDetail };
   }
   if (code === "23503") {
-    return { code: "conflict", message: "No se puede borrar: hay datos relacionados.", detail: msg };
+    return { code: "conflict", message: "No se puede borrar: hay datos relacionados.", detail: safeDetail };
   }
   if (code === "23P01") {
     // exclusion_violation: M40 EXCLUDE constraint (turno por profesional/horario).
     // Cubre el hit de doble-reserva tanto en createTurno como en el CAS de
     // aceptar pedido.
-    return { code: "conflict", message: "Ese profesional ya tiene un turno en ese horario.", detail: msg };
+    return { code: "conflict", message: "Ese profesional ya tiene un turno en ese horario.", detail: safeDetail };
+  }
+  if (code === "23514") {
+    return { code: "validation", message: "Alguno de los datos no cumple una regla de validación. Revisá los campos e intentá nuevamente.", detail: safeDetail };
   }
   if (code === "PGRST116" || msg.includes("no rows")) {
-    return { code: "not_found", message: "No se encontró el recurso.", detail: msg };
+    return { code: "not_found", message: "No se encontró el recurso.", detail: safeDetail };
   }
-  return { code: "db_error", message: "Error en la base de datos.", detail: msg };
+  return { code: "db_error", message: "Error en la base de datos.", detail: safeDetail };
 }

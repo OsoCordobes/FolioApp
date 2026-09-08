@@ -38,12 +38,12 @@ export default async function ImportarPacientesPage() {
           <h1>Importar pacientes</h1>
           <p className="fi-page-sub">
             Subí un CSV exportado de Excel o Google Sheets, mapeá las columnas y Folio crea
-            los pacientes cifrados, sin duplicar los que ya tenés (por DNI o teléfono).
+            las fichas cifradas y señala coincidencias para revisar. Un teléfono compartido no identifica a un paciente.
           </p>
         </div>
       </header>
 
-      <ImportarPacientesClient />
+      <ImportarPacientesClient organizationId={ctx.data.session.organizationId} memberId={ctx.data.session.memberId} />
     </main>
   );
 }

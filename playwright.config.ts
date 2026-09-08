@@ -1,20 +1,13 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const PROTOTYPE_PORT = 4001;
-const APP_PORT = 3010;
+import "./scripts/testing/app-bootstrap.mjs";
+import { LOCAL_BROWSER_ARGS } from "./scripts/testing/browser-network.mjs";
 
-const PROTOTYPE_ROOT = "C:\\Users\\amiun\\Desktop\\Folio";
-
-/**
- * Configuración base. Tres projects:
- *   - `prototype` — sirve el HTML estático del prototipo en localhost:4001.
- *   - `app` — corre Next dev en localhost:3010 y compara visualmente.
- *   - `e2e` — corre auth + onboarding + nav contra `E2E_BASE_URL`
- *     (default: localhost:3010 si dev server activo; override a https://prod
- *     para validar contra producción). Requiere envs reales (Supabase keys,
- *     FOLIO_ENC_KEY) para que el dev server arranque.
- */
-const E2E_BASE_URL = process.env.E2E_BASE_URL ?? `http://localhost:${APP_PORT}`;
+// Bootstrap validates local targets, clears inherited credentials and blocks env
+// files/provider I/O before any owned app process is launched.
+const E2E_BASE_URL=process.env.E2E_BASE_URL!;
+const prototypeRoot=process.env.FOLIO_TEST_PROTOTYPE_ROOT;
+const onlyPrototype=process.argv.includes("--project=prototype");
 
 export default defineConfig({
   testDir: "./tests",
@@ -22,7 +15,7 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: 0,
   workers: 1,
-  reporter: process.env.CI ? "github" : "html",
+  reporter: process.env.CI ? "github" : [["html", {open:"never"}], ["list"]],
 
   /**
    * Snapshots compartidos entre todos los specs y projects, sin sufijos
@@ -43,54 +36,18 @@ export default defineConfig({
     viewport: { width: 1440, height: 900 },
     deviceScaleFactor: 1,
     colorScheme: "light",
-    ignoreHTTPSErrors: true,
+    ignoreHTTPSErrors: false,
+    serviceWorkers: "block",
+    launchOptions: {args:LOCAL_BROWSER_ARGS},
     trace: "retain-on-failure",
   },
   projects: [
-    {
-      name: "prototype",
-      testMatch: /baseline\.spec\.ts/,
-      use: {
-        ...devices["Desktop Chrome"],
-        baseURL: `http://localhost:${PROTOTYPE_PORT}`,
-        viewport: { width: 1440, height: 900 },
-      },
-    },
-    {
-      name: "app",
-      testMatch: /visual\/(app|landing)\.spec\.ts/,
-      use: {
-        ...devices["Desktop Chrome"],
-        baseURL: `http://localhost:${APP_PORT}`,
-        viewport: { width: 1440, height: 900 },
-      },
-      dependencies: [],
-    },
-    {
-      name: "e2e",
-      testMatch: /e2e\/.*\.spec\.ts/,
-      use: {
-        ...devices["Desktop Chrome"],
-        baseURL: E2E_BASE_URL,
-      },
-    },
+    ...(prototypeRoot?[{name:"prototype",testMatch:/baseline\.spec\.ts/,use:{...devices["Desktop Chrome"],baseURL:"http://127.0.0.1:4001",viewport:{width:1440,height:900}}}]:[]),
+    {name:"app",testMatch:/visual\/(app|landing)\.spec\.ts/,use:{...devices["Desktop Chrome"],baseURL:E2E_BASE_URL,viewport:{width:1440,height:900}}},
+    {name:"e2e",testMatch:/e2e\/.*\.spec\.ts/,use:{...devices["Desktop Chrome"],baseURL:E2E_BASE_URL}},
   ],
   webServer: [
-    {
-      command: `pnpm exec serve -l ${PROTOTYPE_PORT} "${PROTOTYPE_ROOT}"`,
-      url: `http://localhost:${PROTOTYPE_PORT}`,
-      reuseExistingServer: !process.env.CI,
-      timeout: 60_000,
-      stdout: "ignore",
-      stderr: "pipe",
-    },
-    {
-      command: `pnpm dev`,
-      url: `http://localhost:${APP_PORT}`,
-      reuseExistingServer: !process.env.CI,
-      timeout: 120_000,
-      stdout: "ignore",
-      stderr: "pipe",
-    },
+    ...(prototypeRoot?[{command:"node scripts/testing/prototype-server.mjs",url:"http://127.0.0.1:4001",reuseExistingServer:false,timeout:60000}]:[]),
+    ...(!onlyPrototype?[{command:"node scripts/testing/app-server.mjs",url:E2E_BASE_URL,reuseExistingServer:false,timeout:120000}]:[]),
   ],
 });

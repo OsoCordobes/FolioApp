@@ -1,26 +1,12 @@
 "use client";
 
-/**
- * Folio · especialidades · cardiología · galería de estudios adjuntos (C6).
- *
- * Generaliza el bloque de radiografías de quiropraxia (lib/especialidades/
- * quiropraxia/radiografias.tsx) para cardiología: adjunta ECG, Holter,
- * ergometría o cualquier estudio escaneado / en PDF a la sesión del turno en
- * curso (documento_clinico tipo INFORME_EXTERNO, M08). Thumbnail vía signed URL
- * para imágenes, chip de archivo para pdf/dicom, + la descripción de cada uno.
- *
- * Waveform: el archivo se ABRE por signed URL en pestaña nueva — Folio NO
- * renderiza la señal ECG (fuera de scope C6).
- *
- * El botón de subida queda DESHABILITADO con un hint cuando todavía no hay
- * sesión guardada para el turno (el estudio cuelga de una sesión). readOnly
- * oculta la subida (snapshot / versión pasada). Los signed URLs expiran a los
- * 5 min: si un thumbnail rompe, se refresca lazy vía refreshRadiografiaUrlAction
- * (el reader es genérico — sirve para cualquier documento_clinico org-scoped).
+/** Galería clínica. Las rutas de archivos revalidan sesión, MFA y alcance
+ * del paciente en cada GET. La subida se valida íntegramente en el servidor.
+ * Imágenes compatibles usan una vista previa; otros formatos se descargan.
  */
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import * as I from "@/components/icons";
 import {
@@ -32,7 +18,8 @@ interface EstudioAdjuntoItem {
   id: string;
   fecha: string;
   descripcion: string | null;
-  signedUrl: string;
+  downloadUrl: string;
+  mimeType?: string;
   sesionId: string | null;
 }
 
@@ -52,10 +39,8 @@ function fmtFecha(iso: string): string {
   return `${d.getDate()} ${MESES[d.getMonth()]} ${d.getFullYear()}`;
 }
 
-function esImagen(url: string): boolean {
-  // El signed URL lleva el path con extensión; un check barato alcanza para
-  // decidir thumbnail vs chip de archivo.
-  return /\.(png|jpe?g|webp|heic|tiff?)(\?|$)/i.test(url);
+function esImagen(mime?: string): boolean {
+  return mime === "image/png" || mime === "image/jpeg" || mime === "image/webp";
 }
 
 export function EstudiosAdjuntos({
@@ -70,7 +55,8 @@ export function EstudiosAdjuntos({
   const [nota, setNota] = useState("");
   const [subiendo, setSubiendo] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // signed URLs refrescados lazy (override del valor del server al expirar).
+  // Un único intento autorizado de recuperación por miniatura.
+  const attempted = useRef(new Set<string>());
   const [refreshed, setRefreshed] = useState<Record<string, string>>({});
 
   const puedeSubir = !readOnly && !!pacienteId && !!turno && turno.tieneSesionGuardada;
@@ -85,7 +71,7 @@ export function EstudiosAdjuntos({
     fd.set("pacienteId", pacienteId);
     fd.set("turnoId", turno.id);
     if (nota.trim() !== "") fd.set("descripcion", nota.trim());
-    const result = await uploadEstudioCardioAction(fd);
+    const result = await uploadEstudioCardioAction(fd).catch(() => ({ ok: false as const, error: { message: "Se interrumpió la subida. Intentá nuevamente." } }));
     setSubiendo(false);
     if (result.ok) {
       setFile(null);
@@ -97,10 +83,13 @@ export function EstudiosAdjuntos({
   };
 
   const handleBrokenThumb = async (id: string) => {
-    if (refreshed[id]) return; // ya intentado
-    const result = await refreshRadiografiaUrlAction(id);
+    if (attempted.current.has(id)) return;
+    attempted.current.add(id);
+    const result = await refreshRadiografiaUrlAction(id).catch(() => ({ ok: false as const, error: { message: "No pudimos abrir el archivo. Intentá nuevamente." } }));
     if (result.ok) {
-      setRefreshed((prev) => ({ ...prev, [id]: result.data.signedUrl }));
+      setRefreshed((prev) => ({ ...prev, [id]: result.data.downloadUrl }));
+    } else {
+      setError(result.error.message);
     }
   };
 
@@ -118,7 +107,7 @@ export function EstudiosAdjuntos({
       ) : (
         <ul className="pc-quiro-radios-list">
           {items.map((r) => {
-            const url = refreshed[r.id] ?? r.signedUrl;
+            const url = refreshed[r.id] ?? r.downloadUrl;
             return (
               <li key={r.id} className="pc-quiro-radio-item">
                 <a
@@ -127,12 +116,8 @@ export function EstudiosAdjuntos({
                   rel="noopener noreferrer"
                   className="pc-quiro-radio-thumb"
                 >
-                  {esImagen(url) ? (
-                    // Raw <img> a propósito (X8 lo saltea): `url` es un signed
-                    // Storage URL rotativo (PHI) sin dimensiones fijas y con un
-                    // onError→re-sign. next/image cacheado sobre un token que
-                    // expira es una trampa; el host firmado está deliberadamente
-                    // fuera de images.remotePatterns.
+                  {esImagen(r.mimeType) ? (
+                    // Mantener la autorización por GET y evitar cachés de optimización.
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={url}
@@ -161,13 +146,13 @@ export function EstudiosAdjuntos({
           <label className="pc-quiro-file-label">
             <input
               type="file"
-              accept="image/*,application/pdf,application/dicom"
+              accept="application/pdf,image/jpeg,image/png,image/webp,image/heic,image/tiff,application/dicom"
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               disabled={!puedeSubir || subiendo}
             />
             <span className="pc-quiro-pill">
               <I.Plus size={13} />
-              {file ? file.name.slice(0, 28) : "Elegir archivo"}
+              {file ? file.name.slice(0, 28) : "Elegir archivo (máx. 4 MiB)"}
             </span>
           </label>
           <input

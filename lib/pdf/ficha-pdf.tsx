@@ -12,7 +12,7 @@
  *   - Datos del paciente (nombre, edad, motivo).
  *   - SOAP de la sesión (subjetivo / objetivo / análisis / plan).
  *   - Resumen de la herramienta de la especialidad (texto humano, no PHI cruda).
- *   - Resultados de planillas/instrumentos (score + banda, sin respuestas crudas).
+ *   - Resultados de planillas/instrumentos (score + banda y respuestas originales).
  *   - Watermark diagonal "CONFIDENCIAL" (fixed → se repite en cada página).
  *   - Pie con la fecha de generación y el número de página.
  *
@@ -29,7 +29,7 @@ import {
   StyleSheet,
   renderToBuffer,
 } from "@react-pdf/renderer";
-import { createElement, type ReactElement } from "react";
+import React, { createElement, type ReactElement } from "react";
 
 import {
   buildMembreteMeta,
@@ -48,8 +48,12 @@ import {
 
 // ─── Shape de entrada (todo YA en claro) ─────────────────────────────────────
 
-/** Un resultado de instrumento/planilla ya scoreado (sin respuestas crudas). */
+/** Un resultado histórico; nunca se recalcula al exportar. */
 export interface FichaPdfInstrumento {
+  instrumentoId?: string;
+  version?: number;
+  respuestas?: unknown;
+  respuestasEstado?: "registradas" | "ausentes_en_origen";
   /** Nombre del instrumento ("PHQ-9", "DASS-21"). */
   nombre: string;
   /** Puntaje total, como texto ("14", "—"). */
@@ -66,6 +70,10 @@ export interface FichaPdfInstrumento {
  * "—" para no dejar bloques en blanco.
  */
 export interface FichaPdfData {
+  alcanceEntrega?: string;
+  enmiendas?: import("@/lib/ficha/enmienda").EnmiendaClinica[];
+  notasSesion?: string | null;
+  notasFicha?: import("@/lib/ficha/nota-clinica").NotaClinicaFicha[];
   /** Nombre del consultorio/clínica (membrete). */
   organizacion: string;
   /** Nombre completo del profesional que exporta, o null. */
@@ -330,8 +338,8 @@ export function FichaPdfDocument({ data }: { data: FichaPdfData }): ReactElement
           <Text style={styles.body}>{orDash(motivo)}</Text>
         </View>
 
-        {/* SOAP */}
-        <View style={styles.section}>
+        {/* Original de una sesión puntual; la historia completa va fechada en Evolución. */}
+        {fechaSesion ? <View style={styles.section}>
           <Text style={styles.sectionTitle}>Evolución (SOAP)</Text>
           {hayEvolucion ? (
             <>
@@ -343,8 +351,19 @@ export function FichaPdfDocument({ data }: { data: FichaPdfData }): ReactElement
           ) : (
             <Text style={styles.body}>Sin registro de evolución para esta sesión.</Text>
           )}
-        </View>
+        </View> : null}
 
+        {data.notasSesion ? <FieldBlock label="Notas de la sesión" value={data.notasSesion} /> : null}
+        {(data.enmiendas ?? []).map((e) => <View key={e.id} style={styles.section}>
+          <Text style={styles.sectionTitle}>Enmienda · {formatGeneradoTs(e.createdAt)}</Text>
+          <Text style={styles.body}>Autor (registro): {e.autorId}</Text>
+          <FieldBlock label="Motivo" value={e.motivo} /><Text style={styles.body}>{e.texto}</Text>
+        </View>)}
+        {(data.notasFicha ?? []).map((n) => <View key={n.id} style={styles.section}>
+          <Text style={styles.sectionTitle}>Nota clínica · {formatGeneradoTs(n.createdAt)}</Text>
+          <Text style={styles.body}>Autor: {n.autorNombre ?? n.autorId} · {n.autorId}</Text>
+          <Text style={styles.body}>{n.texto ?? "No se pudo leer esta nota"}</Text>
+        </View>)}
         {/* Resumen de la herramienta de especialidad */}
         {resumenHerramienta ? (
           <View style={styles.section}>
@@ -364,7 +383,7 @@ export function FichaPdfDocument({ data }: { data: FichaPdfData }): ReactElement
         {evolucion.length > 0 ? (
           <View style={styles.section}>
             <Text style={styles.sectionTitle} minPresenceAhead={40}>
-              {`Evolución — últimas ${evolucion.length} sesiones`}
+              {`Evolución — ${evolucion.length} visitas registradas`}
             </Text>
             {evolucion.map((ev, i) => (
               <View key={`${ev.fecha}-${i}`} style={styles.evolucionRow}>
@@ -372,6 +391,14 @@ export function FichaPdfDocument({ data }: { data: FichaPdfData }): ReactElement
                   {`${orDash(ev.fecha)}  ·  ${orDash(ev.servicio)}`}
                 </Text>
                 <Text style={styles.evolucionResumen}>{orDash(ev.resumen)}</Text>
+                <Text style={styles.body}>Profesional de la visita (registro): {ev.profesionalId ?? "No registrado"}</Text>
+                <Text style={styles.body}>{ev.lockedAt === undefined ? "Sin sesión clínica registrada" : ev.lockedAt ? `Cerrada: ${formatGeneradoTs(ev.lockedAt)}` : "Borrador sin firma de cierre"}</Text>
+                {ev.notas ? <Text style={styles.body}>{ev.notas}</Text> : null}
+                {(ev.enmiendas ?? []).map((e) => <View key={e.id}>
+                  <Text style={styles.evolucionHead}>Enmienda · {formatGeneradoTs(e.createdAt)}</Text>
+                  <Text style={styles.body}>Autor (registro): {e.autorId}</Text>
+                  <Text style={styles.body}>Motivo: {e.motivo}</Text><Text style={styles.body}>{e.texto}</Text>
+                </View>)}
                 {ev.soap ? (
                   <>
                     {(
@@ -396,12 +423,18 @@ export function FichaPdfDocument({ data }: { data: FichaPdfData }): ReactElement
           </View>
         ) : null}
 
+        {data.alcanceEntrega ? <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Alcance de esta entrega</Text>
+          <Text style={styles.body}>{data.alcanceEntrega}</Text>
+        </View> : null}
+
         {/* Instrumentos / planillas */}
         {instrumentos.length > 0 ? (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Escalas y planillas</Text>
             {instrumentos.map((inst, i) => (
-              <View key={`${inst.nombre}-${i}`} style={styles.instrumentoRow} wrap={false}>
+              <View key={`${inst.nombre}-${i}`} style={styles.section}>
+                <View style={styles.instrumentoRow} wrap={false}>
                 <View>
                   <Text style={styles.instrumentoNombre}>{inst.nombre}</Text>
                   <Text style={styles.instrumentoBanda}>
@@ -410,6 +443,11 @@ export function FichaPdfDocument({ data }: { data: FichaPdfData }): ReactElement
                   </Text>
                 </View>
                 <Text style={styles.instrumentoScore}>{orDash(inst.total)}</Text>
+                </View>
+                {inst.version !== undefined ? <Text style={styles.body}>{`Registro original: ${inst.instrumentoId ?? inst.nombre} · versión ${inst.version}`}</Text> : null}
+                {inst.respuestasEstado ? <Text style={styles.body}>{inst.respuestasEstado === "ausentes_en_origen"
+                  ? "Respuestas ausentes en el registro de origen; no se reconstruyen desde el puntaje."
+                  : `Respuestas originales: ${JSON.stringify(inst.respuestas, null, 2)}`}</Text> : null}
               </View>
             ))}
           </View>

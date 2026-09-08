@@ -2,7 +2,8 @@
  * Folio · queries y mutations de instrumento_respuesta (biblioteca de escalas).
  *
  * Writer ÚNICO de instrumento_respuesta (M73). Guarda UNA aplicación de un
- * instrumento validado (lib/instrumentos) a un paciente:
+ * instrumento registrado (lib/instrumentos) a un paciente elegible según la
+ * restricción operativa provisional. La validación clínica sigue pendiente:
  *
  *   1. valida `instrumentoId` contra el registry (getInstrumento) — un id
  *      desconocido RECHAZA (no se inserta basura sin scoring canónico);
@@ -35,6 +36,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import { err, mapSupabaseError, ok, type Result } from "./errors";
 import { getActiveSession } from "./session";
+import { readInstrumentPopulation, POPULATION_BLOCK_MESSAGE } from "./instrument-population";
 
 // ─── Input ─────────────────────────────────────────────────────────────────
 
@@ -135,15 +137,27 @@ export async function saveRespuesta(
 
   // Valida el id + computa el score server-side (nunca se confía en un score del
   // cliente). Un id desconocido rechaza ANTES de tocar la DB.
-  const scored = computeScoreSnapshot(d.instrumentoId, d.respuestas);
-  if (!scored.ok) {
-    return err(scored.code, scored.message);
-  }
+  if (!getInstrumento(d.instrumentoId)) return err("validation", "Instrumento desconocido.");
 
   const session = await getActiveSession();
   if (!session.ok) return session;
 
   const supabase = await createSupabaseServerClient();
+
+  let encounter: string | Date = new Date();
+  if(d.sesionId){
+    const {data:sessionRow,error:sessionError}=await supabase.from("sesion")
+      .select("paciente_id, turno:turno_id(inicio)").eq("id",d.sesionId)
+      .eq("organization_id",session.data.organizationId).maybeSingle();
+    const appointment=Array.isArray(sessionRow?.turno)?sessionRow.turno[0]:sessionRow?.turno;
+    if(sessionError||sessionRow?.paciente_id!==d.pacienteId||!appointment?.inicio)return err("forbidden","No pudimos verificar la fecha de atención del instrumento.");
+    encounter=appointment.inicio;
+  }
+  const population=await readInstrumentPopulation(supabase,d.pacienteId,session.data.organizationId,encounter);
+  if(!population.ok)return population;
+  if(!population.data.allowed)return err("validation",POPULATION_BLOCK_MESSAGE);
+  const scored = computeScoreSnapshot(d.instrumentoId, d.respuestas);
+  if (!scored.ok) return err(scored.code, scored.message);
 
   // organization_id va en cada insert para que la RLS (org activa) + el trigger
   // same-org validen la fila. Las respuestas crudas se serializan y cifran

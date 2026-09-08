@@ -1,33 +1,5 @@
-/**
- * CLINICA-3 (hallazgo C) — degradación de `aceptarPedido` ante ciphertext
- * corrupto: el listado (listPedidos) degrada con tryDecrypt, pero el acepte
- * usaba decryptColumn crudo → el pedido se LISTABA y "Aceptar" tiraba una
- * excepción no manejada (500) fuera del contrato Result.
- *
- * Acá se verifica la cadena completa con un fixture REAL de ciphertext
- * corrupto: decryptColumn throwea (el viejo 500), tryDecrypt degrada a null,
- * y `pedidoIlegibleParaAceptar` (decisión pura extraída del acepte) corta con
- * err("validation") solo cuando nombre Y teléfono son ilegibles y no hay
- * paciente existente que reutilizar.
- */
-
-// Cargar .env.local ANTES de importar lib/crypto (mismo patrón que
-// crypto-roundtrip.test.ts): las claves AES se leen lazy pero defensivo.
-import { readFileSync } from "node:fs";
-
-if (!process.env.FOLIO_ENC_KEY || !process.env.FOLIO_ENC_HMAC_KEY) {
-  try {
-    const raw = readFileSync(".env.local", "utf8");
-    for (const line of raw.split(/\r?\n/)) {
-      const m = /^([A-Z_]+)="?([^"\r\n]+)"?$/.exec(line.trim());
-      if (!m) continue;
-      const [, k, v] = m;
-      if (!process.env[k]) process.env[k] = v;
-    }
-  } catch {
-    // .env.local missing — tests will fail loudly when keys are needed.
-  }
-}
+/** Central synthetic keys and network isolation; no environment files. */
+import "../../scripts/testing/unit-bootstrap.mjs";
 
 import assert from "node:assert/strict";
 import test from "node:test";

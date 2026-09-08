@@ -1,4 +1,6 @@
 "use client";
+import { safeLog } from "@/lib/observability/safe-log";
+
 
 /**
  * Folio · /configuracion — ajustes del consultorio.
@@ -11,7 +13,8 @@
  * Pago (estado de la suscripción) y WhatsApp (solo si el deploy lo tiene operativo).
  */
 
-import { useEffect, useId, useState, useTransition, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, useTransition, type ReactNode } from "react";
+import { AvailabilityDraft } from "@/lib/agenda/availability-draft";
 import { useRouter } from "next/navigation";
 
 import * as I from "@/components/icons";
@@ -19,6 +22,7 @@ import { PermissionMatrix } from "@/components/configuracion/permission-matrix";
 import { PhotoUpload } from "@/components/configuracion/photo-upload";
 import { UpgradeClinicaModal } from "@/components/configuracion/upgrade-clinica-modal";
 import { LogoUpload } from "@/components/public-card/logo-upload";
+import { uploadSettingsOrgLogo, removeSettingsOrgLogo } from "@/app/(public)/onboarding/actions";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { contar } from "@/lib/format/plural";
 import { useConfirm } from "@/lib/use-confirm";
@@ -33,6 +37,7 @@ import {
   saveBookingPrefsAction,
   saveConsultorioAction,
   saveHorariosAction,
+  readHorariosAction,
   saveServiciosAction,
   updateMemberEspecialidadAction,
 } from "@/app/(app)/configuracion/actions";
@@ -59,6 +64,7 @@ import { SUPPORT_EMAIL, supportMailto } from "@/lib/support";
 import type {
   ConsultorioData,
   DiaHorarios,
+  HorariosContext,
   DiaSemanaId,
   IntegrationStatus,
   ServicioRow,
@@ -365,9 +371,9 @@ function SecCuenta({
         <Row label="Contraseña" sub="Te enviaremos un email con un link de reset">
           <CambiarPasswordButton email={c.email} />
         </Row>
-        {/* MFA y listado de sesiones activas: sin backend todavía — no mostramos
-            UI de seguridad que recomiende algo que no existe. Ambos viven en
-            docs/BACKLOG-POST-LAUNCH.md; restaurar las filas cuando haya feature real. */}
+        <Row label="Verificación en dos pasos" sub="Protegé tu cuenta con un autenticador y un dispositivo de respaldo.">
+          <a href="/seguridad/mfa?next=/configuracion" className="fi-btn fi-btn-ghost">Configurar autenticador →</a>
+        </Row>
       </Section>
 
       <Section title="Apariencia" sub="Preferencia visual de la interfaz. Se guarda en este dispositivo.">
@@ -445,7 +451,7 @@ function CambiarPasswordButton({ email }: { email: string }) {
       if (error) throw error;
       setState("sent");
     } catch (e) {
-      console.warn("[configuracion] reset password falló:", e);
+      safeLog("warn", "components.configuracion.configuracion.L449", "[configuracion] reset password falló:", e);
       setState("error");
     }
   };
@@ -546,6 +552,8 @@ function SecConsultorio({
             persiste sola: no pasa por la save-bar. */}
         <Row label="Foto del consultorio" sub="Opcional · PNG hasta 500 KB · se ve en tu link público">
           <LogoUpload
+            uploadAction={uploadSettingsOrgLogo}
+            removeAction={removeSettingsOrgLogo}
             currentLogoUrl={logoUrl}
             // La action persiste sola; el componente ya muestra su propio
             // preview. Un router.refresh() acá volvería a montar toda la
@@ -1484,11 +1492,14 @@ function SecEquipo({
       setInvEmail("");
       setInvColegiado(false);
       setLastAcceptUrl(result.data.acceptUrl);
-      setNotice(
-        result.data.emailEnviado
-          ? `Le enviamos la invitación a ${result.data.invitation.email}. También podés copiar el link y pasárselo directo.`
-          : "El envío de emails no está configurado — copiá el link y pasáselo directo. La invitación vence en 7 días.",
-      );
+      const emailNotices = {
+        aceptado: "El servicio de correo aceptó la invitación. La entrega todavía no está confirmada.",
+        pendiente: "La invitación quedó guardada y el correo está pendiente de envío.",
+        no_disponible: "La invitación quedó guardada. El envío de correo no está disponible.",
+        fallido: "La invitación quedó guardada, pero falló el envío del correo.",
+        por_confirmar: "La invitación quedó guardada. Todavía no podemos confirmar si salió el correo.",
+      };
+      setNotice(`${emailNotices[result.data.emailEstado]} Podés copiar el enlace y compartirlo. Vence en 7 días.`);
     });
   };
 
@@ -1836,7 +1847,7 @@ function PageHeader({ dirty, onSave, onDiscard, isSaving, saveError, canEdit }: 
         <span className="fi-eyebrow">ajustes</span>
         <h1>Configuración</h1>
         {saveError ? (
-          <p style={{ color: "var(--red)", marginTop: 4, fontSize: 13 }}>{saveError}</p>
+          <p role="alert" style={{ color: "var(--red)", marginTop: 4, fontSize: 13 }}>{saveError}</p>
         ) : null}
       </div>
       <div className={"cfg-save-bar " + (dirty ? "is-dirty" : "")}>
@@ -1864,7 +1875,7 @@ function PageHeader({ dirty, onSave, onDiscard, isSaving, saveError, canEdit }: 
           </>
         ) : (
           <span className="cfg-save-msg cfg-save-msg--saved">
-            <I.Check size={12} /> Todo guardado
+            <I.Check size={12} /> {saveError ? "Revisión pendiente" : "Todo guardado"}
           </span>
         )}
       </div>
@@ -1880,6 +1891,7 @@ interface ConfiguracionProps {
   initialConsultorio: ConsultorioData;
   initialServicios: ServicioCfg[];
   initialDias: Record<DiaSemanaId, DiaHorarios>;
+  initialHorariosContext: HorariosContext;
   initialAutoConfirmar: boolean;
   initialSlotMargenMin: number;
   googleCalendar: IntegrationStatus;
@@ -1940,6 +1952,7 @@ export function Configuracion({
   initialConsultorio,
   initialServicios,
   initialDias,
+  initialHorariosContext,
   initialAutoConfirmar,
   initialSlotMargenMin,
   googleCalendar,
@@ -1989,13 +2002,21 @@ export function Configuracion({
 
   const [consultorio, setConsultorio] = useState<ConsultorioData>(initialConsultorio);
   const [consultorioSnap, setConsultorioSnap] = useState<ConsultorioData>(initialConsultorio);
-  const [dias, setDias] = useState<Record<DiaId, Dia>>(initialDias);
-  const [diasSnap, setDiasSnap] = useState<Record<DiaId, Dia>>(initialDias);
+  const [availability] = useState(() => new AvailabilityDraft({ context: initialHorariosContext, dias: initialDias }));
+  const [, redrawAvailability] = useState(0);
+  const dias = availability.dias;
+  const savingRef = useRef(false);
+  const refreshAvailability = () => redrawAvailability((n) => n + 1);
   const [servicios, setServicios] = useState<ServicioCfg[]>(initialServicios);
   const [serviciosSnap, setServiciosSnap] = useState<ServicioCfg[]>(initialServicios);
   const [dirty, setDirty] = useState<DirtyState>(NO_DIRTY);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isSaving, startSavingTransition] = useTransition();
+
+  useEffect(() => {
+    availability.receive({ context: initialHorariosContext, dias: initialDias });
+    redrawAvailability((n) => n + 1);
+  }, [availability, initialHorariosContext, initialDias]);
 
   // Margen entre turnos (M43 slot_margen_min). Persiste on-change vía
   // saveBookingPrefsAction (mismo patrón que el toggle auto-confirmar), no por
@@ -2020,13 +2041,27 @@ export function Configuracion({
   const anyDirty = dirty.consultorio || dirty.horarios || dirty.servicios;
 
   const setC = (patch: Partial<ConsultorioData>) => {
+    if (savingRef.current) return;
     setConsultorio((prev) => ({ ...prev, ...patch }));
     setDirty((d) => ({ ...d, consultorio: true }));
   };
 
   const handleSave = () => {
+    if (savingRef.current || !canEdit || availability.contextChanged) return;
+    const command = dirty.horarios ? availability.begin(crypto.randomUUID()) : null;
+    if (dirty.horarios && !command) { setSaveError("Cargá los horarios guardados antes de seguir."); return; }
+    savingRef.current = true;
     setSaveError(null);
+    refreshAvailability();
     startSavingTransition(async () => {
+      try {
+      if (command) {
+        const result = await saveHorariosAction(command);
+        availability.finish(result);
+        refreshAvailability();
+        if (!result.ok) { setSaveError(`Horarios: ${result.error.message}`); return; }
+        setDirty((d) => ({ ...d, horarios: false }));
+      }
       // Save secciones marcadas dirty en serie. Si una falla, paramos y reportamos.
       if (dirty.consultorio) {
         const result = await saveConsultorioAction({
@@ -2046,16 +2081,9 @@ export function Configuracion({
           return;
         }
         setConsultorioSnap(consultorio);
+        setDirty((d) => ({ ...d, consultorio: false }));
       }
 
-      if (dirty.horarios) {
-        const result = await saveHorariosAction({ dias });
-        if (!result.ok) {
-          setSaveError(`Horarios: ${result.error.message}`);
-          return;
-        }
-        setDiasSnap(dias);
-      }
 
       if (dirty.servicios) {
         const result = await saveServiciosAction({ servicios });
@@ -2064,17 +2092,34 @@ export function Configuracion({
           return;
         }
         setServiciosSnap(servicios);
+        setDirty((d) => ({ ...d, servicios: false }));
       }
 
-      setDirty(NO_DIRTY);
+      } catch {
+        if (availability.pending) availability.finish({ ok: false, error: { code: "network", message: "Conexión interrumpida" } });
+        setSaveError("No pudimos confirmar el guardado. Reintentá para recuperar el resultado.");
+      } finally { savingRef.current = false; refreshAvailability(); }
+    });
+  };
+
+  const loadSavedHours = () => {
+    if (savingRef.current || availability.uncertain || availability.contextChanged) return;
+    savingRef.current = true;
+    startSavingTransition(async () => {
+      try {
+        const result = await readHorariosAction({ organizationId: availability.context.organizationId, memberId: availability.context.memberId });
+        if (!result.ok) { setSaveError(result.error.message); return; }
+        if (!availability.reload(result.data)) { setSaveError("Los horarios volvieron a cambiar. Reintentá la lectura."); return; }
+        setDirty((d) => ({ ...d, horarios: false })); setSaveError(null);
+      } catch { setSaveError("No pudimos leer los horarios. Conservamos tus cambios; volvé a intentar."); }
+      finally { savingRef.current = false; refreshAvailability(); }
     });
   };
 
   const handleDiscard = () => {
+    if (savingRef.current || (dirty.horarios && !availability.discard())) return;
     if (dirty.consultorio) setConsultorio(consultorioSnap);
-    if (dirty.horarios) {
-      setDias(diasSnap);
-    }
+    refreshAvailability();
     if (dirty.servicios) setServicios(serviciosSnap);
     setDirty(NO_DIRTY);
     setSaveError(null);
@@ -2087,7 +2132,7 @@ export function Configuracion({
         onSave={handleSave}
         onDiscard={handleDiscard}
         isSaving={isSaving}
-        saveError={saveError}
+        saveError={availability.contextChanged ? "Cambió el consultorio activo. Volvé a cargar la página." : availability.conflict ? "Los horarios cambiaron en otra pestaña. Conservamos tu borrador: cargá los guardados para reemplazarlo y seguir." : saveError}
         canEdit={canEdit}
       />
 
@@ -2098,7 +2143,7 @@ export function Configuracion({
           showEquipo={canManageTeam || equipoSelf != null}
           showPerfilPublico={esColegiado && initialPerfilPublico != null}
         />
-        <div className="cfg-pane">
+        <fieldset className="cfg-pane" disabled={isSaving || availability.contextChanged} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
           {seccion === "cuenta"        ? <SecCuenta c={consultorio} set={setC} showVinculaciones={showVinculaciones} showAuditLog={canEdit} /> : null}
           {seccion === "perfil-publico" && initialPerfilPublico ? (
             <SecPerfilPublico initial={initialPerfilPublico} matricula={consultorio.matricula} />
@@ -2132,21 +2177,26 @@ export function Configuracion({
           ) : null}
           {seccion === "horarios"      ? (
             <>
+              {availability.conflict && !availability.uncertain && !availability.contextChanged ? <button type="button" className="fi-btn" onClick={loadSavedHours}>Reemplazar borrador con horarios guardados</button> : null}
+              {availability.uncertain ? <p role="status">El resultado está pendiente de confirmación. Usá Guardar para reintentar el mismo cambio.</p> : null}
+              {availability.context.protectedDates ? <p role="status">Hay horarios con fechas especiales. Su actualización necesita una revisión para conservar esas fechas.</p> : null}
+              <fieldset disabled={availability.locked || !canEdit} style={{ border: 0, padding: 0, margin: 0, minWidth: 0, display: "flex", flexDirection: "column", gap: "inherit" }}>
               <SecHorarios
                 dias={dias}
-                setDias={(d) => { setDias(d); setDirty((dd) => ({ ...dd, horarios: true })); }}
+                setDias={(d) => { if (savingRef.current || availability.locked) return; availability.edit(d); refreshAvailability(); setDirty((dd) => ({ ...dd, horarios: true })); }}
                 slotMargenMin={slotMargenMin}
                 onMargenChange={onMargenChange}
                 margenPending={margenPending}
                 canEdit={canEdit}
               />
+              </fieldset>
               <SecBookingPrefs initialAutoConfirmar={initialAutoConfirmar} canEdit={canEdit} />
             </>
           ) : null}
           {seccion === "servicios"     ? (
             <SecServicios
               servicios={servicios}
-              setServicios={(s) => { setServicios(s); setDirty((dd) => ({ ...dd, servicios: true })); }}
+              setServicios={(s) => { if (savingRef.current) return; setServicios(s); setDirty((dd) => ({ ...dd, servicios: true })); }}
             />
           ) : null}
           {seccion === "integraciones" ? (
@@ -2166,7 +2216,7 @@ export function Configuracion({
               membersActivos={membersActivos}
             />
           ) : null}
-        </div>
+        </fieldset>
       </div>
     </div>
   );

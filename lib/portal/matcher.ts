@@ -46,6 +46,8 @@
 export interface MatchCandidate {
   pacienteId: string;
   organizationId: string;
+  /** Linked records still count toward household ambiguity but cannot be targets. */
+  alreadyLinked?: boolean;
   /** El DNI aportado por el titular matcheó el dni_hash (salteado por esta org)
    * de esta fila. false si el titular no aportó DNI o no matcheó. */
   dniMatch: boolean;
@@ -104,7 +106,7 @@ function highConfidenceReason(c: MatchCandidate): AutoLinkDecision["reason"] | n
   // (DNI + teléfono) NO alcanzan para otorgar acceso a PHI ajena
   // [audit-fixes · ALTO-1]. Alta confianza EXIGE emailMatch + un segundo
   // identificador que ate la cuenta a ESA fila. Sin emailMatch → claim (P9).
-  if (!c.emailMatch) return null;
+  if (c.alreadyLinked || !c.emailMatch) return null;
   if (c.dniMatch) return "dni_email";
   if (c.telefonoMatch) return "telefono_email";
   return null;
@@ -124,8 +126,8 @@ function hasAnyMatch(c: MatchCandidate): boolean {
  *
  * Reglas:
  *   1. Se descartan candidatos SIN ninguna coincidencia (no son candidatos).
- *   2. Se descartan filas paciente YA linkeadas a OTRA cuenta o a ESTA (el
- *      caller no debería pasarlas, pero defendemos: `alreadyLinked` las excluye).
+ *   2. Las filas ya vinculadas cuentan para la ambigüedad, pero no reciben links
+ *      ni claims nuevos. El caller incluye todas las filas vivas coincidentes.
  *   3. Por ORG: si HAY exactamente UN candidato de alta confianza y es el ÚNICO
  *      candidato de esa org, se auto-linkea. Si hay >1 candidato en la org
  *      (aunque uno sea "alta confianza"), TODOS los de esa org van a claim
@@ -168,6 +170,7 @@ export function matchAccount(candidates: MatchCandidate[]): MatchOutcome {
     }
     // >1 candidato en la org, o el único no es alta confianza → todos a claim.
     for (const c of orgCandidates) {
+      if (c.alreadyLinked) continue;
       claims.push({
         kind: "claim",
         pacienteId: c.pacienteId,

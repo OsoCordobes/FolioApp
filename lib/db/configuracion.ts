@@ -1,3 +1,4 @@
+
 /**
  * Folio · /configuracion data fetcher y mutations (Sprint S1 T-1.9).
  *
@@ -16,6 +17,8 @@
  */
 
 import { z } from "zod";
+import { decodeAvailabilitySnapshot } from "@/lib/agenda/availability-snapshot";
+import { createHash } from "node:crypto";
 
 import { encryptColumn } from "@/lib/crypto";
 import { ESPECIALIDAD_SLUGS, type EspecialidadSlug } from "@/lib/especialidades/meta";
@@ -92,6 +95,7 @@ export interface ConfiguracionData {
    * muestra como anomalía en Horarios en vez de dejar la sección en blanco.
    */
   sinDisponibilidad: boolean;
+  horariosContext: HorariosContext;
   /** M43 · si true, las reservas del link público se confirman automáticamente. */
   autoConfirmarReservas: boolean;
   /** M43 · minutos de margen entre slots ofrecidos en el booking público. */
@@ -107,23 +111,11 @@ export interface ConfiguracionData {
 
 // ─── Fetcher ───────────────────────────────────────────────────────────────
 
-const DEFAULT_DIAS: Record<DiaSemanaId, DiaHorarios> = {
-  lun: { on: false, franjas: [] },
-  mar: { on: false, franjas: [] },
-  mie: { on: false, franjas: [] },
-  jue: { on: false, franjas: [] },
-  vie: { on: false, franjas: [] },
-  sab: { on: false, franjas: [] },
-  dom: { on: false, franjas: [] },
-};
-
-const DOW_TO_DIA: Record<number, DiaSemanaId> = {
-  0: "dom", 1: "lun", 2: "mar", 3: "mie", 4: "jue", 5: "vie", 6: "sab",
-};
-
-export async function getConfiguracionData(): Promise<Result<ConfiguracionData>> {
+export async function getConfiguracionData(expected?: { organizationId: string; memberId: string }): Promise<Result<ConfiguracionData>> {
   const ctx = await getActiveContext();
   if (!ctx.ok) return ctx;
+
+  if (expected && (expected.organizationId !== ctx.data.organization.id || expected.memberId !== ctx.data.session.memberId)) return err("conflict", "Cambió el consultorio activo. Volvé a cargar la página.");
 
   const supabase = await createSupabaseServerClient();
 
@@ -158,26 +150,10 @@ export async function getConfiguracionData(): Promise<Result<ConfiguracionData>>
     .eq("id", ctx.data.organization.id)
     .maybeSingle();
 
-  // 4. Disponibilidad del profesional activo (member actual).
-  const { data: disponibilidad, error: dispErr } = await supabase
-    .from("disponibilidad_profesional")
-    .select("dia_semana, hora_inicio, hora_fin")
-    .eq("organization_id", ctx.data.organization.id)
-    .eq("member_id", ctx.data.session.memberId)
-    .order("dia_semana");
-  if (dispErr) {
-    console.warn(`[configuracion] disponibilidad_profesional falló: ${dispErr.message}`);
-  }
-
-  const dias: Record<DiaSemanaId, DiaHorarios> = JSON.parse(JSON.stringify(DEFAULT_DIAS));
-  for (const row of disponibilidad ?? []) {
-    const dia = DOW_TO_DIA[row.dia_semana as number];
-    if (!dia) continue;
-    dias[dia].on = true;
-    const hi = String(row.hora_inicio).slice(0, 5);
-    const hf = String(row.hora_fin).slice(0, 5);
-    dias[dia].franjas.push([hi, hf]);
-  }
+  // 4. Una lectura fallida nunca se convierte en una semana vacía editable.
+  const snapshot = await readHorarios(expected ?? { organizationId: ctx.data.organization.id, memberId: ctx.data.session.memberId });
+  if (!snapshot.ok) return snapshot;
+  const { dias, context: horariosContext } = snapshot.data;
 
   const profesional = [ctx.data.profile.nombre, ctx.data.profile.apellido]
     .filter(Boolean).join(" ").trim() || "—";
@@ -228,7 +204,8 @@ export async function getConfiguracionData(): Promise<Result<ConfiguracionData>>
     // no sobre los toggles: un día "encendido" sin franjas tampoco ofrece nada.
     // Con `dispErr` no afirmamos nada (no sabemos si hay franjas): avisar "no
     // tenés horarios" por un fallo transitorio sería una alarma falsa.
-    sinDisponibilidad: !dispErr && (disponibilidad ?? []).length === 0,
+    sinDisponibilidad: Object.values(dias).every((dia) => !dia.on),
+    horariosContext,
     // M43 · default true (igual que el DEFAULT de la columna) si la org es
     // anterior a la migración o el campo viene null.
     autoConfirmarReservas: (orgExtra?.auto_confirmar_reservas as boolean | null) ?? true,
@@ -338,74 +315,58 @@ const DIA_TO_DOW: Record<DiaSemanaId, number> = {
 
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-const saveHorariosSchema = z.object({
-  dias: z.record(
-    z.enum(["lun", "mar", "mie", "jue", "vie", "sab", "dom"]),
-    z.object({
-      on: z.boolean(),
-      franjas: z.array(z.tuple([z.string().regex(HHMM), z.string().regex(HHMM)])),
-    }),
-  ),
-});
-
-export type SaveHorariosInput = z.infer<typeof saveHorariosSchema>;
-
-/**
- * Reemplaza la disponibilidad semanal del profesional activo en
- * disponibilidad_profesional. Idempotente: llamarla dos veces con la misma
- * data produce el mismo resultado final.
- *
- * El reemplazo va por el RPC `reemplazar_disponibilidad` (M97) y NO por un
- * DELETE + INSERT desde acá. El par suelto viaja como dos requests PostgREST
- * ⇒ dos transacciones: si el INSERT fallaba, el DELETE ya estaba commiteado y
- * el profesional se quedaba con CERO franjas mientras la UI le decía que no se
- * había guardado — con la agenda pública sin ofrecer un solo turno hasta que
- * volviera a entrar acá. Con el RPC es todo o nada.
- */
-export async function saveHorarios(input: SaveHorariosInput): Promise<Result<void>> {
-  const parsed = saveHorariosSchema.safeParse(input);
-  if (!parsed.success) {
-    return err("validation", "Datos de horarios inválidos.", parsed.error.message);
-  }
-  const d = parsed.data;
-
+export interface HorariosContext { organizationId: string; memberId: string; revision: number; protectedDates: boolean }
+export interface HorariosSnapshot { context: HorariosContext; dias: Record<DiaSemanaId, DiaHorarios> }
+const expectedHorariosSchema = z.object({ organizationId: z.string().uuid(), memberId: z.string().uuid() });
+export async function readHorarios(expected: { organizationId: string; memberId: string }): Promise<Result<HorariosSnapshot>> {
+  if (!expectedHorariosSchema.safeParse(expected).success) return err("validation", "Falta identificar la agenda.");
   const ctx = await getActiveContext();
   if (!ctx.ok) return ctx;
-  if (ctx.data.session.role !== "OWNER" && ctx.data.session.role !== "DIRECTOR" && ctx.data.session.role !== "PROFESIONAL") {
-    return err("forbidden", "No tenés permisos para editar horarios.");
-  }
-
-  // La org y el member NO viajan en el payload: son parámetros del RPC y la
-  // función los re-escribe en cada fila, así que una franja no puede colarse en
-  // otro tenant aunque el cliente la mande manipulada.
-  const franjas: Array<{ dia_semana: number; hora_inicio: string; hora_fin: string }> = [];
-
-  for (const [diaKey, dia] of Object.entries(d.dias)) {
-    if (!dia || !dia.on) continue;
-    const dow = DIA_TO_DOW[diaKey as DiaSemanaId];
-    if (dow == null) continue;
-    for (const [hi, hf] of dia.franjas) {
-      if (!hi || !hf) continue;
-      if (hi >= hf) continue;
-      franjas.push({ dia_semana: dow, hora_inicio: hi, hora_fin: hf });
+  if (ctx.data.organization.id !== expected.organizationId || ctx.data.session.memberId !== expected.memberId) return err("conflict", "Cambió el consultorio activo. Volvé a cargar la página.");
+  try {
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = await supabase.rpc("read_availability_snapshot", { p_org: expected.organizationId, p_member: expected.memberId });
+    if (error) { const mapped = mapSupabaseError(error); return err(mapped.code, mapped.message); }
+    const parsed = decodeAvailabilitySnapshot(data, expected);
+    return parsed ? ok(parsed) : err("db_error", "No se pudieron leer los horarios. Volvé a intentar.");
+  } catch { return err("db_error", "No se pudieron leer los horarios. Volvé a intentar."); }
+}
+const saveHorariosSchema = expectedHorariosSchema.extend({
+  revision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER), operacionId: z.string().uuid(),
+  dias: z.record(z.enum(["lun", "mar", "mie", "jue", "vie", "sab", "dom"]), z.object({
+    on: z.boolean(), franjas: z.array(z.tuple([z.string().max(5), z.string().max(5)])).max(12),
+  })).superRefine((dias, check) => {
+    for (const key of Object.keys(DIA_TO_DOW) as DiaSemanaId[]) {
+      const dia = dias[key];
+      if (!dia || (dia.on && !dia.franjas.length)) { check.addIssue({ code: z.ZodIssueCode.custom, message: "Semana incompleta" }); continue; }
+      if (!dia.on) continue;
+      const ordered = [...dia.franjas].sort((a, b) => a[0].localeCompare(b[0]));
+      if (ordered.some(([start, end], i) => !HHMM.test(start) || !HHMM.test(end) || start >= end || (i > 0 && start < ordered[i - 1][1]))) check.addIssue({ code: z.ZodIssueCode.custom, message: "Franjas inválidas" });
     }
-  }
-
-  const supabase = await createSupabaseServerClient();
-
-  // M97 · DELETE + INSERT en una sola transacción. Si algo falla, la semana
-  // vieja queda intacta: nunca "error en pantalla + agenda en cero".
-  const { error } = await supabase.rpc("reemplazar_disponibilidad", {
-    p_organization_id: ctx.data.organization.id,
-    p_member_id: ctx.data.session.memberId,
-    p_franjas: franjas,
-  });
-  if (error) {
-    const mapped = mapSupabaseError(error);
-    return err(mapped.code, mapped.message, error.message);
-  }
-
-  return ok(undefined);
+  }),
+});
+export type SaveHorariosInput = z.infer<typeof saveHorariosSchema>;
+export interface SaveHorariosResult { revision: number; count: number }
+/** Revisión y recibo atómicos: reintentar el mismo intento recupera su resultado. */
+export async function saveHorarios(input: SaveHorariosInput): Promise<Result<SaveHorariosResult>> {
+  const parsed = saveHorariosSchema.safeParse(input);
+  if (!parsed.success) return err("validation", "Revisá los días y las franjas: deben estar completas, ordenadas y sin superponerse.");
+  const d = parsed.data;
+  const ctx = await getActiveContext();
+  if (!ctx.ok) return ctx;
+  if (!["OWNER", "DIRECTOR", "PROFESIONAL"].includes(ctx.data.session.role)) return err("forbidden", "No tenés permisos para editar horarios.");
+  if (ctx.data.organization.id !== d.organizationId || ctx.data.session.memberId !== d.memberId) return err("conflict", "Cambió el consultorio activo. Volvé a cargar la página.");
+  const franjas = Object.entries(d.dias).flatMap(([key, dia]) => dia?.on ? dia.franjas.map(([hora_inicio, hora_fin]) => ({ dia_semana: DIA_TO_DOW[key as DiaSemanaId], hora_inicio, hora_fin })) : [])
+    .sort((a, b) => a.dia_semana - b.dia_semana || a.hora_inicio.localeCompare(b.hora_inicio) || a.hora_fin.localeCompare(b.hora_fin));
+  const hash = createHash("sha256").update(JSON.stringify([d.revision, franjas])).digest("hex");
+  try {
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = await supabase.rpc("save_availability_revision", { p_org: d.organizationId, p_member: d.memberId, p_expected_revision: d.revision, p_operation: d.operacionId, p_hash: hash, p_franjas: franjas });
+    if (error) { if (error.code === "40001") return err("conflict", "Los horarios cambiaron desde que abriste la página. Cargá los guardados antes de volver a editar."); const mapped = mapSupabaseError(error); return err(mapped.code, mapped.message); }
+    const receipt = z.object({ revision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER), count: z.number().int().min(0).max(84) }).safeParse(data);
+    if (!receipt.success || receipt.data.revision <= d.revision) return err("db_error", "No pudimos confirmar el guardado. Reintentá para recuperar el resultado.");
+    return ok(receipt.data);
+  } catch { return err("db_error", "No pudimos confirmar el guardado. Reintentá para recuperar el resultado."); }
 }
 
 // ─── Mutation: guardar Servicios ──────────────────────────────────────────

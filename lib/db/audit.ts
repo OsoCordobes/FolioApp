@@ -1,3 +1,5 @@
+
+import { safeLog } from "@/lib/observability/safe-log";
 /**
  * Folio · query del audit_log para el dashboard de cumplimiento.
  *
@@ -247,15 +249,15 @@ export async function writeAuditEntry(
       .from("audit_log")
       .insert(buildAuditInsertRow(input, netCtx));
     if (error) {
-      console.warn(
-        `[audit] no se pudo registrar ${input.action} (${input.resourceType}:${input.resourceId}): ${error.message}`,
+      safeLog("warn", "lib.db.audit.L250",
+        { error: error },
       );
       return err("db_error", "No se pudo registrar el evento de auditoría.", error.message);
     }
     return ok(undefined);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    console.warn(`[audit] excepción registrando ${input.action}: ${msg}`);
+    safeLog("warn", "lib.db.audit.L258", `[audit] excepción registrando ${input.action}: ${msg}`);
     return err("db_error", "No se pudo registrar el evento de auditoría.", msg);
   }
 }

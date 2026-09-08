@@ -1,3 +1,4 @@
+import { canExportCompleteClinicalHistory } from "@/lib/auth/clinical-export-scope";
 /**
  * Folio · /pacientes/[id] (Server Component).
  *
@@ -85,6 +86,7 @@ export default async function PacientePage({ params }: PageProps) {
 
   return (
     <PacienteDetalle
+      canExportCompleteHistory={canExportCompleteClinicalHistory(ctx.data.session.role, ctx.data.session.esColegiado)}
       paciente={data.data.paciente}
       plan={data.data.plan}
       cumple={data.data.cumple}

@@ -49,7 +49,7 @@ export default async function ConfiguracionPage({
     throw new Error(`No se pudo cargar /configuracion: ${ctx.error.message}`);
   }
 
-  const data = await getConfiguracionData();
+  const data = await getConfiguracionData({ organizationId: ctx.data.organization.id, memberId: ctx.data.session.memberId });
   if (!data.ok) {
     throw new Error(`Error cargando configuración: ${data.error.message}`);
   }
@@ -121,6 +121,7 @@ export default async function ConfiguracionPage({
       initialConsultorio={data.data.consultorio}
       initialServicios={data.data.servicios}
       initialDias={data.data.dias}
+      initialHorariosContext={data.data.horariosContext}
       initialAutoConfirmar={data.data.autoConfirmarReservas}
       initialSlotMargenMin={data.data.slotMargenMin}
       logoUrl={data.data.logoUrl}

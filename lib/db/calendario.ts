@@ -1,3 +1,5 @@
+
+import { safeLog } from "@/lib/observability/safe-log";
 /**
  * Folio · /calendario data fetcher (Sprint S1 T-1.5).
  *
@@ -21,6 +23,7 @@ import { loadCanceladoPorPacienteIds } from "./cancelado-por-paciente";
 import { loadConfirmadoViaByTurnoId } from "./confirmado-via";
 import { err, ok, type Result } from "./errors";
 import { getActiveSession } from "./session";
+import { readCompleteCollection } from "./complete-collection";
 import { normalizeModalidad } from "@/lib/types";
 import type {
   Bloqueo,
@@ -259,6 +262,7 @@ interface FetcherInput {
 // ─── Fetcher ───────────────────────────────────────────────────────────────
 
 export async function getCalendarioSemana(input: FetcherInput): Promise<Result<CalendarioSemanaData>> {
+  try {
   const { organizationId, weekStartIso, timezone, profesionalId, profesionalesNombreById } = input;
   const tz = timezone || "America/Argentina/Cordoba";
   const supabase = await createSupabaseServerClient();
@@ -269,70 +273,64 @@ export async function getCalendarioSemana(input: FetcherInput): Promise<Result<C
   // descifra para roles con acceso clínico (espejo de can_read_clinical en RLS).
   // Si la sesión no resuelve, fail-closed: tratamos como sin acceso clínico.
   const sessionRes = await getActiveSession();
+  if (!sessionRes.ok) return sessionRes;
   const canReadClinical = sessionRes.ok
     ? capabilitiesFor(sessionRes.data.role, sessionRes.data.esColegiado).canReadClinical
     : false;
 
   // 4 queries en paralelo: turnos, bloqueos, pedidos, disponibilidad.
   const [turnosRes, bloqueosRes, pedidosRes, dispRes] = await Promise.all([
-    (async () => {
+    readCompleteCollection<TurnoExtendidoRow>(async (from, to) => {
       let q = supabase
         .from("turno_extendido")
-        .select(
-          "id, organization_id, inicio, duracion_min, estado, origen, " +
-            "paciente_id, paciente_nombre_cifrado, paciente_apellido_cifrado, paciente_telefono_cifrado, " +
-            "paciente_tipo, paciente_tags, paciente_alerta_alergia, servicio_nombre, profesional_id, " +
-            "nota_reserva_cifrado, modalidad",
-        )
+        .select("id, organization_id, inicio, duracion_min, estado, origen, paciente_id, paciente_nombre_cifrado, paciente_apellido_cifrado, paciente_telefono_cifrado, paciente_tipo, paciente_tags, paciente_alerta_alergia, servicio_nombre, profesional_id, nota_reserva_cifrado, modalidad", { count: "exact" })
         .eq("organization_id", organizationId)
         .gte("inicio", startUtc)
         .lt("inicio", endUtc)
-        .order("inicio", { ascending: true });
+        .order("inicio", { ascending: true }).order("id", { ascending: true }).range(from, to);
       if (profesionalId) q = q.eq("profesional_id", profesionalId);
       return q;
-    })(),
-    (async () => {
+    }),
+    readCompleteCollection<BloqueoRow>(async (from, to) => {
       let q = supabase
         .from("bloqueo")
-        .select("id, inicio, duracion_min, titulo, origen")
+        .select("id, inicio, duracion_min, titulo, origen", { count: "exact" })
         .eq("organization_id", organizationId)
         .gte("inicio", startUtc)
         .lt("inicio", endUtc)
-        .order("inicio", { ascending: true });
+        .order("inicio", { ascending: true }).order("id", { ascending: true }).range(from, to);
       if (profesionalId) q = q.eq("profesional_id", profesionalId);
       return q;
-    })(),
-    supabase
+    }),
+    readCompleteCollection<PedidoRow>((from, to) => supabase
       .from("pedido")
-      .select(
-        "id, canal, estado, nombre_cifrado, telefono_cifrado, email_cifrado, paciente_id, profesional_id, " +
-          "fecha_propuesta, duracion_min, servicio_id, motivo_cifrado, precio_cents, recibido_ts, confirmado_ts",
-      )
+      .select("id, canal, estado, nombre_cifrado, telefono_cifrado, email_cifrado, paciente_id, profesional_id, fecha_propuesta, duracion_min, servicio_id, motivo_cifrado, precio_cents, recibido_ts, confirmado_ts", { count: "exact" })
       .eq("organization_id", organizationId)
       // Solo PENDIENTE: la UI filtra estricto por "pendiente"; traer REAGENDADO
       // descifraba PII de filas que ninguna vista renderiza (audit L9).
       .eq("estado", "PENDIENTE")
-      .order("recibido_ts", { ascending: false }),
+      .order("recibido_ts", { ascending: false }).order("id", { ascending: false }).range(from, to)),
     // Disponibilidad activa — decide qué días de finde se pintan "Cerrado" y
     // el denominador del % de capacidad por día. Con filtro de profesional
     // activo se acota a SUS franjas (su agenda, su capacidad); en "Todos" es
     // org-wide: un día queda cerrado solo si NINGÚN profesional tiene franja
     // (unión) y la capacidad suma a todos los colegiados. Org-scoped: la RLS
     // disp_select_org (M02) limita a miembros de la org.
-    (async () => {
+    readCompleteCollection<{id:string; dia_semana:number; hora_inicio:string; hora_fin:string; vigencia_desde:string; vigencia_hasta:string|null}>(async (from, to) => {
       let q = supabase
         .from("disponibilidad_profesional")
-        .select("dia_semana, hora_inicio, hora_fin, vigencia_desde, vigencia_hasta")
+        .select("id, dia_semana, hora_inicio, hora_fin, vigencia_desde, vigencia_hasta", { count: "exact" })
         .eq("organization_id", organizationId)
-        .eq("activa", true);
+        .eq("activa", true).order("vigencia_desde", { ascending: true }).order("id", { ascending: true }).range(from, to);
       if (profesionalId) q = q.eq("member_id", profesionalId);
       return q;
-    })(),
+    }),
   ]);
 
-  if (turnosRes.error) return err("db_error", "Error leyendo turnos.", turnosRes.error.message);
-  if (bloqueosRes.error) return err("db_error", "Error leyendo bloqueos.", bloqueosRes.error.message);
-  if (pedidosRes.error) return err("db_error", "Error leyendo pedidos.", pedidosRes.error.message);
+  if (turnosRes.error) return err("db_error", "No se pudieron leer todos los turnos. Intentá nuevamente.");
+  if (bloqueosRes.error) return err("db_error", "No se pudieron leer todos los bloqueos. Intentá nuevamente.");
+  if (pedidosRes.error) return err("db_error", "No se pudieron leer todos los pedidos. Intentá nuevamente.");
+  if (dispRes.error) return err("db_error", "No se pudo verificar la disponibilidad. Intentá nuevamente.");
 
   const turnoRows = (turnosRes.data ?? []) as unknown as TurnoExtendidoRow[];
   const bloqueoRows = (bloqueosRes.data ?? []) as unknown as BloqueoRow[];
@@ -432,12 +430,7 @@ export async function getCalendarioSemana(input: FetcherInput): Promise<Result<C
   const weekDates = enumerateWeekDates(weekStartIso);
   const weekRangeLabel = formatWeekRangeLabel(weekStartIso, weekDates[6]);
 
-  // Días cerrados de la semana. Si la lectura de disponibilidad falla, NO
-  // tumbamos la página por algo cosmético: caemos al comportamiento histórico
-  // (finde cerrado salvo eventos) con un warn para diagnóstico.
-  if (dispRes.error) {
-    console.warn(`[calendario] disponibilidad_profesional falló: ${dispRes.error.message}`);
-  }
+  // Empty availability is valid only after a complete successful read.
   const disponibilidad: FranjaDisponibilidad[] = (
     (dispRes.data ?? []) as unknown as Array<{
       dia_semana: number;
@@ -458,15 +451,15 @@ export async function getCalendarioSemana(input: FetcherInput): Promise<Result<C
     ...bloqueos.map((b) => b.fecha),
     ...pedidos.filter((p) => p.estado === "pendiente" && p.fecha).map((p) => p.fecha as string),
   ]);
-  const diasCerrados = deriveDiasCerrados(weekDates, dispRes.error ? [] : disponibilidad, fechasConEventos);
+  const diasCerrados = deriveDiasCerrados(weekDates, disponibilidad, fechasConEventos);
   // Capacidad por día: con filtro de profesional la query ya vino acotada a
   // sus franjas; en "Todos" suma las de toda la org. Sin franjas → null →
   // fallback histórico (600 min) en la UI.
-  const capacidadDiaMin = deriveCapacidadSemana(weekDates, dispRes.error ? [] : disponibilidad);
+  const capacidadDiaMin = deriveCapacidadSemana(weekDates, disponibilidad);
   // Rango horario de disponibilidad de la semana (para el rango de la grilla).
   const rangoDisponibilidadMin = deriveRangoDisponibilidadSemana(
     weekDates,
-    dispRes.error ? [] : disponibilidad,
+    disponibilidad,
   );
 
   const nowDate = new Date();
@@ -488,6 +481,9 @@ export async function getCalendarioSemana(input: FetcherInput): Promise<Result<C
     capacidadDiaMin,
     rangoDisponibilidadMin,
   });
+  } catch {
+    return err("db_error", "No se pudo leer el calendario completo. Intentá nuevamente.");
+  }
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -525,7 +521,7 @@ function tryDecrypt(value: string | null | undefined, label: string): string | n
     return decryptColumn(value);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    console.warn(`[calendario] decrypt falló (${label}): ${msg}`);
+    safeLog("warn", "lib.db.calendario.L528", `[calendario] decrypt falló (${label}): ${msg}`);
     return null;
   }
 }
@@ -764,12 +760,14 @@ interface MesFetcherInput {
  * cancelados/no-asistió/reagendados) para los conteos/preview por día.
  */
 export async function getCalendarioMes(input: MesFetcherInput): Promise<Result<CalendarioMesData>> {
+  try {
   const { organizationId, monthIso, timezone, profesionalId, profesionalesNombreById } = input;
   const tz = timezone || "America/Argentina/Cordoba";
   const supabase = await createSupabaseServerClient();
 
   // M56 · gate clínico (ver getCalendarioSemana). Fail-closed sin sesión.
   const sessionRes = await getActiveSession();
+  if (!sessionRes.ok) return sessionRes;
   const canReadClinical = sessionRes.ok
     ? capabilitiesFor(sessionRes.data.role, sessionRes.data.esColegiado).canReadClinical
     : false;
@@ -785,23 +783,20 @@ export async function getCalendarioMes(input: MesFetcherInput): Promise<Result<C
   // Fin exclusivo: medianoche del día siguiente al último de la grilla.
   const endUtc = wallClockInTzToUtc(ly, lm, ld + 1, 0, 0, 0, tz).toISOString();
 
+  const turnosRes = await readCompleteCollection<TurnoExtendidoRow>(async (from, to) => {
   let q = supabase
     .from("turno_extendido")
-    .select(
-      "id, organization_id, inicio, duracion_min, estado, origen, " +
-        "paciente_id, paciente_nombre_cifrado, paciente_apellido_cifrado, paciente_telefono_cifrado, " +
-        "paciente_tipo, paciente_tags, paciente_alerta_alergia, servicio_nombre, profesional_id, " +
-        "nota_reserva_cifrado",
-    )
+    .select("id, organization_id, inicio, duracion_min, estado, origen, paciente_id, paciente_nombre_cifrado, paciente_apellido_cifrado, paciente_telefono_cifrado, paciente_tipo, paciente_tags, paciente_alerta_alergia, servicio_nombre, profesional_id, nota_reserva_cifrado, modalidad", { count: "exact" })
     .eq("organization_id", organizationId)
     .in("estado", ["AGENDADO", "CONFIRMADO", "EN_SALA", "ATENDIENDO", "CERRADO"])
     .gte("inicio", startUtc)
     .lt("inicio", endUtc)
-    .order("inicio", { ascending: true });
+    .order("inicio", { ascending: true }).order("id", { ascending: true }).range(from, to);
   if (profesionalId) q = q.eq("profesional_id", profesionalId);
 
-  const turnosRes = await q;
-  if (turnosRes.error) return err("db_error", "Error leyendo turnos del mes.", turnosRes.error.message);
+  return q;
+  });
+  if (turnosRes.error) return err("db_error", "No se pudieron leer todos los turnos del mes. Intentá nuevamente.");
 
   const turnoRows = (turnosRes.data ?? []) as unknown as TurnoExtendidoRow[];
 
@@ -845,4 +840,7 @@ export async function getCalendarioMes(input: MesFetcherInput): Promise<Result<C
     turnos,
     pacientes: Object.fromEntries(pacientesAcum.entries()),
   });
+  } catch {
+    return err("db_error", "No se pudo leer el calendario completo. Intentá nuevamente.");
+  }
 }

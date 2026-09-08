@@ -1,456 +1,142 @@
-/**
- * Folio · /api/cron/dispatch-recordatorios
- *
- * Disparado cada 15min por GitHub Actions (.github/workflows/
- * dispatch-recordatorios.yml — Vercel Hobby solo permite crons diarios) con
- * el cron diario de vercel.json como backstop. Procesa la cola
- * `recordatorio_job`:
- *
- *   - Filtra: enviado_ts IS NULL AND scheduled_ts <= now() AND intentos < 5
- *     AND scheduled_ts > now() - 6h (no enviamos recordatorios viejos
- *     que el cron no procesó por downtime — alerta al user en su lugar)
- *   - Para cada job: claim CAS sobre `intentos` (UPDATE guardado por
- *     enviado_ts IS NULL + intentos = <valor leído>) ANTES de enviar; recién
- *     después hidrata turno + paciente (PII descifrada) + organization
- *     + servicio y envía el template WhatsApp.
- *   - Fallback email (M67): si el teléfono no normaliza a E.164 o el envío
- *     WhatsApp lanza, y el paciente tiene email en paciente_identidad, se
- *     envía el template de email equivalente y se marca canal='email'.
- *     Sin teléfono utilizable NI email → canal='ninguno' + error_msg
- *     'sin canal de contacto' (consume presupuesto de intentos como
- *     cualquier falla). La decisión es pura: `decideCanalRecordatorio`.
- *   - Éxito: enviado_ts = now() + canal ('whatsapp' | 'email')
- *   - Email simulado (sin RESEND_API_KEY): enviado_ts + error_msg "envío
- *     simulado (…)" — no se reintenta pero la DB NO reporta entrega real.
- *     Email fallido (Resend error): SIN enviado_ts, se reintenta (máx 5).
- *     Matriz completa en `decideMarcaEmailRecordatorio`.
- *   - Falla: error_msg = mensaje (el claim ya incrementó intentos; 5 máx)
- *
- * Semántica de `intentos`: cuenta intentos INICIADOS (el claim incrementa
- * antes de enviar, éxitos incluidos), no fallas. El presupuesto efectivo
- * sigue siendo 5: el pick filtra intentos < 5 ANTES del claim y el éxito
- * setea enviado_ts.
- *
- * Seguridad:
- *   - Authorization: Bearer ${CRON_SECRET} requerido.
- *   - Concurrencia: el claim CAS dedupea invocaciones solapadas que pickearon
- *     el mismo snapshot — el perdedor cuenta `skipped` y no envía. Residuales
- *     at-least-once (aceptados; eliminarlos requiere estado 'enviando'/lease
- *     con migración):
- *       (a) job in-flight: si otra invocación pickea DESPUÉS del claim (lee
- *           intentos=1) y ANTES del set de enviado_ts, su claim con token 1
- *           pasa y puede duplicar ESE único job (≤1 por solape, vs batch
- *           entero sin claim);
- *       (b) crash/timeout entre el envío WhatsApp exitoso y el update de
- *           enviado_ts puede duplicar en la corrida siguiente.
- *
- * Performance:
- *   - Batch de 25 jobs por invocación (cap para mantener latencia <30s
- *     en función Vercel Hobby).
- *   - F11: alerta Sentry si batch_size > 80% durante 3 corridas seguidas
- *     (señal de saturación; subir frecuencia o paralelizar).
- */
-
+/** Durable reminder worker: a live lease owns every send; uncertain WhatsApp sends require review. */
 import { NextRequest, NextResponse } from "next/server";
-
 import { buildConfirmToken } from "@/lib/booking/confirm-token";
 import { fmtHora } from "@/lib/booking/slots-format";
 import { getAppUrl } from "@/lib/config/app-url";
 import { decryptColumn, tryDecrypt } from "@/lib/crypto";
-import {
-  decideCanalRecordatorio,
-  decideClaimRecordatorio,
-  decideMarcaEmailRecordatorio,
-  decideSkipRecordatorioOrgInterna,
-} from "@/lib/db/recordatorios";
 import { ESTADOS_CANCELAN_SIDE_EFFECTS } from "@/lib/db/turnos";
-import { sendEmail } from "@/lib/email/client";
-import {
-  buildConfirmacion24hEmail,
-  buildPostVisitaEmail,
-  buildRecordatorio2hEmail,
-} from "@/lib/email/templates/recordatorio-turno";
+import { emailDeliveryConfiguration } from "@/lib/email/client";
+import { deliverDurableEmail, deliveryOutcome } from "@/lib/email/durable";
+import { buildConfirmacion24hEmail, buildPostVisitaEmail, buildRecordatorio2hEmail } from "@/lib/email/templates/recordatorio-turno";
 import { toWhatsappE164 } from "@/lib/format/phone";
 import { verifyBearer } from "@/lib/security/verify-bearer";
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
-import {
-  sendConfirmacion24h,
-  sendPostVisita,
-  sendRecordatorio2h,
-} from "@/lib/whatsapp/templates";
-
+import { sendConfirmacion24h, sendPostVisita, sendRecordatorio2h } from "@/lib/whatsapp/templates";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
-
-const BATCH_SIZE = 25;
-const MAX_AGE_HOURS = 6;                            // no enviar recordatorios atrasados >6h
-const MAX_INTENTOS = 5;
-
+type Service = ReturnType<typeof createSupabaseServiceClient>;
 interface RecordatorioRow {
-  id: string;
-  organization_id: string;
-  turno_id: string;
+  id: string; organization_id: string; turno_id: string;
   tipo: "CONFIRMACION_24H" | "RECORDATORIO_2H" | "POST_VISITA";
-  scheduled_ts: string;
-  intentos: number;
+  scheduled_ts: string; intentos: number; lease_token: string;
 }
-
-async function runDispatch(): Promise<NextResponse> {
+type Outcome = "accepted" | "retryable" | "terminal";
+async function finish(service: Service, job: RecordatorioRow, state: Outcome, canal: string | null, providerId: string | null, error: string | null): Promise<Outcome> {
+  const result = await service.rpc("recordatorio_finish", {p_id:job.id,p_token:job.lease_token,p_status:state,p_canal:canal,p_provider_id:providerId,p_error:error});
+  if (result.error || result.data !== true) throw new Error("reminder_finish_failed");
+  return state;
+}
+async function runDispatch() {
+  const configuration = emailDeliveryConfiguration();
+  if (!configuration.enabled) return NextResponse.json({ok:true,processed:0,configuration});
   const service = createSupabaseServiceClient();
-  const now = new Date();
-  const minScheduled = new Date(now.getTime() - MAX_AGE_HOURS * 60 * 60_000).toISOString();
-
-  // Pickear jobs due
-  const { data: jobs, error: pickErr } = await service
-    .from("recordatorio_job")
-    .select("id, organization_id, turno_id, tipo, scheduled_ts, intentos")
-    .is("enviado_ts", null)
-    .lte("scheduled_ts", now.toISOString())
-    .gte("scheduled_ts", minScheduled)
-    .lt("intentos", MAX_INTENTOS)
-    .order("scheduled_ts", { ascending: true })
-    .limit(BATCH_SIZE);
-
-  if (pickErr) {
-    return NextResponse.json({ ok: false, error: pickErr.message }, { status: 500 });
-  }
-  if (!jobs || jobs.length === 0) {
-    return NextResponse.json({ ok: true, processed: 0 });
-  }
-
-  const results = {
-    processed: 0,
-    succeeded: 0,
-    failed: 0,
-    skipped: 0,
-    errors: [] as string[],
-  };
-
-  for (const job of jobs as RecordatorioRow[]) {
-    // Claim CAS: un solo UPDATE guardado (atómico en Postgres). `intentos`
-    // actúa de token de concurrencia optimista — si otra invocación ya lo
-    // claimeó (o ya lo envió), afecta 0 filas y salteamos sin enviar.
-    const { data: claimRows, error: claimErr } = await service
-      .from("recordatorio_job")
-      .update({ intentos: job.intentos + 1 })
-      .eq("id", job.id)
-      .is("enviado_ts", null)
-      .eq("intentos", job.intentos)
-      .select("id");
-
-    const claim = decideClaimRecordatorio(claimRows?.length ?? 0, Boolean(claimErr));
-    if (claim === "db_error") {
-      results.failed += 1;
-      results.errors.push(`${job.id}: claim: ${claimErr?.message}`);
-      continue;
-    }
-    if (claim === "skip") {
-      results.skipped += 1;
-      continue;
-    }
-
-    results.processed += 1;
-    try {
-      await processJob(service, job);
-      results.succeeded += 1;
-    } catch (e) {
-      results.failed += 1;
-      const msg = e instanceof Error ? e.message : String(e);
-      results.errors.push(`${job.id}: ${msg}`);
-      // El claim ya incrementó `intentos`; acá solo registramos el error.
-      // (Escribir job.intentos + 1 de nuevo sería un lost-update stale.)
-      await service
-        .from("recordatorio_job")
-        .update({ error_msg: msg.slice(0, 500) })
-        .eq("id", job.id);
+  const {data:jobs,error} = await service.rpc("recordatorio_claim",{p_limit:3});
+  if (error) return NextResponse.json({ok:false,error:"reminder_claim_failed"},{status:503});
+  const results = {processed:0,accepted:0,retryable:0,terminal:0,failed:0};
+  for (const job of (jobs ?? []) as RecordatorioRow[]) {
+    results.processed++;
+    try { results[await processJob(service,job)]++; }
+    catch {
+      results.failed++;
+      // A missing receipt after a WhatsApp call must not become a retry.
+      // Leave that lease to recordatorio_claim, which quarantines uncertainty.
+      const {data:row} = await service.from("recordatorio_job").select("external_started_at,canal").eq("id",job.id).maybeSingle();
+      if (row && !(row.external_started_at && row.canal === "whatsapp")) {
+        await finish(service,job,"retryable",null,null,"reminder_processing_failed").catch(()=>undefined);
+      }
     }
   }
-
-  return NextResponse.json({ ok: true, ...results });
+  return NextResponse.json({ok:results.failed===0,...results},{status:results.failed ? 503 : 200});
 }
-
-function authorize(req: NextRequest): NextResponse | null {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) {
-    return NextResponse.json({ ok: false, error: "CRON_SECRET no configurado" }, { status: 500 });
-  }
-  if (!verifyBearer(req.headers.get("authorization"), secret)) {
-    return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
-  }
-  return null;
-}
-
 export async function GET(req: NextRequest) {
-  const denied = authorize(req);
-  if (denied) return denied;
-  return runDispatch();
+  if (!process.env.CRON_SECRET) return NextResponse.json({ok:false,error:"cron_unconfigured"},{status:503});
+  if (!verifyBearer(req.headers.get("authorization"),process.env.CRON_SECRET)) return NextResponse.json({ok:false,error:"unauthorized"},{status:401});
+  try { return await runDispatch(); }
+  catch { return NextResponse.json({ok:false,error:"reminder_worker_failed"},{status:503}); }
 }
+export const POST = GET;
 
-export async function POST(req: NextRequest) {
-  const denied = authorize(req);
-  if (denied) return denied;
-  return runDispatch();
-}
-
-/** Levanta datos relacionados, envía el template, marca enviado_ts. */
-async function processJob(
-  service: ReturnType<typeof createSupabaseServiceClient>,
-  job: RecordatorioRow,
-): Promise<void> {
-  // Cargar turno + paciente + organization + servicio
-  const { data: turno, error } = await service
-    .from("turno")
-    .select("id, inicio, paciente_id, servicio_id, estado")
-    .eq("id", job.turno_id)
-    .maybeSingle();
-
-  if (error) throw new Error(`turno fetch: ${error.message}`);
-  if (!turno) throw new Error("turno no encontrado (borrado?)");
-  // El literal duplicado omitía REAGENDADO: si el `after()` que borra los
-  // recordatorios se pierde, el paciente recibía el recordatorio del turno
-  // VIEJO y se presentaba el día equivocado. Se importa la constante canónica
-  // (lib/db/turnos.ts) en vez de mantener dos listas que se desincronizan.
-  const ESTADOS_SKIP: readonly string[] = [...ESTADOS_CANCELAN_SIDE_EFFECTS, "CERRADO"];
-  if (job.tipo !== "POST_VISITA" && ESTADOS_SKIP.includes(turno.estado)) {
-    // El turno fue cancelado/cerrado antes del recordatorio: marcar como enviado
-    // (sin enviar) para no reintentar.
-    await service
-      .from("recordatorio_job")
-      .update({ enviado_ts: new Date().toISOString(), error_msg: `skip: estado ${turno.estado}` })
-      .eq("id", job.id);
-    return;
+async function processJob(service: Service, job: RecordatorioRow): Promise<Outcome> {
+  const {data:turno,error} = await service.from("turno").select("id,inicio,paciente_id,servicio_id,estado")
+    .eq("id",job.turno_id).eq("organization_id",job.organization_id).maybeSingle();
+  if (error || !turno) throw new Error("turno_unavailable");
+  const skipStates: readonly string[] = [...ESTADOS_CANCELAN_SIDE_EFFECTS,"CERRADO"];
+  if ((job.tipo !== "POST_VISITA" && skipStates.includes(turno.estado)) || (job.tipo === "POST_VISITA" && turno.estado !== "CERRADO")) {
+    return finish(service,job,"terminal",null,null,"appointment_obsolete");
   }
-
-  // paciente → identidad_id → paciente_identidad. La tabla paciente_identidad
-  // no tiene una FK directa a paciente.id (el split es 1:1 con la FK al revés:
-  // paciente.identidad_id → paciente_identidad.id). Por eso necesitamos el
-  // lookup en dos pasos. M20 renombró organization.direccion a
-  // direccion_completa — usamos ese nombre.
-  const [{ data: paciente }, { data: org }, { data: servicio }] = await Promise.all([
-    service
-      .from("paciente")
-      .select("identidad_id")
-      .eq("id", turno.paciente_id)
-      .maybeSingle(),
-    service
-      .from("organization")
-      .select("nombre, direccion_completa, ciudad, timezone, is_internal_account")
-      .eq("id", job.organization_id)
-      .maybeSingle(),
-    service
-      .from("servicio")
-      .select("nombre")
-      .eq("id", turno.servicio_id)
-      .maybeSingle(),
+  const [patientResult,orgResult,serviceResult] = await Promise.all([
+    service.from("paciente").select("identidad_id,deleted_at,pseudonimizado_en").eq("id",turno.paciente_id).eq("organization_id",job.organization_id).maybeSingle(),
+    service.from("organization").select("nombre,direccion_completa,ciudad,timezone,is_internal_account,is_synthetic,deleted_at").eq("id",job.organization_id).maybeSingle(),
+    service.from("servicio").select("nombre").eq("id",turno.servicio_id).eq("organization_id",job.organization_id).maybeSingle(),
   ]);
-
-  if (!org) throw new Error("organization no encontrada");
-
-  // Orgs internas/demo (M37): pacientes MOCK con contactos ficticios — nunca
-  // enviar. Se marca enviado (sin enviar) ANTES de descifrar PII, mismo patrón
-  // que el skip por estado del turno. Decisión pura testeable en
-  // lib/db/recordatorios.ts (decideSkipRecordatorioOrgInterna).
-  if (decideSkipRecordatorioOrgInterna(org.is_internal_account)) {
-    await service
-      .from("recordatorio_job")
-      .update({ enviado_ts: new Date().toISOString(), error_msg: "skip: org interna" })
-      .eq("id", job.id);
-    return;
-  }
-  if (!paciente?.identidad_id) {
-    throw new Error("paciente sin identidad (pseudonimizado?)");
-  }
-
-  const { data: ident } = await service
-    .from("paciente_identidad")
-    .select("nombre_cifrado, telefono_cifrado, email_cifrado")
-    .eq("id", paciente.identidad_id)
-    .maybeSingle();
-  if (!ident) throw new Error("paciente_identidad no encontrada");
-
-  // El nombre es imprescindible para cualquier canal; teléfono y email son
-  // los canales en sí — un ciphertext corrupto en uno no debe hundir el job
-  // si el otro sirve (tryDecrypt loguea el label, jamás el valor).
+  if (patientResult.error || orgResult.error || serviceResult.error) throw new Error("reminder_context_failed");
+  const org = orgResult.data;
+  const patient = patientResult.data;
+  if (!org) throw new Error("organization_unavailable");
+  // Keep the existing internal/demo exclusion until existing demo flags are reviewed.
+  if (org.is_synthetic || org.deleted_at) return finish(service,job,"terminal",null,null,"organization_delivery_blocked");
+  if (!patient?.identidad_id || patient.deleted_at || patient.pseudonimizado_en) return finish(service,job,"terminal",null,null,"patient_unavailable");
+  const {data:ident,error:identError} = await service.from("paciente_identidad").select("nombre_cifrado,telefono_cifrado,email_cifrado")
+    .eq("id",patient.identidad_id).eq("organization_id",job.organization_id).maybeSingle();
+  if (identError || !ident) throw new Error("identity_unavailable");
   const nombre = decryptColumn(ident.nombre_cifrado);
-  if (!nombre) throw new Error("PII desencriptación falló (nombre)");
-  const telefono = tryDecrypt(ident.telefono_cifrado, "recordatorio.telefono");
-  const emailRaw = tryDecrypt(ident.email_cifrado, "recordatorio.email");
-  const email = emailRaw && emailRaw.trim().includes("@") ? emailRaw.trim() : null;
-
-  const inicio = new Date(turno.inicio);
-  const tz = safeTimezone(org.timezone);
-  const fmtFecha = inicio.toLocaleDateString("es-AR", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    timeZone: tz,
-  });
-  // fmtHora (lib/booking/slots-format) fija hourCycle h23: sin él, el ICU de
-  // Node resuelve es-AR como h12 y los templates — que concatenan " hs" —
-  // mandaban al paciente "Hoy a las 10:00 a. m. hs".
-  const horaFmt = fmtHora(turno.inicio, tz);
-  const direccion = [org.direccion_completa, org.ciudad].filter(Boolean).join(", ");
-
-  // Memo del post-visita: lo necesitan ambos canales.
-  let memo = "";
-  if (job.tipo === "POST_VISITA") {
-    const { data: post } = await service
-      .from("post_visita")
-      .select("memo_cifrado")
-      .eq("turno_id", turno.id)
-      .maybeSingle();
-    memo = post ? decryptColumn(post.memo_cifrado) ?? "" : "";
-  }
-
-  const phoneE164 = toWhatsappE164(telefono);
-
-  // Decisión de canal (pura, M67): WhatsApp primario; email de fallback.
-  let canal = decideCanalRecordatorio({
-    telefonoValido: phoneE164 !== null,
-    emailPresente: email !== null,
-  });
-  let whatsappError: Error | null = null;
-
-  if (canal === "whatsapp" && phoneE164 !== null) {
+  if (!nombre) throw new Error("identity_decryption_failed");
+  const telefono = tryDecrypt(ident.telefono_cifrado,"recordatorio.telefono");
+  const emailRaw = tryDecrypt(ident.email_cifrado,"recordatorio.email");
+  const email = emailRaw?.trim().includes("@") ? emailRaw.trim() : null;
+  const phone = toWhatsappE164(telefono);
+  const timezone = safeTimezone(org.timezone);
+  const fecha = new Date(turno.inicio).toLocaleDateString("es-AR",{weekday:"short",day:"numeric",month:"short",timeZone:timezone});
+  const hora = fmtHora(turno.inicio,timezone);
+  const direccion = [org.direccion_completa,org.ciudad].filter(Boolean).join(", ");
+  const memo = "Consultá tus indicaciones en el portal de Folio o contactá al consultorio.";
+  if (phone && process.env.WHATSAPP_ACCESS_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID) {
+    // Persist the uncertainty boundary BEFORE any provider I/O. There is no
+    // documented WhatsApp idempotency here; an ambiguous response never falls
+    // through to a second channel or a blind automatic resend.
+    const started = await service.from("recordatorio_job").update({external_started_at:new Date().toISOString(),canal:"whatsapp"})
+      .eq("id",job.id).eq("lease_token",job.lease_token).eq("delivery_state","leased")
+      .gt("lease_until",new Date().toISOString()).select("id");
+    if (started.error || started.data?.length !== 1) throw new Error("reminder_lease_lost");
+    let receipt: {id:string};
     try {
-      if (job.tipo === "CONFIRMACION_24H") {
-        await sendConfirmacion24h({
-          to: phoneE164,
-          pacienteNombre: nombre,
-          fecha: fmtFecha,
-          hora: horaFmt,
-          consultorioNombre: org.nombre,
-          direccion,
-          servicio: servicio?.nombre ?? "Consulta",
-        });
-      } else if (job.tipo === "RECORDATORIO_2H") {
-        await sendRecordatorio2h({
-          to: phoneE164,
-          pacienteNombre: nombre,
-          hora: horaFmt,
-          consultorioNombre: org.nombre,
-        });
-      } else if (job.tipo === "POST_VISITA") {
-        await sendPostVisita({
-          to: phoneE164,
-          pacienteNombre: nombre,
-          memoCorto: memo,
-          profesionalNombre: org.nombre,
-        });
-      }
-
-      await service
-        .from("recordatorio_job")
-        .update({ enviado_ts: new Date().toISOString(), error_msg: null, canal: "whatsapp" })
-        .eq("id", job.id);
-      return;
-    } catch (e) {
-      // WhatsApp falló → re-decidir con el resultado; si hay email, fallback.
-      whatsappError = e instanceof Error ? e : new Error(String(e));
-      canal = decideCanalRecordatorio({
-        telefonoValido: true,
-        emailPresente: email !== null,
-        resultadoWhatsApp: "fallo",
-      });
-    }
-  }
-
-  if (canal === "email" && email !== null) {
-    // F7b · links 1-click firmados para el email de 24h: "Confirmo mi turno"
-    // (primario) y "No puedo ir" (cancela). Tokens HMAC stateless
-    // (lib/booking/confirm-token) que expiran al INICIO del turno. Fail-soft:
-    // si la firma no se puede armar (HMAC key ausente/inválida) el email sale
-    // como siempre, con el CTA al portal (campos opcionales del template).
-    let confirmarUrl: string | null = null;
-    let cancelarUrl: string | null = null;
-    if (job.tipo === "CONFIRMACION_24H") {
-      try {
-        const base = getAppUrl();
-        const expMs = inicio.getTime();
-        confirmarUrl = `${base}/t/${buildConfirmToken({ turnoId: turno.id, accion: "confirmar", expMs })}`;
-        cancelarUrl = `${base}/t/${buildConfirmToken({ turnoId: turno.id, accion: "cancelar", expMs })}`;
-      } catch (e) {
-        // Sin PHI: solo el motivo operativo.
-        console.warn(
-          `[dispatch-recordatorios] links 1-click no disponibles: ${e instanceof Error ? e.message : String(e)}`,
-        );
-      }
-    }
-
-    const { subject, html } =
-      job.tipo === "CONFIRMACION_24H"
-        ? buildConfirmacion24hEmail({
-            pacienteNombre: nombre,
-            consultorioNombre: org.nombre,
-            servicioNombre: servicio?.nombre ?? "Consulta",
-            fecha: fmtFecha,
-            hora: horaFmt,
-            direccion: direccion || null,
-            confirmarUrl,
-            cancelarUrl,
-          })
+      const operation = job.tipo === "CONFIRMACION_24H"
+        ? sendConfirmacion24h({to:phone,pacienteNombre:nombre,fecha,hora,consultorioNombre:org.nombre,direccion,servicio:"Turno"})
         : job.tipo === "RECORDATORIO_2H"
-          ? buildRecordatorio2hEmail({
-              pacienteNombre: nombre,
-              consultorioNombre: org.nombre,
-              hora: horaFmt,
-            })
-          : buildPostVisitaEmail({
-              pacienteNombre: nombre,
-              profesionalNombre: org.nombre,
-              memoCorto: memo,
-            });
-
-    // sendEmail es fail-safe (nunca lanza) pero HONESTO: devuelve un resultado
-    // discriminado. La matriz resultado → efecto en el job es una decisión
-    // pura (decideMarcaEmailRecordatorio, lib/db/recordatorios.ts):
-    //   'sent'      → enviado_ts + canal, sin error_msg (entrega real).
-    //   'simulated' → enviado_ts + canal + error_msg "envío simulado (…)":
-    //                 sin RESEND_API_KEY reintentar quemaría los 5 intentos
-    //                 en ruido, pero la DB deja constancia de que el paciente
-    //                 NO recibió nada (antes se marcaba como éxito y el
-    //                 profesional creía que el anti-ausencias funcionaba).
-    //   'failed'    → SIN enviado_ts: throw → el caller escribe error_msg y
-    //                 el presupuesto de intentos (el claim ya incrementó)
-    //                 permite reintentar fallas transitorias de Resend.
-    const resultado = await sendEmail({ to: email, subject, html });
-    const marca = decideMarcaEmailRecordatorio(resultado);
-    if (!marca.marcarEnviado) {
-      throw new Error(marca.errorMsg ?? "envío email falló");
-    }
-
-    await service
-      .from("recordatorio_job")
-      .update({
-        enviado_ts: new Date().toISOString(),
-        error_msg: marca.errorMsg,
-        canal: "email",
-      })
-      .eq("id", job.id);
-    return;
+          ? sendRecordatorio2h({to:phone,pacienteNombre:nombre,hora,consultorioNombre:org.nombre})
+          : sendPostVisita({to:phone,pacienteNombre:nombre,memoCorto:memo,profesionalNombre:org.nombre});
+      let timeout: ReturnType<typeof setTimeout> | undefined;
+      try { receipt = await Promise.race([operation,new Promise<never>((_,reject)=>{timeout=setTimeout(()=>reject(new Error("provider_timeout")),10_000);})]); }
+      finally { if (timeout) clearTimeout(timeout); }
+    } catch { return finish(service,job,"terminal","whatsapp",null,"provider_response_unknown"); }
+    if (!receipt.id) return finish(service,job,"terminal","whatsapp",null,"provider_receipt_missing");
+    return finish(service,job,"accepted","whatsapp",receipt.id,null);
   }
-
-  // canal === "ninguno": sin teléfono utilizable ni email. Registramos el
-  // canal y lanzamos — el caller escribe error_msg y el presupuesto de
-  // intentos se consume como cualquier falla (semántica intacta).
-  await service.from("recordatorio_job").update({ canal: "ninguno" }).eq("id", job.id);
-  throw new Error(
-    whatsappError
-      ? `sin canal de contacto — WhatsApp falló: ${whatsappError.message}`
-      : "sin canal de contacto (teléfono no normalizable a E.164 AR, sin email)",
-  );
+  if (!email) return finish(service,job,"terminal","ninguno",null,"contact_unavailable");
+  let confirmarUrl: string | null = null;
+  let cancelarUrl: string | null = null;
+  if (job.tipo === "CONFIRMACION_24H") {
+    try {
+      const expMs = new Date(turno.inicio).getTime();
+      confirmarUrl = `${getAppUrl()}/t/${buildConfirmToken({turnoId:turno.id,accion:"confirmar",expMs})}`;
+      cancelarUrl = `${getAppUrl()}/t/${buildConfirmToken({turnoId:turno.id,accion:"cancelar",expMs})}`;
+    } catch { /* Portal fallback; never log raw signing errors. */ }
+  }
+  const template = job.tipo === "CONFIRMACION_24H"
+    ? buildConfirmacion24hEmail({pacienteNombre:nombre,consultorioNombre:org.nombre,servicioNombre:"Turno",fecha,hora,direccion:direccion || null,confirmarUrl,cancelarUrl})
+    : job.tipo === "RECORDATORIO_2H"
+      ? buildRecordatorio2hEmail({pacienteNombre:nombre,consultorioNombre:org.nombre,hora})
+      : buildPostVisitaEmail({pacienteNombre:nombre,profesionalNombre:org.nombre,memoCorto:memo});
+  const expiry = Math.min(new Date(job.scheduled_ts).getTime()+6*60*60_000,
+    job.tipo === "POST_VISITA" ? Infinity : new Date(turno.inicio).getTime());
+  const result = await deliverDurableEmail({organizationId:job.organization_id,turnoId:job.turno_id,
+    kind:job.tipo === "POST_VISITA" ? "reminder_post_visit" : "reminder",dedupeKey:`reminder:${job.id}`,
+    expiresAt:new Date(expiry).toISOString(),to:email,...template},service);
+  const outcome = deliveryOutcome(result);
+  return finish(service,job,outcome.status,"email",outcome.providerId,outcome.code);
 }
-
-const DEFAULT_TZ = "America/Argentina/Cordoba";
-
-/** Valida la timezone de la org contra Intl; inválida/ausente → default AR. */
 function safeTimezone(tz: string | null | undefined): string {
-  if (!tz) return DEFAULT_TZ;
-  try {
-    new Intl.DateTimeFormat("es-AR", { timeZone: tz });
-    return tz;
-  } catch {
-    return DEFAULT_TZ;
-  }
+  if (tz) { try { new Intl.DateTimeFormat("es-AR",{timeZone:tz}); return tz; } catch {} }
+  return "America/Argentina/Cordoba";
 }

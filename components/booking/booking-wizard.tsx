@@ -10,6 +10,7 @@
 
 import Script from "next/script";
 import { useEffect, useRef, useState, useTransition } from "react";
+import { BookingSubmissionAttempt } from "@/lib/booking/submission-attempt";
 
 import {
   createPedidoPublico,
@@ -126,6 +127,9 @@ export function BookingWizard({
     telefono?: boolean;
     consent?: boolean;
   }>({});
+  type BookingPayload=Omit<Parameters<typeof createPedidoPublico>[0],"operacionId"|"captchaToken">;
+  const submissionRef=useRef(new BookingSubmissionAttempt<BookingPayload>());
+  const [submissionUncertain,setSubmissionUncertain]=useState(false);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const captchaContainerRef = useRef<HTMLDivElement | null>(null);
   const captchaWidgetIdRef = useRef<string | null>(null);
@@ -403,6 +407,7 @@ export function BookingWizard({
             <button
               type="button"
               className="bk-back"
+              disabled={pending||submissionUncertain}
               onClick={() => setVista("slot")}
             >
               ← Cambiar horario
@@ -442,6 +447,7 @@ export function BookingWizard({
             <form
               onSubmit={(e) => {
                 e.preventDefault();
+                if(submissionRef.current.inFlight)return;
                 const invalidNombre = nombre.length < 2;
                 const invalidTelefono = telefono.length < 6;
                 if (invalidNombre || invalidTelefono) {
@@ -458,38 +464,27 @@ export function BookingWizard({
                 }
                 setFieldErrs({});
                 setErr(null);
-                if (TURNSTILE_SITE_KEY && !captchaToken) {
+                if (TURNSTILE_SITE_KEY && !captchaToken && !submissionRef.current.uncertain) {
                   setErr("Esperá unos segundos a que el captcha verifique.");
                   return;
                 }
-                startTransition(async () => {
-                  const result = await createPedidoPublico({
-                    orgSlug: org.slug,
-                    servicioId,
-                    profesionalId: profesionalIdParaActions(multiProf, profesionalSelId),
-                    inicio: slotPicked.inicio,
-                    nombre,
-                    telefono,
-                    email: email || undefined,
-                    motivo: motivo || undefined,
-                    captchaToken: captchaToken ?? undefined,
-                    consentAccepted,
-                    consentVersion: PRIVACY_VERSION,
-                  });
-                  if (!result.ok) {
-                    // Los tokens de Turnstile son de un solo uso: el server ya
-                    // lo consumió en siteverify aunque el action falle. Sin
-                    // este reset, el retry reenvía el token muerto y muere con
-                    // "Captcha inválido" — dead-end doble para el paciente.
-                    if (captchaWidgetIdRef.current && window.turnstile) {
-                      window.turnstile.reset(captchaWidgetIdRef.current);
+                const attempt=submissionRef.current.begin({orgSlug:org.slug,servicioId,profesionalId:profesionalIdParaActions(multiProf,profesionalSelId),inicio:slotPicked.inicio,nombre,telefono,email:email||undefined,motivo:motivo||undefined,consentAccepted,consentVersion:PRIVACY_VERSION},()=>crypto.randomUUID());
+                if(!attempt)return;
+                startTransition(async()=>{
+                  try{
+                    const result=await createPedidoPublico({...attempt.payload,operacionId:attempt.id,captchaToken:captchaToken??undefined});
+                    if(!result.ok){
+                      submissionRef.current.finish(result.error.code==="network"||result.error.code==="db_error"?"uncertain":"rejected");
+                      setErr(result.error.message);
+                      if(captchaWidgetIdRef.current&&window.turnstile)window.turnstile.reset(captchaWidgetIdRef.current);
+                      setCaptchaToken(null);return;
                     }
+                    submissionRef.current.finish("success");setAutoConfirmado(result.data.autoConfirmado);setVista("ok");
+                  }catch{
+                    submissionRef.current.finish("uncertain");setErr("La respuesta se interrumpió. Confirmá esta misma solicitud antes de hacer otra.");
+                    if(captchaWidgetIdRef.current&&window.turnstile)window.turnstile.reset(captchaWidgetIdRef.current);
                     setCaptchaToken(null);
-                    setErr(result.error.message);
-                    return;
-                  }
-                  setAutoConfirmado(result.data.autoConfirmado);
-                  setVista("ok");
+                  }finally{setSubmissionUncertain(submissionRef.current.uncertain);}
                 });
               }}
               style={{ display: "flex", flexDirection: "column", gap: 12 }}
@@ -497,6 +492,7 @@ export function BookingWizard({
               <label className="au-field">
                 <span>Nombre y apellido</span>
                 <input
+                  disabled={pending||submissionUncertain}
                   value={nombre}
                   onChange={(e) => {
                     setNombre(e.target.value);
@@ -512,6 +508,7 @@ export function BookingWizard({
                 <span>Teléfono (WhatsApp)</span>
                 <input
                   type="tel"
+                  disabled={pending||submissionUncertain}
                   value={telefono}
                   onChange={(e) => {
                     setTelefono(e.target.value);
@@ -531,6 +528,7 @@ export function BookingWizard({
                 </span>
                 <input
                   type="email"
+                  disabled={pending||submissionUncertain}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   autoComplete="email"
@@ -538,7 +536,7 @@ export function BookingWizard({
               </label>
               <label className="au-field">
                 <span>Motivo <small>opcional</small></span>
-                <textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={3} />
+                <textarea disabled={pending||submissionUncertain} value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={3} />
               </label>
               {TURNSTILE_SITE_KEY ? (
                 <>
@@ -564,6 +562,7 @@ export function BookingWizard({
               >
                 <input
                   type="checkbox"
+                  disabled={pending||submissionUncertain}
                   checked={consentAccepted}
                   onChange={(e) => {
                     setConsentAccepted(e.target.checked);
@@ -601,7 +600,7 @@ export function BookingWizard({
                 disabled={pending || !consentAccepted}
                 title={!consentAccepted ? "Aceptá la Política de Privacidad para continuar" : undefined}
               >
-                {pending ? "Enviando..." : "Solicitar turno"}
+                {pending ? "Enviando..." : submissionUncertain ? "Confirmar solicitud pendiente" : "Solicitar turno"}
               </button>
             </form>
           </section>
@@ -645,7 +644,7 @@ export function BookingWizard({
                 <b>{fmtHora(slotPicked.inicio)} hs</b>.
                 {email ? (
                   <>
-                    <br />Te enviamos la confirmación a <span className="fm-mono">{email}</span>.
+                    <br />Correo de contacto: <span className="fm-mono">{email}</span>.
                   </>
                 ) : null}
               </p>

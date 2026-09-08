@@ -6,13 +6,8 @@
  * `scheduled_ts` = inicio - 24h / inicio - 2h. La UNIQUE (turno_id, tipo)
  * evita duplicados.
  *
- * El dispatcher F9 (/api/cron/dispatch-recordatorios) levanta los `enviado_ts
- * IS NULL AND scheduled_ts <= now() AND intentos < 5`, claimea cada job con
- * un CAS sobre `intentos` (incrementa al INICIAR el intento — ver
- * `decideClaimRecordatorio`) y los envía via WhatsApp Cloud (templates
- * aprobados en F6), con fallback a email cuando WhatsApp no está disponible
- * (ver `decideCanalRecordatorio` + columna `canal` de M67). Marca enviado_ts
- * en éxito o error_msg en falla.
+ * M100 claims due work with a two-minute lease and a guarded completion RPC.
+ * Provider acceptance is separate from delivered; expired/blocked work is terminal.
  *
  * POST_VISITA se schedulea aparte: cuando un turno transiciona a CERRADO,
  * scheduled_ts = closed_ts + 2h.
@@ -45,20 +40,11 @@ export function decideClaimRecordatorio(
   return "claimed";
 }
 
-/**
- * Decisión pura: ¿el dispatcher debe SALTEAR el envío porque la org es
- * interna/demo (is_internal_account, M37)? Las orgs internas tienen pacientes
- * MOCK con teléfonos/emails ficticios — un recordatorio real por WhatsApp o
- * email a esos contactos es, en el mejor caso, ruido, y en el peor un mensaje
- * a un número de un tercero. El job se marca enviado con error_msg
- * "skip: org interna" (mismo patrón que el skip por estado del turno) para no
- * reintentar. Solo `true` estricto skipea: null/undefined (columna ausente en
- * un select viejo) NO deben suprimir envíos de orgs reales.
- */
-export function decideSkipRecordatorioOrgInterna(
-  isInternalAccount: boolean | null | undefined,
+/** Synthetic fixtures never send externally; a compensated account is not a fixture. */
+export function decideSkipRecordatorioOrgSintetica(
+  isSynthetic: boolean | null | undefined,
 ): boolean {
-  return isInternalAccount === true;
+  return isSynthetic === true;
 }
 
 /** Canal efectivo de un recordatorio — espejo del CHECK de M67. */
@@ -100,23 +86,7 @@ export interface MarcaEmailRecordatorio {
   errorMsg: string | null;
 }
 
-/**
- * Decisión pura: qué escribir en `recordatorio_job` según el resultado
- * discriminado de `sendEmail` (lib/email/client.ts). Matriz completa:
- *
- *   - 'sent'      → enviado_ts + error_msg null. Éxito real.
- *   - 'simulated' → enviado_ts + error_msg "envío simulado (…)". Sin
- *                   RESEND_API_KEY reintentar es inútil (toda corrida
- *                   posterior simularía igual y quemaría los 5 intentos en
- *                   ruido); se marca procesado PERO el error_msg deja
- *                   registro honesto de que ningún paciente recibió nada.
- *   - 'failed'    → SIN enviado_ts + error_msg con el error real. El claim
- *                   ya incrementó `intentos`, así que una falla transitoria
- *                   de Resend se reintenta en la próxima corrida (máx 5).
- *
- * La DB nunca miente: enviado_ts sin error_msg significa entrega real
- * confirmada por el proveedor; cualquier otra cosa queda explicada.
- */
+/** Compatibility mapping: only provider acceptance marks enviado_ts; delivery remains unconfirmed. */
 export function decideMarcaEmailRecordatorio(
   resultado: SendEmailResult,
 ): MarcaEmailRecordatorio {
@@ -125,9 +95,13 @@ export function decideMarcaEmailRecordatorio(
       return { marcarEnviado: true, errorMsg: null };
     case "simulated":
       return {
-        marcarEnviado: true,
+        marcarEnviado: false,
         errorMsg: "envío simulado (sin RESEND_API_KEY) — el paciente NO recibió el email",
       };
+    case "blocked":
+    case "queued":
+    case "uncertain":
+      return { marcarEnviado: false, errorMsg: resultado.detail };
     case "failed":
       return { marcarEnviado: false, errorMsg: `envío email falló: ${resultado.detail}` };
   }
@@ -203,13 +177,13 @@ export async function schedulePostVisitaForTurno(input: {
 
 /**
  * Cancela recordatorios pendientes de un turno (cuando se cancela/reagenda).
- * No borra los ya enviados; solo deja sin efecto los pending.
+ * Retiene el historial y la frontera de envío incierto, también si el job tenía lease.
  */
 export async function cancelRecordatoriosForTurno(turnoId: string): Promise<Result<void>> {
   const service = createSupabaseServiceClient();
   const { error } = await service
     .from("recordatorio_job")
-    .delete()
+    .update({ delivery_state: "terminal", error_msg: "appointment_cancelled", lease_token: null, lease_until: null })
     .eq("turno_id", turnoId)
     .is("enviado_ts", null);
 

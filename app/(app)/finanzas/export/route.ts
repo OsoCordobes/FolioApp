@@ -1,109 +1,53 @@
-/**
- * Folio · GET /finanzas/export — export CSV COMPLETO del período (E2).
- *
- * El botón "Exportar" descargaba solo las ≤20 transacciones renderizadas: con
- * período "Año" el dueño exportaba 20 filas creyendo que exportaba el año.
- * Este route handler reusa el MISMO rango (computeRangeOverride) y la MISMA
- * query de pagos que la página (getFinanzasExportRows), sin cap.
- *
- * Autorización: idéntica a app/(app)/finanzas/page.tsx — el layout de (app) no
- * cubre route handlers, así que acá se repite el gate completo:
- *   - sesión activa (getActiveContext),
- *   - capabilities.canSeeFinanzas (recepción/coordinación → 404),
- *   - scoping por profesional (PROFESIONAL sin canSeeFinanzasAll exporta SOLO
- *     lo suyo — mismo fix del leak E1).
- *
- * PII: el CSV lleva nombres de pacientes (igual que la pantalla que el rol ya
- * ve). Sale con Content-Disposition attachment y BOM UTF-8 para que Excel
- * es-AR abra tildes bien.
- */
-
+/** Complete filtered CSV, generated only after all pages and revisions validate. */
 import { capabilitiesForSession } from "@/lib/auth/guard";
-import { finanzasScopeMemberId } from "@/lib/auth/finanzas-scope";
 import { getActiveContext } from "@/lib/db/active-context";
-import {
-  computeRangeOverride,
-  getFinanzasExportRows,
-  MAX_FILAS_PERIODO,
-  type FinanzasPeriodo,
-} from "@/lib/db/finanzas";
-// PR #118 · csvEscapeTexto neutraliza formula injection (=, +, -, @, TAB, CR)
-// en los campos de texto libre — el nombre del paciente puede venir del
-// booking público. Helper compartido y testeado en lib/format/csv.ts.
+import { computeRangeOverride, financePeriodBounds, getFinanzasExportRows, type FinanzasPeriodo } from "@/lib/db/finanzas";
+import { movementRequestSchema } from "@/lib/finanzas/filter-schema";
+import { EXPORT_MAX_BYTES } from "@/lib/finanzas/movements";
+import { centsToDecimal } from "@/lib/format/financial-money";
 import { csvEscapeTexto } from "@/lib/format/csv";
 
 export const dynamic = "force-dynamic";
-
 const PERIODOS: FinanzasPeriodo[] = ["hoy", "semana", "mes", "6m", "anio"];
+const failure = (message: string, status: number) => new Response(message, { status, headers: { "Cache-Control": "no-store" } });
 
-function parsePeriodo(raw: string | null): FinanzasPeriodo {
-  return PERIODOS.includes(raw as FinanzasPeriodo) ? (raw as FinanzasPeriodo) : "mes";
-}
-
-export async function GET(req: Request): Promise<Response> {
+async function exportCsv(req: Request, filtered: boolean): Promise<Response> {
   const ctx = await getActiveContext();
-  if (!ctx.ok) {
-    return new Response("No autorizado.", { status: 401 });
+  if (!ctx.ok) return failure("No autorizado.", 401);
+  if (!capabilitiesForSession(ctx.data.session).canSeeFinanzas) return failure("No encontrado.", 404);
+  const timezone = ctx.data.organization.timezone || "America/Argentina/Cordoba";
+  let filter: { status: "todos" | "cobrados" | "pendientes"; query: string } = { status: "todos", query: "" };
+  let periodo: FinanzasPeriodo = "mes";
+  let rangeOverride;
+  if (filtered) {
+    if (req.headers.get("origin") !== new URL(req.url).origin) return failure("Origen no permitido.", 403);
+    const text = await req.text();
+    if (text.length > 4096) return failure("Filtros inválidos.", 400);
+    const parsed = movementRequestSchema.safeParse(Object.fromEntries(new URLSearchParams(text)));
+    if (!parsed.success) return failure("Filtros inválidos.", 400);
+    periodo = parsed.data.periodo;
+    filter = { status: parsed.data.status, query: parsed.data.query };
+    rangeOverride = { startUtc: parsed.data.startUtc, endUtc: parsed.data.endUtc, label: periodo };
+  } else {
+    const raw = new URL(req.url).searchParams.get("periodo") as FinanzasPeriodo;
+    periodo = PERIODOS.includes(raw) ? raw : "mes";
+    // The legacy GET explicitly exports the entire period, never a partial table page.
+    const bounds = financePeriodBounds({ organizationId: ctx.data.organization.id, timezone,
+      rangeOverride: computeRangeOverride(periodo, timezone) });
+    rangeOverride = { startUtc: bounds.startUtc, endUtc: bounds.endUtc, label: periodo };
   }
-
-  const caps = capabilitiesForSession(ctx.data.session);
-  if (!caps.canSeeFinanzas) {
-    // Mismo corte que la página (notFound) para no revelar la ruta a roles
-    // sin panel de finanzas.
-    return new Response("No encontrado.", { status: 404 });
-  }
-
-  const tz = ctx.data.organization.timezone || "America/Argentina/Cordoba";
-  const periodo = parsePeriodo(new URL(req.url).searchParams.get("periodo"));
-  const rangeOverride = computeRangeOverride(periodo, tz);
-  const profesionalMemberId = finanzasScopeMemberId(caps, ctx.data.session.memberId);
-
-  const result = await getFinanzasExportRows({
-    organizationId: ctx.data.organization.id,
-    timezone: tz,
-    rangeOverride,
-    profesionalMemberId,
-  });
-  if (!result.ok) {
-    return new Response("Error generando el export.", { status: 500 });
-  }
-
-  const headers = ["Fecha", "Paciente", "Servicio", "Monto", "Metodo", "Estado"];
-  const lines = result.data.rows.map((r) =>
-    [
-      new Date(r.fecha).toISOString(),
-      csvEscapeTexto(r.paciente),
-      csvEscapeTexto(r.servicio),
-      String(r.monto),
-      r.metodo,
-      r.estado,
-    ].join(","),
-  );
-  // H7 · el pie de la tabla promete "el export CSV incluye el período
-  // completo". Con la paginación de H2 eso ya es cierto hasta el tope de
-  // seguridad; si igual se tocó el tope, el CSV lo DICE en su última fila en
-  // vez de mentir por omisión.
-  if (result.data.truncado) {
-    lines.push(
-      [
-        csvEscapeTexto(
-          `AVISO: export parcial. El período supera el máximo exportable (${MAX_FILAS_PERIODO} filas). Elegí un período más corto para bajarlo completo.`,
-        ),
-        "", "", "", "", "",
-      ].join(","),
-    );
-  }
-  // BOM UTF-8 (U+FEFF): sin esto Excel es-AR abre "José" como mojibake.
-  const BOM = String.fromCharCode(0xfeff);
-  const csv = BOM + [headers.join(","), ...lines].join("\r\n");
-
-  const filename = `transacciones-folio-${periodo}.csv`;
-  return new Response(csv, {
-    status: 200,
-    headers: {
-      "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="${filename}"`,
-      "Cache-Control": "no-store",
-    },
-  });
+  const result = await getFinanzasExportRows({ organizationId: ctx.data.organization.id, timezone, rangeOverride }, filter);
+  if (!result.ok) return failure(result.error.message, 409);
+  const lines = result.data.rows.map((r) => [new Date(r.fecha).toISOString(), csvEscapeTexto(r.paciente),
+    csvEscapeTexto(r.servicio), centsToDecimal(r.montoCents!), r.metodo, r.estado].join(","));
+  const csv = "\uFEFF" + ["Fecha,Paciente,Servicio,Monto,Metodo,Estado", ...lines].join("\r\n");
+  if (new TextEncoder().encode(csv).byteLength > EXPORT_MAX_BYTES) return failure("La exportación supera 10 MB. Elegí un período menor.", 413);
+  return new Response(csv, { status: 200, headers: {
+    "Content-Type": "text/csv; charset=utf-8",
+    "Content-Disposition": `attachment; filename="transacciones-folio-${periodo}.csv"`,
+    "Cache-Control": "no-store",
+  } });
 }
+
+export async function GET(req: Request): Promise<Response> { return exportCsv(req, false); }
+export async function POST(req: Request): Promise<Response> { return exportCsv(req, true); }

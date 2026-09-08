@@ -1,3 +1,5 @@
+
+import { safeLog } from "@/lib/observability/safe-log";
 /**
  * Folio · /api/cron/reconcile-suscripciones
  *
@@ -18,8 +20,8 @@
  * ventana máxima de divergencia ~24 h; si el plan de Vercel lo permite,
  * subir a cada 12 h.
  *
- * Performance: batch de 50 por corrida, ordenado por updated_at ASC (las más
- * "viejas" primero). Una falla con una suscripción no corta el batch.
+ * Performance: 10 claims por corrida, ordenados por next_reconcile_at.
+ * Cada claim avanza aun sin cambios; leases evitan corridas superpuestas.
  *
  * Fase E (E2): para cada suscripción del batch también corre
  * `syncSubscriptionAmount` — si una org CLINICA cambió de seats y el sync
@@ -44,17 +46,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { captureException, captureMessage } from "@sentry/nextjs";
 
+import { recoverProviderOperations } from "@/lib/billing/provider-operations";
+import { replayBillingWebhooks } from "@/lib/billing/webhook";
 import { decideLifecycleEmails } from "@/lib/billing/lifecycle";
 import { computeMonthlyPriceCents, type OrganizacionTipo } from "@/lib/billing/pricing";
 import {
   applySubscriptionUpdate,
   computeAccessGate,
   GRACE_PERIOD_DAYS,
-  RECONCILABLE_ESTADOS,
   syncSubscriptionAmount,
   type EstadoSuscripcion,
 } from "@/lib/db/suscripcion";
 import { notifySuscripcionSuspendida, notifyTrialPorVencer } from "@/lib/email/notify";
+import type { SendEmailResult } from "@/lib/email/client";
 import { checkMpLiveMode } from "@/lib/mercadopago/webhook-security";
 import { getPaymentProvider } from "@/lib/payments";
 import { verifyBearer } from "@/lib/security/verify-bearer";
@@ -64,7 +68,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const BATCH_SIZE = 50;
+const BATCH_SIZE = 10;
 
 // ─── Fase lifecycle (PR 1.2): límites de las queries ─────────────────────────
 // Batch chico y fijo: el cron corre diario; lo que no entra hoy entra mañana
@@ -84,21 +88,16 @@ interface SuscripcionPick {
   organization_id: string;
   mp_preapproval_id: string;
   estado: string;
+  reconcile_lease_token: string;
 }
 
 async function runReconcile(): Promise<NextResponse> {
   const service = createSupabaseServiceClient();
 
-  const { data: rows, error: pickErr } = await service
-    .from("suscripcion")
-    .select("id, organization_id, mp_preapproval_id, estado")
-    .not("mp_preapproval_id", "is", null)
-    .in("estado", [...RECONCILABLE_ESTADOS])
-    .order("updated_at", { ascending: true })
-    .limit(BATCH_SIZE);
+  const { data: rows, error: pickErr } = await service.rpc("billing_claim_reconcile", {p_limit:BATCH_SIZE});
 
   if (pickErr) {
-    console.error(`[reconcile-sus] error listando suscripciones: ${pickErr.message}`);
+    safeLog("error", "app.api.cron.reconcile.suscripciones.route.L98", { error: pickErr });
     captureException(new Error(`reconcile pick falló: ${pickErr.message}`), {
       tags: { component: "reconcile", op: "pick" },
     });
@@ -113,7 +112,9 @@ async function runReconcile(): Promise<NextResponse> {
   let sandboxDiscarded = 0;
 
   const provider = getPaymentProvider();
-  for (const sus of picked) {
+  const recovery = Promise.all([replayBillingWebhooks(service),recoverProviderOperations(service)]);
+  await Promise.all(picked.map(async (sus) => {
+    let retry = false;
     try {
       const subscription = await provider.fetchSubscription(sus.mp_preapproval_id);
 
@@ -128,7 +129,7 @@ async function runReconcile(): Promise<NextResponse> {
       const liveModeCheck = checkMpLiveMode(subscription.liveMode);
       if (liveModeCheck.discard) {
         sandboxDiscarded++;
-        console.error(
+        safeLog("error", "app.api.cron.reconcile.suscripciones.route.L130",
           `[reconcile-sus] preapproval sandbox (live_mode=false) descartado en producción sus=${sus.id} preapproval=${sus.mp_preapproval_id}. Revisar credenciales: ¿MP_ACCESS_TOKEN de test en prod?`,
         );
         captureMessage("[reconcile] preapproval sandbox (live_mode=false) descartado en producción", {
@@ -136,25 +137,26 @@ async function runReconcile(): Promise<NextResponse> {
           tags: { component: "reconcile", op: "live-mode-guard" },
           extra: { suscripcionId: sus.id, preapprovalId: sus.mp_preapproval_id },
         });
-        continue;
+        return;
       }
 
       const res = await applySubscriptionUpdate(subscription);
       if (!res.ok) {
         failed++;
-        console.warn(
-          `[reconcile-sus] apply falló sus=${sus.id} preapproval=${sus.mp_preapproval_id}: ${res.error.message}`,
+        retry = true;
+        safeLog("warn", "app.api.cron.reconcile.suscripciones.route.L145",
+          { error: res.error },
         );
         captureException(new Error(`reconcile apply falló: ${res.error.detail ?? res.error.message}`), {
           tags: { component: "reconcile", op: "apply" },
           extra: { suscripcionId: sus.id },
         });
-        continue;
+        return;
       }
       // ok(null) = sin fila o evento no más nuevo (estado ya consistente).
       if (res.data && res.data.estado !== sus.estado) {
         updated++;
-        console.log(
+        safeLog("log", "app.api.cron.reconcile.suscripciones.route.L157",
           `[reconcile-sus] sus=${sus.id} org=${sus.organization_id}: ${sus.estado} → ${res.data.estado} (webhook perdido reconciliado).`,
         );
       } else {
@@ -168,14 +170,15 @@ async function runReconcile(): Promise<NextResponse> {
       const sync = await syncSubscriptionAmount(sus.organization_id);
       if (sync.ok && sync.data.synced) {
         montoSynced++;
-        console.log(
+        safeLog("log", "app.api.cron.reconcile.suscripciones.route.L171",
           `[reconcile-sus] monto sync org=${sus.organization_id}: ${sync.data.fromCents} → ${sync.data.toCents} (drift de seats reconciliado).`,
         );
       } else if (!sync.ok) {
+        retry = true;
         // No cuenta como `failed` del batch de estados: queda logueado y se
         // reintenta en la próxima corrida.
-        console.warn(
-          `[reconcile-sus] monto sync falló org=${sus.organization_id}: ${sync.error.message}`,
+        safeLog("warn", "app.api.cron.reconcile.suscripciones.route.L178",
+          { error: sync.error },
         );
         captureException(new Error(`reconcile monto sync falló: ${sync.error.detail ?? sync.error.message}`), {
           tags: { component: "reconcile", op: "monto-sync" },
@@ -186,15 +189,22 @@ async function runReconcile(): Promise<NextResponse> {
       // MP API caída / 404 de preapproval → no cortamos el batch; queda para
       // la próxima corrida.
       failed++;
+      retry = true;
       const msg = e instanceof Error ? e.message : String(e);
-      console.warn(`[reconcile-sus] error sus=${sus.id} preapproval=${sus.mp_preapproval_id}: ${msg}`);
+      safeLog("warn", "app.api.cron.reconcile.suscripciones.route.L192", `[reconcile-sus] error sus=${sus.id} preapproval=${sus.mp_preapproval_id}: ${msg}`);
       captureException(e, {
         tags: { component: "reconcile", op: "reconcile-item" },
         extra: { suscripcionId: sus.id },
       });
+    } finally {
+      const {error: finishError} = await service.from("suscripcion")
+        .update({reconcile_lease_until:null,reconcile_lease_token:null,...(retry ? {next_reconcile_at:new Date(Date.now()+60*60_000).toISOString()} : {})})
+        .eq("id",sus.id).eq("reconcile_lease_token",sus.reconcile_lease_token);
+      if (finishError) failed++;
     }
-  }
+  }));
 
+  const [webhookReplay,providerRecovery] = await recovery;
   // ─── Fase lifecycle (PR 1.2) — corre SIEMPRE, aún con fallas en el loop ────
   const lifecycleEmails = await runLifecyclePhase(service);
   const deadReminders = await countDeadReminderJobs(service);
@@ -208,9 +218,11 @@ async function runReconcile(): Promise<NextResponse> {
     montoSynced,
     sandboxDiscarded,
     lifecycleEmails,
+    webhookReplay,
+    providerRecovery,
     deadReminders,
   };
-  console.log(`[reconcile-sus] ${JSON.stringify(summary)}`);
+  safeLog("log", "app.api.cron.reconcile.suscripciones.route.L223", summary);
   return NextResponse.json(summary);
 }
 
@@ -221,10 +233,21 @@ async function runReconcile(): Promise<NextResponse> {
 type ServiceClient = ReturnType<typeof createSupabaseServiceClient>;
 
 interface LifecycleCounters {
-  /** Emails de trial_por_vencer despachados (el dedupe M65 puede skipear). */
+  /** Provider acceptance observed, never proof of inbox delivery. */
   trial: number;
-  /** Emails de suscripcion_suspendida despachados (ídem dedupe). */
   suspendida: number;
+  queued: number;
+  failed: number;
+  blocked: number;
+  uncertain: number;
+}
+
+function recordLifecycleDelivery(counters: LifecycleCounters, kind: "trial" | "suspendida", result: SendEmailResult) {
+  if (result.status === "sent" && result.providerId) counters[kind]++;
+  else if (result.status === "queued") counters.queued++;
+  else if (result.status === "failed") counters.failed++;
+  else if (result.status === "uncertain" || result.status === "sent") counters.uncertain++;
+  else counters.blocked++;
 }
 
 /**
@@ -233,14 +256,14 @@ interface LifecycleCounters {
  * sale igual, con los contadores que se alcanzaron a computar).
  */
 async function runLifecyclePhase(service: ServiceClient): Promise<LifecycleCounters> {
-  const counters: LifecycleCounters = { trial: 0, suspendida: 0 };
+  const counters: LifecycleCounters = { trial: 0, suspendida: 0, queued: 0, failed: 0, blocked: 0, uncertain: 0 };
   const now = new Date();
 
   try {
     await runTrialAvisos(service, now, counters);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    console.warn(`[reconcile-sus] fase lifecycle (trial) falló: ${msg}`);
+    safeLog("warn", "app.api.cron.reconcile.suscripciones.route.L264", `[reconcile-sus] fase lifecycle (trial) falló: ${msg}`);
     captureException(e, { tags: { component: "reconcile", op: "lifecycle-trial" } });
   }
 
@@ -248,7 +271,7 @@ async function runLifecyclePhase(service: ServiceClient): Promise<LifecycleCount
     await runSuspendidaAvisos(service, now, counters);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    console.warn(`[reconcile-sus] fase lifecycle (suspendida) falló: ${msg}`);
+    safeLog("warn", "app.api.cron.reconcile.suscripciones.route.L272", `[reconcile-sus] fase lifecycle (suspendida) falló: ${msg}`);
     captureException(e, { tags: { component: "reconcile", op: "lifecycle-suspendida" } });
   }
 
@@ -359,16 +382,16 @@ async function runTrialAvisos(
       const destinatario =
         sub?.payer_email ?? (ownerProfileId ? emailByProfile.get(ownerProfileId) : undefined);
       if (!destinatario) {
-        console.warn(`[reconcile-sus] trial org=${org.id}: sin email de OWNER resoluble, skip.`);
-        continue;
+        safeLog("warn", "app.api.cron.reconcile.suscripciones.route.L383", `[reconcile-sus] trial org=${org.id}: sin email de OWNER resoluble, skip.`);
+        return;
       }
-      await notifyTrialPorVencer({
+      const delivery = await notifyTrialPorVencer({
         organizationId: org.id,
         destinatario,
         diasRestantes: decision.diasRestantes,
         montoMensualCents: computeMonthlyPriceCents(org.tipo, seatsByOrg.get(org.id) ?? 1),
       });
-      counters.trial++;
+      recordLifecycleDelivery(counters, "trial", delivery);
     }
   }
 }
@@ -440,13 +463,13 @@ async function runSuspendidaAvisos(
 
     for (const decision of decisiones) {
       if (decision.tipo !== "suscripcion_suspendida") continue;
-      await notifySuscripcionSuspendida({
+      const delivery = await notifySuscripcionSuspendida({
         organizationId: sub.organization_id,
         destinatario: sub.payer_email,
         episodioIso: decision.episodioIso,
         montoMensualCents: sub.monto_cents ?? computeMonthlyPriceCents("INDEPENDIENTE", 1),
       });
-      counters.suspendida++;
+      recordLifecycleDelivery(counters, "suspendida", delivery);
     }
   }
 }
@@ -469,7 +492,7 @@ async function countDeadReminderJobs(service: ServiceClient): Promise<number | n
     .or(`intentos.gte.${DEAD_REMINDER_MAX_INTENTOS},scheduled_ts.lt.${staleCutoff}`);
 
   if (error) {
-    console.warn(`[reconcile-sus] count de dead reminders falló: ${error.message}`);
+    safeLog("warn", "app.api.cron.reconcile.suscripciones.route.L493", { error: error });
     captureException(new Error(`count dead reminders falló: ${error.message}`), {
       tags: { component: "reconcile", op: "dead-reminders" },
     });
@@ -478,7 +501,7 @@ async function countDeadReminderJobs(service: ServiceClient): Promise<number | n
 
   const dead = count ?? 0;
   if (dead > 0) {
-    console.warn(
+    safeLog("warn", "app.api.cron.reconcile.suscripciones.route.L502",
       `[reconcile-sus] ${dead} recordatorio_job muertos (enviado_ts null + intentos >= ${DEAD_REMINDER_MAX_INTENTOS} o scheduled_ts < now - ${DEAD_REMINDER_STALE_HOURS}h).`,
     );
     captureMessage(`[reconcile] ${dead} recordatorio_job muertos`, {

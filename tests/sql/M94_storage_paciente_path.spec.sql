@@ -1,3 +1,7 @@
+-- Historical M94 behavior is tested in isolation; M104_clinical_attachments.spec.sql
+-- verifies the effective server-only policy. Rollback restores M104 automatically.
+BEGIN;
+DROP POLICY IF EXISTS clinical_attachments_server_only ON storage.objects;
 -- ════════════════════════════════════════════════════════════════════════════
 -- Folio · M94 spec · el bucket clínico deja de ser la puerta de atrás a la HC 🔒
 -- ════════════════════════════════════════════════════════════════════════════
@@ -594,3 +598,5 @@ END $$;
 CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT NULL::uuid $$;
 
 DO $$ BEGIN RAISE NOTICE 'M94 spec PASS · el bucket clínico ahora respeta la ficha: caja fuerte cerrada, org atada al path, paths rotos fail-closed y el portal escribe sólo en su org'; END $$;
+
+ROLLBACK;

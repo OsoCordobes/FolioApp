@@ -1,3 +1,5 @@
+
+import { safeLog } from "@/lib/observability/safe-log";
 /**
  * Folio · WhatsApp webhook (inbound + status).
  *
@@ -93,7 +95,7 @@ export async function POST(request: NextRequest) {
   try {
     payload = JSON.parse(rawBody);
   } catch (e) {
-    console.warn("[whatsapp] body no es JSON válido:", e);
+    safeLog("warn", "app.api.whatsapp.webhook.route.L96", "[whatsapp] body no es JSON válido:", e);
     return NextResponse.json({ ok: true }, { status: 200 });
   }
 
@@ -111,7 +113,7 @@ export async function POST(request: NextRequest) {
         if (msg.type !== "text" || !msg.text?.body) continue;
 
         if (!org) {
-          console.warn(`[whatsapp] mensaje recibido para phone_number_id=${phoneNumberId} pero no resolve a ninguna org. Ignorado.`);
+          safeLog("warn", "app.api.whatsapp.webhook.route.L114", `[whatsapp] mensaje recibido para phone_number_id=${phoneNumberId} pero no resolve a ninguna org. Ignorado.`);
           continue;
         }
 
@@ -140,7 +142,7 @@ export async function POST(request: NextRequest) {
           .select("id")
           .single();
         if (pedErr || !pedidoCreado) {
-          console.warn(`[whatsapp] error creando pedido inbound: ${pedErr?.message}`);
+          safeLog("warn", "app.api.whatsapp.webhook.route.L143", { error: pedErr });
         } else {
           // Aviso al profesional (owner de la org — el pedido de WhatsApp no
           // trae profesional destino). Post-respuesta vía after(), fail-safe:
@@ -186,7 +188,7 @@ export async function POST(request: NextRequest) {
           .update(patch)
           .eq("meta_message_id", status.id);
         if (upErr) {
-          console.warn(`[whatsapp] error actualizando status ${status.id}: ${upErr.message}`);
+          safeLog("warn", "app.api.whatsapp.webhook.route.L189", { error: upErr });
         }
       }
     }

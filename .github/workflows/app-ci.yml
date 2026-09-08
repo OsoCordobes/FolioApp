@@ -14,12 +14,6 @@ jobs:
   app-ci:
     runs-on: ubuntu-latest
 
-    env:
-      # Claves de cifrado SOLO para tests (lib/crypto exige que existan).
-      # Valores dummy de 32 bytes en base64 — nunca usar en runtime real.
-      FOLIO_ENC_KEY: "Zm9saW8tY2ktZHVtbXktZW5jcnlwdGlvbi1rZXktMzI="
-      FOLIO_ENC_HMAC_KEY: "Zm9saW8tY2ktZHVtbXktaG1hYy1rZXktMzItYnl0ZXM="
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -47,16 +41,9 @@ jobs:
       - name: Unit tests
         run: pnpm test:unit
 
-      # Gate de build: una regresión de `next build` no debe descubrirse en
-      # Vercel post-merge (master auto-deploya a prod). El build NO exige
-      # envs de Supabase hoy (los accesos son lazy y las páginas SSG están
-      # guarded), pero se inyectan dummies para paridad con el build de
-      # Vercel (donde existen): así un futuro prerender que las lea no
-      # rompe CI por `requireEnv` cuando en prod buildearía bien.
-      # Valores dummy — nunca apuntan a un proyecto real.
-      - name: Build
-        run: pnpm build
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: "https://dummy.supabase.co"
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: "dummy"
-          SUPABASE_SERVICE_ROLE_KEY: "dummy"
+      - name: Recovery format tests (synthetic keys only)
+        run: pnpm test:recovery
+
+      # Isolated build: synthetic keys, local-only endpoints, no .env files or provider I/O.
+      - name: Isolated build
+        run: pnpm test:build

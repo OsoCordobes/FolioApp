@@ -19,8 +19,6 @@ import { headers } from "next/headers";
 import { z } from "zod";
 
 import {
-  elegirPlantillasVigentes,
-  type PlantillaConsentimientoRow,
   type PlantillaVigente,
 } from "@/lib/consentimientos/helpers";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -73,7 +71,7 @@ export async function listConsentimientosPaciente(
   const { data, error } = await supabase
     .from("consentimiento")
     .select(
-      "id, paciente_id, plantilla_id, tipo, firma_storage_path, firmado_en, firmado_por_tutor_id, revocado_en, revocado_motivo, plantilla:plantilla_consentimiento(titulo, tipo, version)",
+      "id, paciente_id, plantilla_id, tipo, firma_storage_path, firmado_en, firmado_por_tutor_id, revocado_en, revocado_motivo, evidencia_estado, version_snapshot, texto_snapshot, participantes, plantilla:plantilla_consentimiento(titulo, tipo, version)",
     )
     .eq("organization_id", session.data.organizationId)
     .eq("paciente_id", pacienteId)
@@ -170,14 +168,13 @@ export async function getSignedFirmaUrl(firmaStoragePath: string): Promise<Resul
   if (!session.ok) return session;
 
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.storage
-    .from("consentimientos-firmados")
-    .createSignedUrl(firmaStoragePath.replace(/^consentimientos-firmados\//, ""), 300);
+  const { data, error } = await supabase.from("consentimiento").select("id")
+    .eq("organization_id",session.data.organizationId).eq("firma_storage_path",firmaStoragePath).maybeSingle();
 
   if (error || !data) {
     return err("not_found", "No se pudo generar el link de la firma.", error?.message);
   }
-  return ok(data.signedUrl);
+  return ok(`/api/consentimientos/${data.id}/firma`);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -219,24 +216,18 @@ export async function listPlantillasConsentimientoPortal(): Promise<
   if (!session.ok) return session;
 
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
-    .from("plantilla_consentimiento")
-    .select("id, organization_id, tipo, version, titulo, texto_markdown")
-    .is("reemplazado_por", null)
-    .is("organization_id", null); // sólo globales (defensa explícita además de la RLS)
-
-  if (error) {
-    return err("db_error", "No pudimos cargar las plantillas de consentimiento.", error.message);
-  }
-
-  const vigentes = elegirPlantillasVigentes((data ?? []) as PlantillaConsentimientoRow[]);
-  if (vigentes.length === 0) {
-    return err(
-      "not_found",
-      "No hay plantillas de consentimiento disponibles. Contactá a tu consultorio.",
-    );
-  }
-  return ok(vigentes);
+  const {data,error}=await supabase.from("consentimiento_evaluacion")
+    .select("id,paciente_id,plantilla_id,tipo,version_snapshot,texto_snapshot")
+    .eq("modo","AUTONOMO").is("revocado_en",null).gt("vigente_hasta",new Date().toISOString()).order("created_at",{ascending:false});
+  if(error)return err("db_error","No pudimos consultar los consentimientos preparados por tu profesional.");
+  const recorded=await supabase.from("consentimiento").select("evaluacion_id").not("evaluacion_id","is",null);
+  if(recorded.error)return err("db_error","No pudimos comprobar cuáles consentimientos ya se registraron.");
+  const completed=new Set((recorded.data??[]).map(r=>r.evaluacion_id));
+  const seen=new Set<string>(); const items:PlantillaVigente[]=[];
+  for(const row of data??[]){if(completed.has(row.id))continue;const key=row.paciente_id+":"+row.plantilla_id;if(seen.has(key))continue;seen.add(key);
+    items.push({id:row.plantilla_id,evaluacionId:row.id,pacienteId:row.paciente_id,tipo:row.tipo,version:row.version_snapshot,titulo:"Consentimiento preparado por el consultorio",textoMarkdown:row.texto_snapshot,esCustomDeOrg:false});}
+  if(!items.length)return err("not_found","Tu profesional todavía no preparó un consentimiento para firmar. Podés seguir usando el portal.");
+  return ok(items);
 }
 
 /**

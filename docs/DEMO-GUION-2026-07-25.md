@@ -1,70 +1,29 @@
-# Guion de demo — primera llamada de venta
+# Guion de demostración con datos sintéticos
 
-Checklist operativo: preparación (la mañana de la llamada) y demo en vivo.
-Producto: **https://foliosalud.com** · Salud: https://foliosalud.com/api/health
+Actualización del 8 de septiembre de 2026. Las instrucciones antiguas para
+reescribir las organizaciones de demo mediante una URL quedaron retiradas; su
+historial permanece en Git. Ver [operaciones administrativas](OPERACIONES-ADMINISTRATIVAS.md).
 
-Reemplaza a `DEMO-GUION-DOMINGO.md` (2026-06-14, construido sobre la org
-`lautaro-amiune` — ELIMINADA el 2026-06-15). El setup vigente: la cuenta
-`amiunelautaro@gmail.com` es soporte/demo con **una org demo por especialidad**
-(`demo-quiropraxia`, `demo-cardiologia`, `demo-psicologia`, `demo-kinesiologia`,
-`demo-nutricion`) + la org real — el **OrgSwitcher** del sidebar cambia entre
-ellas. Cada org demo es interna (badge "Cuenta interna", sin gate de billing),
-invisible en el directorio público y bookeable por link directo.
+## Preparación
 
-## Preparación (30 min, en este orden)
+- Usar únicamente una organización sintética identificada, sin pacientes reales.
+- Conservar los datos existentes. No ejecutar reinicios, limpieza de historias ni
+  opciones `force` para actualizar la fecha de una demostración.
+- Mantener bloqueadas sus comunicaciones externas. Una cuenta interna que evita
+  el cobro no demuestra por sí sola que sea una organización sintética.
+- Verificar acceso, segundo factor y estado de las integraciones con el entorno
+  de prueba preparado. La verificación de correo permanece activa; si el correo
+  no llega, revisar SMTP y sus cuotas en lugar de desactivar la verificación.
+- Las señales de salud describen la comprobación que realmente hicieron. No
+  equivalen a una prueba de entrega de correo, un cobro o una restauración.
+- Crear los turnos de la demostración mediante los flujos probados. La carga
+  masiva de ensayo tendrá una herramienta separada, con límites y rechazo de
+  producción por defecto.
 
-### 1. Sanidad ANTES de todo (5 min)
-
-- [ ] `GET /api/health` → si `ok: false`, mirar qué check está en `false`:
-      - `checks.db` / `checks.env` → **frená acá y resolvé primero** (el seed
-        necesita `FOLIO_ENC_KEY` y la DB; si env falla, el seed también).
-      - `checks.rate_limit` (Upstash sin configurar) → benigno **siempre que**
-        `UPSTASH_FAIL_CLOSED` NO esté en `"true"` en Vercel (verificalo en el
-        dashboard: debe estar unset o `"false"`).
-      - `integrations.email: false` → **el email real no sale** (fail-safe: se
-        loguea como `simulated`, no se marca como enviado). Sin
-        `RESEND_API_KEY` no hay confirmación de reserva ni recordatorio 24h ni
-        botón de confirmación 1-click en el buzón del paciente.
-- [ ] Alta de cuenta, chequeo determinístico (5 seg, sin crear cuentas):
-      `curl -s -H "apikey: $NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY" https://grkpayhxndztlfwxobnt.supabase.co/auth/v1/settings`
-      → `mailer_autoconfirm: true` = alta con email+contraseña operativa.
-      Si es `false`, hay DOS caminos y conviene saber cuál vas a mostrar:
-      - **Google** (`"google": true` en el mismo JSON) — funciona hoy tal cual,
-        sin confirmación de email de por medio. Es el camino recomendado para
-        la demo en vivo.
-      - **Email + contraseña** — requiere Supabase → Auth → apagar "Confirm
-        email" (o configurar el SMTP de Resend). Re-correr el curl hasta ver
-        `true`, y de paso confirmar `disable_signup: false`.
-
-### 2. Seed de las orgs demo (10 min)
-
-**Camino recomendado (1 click, sin secretos a mano):** GitHub → Actions →
-**"Demo · seed consultorios (manual)"** → Run workflow → `especialidad=all`,
-`force=true`. Usa el `CRON_SECRET` guardado en Actions (el de Vercel es
-*sensitive*/write-only: `vercel env pull` lo devuelve vacío).
-
-Camino manual equivalente, si tenés el `CRON_SECRET` a mano:
-
-```bash
-for esp in quiropraxia cardiologia psicologia kinesiologia nutricion; do
-  curl -sS -X POST "https://foliosalud.com/api/admin/seed-demo?especialidad=$esp&force=1" \
-    -H "Authorization: Bearer $CRON_SECRET"; echo;
-done
-```
-
-- Idempotente sin `force`: si la org ya tiene pacientes MOCK, se saltea
-  (`skipped: true`). **Con `force=1`** borra los MOCK y re-siembra con la
-  agenda "del día" fresca — correlo **la mañana de cada llamada**, así los
-  turnos de HOY caen en el día de la demo.
-- Solo borrar: `&cleanup=1`.
-- El endpoint está triple-gateado (env `ALLOW_DEMO_SEED` + `CRON_SECRET` +
-  guard que aborta si un slug `demo-*` NO es cuenta interna).
-- Cada org queda con: 6 pacientes MOCK coherentes con la especialidad,
-  historia (turnos pasados cerrados + sesiones con la herramienta clínica
-  ACTUAL + pagos), agenda de HOY con un turno **EN SALA** (para mostrar
-  transiciones en vivo) y turnos futuros. Psicología además: serie PHQ-9/GAD-7
-  con mejoría (panel "Evolución de resultados"). Cobertura (obra social) ya
-  cargada en parte de los pacientes.
+El recorrido siguiente se conserva como material de revisión. Cada prestación
+se debe demostrar y aprobar antes de presentarla como parte de la oferta.
+Los instrumentos requieren validación profesional y de población; mostrar una
+pantalla o una puntuación sintética no acredita su validez clínica.
 
 ### 3. Recorrido de verificación (10 min)
 
@@ -143,3 +102,4 @@ done
 | 2-3 testimonios reales con permiso escrito | Desbloquea la sección de social proof de la landing |
 | Keys de PostHog en prod | Sin eso el funnel signup → onboarding → primer turno no se mide |
 | OAuth app de Google "In production" | Refresh tokens de Testing mueren a los 7 días |
+

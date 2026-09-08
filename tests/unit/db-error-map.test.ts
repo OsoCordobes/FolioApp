@@ -134,7 +134,8 @@ test("23505 teléfono parcial-unique ⇒ conflict con mensaje de teléfono", () 
     details: "paciente_identidad_telefono_unique_active",
   });
   assert.equal(r.code, "conflict");
-  assert.equal(r.message, "Ya existe un paciente con ese teléfono en tu organización.");
+  assert.match(r.message, /contacto compartido/);
+  assert.match(r.message, /no uses la ficha de otra persona/);
 });
 
 test("23505 genérico ⇒ conflict genérico", () => {
@@ -178,11 +179,11 @@ test("error sin code ni substring conocido ⇒ db_error", () => {
   assert.equal(r.code, "db_error");
 });
 
-// ─── detail siempre preserva el mensaje técnico ──────────────────────────────
+// ─── detail sólo conserva códigos seguros ──────────────────────────────
 
-test("detail preserva el mensaje original para logs", () => {
+test("detail conserva SQLSTATE sin el mensaje original", () => {
   const r = mapSupabaseError({ message: "permission denied for table x", code: "42501" });
-  assert.equal(r.detail, "permission denied for table x");
+  assert.equal(r.detail, "42501");
 });
 
 // ─── isUniqueViolation (sin cambios, pero se pinea por code y por substring) ─
@@ -199,4 +200,19 @@ test("isUniqueViolation: false para otro error / null", () => {
   assert.equal(isUniqueViolation({ code: "23503", message: "fk" }), false);
   assert.equal(isUniqueViolation(null), false);
   assert.equal(isUniqueViolation(undefined), false);
+});
+
+import { err } from '../../lib/db/errors';
+for(const code of ['23505','23503','23514','42501','P0001','PGRST116','unknown-secret'])test(`DB error ${code} never returns SQL/PHI in detail`,()=>{
+ const result=mapSupabaseError({code,message:'ana@example.invalid diagnostico-privado token=bearer-secret',details:'SQL patient_name=Ana'});
+ assert.doesNotMatch(JSON.stringify(result),/ana@example|diagnostico-privado|bearer-secret|patient_name/);
+ if(code!=='unknown-secret')assert.equal(result.detail,code);else assert.equal(result.detail,'db_error');
+});
+test('CHECK violations have a generic actionable validation message',()=>{
+ const result=mapSupabaseError({code:'23514',message:'especialidad includes private patient value'});
+ assert.equal(result.code,'validation');assert.equal(result.message,'Alguno de los datos no cumple una regla de validación. Revisá los campos e intentá nuevamente.');
+});
+test('the Result err constructor cannot reintroduce raw diagnostics',()=>{
+ assert.doesNotMatch(JSON.stringify(err('network','Intentá nuevamente.','SQL ana@example.invalid token=bearer-secret')),/ana@example|bearer-secret/);
+ const result=err('db_error','No pudimos guardar.','23505');if(result.ok)assert.fail();assert.equal(result.error.detail,'23505');
 });

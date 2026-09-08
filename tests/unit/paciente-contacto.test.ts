@@ -1,34 +1,5 @@
-/**
- * Folio · payload de edición de contacto del paciente (B8).
- *
- * Lo que este test protege no es el UPDATE — es el **recálculo de los blind
- * indexes**, que es la parte que se puede olvidar sin que nada falle.
- *
- * `nombre_hash` y `telefono_hash` son los índices ciegos con los que el
- * directorio busca: el nombre está cifrado, así que Postgres no puede hacer
- * LIKE sobre el ciphertext. Si se actualiza el nombre y no el hash, el paciente
- * sigue existiendo pero **desaparece del buscador** — y nadie se entera hasta
- * que alguien lo busca, no lo encuentra, y concluye que no está cargado.
- */
-
-// Carga .env.local ANTES de importar lib/crypto, para que las keys AES estén
-// presentes cuando disparen sus getters lazy. Mismo preámbulo que
-// tests/unit/crypto-roundtrip.test.ts.
-import { readFileSync } from "node:fs";
-
-if (!process.env.FOLIO_ENC_KEY || !process.env.FOLIO_ENC_HMAC_KEY) {
-  try {
-    const raw = readFileSync(".env.local", "utf8");
-    for (const line of raw.split(/\r?\n/)) {
-      const m = /^([A-Z_]+)="?([^"\r\n]+)"?$/.exec(line.trim());
-      if (!m) continue;
-      const [, k, v] = m;
-      if (!process.env[k]) process.env[k] = v;
-    }
-  } catch {
-    // Sin .env.local los tests fallan ruidoso cuando necesiten las keys.
-  }
-}
+/** Central synthetic keys and network isolation; no environment files. */
+import "../../scripts/testing/unit-bootstrap.mjs";
 
 import assert from "node:assert/strict";
 import test from "node:test";

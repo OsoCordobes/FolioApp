@@ -1,29 +1,5 @@
-/**
- * Folio · tests del token HMAC de confirmación 1-click (F7b · M90).
- *
- * Cargamos .env.local ANTES de importar el módulo (mismo patrón que
- * crypto-roundtrip.test.ts). Si la key no está (CI sin secrets), seteamos una
- * key de test determinística — el módulo solo exige 32 bytes base64.
- */
-import { readFileSync } from "node:fs";
-
-if (!process.env.FOLIO_ENC_HMAC_KEY) {
-  try {
-    const raw = readFileSync(".env.local", "utf8");
-    for (const line of raw.split(/\r?\n/)) {
-      const m = /^([A-Z_]+)="?([^"\r\n]+)"?$/.exec(line.trim());
-      if (!m) continue;
-      const [, k, v] = m;
-      if (!process.env[k]) process.env[k] = v;
-    }
-  } catch {
-    // .env.local ausente — cae al fallback de abajo.
-  }
-}
-if (!process.env.FOLIO_ENC_HMAC_KEY) {
-  // 32 bytes deterministas para CI (el módulo solo valida largo, no origen).
-  process.env.FOLIO_ENC_HMAC_KEY = Buffer.alloc(32, 7).toString("base64");
-}
+/** Central synthetic keys and network isolation; no environment files. */
+import "../../scripts/testing/unit-bootstrap.mjs";
 
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";

@@ -1,4 +1,6 @@
 "use server";
+import { safeLog } from "@/lib/observability/safe-log";
+
 
 /**
  * Folio · Server Actions de /configuracion.
@@ -15,6 +17,9 @@ import {
   saveBookingPrefs,
   saveConsultorio,
   saveHorarios,
+  readHorarios,
+  type HorariosSnapshot,
+  type SaveHorariosResult,
   saveServicios,
   type SaveBookingPrefsInput,
   type SaveConsultorioInput,
@@ -86,7 +91,11 @@ export async function saveConsultorioAction(input: SaveConsultorioInput): Promis
   return result;
 }
 
-export async function saveHorariosAction(input: SaveHorariosInput): Promise<Result<void>> {
+export async function readHorariosAction(expected: { organizationId: string; memberId: string }): Promise<Result<HorariosSnapshot>> {
+  return readHorarios(expected);
+}
+
+export async function saveHorariosAction(input: SaveHorariosInput): Promise<Result<SaveHorariosResult>> {
   const result = await saveHorarios(input);
   if (result.ok) {
     revalidatePath("/configuracion");
@@ -132,8 +141,8 @@ export interface InviteMemberResult {
   invitation: CreatedInvitation["invitation"];
   /** Link con el token crudo — solo se muestra una vez para copiar. */
   acceptUrl: string;
-  /** false cuando RESEND_API_KEY no está configurada (envío simulado). */
-  emailEnviado: boolean;
+  /** Acceptance is a provider receipt, not proof the email reached the inbox. */
+  emailEstado: "aceptado" | "pendiente" | "no_disponible" | "fallido" | "por_confirmar";
 }
 
 export async function inviteMemberAction(
@@ -144,8 +153,8 @@ export async function inviteMemberAction(
 
   // Email fail-safe (lib/email): si no sale, la invitación NO se pierde — la
   // UI muestra acceptUrl para copiar. Nunca loguear acceptUrl (token crudo).
-  const emailEnviado = Boolean(process.env.RESEND_API_KEY);
-  await notifyMemberInvitation({
+  const delivery = await notifyMemberInvitation({
+    organizationId: result.data.organizationId,
     to: result.data.invitation.email,
     organizationNombre: result.data.organizationNombre,
     rolLabel: roleLabel(result.data.invitation.role, result.data.invitation.esColegiado),
@@ -161,7 +170,10 @@ export async function inviteMemberAction(
     data: {
       invitation: result.data.invitation,
       acceptUrl: result.data.acceptUrl,
-      emailEnviado,
+      emailEstado: delivery.status === "sent" && delivery.providerId ? "aceptado"
+        : delivery.status === "queued" ? "pendiente"
+        : delivery.status === "uncertain" || delivery.status === "sent" ? "por_confirmar"
+        : delivery.status === "failed" ? "fallido" : "no_disponible",
     },
   };
 }
@@ -328,8 +340,8 @@ export async function upgradeOrgTipoAction(): Promise<Result<UpgradeOrgTipoResul
     // y el registro de auditoría es best-effort — logueamos para reconciliar a
     // mano si hiciera falta, pero no le fallamos al usuario un upgrade que ya
     // ocurrió. (Sin PII: solo ids internos y montos.)
-    console.warn(
-      `[billing] upgrade_tipo org=${session.data.organizationId}: INSERT organization_tipo_cambio falló: ${cambioErr.message}`,
+    safeLog("warn", "app.app.configuracion.actions.L334",
+      { error: cambioErr },
     );
   }
 
@@ -379,6 +391,9 @@ export async function connectGoogleCalendar(
   // redirect() hace su throw normal y Next navega al consent de Google.
   let url: string;
   try {
+    const googleClient=await createSupabaseServerClient();
+    const googleScope=await googleClient.from("organization").select("id,is_synthetic").eq("id",session.data.organizationId).is("deleted_at",null).maybeSingle();
+    if(googleScope.error||!googleScope.data||googleScope.data.is_synthetic!==false)return err("forbidden","Esta organización no puede conectar servicios externos.");
     const { state, cookieValue } = buildGoogleOAuthState({
       memberId: session.data.memberId,
       fromOnboarding: returnTo === "onboarding",

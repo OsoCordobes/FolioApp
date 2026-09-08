@@ -1,25 +1,5 @@
-/**
- * Folio · unit tests para blindIndexPhone (M30 dedup helper).
- *
- * Carga .env.local antes de importar lib/crypto para que FOLIO_ENC_HMAC_KEY
- * esté disponible (mismo pattern que crypto-roundtrip.test.ts).
- */
-
-import { readFileSync } from "node:fs";
-
-if (!process.env.FOLIO_ENC_HMAC_KEY) {
-  try {
-    const raw = readFileSync(".env.local", "utf8");
-    for (const line of raw.split(/\r?\n/)) {
-      const m = /^([A-Z_]+)="?([^"\r\n]+)"?$/.exec(line.trim());
-      if (!m) continue;
-      const [, k, v] = m;
-      if (!process.env[k]) process.env[k] = v;
-    }
-  } catch {
-    // .env.local missing — los tests con env-vars fallarán ruidosamente.
-  }
-}
+/** Central synthetic keys and network isolation; no environment files. */
+import "../../scripts/testing/unit-bootstrap.mjs";
 
 import assert from "node:assert/strict";
 import test from "node:test";

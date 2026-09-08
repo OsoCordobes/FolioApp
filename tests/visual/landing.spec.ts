@@ -1,7 +1,7 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "../fixtures/local-test";
 
 /**
- * Visual regression del landing de marketing (`/`) — project `app` (:3010).
+ * Visual regression del landing de marketing (`/`) — project `app` (:4410).
  *
  * A diferencia de app.spec.ts (que compara contra baselines del prototipo),
  * acá los baselines son self-generated (--update-snapshots) y viven en el

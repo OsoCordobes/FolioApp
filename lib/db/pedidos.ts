@@ -4,18 +4,12 @@
 
 import { z } from "zod";
 
-import { runAfterResponse } from "@/lib/after-response";
 import { blindIndex, blindIndexPhone, encryptColumn, tryDecrypt } from "@/lib/crypto";
-import { notifyBookingConfirmada } from "@/lib/email/notify";
-import { pushTurnoToGoogle } from "@/lib/google/sync";
-import { trackEvent } from "@/lib/observability/events";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import { err, mapSupabaseError, ok, type Result } from "./errors";
 import { resolveProfesionalDestino } from "./profesional-destino";
-import { scheduleRecordatoriosForTurno } from "./recordatorios";
 import { getActiveSession } from "./session";
-import { checkSlotOcupado } from "./turnos";
 
 /**
  * CR-7 — decisión pura del compare-and-swap del estado del pedido.
@@ -35,32 +29,6 @@ export function decidePedidoCas(
   if (hadError) return "db_error";
   if (rowsAffected < 1) return "conflict";
   return "ok";
-}
-
-/**
- * Helper compartido: programa los recordatorios 24h/2h de un turno recién
- * creado desde un pedido aceptado/confirmado (H-APP-1). Corre post-respuesta
- * vía after() (runAfterResponse) — el caller no espera el round-trip — con
- * captura en Sentry DENTRO del callback, mismo patrón que createTurno.
- */
-function scheduleRecordatoriosFireAndForget(
-  organizationId: string,
-  turnoId: string,
-  inicioIso: string,
-): void {
-  runAfterResponse(() =>
-    scheduleRecordatoriosForTurno({
-      organizationId,
-      turnoId,
-      inicio: new Date(inicioIso),
-    }).catch(async (e) => {
-      const { captureException } = await import("@sentry/nextjs");
-      captureException(e, {
-        tags: { component: "pedido-accept", op: "scheduleRecordatorios" },
-        extra: { turnoId, organizationId },
-      });
-    }),
-  );
 }
 
 /**
@@ -154,13 +122,13 @@ export async function listPedidos(estado?: string): Promise<Result<Record<string
 // Sin sesión: recibe el client (service o server — son estructuralmente el
 // mismo tipo `createServerClient<any>`). Lo usan tanto `aceptarPedido`
 // (profesional aceptando manualmente en la bandeja, server client autenticado)
-// como `createPedidoPublico` (auto-confirmación, service client sin sesión).
+// La auto-confirmación pública usa el mismo RPC desde su transacción SQL.
 //
-// Pasos: re-chequear slot → resolver/crear paciente → CAS PENDIENTE→CONFIRMADO
-// → insertar turno CONFIRMADO → programar recordatorios. Errores devuelven un
-// Result con rollback de los pasos previos para no dejar estado inconsistente.
+// El RPC valida la autoridad actual y guarda paciente, turno, comprobante y
+// avisos en una transacción. Un error revierte todo; repetir recupera el resultado.
 
 export interface PromotePedidoInput {
+  identityParts?: {nombre:string;apellido:string};
   pedidoId: string;
   organizationId: string;
   profesionalId: string;
@@ -169,251 +137,32 @@ export interface PromotePedidoInput {
   duracionMin: number;
   precioCents: number | null;
   canal: string;
-  /** Si viene, se reutiliza el paciente existente; sino se crea uno nuevo. */
+  /** Debe coincidir con el paciente ya vinculado al pedido; no permite adoptarlo. */
   pacienteId?: string | null;
   nombre: string;
   telefono: string;
   email: string | null;
   motivo: string | null;
   /**
-   * `organization.is_internal_account` si el caller ya lo tiene cargado —
-   * filtra los trackEvent.* de orgs internas/demo del funnel de PostHog.
+   * Compatibilidad con callers anteriores; no se emiten eventos con pacientes.
    */
   orgEsInterna?: boolean;
 }
 
-export async function promotePedidoToTurno(
-  client: Awaited<ReturnType<typeof createSupabaseServerClient>>,
-  input: PromotePedidoInput,
-): Promise<Result<{ turnoId: string; pacienteId: string }>> {
-  const {
-    pedidoId,
-    organizationId,
-    profesionalId,
-    servicioId,
-    fechaPropuesta,
-    duracionMin,
-    precioCents,
-    canal,
-    nombre,
-    telefono,
-    email,
-    motivo,
-  } = input;
-
-  // a. Re-chequeo de solapamiento ANTES de cualquier mutación. Si el slot está
-  //    ocupado abortamos limpio: el pedido sigue PENDIENTE. El propio pedido
-  //    (aún PENDIENTE con fecha_propuesta solapada por definición) se excluye
-  //    del chequeo (M53) — sin esto se auto-conflictuaba y NINGUNA reserva
-  //    pública ni acepte de bandeja podía completarse.
-  const ocupado = await checkSlotOcupado(
-    client,
-    organizationId,
-    fechaPropuesta,
-    duracionMin,
-    profesionalId,
-    pedidoId,
-  );
-  if (ocupado) {
-    return err("conflict", "Ese horario ya no está disponible.");
-  }
-
-  // b. Resolver paciente: usar el existente o crear identidad + paciente.
-  let pacienteId: string;
-  if (input.pacienteId) {
-    pacienteId = input.pacienteId;
-  } else {
-    if (telefono.length < 6) {
-      return err("validation", "El pedido no tiene teléfono válido para crear el paciente.");
-    }
-    const partes = nombre.trim().split(/\s+/);
-    const primerNombre = partes[0] || "Sin nombre";
-    const apellido = partes.slice(1).join(" ") || "—";
-    const nombreFull = `${primerNombre} ${apellido}`;
-
-    const { data: identidad, error: idErr } = await client
-      .from("paciente_identidad")
-      .insert({
-        organization_id: organizationId,
-        nombre_cifrado: encryptColumn(primerNombre)!,
-        apellido_cifrado: encryptColumn(apellido)!,
-        tipo_doc: "DNI",
-        telefono_cifrado: encryptColumn(telefono)!,
-        email_cifrado: encryptColumn(email ?? null),
-        nombre_hash: blindIndex(nombreFull, organizationId),
-        telefono_hash: blindIndexPhone(telefono, organizationId), // M30 dedup partial UNIQUE
-      })
-      .select("id")
-      .single();
-
-    if (idErr || !identidad) {
-      // 23505 = duplicate telefono_hash (M30): el paciente ya existe. En vez de
-      // fallar, lo resolvemos y reutilizamos.
-      const sqlstate = (idErr as { code?: string } | null)?.code;
-      if (sqlstate === "23505") {
-        const { data: existIdentidad } = await client
-          .from("paciente_identidad")
-          .select("id")
-          .eq("organization_id", organizationId)
-          .eq("telefono_hash", blindIndexPhone(telefono, organizationId))
-          .maybeSingle();
-        if (!existIdentidad) {
-          return err("db_error", "No se pudo resolver el paciente existente.", idErr?.message);
-        }
-        const { data: existPaciente } = await client
-          .from("paciente")
-          .select("id")
-          .eq("identidad_id", existIdentidad.id)
-          .eq("organization_id", organizationId)
-          .is("deleted_at", null)
-          .maybeSingle();
-        if (!existPaciente) {
-          return err("db_error", "No se pudo resolver el paciente existente.", idErr?.message);
-        }
-        pacienteId = existPaciente.id;
-        return await finishPromote();
-      }
-      const mapped = mapSupabaseError(idErr ?? { message: "no identidad" });
-      return err(mapped.code, mapped.message, idErr?.message);
-    }
-    const identidadId = identidad.id;
-
-    const { data: paciente, error: pacErr } = await client
-      .from("paciente")
-      .insert({
-        organization_id: organizationId,
-        identidad_id: identidadId,
-        motivo_consulta_cifrado: encryptColumn(motivo ?? null),
-        tags: [],
-        profesional_principal_id: profesionalId,
-      })
-      .select("id")
-      .single();
-
-    if (pacErr || !paciente) {
-      // Rollback identidad para no dejar una identidad huérfana sin paciente.
-      await client.from("paciente_identidad").delete().eq("id", identidadId);
-      const mapped = pacErr ? mapSupabaseError(pacErr) : { code: "db_error" as const, message: "No se creó el paciente." };
-      return err(mapped.code, mapped.message, pacErr?.message);
-    }
-    pacienteId = paciente.id;
-
-    // Business event: paciente nuevo creado desde un pedido (manual o auto).
-    void trackEvent.pacienteCreated({
-      orgId: organizationId,
-      source: "pedido",
-      hasDni: false,
-      hasEmail: Boolean(email),
-      isInternal: input.orgEsInterna,
-    });
-  }
-
-  return await finishPromote();
-
-  // Pasos c-f compartidos por ambas ramas de resolución de paciente.
-  async function finishPromote(): Promise<Result<{ turnoId: string; pacienteId: string }>> {
-    // c. CAS del estado del pedido ANTES de crear el turno.
-    const { data: casRows, error: casErr } = await client
-      .from("pedido")
-      .update({
-        estado: "CONFIRMADO",
-        confirmado_ts: new Date().toISOString(),
-        paciente_id: pacienteId,
-      })
-      .eq("id", pedidoId)
-      .eq("organization_id", organizationId)
-      .eq("estado", "PENDIENTE")
-      .select("id");
-
-    const casDecision = decidePedidoCas(casRows?.length ?? 0, Boolean(casErr));
-    if (casDecision === "db_error") {
-      const mapped = mapSupabaseError(casErr ?? { message: "cas failed" });
-      return err(mapped.code, "No se pudo actualizar el pedido.", casErr?.message);
-    }
-    if (casDecision === "conflict") {
-      return err("conflict", "El pedido ya fue procesado.");
-    }
-
-    // d. Insertar turno CONFIRMADO. Si falla, rollback del CAS a PENDIENTE.
-    //    M56: copiamos el motivo del booking a turno.nota_reserva_cifrado
-    //    (re-cifrado AES-256-GCM) para que el detalle del turno muestre la
-    //    aclaración del paciente sin tener que volver al pedido. Cubre tanto el
-    //    acepte manual de bandeja como el auto-confirm público (ambos pasan acá).
-    const { data: turno, error: turnoErr } = await client
-      .from("turno")
-      .insert({
-        organization_id: organizationId,
-        paciente_id: pacienteId,
-        servicio_id: servicioId,
-        profesional_id: profesionalId,
-        inicio: fechaPropuesta,
-        duracion_min: duracionMin,
-        precio_cents: precioCents ?? 0,
-        origen: buildTurnoOrigenFromCanal(canal),
-        estado: "CONFIRMADO",
-        nota_reserva_cifrado: encryptColumn(motivo ?? null),
-      })
-      .select("id")
-      .single();
-
-    if (turnoErr || !turno) {
-      await client
-        .from("pedido")
-        .update({ estado: "PENDIENTE", confirmado_ts: null })
-        .eq("id", pedidoId)
-        .eq("organization_id", organizationId);
-      return err(
-        mapSupabaseError(turnoErr ?? { message: "no turno" }).code,
-        "No se pudo crear el turno desde el pedido.",
-        turnoErr?.message,
-      );
-    }
-
-    // e. Programar recordatorios 24h/2h (fire-and-forget).
-    scheduleRecordatoriosFireAndForget(organizationId, turno.id, fechaPropuesta);
-
-    // e.2 Push a Google Calendar (post-respuesta vía after(), fail-safe).
-    //     Cubre tanto el booking público auto-confirmado como `aceptarPedido`
-    //     (ambos pasan por este core). pushTurnoToGoogle ya es no-throw, pero
-    //     encadenamos un .catch defensivo (Sentry DENTRO del after).
-    runAfterResponse(() =>
-      pushTurnoToGoogle({
-        client,
-        turnoId: turno.id,
-        organizationId,
-        profesionalMemberId: profesionalId,
-      }).catch(async (e) => {
-        const { captureException } = await import("@sentry/nextjs");
-        captureException(e, {
-          tags: { component: "pedido-accept", op: "pushTurnoToGoogle" },
-          extra: { turnoId: turno.id, organizationId },
-        });
-      }),
-    );
-
-    // e.3 Email de confirmación al paciente (post-respuesta vía after(),
-    //     fail-safe). Cubre tanto el booking público auto-confirmado como
-    //     `aceptarPedido` (ambos pasan por este core). notifyBookingConfirmada
-    //     ya es no-throw; el .catch defensivo replica el patrón Sentry.
-    runAfterResponse(() =>
-      notifyBookingConfirmada({
-        client,
-        turnoId: turno.id,
-        organizationId,
-        pacienteEmail: input.email,
-        pacienteNombre: input.nombre,
-      }).catch(async (e) => {
-        const { captureException } = await import("@sentry/nextjs");
-        captureException(e, {
-          tags: { component: "pedido-accept", op: "notifyBookingConfirmada" },
-          extra: { turnoId: turno.id, organizationId },
-        });
-      }),
-    );
-
-    // f. Listo.
-    return ok({ turnoId: turno.id, pacienteId });
-  }
+export function buildBookingIdentity(nombre:string,telefono:string,email:string|null,organizationId:string,explicit?:{nombre:string;apellido:string}){
+ const partes=nombre.trim().split(/\s+/),first=explicit?.nombre??(partes[0]||"Sin nombre"),last=explicit?.apellido??(partes.slice(1).join(" ")||"—");
+ return {pedido_nombre_cifrado:encryptColumn(nombre),nombre_cifrado:encryptColumn(first),apellido_cifrado:encryptColumn(last),telefono_cifrado:encryptColumn(telefono),email_cifrado:encryptColumn(email),
+ nombre_hash:blindIndex(`${first} ${last}`,organizationId),telefono_hash:blindIndexPhone(telefono,organizationId)};
+}
+export async function promotePedidoToTurno(client:Awaited<ReturnType<typeof createSupabaseServerClient>>,input:PromotePedidoInput):Promise<Result<{turnoId:string;pacienteId:string}>>{
+ try{
+  if(!input.pacienteId&&input.telefono.length<6)return err("validation","El pedido no tiene teléfono válido para crear el paciente.");
+  const {data,error}=await client.rpc("promote_pedido_atomic",{p_org:input.organizationId,p_pedido:input.pedidoId,p_profesional:input.profesionalId,p_servicio:input.servicioId,p_inicio:input.fechaPropuesta,
+   p_expected_patient:input.pacienteId??null,p_identity:input.pacienteId?null:buildBookingIdentity(input.nombre,input.telefono,input.email,input.organizationId,input.identityParts)});
+  if(error){const mapped=mapSupabaseError(error);return err(mapped.code,mapped.message);}
+  if(!data||!z.string().uuid().safeParse(data.turnoId).success||!z.string().uuid().safeParse(data.pacienteId).success)return err("db_error","No pudimos confirmar la conversión. Reintentá el mismo pedido.");
+  return ok({turnoId:data.turnoId,pacienteId:data.pacienteId});
+ }catch{return err("network","No pudimos confirmar la respuesta. Reintentá el mismo pedido antes de crear otro turno.");}
 }
 
 // ─── Crear pedido (desde booking público F7 o webhook WhatsApp F6) ────
@@ -460,13 +209,14 @@ export async function rechazarPedido(pedidoId: string, motivo: string): Promise<
   if (!session.ok) return session;
 
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("pedido")
     .update({ estado: "RECHAZADO", rechazado_motivo: motivo })
     .eq("id", pedidoId)
-    .eq("organization_id", session.data.organizationId);
+    .eq("organization_id", session.data.organizationId).eq("estado", "PENDIENTE").select("id");
 
   if (error) return err(mapSupabaseError(error).code, mapSupabaseError(error).message, error.message);
+  if (!data?.length) return err("conflict", "El pedido ya fue resuelto. Actualizá la bandeja.");
   return ok(undefined);
 }
 
@@ -615,6 +365,7 @@ export async function aceptarPedido(
 
   if (pedErr) return err(mapSupabaseError(pedErr).code, mapSupabaseError(pedErr).message, pedErr.message);
   if (!pedidoRaw) return err("not_found", "Pedido no encontrado.");
+  if(pedidoRaw.estado==="CONFIRMADO")return promotePedidoToTurno(supabase,{pedidoId,organizationId:session.data.organizationId,profesionalId:pedidoRaw.profesional_id??session.data.memberId,servicioId:pedidoRaw.servicio_id??pedidoId,fechaPropuesta:pedidoRaw.fecha_propuesta??new Date().toISOString(),duracionMin:pedidoRaw.duracion_min,precioCents:pedidoRaw.precio_cents,canal:pedidoRaw.canal,pacienteId:pedidoRaw.paciente_id,nombre:"",telefono:"",email:null,motivo:null});
   if (pedidoRaw.estado !== "PENDIENTE") {
     return err("validation", `El pedido ya está en estado ${pedidoRaw.estado.toLowerCase()}.`);
   }
@@ -695,8 +446,8 @@ export async function aceptarPedido(
 // Cierra el dead-end de los pedidos sin estructura (WhatsApp/teléfono sin
 // hora, o con horario que se ocupó): la bandeja ofrece elegir fecha+hora
 // (+servicio si el pedido no trae) y esto delega en `promotePedidoToTurno`
-// con la fecha elegida — el core ya hace slot check + CAS + mapeo
-// canal→origen (B1) + recordatorios + push gcal + email de confirmación.
+// con la fecha elegida. Una transacción valida el horario, crea el turno
+// y conserva el comprobante junto con los avisos pendientes.
 // Wrapper FINO deliberado (era el TODO de CLINICA-3, hallazgo D): NO
 // reimplementa el flujo a mano.
 
@@ -722,6 +473,8 @@ export function decideServicioParaAceptar(
 }
 
 export interface AceptarConHorarioInput {
+  pacienteNuevo?: { nombre: string; apellido: string; telefono: string; email?: string };
+  expectedPacienteId?: string;
   /** Fecha/hora elegida (ISO con offset) — override de pedido.fecha_propuesta. */
   fechaHora: string;
   /** Servicio elegido cuando el pedido no trae servicio_id (o para reasignar). */
@@ -731,6 +484,8 @@ export interface AceptarConHorarioInput {
 }
 
 const aceptarConHorarioSchema = z.object({
+  pacienteNuevo: z.object({nombre:z.string().min(1).max(80),apellido:z.string().min(1).max(80),telefono:z.string().min(6).max(30),email:z.string().email().optional().or(z.literal(""))}).optional(),
+  expectedPacienteId: z.string().uuid().optional(),
   fechaHora: z.string().datetime({ offset: true }),
   servicioId: z.string().uuid().nullish(),
   profesionalId: z.string().uuid().nullish(),
@@ -763,6 +518,8 @@ export async function aceptarPedidoConHorario(
 
   if (pedErr) return err(mapSupabaseError(pedErr).code, mapSupabaseError(pedErr).message, pedErr.message);
   if (!pedidoRaw) return err("not_found", "Pedido no encontrado.");
+  if (parsed.data.expectedPacienteId && parsed.data.expectedPacienteId !== pedidoRaw.paciente_id) return err("conflict", "El paciente elegido no corresponde a este pedido.");
+  if(pedidoRaw.estado==="CONFIRMADO")return promotePedidoToTurno(supabase,{pedidoId,organizationId:session.data.organizationId,profesionalId:pedidoRaw.profesional_id??session.data.memberId,servicioId:pedidoRaw.servicio_id??pedidoId,fechaPropuesta:pedidoRaw.fecha_propuesta??new Date().toISOString(),duracionMin:pedidoRaw.duracion_min,precioCents:pedidoRaw.precio_cents,canal:pedidoRaw.canal,pacienteId:pedidoRaw.paciente_id,nombre:"",telefono:"",email:null,motivo:null});
   if (pedidoRaw.estado !== "PENDIENTE") {
     return err("validation", `El pedido ya está en estado ${pedidoRaw.estado.toLowerCase()}.`);
   }
@@ -800,9 +557,10 @@ export async function aceptarPedidoConHorario(
   }
 
   // Descifrado + guard de ilegibilidad: mismo contrato que aceptarPedido.
-  const nombreDec = tryDecrypt(pedidoRaw.nombre_cifrado, "pedido.nombre_cifrado");
-  const telefonoDec = tryDecrypt(pedidoRaw.telefono_cifrado, "pedido.telefono_cifrado");
-  const email = tryDecrypt(pedidoRaw.email_cifrado, "pedido.email_cifrado");
+  const repair = pedidoRaw.paciente_id ? null : parsed.data.pacienteNuevo;
+  const nombreDec = repair ? `${repair.nombre} ${repair.apellido}`.trim() : tryDecrypt(pedidoRaw.nombre_cifrado, "pedido.nombre_cifrado");
+  const telefonoDec = repair?.telefono ?? tryDecrypt(pedidoRaw.telefono_cifrado, "pedido.telefono_cifrado");
+  const email = repair ? repair.email || null : tryDecrypt(pedidoRaw.email_cifrado, "pedido.email_cifrado");
   const motivo = tryDecrypt(pedidoRaw.motivo_cifrado, "pedido.motivo_cifrado");
 
   if (
@@ -829,11 +587,8 @@ export async function aceptarPedidoConHorario(
   );
   if (!profRes.ok) return profRes;
 
-  // Core compartido con la fecha ELEGIDA: re-chequea el slot nuevo (mismo
-  // checkSlotOcupado que createTurno, excluyendo este pedido para que su
-  // fecha_propuesta vieja no se auto-conflictúe), CAS PENDIENTE→CONFIRMADO,
-  // turno CONFIRMADO con origen vía CANAL_TO_ORIGEN (B1), recordatorios,
-  // push gcal y email de confirmación al paciente.
+  // El servidor vuelve a validar contexto y horario bajo locks, y conserva
+  // turno, paciente, comprobante y avisos en la misma transacción.
   return await promotePedidoToTurno(supabase, {
     pedidoId,
     organizationId: session.data.organizationId,
@@ -845,6 +600,7 @@ export async function aceptarPedidoConHorario(
     canal: pedidoRaw.canal,
     pacienteId: pedidoRaw.paciente_id,
     nombre,
+    identityParts: repair ? {nombre:repair.nombre,apellido:repair.apellido}:undefined,
     telefono,
     email,
     motivo,

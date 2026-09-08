@@ -25,10 +25,16 @@ import { verifyTurnstile } from "@/lib/security/turnstile";
  */
 
 import { z } from "zod";
+import { createHash } from "node:crypto";
+import { decodeAvailabilitySnapshot } from "@/lib/agenda/availability-snapshot";
+import { err, ok, mapSupabaseError, type Result, type FolioErrorCode } from "@/lib/db/errors";
+import type { HorariosSnapshot } from "@/lib/db/configuracion";
 
 import { classifySignUpOutcome } from "@/lib/auth/signup-outcome";
 import { getAppUrl } from "@/lib/config/app-url";
 import { encryptColumn } from "@/lib/crypto";
+import { getActiveSession } from "@/lib/db/session";
+import { verifyMfaSession } from "@/lib/auth/mfa-access";
 import { ESPECIALIDAD_SLUGS } from "@/lib/especialidades/meta";
 import { trackEvent } from "@/lib/observability/events";
 import { validateFranjas } from "@/lib/onboarding/franjas";
@@ -224,6 +230,9 @@ export async function signUpAndInitOrganization(
   }
 
   // 3. Bootstrap atómico vía M33 RPC.
+  const verifiedSession = await verifyMfaSession(supabase);
+  if (!verifiedSession.ok) return { ok: false, error: verifiedSession.error.message };
+  if (verifiedSession.data.user.id !== userId) return { ok: false, error: "Volvé a iniciar sesión." };
   //
   // Reemplaza los pasos 3-6 viejos (existing-check + org insert + profile
   // upsert + member insert con DELETEs compensatorios). Garantía Postgres
@@ -289,12 +298,9 @@ export async function bootstrapOrgForAuthenticatedUser(
   options: { turnstileToken?: string | null; consent?: boolean } = {},
 ): Promise<OnboardingBootstrapResult> {
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return { ok: false, error: "Sesión expirada. Volvé a entrar." };
-  }
+  const verifiedSession = await verifyMfaSession(supabase);
+  if (!verifiedSession.ok) return { ok: false, error: verifiedSession.error.message };
+  const { user } = verifiedSession.data;
 
   const reqHeaders = await headers();
   const ipRaw = reqHeaders.get("x-forwarded-for") ?? reqHeaders.get("x-real-ip") ?? null;
@@ -391,6 +397,8 @@ export interface StepUpdateResult {
   ok: boolean;
   error?: string;
   slug?: string;            // útil en step 3 si el user cambió el slug
+  revision?: number;
+  code?: FolioErrorCode;
 }
 
 export interface Step2Data {
@@ -427,6 +435,10 @@ export interface Step4Data {
 }
 
 export interface Step5Data {
+  organizationId: string;
+  memberId: string;
+  revision: number;
+  operacionId: string;
   diasActivos: string[];
   franjas: [string, string][];
   slotMin: number;
@@ -468,30 +480,50 @@ const TIPOS_CANONICOS_SET = new Set<string>(TIPOS_CANONICOS_VALIDOS);
  * También actualiza `organization.onboarding_step_max = max(actual, stepId)`
  * para que el resume state sepa hasta dónde llegó.
  */
+const step5VersionSchema = z.object({ organizationId: z.string().uuid(), memberId: z.string().uuid(), revision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER), operacionId: z.string().uuid(),
+  diasActivos: z.array(z.enum(["dom", "lun", "mar", "mie", "jue", "vie", "sab"])).min(1).max(7), franjas: z.array(z.tuple([z.string(), z.string()])).min(1).max(12) });
+/** A current authenticated snapshot is required before editing the initial week. */
+export async function readOnboardingHorarios(organizationId: string): Promise<Result<HorariosSnapshot>> {
+  if (!z.string().uuid().safeParse(organizationId).success) return err("validation", "Consultorio inválido.");
+  const session = await getActiveSession(); if (!session.ok) return session;
+  if (session.data.organizationId !== organizationId || session.data.role !== "OWNER") return err("forbidden", "Cambió el consultorio activo. Volvé a cargar la página.");
+  try {
+    const client = await createSupabaseServerClient();
+    const { data, error } = await client.rpc("read_onboarding_availability", { p_org: organizationId, p_member: session.data.memberId });
+    if (error) { const mapped = mapSupabaseError(error); return err(mapped.code, mapped.message); }
+    const snapshot = decodeAvailabilitySnapshot(data, { organizationId, memberId: session.data.memberId });
+    return snapshot ? ok(snapshot) : err("db_error", "No pudimos leer los horarios. Volvé a intentar.");
+  } catch { return err("network", "No pudimos leer los horarios. Volvé a intentar."); }
+}
+async function saveInitialHorarios(input: Step5Data): Promise<StepUpdateResult> {
+  const parsed = step5VersionSchema.safeParse(input);
+  if (!parsed.success || !validateFranjas(parsed.data.franjas).ok || new Set(parsed.data.diasActivos).size !== parsed.data.diasActivos.length) return { ok: false, code: "validation", error: "Revisá los días, las franjas y la revisión de la agenda." };
+  const session = await getActiveSession(); if (!session.ok) return { ok: false, code: session.error.code, error: session.error.message };
+  const d = parsed.data;
+  if (session.data.organizationId !== d.organizationId || session.data.memberId !== d.memberId || session.data.role !== "OWNER") return { ok: false, code: "forbidden", error: "Cambió el consultorio activo. Volvé a cargar la página." };
+  const days = ["dom", "lun", "mar", "mie", "jue", "vie", "sab"];
+  const franjas = d.diasActivos.flatMap((dia) => d.franjas.map(([hora_inicio, hora_fin]) => ({ dia_semana: days.indexOf(dia), hora_inicio, hora_fin }))).sort((a,b) => a.dia_semana-b.dia_semana || a.hora_inicio.localeCompare(b.hora_inicio));
+  try {
+    const client = await createSupabaseServerClient();
+    const { data, error } = await client.rpc("save_onboarding_availability", { p_org: d.organizationId, p_member: d.memberId, p_expected_revision: d.revision, p_operation: d.operacionId, p_hash: createHash("sha256").update(JSON.stringify([d.revision,franjas])).digest("hex"), p_franjas: franjas });
+    if (error) { const mapped = mapSupabaseError(error); return { ok: false, code: error.code === "40001" ? "conflict" : mapped.code, error: error.code === "40001" ? "Los horarios cambiaron. Cargá los guardados antes de continuar." : mapped.message }; }
+    if (!data || !Number.isSafeInteger(data.revision) || data.revision <= d.revision) return { ok: false, code: "db_error", error: "No pudimos confirmar el guardado. Reintentá." };
+    return { ok: true, revision: data.revision };
+  } catch { return { ok: false, code: "network", error: "No pudimos confirmar el guardado. Reintentá el mismo cambio." }; }
+}
+
 export async function updateOnboardingStep(
   stepId: number,
   data: Step2Data | Step3Data | Step4Data | Step5Data | Step6Data | Step7Data,
 ): Promise<StepUpdateResult> {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Sesión expirada. Volvé a entrar." };
-
-  const service = createSupabaseServiceClient();
-
-  // Buscar la org del user (creada en signUpAndInitOrganization).
-  const { data: member } = await service
-    .from("member")
-    .select("organization_id")
-    .eq("profile_id", user.id)
-    .is("deleted_at", null)
-    .maybeSingle();
-  if (!member?.organization_id) {
-    return { ok: false, error: "No pude resolver tu organización. Cerrá sesión y volvé a registrarte." };
+  if (!Number.isInteger(stepId) || stepId < 2 || stepId > 7) {
+    return { ok: false, error: "Paso de configuración inválido." };
   }
-  const orgId = member.organization_id as string;
-
+  if (stepId === 5) return saveInitialHorarios(data as Step5Data);
+  const access = await resolveOrganizationEditor("wizard");
+  if (!access.ok) return access;
+  const { service, orgId, userId } = access;
+  const user = { id: userId };
   try {
     switch (stepId) {
       case 2: {
@@ -574,54 +606,6 @@ export async function updateOnboardingStep(
         }
         break;
       }
-      case 5: {
-        const d = data as Step5Data;
-        // Validación ANTES del DELETE (lib/onboarding/franjas — la misma que
-        // corre el cliente). Sin esto, una franja invertida borraba la
-        // disponibilidad vieja y el INSERT fallaba contra el CHECK disp_orden:
-        // el user quedaba con CERO disponibilidad y un error crudo de Postgres.
-        if (!Array.isArray(d.diasActivos) || d.diasActivos.length === 0) {
-          return { ok: false, error: "Elegí al menos un día de atención." };
-        }
-        const franjasCheck = validateFranjas(d.franjas ?? []);
-        if (!franjasCheck.ok) {
-          return {
-            ok: false,
-            error: franjasCheck.error ?? "Revisá las franjas horarias.",
-          };
-        }
-        // Reemplazo total de disponibilidad: delete + insert
-        const { data: memberSelf } = await service
-          .from("member")
-          .select("id")
-          .eq("profile_id", user.id)
-          .eq("organization_id", orgId)
-          .single();
-        if (!memberSelf) return { ok: false, error: "Member no encontrado." };
-
-        await service
-          .from("disponibilidad_profesional")
-          .delete()
-          .eq("member_id", memberSelf.id);
-
-        const dowMap: Record<string, number> = {
-          dom: 0, lun: 1, mar: 2, mie: 3, jue: 4, vie: 5, sab: 6,
-        };
-        const rows = d.diasActivos.flatMap((dia) =>
-          d.franjas.map(([from, to]) => ({
-            organization_id: orgId,
-            member_id: memberSelf.id,
-            dia_semana: dowMap[dia] ?? 1,
-            hora_inicio: from,
-            hora_fin: to,
-          })),
-        );
-        if (rows.length > 0) {
-          const { error } = await service.from("disponibilidad_profesional").insert(rows);
-          if (error) return { ok: false, error: error.message };
-        }
-        break;
-      }
       case 6: {
         const d = data as Step6Data;
         // Reemplazo total de servicios
@@ -665,56 +649,25 @@ export async function updateOnboardingStep(
  * Marca el onboarding como completado. Llamada desde el paso final (moment).
  */
 export async function finalizeOnboarding(): Promise<{ ok: boolean; error?: string; slug?: string }> {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Sesión expirada." };
+  const access = await resolveOrganizationEditor("finalize");
+  if (!access.ok) return access;
+  const { service, orgId, organization } = access;
+  if (organization.onboarding_completed === true) return { ok: true, slug: organization.slug as string };
 
-  const service = createSupabaseServiceClient();
-  const { data: member } = await service
-    .from("member")
-    .select("organization_id")
-    .eq("profile_id", user.id)
-    .is("deleted_at", null)
-    .maybeSingle();
-  if (!member?.organization_id) return { ok: false, error: "No pude resolver tu organización." };
-  const orgId = member.organization_id as string;
-
-  // Estado previo: nos permite disparar el business event UNA sola vez (en la
-  // transición false→true). Si el usuario vuelve a Step 9 y re-llama esta
-  // action, onboarding_completed ya es true y el evento no se re-dispara.
-  const { data: prev } = await service
-    .from("organization")
-    .select("onboarding_completed, is_internal_account")
-    .eq("id", orgId)
-    .maybeSingle();
-
-  // Wizard de 8 pasos (el viejo Step 8 informativo se fusionó en el moment).
-  const { data: org, error } = await service
-    .from("organization")
-    .update({
-      onboarding_completed: true,
-      onboarding_step_max: 8,
-    })
-    .eq("id", orgId)
-    .select("slug")
-    .single();
-
+  // Compare-and-set: only the caller that completes the wizard emits the event.
+  const { data: org, error } = await service.from("organization")
+    .update({ onboarding_completed: true, onboarding_step_max: 8 })
+    .eq("id", orgId).eq("onboarding_completed", false).is("deleted_at", null)
+    .select("slug").maybeSingle();
   if (error) return { ok: false, error: error.message };
-
-  // Business event: onboarding finalizado y org operativa. Sólo en la
-  // transición (prev.onboarding_completed !== true) para no contar dobles.
-  // Fire-and-forget, no-op sin POSTHOG_KEY, sin PII (org id + steps).
-  // isInternal filtra los re-onboardings de cuentas internas/demo del funnel.
-  if (prev?.onboarding_completed !== true) {
-    void trackEvent.onboardingCompleted({
-      orgId,
-      stepsCompleted: 8,
-      isInternal: Boolean(prev?.is_internal_account),
-    });
+  if (!org) {
+    const retry = await resolveOrganizationEditor("finalize");
+    if (!retry.ok) return retry;
+    return retry.organization.onboarding_completed === true
+      ? { ok: true, slug: retry.organization.slug as string }
+      : { ok: false, error: "No se pudo completar el registro. Intentá de nuevo." };
   }
-
+  void trackEvent.onboardingCompleted({ orgId, stepsCompleted: 8, isInternal: Boolean(organization.is_internal_account) });
   return { ok: true, slug: org.slug as string };
 }
 
@@ -744,7 +697,7 @@ export interface UploadOrgLogoResult {
  * Sube un PNG de logo del consultorio. Recibe FormData (campo "file")
  * para que la transferencia no pase por base64 + JSON.
  */
-export async function uploadOrgLogo(formData: FormData): Promise<UploadOrgLogoResult> {
+async function uploadLogo(formData: FormData, mode: "wizard" | "settings"): Promise<UploadOrgLogoResult> {
   const file = formData.get("file");
   if (!(file instanceof File)) {
     return { ok: false, error: "No recibimos un archivo." };
@@ -759,21 +712,9 @@ export async function uploadOrgLogo(formData: FormData): Promise<UploadOrgLogoRe
     return { ok: false, error: "El logo supera los 500 KB." };
   }
 
-  const supabase = await createSupabaseServerClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Sesión expirada. Volvé a entrar." };
-
-  const service = createSupabaseServiceClient();
-  const { data: member } = await service
-    .from("member")
-    .select("organization_id")
-    .eq("profile_id", user.id)
-    .is("deleted_at", null)
-    .maybeSingle();
-  if (!member?.organization_id) {
-    return { ok: false, error: "No pude resolver tu organización." };
-  }
-  const orgId = member.organization_id as string;
+  const access = await resolveOrganizationEditor(mode);
+  if (!access.ok) return access;
+  const { service, orgId } = access;
 
   const bytes = new Uint8Array(await file.arrayBuffer());
   const path = buildLogoPath(orgId);
@@ -807,22 +748,10 @@ export interface RemoveOrgLogoResult {
  * Borra el logo del bucket y limpia organization.logo_url. Idempotente:
  * si no había logo, no falla.
  */
-export async function removeOrgLogo(): Promise<RemoveOrgLogoResult> {
-  const supabase = await createSupabaseServerClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Sesión expirada." };
-
-  const service = createSupabaseServiceClient();
-  const { data: member } = await service
-    .from("member")
-    .select("organization_id")
-    .eq("profile_id", user.id)
-    .is("deleted_at", null)
-    .maybeSingle();
-  if (!member?.organization_id) {
-    return { ok: false, error: "No pude resolver tu organización." };
-  }
-  const orgId = member.organization_id as string;
+async function removeLogo(mode: "wizard" | "settings"): Promise<RemoveOrgLogoResult> {
+  const access = await resolveOrganizationEditor(mode);
+  if (!access.ok) return access;
+  const { service, orgId } = access;
 
   const path = buildLogoPath(orgId);
   const { error: rmErr } = await service.storage.from(LOGO_BUCKET).remove([path]);
@@ -832,4 +761,38 @@ export async function removeOrgLogo(): Promise<RemoveOrgLogoResult> {
 
   await service.from("organization").update({ logo_url: null }).eq("id", orgId);
   return { ok: true };
+}
+
+/** Recheck the current membership and organization immediately before service writes. */
+async function resolveOrganizationEditor(mode: "wizard" | "settings" | "finalize") {
+  const session = await getActiveSession();
+  if (!session.ok) return { ok: false as const, error: session.error.message };
+  const { organizationId: orgId, memberId, userId } = session.data;
+  const service = createSupabaseServiceClient();
+  const { data: member, error: memberError } = await service.from("member")
+    .select("id, role, deleted_at").eq("id", memberId)
+    .eq("profile_id", userId).eq("organization_id", orgId).maybeSingle();
+  const { data: org, error: orgError } = await service.from("organization")
+    .select("id, deleted_at, onboarding_completed, slug, is_internal_account").eq("id", orgId).maybeSingle();
+  const roles = mode === "settings" ? ["OWNER", "DIRECTOR"] : ["OWNER"];
+  if (memberError || orgError || !member || member.deleted_at !== null ||
+      !roles.includes(member.role) || !org || org.deleted_at !== null ||
+      (mode === "wizard" && org.onboarding_completed !== false)) {
+    return { ok: false as const, error: "No tenés permiso para modificar esta configuración." };
+  }
+  return { ok: true as const, service, orgId, userId, organization: org };
+}
+
+export async function uploadOrgLogo(formData: FormData): Promise<UploadOrgLogoResult> {
+  return uploadLogo(formData, "wizard");
+}
+export async function removeOrgLogo(): Promise<RemoveOrgLogoResult> {
+  return removeLogo("wizard");
+}
+/** Normal settings keep their own role gate after the wizard has completed. */
+export async function uploadSettingsOrgLogo(formData: FormData): Promise<UploadOrgLogoResult> {
+  return uploadLogo(formData, "settings");
+}
+export async function removeSettingsOrgLogo(): Promise<RemoveOrgLogoResult> {
+  return removeLogo("settings");
 }

@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "../fixtures/local-test";
 
 /**
  * Folio Atelier · F1 token-bootstrap acceptance.
@@ -8,7 +8,7 @@ import { test, expect } from "@playwright/test";
  *   - All Folio Atelier design tokens resolve on `:root`.
  *   - The three decoration primitives render at `/decoration`.
  *
- * They run against the dev server on http://localhost:3010 via the `e2e`
+ * They run against the dev server on http://127.0.0.1:4410 via the `e2e`
  * Playwright project (see `playwright.config.ts`). The dev server is
  * launched automatically by Playwright as a webServer dependency.
  */

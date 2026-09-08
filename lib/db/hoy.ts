@@ -1,3 +1,5 @@
+
+import { safeLog } from "@/lib/observability/safe-log";
 /**
  * Folio · /hoy data fetcher (Sprint S1 T-1.4).
  *
@@ -24,6 +26,7 @@ import { loadCanceladoPorPacienteIds } from "./cancelado-por-paciente";
 import { loadConfirmadoViaByTurnoId } from "./confirmado-via";
 import { err, ok, type Result } from "./errors";
 import { getActiveSession } from "./session";
+import { readCompleteCollection } from "./complete-collection";
 import { normalizeModalidad } from "@/lib/types";
 import type { ConfirmadoVia, Paciente, PacientesById, EstadoTurno, OrigenTurno, PostVisita, Turno } from "@/lib/types";
 
@@ -128,6 +131,7 @@ interface FetcherInput {
 }
 
 export async function getDashboardHoy(input: FetcherInput): Promise<Result<DashboardHoyData>> {
+  try {
   const { organizationId, fechaIso, timezone, profesionalId, profesionalesNombreById } = input;
   const supabase = await createSupabaseServerClient();
 
@@ -135,6 +139,7 @@ export async function getDashboardHoy(input: FetcherInput): Promise<Result<Dashb
   // descifra para roles con acceso clínico (espejo de can_read_clinical en RLS).
   // Fail-closed sin sesión.
   const sessionRes = await getActiveSession();
+  if (!sessionRes.ok) return sessionRes;
   const canReadClinical = sessionRes.ok
     ? capabilitiesFor(sessionRes.data.role, sessionRes.data.esColegiado).canReadClinical
     : false;
@@ -144,31 +149,22 @@ export async function getDashboardHoy(input: FetcherInput): Promise<Result<Dashb
   // calculado en JS pasando la fecha pivot a Intl.
   const { startUtc, endUtc } = computeDayRangeUtc(fechaIso, timezone);
 
+  const { data, error } = await readCompleteCollection<TurnoExtendidoRow>(async (from, to) => {
   let query = supabase
     .from("turno_extendido")
-    .select(
-      "id, organization_id, inicio, duracion_min, estado, origen, precio_cents, " +
-        "gcal_event_id, atendiendo_desde, duracion_real_min, " +
-        "paciente_id, paciente_nombre_cifrado, paciente_apellido_cifrado, paciente_telefono_cifrado, " +
-        "paciente_tipo, paciente_tags, paciente_alerta_alergia, " +
-        "servicio_nombre, servicio_tipo_canonico, " +
-        // El cobro REAL del turno (no el precio de lista): el KPI "Recaudado"
-        // de /hoy tiene que dar lo mismo que /finanzas, que lee `pago`.
-        "pago_id, pago_monto_cents, pago_estado, pago_pagado_ts, " +
-        "profesional_id, nota_reserva_cifrado, " +
-        "modalidad",
-    )
+    .select("id, organization_id, inicio, duracion_min, estado, origen, precio_cents, gcal_event_id, atendiendo_desde, duracion_real_min, paciente_id, paciente_nombre_cifrado, paciente_apellido_cifrado, paciente_telefono_cifrado, paciente_tipo, paciente_tags, paciente_alerta_alergia, servicio_nombre, servicio_tipo_canonico, pago_id, pago_monto_cents, pago_estado, pago_pagado_ts, profesional_id, nota_reserva_cifrado, modalidad", { count: "exact" })
     .eq("organization_id", organizationId)
     .gte("inicio", startUtc)
     .lt("inicio", endUtc)
-    .order("inicio", { ascending: true });
+    .order("inicio", { ascending: true }).order("id", { ascending: true }).range(from, to);
 
   if (profesionalId) {
     query = query.eq("profesional_id", profesionalId);
   }
 
-  const { data, error } = await query;
-  if (error) return err("db_error", "Error leyendo agenda del día.", error.message);
+  return query;
+  });
+  if (error) return err("db_error", "No se pudo leer la agenda del día completa. Intentá nuevamente.");
 
   const rows = (data ?? []) as unknown as TurnoExtendidoRow[];
 
@@ -192,6 +188,8 @@ export async function getDashboardHoy(input: FetcherInput): Promise<Result<Dashb
     ),
   ]);
 
+  if (!postVisitaByTurno.ok) return postVisitaByTurno;
+
   // Agrupar pacientes únicos (set + desencripción una sola vez por paciente).
   const pacientesAcum = new Map<string, Paciente>();
 
@@ -201,7 +199,7 @@ export async function getDashboardHoy(input: FetcherInput): Promise<Result<Dashb
     }
     return rowToTurno(
       row,
-      postVisitaByTurno.get(row.id) ?? null,
+      postVisitaByTurno.data.get(row.id) ?? null,
       timezone,
       profesionalesNombreById,
       canReadClinical,
@@ -216,35 +214,30 @@ export async function getDashboardHoy(input: FetcherInput): Promise<Result<Dashb
   const { fechaLarga, fechaAnio } = formatFechaLarga(fechaIso, timezone);
 
   return ok({ turnos, pacientes, fechaIso, fechaLarga, fechaAnio });
+  } catch {
+    return err("db_error", "No se pudo leer la agenda del día completa. Intentá nuevamente.");
+  }
 }
 
 // ─── Helpers internos ──────────────────────────────────────────────────────
 
 async function loadPostVisitaFlags(
-  turnoIds: string[],
-  organizationId: string,
-): Promise<Map<string, { guardada: boolean }>> {
+  turnoIds: string[], organizationId: string,
+): Promise<Result<Map<string, { guardada: boolean }>>> {
   const out = new Map<string, { guardada: boolean }>();
-  if (turnoIds.length === 0) return out;
-
+  if (turnoIds.length === 0) return ok(out);
   const supabase = await createSupabaseServerClient();
-  const { data } = await supabase
-    .from("sesion")
-    .select("turno_id, soap_s_cifrado, soap_o_cifrado, soap_a_cifrado, soap_p_cifrado")
-    .eq("organization_id", organizationId)
-    .in("turno_id", turnoIds);
-
-  for (const r of (data ?? []) as unknown as Array<{
-    turno_id: string;
-    soap_s_cifrado: string | null;
-    soap_o_cifrado: string | null;
-    soap_a_cifrado: string | null;
-    soap_p_cifrado: string | null;
-  }>) {
-    const guardada = !!(r.soap_s_cifrado || r.soap_o_cifrado || r.soap_a_cifrado || r.soap_p_cifrado);
-    out.set(r.turno_id, { guardada });
+  type SavedRow = { id: string; turno_id: string; soap_s_cifrado: string | null; soap_o_cifrado: string | null; soap_a_cifrado: string | null; soap_p_cifrado: string | null };
+  // Bound IN lists as well as response pages: a large day must not exceed URL limits.
+  for (let i = 0; i < turnoIds.length; i += 200) {
+    const result = await readCompleteCollection<SavedRow>((from, to) => supabase.from("sesion")
+      .select("id, turno_id, soap_s_cifrado, soap_o_cifrado, soap_a_cifrado, soap_p_cifrado", { count: "exact" })
+      .eq("organization_id", organizationId).in("turno_id", turnoIds.slice(i, i + 200))
+      .order("id", { ascending: true }).range(from, to));
+    if (result.error) return err("db_error", "No se pudo comprobar si las notas de las visitas están guardadas. Intentá nuevamente.");
+    for (const r of result.data) out.set(r.turno_id, { guardada: !!(r.soap_s_cifrado || r.soap_o_cifrado || r.soap_a_cifrado || r.soap_p_cifrado) });
   }
-  return out;
+  return ok(out);
 }
 
 function rowToPaciente(row: TurnoExtendidoRow): Paciente {
@@ -328,7 +321,7 @@ function tryDecrypt(value: string | null | undefined, label: string): string | n
     return decryptColumn(value);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    console.warn(`[hoy] decrypt falló (${label}): ${msg}. len=${value.length}`);
+    safeLog("warn", "lib.db.hoy.L331", `[hoy] decrypt falló (${label}): ${msg}. len=${value.length}`);
     return null;
   }
 }

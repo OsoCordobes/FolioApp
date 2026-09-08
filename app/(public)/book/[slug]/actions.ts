@@ -1,5 +1,6 @@
 "use server";
 
+
 /**
  * Folio · Server Actions del booking público.
  *
@@ -15,19 +16,16 @@
 import { headers } from "next/headers";
 import { z } from "zod";
 
-import { runAfterResponse } from "@/lib/after-response";
 import { encryptColumn } from "@/lib/crypto";
-import { err, ok, type Result } from "@/lib/db/errors";
-import { buildAutoConfirmDecision, promotePedidoToTurno } from "@/lib/db/pedidos";
+import { err, mapSupabaseError, ok, type Result } from "@/lib/db/errors";
+import { buildBookingIdentity } from "@/lib/db/pedidos";
+import { createHash } from "node:crypto";
 import { resolveProfesionalPublico } from "@/lib/db/profesional-destino";
-import { notifyBookingRecibida, notifyPedidoNuevo } from "@/lib/email/notify";
 import {
   AvailabilityDbError,
   getSlotsDisponibles,
-  slotEstaOfrecido,
   type Slot,
 } from "@/lib/booking/availability";
-import { trackEvent } from "@/lib/observability/events";
 import { limitByIp } from "@/lib/security/rate-limit";
 import { verifyTurnstile } from "@/lib/security/turnstile";
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
@@ -135,6 +133,7 @@ export async function fetchSlotsPublico(
 }
 
 const createPedidoInput = z.object({
+  operacionId:z.string().uuid(),
   orgSlug: z.string().regex(/^[a-z0-9-]+$/),
   servicioId: z.string().uuid(),
   /** CLINICA-4 · mismo contrato que fetchSlotsPublico (ver slotsInput). */
@@ -153,341 +152,34 @@ const createPedidoInput = z.object({
   consentVersion: z.string().min(8).max(32).optional(),
 });
 
-export async function createPedidoPublico(
-  input: z.infer<typeof createPedidoInput>,
-): Promise<Result<{ id: string; autoConfirmado: boolean }>> {
-  const parsed = createPedidoInput.safeParse(input);
-  if (!parsed.success) {
-    return err("validation", "Datos del pedido inválidos.", parsed.error.message);
-  }
-
-  // Enforcement de consentimiento (Ley 25.326 art. 5). El wizard pasa
-  // consentAccepted=true desde la checkbox; si falta, rechazamos acá con un
-  // mensaje claro en vez de dejar que la DB rebote por el constraint
-  // pedido_web_requires_consent (M39).
-  if (parsed.data.consentAccepted !== true || !parsed.data.consentVersion) {
-    return err(
-      "validation",
-      "Para reservar debés aceptar la Política de Privacidad y los Términos.",
-    );
-  }
-
-  const ip = await clientIp();
-
-  // Rate limit más estricto en el submit final.
-  const rl = await limitByIp("book.create", ip, 5);
-  if (!rl.ok) {
-    return err("validation", `Demasiados intentos, probá en ${rl.resetIn}s.`);
-  }
-
-  // Captcha obligatorio. En dev (sin secret), verifyTurnstile retorna true
-  // para no bloquear el flow local. En producción es fail-closed.
-  const captchaOk = await verifyTurnstile(parsed.data.captchaToken, ip);
-  if (!captchaOk) {
-    return err("validation", "Captcha inválido o expirado. Recargá la página.");
-  }
-
-  const service = createSupabaseServiceClient();
-  // Mismos filtros que fetchSlotsPublico y que la page pública: org viva y
-  // listada, servicio activo y no borrado. Sin esto, un POST directo al action
-  // podía reservar contra orgs deslistadas/borradas o servicios inactivos.
-  const { data: org } = await service
-    .from("organization")
-    .select("id, auto_confirmar_reservas, opt_out_public_listing, slot_margen_min, is_internal_account")
-    .eq("slug", parsed.data.orgSlug)
-    .is("deleted_at", null)
-    .maybeSingle();
-  if (!org || org.opt_out_public_listing) {
-    return err("not_found", "Consultorio no encontrado.");
-  }
-
-  const { data: servicio } = await service
-    .from("servicio")
-    .select("id, organization_id, duracion_min, precio_cents, nombre")
-    .eq("id", parsed.data.servicioId)
-    .eq("organization_id", org.id)
-    .eq("activo", true)
-    .is("deleted_at", null)
-    .maybeSingle();
-  if (!servicio) return err("not_found", "Servicio no disponible.");
-
-  // Resolver el profesional destino — MISMO contrato que fetchSlotsPublico
-  // (CLINICA-4): el elegido del wizard (validado como colegiado activo) o el
-  // único colegiado, determinístico. Se usa ESE id —sin re-resolver— para
-  // persistir pedido.profesional_id, validar el slot ofrecido y auto-confirmar
-  // (M40 keyea por profesional_id). Antes había una SEGUNDA resolución
-  // independiente sin ORDER BY: un alta/baja de member entre fetch y submit
-  // podía ofrecer slots del profesional A y validar/persistir contra B.
-  const profesionalRes = await resolveProfesionalPublico(service, {
-    organizationId: org.id,
-    profesionalId: parsed.data.profesionalId ?? null,
-  });
-
-  // Validación dura del horario pedido: tiene que ser FUTURO, dentro de la
-  // ventana de booking, y coincidir EXACTAMENTE con un slot que la grilla
-  // ofrece (disponibilidad del profesional + duración + margen M43). Sin esto,
-  // un POST directo al action (es un endpoint HTTP público) podía crear
-  // pedidos —y con auto-confirm, turnos CONFIRMADOS— a cualquier hora,
-  // incluso en el pasado.
-  const inicioDate = new Date(parsed.data.inicio);
-  const ahora = new Date();
-  const ventanaMax = new Date(ahora.getTime() + 60 * 24 * 60 * 60_000);
-  if (!(inicioDate > ahora) || inicioDate > ventanaMax) {
-    return err("validation", "Ese horario no es válido. Elegí un horario de la agenda.");
-  }
-  if (!profesionalRes.ok) return profesionalRes;
-  const profesionalId = profesionalRes.data;
-
-  let slotsValidos: Slot[];
-  try {
-    slotsValidos = await getSlotsDisponibles({
-      organizationId: org.id,
-      profesionalId,
-      duracionMin: servicio.duracion_min,
-      // Ventana mínima que contiene el horario pedido (la grilla se deriva
-      // igual que en fetchSlotsPublico, así la comparación es exacta).
-      rangeStart: ahora,
-      rangeEnd: new Date(inicioDate.getTime() + servicio.duracion_min * 60_000 + 60_000),
-      margenMin: (org.slot_margen_min as number | null) ?? 0,
-    });
-  } catch (e) {
-    if (e instanceof AvailabilityDbError) {
-      return err("db_error", e.message, typeof e.cause === "string" ? e.cause : undefined);
-    }
-    throw e;
-  }
-  if (!slotEstaOfrecido(slotsValidos, parsed.data.inicio)) {
-    return err("conflict", "Ese horario ya no está disponible. Por favor elegí otro.");
-  }
-
-  // Re-chequear que el slot siga libre. Race window mínimo: alguien podría haber
-  // tomado el mismo horario entre que el wizard cargó la lista y este submit.
-  // El backstop transaccional duro es el EXCLUDE de M40 (23P01 → conflict).
-  const finDate = new Date(inicioDate.getTime() + servicio.duracion_min * 60_000);
-
-  const overlap = await service.rpc("slot_ocupado", {
-    p_org: org.id,
-    p_inicio: inicioDate.toISOString(),
-    p_fin: finDate.toISOString(),
-    // M54: chequeo per-profesional (org-wide sobre-bloqueaba en clínicas:
-    // el turno del cardiólogo rechazaba la reserva con la psicóloga).
-    p_profesional: profesionalId,
-  });
-
-  // Fallback en caso de que el RPC no exista todavía: chequear manualmente.
-  let ocupado = false;
-  if (overlap.error || overlap.data === null) {
-    const finIso = finDate.toISOString();
-    // Ventana de -8h para capturar turnos largos que arrancan antes pero todavía
-    // solapan (la duración máxima de un turno es 480min = 8h). Mismo lookback que
-    // checkSlotOcupado (lib/db/turnos.ts).
-    const lookbackIso = new Date(inicioDate.getTime() - 8 * 60 * 60_000).toISOString();
-
-    // M54: mismo scope per-profesional que el RPC y que checkSlotOcupado
-    // (lib/db/turnos.ts): turno/bloqueo del profesional; pedido del
-    // profesional MÁS los sin asignar (bloqueo conservador). Fix incluido:
-    // la query de turno seleccionaba solo `id` — overlapsWith leía
-    // inicio/duracion_min como undefined → NaN → ningún turno contaba como
-    // conflicto en el fallback.
-    const [{ data: turnoConflict }, { data: pedidoConflict }, { data: bloqueoConflict }] =
-      await Promise.all([
-        service
-          .from("turno")
-          .select("id, inicio, duracion_min")
-          .eq("organization_id", org.id)
-          .eq("profesional_id", profesionalId)
-          .in("estado", ["AGENDADO", "CONFIRMADO", "EN_SALA", "ATENDIENDO"])
-          .is("deleted_at", null)
-          .lt("inicio", finIso)
-          .gte("inicio", lookbackIso)
-          .limit(20),
-        service
-          .from("pedido")
-          .select("id, fecha_propuesta, duracion_min")
-          .eq("organization_id", org.id)
-          .eq("estado", "PENDIENTE")
-          .or(`profesional_id.eq.${profesionalId},profesional_id.is.null`)
-          .not("fecha_propuesta", "is", null)
-          .gte("fecha_propuesta", lookbackIso)
-          .lt("fecha_propuesta", finIso)
-          .limit(20),
-        service
-          .from("bloqueo")
-          .select("id, inicio, duracion_min")
-          .eq("organization_id", org.id)
-          .eq("profesional_id", profesionalId)
-          .gte("inicio", lookbackIso)
-          .lt("inicio", finIso)
-          .limit(20),
-      ]);
-
-    const overlapsWith = (
-      rows: Array<{ inicio?: string; fecha_propuesta?: string; duracion_min: number }> | null,
-      field: "inicio" | "fecha_propuesta",
-    ) =>
-      (rows ?? []).some((r) => {
-        const startMs = new Date(r[field]!).getTime();
-        const endMs = startMs + r.duracion_min * 60_000;
-        return startMs < finDate.getTime() && endMs > inicioDate.getTime();
-      });
-
-    ocupado =
-      overlapsWith(turnoConflict as Array<{ inicio: string; duracion_min: number }> | null, "inicio") ||
-      overlapsWith(
-        pedidoConflict as Array<{ fecha_propuesta: string; duracion_min: number }> | null,
-        "fecha_propuesta",
-      ) ||
-      overlapsWith(bloqueoConflict as Array<{ inicio: string; duracion_min: number }> | null, "inicio");
-  } else {
-    ocupado = overlap.data === true;
-  }
-
-  if (ocupado) {
-    return err("conflict", "Ese horario ya no está disponible. Por favor elegí otro.");
-  }
-
-  const userAgent = await clientUserAgent();
-
-  const { data: pedido, error } = await service
-    .from("pedido")
-    .insert({
-      organization_id: org.id,
-      canal: "WEB",
-      estado: "PENDIENTE",
-      nombre_cifrado: encryptColumn(parsed.data.nombre)!,
-      telefono_cifrado: encryptColumn(parsed.data.telefono)!,
-      email_cifrado: encryptColumn(parsed.data.email ?? null),
-      fecha_propuesta: parsed.data.inicio,
-      duracion_min: servicio.duracion_min,
-      servicio_id: servicio.id,
-      // El ELEGIDO/resuelto arriba — la bandeja y promotePedidoToTurno
-      // trabajan con este id, nunca re-resuelven (CLINICA-4).
-      profesional_id: profesionalId,
-      motivo_cifrado: encryptColumn(parsed.data.motivo ?? null),
-      precio_cents: servicio.precio_cents,
-      // Evidencia legal del consentimiento (Ley 25.326 art. 5 + M39 columnas).
-      consent_aceptado_en: new Date().toISOString(),
-      consent_ip: ip,
-      consent_user_agent: userAgent,
-      consent_version: parsed.data.consentVersion,
-    })
-    .select("id")
-    .single();
-
-  if (error || !pedido) {
-    return err("db_error", "No se pudo crear el pedido.", error?.message);
-  }
-
-  // Business event: pedido público creado (Sprint 2 T2.2). distinctId =
-  // org.slug porque el pedido es anónimo (no hay user authenticated en el
-  // contexto público); tracking a nivel org. isInternal filtra las reservas
-  // de prueba contra los consultorios demo-* del funnel.
-  void trackEvent.bookingPublicCompleted({
-    orgSlug: parsed.data.orgSlug,
-    servicioId: servicio.id,
-    isInternal: Boolean(org.is_internal_account),
-  });
-
-  // Auto-confirmación configurable (M43). Si la org lo tiene activado y hay un
-  // profesional resuelto, promovemos el pedido a turno CONFIRMADO de inmediato
-  // usando los plaintext ya validados (no hace falta descifrar).
-  const decision = buildAutoConfirmDecision(
-    { auto_confirmar_reservas: Boolean(org.auto_confirmar_reservas) },
-    { profesional_id: profesionalId },
-  );
-
-  // Email "solicitud recibida" (post-respuesta vía after(), fail-safe). Solo
-  // cuando el pedido queda PENDIENTE: auto-confirm apagado/sin profesional, o
-  // falló por un error que no es conflicto. notifyBookingRecibida ya es
-  // no-throw; el captureException queda DENTRO del after.
-  const notifyBookingRecibidaFireAndForget = (): void => {
-    if (!parsed.data.email) return;
-    runAfterResponse(() =>
-      notifyBookingRecibida({
-        client: service,
-        organizationId: org.id,
-        pacienteEmail: parsed.data.email ?? null,
-        pacienteNombre: parsed.data.nombre,
-        servicioNombre: servicio.nombre,
-        inicioIso: parsed.data.inicio,
-      }).catch(async (e) => {
-        const { captureException } = await import("@sentry/nextjs");
-        captureException(e, {
-          tags: { component: "book-public", op: "notifyBookingRecibida" },
-          extra: { pedidoId: pedido.id, organizationId: org.id },
-        });
-      }),
-    );
-  };
-
-  // Aviso al PROFESIONAL de que entró un pedido pendiente (post-respuesta,
-  // fail-safe). SOLO en los caminos donde el pedido queda PENDIENTE — con
-  // auto-confirm el pedido ya es turno y el profesional lo ve en su agenda
-  // (+ gcal). Destinatario: el profesional destino del pedido, con fallback
-  // al owner (lo resuelve notifyPedidoNuevo).
-  const notifyPedidoNuevoFireAndForget = (): void => {
-    runAfterResponse(() =>
-      notifyPedidoNuevo({
-        client: service,
-        organizationId: org.id,
-        pedidoId: pedido.id,
-        pacienteNombre: parsed.data.nombre,
-        canal: "WEB",
-        fechaPropuestaIso: parsed.data.inicio,
-        profesionalId,
-      }).catch(async (e) => {
-        const { captureException } = await import("@sentry/nextjs");
-        captureException(e, {
-          tags: { component: "book-public", op: "notifyPedidoNuevo" },
-          extra: { pedidoId: pedido.id, organizationId: org.id },
-        });
-      }),
-    );
-  };
-
-  if (decision.shouldAutoConfirm && decision.profesionalId) {
-    const promote = await promotePedidoToTurno(service, {
-      pedidoId: pedido.id,
-      organizationId: org.id,
-      profesionalId: decision.profesionalId,
-      servicioId: servicio.id,
-      fechaPropuesta: parsed.data.inicio,
-      duracionMin: servicio.duracion_min,
-      precioCents: servicio.precio_cents,
-      canal: "WEB",
-      pacienteId: null,
-      nombre: parsed.data.nombre,
-      telefono: parsed.data.telefono,
-      email: parsed.data.email ?? null,
-      motivo: parsed.data.motivo ?? null,
-      orgEsInterna: Boolean(org.is_internal_account),
-    });
-
-    if (promote.ok) {
-      // El email de confirmación ya salió desde promotePedidoToTurno (cubre
-      // tanto este auto-confirm como aceptarPedido). No mandamos "recibida".
-      return ok({ id: pedido.id, autoConfirmado: true });
-    }
-
-    if (promote.error.code === "conflict") {
-      return err("conflict", "Ese horario ya no está disponible. Por favor elegí otro.");
-    }
-
-    // Otro error: el pedido queda PENDIENTE (el profesional lo acepta a mano).
-    // Logueamos + Sentry pero devolvemos ok (la solicitud quedó registrada).
-    console.error("[createPedidoPublico] auto-confirm falló:", promote.error);
-    void import("@sentry/nextjs").then(({ captureException }) =>
-      captureException(new Error(`auto-confirm falló: ${promote.error.message}`), {
-        tags: { component: "book-public", op: "auto-confirm" },
-        extra: { pedidoId: pedido.id, organizationId: org.id, code: promote.error.code },
-      }),
-    );
-    notifyBookingRecibidaFireAndForget();
-    notifyPedidoNuevoFireAndForget();
-    return ok({ id: pedido.id, autoConfirmado: false });
-  }
-
-  notifyBookingRecibidaFireAndForget();
-  notifyPedidoNuevoFireAndForget();
-  return ok({ id: pedido.id, autoConfirmado: false });
+export async function createPedidoPublico(input:z.infer<typeof createPedidoInput>):Promise<Result<{id:string;autoConfirmado:boolean}>>{
+ const parsed=createPedidoInput.safeParse(input);
+ if(!parsed.success)return err("validation","Revisá los datos de la solicitud y volvé a intentar.");
+ const d=parsed.data;
+ if(d.consentAccepted!==true||!d.consentVersion)return err("validation","Para reservar debés aceptar la Política de Privacidad y los Términos.");
+ try{
+  const ip=await clientIp(),rl=await limitByIp("book.create",ip,5);
+  if(!rl.ok)return err("validation",`Demasiados intentos, probá en ${rl.resetIn}s.`);
+  const service=createSupabaseServiceClient();
+  const hash=createHash("sha256").update(JSON.stringify({org:d.orgSlug,service:d.servicioId,professional:d.profesionalId??null,inicio:new Date(d.inicio).toISOString(),nombre:d.nombre,telefono:d.telefono,email:d.email??null,motivo:d.motivo??null,consent:d.consentVersion})).digest("hex");
+  // A durable receipt is recoverable without spending a one-use captcha again.
+  const previous=await service.rpc("public_booking_receipt",{p_slug:d.orgSlug,p_operation:d.operacionId,p_hash:hash});
+  if(previous.error){const mapped=mapSupabaseError(previous.error);return err(mapped.code,mapped.message);}
+  if(previous.data)return publicBookingResult(previous.data);
+  if(!await verifyTurnstile(d.captchaToken,ip))return err("validation","Captcha inválido o expirado. Volvé a verificarlo e intentá nuevamente.");
+  const {data:org,error:orgError}=await service.from("organization").select("id,opt_out_public_listing").eq("slug",d.orgSlug).is("deleted_at",null).maybeSingle();
+  if(orgError)return err("db_error","No pudimos verificar el consultorio.");
+  if(!org||org.opt_out_public_listing)return err("not_found","Consultorio no encontrado.");
+  const professional=await resolveProfesionalPublico(service,{organizationId:org.id,profesionalId:d.profesionalId??null});
+  if(!professional.ok)return professional;
+  const {data,error}=await service.rpc("submit_public_booking",{p_slug:d.orgSlug,p_operation:d.operacionId,p_hash:hash,p_profesional:professional.data,p_servicio:d.servicioId,p_inicio:d.inicio,
+   p_data:{nombre_cifrado:encryptColumn(d.nombre),telefono_cifrado:encryptColumn(d.telefono),email_cifrado:encryptColumn(d.email??null),motivo_cifrado:encryptColumn(d.motivo??null),consent_version:d.consentVersion,consent_ip:ip,consent_user_agent:await clientUserAgent()},
+   p_identity:buildBookingIdentity(d.nombre,d.telefono,d.email??null,org.id)});
+  if(error){const mapped=mapSupabaseError(error);return err(mapped.code,mapped.message);}
+  return publicBookingResult(data);
+ }catch{return err("network","No pudimos confirmar la respuesta. Reintentá esta misma solicitud antes de crear otra.");}
+}
+function publicBookingResult(data:unknown):Result<{id:string;autoConfirmado:boolean}>{
+ const parsed=z.object({id:z.string().uuid(),autoConfirmado:z.boolean()}).safeParse(data);
+ return parsed.success?ok(parsed.data):err("db_error","No pudimos confirmar el comprobante de la reserva. Reintentá la misma solicitud.");
 }

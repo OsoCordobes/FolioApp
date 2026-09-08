@@ -1,3 +1,7 @@
+-- Historical M95 guarantees, isolated from the later M104 server-only write path.
+-- Effective M104 denial is exercised by M102_clinical_attachments.spec.sql.
+BEGIN;
+DROP POLICY IF EXISTS documento_server_update ON public.documento_clinico;
 -- ════════════════════════════════════════════════════════════════════════════
 -- Folio · M95 spec · el UPDATE clínico exige poder VER al paciente 🔒
 -- ════════════════════════════════════════════════════════════════════════════
@@ -303,3 +307,5 @@ RESET ROLE;
 CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT NULL::uuid $$;
 
 DO $$ BEGIN RAISE NOTICE 'M95 spec PASS · el UPDATE clínico ya no alcanza a pacientes invisibles, y la caja fuerte la mueve sólo un admin'; END $$;
+
+ROLLBACK;

@@ -1,3 +1,5 @@
+
+import { safeLog } from "@/lib/observability/safe-log";
 /**
  * Folio · /pacientes/[id] data fetcher (Sprint S1 T-1.7).
  *
@@ -38,10 +40,14 @@ import {
   type EstadoVertebra,
 } from "@/lib/especialidades/quiropraxia/schema";
 import type { ToolHistorialEntry } from "@/lib/especialidades/types";
+import { cordobaDate, instrumentPopulationEligibility, hasInstrumentPayload, omitInstrumentFields } from "@/lib/instrumentos/population-policy";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import { listDocumentosPaciente } from "./documentos";
 import { err, ok, type Result } from "./errors";
+import { readCompleteCollection } from "./complete-collection";
+import { readEnmiendas } from "./enmiendas";
+import type { EnmiendaClinica } from "@/lib/ficha/enmienda";
 
 // ─── Shapes esperados por el componente (prototipo) ───────────────────────
 
@@ -63,6 +69,8 @@ export interface PacienteFichaInfo {
   tipo: "nuevo" | "recurrente";
   sesiones: number;
   edad: number;
+  /** DOB from the patient's identity; absent DOB must never imply adulthood. */
+  fechaNacimiento?: string | null;
   genero: "F" | "M";
   motivo: string;
   tags: string[];
@@ -100,6 +108,10 @@ export interface IntakeAvanzadoFicha {
 }
 
 export interface SesionPlan {
+  enmiendas?: EnmiendaClinica[];
+  notas?: string | null;
+  profesionalId?: string | null;
+  lockedAt?: string | null;
   fecha: string;          // YYYY-MM-DD
   servicio: string;
   dur: number;
@@ -203,6 +215,7 @@ export interface TurnoActivoFicha {
    * tablet y mostraba "Guardado ✓".
    */
   sesionUpdatedAt: string | null;
+  sesionRevision:number;
   /**
    * Workstream 6 · ¿existe YA una fila sesion para este turno? (cualquier
    * sesion.turno_id == turnoEnCurso.id). La Tool quiro lo usa para dos cosas:
@@ -216,8 +229,7 @@ export interface TurnoActivoFicha {
 
 /**
  * Workstream 6 · una radiografía del paciente para la galería de la Tool quiro.
- * `signedUrl` es de vida corta (5 min, lib/db/documentos.ts) — se refresca
- * client-side al expirar. Solo se trae para fichas con especialidad activa
+ * `downloadUrl` revalida acceso en cada GET (lib/db/documentos.ts). Solo se trae para fichas con especialidad activa
  * quiropraxia (otras orgs reciben []).
  */
 export interface RadiografiaFicha {
@@ -225,7 +237,8 @@ export interface RadiografiaFicha {
   /** YYYY-MM-DD: fecha_estudio ?? created_at.slice(0,10). */
   fecha: string;
   descripcion: string | null;
-  signedUrl: string;
+  downloadUrl: string;
+  mimeType?: string;
   sesionId: string | null;
 }
 
@@ -267,19 +280,17 @@ export interface PlanData {
   historialTotal: number;
   /**
    * Workstream 6 · galería de radiografías del paciente (documento_clinico tipo
-   * RADIOGRAFIA) para la Tool quiro, con signed URLs de vida corta. Solo se
+   * RADIOGRAFIA) para la Tool quiro, con rutas autenticadas. Solo se
    * llena cuando la especialidad ACTIVA es quiropraxia (otras orgs: []) — la
-   * Tool de cardio/psico la ignora. Server-side: los URLs firmados son seguros
-   * de mandar al cliente (expiran en 5 min).
+   * Tool de cardio/psico la ignora. Cada descarga vuelve a verificar sesión y alcance.
    */
   radiografias: RadiografiaFicha[];
   /**
    * C6 · adjuntos de estudios del paciente (documento_clinico tipo
    * INFORME_EXTERNO — ECG/Holter/ergometría escaneados/PDF) para la Tool cardio,
-   * con signed URLs de vida corta. Generaliza el bloque de radiografías: solo se
+   * con rutas autenticadas. Generaliza el bloque de radiografías: solo se
    * llena cuando la especialidad ACTIVA es cardiología (otras orgs: []). Mismo
-   * shape que `radiografias` (documento por sesión). La Tool los ABRE por signed
-   * URL — Folio NO renderiza señal ECG.
+   * shape que `radiografias` (documento por sesión). La Tool los ABRE por ruta autenticada — Folio NO renderiza señal ECG.
    */
   estudiosAdjuntos: RadiografiaFicha[];
   /**
@@ -304,9 +315,7 @@ export interface PacienteFichaData {
   /**
    * M96 · notas de la ficha (sin turno), de la más nueva a la más vieja.
    *
-   * Best-effort: si la lectura falla, la ficha se rinde igual con `[]`. Que un
-   * error leyendo las notas deje al profesional sin la historia clínica entera
-   * sería un mal negocio.
+   * Una lectura fallida se informa como error; nunca equivale a no tener notas.
    */
   notas: NotaClinicaFicha[];
   cumple: string; // "18 may" o "—"
@@ -352,6 +361,7 @@ interface IntakeAvanzadoRow {
 interface SesionRow {
   id: string;
   turno_id: string;
+  turno?: { inicio: string } | { inicio: string }[] | null;
   paciente_id: string;
   soap_s_cifrado: string | null;
   soap_o_cifrado: string | null;
@@ -364,6 +374,7 @@ interface SesionRow {
   created_at: string;
   /** Versión de la fila (trigger sesion_set_updated_at): control de concurrencia. */
   updated_at: string;
+  revision:number;
   /** Ancla retroactiva: una sesión lockeada NO se puede re-editar (M10). */
   locked_at: string | null;
 }
@@ -556,23 +567,21 @@ export async function getPacienteFicha(
       .eq("id", pacienteId)
       .eq("organization_id", organizationId)
       .maybeSingle(),
-    // Workstream 6 · .limit(50) (antes 10): más historial de visitas para el
-    // "Control de visitas" quiro. Costo: hasta 50 sesiones descifran SOAP +
-    // tool_data por ficha (vs 10) — aceptable para una sola ficha por request.
-    supabase
-      .from("sesion")
-      .select("id, turno_id, paciente_id, soap_s_cifrado, soap_o_cifrado, soap_a_cifrado, soap_p_cifrado, vertebras_json, tool_id, tool_data_cifrado, notas_cifrado, created_at, updated_at, locked_at")
-      .eq("paciente_id", pacienteId)
-      .eq("organization_id", organizationId)
-      .order("created_at", { ascending: false })
-      .limit(historialCompleto ? 2000 : 50),
-    supabase
-      .from("turno_extendido")
-      .select("id, inicio, duracion_min, duracion_real_min, estado, servicio_nombre, profesional_id, atendiendo_desde")
-      .eq("paciente_id", pacienteId)
-      .eq("organization_id", organizationId)
-      .order("inicio", { ascending: false })
-      .limit(historialCompleto ? 2000 : 50),
+    historialCompleto
+      ? readCompleteCollection<SesionRow>((from, to) => supabase.from("sesion")
+          .select("*, turno:turno_id(inicio)", { count: "exact" }).eq("paciente_id", pacienteId).eq("organization_id", organizationId)
+          .order("created_at", { ascending: false }).order("id", { ascending: false }).range(from, to))
+      : supabase.from("sesion").select("*, turno:turno_id(inicio)").eq("paciente_id", pacienteId).eq("organization_id", organizationId)
+          .order("created_at", { ascending: false }).order("id", { ascending: false }).limit(50),
+    historialCompleto
+      ? readCompleteCollection<TurnoExtRow>((from, to) => supabase.from("turno_extendido")
+          .select("id, inicio, duracion_min, duracion_real_min, estado, servicio_nombre, profesional_id, atendiendo_desde", { count: "exact" })
+          .eq("paciente_id", pacienteId).eq("organization_id", organizationId)
+          .order("inicio", { ascending: false }).order("id", { ascending: false }).range(from, to))
+      : supabase.from("turno_extendido")
+          .select("id, inicio, duracion_min, duracion_real_min, estado, servicio_nombre, profesional_id, atendiendo_desde")
+          .eq("paciente_id", pacienteId).eq("organization_id", organizationId)
+          .order("inicio", { ascending: false }).order("id", { ascending: false }).limit(50),
     // M58 · plan de tratamiento persistido (1:1 por paciente). maybeSingle:
     // la mayoría de los pacientes no tiene fila todavía → el card cae a los
     // valores derivados de los turnos.
@@ -595,12 +604,38 @@ export async function getPacienteFicha(
   if (pacRes.error) return err("db_error", "Error leyendo paciente.", pacRes.error.message);
   if (!pacRes.data) return err("not_found", "Paciente no encontrado o sin permisos.");
 
+  if (sesionesRes.error || turnosRes.error || planRes.error || intakeRes.error) {
+    return err("db_error", "No se pudo leer la historia clínica completa. Intentá nuevamente.");
+  }
   const row = pacRes.data as unknown as PacienteCompletoRow;
   const sesiones = (sesionesRes.data ?? []) as unknown as SesionRow[];
   const turnos = (turnosRes.data ?? []) as unknown as TurnoExtRow[];
-  // M58 · plan persistido. Un error de lectura NO rompe la ficha: degradamos a
-  // null (el card sigue funcionando con los valores derivados de los turnos).
+  const enmiendasRes = await readEnmiendas(supabase, organizationId, sesiones.map((s) => s.id));
+  if (!enmiendasRes.ok) return enmiendasRes;
+  if (historialCompleto && sesiones.some((s) => !turnos.some((t) => t.id === s.turno_id))) {
+    return err("db_error", "No se pudieron recuperar todas las visitas de la historia clínica.");
+  }
+  // Never present unreadable clinical ciphertext as a blank finding.
+  for (const s of sesiones) {
+    for (const field of ["soap_s_cifrado", "soap_o_cifrado", "soap_a_cifrado", "soap_p_cifrado", "notas_cifrado", "tool_data_cifrado"] as const) {
+      if (s[field] != null && tryDecrypt(s[field], field) === null) return err("db_error", "No se pudo descifrar parte de la historia clínica.");
+    }
+  }
+
+  // El plan ausente es válido; un error de lectura ya se rechazó arriba.
   const planRow = (planRes.data ?? null) as unknown as PlanTratamientoRow | null;
+  for (const [value, label] of [
+    [row.motivo_consulta_cifrado, "motivo"], [row.notas_importantes_cifrado, "notas"],
+    [planRow?.diagnostico_cifrado, "plan.diagnostico"], [planRow?.notas_cifrado, "plan.notas"],
+  ] as const) {
+    if (value != null && tryDecrypt(value, label) === null) return err("db_error", "No se pudo descifrar parte de la ficha clínica.");
+  }
+  for (const s of sesiones) {
+    if (s.tool_data_cifrado != null) {
+      try { JSON.parse(tryDecrypt(s.tool_data_cifrado, "tool_data")!); }
+      catch { return err("db_error", "No se pudo interpretar una herramienta clínica guardada."); }
+    }
+  }
   const planDiagnostico = tryDecrypt(planRow?.diagnostico_cifrado, "plan.diagnostico");
   const planNotas = tryDecrypt(planRow?.notas_cifrado, "plan.notas");
 
@@ -638,7 +673,7 @@ export async function getPacienteFicha(
       // Degradamos la ficha, no la rompemos — pero con señal: una regresión de
       // schema/RLS acá se vería como "Particular" en todas las fichas.
       coberturaLeida = false;
-      console.error(`[paciente-ficha] lookup de cobertura falló: ${cobErr.message}`);
+      safeLog("error", "lib.db.paciente.ficha.L672", { error: cobErr });
       const { captureException } = await import("@sentry/nextjs");
       captureException(new Error(`Cobertura ficha falló — ${cobErr.message}`), {
         tags: { component: "paciente-ficha", op: "cobertura" },
@@ -679,9 +714,9 @@ export async function getPacienteFicha(
       .limit(1)
       .maybeSingle(),
   ]);
-  // Si el COUNT falla, se degrada al conteo del recorte: es un número peor pero
-  // no rompe la ficha.
-  const sesionesCompletadas = countRes.count ?? cerrados.length;
+  // No sustituir el total real por el tamaño de una página ante errores.
+  if (countRes.error || primeraRes.error || countRes.count === null) return err("db_error", "No se pudo verificar el historial de visitas.");
+  const sesionesCompletadas = countRes.count;
   const primeraVisita = (primeraRes.data as { inicio: string } | null)?.inicio ?? null;
   const lastSesion = sesiones[0] ?? null;
 
@@ -714,7 +749,7 @@ export async function getPacienteFicha(
   // antes de pasárselo a la Tool (filtrarToolHistorial) — en fichas mixtas
   // cada herramienta ve solo SUS sesiones.
   const toolHistorial: ToolHistorialEntry[] = sesiones.map((s) => ({
-    fecha: s.created_at.slice(0, 10),
+    fecha: cordobaDate((Array.isArray(s.turno)?s.turno[0]:s.turno)?.inicio??"")??"",
     toolData: sesionToolData(s),
     toolId: s.tool_id,
   }));
@@ -729,7 +764,7 @@ export async function getPacienteFicha(
   // Cuántas visitas se RINDEN en pantalla. El total real va en historialTotal.
   const HISTORIAL_EN_PANTALLA = 10;
   const historial: SesionPlan[] = (
-    historialCompleto ? cerrados : cerrados.slice(0, HISTORIAL_EN_PANTALLA)
+    historialCompleto ? turnos.filter((t) => t.estado === "CERRADO" || sesiones.some((s) => s.turno_id === t.id)) : cerrados.slice(0, HISTORIAL_EN_PANTALLA)
   ).map((t) => {
     const sesion = sesiones.find((s) => s.turno_id === t.id);
     const toolData = sesion ? sesionToolData(sesion) : null;
@@ -741,12 +776,18 @@ export async function getPacienteFicha(
       fecha: t.inicio.slice(0, 10),
       servicio: t.servicio_nombre,
       dur: t.duracion_real_min ?? t.duracion_min,
-      cambio: meta.resumenSesion(toolData),
+      cambio: !instrumentPopulationEligibility({fechaNacimiento:row.fecha_nacimiento,fechaAtencion:t.inicio}).allowed && hasInstrumentPayload(meta.slug,toolData)
+        ? `${meta.resumenSesion(omitInstrumentFields(meta.slug,toolData))} · Escalas históricas: respuestas originales, sin nueva interpretación.`
+        : meta.resumenSesion(toolData),
       vertebras,
       // D2 · SOAP por sesión ya descifrado (mismas filas que la query trajo;
       // antes se descartaba). Habilita "Ver detalle" + la sección Evolución
       // del PDF sin queries extra.
       sesionId: sesion?.id ?? null,
+      enmiendas: sesion ? enmiendasRes.data.get(sesion.id) ?? [] : [],
+      notas: sesion ? tryDecrypt(sesion.notas_cifrado, "sesion.notas") : null,
+      profesionalId: t.profesional_id,
+      lockedAt: sesion ? sesion.locked_at : undefined,
       soap: sesion
         ? {
             s: tryDecrypt(sesion.soap_s_cifrado, "soap.s") ?? "",
@@ -774,6 +815,7 @@ export async function getPacienteFicha(
     tipo: tipoUI,
     sesiones: sesionesCompletadas,
     edad: row.fecha_nacimiento ? calcularEdad(row.fecha_nacimiento) : 0,
+    fechaNacimiento: row.fecha_nacimiento ?? null,
     genero: row.sexo_biologico === "F" ? "F" : "M",
     motivo,
     tags: row.tags ?? [],
@@ -889,6 +931,7 @@ export async function getPacienteFicha(
             ? { fecha: lastSesion.created_at, soap: leerSoap(lastSesion) }
             : null,
         sesionUpdatedAt: sesionTurnoAncla?.updated_at ?? null,
+        sesionRevision:sesionTurnoAncla?.revision??0,
       }
     : null;
 
@@ -904,13 +947,15 @@ export async function getPacienteFicha(
     fecha_estudio: string | null;
     created_at: string;
     descripcion: string | null;
-    signedUrl: string;
+    downloadUrl: string;
+    mime_type: string;
     sesion_id: string | null;
   }): RadiografiaFicha => ({
     id: doc.id,
     fecha: (doc.fecha_estudio ?? doc.created_at).slice(0, 10),
     descripcion: doc.descripcion,
-    signedUrl: doc.signedUrl,
+    downloadUrl: doc.downloadUrl,
+    mimeType: doc.mime_type,
     sesionId: doc.sesion_id,
   });
 
@@ -964,11 +1009,10 @@ export async function getPacienteFicha(
 
   // M96 · notas de la ficha. Best-effort: un error leyéndolas no puede dejar al
   // profesional sin la historia clínica entera.
-  const notasRes = await listNotasClinicas(pacienteId);
-  const notasFicha = notasRes.ok ? notasRes.data : [];
-  if (!notasRes.ok) {
-    console.warn(`[paciente-ficha] listNotasClinicas falló: ${notasRes.error.message}`);
-  }
+  const notasRes = await listNotasClinicas(pacienteId, historialCompleto ? null : 100);
+  if (!notasRes.ok) return notasRes;
+  const notasFicha = notasRes.data;
+  if (historialCompleto && notasFicha.some((n) => n.texto === null)) return err("db_error", "No se pudo descifrar una nota clínica.");
 
   return ok({ paciente, plan, cumple, intakeAvanzado, notas: notasFicha });
 }
@@ -1003,7 +1047,7 @@ function sesionToolData(s: SesionRow): unknown {
         // crea linkage rastreable hacia datos clínicos. Solo en desarrollo.
         if (process.env.NODE_ENV === "development") {
           const msg = e instanceof Error ? e.message : String(e);
-          console.warn(`[paciente-ficha] tool_data JSON inválido (sesion ${s.id}): ${msg}`);
+          safeLog("warn", "lib.db.paciente.ficha.L1045", `[paciente-ficha] tool_data JSON inválido (sesion ${s.id}): ${msg}`);
         }
       }
     }

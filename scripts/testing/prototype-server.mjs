@@ -1,0 +1,10 @@
+import './app-bootstrap.mjs';
+import {spawn} from 'node:child_process';
+import {createRequire} from 'node:module';
+import {statSync} from 'node:fs';
+import {isolationError} from './isolation-policy.mjs';
+const require=createRequire(import.meta.url),root=process.env.FOLIO_TEST_PROTOTYPE_ROOT;
+if(!root||!statSync(root).isDirectory())throw isolationError('An explicit local prototype directory is required.');
+const child=spawn(process.execPath,[require.resolve('serve/build/main.js'),'-l','tcp://127.0.0.1:4001',root],{stdio:'inherit',env:process.env});
+child.on('error',()=>{process.exitCode=1;});child.on('exit',code=>{process.exitCode=code??1;});
+for(const signal of ['SIGTERM','SIGINT'])process.on(signal,()=>child.kill(signal));

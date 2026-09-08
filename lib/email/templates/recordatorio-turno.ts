@@ -166,25 +166,13 @@ export function buildPostVisitaEmail(input: PostVisitaEmailInput): {
   subject: string;
   html: string;
 } {
-  const subject = `Indicaciones de tu visita — ${input.profesionalNombre}`;
-  const preheaderTexto = input.memoCorto
-    ? `Indicaciones de tu visita a ${input.profesionalNombre}`
-    : `Gracias por tu visita a ${input.profesionalNombre}`;
-  const memoBlock = input.memoCorto
-    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5efe4;border-radius:8px;padding:16px;margin:0 0 16px;">
-                  <tr><td style="padding:16px;">
-                    <p style="margin:0;font-size:14px;line-height:1.6;color:#2b2622;">${esc(input.memoCorto)}</p>
-                  </td></tr>
-                </table>`
-    : "";
-
-  const body = `<p style="margin:0 0 16px;font-size:16px;">Hola ${esc(input.pacienteNombre)},</p>
-                <p style="margin:0 0 16px;font-size:15px;line-height:1.5;">Gracias por tu visita a <strong>${esc(input.profesionalNombre)}</strong>. ${input.memoCorto ? "Te dejamos las indicaciones de hoy:" : "Cualquier consulta, escribinos."}</p>
-                ${memoBlock}
-                <p style="margin:0;color:#6b5e4f;font-size:13px;line-height:1.5;">Ante cualquier duda sobre las indicaciones, contactá al consultorio.</p>`;
-
-  return {
-    subject,
-    html: wrap(`Gracias por tu visita · ${input.profesionalNombre}`, preheaderTexto, body),
-  };
+  // Legacy callers may still pass memoCorto. Never serialize clinical narrative
+  // into an email provider or durable outbox, even inside an encrypted envelope.
+  const subject = `Gracias por tu visita — ${input.profesionalNombre}`;
+  const preheaderTexto = `Gracias por tu visita a ${input.profesionalNombre}`;
+  const body = `<p>Hola ${esc(input.pacienteNombre)},</p>
+    <p>Gracias por tu visita a <strong>${esc(input.profesionalNombre)}</strong>.</p>
+    <p>Para consultar información de tu atención, ingresá al portal o contactá al consultorio.</p>
+    ${ctaButton(defaultPortalUrl(), "Ir al portal")}`;
+  return { subject, html: wrap(`Gracias por tu visita · ${input.profesionalNombre}`, preheaderTexto, body) };
 }

@@ -20,6 +20,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { ProfFilterChips } from "@/components/agenda/prof-filter-chips";
+import { AgendaSyncNotice } from "@/components/agenda/agenda-sync-notice";
 import * as I from "@/components/icons";
 import { BloqueoModal } from "@/components/calendario/bloqueo-modal";
 import { PedidoModal } from "@/components/calendario/pedido-modal";
@@ -987,6 +988,7 @@ interface CalendarioProps {
   initialVista?: Vista;
   /** Org activa — habilita el live update (polling / realtime tras flag). */
   organizationId?: string;
+  agendaRevision?: string | null;
   // Vista mensual (PR E)
   mesGrid: MonthGridCell[];
   mesTurnos: TurnoSemana[];
@@ -1034,6 +1036,7 @@ export function Calendario({
   hoyWeekStartIso,
   initialVista = "semana",
   organizationId,
+  agendaRevision = null,
   mesGrid,
   mesTurnos,
   mesPacientes,
@@ -1074,7 +1077,7 @@ export function Calendario({
 
   // Live update: los turnos llegan por props (sin useState espejo), así que
   // un router.refresh() alcanza para que la vista se actualice sola.
-  useAgendaAutoRefresh(organizationId ?? null);
+  const agendaSync = useAgendaAutoRefresh(organizationId ?? null, agendaRevision);
 
   // Fallback defensivo si el SC todavía no manda la prop (mismo hardcode previo).
   const cerradosSemana = diasCerrados ?? weekDates.map((_, i) => i === 5 || i === 6);
@@ -1131,6 +1134,7 @@ export function Calendario({
         profHrefFor={profHrefFor}
       />
 
+      <AgendaSyncNotice sync={agendaSync} />
       {vista === "semana" ? (
         <VistaSemana
           turnos={turnosFiltrados}

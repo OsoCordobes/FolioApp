@@ -10,18 +10,19 @@
  *      form since the session already exists with a member)
  *
  * Pre-requisitos:
- *   1. Dev server at E2E_BASE_URL (default localhost:3010 via pnpm dev).
- *   2. Real Supabase envs (NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
- *      FOLIO_ENC_KEY, FOLIO_ENC_HMAC_KEY).
- *   3. The signup creates a real row in auth.users. Tests namespace emails
- *      with `e2e-test-<ts>@folio.app` so cleanup is mechanical via
- *      scripts/reset-user-password.mjs or a periodic cron.
+ *   1. Dev server at E2E_BASE_URL (default 127.0.0.1:4410 via pnpm test:e2e).
+ *   2. Dedicated local FOLIO_TEST_SUPABASE_* values (see README).
+ *   3. The signup creates a local row in auth.users. Tests namespace emails
+ *      with `e2e-test-<ts>@example.test` so cleanup is mechanical via
+ *      the separately reviewed local cleanup procedure.
  *
  * Run:
- *   pnpm exec playwright test --project=e2e tests/e2e/auth.spec.ts
+ *   pnpm test:e2e -- tests/e2e/auth.spec.ts
  */
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../fixtures/local-test";
+
+test.skip(process.env.FOLIO_TEST_REAL_SUPABASE!=="1","Requires an explicitly configured dedicated local Supabase instance.");
 
 const NS_E2E = "e2e-test";
 
@@ -36,7 +37,7 @@ test.beforeEach(async ({ context }) => {
 
 function nuevoEmail(): string {
   const ts = Date.now();
-  return `${NS_E2E}-${ts}@folio.app`;
+  return `${NS_E2E}-${ts}@example.test`;
 }
 
 test.describe("Auth · signup → onboarding", () => {
@@ -76,7 +77,7 @@ test.describe("Auth · signup → onboarding", () => {
   test("login form shows generic error for invalid credentials", async ({ page }) => {
     await page.goto("/login");
     await expect(page.getByRole("heading", { name: /entrar/i })).toBeVisible();
-    await page.locator('input[type="email"]').fill("noexiste-e2e@folio.app");
+    await page.locator('input[type="email"]').fill("noexiste-e2e@example.test");
     await page.locator('input[type="password"]').fill("ContraseñaCualquiera1!");
     await page.getByRole("button", { name: /^entrar/i }).click();
     await expect(

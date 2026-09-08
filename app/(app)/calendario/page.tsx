@@ -1,3 +1,5 @@
+
+import { safeLog } from "@/lib/observability/safe-log";
 /**
  * Folio · /calendario (Server Component).
  *
@@ -22,6 +24,8 @@ import { Calendario } from "@/components/calendario/calendario";
 import { resolveAgendaProfesional, type ProfesionalLite } from "@/lib/agenda/profesional";
 import { capabilitiesFor } from "@/lib/auth/capabilities";
 import { getActiveContext } from "@/lib/db/active-context";
+import { readAgendaRevision } from "@/lib/db/agenda-revision";
+import { getActiveSession } from "@/lib/db/session";
 import {
   formatMonthLabel,
   getCalendarioMes,
@@ -40,11 +44,16 @@ interface PageProps {
 }
 
 export default async function CalendarioPage({ searchParams }: PageProps) {
+  const identity = await getActiveSession();
+  if (!identity.ok) throw new Error("No se pudo comprobar el acceso a la agenda.");
+  const preRevision = await readAgendaRevision(identity.data);
   const ctx = await getActiveContext();
   if (!ctx.ok) {
     throw new Error(`No se pudo cargar /calendario: ${ctx.error.message}`);
   }
 
+  // Pre-read: do not acknowledge a revision newer than the rendered snapshot.
+  const agendaRevision = identity.data.organizationId === ctx.data.session.organizationId && identity.data.memberId === ctx.data.session.memberId ? preRevision : null;
   const tz = ctx.data.organization.timezone || "America/Argentina/Cordoba";
   const params = await searchParams;
 
@@ -68,7 +77,7 @@ export default async function CalendarioPage({ searchParams }: PageProps) {
   // (org-wide, sin selector) con un warn — nunca tiramos la agenda abajo.
   const profsRes = await listProfesionalesLite(ctx.data.organization.id);
   if (!profsRes.ok) {
-    console.warn(`[calendario] listProfesionalesLite falló: ${profsRes.error.message}`);
+    safeLog("warn", "app.app.calendario.page.L71", { error: profsRes.error });
   }
   const profesionales: ProfesionalLite[] = profsRes.ok ? profsRes.data : [];
   const caps = capabilitiesFor(ctx.data.session.role, ctx.data.session.esColegiado);
@@ -125,6 +134,7 @@ export default async function CalendarioPage({ searchParams }: PageProps) {
       hoyWeekStartIso={hoyWeekStartIso}
       initialVista={initialVista}
       organizationId={ctx.data.organization.id}
+      agendaRevision={agendaRevision}
       mesGrid={mesData.data.grid}
       mesTurnos={mesData.data.turnos}
       mesPacientes={mesData.data.pacientes}

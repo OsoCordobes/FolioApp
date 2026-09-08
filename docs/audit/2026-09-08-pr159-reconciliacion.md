@@ -19,5 +19,5 @@ Las fuentes operativas vigentes son [recuperación](../RECUPERACION-CLAVES.md),
 [rotación](../ROTACION-CLAVES.md), [respaldos](../RESPALDOS.md) y
 [estado de implementación](../plans/2026-09-08-market-readiness.md).
 El documento anterior queda preservado en el bundle de ramas, sin incorporarlo como
-instrucción vigente. Su PR podrá cerrarse cuando esta reconciliación esté guardada
-en una entrega revisable.
+instrucción vigente. La reconciliación quedó guardada en el commit `b6e1da9`.
+Después de revalidar el head completo, se cerró PR159 y se retiró su rama remota.

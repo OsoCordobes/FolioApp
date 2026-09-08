@@ -51,11 +51,12 @@ const CANVAS_ALTO = 220;
 const TRAZO_ANCHO = 2.2;
 
 export function FirmaPortalModal({
-  fichas,
+  fichas: todasLasFichas,
   plantillas,
   onClose,
   onCreated,
 }: FirmaPortalModalProps) {
+  const fichas = todasLasFichas.filter(f=>plantillas.some(p=>p.pacienteId===f.pacienteId && p.evaluacionId));
   const multiFicha = fichas.length > 1;
   // Paso 0 sólo existe con >1 ficha; si hay una sola, arrancamos en el paso 1.
   const [paso, setPaso] = useState<0 | 1 | 2>(multiFicha ? 0 : 1);
@@ -73,7 +74,8 @@ export function FirmaPortalModal({
   const dibujandoRef = useRef(false);
 
   const ficha = fichas.find((f) => f.pacienteId === pacienteId) ?? fichas[0] ?? null;
-  const plantilla = plantillas.find((p) => p.id === plantillaId) ?? plantillas[0] ?? null;
+  const disponibles=plantillas.filter(p=>p.pacienteId===pacienteId);
+  const plantilla = disponibles.find((p) => p.id === plantillaId) ?? disponibles[0] ?? null;
   const bloques = useMemo<ConsentBlock[]>(
     () => (plantilla ? parseConsentMarkdown(plantilla.textoMarkdown) : []),
     [plantilla],
@@ -237,6 +239,7 @@ export function FirmaPortalModal({
       formData.set("file", blob, "firma.png");
       formData.set("pacienteId", ficha.pacienteId);
       formData.set("plantillaId", plantilla.id);
+      formData.set("evaluacionId",plantilla.evaluacionId??"");
       const result = await uploadFirmaConsentimientoPortalAction(formData);
       if (!result.ok) {
         setError(result.error.message);
@@ -309,7 +312,7 @@ export function FirmaPortalModal({
           <>
             <fieldset className="pc-consent-tipos">
               <legend className="pc-consent-label">Tipo de consentimiento</legend>
-              {plantillas.map((p) => (
+              {disponibles.map((p) => (
                 <label
                   key={p.id}
                   className={

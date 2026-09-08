@@ -1,3 +1,5 @@
+
+import { safeLog } from "@/lib/observability/safe-log";
 /**
  * Folio · rate limiting con Upstash Redis (REST API, edge-compatible).
  *
@@ -6,7 +8,9 @@
  *   - `limitByUser(scope, userId, ...)`: limit por user authenticated.
  *   - `limitByOrg(scope, orgId, ...)`: limit por org (analytics queries).
  *
- * Algoritmo: sliding window con `INCR` + `EXPIRE`. Matriz ante fallo (la
+ * Algoritmo: ventana fija con contador y expiración en una operación atómica.
+ * La identidad enviada a Redis es un HMAC, nunca la IP o correo originales.
+ * Matriz ante fallo (la
  * versión completa vive en el catch de `rateLimit`):
  *   - Keys AUSENTES: fail-open (`ok: true`, `remaining: options.maxRequests`).
  *     En producción loguea un console.error UNA vez por proceso;
@@ -51,11 +55,46 @@ async function upstashCommand(args: (string | number)[]): Promise<unknown> {
     signal: AbortSignal.timeout(2000),
   });
   if (!res.ok) {
-    throw new Error(`upstash HTTP ${res.status}: ${await res.text()}`);
+    throw new Error("upstash_http_error");
   }
   const data = (await res.json()) as UpstashCommandResponse;
-  if (data.error) throw new Error(`upstash error: ${data.error}`);
+  if (data.error) throw new Error("upstash_command_error");
   return data.result;
+}
+
+// Redis executes the entire script atomically: an interrupted HTTP response
+// cannot leave a newly incremented counter without an expiration.
+const FIXED_WINDOW_SCRIPT = `
+local count = redis.call('INCR', KEYS[1])
+local ttl = redis.call('TTL', KEYS[1])
+if ttl < 0 then
+  redis.call('EXPIRE', KEYS[1], ARGV[1])
+  ttl = tonumber(ARGV[1])
+end
+return {count, ttl}`;
+
+async function opaqueIdentity(scope: string, key: string): Promise<string> {
+  const encoded = process.env.FOLIO_ENC_HMAC_KEY?.trim();
+  if (!encoded || !/^[A-Za-z0-9+/]{43}=$/.test(encoded)) {
+    throw new Error("rate_limit_identity_key_invalid");
+  }
+  const decoded = atob(encoded);
+  if (decoded.length !== 32 || btoa(decoded) !== encoded) {
+    throw new Error("rate_limit_identity_key_invalid");
+  }
+  const bytes = Uint8Array.from(decoded, c => c.charCodeAt(0));
+  try {
+    const signingKey = await crypto.subtle.importKey(
+      "raw", bytes, { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
+    );
+    const signature = await crypto.subtle.sign(
+      "HMAC", signingKey,
+      new TextEncoder().encode(JSON.stringify(["folio-rate-limit-v1", scope, key])),
+    );
+    return `rl:v2:${Array.from(new Uint8Array(signature), b => b.toString(16).padStart(2, "0")).join("")}`;
+  } finally {
+    bytes.fill(0);
+  }
 }
 
 const isProd = () => process.env.NODE_ENV === "production";
@@ -81,25 +120,32 @@ export function __resetRateLimitLogState() {
 }
 
 /**
- * Sliding window: `${scope}:${key}` con TTL `windowSec`. Permite hasta
- * `maxRequests` en la ventana. Retorna `ok: false` si se excede.
+ * Ventana fija iniciada por el primer intento, con TTL `windowSec`.
+ * Permite hasta `maxRequests`; también cuenta los intentos rechazados.
  */
 export async function rateLimit(
   scope: string,
   key: string,
   options: { maxRequests: number; windowSec: number },
 ): Promise<RateLimitResult> {
-  const fullKey = `rl:${scope}:${key}`;
+  if (!Number.isSafeInteger(options.maxRequests) || options.maxRequests < 1 || options.maxRequests > 1_000_000 ||
+      !Number.isSafeInteger(options.windowSec) || options.windowSec < 1 || options.windowSec > 86_400) {
+    return { ok: false, remaining: 0, resetIn: 60 };
+  }
   try {
-    const count = (await upstashCommand(["INCR", fullKey])) as number;
-    if (count === 1) {
-      await upstashCommand(["EXPIRE", fullKey, options.windowSec]);
+    if (!isUpstashConfigured()) throw new Error("upstash_not_configured");
+    const fullKey = await opaqueIdentity(scope, key);
+    const result = await upstashCommand(["EVAL", FIXED_WINDOW_SCRIPT, 1, fullKey, options.windowSec]);
+    if (!Array.isArray(result) || result.length !== 2) throw new Error("upstash_counter_invalid");
+    const [count, ttl]: unknown[] = result;
+    if (typeof count !== "number" || !Number.isSafeInteger(count) || count < 1 ||
+        typeof ttl !== "number" || !Number.isSafeInteger(ttl) || ttl < 0 || ttl > options.windowSec) {
+      throw new Error("upstash_counter_invalid");
     }
-    const ttl = (await upstashCommand(["TTL", fullKey])) as number;
     return {
       ok: count <= options.maxRequests,
       remaining: Math.max(0, options.maxRequests - count),
-      resetIn: typeof ttl === "number" && ttl > 0 ? ttl : options.windowSec,
+      resetIn: Math.max(1, ttl),
     };
   } catch (e) {
     // ─── Matriz de fallo (gateada por UPSTASH_FAIL_CLOSED) ────────────────
@@ -124,14 +170,14 @@ export async function rateLimit(
       // (a) Envs AUSENTES. Default: fail-open (F0.4 pendiente — Upstash puede
       // no estar provisionado en prod). UPSTASH_FAIL_CLOSED="true" fuerza closed.
       if (isProd() && process.env.UPSTASH_FAIL_CLOSED === "true") {
-        console.error(
+        safeLog("error", "lib.security.rate.limit.L127",
           `[rate-limit] Upstash keys ausentes en producción con UPSTASH_FAIL_CLOSED=true — fail-closed para scope="${scope}".`,
         );
         return { ok: false, remaining: 0, resetIn: options.windowSec };
       }
       if (isProd() && !warnedMissingEnvs) {
         warnedMissingEnvs = true;
-        console.error(
+        safeLog("error", "security.rate_limit.missing_config",
           `[rate-limit] UPSTASH_REDIS_REST_URL/TOKEN ausentes en producción — rate limiting DESACTIVADO (fail-open). Provisionar Upstash (F0.4) cuanto antes.`,
         );
       }
@@ -142,7 +188,7 @@ export async function rateLimit(
     // silencio). Escape hatch operativo: UPSTASH_FAIL_CLOSED="false" fuerza
     // fail-open. Nota: el AbortError/TimeoutError de AbortSignal.timeout cae
     // acá (no matchea el message del branch (a)).
-    console.error(`[rate-limit] Upstash error para scope="${scope}"`, e);
+    safeLog("error", "lib.security.rate.limit.L145", `[rate-limit] Upstash error para scope="${scope}"`, e);
     if (isProd() && process.env.UPSTASH_FAIL_CLOSED !== "false") {
       return { ok: false, remaining: 0, resetIn: options.windowSec };
     }

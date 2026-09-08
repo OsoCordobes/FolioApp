@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../fixtures/local-test";
 
 /**
  * Folio · open-redirect mitigation — Phase 1 of pre-audit sprint.

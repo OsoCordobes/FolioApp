@@ -42,6 +42,8 @@ import {
   type PuntoSerie,
 } from "@/lib/instrumentos/components";
 import type { SpecialtyToolProps } from "@/lib/especialidades/types";
+import { instrumentPopulationEligibility, retainInstrumentFields } from "@/lib/instrumentos/population-policy";
+import { HistoricalInstrumentResponses } from "@/lib/instrumentos/components/HistoricalInstrumentResponses";
 import {
   deriveKinesioSeries,
   ESTADO_OBJETIVO_KINE_LABELS,
@@ -311,9 +313,12 @@ export function KinesiologiaTool({
   onChange,
   readOnly,
   historial,
+  fechaNacimiento,
+  fechaAtencion,
 }: SpecialtyToolProps) {
+  const population={fechaNacimiento,fechaAtencion};
   const draft = useMemo(() => parseDraft(value), [value]);
-  const series = useMemo(() => deriveKinesioSeries(historial), [historial]);
+  const series = useMemo(() => deriveKinesioSeries(historial.map(entry=>instrumentPopulationEligibility({fechaNacimiento,fechaAtencion:entry.fecha}).allowed?entry:{...entry,toolData:entry.toolData&&typeof entry.toolData==="object"?{...entry.toolData,ndi:undefined,odi:undefined,borg:undefined}:entry.toolData})), [historial,fechaNacimiento]);
 
   const romHistorial = useMemo(() => {
     const out: Array<{ medicion: RomMedicion; fechaSesion: string }> = [];
@@ -347,7 +352,8 @@ export function KinesiologiaTool({
 
   const emit = (next: KinesioDraft) => {
     if (readOnly) return;
-    onChange(limpiarDraft(next));
+    const cleaned=limpiarDraft(next);
+    onChange(instrumentPopulationEligibility(population).allowed ? cleaned : retainInstrumentFields("kinesiologia",cleaned,value));
   };
 
   // ── Motivo ──
@@ -707,9 +713,10 @@ export function KinesiologiaTool({
           Índices de discapacidad y esfuerzo percibido para el seguimiento
           funcional. Tamizaje orientativo — no reemplazan la evaluación clínica.
         </p>
-        <PlanillaRenderer def={ndiDef} respuestas={draft.ndi ?? null} onChange={setNdi} readOnly={readOnly} colapsable />
-        <PlanillaRenderer def={odiDef} respuestas={draft.odi ?? null} onChange={setOdi} readOnly={readOnly} colapsable />
-        <PlanillaRenderer def={borgDef} respuestas={draft.borg ?? null} onChange={setBorg} readOnly={readOnly} colapsable />
+        <PlanillaRenderer population={population} def={ndiDef} respuestas={draft.ndi ?? null} onChange={setNdi} readOnly={readOnly} colapsable />
+        <PlanillaRenderer population={population} def={odiDef} respuestas={draft.odi ?? null} onChange={setOdi} readOnly={readOnly} colapsable />
+        <PlanillaRenderer population={population} def={borgDef} respuestas={draft.borg ?? null} onChange={setBorg} readOnly={readOnly} colapsable />
+        <HistoricalInstrumentResponses historial={historial} fechaNacimiento={fechaNacimiento} />
       </section>
 
       {/* ── Objetivos funcionales (ObjetivosBlock genérico, D3) ── */}

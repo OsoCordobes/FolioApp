@@ -10,16 +10,16 @@
  *   de consola.
  *
  * Gateado por E2E_LOGIN_EMAIL / E2E_LOGIN_PASSWORD (usuario ya existente,
- * p. ej. el owner de la org de prueba `lautaro-folio`). Solo lee; no escribe
+ * p. ej. el owner de la org de prueba `folio-test-booking`). Solo lee; no escribe
  * nada en la DB. Ver tests/e2e/README.md.
  *
  * Run (PowerShell):
- *   $env:E2E_LOGIN_EMAIL="lautaro-folio-test@folio.app"
- *   $env:E2E_LOGIN_PASSWORD="<password>"
- *   pnpm exec playwright test tests/e2e/demo-path.spec.ts --project=e2e
+ *   $env:FOLIO_TEST_LOGIN_EMAIL="medico@example.test"
+ *   $env:FOLIO_TEST_LOGIN_PASSWORD="<password>"
+ *   pnpm test:e2e -- tests/e2e/demo-path.spec.ts --project=e2e
  */
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../fixtures/local-test";
 
 const EMAIL = process.env.E2E_LOGIN_EMAIL ?? "";
 const PASSWORD = process.env.E2E_LOGIN_PASSWORD ?? "";

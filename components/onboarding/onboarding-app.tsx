@@ -1,4 +1,6 @@
 "use client";
+import { safeLog } from "@/lib/observability/safe-log";
+
 
 /**
  * Folio · Onboarding · 8-step wizard (premium architecture).
@@ -26,6 +28,8 @@
  */
 
 import dynamic from "next/dynamic";
+import { AvailabilityDraft } from "@/lib/agenda/availability-draft";
+import { setupHoursWeek, uniformSetupHours } from "@/lib/onboarding/availability";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 
@@ -34,6 +38,7 @@ import {
   finalizeOnboarding,
   signUpAndInitOrganization,
   updateOnboardingStep,
+  readOnboardingHorarios,
 } from "@/app/(public)/onboarding/actions";
 import { CheckEmailPanel } from "@/components/auth/check-email-panel";
 import { SideArt } from "@/components/auth/side-art";
@@ -245,11 +250,66 @@ export function OnboardingApp({
     }
   }, [data, authedEmail]);
 
+  const hoursRef = useRef<AvailabilityDraft | null>(null);
+  const hoursFlightRef = useRef<Promise<boolean> | null>(null);
+  const hoursSavedRef = useRef(false);
+  const [hoursError, setHoursError] = useState<string | null>(null);
+  const [, redrawHours] = useState(0);
+  useEffect(() => {
+    if (!orgId) return;
+    let cancelled = false;
+    hoursRef.current = null; hoursSavedRef.current = false;
+    void readOnboardingHorarios(orgId).then((result) => {
+      if (cancelled) return;
+      if (!result.ok) { setHoursError(result.error.message); return; }
+      const uniform = uniformSetupHours(result.data);
+      if (!uniform) { setHoursError("Hay horarios con fechas o franjas diferentes por día. Necesitan una revisión antes de continuar."); return; }
+      hoursRef.current = new AvailabilityDraft(result.data);
+      if (uniform.diasActivos.length) setData((prev) => ({ ...prev, ...uniform }));
+      setHoursError(null); redrawHours((n) => n + 1);
+    }).catch(() => { if (!cancelled) setHoursError("No pudimos leer los horarios. Volvé a cargar para intentarlo."); });
+    return () => { cancelled = true; };
+  }, [orgId]);
+
+  const persistInitialHours = useCallback((snapshot: OnboardingDataState): Promise<boolean> => {
+    if (hoursFlightRef.current) return hoursFlightRef.current;
+    const hours = hoursRef.current;
+    if (!hours || hours.context.organizationId !== orgId) { setHoursError("No pudimos leer la agenda actual. Volvé a cargar los horarios."); return Promise.resolve(false); }
+    if (!snapshot.diasActivos.length || !validateFranjas(snapshot.franjas).ok) return Promise.resolve(false);
+    const week = setupHoursWeek(snapshot.diasActivos, snapshot.franjas);
+    if (hoursSavedRef.current && !hours.dirty && !hours.conflict && JSON.stringify(week) === JSON.stringify(hours.dias)) return Promise.resolve(true);
+    hours.edit(week);
+    const command = hours.begin(crypto.randomUUID());
+    if (!command) { setHoursError("Los horarios cambiaron. Cargá los guardados antes de continuar."); return Promise.resolve(false); }
+    const active = Object.entries(command.dias).filter(([,day]) => day?.on);
+    setSaveState({ status: "saving" }); redrawHours((n) => n + 1);
+    const pending = (async () => {
+      try {
+        const result = await updateOnboardingStep(5, { organizationId: command.organizationId, memberId: command.memberId, revision: command.revision, operacionId: command.operacionId,
+          diasActivos: active.map(([day]) => day), franjas: active[0][1]!.franjas, slotMin: snapshot.slotMin });
+        if (!result.ok || result.revision === undefined) {
+          hours.finish({ ok: false, error: { code: result.code ?? "db_error", message: result.error ?? "No pudimos confirmar el guardado." } });
+          setSaveState({ status: "error", message: result.error });
+          if (hours.conflict) setHoursError("Los horarios cambiaron. Cargá los guardados antes de continuar.");
+          return false;
+        }
+        hours.finish({ ok: true, data: { revision: result.revision, count: active.length } }); hoursSavedRef.current = true;
+        setSaveState({ status: "saved", lastSavedAt: Date.now() }); setHoursError(null); return true;
+      } catch {
+        hours.finish({ ok: false, error: { code: "network", message: "Conexión interrumpida" } });
+        setSaveState({ status: "error", message: "No pudimos confirmar el guardado. Reintentá el mismo cambio." }); return false;
+      } finally { hoursFlightRef.current = null; redrawHours((n) => n + 1); }
+    })();
+    hoursFlightRef.current = pending;
+    return pending;
+  }, [orgId]);
+
   // ─── Auto-save por step (debounce 800ms) ─────────────────────────────────
 
   const persistStep = useCallback(
     async (step: number, snapshot: OnboardingDataState) => {
       if (!orgId) return;
+      if (step === 5) { await persistInitialHours(snapshot); return; }
       try {
         setSaveState({ status: "saving" });
         let result;
@@ -285,25 +345,6 @@ export function OnboardingApp({
               cardMood: snapshot.cardMood,
             });
             break;
-          case 5: {
-            // No mandar al server estados intermedios inválidos (franja recién
-            // agregada vacía, fin < inicio mientras edita): el server los
-            // rechaza igual, pero acá evitamos el flash de "Reintentar
-            // guardar" en cada tecla. El último estado válido queda en DB.
-            if (
-              snapshot.diasActivos.length === 0 ||
-              !validateFranjas(snapshot.franjas).ok
-            ) {
-              setSaveState({ status: "idle" });
-              return;
-            }
-            result = await updateOnboardingStep(5, {
-              diasActivos: snapshot.diasActivos,
-              franjas: snapshot.franjas,
-              slotMin: snapshot.slotMin,
-            });
-            break;
-          }
           case 6:
             result = await updateOnboardingStep(6, {
               servicios: snapshot.servicios.map((s) => ({
@@ -334,14 +375,14 @@ export function OnboardingApp({
         // attempting to fetch resource"). Mostrárselo a alguien que está
         // dando de alta su consultorio no le dice nada y parece que se rompió
         // Folio. El detalle va a la consola, que es donde sirve.
-        console.error("[onboarding autosave]", e);
+        safeLog("error", "components.onboarding.onboarding.app.L337", "[onboarding autosave]", e);
         setSaveState({
           status: "error",
           message: "No pudimos guardar. Revisá tu conexión — tus datos siguen acá.",
         });
       }
     },
-    [orgId, orgSlug],
+    [orgId, orgSlug, persistInitialHours],
   );
 
   // Trigger auto-save cuando cambian datos relevantes
@@ -366,8 +407,10 @@ export function OnboardingApp({
     };
   }, [data, stepIdx, orgId, persistStep]);
 
-  const set = (patch: Partial<OnboardingDataState>) =>
+  const set = (patch: Partial<OnboardingDataState>) => {
+    if (stepIdx === 5 && (!hoursRef.current || hoursRef.current.locked || hoursError)) return;
     setData((prev) => ({ ...prev, ...patch }));
+  };
 
   const flushSaveIfPending = useCallback(async () => {
     if (saveTimerRef.current) {
@@ -381,16 +424,24 @@ export function OnboardingApp({
   }, [data, orgId, persistStep]);
 
   const next = useCallback(() => {
+    if (stepIdx === 5) {
+      if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
+      void persistInitialHours(data).then((saved) => { if (saved) { setDirection("forward"); setStepIdx(6); } }); return;
+    }
     setDirection("forward");
     void flushSaveIfPending();
     setStepIdx((n) => Math.min(ONB_TOTAL, n + 1));
-  }, [flushSaveIfPending]);
+  }, [flushSaveIfPending, stepIdx, persistInitialHours, data]);
 
   const back = useCallback(() => {
+    if (stepIdx === 5) {
+      if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
+      void persistInitialHours(data).then((saved) => { if (saved) { setDirection("back"); setStepIdx(4); } }); return;
+    }
     setDirection("back");
     void flushSaveIfPending();
     setStepIdx((n) => Math.max(1, n - 1));
-  }, [flushSaveIfPending]);
+  }, [flushSaveIfPending, stepIdx, persistInitialHours, data]);
 
   const skip = next;
 
@@ -558,7 +609,11 @@ export function OnboardingApp({
           {stepIdx === 2 ? <Step2Profesional {...commonStepProps} /> : null}
           {stepIdx === 3 ? <Step3Consultorio {...commonStepProps} /> : null}
           {stepIdx === 4 ? <Step4Personalizacion {...commonStepProps} /> : null}
-          {stepIdx === 5 ? <Step5Horarios {...commonStepProps} /> : null}
+          {stepIdx === 5 ? <>
+            {hoursError ? <p role="alert">{hoursError} <button type="button" className="fi-btn" onClick={() => window.location.reload()}>Cargar horarios guardados</button></p> : null}
+            {!hoursRef.current && !hoursError ? <p role="status">Leyendo horarios…</p> : null}
+            <fieldset disabled={!hoursRef.current || hoursRef.current.locked || !!hoursError} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}><Step5Horarios {...commonStepProps} /></fieldset>
+          </> : null}
           {stepIdx === 6 ? <Step6Servicios {...commonStepProps} /> : null}
           {stepIdx === 7 ? (
             <Step7Google

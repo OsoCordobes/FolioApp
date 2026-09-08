@@ -13,28 +13,27 @@
  * (writer único de sesion.tool_id / tool_data_cifrado, M50).
  */
 
+import { listRepresentaciones } from "@/lib/db/representaciones";
+import { uploadReviewedConsent } from "@/lib/consentimientos/signature-upload";
+import { capabilitiesFor } from "@/lib/auth/capabilities";
+import { CLINICAL_BUCKET, CLINICAL_UPLOAD_MAX_BYTES, inspectClinicalFile } from "@/lib/storage/clinical-files";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import {
-  buildFirmaStoragePath,
   elegirPlantillasVigentes,
   mapConsentimientoRow,
-  pathSinBucket,
-  tutorVigente,
   type ConsentimientoListItem,
   type PlantillaConsentimientoRow,
   type PlantillaVigente,
   type TutorOption,
 } from "@/lib/consentimientos/helpers";
-import { tryDecrypt } from "@/lib/crypto";
 import { getActiveContext } from "@/lib/db/active-context";
 import { getFichaTimeline } from "@/lib/db/ficha-timeline";
 import type { EventoTimeline } from "@/lib/ficha/timeline-core";
 import { addNotaClinica } from "@/lib/db/notas-clinicas";
 import { updatePacienteContacto, type UpdatePacienteContactoInput } from "@/lib/db/pacientes";
 import {
-  createConsentimiento,
   getSignedFirmaUrl,
   listConsentimientosPaciente,
   revokeConsentimiento,
@@ -43,7 +42,7 @@ import {
   buildDocumentoStoragePath,
   createDocumentoClinico,
   listDocumentosPaciente,
-  refreshSignedUrl,
+  getDocumentoDownloadUrl,
   TIPO_DOCUMENTO,
   type TipoDocumento,
 } from "@/lib/db/documentos";
@@ -52,7 +51,7 @@ import { savePacienteIntakeAvanzado } from "@/lib/db/paciente-intake";
 import { createPaciente, updatePacienteCobertura } from "@/lib/db/pacientes";
 import { savePlanTratamiento } from "@/lib/db/plan-tratamiento";
 import { getActiveSession } from "@/lib/db/session";
-import { addEnmienda, sesionPerteneceAPaciente, upsertSesion } from "@/lib/db/sesiones";
+import { addEnmienda, sesionPerteneceAPaciente, upsertSesion, readClinicalSessionRevision } from "@/lib/db/sesiones";
 import { transitionTurno } from "@/lib/db/turnos";
 import { err, ok, type Result } from "@/lib/db/errors";
 import { buildUpsertSesionInput } from "@/lib/especialidades/draft";
@@ -360,220 +359,49 @@ export async function listOutcomeSeriesAction(
 // ─── Guardar sesión desde la ficha (tab Plan) ───────────────────────────────
 
 const saveSesionFichaSchema = z.object({
-  turnoId: z.string().uuid(),
-  pacienteId: z.string().uuid(),
-  /** Borrador del slot clínico — opaco acá; lo valida el writer contra el
-   *  schema zod del registry. null/ausente = no se tocó la herramienta. */
-  toolValue: z.unknown().optional(),
-  soap: z.object({
-    subjetivo: z.string().max(5000),
-    objetivo: z.string().max(5000),
-    analisis: z.string().max(5000),
-    plan: z.string().max(5000),
-  }),
-  /**
-   * true = guardado AUTOMÁTICO (debounce del borrador): persiste la sesión
-   * pero NO transiciona el turno a ATENDIENDO — empezar a atender es una
-   * decisión explícita del profesional (guardado manual / "Guardar y cerrar"),
-   * no un efecto colateral de tipear. Ausente/false = guardado manual.
-   */
-  autosave: z.boolean().optional(),
-  /**
-   * `sesion.updated_at` que la ficha tenía al hidratarse. Si otra pestaña
-   * guardó en el medio, el writer devuelve `conflict` en vez de pisarla.
-   */
-  updatedAtEsperado: z.string().optional(),
+  turnoId:z.string().uuid(),pacienteId:z.string().uuid(),toolValue:z.unknown().optional(),
+  soap:z.object({subjetivo:z.string().max(5000),objetivo:z.string().max(5000),analisis:z.string().max(5000),plan:z.string().max(5000)}),
+  autosave:z.boolean().optional(),revisionEsperada:z.number().int().min(0).max(Number.MAX_SAFE_INTEGER-1),operacionId:z.string().uuid(),
 });
+export type SaveSesionFichaActionInput=z.infer<typeof saveSesionFichaSchema>;
+export interface SaveSesionFichaResult {sesionId:string;revision:number;updatedAt:string;operationId:string;cerrado:boolean}
+export interface SaveSesionYCerrarResult extends SaveSesionFichaResult {aviso?:string}
 
-export type SaveSesionFichaActionInput = z.infer<typeof saveSesionFichaSchema>;
-
-/**
- * Persiste el borrador del tab Plan (herramienta de especialidad + SOAP)
- * como la sesión del turno en curso del paciente (upsert 1:1 por turno_id,
- * editable hasta el lock — Ley 26.529).
- *
- * El toolId NO viaja del cliente: lo deriva el writer (upsertSesion) de la
- * especialidad EFECTIVA del PROFESIONAL del turno (M55: member.especialidad
- * ?? organization.especialidad) y valida el toolData contra el schema zod del
- * registry antes de cifrar. RLS (sesion_insert/update_clinical, M10) y el
- * trigger sesion_same_org_guard cubren tenancy y coherencia turno↔paciente.
- * PHI: nunca se loguea el contenido del borrador.
- */
-export async function saveSesionFichaAction(
-  input: SaveSesionFichaActionInput,
-): Promise<Result<{ sesionId: string }>> {
-  const parsed = saveSesionFichaSchema.safeParse(input);
-  if (!parsed.success) {
-    return err("validation", "Datos de la sesión inválidos.", parsed.error.message);
-  }
-
-  const ctx = await getActiveContext();
-  if (!ctx.ok) return ctx;
-
-  // Feedback quiro (jul-2026): la ficha también guarda con el turno de hoy aún
-  // no iniciado (ancla por_iniciar de elegirTurnoAncla). El guardado MANUAL es
-  // empezar a atender: si el turno está AGENDADO/CONFIRMADO/EN_SALA se lo lleva
-  // a ATENDIENDO (matriz M09: AGENDADO|CONFIRMADO → EN_SALA → ATENDIENDO) ANTES
-  // del upsert, así atendiendo_desde marca el inicio real de la escritura y
-  // "Guardar y cerrar" puede derivar la duración. El AUTOSAVE NO transiciona
-  // NUNCA (audit jul-2026): una tecla a las 9:00 con turno a las 15:00 lo
-  // flipearía a ATENDIENDO con atendiendo_desde falso y duración real corrupta
-  // — empezar a atender es una decisión explícita, no un efecto de tipear.
-  // Best-effort deliberado: si una transición falla (el estado cambió en el
-  // medio / la matriz la rechaza), la sesión se guarda IGUAL — los datos
-  // clínicos mandan; el estado se corrige desde /hoy y el fallo queda en
-  // Sentry. El SELECT es org-scoped (un turno ajeno da estado null y no se
-  // transiciona; el guard IDOR real vive en upsertSesion).
-  if (parsed.data.autosave !== true) {
-    const supabase = await createSupabaseServerClient();
-    const { data: turnoEstadoRow } = await supabase
-      .from("turno")
-      .select("estado")
-      .eq("id", parsed.data.turnoId)
-      .eq("organization_id", ctx.data.session.organizationId)
-      .maybeSingle();
-    const estadoTurno = (turnoEstadoRow as { estado: string } | null)?.estado ?? null;
-
-    let huboTransicion = false;
-    if (estadoTurno === "AGENDADO" || estadoTurno === "CONFIRMADO" || estadoTurno === "EN_SALA") {
-      const pasos: Array<"EN_SALA" | "ATENDIENDO"> =
-        estadoTurno === "EN_SALA" ? ["ATENDIENDO"] : ["EN_SALA", "ATENDIENDO"];
-      for (const to of pasos) {
-        const trans = await transitionTurno({ turnoId: parsed.data.turnoId, to });
-        if (!trans.ok) {
-          const { captureException } = await import("@sentry/nextjs");
-          captureException(
-            new Error(
-              `saveSesionFicha: no se pudo iniciar la atención (→${to}): ${trans.error.message}`,
-            ),
-            { tags: { component: "pacientes-actions", op: "iniciarAtencionAlGuardar" } },
-          );
-          break;
-        }
-        huboTransicion = true;
-      }
-    }
-    // El turno cambió de estado → /hoy debe dejar de mostrarlo como pendiente,
-    // haya salido bien o no el guardado de abajo.
-    if (huboTransicion) revalidatePath("/hoy");
-  }
-
-  // F-AUTH (IDOR): turnoId/pacienteId vienen del cliente. El guard cross-org
-  // (turno ∈ org activa + turno.paciente_id == pacienteId) vive ahora en
-  // upsertSesion (lib/db/sesiones.ts), así protege a cualquier caller y evita
-  // duplicar el SELECT acá. La RLS + el trigger sesion_same_org_guard son la
-  // última línea en DB.
-  const result = await upsertSesion(
-    buildUpsertSesionInput({
-      turnoId: parsed.data.turnoId,
-      pacienteId: parsed.data.pacienteId,
-      toolValue: parsed.data.toolValue ?? null,
-      soap: parsed.data.soap,
-      updatedAtEsperado: parsed.data.updatedAtEsperado,
-    }),
-  );
-  if (!result.ok) return result;
-
-  // La vuelta: la ficha re-renderiza con la sesión nueva en plan.toolHistorial.
-  revalidatePath(`/pacientes/${parsed.data.pacienteId}`);
-  return ok({ sesionId: result.data.id });
+/** One database transaction owns the clinical revision and optional state change.
+ * Network uncertainty preserves the operation ID so its receipt can be recovered. */
+export async function saveSesionFichaAction(input:SaveSesionFichaActionInput):Promise<Result<SaveSesionFichaResult>>{
+  const parsed=saveSesionFichaSchema.safeParse(input);
+  if(!parsed.success)return err("validation","Falta una revisión válida del borrador. Conservá lo escrito antes de recargar.");
+  try{
+    const v=parsed.data;
+    const result=await upsertSesion(buildUpsertSesionInput({...v,toolValue:v.toolValue??null,intencion:v.autosave?"AUTOSAVE":"SAVE"}));
+    if(!result.ok)return result;
+    revalidatePath(`/pacientes/${v.pacienteId}`);if(!v.autosave)revalidatePath("/hoy");
+    return ok({sesionId:result.data.id,revision:result.data.revision,updatedAt:result.data.updatedAt,operationId:result.data.operationId,cerrado:result.data.closed});
+  }catch{return err("network","No pudimos confirmar la respuesta. Conservá el borrador y reintentá la misma operación.");}
 }
 
-// ─── Guardar y cerrar el turno desde la ficha (tab Plan) ─────────────────────
-
-/**
- * Resultado de "Guardar y cerrar". `ok` SIEMPRE implica que la sesión se
- * guardó; `cerrado` distingue el cierre exitoso del caso "se guardó pero no se
- * pudo cerrar" (el cliente muestra distinto copy y NO navega fuera). Modelarlo
- * así — en vez de un err con code adivinable — evita que el cliente tenga que
- * discriminar por code (save y close comparten codes como db_error/forbidden).
- */
-export interface SaveSesionYCerrarResult {
-  /** true = turno cerrado; false = sesión guardada pero el cierre falló. */
-  cerrado: boolean;
-  /** Mensaje del fallo del cierre (solo presente cuando cerrado === false). */
-  cierreError?: string;
+export async function saveSesionYCerrarAction(input:SaveSesionFichaActionInput):Promise<Result<SaveSesionYCerrarResult>>{
+  const parsed=saveSesionFichaSchema.safeParse(input);
+  if(!parsed.success)return err("validation","Falta una revisión válida del borrador. No se solicitó el cierre.");
+  try{
+    const v=parsed.data;
+    const result=await upsertSesion(buildUpsertSesionInput({...v,toolValue:v.toolValue??null,intencion:"CLOSE"}));
+    if(!result.ok)return result;
+    // Core close and immutable original already committed atomically. Reuse the
+    // existing idempotent scheduling/payment follow-ups; their failure cannot
+    // turn the successful clinical close into a misleading failed-save result.
+    let aviso:string|undefined;
+    try{const followup=await transitionTurno({turnoId:v.turnoId,to:"CERRADO"});
+      if(!followup.ok||followup.data.pagoRegistrado===false)aviso="La atención quedó guardada y cerrada. Revisá las gestiones posteriores y el registro del cobro en la agenda.";
+    }catch{aviso="La atención quedó guardada y cerrada. No pudimos confirmar las gestiones posteriores; revisalas en la agenda.";}
+    revalidatePath("/hoy");revalidatePath(`/pacientes/${v.pacienteId}`);
+    return ok({sesionId:result.data.id,revision:result.data.revision,updatedAt:result.data.updatedAt,operationId:result.data.operationId,cerrado:result.data.closed,...(aviso?{aviso}:{})});
+  }catch{return err("network","No pudimos confirmar si se guardó y cerró. Conservá el borrador y reintentá la misma operación.");}
 }
 
-/**
- * Guarda la sesión del turno en curso (igual que saveSesionFichaAction) Y, si
- * eso ok, cierra el turno (ATENDIENDO → CERRADO). Mismo shape de input que
- * saveSesionFichaAction.
- *
- * Orden deliberado (datos clínicos primero, side-effect terminal después):
- *   1. upsertSesion — si falla, RETORNA un err temprano: NUNCA se cierra sobre
- *      un guardado fallido. Un err de esta action == el guardado falló.
- *   2. transitionTurno(→CERRADO) con la duración real derivada de
- *      atendiendo_desde (mismo cálculo que "Cerrar turno" en /hoy). Si ESTO
- *      falla, devolvemos ok({ cerrado: false, cierreError }) — la sesión YA
- *      está persistida, así que no es un fracaso de la action; el cliente
- *      muestra "Sesión guardada, pero no se pudo cerrar…" sin perder el trabajo.
- *
- * Tenancy: el SELECT de atendiendo_desde es org-scoped (organizationId del
- * contexto activo); el guard cross-org de turnoId/pacienteId ya vive en
- * upsertSesion y transitionTurno (RLS + triggers como última línea en DB).
- */
-export async function saveSesionYCerrarAction(
-  input: SaveSesionFichaActionInput,
-): Promise<Result<SaveSesionYCerrarResult>> {
-  const parsed = saveSesionFichaSchema.safeParse(input);
-  if (!parsed.success) {
-    return err("validation", "Datos de la sesión inválidos.", parsed.error.message);
-  }
-
-  const ctx = await getActiveContext();
-  if (!ctx.ok) return ctx;
-
-  // Duración real: minutos desde atendiendo_desde hasta ahora, org-scoped. Solo
-  // se aplica si cae en [0, 480] (mismo límite que el schema de transitionTurno);
-  // fuera de rango o sin timestamp → undefined (transitionTurno no toca
-  // duracion_real_min y la columna conserva lo que tuviera).
-  const supabase = await createSupabaseServerClient();
-  const { data: turnoRow } = await supabase
-    .from("turno")
-    .select("atendiendo_desde")
-    .eq("id", parsed.data.turnoId)
-    .eq("organization_id", ctx.data.session.organizationId)
-    .maybeSingle();
-
-  const atendiendoDesde = (turnoRow as { atendiendo_desde: string | null } | null)?.atendiendo_desde ?? null;
-  let duracionRealMin: number | undefined;
-  if (atendiendoDesde) {
-    const mins = Math.round((Date.now() - new Date(atendiendoDesde).getTime()) / 60000);
-    if (mins >= 0 && mins <= 480) duracionRealMin = mins;
-  }
-
-  // 1. Guardar la sesión (writer único — deriva tool_id, valida y cifra). Si
-  //    falla, NO cerramos: la sesión es lo que importa.
-  const saved = await upsertSesion(
-    buildUpsertSesionInput({
-      turnoId: parsed.data.turnoId,
-      pacienteId: parsed.data.pacienteId,
-      toolValue: parsed.data.toolValue ?? null,
-      soap: parsed.data.soap,
-      updatedAtEsperado: parsed.data.updatedAtEsperado,
-    }),
-  );
-  if (!saved.ok) return saved;
-
-  // 2. Cerrar el turno. Si falla, la sesión YA quedó guardada: devolvemos un
-  //    ok parcial (cerrado: false) con el mensaje del cierre para el cliente.
-  const closed = await transitionTurno({
-    turnoId: parsed.data.turnoId,
-    to: "CERRADO",
-    duracionRealMin,
-  });
-  if (!closed.ok) {
-    // El guardado persistió → la ficha igual debe refrescar el historial.
-    revalidatePath(`/pacientes/${parsed.data.pacienteId}`);
-    return ok({ cerrado: false, cierreError: closed.error.message });
-  }
-
-  // La vuelta: /hoy deja de mostrar el turno como activo y la ficha re-renderiza
-  // con la sesión nueva en plan.toolHistorial.
-  revalidatePath("/hoy");
-  revalidatePath(`/pacientes/${parsed.data.pacienteId}`);
-  return ok({ cerrado: true });
+export async function readClinicalSessionRevisionAction(turnoId:string,pacienteId:string){
+  try{return await readClinicalSessionRevision(turnoId,pacienteId);}catch{return err("db_error","No pudimos leer la revisión guardada. El borrador local sigue intacto.");}
 }
 
 // ─── Guardar plan de tratamiento (card "Plan de tratamiento") ────────────────
@@ -621,13 +449,8 @@ export async function savePlanTratamientoAction(
 //     ECG/Holter/ergometría escaneados o en PDF).
 // El waveform NO se renderiza: el archivo se ABRE por signed URL en la galería.
 
-const DOC_BUCKET = "documentos-clinicos";
-const DOC_MAX_BYTES = 50 * 1024 * 1024; // espeja el CHECK documento_tamanio_limite (M08)
-// image/* | pdf | dicom. El set fino lo re-valida createDocumentoClinico contra
-// ALLOWED_MIME; acá hacemos un primer filtro barato antes de subir bytes.
-function docMimeOk(mime: string): boolean {
-  return mime.startsWith("image/") || mime === "application/pdf" || mime === "application/dicom";
-}
+const DOC_BUCKET = CLINICAL_BUCKET;
+const DOC_MAX_BYTES = CLINICAL_UPLOAD_MAX_BYTES;
 
 /**
  * Core compartido: adjunta un documento a la sesión del turno en curso.
@@ -637,7 +460,7 @@ function docMimeOk(mime: string): boolean {
  *     que upsertSesion — no se confía en IDs del cliente).
  *   - debe existir una sesion para el turno (el documento cuelga de ella): sino
  *     se pide guardar la sesión primero, así el documento queda atado a la visita.
- *   - mime image/* | pdf | dicom y tamaño <= 50 MB.
+ *   - tipo binario reconocido y tamaño máximo de 4 MiB.
  *
  * PHI: el nombre/descripción no se loguean; el blob vive en el bucket privado y
  * la fila la lee la ficha con signed URLs de vida corta.
@@ -657,8 +480,9 @@ async function uploadDocumentoSesion(params: {
   /** Filename por defecto si el Blob no trae nombre. */
   fallbackFilename: string;
 }): Promise<Result<{ documentoId: string }>> {
-  const { file, pacienteId, turnoId, descripcion, tipo, etiqueta, fallbackFilename } = params;
+  const { file, pacienteId, turnoId, descripcion, tipo, etiqueta } = params;
 
+  try {
   if (!(file instanceof Blob) || file.size === 0) {
     return err("validation", "Adjuntá un archivo válido.");
   }
@@ -666,19 +490,24 @@ async function uploadDocumentoSesion(params: {
     return err("validation", `Datos del ${etiqueta} inválidos.`);
   }
   if (file.size > DOC_MAX_BYTES) {
-    return err("validation", "El archivo supera el límite de 50 MB.");
+    return err("validation", "El archivo supera el límite de 4 MiB.");
   }
-  const mimeType = file.type || "application/octet-stream";
-  if (!docMimeOk(mimeType)) {
-    return err("validation", `Tipo de archivo no permitido: ${mimeType}.`);
-  }
-  const filename = file instanceof File && file.name ? file.name : fallbackFilename;
+  // Actual bytes determine the content type and generated extension.
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const inspected = inspectClinicalFile(bytes);
+  if (!inspected.ok) return inspected;
+  const mimeType = inspected.data.mime;
+  const filename = `documento.${inspected.data.extension}`;
 
   const ctx = await getActiveContext();
   if (!ctx.ok) return ctx;
   const organizationId = ctx.data.session.organizationId;
-
+  if (!capabilitiesFor(ctx.data.session.role, ctx.data.session.esColegiado).canReadClinical) return err("forbidden", "No tenés acceso a los documentos clínicos.");
   const supabase = await createSupabaseServerClient();
+  const patientAccess = await supabase.from("paciente").select("id").eq("id", pacienteId)
+    .eq("organization_id", organizationId).is("deleted_at", null).is("pseudonimizado_en", null).maybeSingle();
+  if (patientAccess.error) return err("db_error", "No pudimos verificar el acceso al paciente.");
+  if (!patientAccess.data) return err("not_found", "Paciente no encontrado.");
 
   // F-AUTH (IDOR): turno ∈ org activa Y turno↔paciente. Mismo SELECT-guard que
   // upsertSesion/checkTurnoOwnership; resolvemos también la sesion del turno.
@@ -698,12 +527,13 @@ async function uploadDocumentoSesion(params: {
 
   // El documento cuelga de la sesion del turno: si todavía no hay sesión, se
   // pide guardarla primero (el documento siempre queda atado a una visita).
-  const { data: sesionRow } = await supabase
+  const { data: sesionRow, error: sesionError } = await supabase
     .from("sesion")
     .select("id")
     .eq("turno_id", turnoId)
     .eq("organization_id", organizationId)
     .maybeSingle();
+  if (sesionError) return err("db_error", "No pudimos verificar la sesión.");
   const sesionId = (sesionRow as { id: string } | null)?.id ?? null;
   if (!sesionId) {
     return err("validation", `Guardá la sesión antes de adjuntar el ${etiqueta}.`);
@@ -714,10 +544,10 @@ async function uploadDocumentoSesion(params: {
   // el upload va SIN el prefijo del bucket.
   const storagePath = buildDocumentoStoragePath({ organizationId, pacienteId, filename });
   const pathInBucket = storagePath.replace(/^documentos-clinicos\//, "");
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  const { error: uploadErr } = await supabase.storage
+  const service = createSupabaseServiceClient();
+  const { error: uploadErr } = await service.storage
     .from(DOC_BUCKET)
-    .upload(pathInBucket, bytes, { contentType: mimeType });
+    .upload(pathInBucket, bytes, { contentType: mimeType, upsert: false, cacheControl: "0" });
   if (uploadErr) {
     return err("db_error", "No pudimos subir el archivo.", uploadErr.message);
   }
@@ -731,11 +561,20 @@ async function uploadDocumentoSesion(params: {
     tamanioBytes: file.size,
     descripcion,
   });
-  if (!created.ok) return created;
+  if (!created.ok) {
+    // Only remove this newly generated object when the DB positively confirms
+    // no record exists; a lost INSERT response must not delete a committed file.
+    const recorded = await service.from("documento_clinico").select("id").eq("storage_path", storagePath).maybeSingle();
+    if (!recorded.error && !recorded.data) await service.storage.from(DOC_BUCKET).remove([pathInBucket]);
+    return created;
+  }
 
   // La vuelta: la galería de la Tool trae el documento nuevo.
   revalidatePath(`/pacientes/${pacienteId}`);
   return ok({ documentoId: created.data.id });
+  } catch {
+    return err("network", "No pudimos subir el archivo. Intentá nuevamente.");
+  }
 }
 
 /**
@@ -797,7 +636,7 @@ export interface DocumentoFichaItem {
   descripcion: string | null;
   mimeType: string;
   /** Signed URL de vida corta (5 min) — refrescar al abrir si expiró. */
-  signedUrl: string;
+  downloadUrl: string;
 }
 
 /**
@@ -821,7 +660,7 @@ export async function listDocumentosPacienteAction(
       fecha: (doc.fecha_estudio ?? doc.created_at).slice(0, 10),
       descripcion: doc.descripcion,
       mimeType: doc.mime_type,
-      signedUrl: doc.signedUrl,
+      downloadUrl: doc.downloadUrl,
     })),
   );
 }
@@ -866,13 +705,13 @@ export async function uploadDocumentoPacienteAction(
  */
 export async function refreshRadiografiaUrlAction(
   documentoId: string,
-): Promise<Result<{ signedUrl: string }>> {
+): Promise<Result<{ downloadUrl: string }>> {
   if (!z.string().uuid().safeParse(documentoId).success) {
     return err("validation", "ID inválido.");
   }
-  const result = await refreshSignedUrl(documentoId);
+  const result = await getDocumentoDownloadUrl(documentoId);
   if (!result.ok) return result;
-  return ok({ signedUrl: result.data });
+  return ok({ downloadUrl: result.data });
 }
 
 // ─── Consentimiento informado con firma (Ley 26.529) ─────────────────────────
@@ -888,27 +727,14 @@ export async function refreshRadiografiaUrlAction(
 // PHI: nunca se loguean nombres ni contenido; los identificadores de los
 // mensajes de error son uuids.
 
-const CONSENT_BUCKET = "consentimientos-firmados";
 // La firma de un canvas pesa decenas de KB; 5 MB es holgado y queda por debajo
 // del file_size_limit del bucket (10 MB, M27).
-const FIRMA_MAX_BYTES = 5 * 1024 * 1024;
 
 /**
  * Espejo app-side de public.can_read_clinical (M01): OWNER, PROFESIONAL o
  * DIRECTOR colegiado. La RLS de M07/M27 es la barrera real — esto solo da un
  * error claro antes de subir bytes.
  */
-function puedeFirmarConsentimientos(session: {
-  role: "OWNER" | "DIRECTOR" | "PROFESIONAL" | "COORDINADOR" | "ASISTENTE";
-  esColegiado: boolean;
-}): boolean {
-  return (
-    session.role === "OWNER" ||
-    session.role === "PROFESIONAL" ||
-    (session.role === "DIRECTOR" && session.esColegiado)
-  );
-}
-
 /**
  * Lista los consentimientos del paciente (vigentes + revocados) mapeados al
  * item plano de la card. Tenancy: listConsentimientosPaciente ya es org-scoped
@@ -960,45 +786,10 @@ export async function listPlantillasConsentimientoAction(): Promise<Result<Plant
  * app-side (M06) — se desencripta server-side con tryDecrypt (una fila
  * corrupta no rompe el selector).
  */
-export async function listTutoresConsentimientoAction(
-  pacienteId: string,
-): Promise<Result<TutorOption[]>> {
-  if (!z.string().uuid().safeParse(pacienteId).success) {
-    return err("validation", "ID de paciente inválido.");
-  }
-  const session = await getActiveSession();
-  if (!session.ok) return session;
-
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
-    .from("tutor_legal")
-    .select("id, vinculo, es_principal, nombre_cifrado, vigencia_desde, vigencia_hasta")
-    .eq("organization_id", session.data.organizationId)
-    .eq("paciente_id", pacienteId)
-    .order("es_principal", { ascending: false });
-  if (error) {
-    return err("db_error", "No pudimos cargar los tutores del paciente.", error.message);
-  }
-
-  const hoy = new Date().toISOString().slice(0, 10);
-  const tutores = ((data ?? []) as Array<{
-    id: string;
-    vinculo: string;
-    es_principal: boolean;
-    nombre_cifrado: string | null;
-    vigencia_desde: string | null;
-    vigencia_hasta: string | null;
-  }>)
-    .filter((t) =>
-      tutorVigente({ vigenciaDesde: t.vigencia_desde, vigenciaHasta: t.vigencia_hasta }, hoy),
-    )
-    .map((t) => ({
-      id: t.id,
-      nombre: tryDecrypt(t.nombre_cifrado, "tutor_legal.nombre") ?? "Tutor legal",
-      vinculo: t.vinculo,
-      esPrincipal: t.es_principal,
-    }));
-  return ok(tutores);
+export async function listTutoresConsentimientoAction(pacienteId:string):Promise<Result<TutorOption[]>> {
+  const result=await listRepresentaciones(pacienteId);
+  if(!result.ok)return result;
+  return ok(result.data.filter(r=>r.vigenteParaConsentir).map(r=>({id:r.id,nombre:r.nombre,vinculo:r.vinculo,esPrincipal:false})));
 }
 
 /**
@@ -1023,112 +814,8 @@ export async function listTutoresConsentimientoAction(
  * con el service client (el bucket no tiene DELETE policy para usuarios —
  * inmutabilidad M27).
  */
-export async function uploadFirmaConsentimientoAction(
-  formData: FormData,
-): Promise<Result<{ consentimientoId: string }>> {
-  const file = formData.get("file");
-  const pacienteId = String(formData.get("pacienteId") ?? "");
-  const plantillaId = String(formData.get("plantillaId") ?? "");
-  const tutorIdRaw = String(formData.get("tutorId") ?? "");
-  const tutorId = tutorIdRaw.trim() === "" ? null : tutorIdRaw;
-
-  if (!(file instanceof Blob) || file.size === 0) {
-    return err("validation", "La firma llegó vacía. Dibujala de nuevo e intentá otra vez.");
-  }
-  if (file.size > FIRMA_MAX_BYTES) {
-    return err("validation", "La firma supera el límite de 5 MB.");
-  }
-  if (file.type !== "image/png") {
-    return err("validation", "La firma debe ser una imagen PNG.");
-  }
-  if (
-    !z.string().uuid().safeParse(pacienteId).success ||
-    !z.string().uuid().safeParse(plantillaId).success ||
-    (tutorId !== null && !z.string().uuid().safeParse(tutorId).success)
-  ) {
-    return err("validation", "Datos del consentimiento inválidos.");
-  }
-
-  const session = await getActiveSession();
-  if (!session.ok) return session;
-  if (!puedeFirmarConsentimientos(session.data)) {
-    return err("forbidden", "Tu rol no puede registrar consentimientos.");
-  }
-  const organizationId = session.data.organizationId;
-
-  const supabase = await createSupabaseServerClient();
-
-  // F-AUTH (IDOR): paciente ∈ org activa. Mismo guard que los vecinos — no se
-  // confía en ids del cliente. La RLS de paciente es la última línea.
-  const { data: pacienteRow, error: pacienteErr } = await supabase
-    .from("paciente")
-    .select("id")
-    .eq("id", pacienteId)
-    .eq("organization_id", organizationId)
-    .maybeSingle();
-  if (pacienteErr) {
-    return err("db_error", "No pudimos validar el paciente.", pacienteErr.message);
-  }
-  if (!pacienteRow) {
-    return err("forbidden", "Ese paciente no pertenece a tu organización.");
-  }
-
-  // Firmante tutor: debe ser tutor del MISMO paciente en la MISMA org (el
-  // trigger consentimiento_tutor_guard re-valida en DB; acá damos error claro).
-  if (tutorId !== null) {
-    const { data: tutorRow, error: tutorErr } = await supabase
-      .from("tutor_legal")
-      .select("id")
-      .eq("id", tutorId)
-      .eq("paciente_id", pacienteId)
-      .eq("organization_id", organizationId)
-      .maybeSingle();
-    if (tutorErr) {
-      return err("db_error", "No pudimos validar el tutor.", tutorErr.message);
-    }
-    if (!tutorRow) {
-      return err("validation", "El tutor seleccionado no corresponde a este paciente.");
-    }
-  }
-
-  // Path canónico server-built (CHECK M07). El upload va SIN el prefijo del
-  // bucket (storage.objects.name no lo incluye — M27).
-  const firmaStoragePath = buildFirmaStoragePath({
-    organizationId,
-    pacienteId,
-    archivoUuid: crypto.randomUUID(),
-  });
-  const pathEnBucket = pathSinBucket(firmaStoragePath);
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  const { error: uploadErr } = await supabase.storage
-    .from(CONSENT_BUCKET)
-    .upload(pathEnBucket, bytes, { contentType: "image/png" });
-  if (uploadErr) {
-    return err("db_error", "No pudimos subir la firma.", uploadErr.message);
-  }
-
-  const created = await createConsentimiento({
-    pacienteId,
-    plantillaId,
-    firmaStoragePath,
-    firmadoPorTutorId: tutorId,
-  });
-  if (!created.ok) {
-    // El PNG quedó huérfano y los usuarios no tienen DELETE en este bucket
-    // (M27): limpieza best-effort con service client. Si también falla, el
-    // archivo huérfano es benigno (uuid sin fila que lo referencie).
-    try {
-      const service = createSupabaseServiceClient();
-      await service.storage.from(CONSENT_BUCKET).remove([pathEnBucket]);
-    } catch {
-      // best-effort: nunca enmascarar el error real del INSERT
-    }
-    return created;
-  }
-
-  // La vuelta: la card de la ficha muestra el consentimiento nuevo.
-  revalidatePath(`/pacientes/${pacienteId}`);
-  return ok({ consentimientoId: created.data.id });
+export async function uploadFirmaConsentimientoAction(formData: FormData): Promise<Result<{ consentimientoId: string }>> {
+  return uploadReviewedConsent(formData, "staff");
 }
 
 const revokeConsentimientoActionSchema = z.object({

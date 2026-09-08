@@ -1,47 +1,15 @@
-"use server";
+
+import { safeLog } from "@/lib/observability/safe-log";
+import { verifyMfaSession } from "@/lib/auth/mfa-access";
+import "server-only";
 
 /**
- * Folio · linkage del portal — orchestrator AUDITADO en path service_role
- * (Fase 3 · P3) 🔒.
- *
- * Cuando una cuenta de portal (paciente_cuenta, M70) se verifica, hay que
- * decidir a qué filas `paciente` (una por org) se la LINKEA. Este módulo:
- *   1. Recomputa los blind indexes (DNI/teléfono/email) del titular POR ORG (los
- *      hashes de `paciente_identidad` están salteados por org — M30/M36/M70).
- *   2. Busca filas `paciente` VIVAS y SIN cuenta (cuenta_id IS NULL) cuyos hashes
- *      coincidan, en CUALQUIER org.
- *   3. Corre el matcher PURO (`lib/portal/matcher.ts`): auto-link alta confianza
- *      (DOS identificadores en la misma fila: DNI+teléfono, DNI+email, o
- *      teléfono+email) vs claim (ambiguo — incluido el DNI solo). El DNI-solo NO
- *      auto-linkea [fase3-P3-adversarial-auth-review].
- *   4. Aplica: auto-links setean `paciente.cuenta_id`; ambiguos se encolan en
- *      `paciente_claim` (estado 'pendiente', aprobados por el clínico en P9).
- *   5. AUDITA cada decisión en `audit_log` (Ley 26.529 art. 18): quién (la
- *      cuenta), qué (link/claim), sobre quién (paciente_id + org).
- *
- * ─── Por qué service_role acá ─────────────────────────────────────────────────
- * El matcher DEBE cruzar orgs sin ser member de ninguna (el paciente no lo es) y
- * DEBE leer `paciente_identidad` de orgs ajenas para comparar hashes — eso lo
- * bloquea la RLS. Corre entonces con service_role (BYPASSRLS), pero:
- *   · SÓLO escribe `paciente.cuenta_id` (nunca datos clínicos) y `paciente_claim`.
- *   · NUNCA mergea filas paciente; sólo linkea.
- *   · TODA decisión queda en el audit_log.
- *   · El input (qué cuenta) se toma de la sesión Supabase del caller
- *     (auth.uid()), no de un arg del cliente ⇒ un usuario no puede correr el
- *     matcher "como" otra cuenta.
- * Las LECTURAS del paciente en el resto del portal usan el cliente anon
- * RLS-enforced; service_role queda acotado a este matcher (y al export, P7).
- *
- * ─── Alta confianza requiere DOS identificadores aportados ────────────────────
- * La cuenta guarda email (claro) y telefono_hash (SIN salt). Para recomputar los
- * hashes salteados por org necesito el RAW. El email lo tengo (claro). El
- * teléfono/DNI el titular los aporta en el flujo de linkage (pantalla del portal)
- * — sin ellos, sólo hay match por email ⇒ jamás alcanza el umbral de auto-link
- * (que exige DOS identificadores: DNI+teléfono, DNI+email o teléfono+email), así
- * que cae a claim: seguro por default. El DNI SOLO tampoco alcanza el umbral
- * [fase3-P3-adversarial-auth-review]: es no-secreto y auto-declarado.
+ * Portal linkage runs only on the server. Email is taken from verified Auth;
+ * callers may provide a DNI/phone and CAPTCHA, never an alternative email.
+ * The matcher identifies candidates across organizations with service_role.
+ * M98 atomically rechecks identity, account, live organization and adult patient,
+ * writes the link, and records its audit. Ambiguous records remain claims.
  */
-
 import { headers } from "next/headers";
 
 import { blindIndex, blindIndexPhone } from "@/lib/crypto";
@@ -53,18 +21,15 @@ import { createSupabaseServerClient, createSupabaseServiceClient } from "@/lib/s
 
 import { matchAccount, type MatchCandidate, type MatchOutcome } from "./matcher";
 
-/** Identificadores que el titular aporta para el matching. `email` default =
- * email de la cuenta (verificado por el magic-link). `dni`/`telefono` opcionales
- * (el titular los tipea en el portal); sin ellos, sólo hay match por email. */
+/** Optional self-declared identifiers; verified email always comes from Auth. */
 export interface LinkageIdentifiers {
   dni?: string | null;
   telefono?: string | null;
-  /** Si se omite, se usa el email verificado de la cuenta. */
-  email?: string | null;
+
   /** Token de Turnstile del widget del portal. OBLIGATORIO (fail-closed en prod)
    * cuando se aportan DNI/teléfono (el path que puede AUTO-LINKEAR y el vector de
    * fuerza bruta de DNIs). El auto-run email-only no lo necesita (no auto-linkea)
-   * pero igual consume el rate-limit por cuenta. */
+   * y no puede cambiar la identidad verificada. */
   captchaToken?: string | null;
 }
 
@@ -107,17 +72,16 @@ async function clientIpForLinkage(): Promise<string | null> {
  * excluye (cuenta_id IS NULL en el filtro de candidatos), y un claim duplicado
  * lo bloquea el UNIQUE (paciente_cuenta_id, paciente_id) de M70 (lo tragamos).
  *
- * @param identifiers DNI/teléfono/email aportados (email default = cuenta).
+ * @param identifiers DNI/teléfono aportados y token CAPTCHA.
  */
 export async function runLinkageForCurrentAccount(
   identifiers: LinkageIdentifiers = {},
 ): Promise<Result<LinkageResult>> {
   // 1. La cuenta del usuario logueado, tomada de SU sesión (no de un arg).
   const anon = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await anon.auth.getUser();
-  if (!user) return err("auth_required", "No estás autenticado.");
+  const verified = await verifyMfaSession(anon);
+  if (!verified.ok) return verified;
+  const { user } = verified.data;
 
   const { data: cuentaId, error: cuentaErr } = await anon.rpc("paciente_cuenta_actual");
   if (cuentaErr) {
@@ -128,8 +92,11 @@ export async function runLinkageForCurrentAccount(
   }
   const pacienteCuentaId = cuentaId as string;
 
-  // 2. Normalizar identificadores. El email default es el de la cuenta.
-  const email = (identifiers.email ?? user.email ?? "").trim().toLowerCase() || null;
+  // 2. Derive identity exclusively from the verified Auth response.
+  const email = (user.email ?? "").trim().toLowerCase();
+  if (!email || !user.email_confirmed_at) {
+    return err("forbidden", "Verificá tu email antes de vincular una ficha.");
+  }
   const dni = identifiers.dni?.trim() || null;
   const telefono = identifiers.telefono?.trim() || null;
 
@@ -211,7 +178,7 @@ export async function runLinkageForCurrentAccount(
 
     const { data: idRows, error: idErr } = await service
       .from("paciente_identidad")
-      .select("id, organization_id, dni_hash, telefono_hash, email_hash, paciente:paciente!identidad_id(id, cuenta_id, pseudonimizado_en)")
+      .select("id, organization_id, dni_hash, telefono_hash, email_hash, paciente:paciente!identidad_id(id, cuenta_id, pseudonimizado_en, deleted_at)")
       .eq("organization_id", organizationId)
       .is("deleted_at", null)
       .or(orClauses.join(","));
@@ -219,24 +186,25 @@ export async function runLinkageForCurrentAccount(
     if (idErr) {
       // No abortamos todo el matcher por una org: logueamos y seguimos (fail-safe
       // — mejor linkear las orgs que sí resolvieron que denegar todo).
-      console.warn(`[linkage] error consultando org ${organizationId}: ${idErr.message}`);
+      safeLog("warn", "lib.portal.link.actions.L187", { error: idErr });
       continue;
     }
 
     for (const row of (idRows ?? []) as unknown as Array<
       IdentidadCandidateRow & {
-        paciente: { id: string; cuenta_id: string | null; pseudonimizado_en: string | null } | { id: string; cuenta_id: string | null; pseudonimizado_en: string | null }[] | null;
+        paciente: { id: string; cuenta_id: string | null; pseudonimizado_en: string | null; deleted_at: string | null } | { id: string; cuenta_id: string | null; pseudonimizado_en: string | null; deleted_at: string | null }[] | null;
       }
     >) {
       // El embed puede venir como objeto (1:1 por FK) — normalizamos.
       const pac = Array.isArray(row.paciente) ? row.paciente[0] : row.paciente;
       if (!pac) continue;
-      // Excluir filas ya linkeadas (a cualquier cuenta) o pseudonimizadas.
-      if (pac.cuenta_id !== null) continue;
+      // Linked household members still count toward ambiguity.
+      if (pac.deleted_at !== null) continue;
       if (pac.pseudonimizado_en !== null) continue;
 
       candidates.push({
         pacienteId: pac.id,
+        alreadyLinked: pac.cuenta_id !== null,
         organizationId,
         dniMatch: Boolean(dniHash && row.dni_hash === dniHash),
         telefonoMatch: Boolean(telHash && row.telefono_hash === telHash),
@@ -252,33 +220,23 @@ export async function runLinkageForCurrentAccount(
   // pisar un link de carrera). Claims: insertar 'pendiente' (UNIQUE tolera dup).
   let autoLinked = 0;
   for (const link of outcome.autoLinks) {
-    const { data: updated, error: upErr } = await service
-      .from("paciente")
-      .update({ cuenta_id: pacienteCuentaId })
-      .eq("id", link.pacienteId)
-      .is("cuenta_id", null)
-      .select("id");
-    if (upErr) {
-      console.warn(`[linkage] error linkeando paciente ${link.pacienteId}: ${upErr.message}`);
+    // Revalidate and lock Auth, account, organization, patient and identity in
+    // ONE transaction. The RPC is executable only by the service role.
+    const { data: updated, error: upErr } = await service.rpc("portal_link_verified_patient", {
+      p_auth_user_id: user.id,
+      p_cuenta_id: pacienteCuentaId,
+      p_paciente_id: link.pacienteId,
+      p_organization_id: link.organizationId,
+      p_verified_email: email,
+      p_email_hash: blindIndex(email, link.organizationId),
+      p_dni_hash: dni ? blindIndex(dni, link.organizationId) : null,
+      p_telefono_hash: telefono ? blindIndexPhone(telefono, link.organizationId) : null,
+    });    if (upErr) {
+      safeLog("warn", "lib.portal.link.actions.L233", { error: upErr });
       continue;
     }
-    if (updated && updated.length > 0) {
-      autoLinked += 1;
-      await writeAuditEntry({
-        organizationId: link.organizationId,
-        actorId: user.id,
-        actorRole: "PACIENTE",
-        action: "paciente.portal_auto_link",
-        resourceType: "paciente",
-        resourceId: link.pacienteId,
-        payload: {
-          paciente_cuenta_id: pacienteCuentaId,
-          reason: link.reason,
-        },
-      });
-    }
+    if (updated === true) autoLinked += 1;
   }
-
   let claimsQueued = 0;
   for (const claim of outcome.claims) {
     const { error: insErr } = await service.from("paciente_claim").insert({
@@ -291,7 +249,7 @@ export async function runLinkageForCurrentAccount(
       // 23505 = ya existe el claim (UNIQUE paciente_cuenta_id, paciente_id): no es
       // error, es idempotencia. Cualquier otro error se loguea y sigue.
       if (insErr.code !== "23505") {
-        console.warn(`[linkage] error encolando claim ${claim.pacienteId}: ${insErr.message}`);
+        safeLog("warn", "lib.portal.link.actions.L250", { error: insErr });
       }
       continue;
     }

@@ -16,13 +16,9 @@
  *   ya resueltos org + paciente y un client Supabase — no llama a getActiveSession
  *   por sí mismo: cada capa decide su propio scope y se lo pasa.
  *
- * ── Qué EXCLUYE (regla dura) ──────────────────────────────────────────────────
- * NUNCA incluye el SOAP crudo (sesion.tool_data_cifrado / campos S/O/A/P): la
- * historia clínica narrativa es dato del profesional-controller, no un dato
- * personal que el paciente porte 1:1. El "resumen clínico" es un WHITELIST de
- * campos no sensibles (motivo de consulta que el propio paciente declaró,
- * fechas de atención), NO un filtro sobre el SOAP. Si mañana se agrega una
- * fuente, se agrega explícitamente acá — el default es no incluir.
+ * La entrega clínica mediada por el profesional incluye las sesiones originales,
+ * notas y enmiendas. El portal mantiene su alcance de entrega hasta completar
+ * la verificación de identidad/representación y la revisión clínica correspondiente.
  *
  * ── Anti-IDOR ─────────────────────────────────────────────────────────────────
  * El riesgo de esta feature es IDOR: pedir el export de un paciente ajeno. Toda
@@ -34,6 +30,9 @@
  */
 
 import "server-only";
+import { readCompleteCollection } from "@/lib/db/complete-collection";
+import { buildClinicalExport, type ClinicalExport } from "./clinical-export";
+import { clinicalManifest, CLINICAL_EXPORT_FORMAT_VERSION } from "./export-manifest";
 
 import { tryDecrypt } from "@/lib/crypto";
 import { err, mapSupabaseError, ok, type Result } from "@/lib/db/errors";
@@ -140,6 +139,9 @@ export interface PatientExportResumenClinico {
 }
 
 export interface PatientExport {
+  format_version?: typeof CLINICAL_EXPORT_FORMAT_VERSION;
+  manifest?: ReturnType<typeof clinicalManifest>;
+  historia_clinica?: ClinicalExport;
   ok: true;
   exported_at: string;
   exported_by: "profesional";
@@ -182,6 +184,8 @@ interface PacienteCompletoRow {
 // ─── Assembler ───────────────────────────────────────────────────────────────
 
 export interface BuildPatientExportInput {
+  /** Set only at the existing authorized professional-mediated endpoint. */
+  clinicalHistory?: "professional-reviewed";
   /** Client Supabase ya autenticado (RLS del profesional). */
   supabase: Supa;
   /** Org activa de la sesión del profesional. NUNCA del input del cliente. */
@@ -198,15 +202,15 @@ export interface BuildPatientExportInput {
  *   - forbidden  → coherencia de org falló (defensa en profundidad).
  *   - db_error   → error de Postgres al leer.
  *
- * Toda PII/PHI se descifra SERVER-SIDE con tryDecrypt (un ciphertext corrupto
- * degrada ese campo a null en vez de tirar el export entero). El SOAP crudo NO
- * se toca. Los turnos/consentimientos/intake se leen SIEMPRE scopeados por
+ * Toda PII/PHI se descifra SERVER-SIDE. El contenido clínico ilegible aborta
+ * la entrega clínica. Los turnos/consentimientos/intake se leen scopeados por
  * (org, paciente_id) — anti-IDOR.
  */
 export async function buildPatientExport(
   input: BuildPatientExportInput,
 ): Promise<Result<PatientExport>> {
   const { supabase, organizationId, pacienteId } = input;
+  const lecturaIniciada = new Date().toISOString();
 
   // 1. Paciente (PII + PHI) vía paciente_completo (security_invoker → RLS del
   //    profesional). Scope DOBLE: por id Y por org — nunca por input del cliente.
@@ -245,12 +249,10 @@ export async function buildPatientExport(
 
   // 2. Turnos del paciente (scopeados por org + paciente_id). Sin PHI: sólo
   //    fecha, duración, estado, modalidad — metadata de la atención.
-  const { data: turnosRaw, error: turnosErr } = await supabase
-    .from("turno")
-    .select("id, inicio, duracion_min, estado, modalidad")
-    .eq("organization_id", organizationId)
-    .eq("paciente_id", pacienteId)
-    .order("inicio", { ascending: false });
+  const { data: turnosRaw, error: turnosErr } = await readCompleteCollection<PatientExportTurno>((from, to) => supabase
+    .from("turno").select("id, inicio, duracion_min, estado, modalidad", { count: "exact" })
+    .eq("organization_id", organizationId).eq("paciente_id", pacienteId)
+    .order("inicio", { ascending: false }).order("id", { ascending: false }).range(from, to));
   if (turnosErr) {
     const mapped = mapSupabaseError(turnosErr);
     return err(mapped.code, mapped.message, turnosErr.message);
@@ -258,14 +260,11 @@ export async function buildPatientExport(
 
   // 3. Consentimientos firmados (scopeados por org + paciente_id). El archivo de
   //    firma NO se incluye (es un binario en Storage); sí su metadata legal.
-  const { data: consentimientosRaw, error: consentErr } = await supabase
+  const { data: consentimientosRaw, error: consentErr } = await readCompleteCollection<{ id: string } & Record<string, unknown>>((from, to) => supabase
     .from("consentimiento")
-    .select(
-      "id, tipo, firmado_en, revocado_en, plantilla:plantilla_consentimiento(titulo, version)",
-    )
-    .eq("organization_id", organizationId)
-    .eq("paciente_id", pacienteId)
-    .order("firmado_en", { ascending: false });
+    .select("id, tipo, firmado_en, revocado_en, plantilla:plantilla_consentimiento(titulo, version)", { count: "exact" })
+    .eq("organization_id", organizationId).eq("paciente_id", pacienteId)
+    .order("firmado_en", { ascending: false }).order("id", { ascending: false }).range(from, to));
   if (consentErr) {
     const mapped = mapSupabaseError(consentErr);
     return err(mapped.code, mapped.message, consentErr.message);
@@ -273,47 +272,60 @@ export async function buildPatientExport(
 
   // 4. Metadata de intake avanzado (qué especialidades tienen ficha cargada — NO
   //    el contenido cifrado). Scope por org + paciente_id.
-  const { data: intakeRaw, error: intakeErr } = await supabase
-    .from("paciente_intake_avanzado")
-    .select("especialidad")
-    .eq("organization_id", organizationId)
-    .eq("paciente_id", pacienteId);
+  const { data: intakeRaw, error: intakeErr } = await readCompleteCollection<{ id: string; especialidad: string }>((from, to) => supabase
+    .from("paciente_intake_avanzado").select("id, especialidad", { count: "exact" })
+    .eq("organization_id", organizationId).eq("paciente_id", pacienteId)
+    .order("id", { ascending: true }).range(from, to));
   if (intakeErr) {
     const mapped = mapSupabaseError(intakeErr);
     return err(mapped.code, mapped.message, intakeErr.message);
   }
 
-  // 5. Conteo de sesiones registradas (metadata; el contenido SOAP NUNCA se
-  //    exporta). count exact + head → no trae filas ni PHI.
+  // 5. Conteo exacto de sesiones; la entrega clínica carga luego sus originales.
   const { count: sesionesCount, error: sesionesErr } = await supabase
     .from("sesion")
     .select("id", { count: "exact", head: true })
     .eq("organization_id", organizationId)
     .eq("paciente_id", pacienteId);
-  if (sesionesErr) {
+  if (sesionesErr || sesionesCount === null) {
+    if (!sesionesErr) return err("db_error", "No se pudo verificar la cantidad de sesiones.");
     const mapped = mapSupabaseError(sesionesErr);
     return err(mapped.code, mapped.message, sesionesErr.message);
   }
 
+  let historiaClinica: ClinicalExport | undefined;
+  if (input.clinicalHistory === "professional-reviewed") {
+    const clinical = await buildClinicalExport(supabase, organizationId, pacienteId);
+    if (!clinical.ok) return clinical;
+    historiaClinica = clinical.data;
+  }
+
+  let unreadablePatientField = false;
+  const decodePatient = (value: string | Buffer | null, context: string) => {
+    const plain = tryDecrypt(value, context);
+    if (value != null && plain === null) unreadablePatientField = true;
+    return plain;
+  };
+
   const identidad: PatientExportIdentidad = {
-    nombre: tryDecrypt(p.nombre_cifrado, "patient-export.nombre"),
-    apellido: tryDecrypt(p.apellido_cifrado, "patient-export.apellido"),
+    nombre: decodePatient(p.nombre_cifrado, "patient-export.nombre"),
+    apellido: decodePatient(p.apellido_cifrado, "patient-export.apellido"),
     tipo_doc: p.tipo_doc ?? null,
-    numero_doc: tryDecrypt(p.numero_doc_cifrado, "patient-export.numero_doc"),
-    email: tryDecrypt(p.email_cifrado, "patient-export.email"),
-    telefono: tryDecrypt(p.telefono_cifrado, "patient-export.telefono"),
+    numero_doc: decodePatient(p.numero_doc_cifrado, "patient-export.numero_doc"),
+    email: decodePatient(p.email_cifrado, "patient-export.email"),
+    telefono: decodePatient(p.telefono_cifrado, "patient-export.telefono"),
     fecha_nacimiento: p.fecha_nacimiento,
     sexo_biologico: p.sexo_biologico,
     genero_autopercibido: p.genero_autopercibido,
-    domicilio_calle: tryDecrypt(p.domicilio_calle_cifrado, "patient-export.domicilio_calle"),
-    domicilio_numero: tryDecrypt(p.domicilio_numero_cifrado, "patient-export.domicilio_numero"),
+    domicilio_calle: decodePatient(p.domicilio_calle_cifrado, "patient-export.domicilio_calle"),
+    domicilio_numero: decodePatient(p.domicilio_numero_cifrado, "patient-export.domicilio_numero"),
     domicilio_ciudad: p.domicilio_ciudad,
     domicilio_provincia: p.domicilio_provincia,
     domicilio_cp: p.domicilio_cp,
   };
 
   const turnos: PatientExportTurno[] = (turnosRaw ?? []).map(
-    (t: Record<string, unknown>) => ({
+    (t) => ({
       id: String(t.id),
       inicio: String(t.inicio),
       duracion_min: Number(t.duracion_min ?? 0),
@@ -350,13 +362,27 @@ export async function buildPatientExport(
   const resumenClinico: PatientExportResumenClinico = {
     // El motivo de consulta lo declaró el propio paciente en el alta → es dato
     // personal suyo, apto para el export. NO es SOAP narrativo del profesional.
-    motivo_consulta: tryDecrypt(p.motivo_consulta_cifrado, "patient-export.motivo_consulta"),
+    motivo_consulta: decodePatient(p.motivo_consulta_cifrado, "patient-export.motivo_consulta"),
     especialidades_con_intake: especialidadesConIntake,
-    sesiones_registradas: sesionesCount ?? 0,
+    sesiones_registradas: historiaClinica?.sesiones.length ?? sesionesCount ?? 0,
   };
+
+  if (historiaClinica && unreadablePatientField) {
+    return err("db_error", "No se pudo descifrar parte de la ficha. No se generó un archivo incompleto.");
+  }
+
+  if (historiaClinica) {
+    const finalScope = await supabase.from("paciente_completo").select("id, organization_id")
+      .eq("id", pacienteId).eq("organization_id", organizationId).maybeSingle();
+    if (finalScope.error || finalScope.data?.id !== pacienteId || finalScope.data?.organization_id !== organizationId) {
+      return err("forbidden", "No se pudo confirmar el acceso al paciente al finalizar la entrega.");
+    }
+  }
 
   return ok({
     ok: true,
+    ...(historiaClinica ? { historia_clinica: historiaClinica, format_version: CLINICAL_EXPORT_FORMAT_VERSION,
+      manifest: clinicalManifest(historiaClinica, lecturaIniciada, new Date().toISOString()) } : {}),
     exported_at: new Date().toISOString(),
     exported_by: "profesional",
     ley_25326_basis: "art. 14 (derecho de acceso del titular) — art. 16 (portabilidad)",
@@ -373,8 +399,10 @@ export async function buildPatientExport(
     notas: [
       "Este export contiene los datos personales del paciente titular bajo Ley 25.326.",
       "Fue generado por el profesional tratante a pedido del paciente (derecho de acceso, art. 14).",
-      "La historia clínica narrativa (evolución/SOAP) es dato del profesional en su rol de responsable del tratamiento y no se incluye en bruto; el resumen contiene sólo el motivo de consulta declarado por el paciente y metadata de la atención.",
-      "Los archivos de firma de los consentimientos se conservan por el profesional (Ley 26.529, retención 10 años) y pueden solicitarse por separado.",
+      historiaClinica
+        ? "Incluye sesiones originales, enmiendas, notas, intake, respuestas y resultados originales de instrumentos e inventario autorizado de documentos y evidencia de consentimientos. Consultá el manifiesto de alcance; no es un archivo completo restaurable."
+        : "Esta entrega del portal contiene datos personales y un resumen. La copia clínica con evolución y enmiendas se solicita al profesional mediante el circuito de entrega autorizado.",
+      "Los bytes de documentos y firmas no están incluidos. Los enlaces disponibles requieren sesión y permisos vigentes; la descarga y verificación de esos archivos quedan pendientes.",
       `Ante dudas o para ejercer rectificación/supresión, el paciente puede contactar a su profesional tratante o, subsidiariamente, a ${SUPPORT_EMAIL}.`,
     ],
   });

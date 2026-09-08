@@ -1,3 +1,5 @@
+
+import { safeLog } from "@/lib/observability/safe-log";
 /**
  * Folio · equipo: members + invitaciones (M49/M51 · Fase C tiers Solo/Clinic).
  *
@@ -89,6 +91,7 @@ export interface TeamInvitationRow {
 }
 
 export interface CreatedInvitation {
+  organizationId: string;
   invitation: TeamInvitationRow;
   /**
    * Link de aceptación con el token crudo. Solo se devuelve UNA vez, al
@@ -114,7 +117,7 @@ function tryDecrypt(value: string | null, label: string): string | null {
     return decryptColumn(value);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    console.warn(`[members] ${label}: decrypt falló (${msg}).`);
+    safeLog("warn", "lib.db.members.L118", `[members] ${label}: decrypt falló (${msg}).`);
     return null;
   }
 }
@@ -609,9 +612,7 @@ export async function createInvitation(
   const invitedByNombre =
     [ctx.data.profile.nombre, ctx.data.profile.apellido].filter(Boolean).join(" ").trim() || null;
 
-  // Audit (Ley 26.529 art. 18): registrar la creación de la invitación. El
-  // email del invitado es PII y se guarda en el payload — ver writeAuditEntry.
-  // NUNCA el token ni token_hash.
+  // The invitation ID provides traceability without duplicating the address or token.
   await writeAuditEntry({
     organizationId: ctx.data.organization.id,
     actorId: ctx.data.session.userId,
@@ -619,10 +620,11 @@ export async function createInvitation(
     action: "member_invitation.create",
     resourceType: "member_invitation",
     resourceId: row.id,
-    payload: { email: row.email, role: row.role, es_colegiado: row.es_colegiado },
+    payload: { role: row.role, es_colegiado: row.es_colegiado },
   });
 
   return ok({
+    organizationId: ctx.data.organization.id,
     invitation: {
       id: row.id,
       email: row.email,

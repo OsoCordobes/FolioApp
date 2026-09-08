@@ -177,6 +177,8 @@ export function BillingPage({
         </Link>
       </header>
 
+      <p><Link href="/mis-datos">Acceder a mis datos y solicitudes</Link></p>
+
       {gateBanner ? <GraceBanner reason={gateBanner} /> : null}
       {activationOk && subscription?.estado !== "ACTIVA" ? <ActivationPendingBanner /> : null}
       {!accessGate.allowed && !gateBanner ? <GraceBanner reason={accessGate.reason ?? "denied"} /> : null}

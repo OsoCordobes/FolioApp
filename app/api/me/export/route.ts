@@ -1,189 +1,24 @@
-/**
- * Folio · /api/me/export · ARCO Access (Ley 25.326 art. 14).
- *
- * Devuelve un JSON estructurado y portable con todos los datos personales
- * del usuario autenticado. Apto como evidencia de cumplimiento del derecho
- * de acceso y como mecanismo de portabilidad.
- *
- * Scope del export:
- *   - profile (PII descifrada)
- *   - memberships (organization_id, rol, scope, equipo, es_colegiado, timestamps)
- *   - subscripciones / planes asociados al profile (si los hay)
- *   - integraciones (proveedor + fecha; tokens NO se exportan por seguridad)
- *   - invitaciones de equipo que el titular creó o aceptó (sin token_hash)
- *
- * El export NO incluye:
- *   - PHI de pacientes: el profesional la accede vía la UI normal (no es
- *     dato personal *suyo*; lo es del paciente, que tiene derecho de
- *     acceso vía el profesional o vía privacidad@folio.app).
- *   - Tokens OAuth, secrets, certificados AFIP cifrados.
- *
- * Audit log:
- *   - Cada export deja una fila `profile.export` en audit_log con
- *     organization_id de la primera membresía. Sirve como prueba de
- *     atención a la solicitud ARCO.
- */
-
-import { headers } from "next/headers";
 import { NextResponse } from "next/server";
-
-import { buildAuditInsertRow } from "@/lib/db/audit";
-import { tryDecrypt } from "@/lib/crypto";
-import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/legal/versions";
-import {
-  buildInvitationOrFilter,
-  sanitizeInvitationsForExport,
-  type RawInvitationRow,
-} from "@/lib/me/export-invitations";
-import { createSupabaseServerClient, createSupabaseServiceClient } from "@/lib/supabase/server";
-import { SUPPORT_EMAIL } from "@/lib/support";
+import { exportPersonalData } from "@/lib/me/personal-export";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-// Export ARCO: descifra PII app-side + agrega varias tablas. Margen sobre el
-// default por si el profile tiene muchas membresías/invitaciones.
 export const maxDuration = 60;
 
 export async function GET() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json(
-      { ok: false, error: { code: "auth_required", message: "No estás autenticado." } },
-      { status: 401 },
-    );
+  const result = await exportPersonalData();
+  if (!result.ok) {
+    const code = result.error.code;
+    return NextResponse.json({ ok: false, error: result.error }, {
+      status: code === "auth_required" ? 401 : code === "mfa_required" || code === "forbidden" ? 403 : code === "conflict" ? 409 : code === "validation" ? 413 : 503,
+      headers: { "Cache-Control": "no-store" },
+    });
   }
-
-  const service = createSupabaseServiceClient();
-
-  // 1. Profile (PII cifrada en DB → la desciframos para el titular).
-  const { data: profileRow, error: profileErr } = await service
-    .from("profile")
-    .select("id, email, nombre_cifrado, apellido_cifrado, matricula, avatar_url, two_factor_enabled, created_at, updated_at")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (profileErr || !profileRow) {
-    return NextResponse.json(
-      { ok: false, error: { code: "not_found", message: "Profile no encontrado." } },
-      { status: 404 },
-    );
-  }
-
-  // 2. Memberships (todas las orgs donde el profile es miembro, incluso
-  //    soft-deleted: el titular tiene derecho a conocer su histórico).
-  const { data: members } = await service
-    .from("member")
-    .select(
-      "id, organization_id, role, alcance, profesionales_gestionados, equipo_id, es_colegiado, accepted_at, deleted_at, created_at",
-    )
-    .eq("profile_id", user.id);
-
-  // 3. Integraciones del profesional (sin tokens).
-  const { data: integraciones } = await service
-    .from("integration")
-    .select("id, organization_id, proveedor, expira_ts, ultimo_uso_ts, created_at")
-    .eq("profesional_id", members?.[0]?.id ?? "00000000-0000-0000-0000-000000000000");
-
-  // 4. Suscripción (si existe la tabla en este deploy).
-  const { data: suscripciones } = await service
-    .from("suscripcion")
-    .select(
-      "id, organization_id, estado, monto_cents, moneda, fecha_alta, proxima_cobro, fecha_cancelacion, created_at",
-    )
-    .in(
-      "organization_id",
-      (members ?? []).map((m) => m.organization_id),
-    );
-
-  // 5. Invitaciones de equipo vinculadas al titular (Ley 25.326 art. 16 —
-  //    portabilidad): las que CREÓ (invited_by_member_id ∈ sus memberships) y
-  //    las que ACEPTÓ (accepted_by_profile_id = user.id). Columnas
-  //    sanitizadas: NUNCA se exporta token_hash (es el secreto de aceptación).
-  const memberIds = (members ?? []).map((m) => m.id);
-  const { data: invitacionesRaw } = await service
-    .from("member_invitation")
-    .select(
-      "id, organization_id, email, role, estado, expires_at, accepted_at, created_at, invited_by_member_id, accepted_by_profile_id",
-    )
-    .or(buildInvitationOrFilter(user.id, memberIds));
-  const invitaciones = sanitizeInvitationsForExport(
-    (invitacionesRaw ?? []) as RawInvitationRow[],
-    user.id,
-    memberIds,
-  );
-
-  // 6. Audit del export (Ley 25.326 art. 14 — evidencia de respuesta). El
-  //    contexto de red (ip/user_agent) es especialmente relevante acá: deja
-  //    constancia de DESDE DÓNDE se ejerció el derecho de acceso a PII.
-  if (members && members.length > 0) {
-    const h = await headers();
-    await service.from("audit_log").insert(
-      buildAuditInsertRow(
-        {
-          organizationId: members[0].organization_id,
-          actorId: user.id,
-          actorRole: members[0].role,
-          action: "profile.export",
-          resourceType: "profile",
-          resourceId: user.id,
-          payload: { reason: "ARCO art. 14 — derecho de acceso del titular" },
-        },
-        {
-          ip: h.get("x-forwarded-for") ?? h.get("x-real-ip") ?? null,
-          userAgent: h.get("user-agent") ?? null,
-        },
-      ),
-    );
-  }
-
-  const payload = {
-    ok: true,
-    exported_at: new Date().toISOString(),
-    ley_25326_basis: "art. 14 (derecho de acceso) — art. 16 (portabilidad implícita)",
-    privacy_policy_version: PRIVACY_VERSION,
-    terms_version: TERMS_VERSION,
-    profile: {
-      id: profileRow.id,
-      email: profileRow.email,
-      // tryDecrypt: un ciphertext corrupto degrada el campo a null en vez de
-      // tirar un 500 que bloquee TODO el export ARCO del titular.
-      nombre: tryDecrypt(profileRow.nombre_cifrado as unknown as Buffer, "export.profile.nombre"),
-      apellido: tryDecrypt(profileRow.apellido_cifrado as unknown as Buffer, "export.profile.apellido"),
-      matricula: profileRow.matricula,
-      avatar_url: profileRow.avatar_url,
-      two_factor_enabled: profileRow.two_factor_enabled,
-      created_at: profileRow.created_at,
-      updated_at: profileRow.updated_at,
-    },
-    memberships: members ?? [],
-    integraciones: (integraciones ?? []).map((i) => ({
-      id: i.id,
-      organization_id: i.organization_id,
-      proveedor: i.proveedor,
-      expira_ts: i.expira_ts,
-      ultimo_uso_ts: i.ultimo_uso_ts,
-      created_at: i.created_at,
-      // Tokens deliberadamente omitidos.
-    })),
-    suscripciones: suscripciones ?? [],
-    invitaciones,
-    notas: [
-      "Este export contiene los datos personales del titular del profile.",
-      `Los datos clínicos de pacientes (PHI) NO están incluidos porque el responsable de esos datos es el profesional tratante en su rol de data controller bajo Ley 25.326. Los pacientes pueden ejercer su derecho de acceso solicitándolo al profesional o, subsidiariamente, a ${SUPPORT_EMAIL}.`,
-      "Tokens OAuth, certificados AFIP y secretos se omiten por seguridad.",
-      "Para ejercer derecho de rectificación: Configuración → Cuenta. Para supresión: Configuración → Eliminar cuenta.",
-    ],
-  };
-
-  return new NextResponse(JSON.stringify(payload, null, 2), {
+  return new NextResponse(JSON.stringify(result.data.payload, null, 2), {
     status: 200,
     headers: {
       "Content-Type": "application/json; charset=utf-8",
-      "Content-Disposition": `attachment; filename="folio-export-${user.id.slice(0, 8)}-${new Date().toISOString().slice(0, 10)}.json"`,
+      "Content-Disposition": `attachment; filename="${result.data.filename}"`,
       "Cache-Control": "no-store",
     },
   });

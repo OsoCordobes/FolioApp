@@ -1,3 +1,5 @@
+
+import { safeLog } from "@/lib/observability/safe-log";
 /**
  * Folio · turno state machine — single source of truth.
  *
@@ -63,6 +65,25 @@ export function canTransition(from: EstadoTurno, to: EstadoTurno): boolean {
   return (VALID_TRANSITIONS[from] ?? []).includes(to);
 }
 
+/** Strict reachability in the acyclic graph enforced by turno_record_transition (M91).
+ * Equal states are deliberately not older: their other fields may have changed.
+ */
+export function isTurnoStatePredecessor(earlier: EstadoTurno, later: EstadoTurno): boolean {
+  if (earlier === later) return false;
+  const visited = new Set<EstadoTurno>();
+  const remaining: EstadoTurno[] = [earlier];
+  while (remaining.length > 0) {
+    const state = remaining.pop()!;
+    if (visited.has(state)) continue;
+    visited.add(state);
+    for (const next of VALID_TRANSITIONS[state] ?? []) {
+      if (next === later) return true;
+      remaining.push(next);
+    }
+  }
+  return false;
+}
+
 export interface ApplyTransitionOptions {
   actor?: ActorTurno;
   trigger?: TriggerTurno;
@@ -78,7 +99,7 @@ export function applyTransition(
   const { actor = "lorenzo", trigger = "manual", extra = {} } = opts;
   if (!canTransition(turno.estado, to)) {
     if (typeof console !== "undefined") {
-      console.warn(`[turnoStates] Invalid transition: ${turno.estado} → ${to}`);
+      safeLog("warn", "lib.turno.states.L100", `[turnoStates] Invalid transition: ${turno.estado} → ${to}`);
     }
     return turno;
   }

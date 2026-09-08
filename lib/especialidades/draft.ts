@@ -43,12 +43,12 @@ export interface SesionFichaDraft {
   /** Borrador del Tool del slot, o null si no se tocó la herramienta. */
   toolValue: unknown;
   soap: FichaSoapDraft;
-  /**
-   * `sesion.updated_at` con el que se hidrató el borrador (control de
-   * concurrencia optimista). `undefined` = la ficha no conocía la versión —
-   * sesión nueva o caller legacy — y el writer se comporta como antes.
-   */
+  /** Legacy transport compatibility only; the writer requires an explicit
+   * durable revision and operation, even when creating a new session. */
   updatedAtEsperado?: string;
+  revisionEsperada?:number;
+  operacionId?:string;
+  intencion?:"SAVE"|"AUTOSAVE"|"CLOSE";
 }
 
 function campoSoap(value: string | null | undefined): string | undefined {
@@ -67,6 +67,9 @@ export function buildUpsertSesionInput(draft: SesionFichaDraft): UpsertSesionInp
       p: campoSoap(draft.soap.plan),
     },
     ...(draft.updatedAtEsperado ? { updatedAtEsperado: draft.updatedAtEsperado } : {}),
+    ...(draft.revisionEsperada!==undefined?{revisionEsperada:draft.revisionEsperada}:{}),
+    ...(draft.operacionId?{operacionId:draft.operacionId}:{}),
+    intencion:draft.intencion??"SAVE",
   };
   if (draft.toolValue == null) return input;
 

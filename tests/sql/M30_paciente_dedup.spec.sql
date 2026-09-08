@@ -19,6 +19,7 @@ DECLARE
   v_id1   uuid;
   v_id2   uuid;
   v_caught boolean;
+  v_phone_unique boolean;
 BEGIN
   -- ── 1. column telefono_hash existe
   IF NOT EXISTS (
@@ -35,11 +36,16 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'M30 spec FAIL: partial UNIQUE on dni_hash ausente';
   END IF;
-  IF NOT EXISTS (
+  SELECT EXISTS (
     SELECT 1 FROM pg_indexes
     WHERE tablename='paciente_identidad' AND indexname='paciente_identidad_telefono_unique_active'
-  ) THEN
-    RAISE EXCEPTION 'M30 spec FAIL: partial UNIQUE on telefono_hash ausente';
+  ) INTO v_phone_unique;
+  -- M109 deliberately permits shared family phones. Keep the historical
+  -- contract before M109 and validate the effective non-unique contract after.
+  -- M109's own spec requires the unique index to be absent.
+  IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE tablename='paciente_identidad'
+    AND indexname='paciente_identidad_org_telefono_search_idx') THEN
+    RAISE EXCEPTION 'M30 spec FAIL: phone lookup index missing';
   END IF;
 
   -- ── Fixtures: 2 orgs sin profile/member (insert directo, RLS bypass como superuser)
@@ -73,8 +79,8 @@ BEGIN
   EXCEPTION WHEN unique_violation THEN
     v_caught := true;
   END;
-  IF NOT v_caught THEN
-    RAISE EXCEPTION 'M30 spec FAIL: duplicado de TELEFONO activo no fue bloqueado';
+  IF v_caught IS DISTINCT FROM v_phone_unique THEN
+    RAISE EXCEPTION 'M30 spec FAIL: shared phone behavior inconsistent with migration stage';
   END IF;
 
   -- ── 5. soft-delete + nuevo activo con mismo DNI → permitido

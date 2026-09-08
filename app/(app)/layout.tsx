@@ -1,3 +1,5 @@
+
+import { safeLog } from "@/lib/observability/safe-log";
 /**
  * Shell autenticada con gating real (S1 T-1.2).
  *
@@ -34,6 +36,7 @@ export default async function AppShellLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   const ctx = await getActiveContext();
   if (!ctx.ok) {
+    if (ctx.error.code === "mfa_required") redirect("/seguridad/mfa");
     if (ctx.error.code === "auth_required") {
       redirect("/login");
     }
@@ -43,8 +46,8 @@ export default async function AppShellLayout({
       // rebota para siempre. /onboarding ahora corta ese loop mandando a
       // /cuenta-error; este log es lo que permite reconstruir por qué el
       // contexto no resolvía (RLS, org sin member, member soft-deleted…).
-      console.warn(
-        `[app layout] getActiveContext ${ctx.error.code} → /onboarding: ${ctx.error.message}`,
+      safeLog("warn", "app.app.layout.L47",
+        { error: ctx.error },
       );
       redirect("/onboarding");
     }

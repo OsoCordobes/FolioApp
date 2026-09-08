@@ -1,308 +1,120 @@
-# LAUNCH RUNBOOK — Folio
+# Folio — controles para publicar y abrir el piloto
 
-> Documento operativo del día de lanzamiento. **es-AR.** Conciso y accionable.
-> Lo usa el operador (vos) para llevar a Folio a producción con el primer
-> cliente real. Orden de uso: **(1) Pre-vuelo de envs → (2) Verificación
-> go-live → (3) Recomendaciones fuertes → (4) tener a mano Rollback y Gaps.**
->
-> Contexto: `master` auto-deploya a producción (Vercel, región `gru1`). El
-> cliente Supabase está tipado `<any>` — un env faltante o un mismatch de
-> schema no rompe en compile-time, falla en runtime. De ahí este pre-vuelo.
+Actualizado el 8 de septiembre de 2026. Este documento sustituye las recomendaciones
+anteriores que trataban correo, respaldos y límites de acceso como opcionales.
+La lista de trabajo y la evidencia vigente están en
+[el registro de implementación](plans/2026-09-08-market-readiness.md).
+**Folio todavía no está habilitado por este proceso para atención clínica real.**
 
----
+## Estado confirmado
 
-## 1. Pre-vuelo de envs en producción (Vercel)
+- Producción conserva el código `2bfbe54137603e373a0fa2ab439d367dedf93415`.
+  Las mejoras de seguridad, clínica y operaciones se preparan en `codex/market-ready`.
+- Se recuperaron las 42 variables de producción en un paquete cifrado fuera del
+  repositorio. Las claves actuales pasan el formato de 32 bytes y no hay claves
+  `_NEXT` activadas. La frase de recuperación fuera de esta PC sigue pendiente.
+- Existe un checkpoint cifrado y autenticado de la base, roles y configuración
+  observada. Storage tenía cuatro buckets y cero objetos. Una restauración de
+  estructura seleccionada pasó; el restablecimiento completo del servicio no.
+- Se corrigió en Supabase Auth la URL del sitio a `https://foliosalud.com` y se
+  retiraron dos entradas de redirección malformadas. Los tres destinos canónicos
+  de acceso/portal/contraseña se comprobaron antes y después, sin enviar correo.
+  Esta configuración cambió después del checkpoint y tiene registro separado.
+- `master` exige PR, los checks `app-ci` y `sql-specs` con base actualizada,
+  resolución de conversaciones e historial lineal. Las reglas incluyen al admin;
+  no permiten borrado ni push forzado. Sólo está habilitada la integración squash
+  y se elimina la rama remota integrada. **Aprobación humana adicional pendiente:**
+  hoy sólo hay un colaborador; el contador de aprobaciones requerido es cero.
 
-Setear en **Vercel → Project → Settings → Environment Variables (Production)**.
-La columna "Si falta" dice el modo de falla: **ROMPE** = la feature/app no
-funciona; **DEGRADA** = sigue andando con capacidad reducida.
+## Antes de cualquier despliegue
 
-### 1.1 CRÍTICAS — tienen que estar antes de tocar al cliente
+1. Registrar commit, checks, migraciones necesarias y operador. Revisar el diff,
+   incluidas pruebas y documentación. El video recibido y sus capturas son privados
+   y no forman parte de los cambios que se publican.
+2. Conservar configuración y un respaldo válido previo. Antes de herramientas que
+   puedan escribir variables locales, hacer una copia protegida de `.env.local`.
+   No imprimir claves, payloads clínicos ni URLs firmadas en evidencias.
+3. Comprobar pruebas de tipos, lint, unidad y compilación aislada, además de SQL
+   desde cero con valores por defecto. No usar variables ni proveedores reales
+   para esas pruebas. Los stubs SQL no certifican Auth ni Storage reales.
+4. Revisar contratos SQL contra las migraciones: un cliente tipado `any` no detecta
+   nombres de columnas o funciones incorrectos. No ignorar fallos de lectura.
+5. Preparar una versión de retorno compatible. No volver a código que evite MFA,
+   escriba originales sin revisión o emita enlaces privados anteriores.
 
-| Env | Para qué | Si falta |
-|-----|----------|----------|
-| `NEXT_PUBLIC_SUPABASE_URL` | URL del proyecto Supabase (cliente + server + middleware). | **ROMPE** — no hay app: middleware y todos los clientes Supabase fallan al instanciar. |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Key pública para el cliente browser/SSR. | **ROMPE** — sesión/auth no funciona; queries del cliente fallan. |
-| `SUPABASE_SERVICE_ROLE_KEY` | Cliente service-role (BYPASSRLS) para ops privilegiadas, crones, health. | **ROMPE** — `requireEnv` tira en `lib/supabase/server.ts`; crones, health-check DB, onboarding, webhooks caen. |
-| `FOLIO_ENC_KEY` | AES-256-GCM de columnas `*_cifrado` (PII/PHI app-side). 32 bytes base64. | **ROMPE** — toda lectura/escritura de PII/PHI cifrada tira; `/api/health` reporta `checks.env.ok=false` → 503. |
-| `FOLIO_ENC_HMAC_KEY` | HMAC-SHA256 de blind indexes (`nombre_hash`/`dni_hash`/`telefono`). 32 bytes base64. | **ROMPE** — búsqueda por nombre/DNI/teléfono y alta de paciente fallan al derivar el índice. |
-| `NEXT_PUBLIC_APP_URL` | URL canónica (`https://...`). Back-URLs de MP, links de invitación, password-reset. Centralizada en `lib/config/app-url.ts` (`getAppUrl()`). | **DEGRADA** — sin setearla, el helper cae a `window.location.origin` en browser y, en server, a `VERCEL_PROJECT_PRODUCTION_URL` → `VERCEL_URL` → `localhost:3010`. Setearla igual a la URL real de prod para que los links generados server-side no dependan de las system envs de Vercel. |
-| `MP_ACCESS_TOKEN` | Token de Folio (merchant directo) para crear preapproval y resolver pagos. | **ROMPE billing** — `requireEnv` tira al activar suscripción o procesar webhook de cobro. |
-| `MP_WEBHOOK_SECRET` | Secreto de firma HMAC de los webhooks de MP. | **ROMPE activación** — en prod el webhook se rechaza sin firma válida → la suscripción nunca pasa a ACTIVA automáticamente. |
-| `CRON_SECRET` | Bearer que autentica los Vercel Crons. | **ROMPE crones** — todo `/api/cron/*` responde 401; recordatorios, reconciliación de billing, mantenimiento de particiones de `audit_log` y renovación de watches de Google no corren. |
-| `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | Site key del captcha (signup, login, booking público). | **ROMPE/DEGRADA** — en prod el captcha es obligatorio; sin la site key el widget no carga y el form no se puede enviar. |
-| `TURNSTILE_SECRET_KEY` | Verificación server-side del token de Turnstile. | **ROMPE** — la validación del captcha falla → signup/login/booking rechazados. |
-| `NEXT_PUBLIC_SENTRY_DSN` | Error tracking (client + server + edge). | **DEGRADA** — la app anda, pero te quedás ciego ante errores en prod el día del lanzamiento. Tratarla como crítica para el go-live. |
+Un hotfix independiente de interfaz puede publicarse con su propia revisión y
+checks si no depende de migraciones o interruptores todavía pendientes. Su entrega
+no habilita el piloto ni acredita el resto del plan.
 
-> **Nota cifrado**: `FOLIO_ENC_KEY` y `FOLIO_ENC_HMAC_KEY` son las "keys de
-> cifrado app-side". NUNCA se commitean. Si ya hay datos cifrados en prod, NO
-> las cambies sin re-encrypt. ⚠️ **No hay script de rotación** — `scripts/rotate-enc-key.ts` no existe; el re-encrypt es manual y está registrado como gap en `docs/audit/known-gaps.md`.
+## Orden de la entrega que combina base y aplicación
 
-### 1.2 OPCIONALES — la app arranca sin ellas; habilitan o endurecen features
+No aplicar todo el directorio de migraciones indiscriminadamente sobre producción.
+La etapa de expansión debe mantener funcionando la aplicación anterior.
 
-| Env | Para qué | Si falta |
-|-----|----------|----------|
-| `RESEND_API_KEY` | Envío real de emails (invitación de equipo, confirmación de turno). | **DEGRADA** — `sendEmail` loguea en vez de enviar (fail-safe). La UI da link copiable. **Recomendado setear** (ver §3). |
-| `EMAIL_FROM` | Remitente de los emails (Resend). | **DEGRADA** — sin remitente válido el envío de Resend falla aunque haya API key. |
-| `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | Backend del rate-limit (signup/login/booking/invitación). | **DEGRADA (riesgo)** — sin Upstash el rate-limit es **fail-open** en prod (M3). Mitigado parcialmente por Turnstile + rate-limits propios de Supabase Auth. **Recomendado provisionar** (ver §3). |
-| `UPSTASH_FAIL_CLOSED` | Tri-state que gatea el modo de falla del rate-limit en prod (`lib/security/rate-limit.ts`). | Sin ella (default): keys AUSENTES → fail-open con `console.error` en logs; keys PRESENTES pero Upstash falla (HTTP/red/timeout) → **fail-closed**. `="true"`: fail-closed también con keys ausentes — setear **solo después** de provisionar Upstash y verificar `/api/health`. `="false"`: escape hatch fail-open total ante un incidente de Upstash. |
-| `PAYMENT_PROVIDER` | Selector del proveedor de pagos (`lib/payments`). | **DEGRADA nula** — default `mercadopago`. Dejar sin setear o en `mercadopago`. |
-| `MP_PLAN_PRICE_CENTS` | Precio del plan Solo (INDEPENDIENTE) en centavos. | **DEGRADA nula** — default 3.000.000 (30.000 ARS). |
-| `CLINIC_BASE_PRICE_CENTS` / `CLINIC_SEAT_PRICE_CENTS` | Pricing de tier Clínica (base + por seat) en centavos. | **DEGRADA nula** — defaults 10.000.000 / 2.500.000 (100k base + 25k por seat). |
-| `META_APP_SECRET` | Firma HMAC de webhooks de WhatsApp. | **DEGRADA/ROMPE WhatsApp** — en prod, sin él el webhook de WhatsApp se bloquea. Si no usás WhatsApp el día 1, no aplica. |
-| `WHATSAPP_ACCESS_TOKEN` / `WHATSAPP_PHONE_NUMBER_ID` | Envío outbound de templates de WhatsApp (recordatorios del cron). | **ROMPE recordatorios** — `lib/whatsapp/client.ts` hace `requireEnv` de ambas; sin ellas `dispatch-recordatorios` falla al enviar. `WHATSAPP_WEBHOOK_VERIFY_TOKEN` se necesita además para el handshake del webhook inbound. |
-| `ACCOUNT_PURGE_ENABLED` | Habilita el hard-delete del cron `account-purge`. | Sin `="1"`, el cron corre en modo listing-only (no borra nada). Setear recién después del trial en staging. |
-| `GOOGLE_OAUTH_CLIENT_ID` / `_SECRET` / `_REDIRECT_URI` | Integración Google Calendar (OAuth + sync). | **DEGRADA** — sin las tres, la conexión de Google Calendar no funciona; el resto de la app sí. |
-| `MP_PUBLIC_KEY` | Reservado para SDK frontend de MP (futuro). | Sin uso hoy. |
-| `SENTRY_DSN` | Fallback server/edge del DSN de Sentry. | **DEGRADA nula** — `NEXT_PUBLIC_SENTRY_DSN` ya cubre los tres runtimes. |
-| `SENTRY_AUTH_TOKEN` | Subida de source maps (build-time, plugin de Sentry). | **DEGRADA** — stack traces sin símbolos. El runtime NO lo lee. |
-| `NEXT_PUBLIC_POSTHOG_KEY` / `_HOST` | Analytics de producto (PostHog, cliente browser). | **DEGRADA** — sin métricas de producto; la app anda. |
-| `POSTHOG_KEY` / `POSTHOG_HOST` | Business events SERVER-side (`lib/observability/posthog.ts` — `trackEvent.*`). `NEXT_PUBLIC_POSTHOG_KEY` solo cubre el cliente browser. | **DEGRADA** — sin `POSTHOG_KEY` los eventos server (`paciente.created`, `booking_public.completed`) son no-op silencioso. |
-| `AFIP_ENV` | `homologacion` | `produccion` para facturación AFIP. | **DEGRADA** — solo afecta facturación electrónica. |
-| `TZ` | Zona horaria del runtime (`America/Argentina/Cordoba`). | **DEGRADA** — fechas en UTC si no se setea; conviene fijarla. |
+1. Aplicar las expansiones revisadas M98–M103 y M105 en adelante que el código
+   final realmente necesite, registrando sus versiones canónicas. Las migraciones
+   todavía en construcción no son instrucciones de despliegue.
+2. **Posponer M104**: restringe escrituras de adjuntos y debe ejecutarse después de
+   publicar los endpoints y escritores compatibles. Su posición numérica no cambia
+   este orden operativo. Registrar y cerrar la diferencia temporal del inventario.
+3. Publicar el código compatible mediante PR con checks aprobados y revisar los
+   recorridos sintéticos esenciales. Confirmar commit desplegado, región y dominio.
+4. Aplicar M104 y las activaciones de una vía según sus guías: preparación/MFA del
+   personal, decisiones de consentimiento, población de instrumentos y escritor
+   clínico atómico. Cada activación necesita su evidencia, no sólo un cambio de env.
+5. Verificar permisos directos por acciones, PostgREST, funciones y archivos antes
+   de dar por cerrado el cambio. No desactivar RLS para resolver un incidente.
 
----
+Guías por frente: [MFA](MFA-ROLLOUT.md), [adjuntos](ADJUNTOS-CLINICOS.md),
+[consentimiento y representación](REPRESENTACION-CONSENTIMIENTO.md),
+[población de instrumentos](INSTRUMENTOS-POBLACION.md),
+[guardado](GUARDADO-CLINICO.md), [cobros](OPERACIONES-COBRO.md),
+[Google Calendar](GOOGLE-CALENDAR-CONFIABILIDAD.md),
+[contactos familiares](CONTACTOS-FAMILIARES.md).
 
-## 2. Verificación go-live
+## Puertas del piloto: todas deben quedar aprobadas
 
-### 2.1 Health-check
+| Control | Evidencia que permite aprobarlo |
+|---|---|
+| Identidad y aislamiento | Dos organizaciones y todos los roles, cuenta dual, revocaciones y AAL1/AAL2 ensayados con Auth/Storage reales. Sin hallazgos críticos o altos abiertos. |
+| Historia clínica | Historia extensa completa, enmiendas, adjuntos, exportación y guardado concurrente; acceso autorizado ante suspensión o baja. |
+| Menores | Representación y consentimiento por acto, contactos compartidos y población aplicable; aprobación de los tres profesionales. |
+| Cobros | Proveedor de prueba controlado: duplicados, eventos desordenados, pérdida de respuesta y recuperación sin doble efecto. |
+| Comunicaciones | Dominio y SMTP de producción verificados; cola, cuota y fallos visibles. Mensajes sin información clínica. |
+| Respaldo | Copia reciente, recuperación completa demostrada, acceso restablecido y archivos verificados; custodia independiente y copia al disco. |
+| Operación | Vercel Pro activo, tareas cada minuto/conciliación verificadas, responsable de soporte y recuperación de cuentas. |
+| Capacidad | Informe local y campaña alojada acotada con latencias, errores y consumo medidos, incluyendo espacio sintético conservado. |
+| Servicio y profesionales | Títulos/matrículas/alcance comprobados; contratos, privacidad, conservación, transferencias y facturación revisados por responsables competentes. |
 
-```bash
-curl -s https://<APP_URL>/api/health | jq
-```
+La configuración actual de Supabase conserva SMTP predeterminado; no es la solución
+aprobada para producción. Falta provisionar/verificar el envío real y habilitar su
+interruptor de entrega. Google, WhatsApp, recetas y ampliaciones no se ofrecen hasta
+aprobar sus circuitos. No interpretar una variable presente como una integración probada.
 
-**Esperado para go-live:**
+El limitador debe tener Upstash configurado y verificado, sin la excepción de fallo
+abierto. Ver [límites de acceso](LIMITES-DE-ACCESO.md). Los chequeos de salud deben
+validar claves y base, pero un HTTP 200 no sustituye estas puertas.
 
-- `ok: true` (HTTP 200). `ok` deriva SOLO de `checks` (db + env críticas).
-- `checks.db.ok: true` y `checks.env.ok: true` (sin `error`).
-- En `integrations`, **todos los críticos en `true`**:
-  - `mercadopago: true`
-  - `mp_webhook_secret: true`  ← (necesita `MP_WEBHOOK_SECRET` **y** `MP_ACCESS_TOKEN`)
-  - `cron_secret: true`        ← (necesita `CRON_SECRET`)
-  - `turnstile: true`
-  - `sentry: true`
-- `integrations.upstash_redis` idealmente `true` (ver §3); `whatsapp`/`google_calendar`/`posthog` según lo que actives.
+## Incidente o resultado dudoso
 
-> `cron_secret` y `mp_webhook_secret` son **informativos**: no bajan `ok` (los
-> crones y el webhook no son dependencia de boot). Pero en este lanzamiento
-> tienen que estar en `true` antes de abrir al cliente — si `mp_webhook_secret`
-> está `false`, la suscripción no se activa sola; si `cron_secret` está
-> `false`, la reconciliación de billing y el mantenimiento de `audit_log` no
-> corren.
+- Pausar la funcionalidad afectada o las altas según el problema y proteger el
+  acceso autorizado a la información existente. Registrar hora, versión y síntomas
+  sin copiar datos clínicos a tickets, chat o analítica.
+- Para un guardado incierto, conservar el borrador y comprobar la operación original.
+  Para un cobro incierto, conciliar con el proveedor antes de intentar otro.
+- Restaurar únicamente siguiendo [respaldos](RESPALDOS.md), sobre destino aislado
+  verificado y con prueba previa. La recuperación local no acredita disponibilidad
+  alojada ni un tiempo de cuatro horas.
+- No borrar historias, aplicar reinicios de base, reutilizar fichas por contacto,
+  rotar todas las claves ni bajar la frecuencia del respaldo para resolver una cuota.
+- Documentar qué quedó confirmado, qué falta y quién autoriza volver a operar.
 
-### 2.2 Smoke manual (en prod, navegador real)
+## Inicio y crecimiento
 
-1. **Onboarding completo**: signup → onboarding → elegir **especialidad** →
-   crear **ficha** de paciente → abrir la **herramienta** clínica de la
-   especialidad → **guardar sesión** sobre el turno en curso → recargar y
-   verificar que el dato persiste.
-2. **Booking público**: abrir `/book/[slug]` del consultorio → reservar un
-   turno → verificar que aparece en la agenda.
-3. **Equipo + invitación (solo si el cliente es Clínica)**: en
-   `/configuracion` → Equipo → invitar a un member → verificar que el email
-   sale (o, sin `RESEND_API_KEY`, que aparece el link copiable) →
-   `/invitacion/[token]` → aceptar.
-
-Si algo de esto falla, **no abras al cliente**: revisá `/api/health` y los
-logs de Vercel/Sentry antes de continuar.
-
-### 2.3 `maxDuration` — nota de capacidad
-
-Los route handlers pesados tienen `export const maxDuration = 60`:
-`mercadopago/webhook`, `me/export`, `cron/account-purge`, `google/callback`,
-`google/webhook`,
-más los crones (`maintenance`, `dispatch-recordatorios`, `reconcile-suscripciones`,
-`analytics/refresh`, `google-watch-renew`) y `admin/migrate` (300s).
-
-> **Limitación de Next 15**: `maxDuration` solo aplica a **route handlers** y
-> **pages**, no a módulos `'use server'` sueltos. Las server actions de billing
-> (`app/(app)/configuracion/billing/actions.ts` — `activateSubscriptionAction`,
-> `syncClinicAmountAction`) llaman a MP pero **no tienen route propio**:
-> heredan la duración de la **page POST** que las invoca
-> (`/configuracion/billing`). No se les puso un `maxDuration` no-op (sería
-> engañoso). Si alguna vez una activación de MP tarda y corta, la vía correcta
-> es mover esa lógica a un route handler dedicado, no agregar un export inútil
-> a la action.
-
----
-
-## 3. Recomendaciones fuertes (antes de abrir al cliente)
-
-1. **Provisionar Upstash y setear `UPSTASH_FAIL_CLOSED=true`.**
-   Hoy el rate-limit es **fail-open** cuando Upstash no está configurado en
-   prod (hallazgo **M3**, `lib/security/rate-limit.ts`): signup/login/booking
-   no tienen límite propio de Folio (queda solo Turnstile + límites de Supabase
-   Auth). Orden correcto:
-   1. Crear Upstash Redis (REST) y setear `UPSTASH_REDIS_REST_URL` +
-      `UPSTASH_REDIS_REST_TOKEN` en Vercel.
-   2. Verificar `/api/health` → `integrations.upstash_redis: true`.
-   3. Confirmar que Sentry está wired (para que la misconfig page a on-call).
-   4. Recién entonces setear `UPSTASH_FAIL_CLOSED=true`.
-
-2. **Setear `RESEND_API_KEY` (+ `EMAIL_FROM`).**
-   Sin esto, los emails de **invitación de equipo** y **confirmación de turno**
-   NO salen — `sendEmail` loguea en vez de enviar (fail-safe) y la UI muestra un
-   link copiable. Para un lanzamiento con cliente real, configuralo así el flujo
-   de invitaciones y confirmaciones funciona de punta a punta.
-
----
-
-## 4. Rollback
-
-`master` auto-deploya a producción. Para revertir un deploy malo:
-
-1. **Revert de código** (preferido — deja historia limpia):
-   `git revert <sha-del-commit-malo>` → push a `master` → Vercel redeploya el
-   estado revertido automáticamente. Alternativa rápida: en **Vercel →
-   Deployments**, "Promote to Production" sobre el último deploy bueno (rollback
-   instantáneo sin tocar git, pero acordate de revertir en git después para que
-   `master` no vuelva a deployar lo malo).
-
-2. **Migraciones — son aditivas, NO hay down.** Las migraciones de Folio son
-   append-only y aditivas (columnas nullable, funciones nuevas, policies). **No
-   existe rollback de schema.** Si revertís código que dependía de una columna
-   nueva, la columna queda en prod sin uso (inofensivo). El riesgo inverso es el
-   peligroso: NUNCA mergees código que usa una columna/RPC que no esté ya en
-   prod (el cliente `<any>` no avisa; falla en runtime con `42703`, como el
-   outage de M49 del 9-jun). **Antes de cualquier deploy con migración: aplicar
-   la migración a prod primero.** La **ÚNICA vía válida** para aplicar
-   migraciones a prod es `scripts/push-pending-migrations.mjs` (registra la
-   versión canónica en `supabase_migrations.schema_migrations`). **NO usar
-   Supabase MCP `apply_migration`**: registra una versión no canónica y deja
-   ciego a `scripts/diff-migrations.mjs` — así se gestó el incidente M49.
-
----
-
-## 5. Gaps aceptados conscientemente para el MVP
-
-De `docs/AUDIT.md`. Se lanza con estos gaps **documentados**; cada uno tiene
-mitigación vigente y plan de cierre post-launch.
-
-| Gap | Riesgo | Mitigación (vigente) | Cuándo se cierra |
-|-----|--------|----------------------|------------------|
-| **M3** — rate-limit fail-open sin Upstash | Brute-force/credential-stuffing en signup/login mientras no haya Upstash. | Turnstile obligatorio en prod + rate-limits propios de Supabase Auth. Además, desde a4ac36c (jul-2026), con Upstash **presente** pero fallando (HTTP/red/timeout 2 s) el default en prod ya es **fail-closed**; el fail-open queda acotado a keys ausentes. | Al provisionar Upstash + `UPSTASH_FAIL_CLOSED=true` (ver §3). Idealmente antes del go-live. |
-| **M4** — `signOut()` no revoca el JWT ya emitido | Si un JWT activo se filtra, sigue válido hasta expirar aunque el user cierre sesión. | `signOut()` usa scope global (revoca refresh tokens de todos los devices) + access token de **vida corta (1h)** → ventana de exposición acotada + RLS bloquea sin JWT válido. | Post-launch, si se requiere revocación inmediata: tabla de revocación / `session_version` en `profile` validado en `getActiveSession()`. |
-| **M8** — helpers `SECURITY DEFINER` ejecutables por `authenticated` vía RPC | Un user logueado podría llamar `user_org_ids`/`can_read_clinical` por `/rest/v1/rpc/*` y aprender su propio scope (info disclosure, NO datos de otros). | Las funciones filtran por `auth.uid()` → solo devuelven el scope del propio usuario; retornan tipos simples (bool/uuid/text), nunca filas. La app NO las invoca por RPC. En prod ya no las puede ejecutar `anon`/PUBLIC. | ⚠️ **NO revocar EXECUTE a `authenticated`** — las policies RLS evalúan estos helpers CON el rol del usuario que consulta; revocárselo rompería todos los chequeos RLS de la app (verificado en re-auditoría 2026-06-11). El cierre correcto es sacarlos de la superficie RPC de PostgREST (moverlos fuera del schema expuesto o filtrarlos en la config de la API), manteniendo EXECUTE para `authenticated`. `anon`/PUBLIC ya están revocados. Riesgo residual aceptado: un user autenticado solo aprende su propio scope. |
-| **M9** — `pg_trgm` / `btree_gist` en schema `public` | Higiene de seguridad: extensiones visibles/callable en `public`; sienta precedente para extensiones futuras peligrosas. | Extensiones no sensibles; las tablas que las usan requieren `auth.uid() IS NOT NULL`. Sin bypass de auth ni fuga de PHI. | Migración post-launch: mover a schema `extensions` dedicado. |
-
-> El resto de bajos de la auditoría (B1–B8) están triados en `docs/AUDIT.md` y
-> no bloquean el lanzamiento.
-
----
-
-## 6. Crons (`vercel.json`)
-
-Todos autenticados con `Bearer CRON_SECRET`. Horarios en **UTC** (Argentina =
-UTC−3). Si `CRON_SECRET` falta, todos devuelven 401 y no hacen nada.
-
-| Path | Schedule (UTC) | Qué hace | Criticidad |
-|------|----------------|----------|------------|
-| `/api/cron/dispatch-recordatorios` | `0 5 * * *` (02:00 AR) | Procesa la cola `recordatorio_job`: hidrata turno+paciente+org y manda el template de WhatsApp; marca enviado/reintenta. **OJO**: además del cron diario de `vercel.json`, GitHub Actions lo dispara **cada 15 minutos** (`.github/workflows/dispatch-recordatorios.yml`) — el plan Hobby de Vercel rechaza schedules sub-diarios y la cola descarta jobs con >6h de atraso; el cron diario queda como backstop idempotente. Si la cuenta sube a Pro, mover `*/15` a `vercel.json` y borrar el workflow. Las invocaciones solapadas están mitigadas con un claim CAS antes de enviar (a8ca994): el solape queda acotado a ≤1 mensaje in-flight por job (el residual requiere lease con migración; diferido a propósito). | Recordatorios de turno — degrada UX si no corre. |
-| `/api/analytics/refresh` | `0 6 * * *` (03:00 AR) | `analytics.refresh_all(periodo)`: recalcula métricas mensuales + benchmarks + cache de insights del mes anterior. | Solo dashboards de analytics. |
-| `/api/cron/maintenance` | `0 3 1 * *` (1° de mes, 00:00 AR) | `audit_log_run_maintenance(6)`: crea las próximas particiones mensuales de `audit_log`. **Crítico a mediano plazo**: sin esto, a los ~12 meses los INSERT a tablas auditadas fallan (M28 deja una partición DEFAULT como red). | **Alta** (diferida) — la app se brickea sin particiones futuras. |
-| `/api/cron/google-watch-renew` | `0 7 * * *` (04:00 AR) | Renueva los watch channels de Google Calendar que expiran en <48h (Google los corta a los ~7 días). | Solo sync de Google Calendar. |
-| `/api/cron/reconcile-suscripciones` | `30 8 * * *` (05:30 AR) | Red de seguridad de billing (A2): para suscripciones en estado no terminal con `mp_preapproval_id`, hace GET preapproval contra MP y aplica el estado real; además corre `syncSubscriptionAmount` (repara PUTs de monto perdidos en Clínica). | **Alta** — repara divergencia local↔MP (cliente pagando sin acceso). |
-| `/api/cron/account-purge` | `0 3 * * *` (00:00 AR) | Purga ARCO: hard-delete de cuentas con baja solicitada hace >30 días. El borrado está gateado por `ACCOUNT_PURGE_ENABLED=1` — sin la env, el cron corre en modo **listing-only** y no borra nada (`route.ts`). | Media — sin la env es no-op de borrado. |
-
-> `/api/cron/account-purge` **ya está registrado en `crons[]`** (diario
-> `0 3 * * *`), pero el hard-delete sigue gateado: sin `ACCOUNT_PURGE_ENABLED=1`
-> el endpoint solo lista candidatos y no borra nada — trial en staging
-> pendiente; para la purga real solo falta setear la env en Vercel Production.
-> La activación completa siempre fue doble: tenerlo en
-> `vercel.json` (sugerido diario 03:00 UTC) **y** setear `ACCOUNT_PURGE_ENABLED=1`.
-
----
-
-## 7. F0.6 — Activar verificación de email en signup (procedimiento)
-
-El código (ítem 1.5) es **adaptativo**: el signup usa `supabase.auth.signUp`,
-así que con el toggle **Confirm email OFF** el flujo es el de siempre
-(autoconfirm, sesión inmediata, cero emails) y con **ON** el signup devuelve
-"Revisá tu email" y el onboarding se retoma tras confirmar (callback →
-`/onboarding` → consent → steps con autosave). **No hay deploy involucrado en
-el flip** — pero los 4 pasos van juntos, en este orden:
-
-> ### ⛔ Gate de merge del ítem 1.5 (verificado 2026-07-03)
->
-> **Prod tiene "Confirm email" ON hoy** (`mailer_autoconfirm: false`), aunque
-> nunca importó porque el signup viejo usaba
-> `admin.createUser({ email_confirm: true })`, que bypasea el toggle.
-> `auth.signUp` **deja de bypasearlo**: si el PR del ítem 1.5 se mergea con el
-> toggle así, TODO signup de prod cae al path `needsConfirmation` con el SMTP
-> built-in (~2-4 mails/h por proyecto) y el template default `?code=` (PKCE,
-> cross-device roto) — **signup público roto en silencio**.
->
-> Antes de mergear, elegí UNA de dos:
-> 1. **Apagar "Confirm email"** (Auth → Sign In / Up → Email) — preserva el
->    flujo actual; los pasos 1-4 de abajo quedan para cuando se active F0.6
->    de verdad; **o**
-> 2. Completar los pasos 1-3 de abajo (SMTP custom + template `token_hash` +
->    allow-list) y dejar el toggle ON.
->
-> Re-verificar con el endpoint público de settings (la key publishable está
-> en `.env.local` como `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`):
->
-> ```sh
-> curl -s -H "apikey: $NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY" \
->   https://grkpayhxndztlfwxobnt.supabase.co/auth/v1/settings
-> ```
->
-> Con la opción 1, `mailer_autoconfirm` debe devolver `true` — **recién
-> entonces mergear**. De paso confirmar `disable_signup: false` (Enable email
-> signups ON) y que el captcha de Supabase Auth siga OFF.
-
-1. **SMTP custom primero** (Supabase → Auth → SMTP Settings; Resend ya está
-   como proveedor de emails de la app). El email service built-in de Supabase
-   tiene cuota de ~2-4 mails/hora POR PROYECTO — con confirm ON y sin SMTP,
-   el signup queda inusable para todos.
-2. **Template "Confirm signup" → link SSR** (Supabase → Auth → Email
-   Templates): cambiar el href a
-   `{{ .SiteURL }}/api/auth/callback?token_hash={{ .TokenHash }}&type=signup`.
-   El default `{{ .ConfirmationURL }}` redirige con `?code=` (PKCE), que solo
-   canjea en el **mismo browser** que inició el signup (cookie
-   `code_verifier`) — un user que se registra en el celular y abre el mail en
-   la PC vería "link inválido". El callback soporta ambos formatos.
-3. **Redirect URLs allow-list** (Supabase → Auth → URL Configuration).
-   **Esto ya rompió producción una vez** y no dio ni un error: GoTrue valida
-   el `redirect_to` contra esta lista y, si no está, **lo descarta y manda al
-   Site URL**. Con el Site URL en la raíz del dominio, el síntoma es "toqué
-   Continuar con Google, elegí mi cuenta y volví a la página de inicio", sin
-   mensaje y sin log. Rompe las tres cosas a la vez: login con Google,
-   confirmación de email y reset de contraseña.
-
-   **Site URL**
-   ```
-   https://foliosalud.com
-   ```
-   **Redirect URLs**
-   ```
-   https://foliosalud.com/api/auth/callback
-   https://foliosalud.com/api/auth/callback?redirect=/portal
-   https://foliosalud.com/reset-password
-   https://folio-app-git-*-osocordobes-projects.vercel.app/api/auth/callback
-   ```
-   La última deja andando el login en los previews. **Verificar siempre con:**
-   ```
-   node --env-file=.env.local scripts/check-auth-redirect.mjs
-   ```
-   Sale con código 1 y nombra qué se rompe si alguna URL no está permitida.
-   Correrlo después de CUALQUIER cambio de dominio.
-
-3b. **Provider Google de Supabase Auth** — no estaba documentado en ningún
-   lado del repo, y no es el mismo OAuth que el de Google Calendar
-   (`DEPLOYMENT.md` §4.2, que apunta a `/api/google/callback`). Vive en
-   Supabase → Auth → Providers → Google, con su propio Client ID/Secret, y en
-   Google Cloud Console ese cliente tiene que tener autorizado el redirect
-   `https://grkpayhxndztlfwxobnt.supabase.co/auth/v1/callback` — el de
-   Supabase, no el de la app.
-4. **Recién entonces** activar **Confirm email** (Auth → Sign In / Up →
-   Email). Verificar en el mismo panel que **Enable email signups** siga ON y
-   que **Captcha protection de Supabase Auth** siga OFF (nuestro Turnstile es
-   app-side; el token no se reenvía a GoTrue — activar el captcha de Supabase
-   rompería el signup server-side).
-
-Smoke post-flip: signup nuevo ⇒ pantalla "Revisá tu email" + mail recibido ⇒
-click en el link desde OTRO browser ⇒ aterriza en `/onboarding` (consent) y
-el wizard continúa. Login con cuenta sin confirmar ⇒ mensaje + botón
-"Reenviar link". Rollback: apagar Confirm email — el signup vuelve al flujo
-autoconfirm sin tocar código.
+Oferta inicial: Solo ARS 30.000 por mes, 30 días de prueba. Piloto de 14 días con
+los tres profesionales y al menos cinco jornadas cada uno; medir problemas y tiempo
+de soporte sin contenido clínico. Mantener la admisión en 3 → 10 → 25 → 50 → 100 → 200
+según capacidad observada y proyección. Avisar al 60% de cuotas y detener nuevas altas
+e importaciones masivas al 70%, o antes si la proyección exige reservar capacidad.
+No prometer 200 profesionales, disponibilidad continua ni cumplimiento certificado
+basándose sólo en pruebas unitarias o en que el sitio responde.

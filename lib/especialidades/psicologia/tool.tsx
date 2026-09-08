@@ -33,6 +33,8 @@ import { useRouter } from "next/navigation";
 import * as I from "@/components/icons";
 import { registrarCssrsAction } from "@/app/(app)/pacientes/actions";
 import { cssrs as cssrsDef } from "@/lib/instrumentos";
+import { instrumentPopulationEligibility, retainInstrumentFields, POPULATION_BLOCK_MESSAGE, type InstrumentPopulationContext } from "@/lib/instrumentos/population-policy";
+import { HistoricalInstrumentResponses } from "@/lib/instrumentos/components/HistoricalInstrumentResponses";
 import { ObjetivosBlock, PlanillaRenderer, ResultadoBadge } from "@/lib/instrumentos/components";
 import { SerieEvolucion, type MetricaSerie, type PuntoSerie } from "@/lib/instrumentos/components";
 import type { SpecialtyToolProps } from "@/lib/especialidades/types";
@@ -497,6 +499,7 @@ function CrisisWorkflow({
   readOnly,
   pacienteId,
   turno,
+  population,
 }: {
   crisisPlan: CrisisPlanDraft | undefined;
   motivos: readonly ("phq9_item9" | "registro_riesgo")[];
@@ -504,6 +507,7 @@ function CrisisWorkflow({
   readOnly?: boolean;
   pacienteId?: string;
   turno?: { id: string; tieneSesionGuardada: boolean } | null;
+  population: InstrumentPopulationContext;
 }) {
   const router = useRouter();
   const [registrando, setRegistrando] = useState(false);
@@ -513,7 +517,8 @@ function CrisisWorkflow({
   const plan = crisisPlan ?? {};
   const cssrs = plan.cssrs ?? null;
   // El score en vivo con la def de la biblioteca (contrato laxo: null si incompleto).
-  const score = scoreCssrsCrisis(cssrs);
+  const scaleAllowed=instrumentPopulationEligibility(population).allowed;
+  const score = scaleAllowed ? scoreCssrsCrisis(cssrs) : null;
   const respondidasCssrs = cssrs ? cssrs.filter((r) => r !== null).length : 0;
   const cssrsCompleto = respondidasCssrs === CSSRS_ITEMS_LEN;
 
@@ -524,7 +529,7 @@ function CrisisWorkflow({
 
   // El PlanillaRenderer emite Array<number | null> (modo binario, 0/1).
   const setCssrs = (next: number[] | number | null) => {
-    if (readOnly) return;
+    if (readOnly || !scaleAllowed) return;
     const arr = Array.isArray(next) ? (next as Array<number | null>) : null;
     onChange({ ...plan, cssrs: arr ?? undefined });
     // Cambió el screener → invalida el "registrado" previo (hay que re-registrar).
@@ -534,7 +539,7 @@ function CrisisWorkflow({
 
   // Registra el screener completo en instrumento_respuesta (tracking longitudinal).
   const registrarEnHistorial = async () => {
-    if (readOnly || registrando || !cssrsCompleto || !pacienteId) return;
+    if (readOnly || !scaleAllowed || registrando || !cssrsCompleto || !pacienteId) return;
     const respuestas = (cssrs ?? []).map((r) => (r === 1 ? 1 : 0));
     setRegistrando(true);
     setErrorRegistro(null);
@@ -555,12 +560,12 @@ function CrisisWorkflow({
   return (
     <section
       className="pc-card"
-      style={{ borderColor: "var(--red)", boxShadow: "0 0 0 1px var(--red-soft)" }}
+      style={motivos.length ? { borderColor: "var(--red)", boxShadow: "0 0 0 1px var(--red-soft)" } : undefined}
     >
       <header className="pc-card-head" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-        <I.Alert size={15} aria-hidden style={{ color: "var(--red)" }} />
-        <span className="fi-eyebrow" style={{ color: "var(--red)" }}>
-          Protocolo de riesgo
+        {motivos.length>0 && <I.Alert size={15} aria-hidden style={{ color: "var(--red)" }} />}
+        <span className="fi-eyebrow" style={motivos.length ? { color: "var(--red)" } : undefined}>
+          {motivos.length ? "Protocolo de riesgo" : "Plan de seguridad"}
         </span>
         {score ? (
           <ResultadoBadge
@@ -571,14 +576,15 @@ function CrisisWorkflow({
         ) : null}
       </header>
 
-      <p role="alert" style={{ ...AVISO_STYLE }}>
-        Se activó por {motivoCopy(motivos)}. Completá el screener C-SSRS y
-        documentá el plan de seguridad. Es tamizaje: no reemplaza la evaluación
-        clínica presencial ni el juicio profesional.
+      <p role={motivos.length ? "alert" : "status"} style={motivos.length ? AVISO_STYLE : undefined}>
+        {motivos.length ? `Se conserva el aviso por ${motivoCopy(motivos)}. ` : "Plan de seguridad disponible para documentar la evaluación. "}
+        {scaleAllowed ? "Podés completar el screener y documentar el plan de seguridad. " : "La clasificación automática está deshabilitada; documentá la evaluación y el plan de seguridad. "}
+        No reemplaza la evaluación clínica presencial ni el juicio profesional.
       </p>
 
       {/* ── C-SSRS (screener binario, renderer genérico de la biblioteca) ── */}
       <PlanillaRenderer
+        population={population}
         def={cssrsDef}
         respuestas={cssrs}
         onChange={setCssrs}
@@ -627,7 +633,7 @@ function CrisisWorkflow({
       </div>
 
       {/* ── Registro longitudinal del screener (instrumento_respuesta, C2) ── */}
-      {!readOnly ? (
+      {!readOnly && scaleAllowed ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <button
@@ -771,9 +777,13 @@ export function PsicologiaTool({
   historial,
   pacienteId,
   turno,
+  fechaNacimiento,
+  fechaAtencion,
 }: SpecialtyToolProps) {
+  const population={fechaNacimiento,fechaAtencion};
+  const scaleAllowed=instrumentPopulationEligibility(population).allowed;
   const draft = useMemo(() => parseDraft(value), [value]);
-  const series = useMemo(() => deriveScoreSeries(historial), [historial]);
+  const series = useMemo(() => deriveScoreSeries(historial.filter(entry=>instrumentPopulationEligibility({fechaNacimiento,fechaAtencion:entry.fecha}).allowed)), [historial,fechaNacimiento]);
   // Últimos objetivos registrados (historial DESC → el primero que tenga).
   const ultimosObjetivos = useMemo(() => {
     for (const entry of historial) {
@@ -791,12 +801,13 @@ export function PsicologiaTool({
 
   const emit = (next: PsicologiaDraft) => {
     if (readOnly) return;
-    onChange(limpiarDraft(next));
+    const cleaned=limpiarDraft(next);
+    onChange(scaleAllowed ? cleaned : retainInstrumentFields("psicologia",cleaned,value));
   };
 
   // ── Escalas ──
-  const phq9Score = scorePhq9(draft.phq9);
-  const gad7Score = scoreGad7(draft.gad7);
+  const phq9Score = scaleAllowed ? scorePhq9(draft.phq9) : null;
+  const gad7Score = scaleAllowed ? scoreGad7(draft.gad7) : null;
   const ideacionPhq9 = (draft.phq9?.[PHQ9_ITEM_IDEACION] ?? 0) > 0;
 
   // ── Detección de riesgo (C7) ──
@@ -815,12 +826,14 @@ export function PsicologiaTool({
   };
 
   const setItemEscala = (escala: "phq9" | "gad7", len: number) => (idx: number, valor: number) => {
+    if(!scaleAllowed)return;
     const base = draft[escala] ?? Array.from({ length: len }, () => null);
     const next = base.map((r, i) => (i === idx ? valor : r));
     emit({ ...draft, [escala]: next });
   };
 
   const quitarEscala = (escala: "phq9" | "gad7") => {
+    if(!scaleAllowed)return;
     const next = { ...draft };
     delete next[escala];
     emit(next);
@@ -851,6 +864,7 @@ export function PsicologiaTool({
         <header className="pc-card-head">
           <span className="fi-eyebrow">Escalas</span>
         </header>
+        {!scaleAllowed && <p role="status">{POPULATION_BLOCK_MESSAGE}</p>}
         <p className="muted" style={{ margin: 0, fontSize: 11.5, lineHeight: 1.5 }}>
           {CONSIGNA_ESCALAS} Tamizaje orientativo — no reemplaza la evaluación
           clínica.
@@ -864,7 +878,7 @@ export function PsicologiaTool({
           score={phq9Score}
           onSet={setItemEscala("phq9", PHQ9_LEN)}
           onQuitar={() => quitarEscala("phq9")}
-          readOnly={readOnly}
+          readOnly={readOnly || !scaleAllowed}
         />
 
         {ideacionPhq9 ? (
@@ -883,7 +897,7 @@ export function PsicologiaTool({
           score={gad7Score}
           onSet={setItemEscala("gad7", GAD7_LEN)}
           onQuitar={() => quitarEscala("gad7")}
-          readOnly={readOnly}
+          readOnly={readOnly || !scaleAllowed}
         />
 
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -897,6 +911,8 @@ export function PsicologiaTool({
           />
         </div>
       </section>
+
+      <HistoricalInstrumentResponses historial={historial} fechaNacimiento={fechaNacimiento} />
 
       {/* ── Registro de sesión: examen del estado mental (MSE completo · C8) ── */}
       <section className="pc-card">
@@ -978,7 +994,7 @@ export function PsicologiaTool({
         {riesgo === "ideacion" || riesgo === "plan" ? (
           <p style={AVISO_STYLE}>
             Registraste riesgo con {riesgo === "plan" ? "plan" : "ideación"}. Abajo
-            se abrió el <b>protocolo de riesgo</b> (C-SSRS + plan de seguridad)
+            se abrió el <b>protocolo de riesgo</b> ({scaleAllowed ? "C-SSRS + plan de seguridad" : "evaluación clínica y plan de seguridad"})
             para estructurar la evaluación y documentar el plan.
           </p>
         ) : null}
@@ -992,11 +1008,12 @@ export function PsicologiaTool({
       />
 
       {/* ── Dashboard de outcomes (C8) ── */}
-      <OutcomesDashboard historial={historial} pacienteId={pacienteId} />
+      <OutcomesDashboard historial={historial} pacienteId={pacienteId} fechaNacimiento={fechaNacimiento} />
 
       {/* ── Protocolo de riesgo suicida (C7) ── */}
-      {deteccion.activo ? (
+      {deteccion.activo || !scaleAllowed || draft.crisisPlan ? (
         <CrisisWorkflow
+          population={population}
           crisisPlan={draft.crisisPlan}
           motivos={deteccion.motivos}
           onChange={setCrisisPlan}

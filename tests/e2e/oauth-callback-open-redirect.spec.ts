@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../fixtures/local-test";
 
 /**
  * Folio · OAuth callback open-redirect mitigation (audit 2026-05-26 #5).

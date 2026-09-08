@@ -1,3 +1,5 @@
+
+import { safeLog } from "@/lib/observability/safe-log";
 /**
  * Folio · Directorio público de profesionales (Fase 3 · M64).
  *
@@ -61,7 +63,7 @@ export async function listDirectorioOrgs(filter: DirectorioFilter = {}): Promise
 
     const { data, error } = await q.order("nombre", { ascending: true }).limit(200);
     if (error) {
-      console.warn("[directorio] listDirectorioOrgs falló (¿M64 sin aplicar?):", error.message);
+      safeLog("warn", "lib.db.directorio.L64", "[directorio] listDirectorioOrgs falló (¿M64 sin aplicar?):", error.message);
       return [];
     }
     return ((data ?? []) as Array<Record<string, unknown>>).map((o) => ({
@@ -75,7 +77,7 @@ export async function listDirectorioOrgs(filter: DirectorioFilter = {}): Promise
       bio: (o.bio as string | null) ?? null,
     }));
   } catch (e) {
-    console.warn("[directorio] excepción:", e instanceof Error ? e.message : String(e));
+    safeLog("warn", "lib.db.directorio.L78", "[directorio] excepción:", e instanceof Error ? e.message : String(e));
     return [];
   }
 }

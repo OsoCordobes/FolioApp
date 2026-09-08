@@ -5,9 +5,8 @@
  * entradas del audit_log de la org activa con filtros por fecha, actor,
  * recurso, acción.
  *
- * Compliance: cumple con Ley 25.326 art. 11 (acceso a logs por titular) y
- * Ley 26.529 art. 15 (custodia + autenticidad). Retención 10 años garantizada
- * por particionado mensual + política de archive a Storage (F12).
+ * This view lists recorded activity. It does not certify legal compliance,
+ * completeness of recording, or retention across backups and storage services.
  */
 
 import { notFound } from "next/navigation";
@@ -61,10 +60,10 @@ export default async function AuditPage({ searchParams }: PageProps) {
   return (
     <main style={{ maxWidth: 1200, margin: "0 auto", padding: "32px 24px" }}>
       <header style={{ marginBottom: 24 }}>
-        <span className="fi-eyebrow">Compliance · Ley 25.326 / 26.529</span>
-        <h1 style={{ fontSize: 28, marginTop: 8 }}>Audit log</h1>
+        <span className="fi-eyebrow">Administración del consultorio</span>
+        <h1 style={{ fontSize: 28, marginTop: 8 }}>Registro de actividad</h1>
         <p style={{ color: "var(--ink-3)", marginTop: 4 }}>
-          Registro inmutable de acciones sobre datos clínicos. Retención 10 años.
+          Acciones registradas sobre los datos del consultorio. Se muestran hasta 100 eventos por consulta.
         </p>
       </header>
 

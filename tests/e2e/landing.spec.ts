@@ -9,7 +9,7 @@
  * (SoftwareApplication + FAQPage), /sitemap.xml y /robots.txt.
  */
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../fixtures/local-test";
 
 const HERO_H1 = /el día se arma solo\. la historia, cifrada\./i;
 

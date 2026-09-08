@@ -1,123 +1,44 @@
-# tests/e2e — specs end-to-end de Folio
+# Pruebas de navegador locales
 
-Corren con el project `e2e` de Playwright contra `E2E_BASE_URL`
-(default `http://localhost:3010`, el dev server de `pnpm dev`;
-`reuseExistingServer=true` — si ya hay un server en 3010, lo reusa).
-
-> ⚠️ **El dev server local apunta a la DB que tengas en `.env.local`**
-> (hoy: producción). Los specs marcados como *escriben datos* crean filas
-> REALES en esa base. Corrélos solo contra la org de prueba designada.
-
-## Specs gateados por env (escriben / requieren credenciales)
-
-### `booking-submit.spec.ts` — booking público real (✍️ ESCRIBE EN LA DB)
-
-Flujo completo de `/book/<slug>` con submit: elegir servicio → slot →
-datos → pantalla de éxito, más la carrera de doble reserva del mismo slot
-(conflicto + retry con otro horario).
+Los comandos de pruebas levantan su propio servidor en `http://127.0.0.1:4410`, con salida `.next-test`. No reutilizan `pnpm dev`, no leen archivos `.env*` y descartan las credenciales de proveedores heredadas. Los destinos externos se rechazan en Node y en el navegador, incluidos los redireccionamientos. Las pruebas nuevas deben importar `test` y `expect` desde `../fixtures/local-test` para conservar la protección del navegador.
 
 ```powershell
-$env:E2E_BOOKING_SLUG = "lautaro-folio"
-pnpm exec playwright test tests/e2e/booking-submit.spec.ts --project=e2e
+pnpm test:e2e -- --list
+pnpm test:e2e -- tests/e2e/not-found.spec.ts
+pnpm test:app
+pnpm test:isolation:browser
 ```
 
-- **Org de prueba**: `lautaro-folio` (datos de muestra, owner
-  `lautaro-folio-test@folio.app`, servicios activos y disponibilidad
-  cargada). Está permitido crear reservas de prueba ahí — **no apuntar a
-  ninguna otra org**.
-- **Qué crea por corrida**: 3 reservas (pedidos y/o turnos auto-confirmados
-  + pacientes nuevos) con nombre `E2E Spec Booking <fecha-hora>` y teléfono
-  único `+54 9 351 5xx xxxx` derivado del timestamp. Sin email (no dispara
-  notificaciones).
-- **Cleanup**: desde la UI pública no se puede; queda documentado como TODO
-  en el spec — borrar por patrón de nombre `E2E Spec Booking %` cuando haya
-  acceso SQL de mantenimiento. Los nombres son greppables a propósito.
-- **Captcha**: en dev no hay `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, el wizard no
-  monta Turnstile y el server es fail-open sin secret. Con captcha real el
-  spec no aplica tal cual.
-- **Rate limit**: `createPedidoPublico` admite 5 submits/IP/hora cuando
-  Upstash está configurado (el rate limit corre ANTES del chequeo de
-  conflicto, así que el intento que falla por conflicto también cuenta).
-  La corrida completa hace 4 submits (3 reservas + 1 conflicto); dos
-  corridas en la misma hora pueden rebotar con "Demasiados intentos".
+Sin Supabase local, las pantallas públicas y los ejemplos que usan mocks pueden comprobarse; los flujos que necesitan Auth, datos clínicos o reservas no quedan verificados. Los escenarios de signup/onboarding y los que requieren login o un consultorio se omiten hasta configurar una instancia local dedicada. Un resultado omitido no es un resultado aprobado.
 
-### `demo-path.spec.ts` — smoke del camino del médico (solo lectura)
+## Instancia local con datos inventados
 
-Login con un usuario **existente** (no crea cuentas) → `/hoy` → abre y
-cierra el modal de crear turno sin crear nada → `/calendario` →
-`/pacientes`, validando que no haya errores de consola.
+La instancia debe estar aislada, tener las migraciones y sus fixtures sintéticos. No use túneles, proxies ni puertos reenviados a una base hospedada. El arranque o preparación de esa instancia es un procedimiento separado: este comando no crea, reinicia ni borra bases.
+
+Configure estas variables sólo con los valores de `supabase status` de esa instancia local:
 
 ```powershell
-$env:E2E_LOGIN_EMAIL = "lautaro-folio-test@folio.app"
-$env:E2E_LOGIN_PASSWORD = "<password>"
-pnpm exec playwright test tests/e2e/demo-path.spec.ts --project=e2e
+$env:FOLIO_TEST_SUPABASE_URL = "http://127.0.0.1:54321"
+$env:FOLIO_TEST_SUPABASE_ANON_KEY = "<JWT anon de la instancia local>"
+$env:FOLIO_TEST_SUPABASE_SERVICE_KEY = "<JWT service_role de la instancia local>"
+$env:FOLIO_TEST_LOGIN_EMAIL = "medico@example.test"
+$env:FOLIO_TEST_LOGIN_PASSWORD = "<clave del usuario sintético local>"
+$env:FOLIO_TEST_BOOKING_SLUG = "folio-test-booking"
+pnpm test:e2e
 ```
 
-Sin las envs, ambos specs se **skipean** (seguro por defecto en CI).
+URL y ambas claves se suministran juntas. Se aceptan los JWT locales legacy con emisor `supabase-demo` o `supabase-local`; las claves hospedadas se rechazan aunque el destino sea localhost. Las cuentas clínicas necesitan su inscripción MFA y fixtures correspondientes. No se omite ese control para conseguir un test verde.
 
-## Flujos premium (PR X10)
+Los usuarios y pacientes creados son inventados (`@example.test`, nombres E2E), y el consultorio fixture debe ser sintético. La prueba de reserva exige disponibilidad y servicios locales preparados. Signup puede crear usuarios locales. Las pruebas históricas opcionales de activación de cobro y alta de ficha permanecen deshabilitadas: una interceptación de `page.route` no simula una llamada al proveedor hecha por el servidor. Para habilitarlas hace falta un fixture de proveedor local explícito y revisar el flujo completo.
 
-Tres specs que cubren los caminos que hacen a Folio "vendible". Todos son
-best-effort: su nivel *smoke* corre sin envs extra, y el nivel *profundo*
-(que escribe datos reales) está gateado por su propia env. El **verde real**
-de cualquier nivel necesita el **dev server corriendo** (`E2E_BASE_URL`) más
-una **org semilla** — sin eso los specs no pueden pasar (se skipean o fallan
-al conectar), no es un bug del spec.
+Los proveedores externos, captcha, correo, pagos, telemetría y fuentes remotas no reciben solicitudes desde estos procesos. Los flujos que los necesitan pueden mostrar un error o quedar pendientes hasta agregar un doble local; eso no demuestra una falla del proveedor ni verifica su integración real. No se deben actualizar imágenes de referencia para ocultar diferencias por fuentes bloqueadas.
 
-### `onboarding.spec.ts` — signup → especialidad → ficha
+## Limpieza y otras comprobaciones
 
-- **Smoke** (siempre): signup inline real → `/onboarding` Step 2, y el
-  radiogroup de especialidad de Step 3 refleja la elección. Crea **una** fila
-  en `auth.users` namespaced `e2e-onb-<ts>@folio.app` (cleanup mecánico por
-  patrón, igual que `auth.spec.ts`). No finaliza onboarding ni crea PHI.
-- **Ficha** (`E2E_ONBOARDING_FICHA=1`): finaliza el wizard y crea una ficha
-  real `E2E Onb Ficha <fecha>` (✍️ **escribe PHI cifrada** — solo org de prueba).
+`scripts/cleanup-e2e.mjs` sólo acepta `FOLIO_TEST_DATABASE_URL` en loopback y una base `folio_test_*` o el `postgres` de Supabase local; requiere un consultorio `folio-test-*` marcado sintético. Conserva su modo de vista previa. Revise esa vista antes de usar su opción de borrado. Nunca carga `.env.local`.
 
-```powershell
-pnpm exec playwright test tests/e2e/onboarding.spec.ts --project=e2e
-$env:E2E_ONBOARDING_FICHA = "1"   # + creación de ficha real
-```
+`pnpm test:visual` requiere `FOLIO_TEST_PROTOTYPE_ROOT`, el directorio explícito del prototipo estático local. `pnpm test:build` compila con el mismo aislamiento y salida separada. Las pruebas unitarias usan `pnpm test:unit` y no necesitan ninguna variable de entorno real.
 
-### `booking.spec.ts` — `/book/<slug>` landing + wizard (solo lectura)
+Validar una instalación hospedada requiere un procedimiento manual separado, autorización específica, inventario de escrituras y datos de prueba revisados. No se admite cambiar `E2E_BASE_URL` a un sitio hospedado ni a los puertos habituales 3000/3010. Este documento no autoriza esa campaña y no modifica los procedimientos manuales de custodia, captura o recuperación.
 
-Recorre el link público real: landing médico-first → wizard → servicio →
-grilla de slots (con horarios accesibles) → "Cambiar servicio". **No envía**
-la reserva → **no crea filas** (complementa a `booking-submit.spec.ts`, que
-sí escribe). Gated por `E2E_BOOKING_SLUG` (mismo env, misma org de prueba).
-
-```powershell
-$env:E2E_BOOKING_SLUG = "lautaro-folio"
-pnpm exec playwright test tests/e2e/booking.spec.ts --project=e2e
-```
-
-### `billing.spec.ts` — activación de suscripción con MP mockeado
-
-- **Smoke** (gated por login OWNER): `/configuracion/billing` carga y ofrece
-  activar/gestionar la suscripción. Solo lee.
-- **Activar** (`E2E_BILLING_ACTIVATE=1`): click en "Activar suscripción" con
-  `page.route` **interceptando todo mercadopago.com** → nunca pega a MP real;
-  tolera ambos desenlaces (redirect al mock si hay creds MP, banner de error
-  si faltan). Crea un preapproval PENDIENTE local (sin cobro).
-
-```powershell
-$env:E2E_LOGIN_EMAIL = "lautaro-folio-test@folio.app"   # OWNER existente
-$env:E2E_LOGIN_PASSWORD = "<password>"
-pnpm exec playwright test tests/e2e/billing.spec.ts --project=e2e
-$env:E2E_BILLING_ACTIVATE = "1"   # + click de activación con MP mockeado
-```
-
-## Resto de los specs
-
-Los demás specs del directorio (`book-public`, `public-card`, `not-found`,
-`security-headers`, etc.) son de solo lectura o usan rutas `/dev/*` con
-mocks. **Excepción histórica**: `auth.spec.ts` crea usuarios reales
-(`e2e-test-<ts>@folio.app`) en la DB apuntada en cada corrida — no correrlo
-contra producción salvo que se acepte ese residuo.
-
-## Correr todo el project e2e
-
-```powershell
-pnpm exec playwright test --project=e2e
-```
-
-Los specs gateados se skipean salvo que sus envs estén seteadas.
+El bloqueo protege contra conexiones accidentales del código probado; no es un aislamiento del sistema operativo frente a código hostil. Los permisos de un proceso local y los servicios accesibles en loopback siguen requiriendo una máquina de pruebas controlada.

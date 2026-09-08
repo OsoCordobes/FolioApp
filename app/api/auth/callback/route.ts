@@ -1,3 +1,5 @@
+
+import { safeLog } from "@/lib/observability/safe-log";
 /**
  * Folio · OAuth callback handler.
  *
@@ -30,6 +32,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { mapAuthError, parseAuthCallbackError } from "@/lib/auth/auth-error-map";
 import { safeRedirect } from "@/lib/security/safe-redirect";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { readMfaStatus, safeMfaReturnPath } from "@/lib/auth/mfa-access";
 
 interface MemberWithOrg {
   organization_id: string | null;
@@ -107,12 +110,22 @@ export async function GET(request: NextRequest) {
     // exacto de "me devuelve a la página de inicio". Ahora deja rastro y le
     // dice algo accionable.
     if (code || tokenHash) {
-      console.error(
+      safeLog("error", "app.api.auth.callback.route.L111",
         `[auth callback] canje sin sesión resultante (code=${Boolean(code)} token_hash=${Boolean(tokenHash)} path=${loginPath})`,
       );
       return NextResponse.redirect(`${origin}${loginPath}?error=session_missing`);
     }
     return NextResponse.redirect(`${origin}${loginPath}`);
+  }
+
+  // First factor exchanged successfully; do not provision/read a dual account's
+  // portal or staff records until its second factor is satisfied.
+  // Password recovery changes the first factor only. Clinical/portal access
+  // remains gated after the password is changed.
+  if (redirectTo === "/reset-password") return NextResponse.redirect(`${origin}/reset-password`);
+  const mfa = await readMfaStatus(supabase);
+  if (!mfa.ok || !mfa.data.allowed) {
+    return NextResponse.redirect(`${origin}/seguridad/mfa?next=${encodeURIComponent(safeMfaReturnPath(redirectTo))}`);
   }
 
   // ─── Portal del paciente (Fase 3 · P3 + M88) ────────────────────────────────
@@ -135,7 +148,8 @@ export async function GET(request: NextRequest) {
   // cuando el link PIDIÓ el portal (redirect empieza con /portal). Un usuario
   // que además es staff y entró por el login normal sigue el flujo de staff.
   if (redirectTo && redirectTo.startsWith("/portal")) {
-    const { data: cuentaId } = await supabase.rpc("paciente_cuenta_ensure");
+    const { data: cuentaId, error: cuentaError } = await supabase.rpc("paciente_cuenta_ensure");
+    if (cuentaError) safeLog("warn", "auth.portal.account", cuentaError);
     if (cuentaId) {
       const safePortal = safeRedirect(redirectTo, "/portal");
       return NextResponse.redirect(`${origin}${safePortal}`);

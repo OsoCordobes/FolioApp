@@ -14,6 +14,11 @@ import { z } from "zod";
 
 import { emitirFacturaParaPago } from "@/lib/afip/comprobantes";
 import { capabilitiesFor } from "@/lib/auth/capabilities";
+import { capabilitiesForSession } from "@/lib/auth/guard";
+import { getActiveContext } from "@/lib/db/active-context";
+import { readFinanceMovements } from "@/lib/db/finanzas-read";
+import { movementRequestSchema } from "@/lib/finanzas/filter-schema";
+import type { MovementPage } from "@/lib/finanzas/movements";
 import { finanzasScopeMemberId } from "@/lib/auth/finanzas-scope";
 import { err, mapSupabaseError, ok, type Result } from "@/lib/db/errors";
 import { getActiveSession } from "@/lib/db/session";
@@ -22,6 +27,17 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 const emitirInput = z.object({
   pagoId: z.string().uuid(),
 });
+
+export async function listFinanceMovementsAction(input: unknown): Promise<Result<MovementPage>> {
+  const parsed = movementRequestSchema.safeParse(input);
+  if (!parsed.success) return err("validation", "Filtros de movimientos inválidos.");
+  const ctx = await getActiveContext();
+  if (!ctx.ok) return ctx;
+  if (!capabilitiesForSession(ctx.data.session).canSeeFinanzas) return err("forbidden", "No tenés acceso a finanzas.");
+  return readFinanceMovements({ organizationId: ctx.data.session.organizationId,
+    startUtc: parsed.data.startUtc, endUtc: parsed.data.endUtc },
+  { status: parsed.data.status, query: parsed.data.query }, parsed.data.cursor);
+}
 
 export async function emitirFacturaAction(input: z.infer<typeof emitirInput>): Promise<Result<{ numero: string }>> {
   const parsed = emitirInput.safeParse(input);

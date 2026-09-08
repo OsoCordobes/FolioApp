@@ -6,15 +6,14 @@
  * background tints reactivos). NO depende de auth — solo carga /login.
  *
  * Pre-requisitos:
- *   1. Servidor en E2E_BASE_URL (default localhost:3010).
- *   2. .env.local configurado (Supabase URL/keys mínimos — el SideArt no
- *      hace fetch pero el wrapping de /login sí necesita supabase server client).
+ *   1. Servidor en E2E_BASE_URL (default 127.0.0.1:4410).
+ *   2. El runner aporta configuración sintética local; nunca lee .env.local.
  *
  * Run:
- *   pnpm exec playwright test tests/e2e/side-art.spec.ts
+ *   pnpm test:e2e -- tests/e2e/side-art.spec.ts
  */
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../fixtures/local-test";
 
 // Phase 6b · pre-dismiss the cookie banner — it's fixed-bottom and can
 // intercept clicks on the SideArt dot navigation.

@@ -22,32 +22,23 @@
  * RLS lo re-valida (paciente_owns). El org y el path se DERIVAN de la sesión.
  */
 
+import { uploadReviewedConsent } from "@/lib/consentimientos/signature-upload";
 import { z } from "zod";
 
 import {
-  buildFirmaStoragePath,
-  pathSinBucket,
   type PlantillaVigente,
 } from "@/lib/consentimientos/helpers";
 import {
-  createConsentimientoPortal,
   listPlantillasConsentimientoPortal,
 } from "@/lib/db/consentimientos";
-import { err, ok, type Result } from "@/lib/db/errors";
-import { getPacienteSession } from "@/lib/db/paciente-session";
+import { err, type Result } from "@/lib/db/errors";
 import {
   getFirmaUrlPortal,
   listConsentimientosPortal,
   type PortalConsentimientoItem,
 } from "@/lib/db/portal-consentimientos";
-import {
-  createSupabaseServerClient,
-  createSupabaseServiceClient,
-} from "@/lib/supabase/server";
 
-const CONSENT_BUCKET = "consentimientos-firmados";
 /** La firma es un PNG de canvas — muy chica; 5 MB es holgadísimo (igual que staff). */
-const FIRMA_MAX_BYTES = 5 * 1024 * 1024;
 
 /** Lista los consentimientos del paciente (vigentes + revocados). */
 export async function listConsentimientosPortalAction(): Promise<
@@ -86,75 +77,6 @@ export async function getFirmaUrlPortalAction(
  * Si el INSERT falla tras el upload, se borra el PNG huérfano best-effort con el
  * service client (el bucket no tiene DELETE policy — inmutabilidad M27).
  */
-export async function uploadFirmaConsentimientoPortalAction(
-  formData: FormData,
-): Promise<Result<{ consentimientoId: string }>> {
-  const file = formData.get("file");
-  const pacienteId = String(formData.get("pacienteId") ?? "");
-  const plantillaId = String(formData.get("plantillaId") ?? "");
-
-  if (!(file instanceof Blob) || file.size === 0) {
-    return err("validation", "La firma llegó vacía. Dibujala de nuevo e intentá otra vez.");
-  }
-  if (file.size > FIRMA_MAX_BYTES) {
-    return err("validation", "La firma supera el límite de 5 MB.");
-  }
-  if (file.type !== "image/png") {
-    return err("validation", "La firma debe ser una imagen PNG.");
-  }
-  if (
-    !z.string().uuid().safeParse(pacienteId).success ||
-    !z.string().uuid().safeParse(plantillaId).success
-  ) {
-    return err("validation", "Datos del consentimiento inválidos.");
-  }
-
-  const session = await getPacienteSession();
-  if (!session.ok) return session;
-
-  // Gate app (anti-IDOR): la ficha debe estar linkeada a la cuenta. De acá sale el
-  // organizationId — NUNCA del cliente. La RLS del upload y del INSERT lo re-validan.
-  const ficha = session.data.pacientes.find((p) => p.pacienteId === pacienteId);
-  if (!ficha) {
-    return err("not_found", "Esa ficha no está vinculada a tu cuenta.");
-  }
-  const organizationId = ficha.organizationId;
-
-  // Path canónico server-built (CHECK M07). El upload va SIN el prefijo del bucket
-  // (storage.objects.name no lo incluye — M27).
-  const firmaStoragePath = buildFirmaStoragePath({
-    organizationId,
-    pacienteId,
-    archivoUuid: crypto.randomUUID(),
-  });
-  const pathEnBucket = pathSinBucket(firmaStoragePath);
-  const bytes = new Uint8Array(await file.arrayBuffer());
-
-  const supabase = await createSupabaseServerClient();
-  const { error: uploadErr } = await supabase.storage
-    .from(CONSENT_BUCKET)
-    .upload(pathEnBucket, bytes, { contentType: "image/png" });
-  if (uploadErr) {
-    return err("db_error", "No pudimos subir la firma.", uploadErr.message);
-  }
-
-  const created = await createConsentimientoPortal({
-    pacienteId,
-    plantillaId,
-    firmaStoragePath,
-  });
-  if (!created.ok) {
-    // El PNG quedó huérfano y el paciente no tiene DELETE en este bucket (M27):
-    // limpieza best-effort con service client. Si también falla, el archivo huérfano
-    // es benigno (uuid sin fila que lo referencie).
-    try {
-      const service = createSupabaseServiceClient();
-      await service.storage.from(CONSENT_BUCKET).remove([pathEnBucket]);
-    } catch {
-      // best-effort: nunca enmascarar el error real del INSERT
-    }
-    return created;
-  }
-
-  return ok({ consentimientoId: created.data.id });
+export async function uploadFirmaConsentimientoPortalAction(formData: FormData): Promise<Result<{ consentimientoId: string }>> {
+  return uploadReviewedConsent(formData, "portal");
 }

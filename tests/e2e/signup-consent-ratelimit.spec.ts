@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../fixtures/local-test";
 
 // Phase 6b · pre-dismiss the cookie banner so it doesn't intercept
 // clicks + so the "Aviso de Privacidad" text isn't duplicated in DOM.
@@ -37,7 +37,7 @@ test.describe("/login signup · consent + Turnstile gates", () => {
     const submit = page.getByRole("button", { name: /empezar/i });
 
     // Fill valid email + password first so disable can only be due to consent.
-    await page.locator('input[type="email"]').fill("e2e-consent-test@folio.app");
+    await page.locator('input[type="email"]').fill("e2e-consent-test@example.test");
     await page.locator('input[type="password"]').fill("TestPassword123!");
 
     // Consent not ticked yet → submit must be disabled.

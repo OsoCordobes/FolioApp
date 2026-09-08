@@ -1,29 +1,10 @@
 "use client";
 
-/**
- * Folio · /finanzas — Ingresos del período con KPIs, gráficos y transacciones.
- *
- * Port fiel de folio/finanzas.jsx + E1/E2 (finanzas completas):
- *  - KPI strip con "Por cobrar" (deuda del período) y labels honestos por
- *    período (la proyección de fin de mes solo aplica a "Este mes").
- *  - Chart diario (línea) para rangos cortos; barras mensuales para 6m/año.
- *    El eje diario va por FECHA REAL del período (no por día-del-mes): ver
- *    LineChart y lib/db/finanzas · buildIngresosPorDia.
- *  - Eje Y relativo al dato (niceCeil) — el piso hardcodeado de $150.000
- *    aplanaba consultorios chicos.
- *  - Tabla con chips Todos/Cobrados/Pendientes y acción inline "Cobrar"
- *    (server action marcarPagoCobradoAction + toast). Lista TODOS los pagos
- *    pendientes del período — es la única superficie de cobro del producto, y
- *    el KPI "Por cobrar" cuenta exactamente esas filas.
- *  - Export CSV server-side SIN cap: el botón es un <a> a /finanzas/export.
- *
- * Los agregados se calculan server-side (lib/db/finanzas.ts) con RLS por org
- * y scoping por profesional cuando el rol solo ve lo propio.
- */
+/** Complete database aggregates with bounded, server-filtered movement pages. */
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition, type ReactNode } from "react";
+import { useState, useTransition, useRef, type ReactNode } from "react";
 
 import * as I from "@/components/icons";
 import { useToast } from "@/components/ui/toast";
@@ -38,7 +19,10 @@ import type {
   MetodoPagoUI,
 } from "@/lib/db/finanzas";
 
-import { marcarPagoCobradoAction } from "@/app/(app)/finanzas/actions";
+import { formatCents } from "@/lib/format/financial-money";
+import type { MovementPage, MovementCursor } from "@/lib/finanzas/movements";
+
+import { listFinanceMovementsAction, marcarPagoCobradoAction } from "@/app/(app)/finanzas/actions";
 
 const METODO_LBL: Record<MetodoPagoUI, { lbl: string; color: string }> = {
   mercadopago:   { lbl: "MercadoPago",   color: "var(--slate)" },
@@ -50,10 +34,9 @@ const METODO_LBL: Record<MetodoPagoUI, { lbl: string; color: string }> = {
   pendiente:     { lbl: "Pendiente",     color: "var(--amber)" },
 };
 
-const MESES_ABREV_FN = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
 const fmtMoney = (n: number | null | undefined): string =>
-  "$ " + (n ?? 0).toLocaleString("es-AR");
+  "$ " + (n ?? 0).toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const fmtMonth = (n: number): string => {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(".0", "") + "M";
@@ -61,10 +44,9 @@ const fmtMonth = (n: number): string => {
   return n.toString();
 };
 
-const fmtFechaHora = (iso: string): string => {
-  const d = new Date(iso);
-  return `${d.getDate()} ${MESES_ABREV_FN[d.getMonth()]} · ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-};
+const fmtFechaHora = (iso: string): string => new Intl.DateTimeFormat("es-AR", {
+  timeZone: "America/Argentina/Cordoba", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
+}).format(new Date(iso));
 
 // ─── KPI strip ──────────────────────────────────────────────────────────────
 
@@ -103,10 +85,7 @@ function KpiCard({ label, value, sub, tone, delta }: KpiCardProps) {
 }
 
 function KpiStrip({
-  totalIngresos,
   totalSesiones,
-  ticketProm,
-  proyeccion,
   porCobrar,
   porCobrarCount,
   diaActual,
@@ -114,6 +93,7 @@ function KpiStrip({
   deltaIngresosPct,
   periodo,
   periodoLabel,
+  exact,
 }: {
   totalIngresos: number;
   totalSesiones: number;
@@ -126,6 +106,7 @@ function KpiStrip({
   deltaIngresosPct: number | null;
   periodo: string;
   periodoLabel: string;
+  exact: FinanzasData["exact"];
 }) {
   const esMes = periodo === "mes";
   // Labels honestos por período: el delta "vs mes pasado" y la proyección de
@@ -140,7 +121,7 @@ function KpiStrip({
         value={
           <>
             <small>$</small>
-            {fmtMonth(totalIngresos)}
+            {formatCents(exact.ingresos).slice(2)}
           </>
         }
         sub={esMes ? `${diaActual} de ${diasDelMes} días` : periodoLabel.toLowerCase()}
@@ -152,7 +133,7 @@ function KpiStrip({
         value={
           <>
             <small>$</small>
-            {fmtMonth(porCobrar)}
+            {formatCents(exact.pendientes).slice(2)}
           </>
         }
         sub={
@@ -174,7 +155,7 @@ function KpiStrip({
         value={
           <>
             <small>$</small>
-            {fmtMonth(ticketProm)}
+            {formatCents(exact.ticket).slice(2)}
           </>
         }
         sub="por sesión"
@@ -185,7 +166,7 @@ function KpiStrip({
           value={
             <>
               <small>$</small>
-              {fmtMonth(proyeccion)}
+              {formatCents(exact.proyeccion).slice(2)}
             </>
           }
           sub="al ritmo actual"
@@ -379,7 +360,7 @@ function BarChartMensual({ meses }: { meses: FinanzasMesIngreso[] }) {
         return (
           <g key={mes.ym}>
             <rect x={x} y={y} width={barW} height={h} rx="2" fill="var(--accent)" opacity="0.85">
-              <title>{`${mes.label} · ${fmtMoney(mes.monto)}`}</title>
+              <title>{`${mes.label} · ${(mes.montoCents ? formatCents(mes.montoCents) : fmtMoney(mes.monto))}`}</title>
             </rect>
             <text x={x + barW / 2} y={PAD_T + H + 16} textAnchor="middle" fill="var(--ink-3)" fontSize="10" fontFamily="Geist Mono">
               {mes.label}
@@ -394,7 +375,8 @@ function BarChartMensual({ meses }: { meses: FinanzasMesIngreso[] }) {
 // ─── Donut ──────────────────────────────────────────────────────────────────
 
 function Donut({ servicios }: { servicios: FinanzasServicioBreakdown[] }) {
-  const total = servicios.reduce((s, x) => s + x.monto, 0);
+  const totalCents = servicios.reduce((s, x) => s + BigInt(x.montoCents ?? "0"), BigInt(0));
+  const total = Number(totalCents) / 100; // Geometry only; the displayed total remains exact.
   const cx = 90;
   const cy = 90;
   const r = 64;
@@ -434,8 +416,9 @@ function Donut({ servicios }: { servicios: FinanzasServicioBreakdown[] }) {
         <text x={cx} y={cy - 4} textAnchor="middle" fontFamily="Geist Mono" fontSize="9" fill="var(--ink-3)" letterSpacing=".08em">
           TOTAL
         </text>
-        <text x={cx} y={cy + 14} textAnchor="middle" fontFamily="Geist" fontWeight="600" fontSize="17" letterSpacing="-.015em" fill="var(--ink)">
-          ${fmtMonth(total)}
+        <text x={cx} y={cy + 14} textAnchor="middle" fontFamily="Geist" fontWeight="600" fontSize="11" letterSpacing="-.015em" fill="var(--ink)">
+          <title>{formatCents(String(totalCents))}</title>
+          {formatCents(String(totalCents))}
         </text>
       </svg>
       <div className="fn-donut-legend">
@@ -443,7 +426,7 @@ function Donut({ servicios }: { servicios: FinanzasServicioBreakdown[] }) {
           <div key={a.id} className="fn-legend-row">
             <span className="fn-legend-swatch" style={{ background: a.color }} />
             <span className="fn-legend-name">{a.nombre}</span>
-            <span className="fn-legend-monto fm-mono">{fmtMoney(a.monto)}</span>
+            <span className="fn-legend-monto fm-mono">{(a.montoCents ? formatCents(a.montoCents) : fmtMoney(a.monto))}</span>
             <span className="fn-legend-pct fm-mono">{Math.round(a.portion * 100)}%</span>
           </div>
         ))}
@@ -466,7 +449,7 @@ function ProfesionalesBreakdown({ profesionales }: { profesionales: FinanzasProf
             <span className="fn-prof-count fm-mono">
               {p.count} {p.count === 1 ? "cobro" : "cobros"}
             </span>
-            <span className="fn-legend-monto fm-mono">{fmtMoney(p.monto)}</span>
+            <span className="fn-legend-monto fm-mono">{(p.montoCents ? formatCents(p.montoCents) : fmtMoney(p.monto))}</span>
           </div>
         ))}
       </div>
@@ -484,68 +467,67 @@ const ESTADO_FILTROS: Array<[EstadoFiltro, string]> = [
   ["pendientes", "Pendientes"],
 ];
 
-function TablaTransacciones({
-  transacciones,
-  mesLabel,
-  periodo,
-  canMarcarCobrado,
-  cobradosNoListados,
-  datosParciales,
-}: {
-  transacciones: FinanzasTransaccion[];
+function TablaTransacciones({ initialPage, window, mesLabel, periodo, canMarcarCobrado }: {
+  initialPage: MovementPage;
+  window: FinanzasData["window"];
   mesLabel: string;
   periodo: string;
   canMarcarCobrado: boolean;
-  cobradosNoListados: number;
-  /** true si la lectura tocó el tope de páginas: el pie NO puede prometer completitud. */
-  datosParciales: boolean;
 }) {
   const router = useRouter();
   const toast = useToast();
   const [search, setSearch] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
   const [estadoFiltro, setEstadoFiltro] = useState<EstadoFiltro>("todos");
-  /** id del pago con "Cobrar" en vuelo (deshabilita el botón de ESA fila). */
+  const [page, setPage] = useState(initialPage);
+  const [history, setHistory] = useState<Array<MovementCursor | null>>([null]);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const requestId = useRef(0);
   const [cobrandoId, setCobrandoId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
+  const filtered = page.rows;
 
-  const filtered = useMemo(() => {
-    let rows = transacciones;
-    if (estadoFiltro !== "todos") {
-      const target = estadoFiltro === "cobrados" ? "cobrado" : "pendiente";
-      rows = rows.filter((t) => t.estado === target);
+  const loadPage = async (status: EstadoFiltro, query: string, cursors: Array<MovementCursor | null>) => {
+    const id = ++requestId.current;
+    setLoading(true);
+    setLoadError("");
+    try {
+      const result = await listFinanceMovementsAction({ periodo, status, query, ...window, cursor: cursors.at(-1) });
+      if (id !== requestId.current) return;
+      if (!result.ok) { setLoadError(`${result.error.message} Se conservan los resultados anteriores.`); return; }
+      setPage(result.data);
+      setEstadoFiltro(status);
+      setAppliedSearch(query);
+      setHistory(cursors);
+    } catch {
+      if (id === requestId.current) setLoadError("No se pudieron actualizar los movimientos. Reintentá.");
+    } finally {
+      if (id === requestId.current) setLoading(false);
     }
-    if (!search.trim()) return rows;
-    const q = search.toLowerCase();
-    return rows.filter((t) =>
-      t.paciente.toLowerCase().includes(q) ||
-      t.servicio.toLowerCase().includes(q) ||
-      String(t.monto).includes(q),
-    );
-  }, [transacciones, search, estadoFiltro]);
-
-  const pendientesCount = useMemo(
-    () => transacciones.filter((t) => t.estado === "pendiente").length,
-    [transacciones],
-  );
-  const cobradosCount = transacciones.length - pendientesCount;
+  };
 
   const marcarCobrado = (t: FinanzasTransaccion) => {
     if (cobrandoId) return;
     setCobrandoId(t.id);
     startTransition(async () => {
-      const result = await marcarPagoCobradoAction(t.id);
-      setCobrandoId(null);
-      if (!result.ok) {
-        toast.show({ titulo: `No se pudo registrar el cobro: ${result.error.message}`, tono: "error" });
-        return;
-      }
-      toast.show({ titulo: `Pago cobrado · ${fmtMoney(t.monto)} · ${t.paciente}` });
-      router.refresh();
+      try {
+        const result = await marcarPagoCobradoAction(t.id);
+        if (!result.ok) {
+          toast.show({ titulo: result.error.message, tono: "error" });
+          return;
+        }
+        toast.show({ titulo: "Cobro registrado" });
+        await loadPage(estadoFiltro, appliedSearch, [null]);
+        router.refresh();
+      } catch {
+        toast.show({ titulo: "No se pudo confirmar el cobro. Actualizá antes de reintentar.", tono: "error" });
+      } finally { setCobrandoId(null); }
     });
   };
 
   return (
-    <div className="fn-table-wrap">
+    <div className="fn-table-wrap" aria-busy={loading}>
       <header className="fn-table-head">
         <span className="fi-eyebrow">Transacciones del período</span>
         <div className="fn-table-tools">
@@ -556,41 +538,45 @@ function TablaTransacciones({
                 type="button"
                 className={"fn-estado-chip-btn " + (estadoFiltro === id ? "is-active" : "")}
                 aria-pressed={estadoFiltro === id}
-                onClick={() => setEstadoFiltro(id)}
+                disabled={loading}
+                onClick={() => { void loadPage(id, appliedSearch, [null]); }}
               >
                 {lbl}
               </button>
             ))}
           </div>
-          <div className="fn-table-search">
+          <form className="fn-table-search" onSubmit={(event) => { event.preventDefault(); void loadPage(estadoFiltro, search.trim(), [null]); }}>
             <I.Search size={12} />
             <input
-              placeholder="Buscar paciente, monto…"
+              placeholder="Nombre completo, DNI, servicio o importe"
+              aria-label="Nombre completo o DNI exacto, servicio o importe exacto"
+              maxLength={120}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
-          </div>
+            <button type="submit" className="fi-btn fi-btn-secondary" disabled={loading}>Buscar</button>
+          </form>
           {/* E2 · export server-side SIN cap: baja TODO el período, no solo
               las ≤20 filas renderizadas. */}
-          <a
-            className="fi-btn fi-btn-secondary"
-            href={`/finanzas/export?periodo=${periodo}`}
-            title="Descargar CSV con todas las transacciones del período"
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
-            </svg>
-            Exportar
-          </a>
+          <form method="post" action="/finanzas/export">
+            <input type="hidden" name="periodo" value={periodo} />
+            <input type="hidden" name="status" value={estadoFiltro} />
+            <input type="hidden" name="query" value={appliedSearch} />
+            <input type="hidden" name="startUtc" value={window.startUtc} />
+            <input type="hidden" name="endUtc" value={window.endUtc} />
+            <button className="fi-btn fi-btn-secondary" disabled={loading} type="submit"
+              title="CSV de todos los resultados del filtro; máximo 10.000 filas y 10 MB">Exportar resultados</button>
+          </form>
         </div>
       </header>
+      <p className="muted" style={{ padding: "8px 16px" }}>
+        Nombre completo o DNI exacto; servicio por texto; importe exacto en pesos (ej. 1.234,56).
+        Los indicadores superiores corresponden al período completo. Orden: registro más reciente.
+      </p>
+      <p role="status" style={{ padding: "0 16px" }}>{loading ? "Cargando movimientos…" : loadError}</p>
       {filtered.length === 0 ? (
         <p className="muted" style={{ padding: 24, textAlign: "center" }}>
-          {transacciones.length === 0
-            ? "Sin transacciones registradas todavía."
-            : estadoFiltro === "pendientes" && !search.trim()
-              ? "Sin pagos pendientes en el período. Todo cobrado."
-              : "Sin resultados para ese filtro."}
+          Sin resultados para los filtros aplicados.
         </p>
       ) : (
         <table className="fn-table">
@@ -639,7 +625,7 @@ function TablaTransacciones({
                   </td>
                   <td className="ta-r">
                     <span className={"fn-monto fm-mono " + (isPendiente ? "is-pendiente" : "")}>
-                      {fmtMoney(t.monto)}
+                      {(t.montoCents ? formatCents(t.montoCents) : fmtMoney(t.monto))}
                     </span>
                   </td>
                 </tr>
@@ -648,32 +634,12 @@ function TablaTransacciones({
           </tbody>
         </table>
       )}
-      {/* H1+H4 · el pie ya no puede prometer "las últimas N": la tabla lista
-          TODOS los pendientes del período (cada uno con su botón Cobrar, que no
-          existe en ninguna otra pantalla) + los cobros más recientes. Decimos
-          exactamente cuántos cobros quedaron fuera y dónde están.
-
-          Con `datosParciales` (la lectura tocó el tope de páginas) NINGUNA de
-          las dos promesas es cierta: pueden faltar pendientes y el CSV tampoco
-          trae el período entero. Antes que prometer de más, el pie lo dice. */}
       <footer className="fn-table-foot">
-        <span className="muted">
-          {pendientesCount === 0
-            ? datosParciales
-              ? "Sin pagos pendientes entre los leídos"
-              : "Sin pagos pendientes"
-            : `${pendientesCount} pago${pendientesCount === 1 ? "" : "s"} pendiente${pendientesCount === 1 ? "" : "s"}${datosParciales ? "" : " (todos listados)"}`}
-          {" · "}
-          {cobradosCount === 1 ? "1 cobro reciente" : `${cobradosCount} cobros recientes`}
-          {cobradosNoListados > 0
-            ? ` (hay ${cobradosNoListados} cobro${cobradosNoListados === 1 ? "" : "s"} más en el CSV)`
-            : ""}
-          {" · "}
-          {mesLabel}
-          {datosParciales
-            ? " · período demasiado grande: el CSV también sale recortado, achicá el rango"
-            : " · el export CSV incluye el período completo"}
-        </span>
+        <span className="muted">{page.totalCount} resultados · página {history.length} · {mesLabel}</span>
+        <button type="button" className="fi-btn fi-btn-secondary" disabled={loading || history.length === 1}
+          onClick={() => { void loadPage(estadoFiltro, appliedSearch, history.slice(0, -1)); }}>Anterior</button>
+        <button type="button" className="fi-btn fi-btn-secondary" disabled={loading || !page.nextCursor}
+          onClick={() => { void loadPage(estadoFiltro, appliedSearch, [...history, page.nextCursor]); }}>Siguiente</button>
       </footer>
     </div>
   );
@@ -755,6 +721,7 @@ export function Finanzas({ data, periodo = "mes", canMarcarCobrado = false }: Fi
         </p>
       ) : null}
       <KpiStrip
+        exact={data.exact}
         totalIngresos={data.totalIngresos}
         totalSesiones={data.totalSesiones}
         ticketProm={data.ticketPromedio}
@@ -797,12 +764,12 @@ export function Finanzas({ data, periodo = "mes", canMarcarCobrado = false }: Fi
       </div>
 
       <TablaTransacciones
-        transacciones={data.transacciones}
+        key={`${periodo}:${data.window.startUtc}:${data.window.endUtc}`}
+        initialPage={data.movements}
+        window={data.window}
         mesLabel={data.mesLabel}
         periodo={periodo}
         canMarcarCobrado={canMarcarCobrado}
-        cobradosNoListados={data.cobradosNoListados}
-        datosParciales={data.datosParciales}
       />
     </div>
   );

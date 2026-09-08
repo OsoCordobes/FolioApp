@@ -1,39 +1,14 @@
 /**
- * Folio · E2E · booking público REAL con submit (/book/[slug]).
- *
- * A diferencia de book-public.spec.ts (que usa /dev/book-preview con mocks),
- * este spec ejecuta el flujo completo contra la DB del entorno apuntado:
- * crea pedidos/turnos REALES vía createPedidoPublico.
- *
- * ⚠️ ESCRIBE EN LA BASE DE DATOS del entorno que sirve E2E_BASE_URL.
- *    Por eso está gateado por E2E_BOOKING_SLUG: solo corre si se apunta
- *    explícitamente a una org de prueba (ej. `lautaro-folio`, org de datos
- *    de muestra designada para esto). Ver tests/e2e/README.md.
- *
- * Datos que crea por corrida completa (3 reservas):
- *   - nombre  : "E2E Spec Booking <YYYY-MM-DD HH:mm:ss>" (+ sufijo A/B)
- *   - teléfono: +54 9 351 5xx xxxx único por corrida (derivado del timestamp).
- *     El blind index de teléfono dedupea pacientes: un teléfono repetido
- *     REUTILIZA el paciente, por eso cada corrida usa uno nuevo.
- *   - email   : nunca (evita disparar notificaciones reales).
- *
- * TODO(cleanup): createPedidoPublico devuelve el id del pedido pero el wizard
- * no lo expone en el DOM, y desde la UI pública no hay forma de cancelar.
- * Cuando haya acceso SQL de mantenimiento, borrar por patrón de nombre
- * "E2E Spec Booking %" (pedido + turno + paciente asociados).
- *
- * Pre-requisitos:
- *   1. Dev server en E2E_BASE_URL (default localhost:3010, `pnpm dev`).
- *   2. Sin NEXT_PUBLIC_TURNSTILE_SITE_KEY en el entorno del server (dev):
- *      el wizard no monta captcha y verifyTurnstile es fail-open sin secret.
- *   3. La org del slug tiene servicios activos y disponibilidad cargada.
- *
- * Run (PowerShell):
- *   $env:E2E_BOOKING_SLUG="lautaro-folio"
- *   pnpm exec playwright test tests/e2e/booking-submit.spec.ts --project=e2e
+ * Reservas con escritura sólo en el consultorio sintético local indicado
+ * por FOLIO_TEST_BOOKING_SLUG=folio-test-*. Requiere Supabase local y fixtures
+ * de servicios/disponibilidad; se omite si faltan. Ver README.md.
+ * Los nombres E2E y teléfonos son inventados. Compartir teléfono no acredita
+ * identidad ni reutiliza un paciente. Proveedores externos están bloqueados.
+ * La limpieza local se revisa por separado; no se ejecuta automáticamente.
+ * Ejecutar: pnpm test:e2e -- tests/e2e/booking-submit.spec.ts
  */
 
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "../fixtures/local-test";
 
 const SLUG = process.env.E2E_BOOKING_SLUG ?? "";
 
@@ -90,7 +65,7 @@ function escapeRe(s: string): string {
  *
  * CLINICA-4: si la org tiene >1 colegiado, entre servicio y horario aparece
  * el paso "Elegí profesional" — este helper lo tolera eligiendo el PRIMER
- * profesional. Con 1 colegiado (la org de prueba lautaro-folio) el paso NO
+ * profesional. Con 1 colegiado (la org de prueba folio-test-booking) el paso NO
  * se monta y el flujo es byte a byte el histórico: el spec pasa tal cual.
  */
 async function irHastaSlots(page: Page): Promise<void> {
@@ -229,7 +204,7 @@ test.describe("/book/[slug] · submit real", () => {
   /**
    * CLINICA-4 · paso "Elegí profesional" (solo orgs con >1 colegiado).
    *
-   * Skip-eado por default: la org de prueba estándar (lautaro-folio) tiene
+   * Skip-eado por default: la org de prueba estándar (folio-test-booking) tiene
    * UN solo colegiado, así que el paso no se monta — eso lo cubren los dos
    * tests de arriba (flujo Solo intacto). Para ejercitar el camino
    * multi-prof, apuntá E2E_BOOKING_SLUG a una org de prueba con 2+

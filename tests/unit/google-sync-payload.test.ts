@@ -16,13 +16,14 @@ const base = {
 
 test("buildCalendarEventPayload: todos los campos presentes", () => {
   const p = buildCalendarEventPayload(base);
-  assert.equal(p.summary, "Consulta inicial — Carlos Vega");
+  assert.equal(p.summary, "Turno reservado");
   assert.equal(p.timeZone, "America/Argentina/Buenos_Aires");
   assert.equal(p.start, base.inicioIso);
   assert.equal(p.end, base.finIso);
-  assert.equal(p.location, base.organizationDireccion);
-  assert.equal(p.attendeeEmail, base.pacienteEmail);
-  assert.ok(p.description.includes("Consultorio Lorenzo"));
+  assert.equal(p.location, undefined);
+  assert.equal(p.attendeeEmail, undefined);
+  assert.ok(!JSON.stringify(p).includes(base.pacienteNombre));
+  assert.ok(!JSON.stringify(p).includes(base.organizationNombre));
   assert.ok(p.description.includes("Folio"));
 });
 
