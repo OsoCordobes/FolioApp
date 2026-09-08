@@ -53,7 +53,7 @@ function harness(transport: (input: { turnoId: string; to: string }) => Promise<
     cursor = 0;
     const tree = exports.Dashboard!({ initialTurnos: snapshot, pacientes: { "synthetic-patient": { nombre: "Paciente de prueba" } }, fechaIso: "2026-09-08", fechaLarga: "martes", nowIso: "2026-09-08T12:00:00Z", timezone: "America/Argentina/Cordoba" });
     effects.splice(0).forEach(effect => effect());
-    return find(tree)!.props.onTransition as (id: string, to: string) => void;
+    return find(tree)!.props.onTransition as (id: string, to: string, extra?: Record<string, unknown>, cobro?: { montoCents: number; pagado: boolean }) => void;
   };
   const transition = render();
   return { transition, fixture, render, slots, notices, requests: () => requests, settle: () => Promise.allSettled(pending) };
@@ -97,13 +97,41 @@ for (const pagoRegistrado of [true, false]) {
     let finish!: (value: { ok: boolean; data: { pagoRegistrado: boolean } }) => void;
     const view = harness(() => new Promise(resolve => { finish = resolve; }));
     view.render([{ ...view.fixture, estado: "atendiendo" }])(view.fixture.id, "cerrado");
-    const authoritative = { ...view.fixture, estado: "cerrado", cobro: { estado: "pagado", montoCents: 1234567, ts: "2026-09-08T12:00:00Z" } };
+    const authoritative = { ...view.fixture, estado: "cerrado", servicio: "Servicio actualizado", cobro: { estado: "pagado", montoCents: 1234567, ts: "2026-09-08T12:00:00Z" } };
     view.render([authoritative]);
+    assert.equal(current(view).cobro?.montoCents, 1234567, "pending optimism must not hide a real payment");
+    assert.equal(current(view).servicio, authoritative.servicio);
     finish({ ok: true, data: { pagoRegistrado } });
     await view.settle();
     assert.equal(current(view).cobro?.montoCents, 1234567);
   });
 }
+
+test("a paid SSR row does not produce a debt-created toast from a late close request", async () => {
+  let finish!: (value: { ok: boolean; data: { pagoRegistrado: boolean } }) => void;
+  const view = harness(() => new Promise(resolve => { finish = resolve; }));
+  view.render([{ ...view.fixture, estado: "atendiendo" }])(view.fixture.id, "cerrado", {}, { montoCents: 3000000, pagado: false });
+  view.render([{ ...view.fixture, estado: "cerrado", cobro: { estado: "pagado", montoCents: 1234567, ts: null } } as typeof view.fixture]);
+  finish({ ok: true, data: { pagoRegistrado: true } });
+  await view.settle();
+  assert.equal(view.notices.length, 1);
+  assert.ok(!(view.notices[0] as { titulo: string }).titulo.includes("deuda registrada"));
+});
+
+test("a predecessor SSR snapshot keeps updated metadata and real payment while close is pending and after ACK", async () => {
+  let finish!: (value: { ok: boolean; data: { pagoRegistrado: boolean } }) => void;
+  const view = harness(() => new Promise(resolve => { finish = resolve; }));
+  view.render([{ ...view.fixture, estado: "atendiendo" }])(view.fixture.id, "cerrado");
+  const refreshed = { ...view.fixture, estado: "atendiendo", servicio: "Cambio del servidor", cobro: { estado: "pagado", montoCents: 765432, ts: null } };
+  view.render([refreshed]);
+  assert.equal(current(view).estado, "cerrado");
+  assert.equal(current(view).servicio, refreshed.servicio);
+  assert.equal(current(view).cobro?.montoCents, 765432);
+  finish({ ok: true, data: { pagoRegistrado: true } });
+  await view.settle();
+  assert.equal(current(view).servicio, refreshed.servicio);
+  assert.equal(current(view).cobro?.montoCents, 765432);
+});
 
 test("arrival ACK survives stale refresh even after a matching snapshot and still allows the next steps", async () => {
   const view = harness();

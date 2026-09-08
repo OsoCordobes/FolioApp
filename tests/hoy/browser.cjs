@@ -90,6 +90,18 @@ const stubs = {
             assert.equal(await page.locator('.fi-toast').count(), 1);
             result.push({ mode, case: 'close succeeds but failed payment rolls back only money + one error notice', pass: true });
             await reset();
+            await page.evaluate(() => qa.refresh({ estado: 'atendiendo' }));
+            await page.waitForFunction(() => qa.state[0].estado === 'atendiendo');
+            await page.evaluate(() => qa.transition('synthetic-walk-in', 'cerrado', {}, { montoCents: 3000000, pagado: false }));
+            await page.evaluate(() => qa.refresh({ estado: 'cerrado', servicio: 'Servicio actualizado', cobro: { estado: 'pagado', montoCents: 1234567, ts: null } }));
+            await page.waitForFunction(() => qa.state[0].cobro.montoCents === 1234567 && qa.state[0].servicio === 'Servicio actualizado');
+            assert.equal(await page.locator('.fi-toast').count(), 0);
+            await page.evaluate(() => qa.settle({ ok: true, data: { pagoRegistrado: true } }));
+            await page.locator('.fi-toast').waitFor();
+            assert.equal(await page.evaluate(() => qa.state[0].cobro.montoCents), 1234567);
+            assert.ok(!(await page.locator('.fi-toast').innerText()).includes('deuda registrada'));
+            result.push({ mode, case: 'equal-state SSR payment visible while pending and no false debt toast after ACK', pass: true });
+            await reset();
             await page.getByRole('button', { name: 'Marcar llegada', exact: true }).click();
             await page.evaluate(() => qa.settle({ ok: true, data: {} }));
             await page.locator('.fi-toast').waitFor();

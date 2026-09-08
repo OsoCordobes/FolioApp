@@ -74,6 +74,22 @@ const TRANSITION_TOAST: Partial<Record<EstadoTurno, string>> = {
   no_asistio: "No asistió registrado",
 };
 
+interface PendingTransition {
+  turno: Turno;
+  patch: Partial<Turno>;
+}
+
+function overlayPending(current: Turno, pending: PendingTransition): Turno {
+  return {
+    ...current,
+    ...pending.patch,
+    // A recorded payment wins over the proposed payment, including when SSR
+    // still shows the previous appointment state (upsert ignores duplicates).
+    cobro: current.cobro?.montoCents != null || !Object.hasOwn(pending.patch, "cobro")
+      ? current.cobro : pending.turno.cobro,
+  };
+}
+
 export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fechaAnio, nowIso, timezone, organizationId, profesionales = [], profActivo = null, primerosPasos = null, canRegistrarCobro = true }: DashboardProps) {
   const router = useRouter();
   const toast = useToast();
@@ -85,7 +101,7 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
   const [, startTransition] = useTransition();
   const now = useNow(nowIso, 60_000);
   const currentTurnos = useRef(initialTurnos);
-  const pendingTurnos = useRef(new Map<string, Turno>());
+  const pendingTurnos = useRef(new Map<string, PendingTransition>());
   const confirmedTurnos = useRef(new Map<string, Turno>());
 
   // Resincronizar el estado local cuando el Server Component re-renderiza
@@ -104,8 +120,10 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
       const pending = pendingTurnos.current.get(turno.id);
       // A later server state (including cancellation) takes precedence over
       // our in-flight optimism. Unrelated appointments remain independent.
-      return pending && (current.estado === pending.estado || isTurnoStatePredecessor(current.estado, pending.estado))
-        ? { ...current, ...pending } : current;
+      // Once SSR has reached the requested state, all of its fields are
+      // authoritative, including payment and metadata while ACK is pending.
+      return pending && isTurnoStatePredecessor(current.estado, pending.turno.estado)
+        ? overlayPending(current, pending) : current;
     });
     currentTurnos.current = refreshed;
     setTurnos(refreshed);
@@ -137,7 +155,11 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
 
     // Network calls and notifications belong to the event, never to a React
     // state updater: React can replay updaters during concurrent rendering.
-    pendingTurnos.current.set(id, next);
+    const pending: PendingTransition = {
+      turno: next,
+      patch: { ...extraConCobro, estado: next.estado, transiciones: next.transiciones },
+    };
+    pendingTurnos.current.set(id, pending);
     const replaceTurno = (replacement: Turno) => {
       const updated = currentTurnos.current.map((turno) => turno.id === id ? replacement : turno);
       currentTurnos.current = updated;
@@ -167,14 +189,14 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
         // vino a eliminar, en versión transitoria.
         if (to === "cerrado" && result.data.pagoRegistrado === false) {
           const withoutPayment = { ...next, cobro: before.cobro };
-          pendingTurnos.current.set(id, withoutPayment);
-          replaceTurno(withoutPayment);
+          pendingTurnos.current.set(id, { turno: withoutPayment, patch: { ...pending.patch, cobro: before.cobro } });
         }
-        const acknowledged = pendingTurnos.current.get(id) ?? next;
+        const settled = pendingTurnos.current.get(id) ?? pending;
+        const acknowledged = settled.turno;
         const seen = confirmedTurnos.current.get(id);
         // Keep the barrier after ACK, without keeping the request pending:
         // the user may immediately advance en_sala -> atendiendo -> cerrado.
-        let confirmed = acknowledged;
+        let confirmed = seen ? overlayPending(seen, settled) : acknowledged;
         if (seen && !isTurnoStatePredecessor(seen.estado, acknowledged.estado)) {
           // A numeric amount came from a real payment row in the refreshed
           // snapshot. A late ACK has no payment row of its own and must not
@@ -191,14 +213,15 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
         // registrada" — ahora avisa con tono error que hay que cargarlo a mano.
         if (to === "cerrado" && cobro && result.data.pagoRegistrado === false) {
           toast.show({
-            titulo: `Turno cerrado, pero el cobro NO se registró — cargalo desde Finanzas · ${before.hora} · ${nombre}`,
+            titulo: `Turno cerrado, pero no pudimos confirmar el cobro solicitado — revisalo en Finanzas · ${before.hora} · ${nombre}`,
             tono: "error",
           });
           return;
         }
         // C4 · feedback: toast de éxito recién cuando el server confirmó (el
         // update optimista ya se ve en la lista; el toast asegura "se guardó").
-        const tituloToast = to === "cerrado" && cobro && !cobro.pagado
+        const tituloToast = to === "cerrado" && result.data.pagoRegistrado === true &&
+          confirmed.cobro?.estado === "pendiente" && (confirmed.cobro.montoCents ?? 0) > 0
           ? "Turno cerrado · deuda registrada"
           : TRANSITION_TOAST[to];
         if (tituloToast) {
