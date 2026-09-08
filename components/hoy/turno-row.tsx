@@ -54,13 +54,14 @@ interface TurnoRowProps {
    * sin ofrecer un cobro que la RLS descartaría. Default true (legacy).
    */
   canRegistrarCobro?: boolean;
-  onTransition: (id: string, to: EstadoTurno, extra?: Partial<Turno>, cobro?: CobroCierreActionInput) => void;
-  onOpenFicha: (id: string) => void;
+  pending?: boolean;
+  onTransition: (id: string, to: EstadoTurno, extra?: Partial<Turno>, cobro?: CobroCierreActionInput) => boolean | void;
+  onOpenFicha: (id: string, transitionStarted?: boolean) => void;
   /** Abre el modal de reagendar (estados agendado|confirmado). */
   onReagendar?: (id: string) => void;
 }
 
-export function TurnoRow({ turno, paciente, isNext, now, timezone, canRegistrarCobro = true, onTransition, onOpenFicha, onReagendar }: TurnoRowProps) {
+export function TurnoRow({ turno, paciente, isNext, now, timezone, canRegistrarCobro = true, pending = false, onTransition, onOpenFicha, onReagendar }: TurnoRowProps) {
   const conf = STATE_CONF[turno.estado as keyof typeof STATE_CONF] ?? STATE_CONF.agendado;
   const isAtendiendo = turno.estado === "atendiendo";
   const isEnSala = turno.estado === "en_sala";
@@ -76,6 +77,7 @@ export function TurnoRow({ turno, paciente, isNext, now, timezone, canRegistrarC
    * pasar en estado atendiendo), default a la duración planificada.
    */
   const cerrarTurno = (cobro?: CobroCierreActionInput) => {
+    if (pending) return;
     const fromIso = turno.atendiendoDesde;
     const duracionMin = fromIso
       ? Math.max(1, Math.round((Date.now() - new Date(fromIso).getTime()) / 60000))
@@ -100,8 +102,8 @@ export function TurnoRow({ turno, paciente, isNext, now, timezone, canRegistrarC
       label: "Abrir ficha",
       icon: <I.ArrowRight size={12} />,
       onClick: () => {
-        onTransition(turno.id, "atendiendo", { atendiendoDesde: new Date().toISOString() });
-        onOpenFicha(turno.id);
+        const started = onTransition(turno.id, "atendiendo", { atendiendoDesde: new Date().toISOString() });
+        if (started !== false) onOpenFicha(turno.id, true);
       },
     };
   } else if (isAtendiendo) {
@@ -140,7 +142,10 @@ export function TurnoRow({ turno, paciente, isNext, now, timezone, canRegistrarC
 
   return (
     <div
-      {...activable(() => onOpenFicha(turno.id))}
+      {...activable(() => { if (!pending) onOpenFicha(turno.id); })}
+      aria-disabled={pending}
+      aria-busy={pending}
+      tabIndex={pending ? -1 : 0}
       aria-label={`Abrir ficha de ${paciente?.nombre ?? "el paciente"}, turno de las ${turno.hora}`}
       className={[
         "fi-turno",
@@ -218,20 +223,21 @@ export function TurnoRow({ turno, paciente, isNext, now, timezone, canRegistrarC
         {cta ? (
           <button
             type="button"
+            disabled={pending}
             className={"fi-btn fi-btn-" + cta.kind}
             onClick={(e) => {
               e.stopPropagation();
-              cta.onClick();
+              if (!pending) cta.onClick();
             }}
           >
-            {cta.label}
+            {pending ? "Guardando…" : cta.label}
             {cta.icon}
           </button>
         ) : null}
         {/* Acciones secundarias (Reagendar / No asistió / Cancelar) plegadas en
             un menú "⋮": el baseline colapsado de la fila se mantiene y la zona
             de acciones no crece con cada estado. */}
-        {tieneMenu ? (
+        {!pending && tieneMenu ? (
           <TurnoOverflowMenu
             pacienteNombre={paciente.nombre}
             puedeReagendar={puedeReagendar}
@@ -244,7 +250,7 @@ export function TurnoRow({ turno, paciente, isNext, now, timezone, canRegistrarC
         ) : null}
       </div>
 
-      {cobroOpen ? (
+      {!pending && cobroOpen ? (
         <CobroCierreDialog
           pacienteNombre={paciente.nombre}
           precioPesos={turno.precio ?? 0}
