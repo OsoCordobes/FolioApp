@@ -1,6 +1,6 @@
 # Folio · Retention Policy (Ley 26.529 art. 18)
 
-Argentine clinical records must be retained **for 10 years** (120 months) past the last contact with the patient. Folio's schema is engineered for this from day 1.
+The retention policy uses a **10-year** (120-month) clinical-record horizon as its documented baseline, with Ley 26.529 art. 18 as a legal reference. The responsible clinical custodian must validate the applicable period, its starting event, any longer obligations and the authorized delivery process. Repository safeguards alone do not prove legal compliance, continuous availability or recovery in production.
 
 ## Append-only by design
 
@@ -40,50 +40,35 @@ ALTER TABLE audit_log DETACH PARTITION audit_log_2026_05;
 DROP TABLE audit_log_2026_05;
 ```
 
-## Patient erasure under retention (the dual constraint)
+## Patient erasure requests and clinical retention
 
-Ley 25.326 art. 16 (right of erasure) + Ley 26.529 art. 18 (10-year retention) appear contradictory: how do you delete a patient's data while keeping their clinical record for 10 years?
+An erasure request requires human review of the applicable retention obligations, identity verification, clinical custody and authorized delivery. Destroying a patient's identity link while retaining clinical rows is not treated as proof that those responsibilities have been fulfilled. This document does not authorize that operation or establish a replacement clinical deletion workflow.
 
-**Folio's answer**: pseudonymization. The patient's **identity** (PII) is destroyed; their **clinical record** (PHI) is retained but disconnected from identity.
+M116 retires `public.pseudonimizar_paciente(uuid, text, boolean)` through an additive migration: it preserves the signature, replaces the body with an unconditional SQLSTATE `42501` rejection before any mutation, and revokes execution from application roles and `PUBLIC`. Both execution and dry-run arguments reject. Historical migrations and existing `pseudonimizacion_event` records remain historical evidence; they are not instructions to repeat the former destructive operation.
 
-Implementation: `pseudonimizar_paciente()` (M13 + M25 extension):
-1. Save SHA-256 of original DNI + nombre to `pseudonimizacion_event` (M25 audit row).
-2. DELETE the `paciente_identidad` row.
-3. SET `paciente.identidad_id = NULL`, `paciente.pseudonimizado_en = now()`.
-4. `sesion`, `documento_clinico`, `turno`, `pago` rows are orphaned (referenced only by `paciente.id`, an opaque UUID).
-
-After pseudonymization, the only way to re-identify the patient is the HMAC blind-index lookup using the original DNI + the org's HMAC key. This requires both the original DNI (which the patient or a legitimate inquirer knows) AND the org's `FOLIO_ENC_HMAC_KEY` (held only by Folio).
+The rejection depends on M116 being applied in the target database. Production application has not been established by this document. See `data-rights.md` for the account-data boundary and rollout verification requirements.
 
 ## Account-level retention
 
-Profile-level deletion (via `/configuracion/datos`) cascades through every owned org. Per Lautaro's sign-off in `known-gaps.md`, the cron is currently in DRY-RUN. To activate:
+`/mis-datos` and `/configuracion/datos` let the verified user register or withdraw a closure request. The standalone `/mis-datos` page remains available outside the clinic billing gate and still requires authentication and applicable MFA. Request and withdrawal actions report success only after updating the matching user's profile row; they set or clear the request marker and reason, then revalidate both pages.
 
-```env
-ACCOUNT_PURGE_ENABLED=1
-```
+The pending state requires human review. No 30-day deadline or other elapsed period triggers account or patient deletion. Review must resolve clinical custody, preservation, continuity of access and authorized delivery before any separately approved closure procedure; the request markers themselves do not implement that procedure.
 
-The cron at `/api/cron/account-purge`:
-1. Waits the 30-day grace.
-2. Pseudonimizes every paciente.
-3. Soft-deletes member + organization rows.
-4. Hard-deletes profile + auth.users.
+The compatibility endpoint `/api/cron/account-purge` is read-only: it counts pending requests and reports `manual_review_required` with `automatic_purge: false`. It has no schedule in `vercel.json`, and `ACCOUNT_PURGE_ENABLED` cannot activate deletion. It does not remove profiles, Auth users, memberships or organizations, and it does not pseudonymize patients. Repository configuration does not verify a deployed build or external scheduler.
 
-The pseudonymization step ensures clinical records survive the cascading account delete — they remain in the database as orphaned PHI, satisfying the 10-year retention obligation.
+The shared personal export in `lib/me/personal-export.ts` returns format v2 for the page action and `/api/me/export`. Its explicit personal categories exclude patient identities and clinical records. A personal account download is therefore not a clinical-record handover; the UI provides a support contact to coordinate separately authorized delivery. This retirement adds no replacement clinical export workflow.
 
 ## Backup + recovery
 
-Supabase Pro tier provides:
-- **Daily logical backups** (last 7 days)
-- **Point-in-time recovery** (last 7 days)
-- **Geo-redundant storage** for the database
+The current provider plan, backup frequency, retention window, point-in-time recovery settings and geographic redundancy must be verified against the target project's configuration. This document does not confirm that any particular backup feature is enabled or that a restore has succeeded.
 
-For the audit-prep sprint, no additional backup config is needed. Post-launch:
-- Snapshot the DB before any encryption-key rotation. ⚠️ There is **no rotation script** (`scripts/rotate-enc-key.ts` does not exist): rotation is manual today — see `known-gaps.md`. The snapshot is not a formality, it is the rollback.
-- Pre-cron-purge snapshot once `ACCOUNT_PURGE_ENABLED=1`.
+Operational evidence should identify the backup owner, protected data and attachments, retained recovery points, encryption-key recovery requirements, and the result of a restore exercise. Database recovery alone does not establish recovery of externally stored clinical attachments or the keys needed to decrypt retained records.
+
+Before encryption-key rotation or any separately approved destructive maintenance, preserve a verified recovery path and follow the current rotation runbook in `../ROTACION-CLAVES.md`. There is no account-purge activation step in this policy.
 
 ## Verification
 
-The retention policy is verifiable end-to-end:
+The following read-only inspections provide partial technical evidence. They do not establish the applicable legal period, provider backup configuration, successful recovery or production application of M116:
 
 ```sql
 -- 1. Confirm append-only on every clinical table
@@ -95,8 +80,8 @@ SELECT tablename, policyname FROM pg_policies
 -- 2. Confirm partition pattern
 SELECT relname FROM pg_class WHERE relname LIKE 'audit_log_%' ORDER BY relname;
 
--- 3. Confirm pseudonymization preserves the event
+-- 3. Inspect historical pseudonymization events (not an active erasure flow)
 SELECT performed_at, motivo FROM pseudonimizacion_event ORDER BY performed_at DESC LIMIT 5;
 ```
 
-E2E coverage: `tests/e2e/security-headers.spec.ts` confirms HSTS preload + frame-ancestors none (prevents off-domain frame embedding of clinical UIs); `supabase/tests/10_M22_rls_hardening.sql` + `11_M25_pseudonimizacion_audit.sql` cover the policy + trigger + audit-event landscape.
+`tests/e2e/security-headers.spec.ts` covers response-header behavior, and `supabase/tests/10_M22_rls_hardening.sql` covers policy/trigger behavior; neither proves clinical retention end-to-end. SQL retirement checks, including updated historical pseudonymization suites, must assert rejection and preserved data after M116. `tests/unit/account-purge-review-only.test.ts` checks that the compatibility endpoint cannot mutate data or gain a schedule through the legacy flag. Live migration state, custody decisions and recovery evidence require separate verification.
