@@ -7,12 +7,26 @@
 
 ## Por qué existe este documento
 
-El 2026-08-13 se descubrió que `FOLIO_ENC_KEY` y `FOLIO_ENC_HMAC_KEY` están
-cargadas en Vercel como `sensitive` — write-only, ni el dashboard ni la API las
-devuelven — y que la única copia legible se había perdido. Producción sigue
-funcionando porque el runtime las tiene inyectadas, pero **no existe backup
-posible de una clave que no se puede leer**: si Vercel las pierde, las 50
-columnas cifradas de la base quedan ilegibles para siempre.
+El 2026-08-13 se perdió la copia local de `FOLIO_ENC_KEY` y
+`FOLIO_ENC_HMAC_KEY`. Son `sensitive` en Vercel y no se devuelven mediante
+el dashboard o la API de variables, pero los procesos autorizados sí reciben
+sus valores. La afirmación anterior de que eran irrecuperables era incorrecta.
+
+El **2026-09-08 se recuperaron ambas claves y otras diez credenciales** mediante
+una compilación administrativa aislada que exportó únicamente un paquete cifrado.
+Primero se ensayó con valores ficticios. Ningún despliegue fue promovido; las
+dos tareas terminaron deliberadamente antes de publicar una aplicación y se
+eliminaron después. Sus URL devuelven 404; producción conserva su versión.
+Una captura complementaria recuperó las 42 variables del inventario completo,
+incluidas las claves de Auth y observabilidad; esa tercera tarea también se eliminó.
+El paquete se descifró localmente y las claves abrieron ocho campos existentes
+y comprobaron cuatro índices de búsqueda. Otros dos campos de la muestra no
+pudieron autenticarse: requieren revisión, sin sobrescribir los registros.
+
+Ver [recuperación verificada](RECUPERACION-CLAVES.md). El propietario aún debe
+custodiar la frase de recuperación fuera de la PC; el respaldo de datos y la
+restauración completa constituyen una etapa adicional. Perder una copia local
+no demuestra una filtración ni exige rotar todas las credenciales.
 
 Hasta ese día, `lib/crypto.ts` describía un `scripts/rotate-enc-key.ts` que
 **nunca se escribió**, y cuatro documentos de compliance lo citaban como el
@@ -20,15 +34,15 @@ procedimiento vigente.
 
 ## La inversión que hace esto posible
 
-Lo natural sería poner la clave nueva en `FOLIO_ENC_KEY` y la vieja en un
-`FOLIO_ENC_KEY_PREV`. **No se puede**: exige escribir el valor viejo en una
-variable nueva, y nadie puede leerlo.
+El contrato de doble clave se diseñó para conservar la clave actual en su
+variable incluso cuando faltaba su copia local. Sigue siendo el contrato
+vigente después de la recuperación; no cambiarlo durante una rotación.
 
 Por eso el orden está invertido:
 
 | variable | contiene | quién la conoce |
 |---|---|---|
-| `FOLIO_ENC_KEY` | la clave **vieja** | nadie — sigue donde ya estaba |
+| `FOLIO_ENC_KEY` | la clave **actual** | recuperada bajo custodia del propietario |
 | `FOLIO_ENC_KEY_NEXT` | la clave **nueva** | vos, que la generaste |
 
 Mientras `_NEXT` esté seteada, `lib/crypto.ts`:
