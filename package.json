@@ -8,11 +8,12 @@
     "start": "next start -p 3010",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test:unit": "node --test --conditions react-server --import tsx \"tests/unit/**/*.test.ts\"",
+    "test:unit": "node scripts/testing/run-unit.mjs",
     "test:visual": "playwright test --project=prototype",
     "test:visual:update": "playwright test --project=prototype --update-snapshots",
     "test:app": "playwright test --project=app",
-    "test:all": "playwright test"
+    "test:all": "playwright test",
+    "test:build": "node scripts/testing/run-build.mjs"
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.5.1",
@@ -23,7 +24,7 @@
     "@tanstack/react-query-devtools": "^5.100.10",
     "framer-motion": "11.11.0",
     "googleapis": "^171.4.0",
-    "next": "15.5.18",
+    "next": "15.5.24",
     "node-forge": "^1.4.0",
     "posthog-js": "^1.374.0",
     "posthog-node": "^5.34.3",
@@ -45,7 +46,7 @@
     "dotenv": "^17.4.2",
     "esbuild": "0.28.0",
     "eslint": "^9",
-    "eslint-config-next": "15.5.18",
+    "eslint-config-next": "15.5.24",
     "pg": "^8.21.0",
     "serve": "^14.2.6",
     "supabase": "^2.98.2",

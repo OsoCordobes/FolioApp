@@ -35,59 +35,67 @@ export function DatosClient({
   const onExport = () => {
     setExportErr(null);
     startTransition(async () => {
-      const result = await exportMyDataAction();
-      if (!result.ok || !result.data) {
-        setExportErr(result.error ?? "No pude armar el export.");
-        return;
+      try {
+        const result = await exportMyDataAction();
+        if (!result.ok || !result.data) {
+          setExportErr(result.error ?? "No pude armar el export.");
+          return;
+        }
+        const blob = new Blob([JSON.stringify(result.data, null, 2)], {
+          type: "application/json",
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = result.filename ?? "folio-export.json";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch {
+        setExportErr("No se pudo completar la descarga. Reintentá.");
       }
-      const blob = new Blob([JSON.stringify(result.data, null, 2)], {
-        type: "application/json",
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = result.filename ?? "folio-export.json";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
     });
   };
 
   const onRequestDelete = async () => {
     setDeleteErr(null);
     const ok = await confirmar({
-      titulo: "¿Programar la eliminación de tu cuenta?",
+      titulo: "¿Solicitar la baja de tu cuenta?",
       mensaje:
-        "Tu cuenta queda marcada para eliminarse en 30 días. Durante ese plazo seguís entrando y podés cancelarla desde acá mismo. Pasados los 30 días no hay vuelta atrás.",
-      confirmLabel: "Programar eliminación",
+        "Registraremos la solicitud para revisar la conservación y la entrega autorizada de la información. No se borrarán automáticamente tu cuenta ni las historias clínicas. Podés cancelar la solicitud desde esta pantalla.",
+      confirmLabel: "Registrar solicitud",
       variant: "danger",
     });
     if (!ok) return;
     startTransition(async () => {
-      const result = await requestAccountDeletionAction(deletionReasonInput || undefined);
-      if (!result.ok) {
-        setDeleteErr(result.error ?? "No pude programar la eliminación.");
-        return;
+      try {
+        const result = await requestAccountDeletionAction(deletionReasonInput || undefined);
+        if (!result.ok) {
+          setDeleteErr(result.error ?? "No pude registrar la solicitud.");
+          return;
+        }
+        setShowDeleteForm(false);
+      } catch {
+        setDeleteErr("No se pudo confirmar la solicitud. Reintentá.");
       }
-      setShowDeleteForm(false);
     });
   };
 
   const onCancelDelete = () => {
     setDeleteErr(null);
     startTransition(async () => {
-      const result = await cancelAccountDeletionAction();
-      if (!result.ok) {
-        setDeleteErr(result.error.message ?? "No pude cancelar la solicitud.");
-        return;
+      try {
+        const result = await cancelAccountDeletionAction();
+        if (!result.ok) {
+          setDeleteErr(result.error.message ?? "No pude cancelar la solicitud.");
+          return;
+        }
+      } catch {
+        setDeleteErr("No se pudo confirmar la cancelación. Reintentá.");
       }
     });
   };
-
-  const scheduledFor = deletionRequestedAt
-    ? new Date(new Date(deletionRequestedAt).getTime() + 30 * 24 * 60 * 60 * 1000)
-    : null;
 
   return (
     <div style={{ display: "grid", gap: 32, marginTop: 24 }}>
@@ -123,20 +131,19 @@ export function DatosClient({
 
       <section className="fi-card" style={{ padding: 24, borderColor: "var(--red-soft)" }}>
         <h2 style={{ marginTop: 0, fontSize: 18, color: "var(--red)" }}>
-          Eliminar mi cuenta
+          Solicitar la baja de mi cuenta
         </h2>
         <p style={{ color: "var(--ink-3)", margin: "4px 0 16px" }}>
-          Ley 25.326 art. 16. Programamos la eliminación de tu cuenta + todos los
-          pacientes de tus consultorios (vía pseudonimización) en <strong>30 días</strong>.
-          Durante ese plazo podés cancelar la solicitud y todo vuelve a la normalidad.
+          Registramos tu solicitud para revisión humana. Antes de una baja se debe
+          resolver la conservación y la entrega autorizada de la información.
+          Las historias clínicas no se eliminan automáticamente. Podés cancelar la solicitud.
         </p>
 
         {deletionRequestedAt ? (
           <div style={{ display: "grid", gap: 12 }}>
             <p style={{ background: "var(--red-soft)", padding: "12px 14px", borderRadius: 8, margin: 0 }}>
-              <strong>Eliminación programada</strong> · solicitada el{" "}
-              {new Date(deletionRequestedAt).toLocaleDateString("es-AR")} · se ejecuta el{" "}
-              {scheduledFor ? scheduledFor.toLocaleDateString("es-AR") : "—"}.
+              <strong>Solicitud pendiente de revisión</strong> · registrada el{" "}
+              {new Date(deletionRequestedAt).toLocaleDateString("es-AR")}.
               {deletionReason ? <><br />Motivo: <em>{deletionReason}</em></> : null}
             </p>
             <button
@@ -167,7 +174,7 @@ export function DatosClient({
                 onClick={onRequestDelete}
                 disabled={pending}
               >
-                {pending ? "Programando…" : "Programar eliminación en 30 días"}
+                {pending ? "Registrando…" : "Registrar solicitud de baja"}
               </button>
               <button
                 type="button"
@@ -187,7 +194,7 @@ export function DatosClient({
             onClick={() => setShowDeleteForm(true)}
             disabled={pending}
           >
-            Quiero eliminar mi cuenta
+            Quiero solicitar la baja
           </button>
         )}
         {deleteErr ? <p className="au-err" style={{ marginTop: 12 }}>{deleteErr}</p> : null}

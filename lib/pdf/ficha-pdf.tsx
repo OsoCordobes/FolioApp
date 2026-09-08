@@ -66,6 +66,7 @@ export interface FichaPdfInstrumento {
  * "—" para no dejar bloques en blanco.
  */
 export interface FichaPdfData {
+  alcance?: string;
   /** Nombre del consultorio/clínica (membrete). */
   organizacion: string;
   /** Nombre completo del profesional que exporta, o null. */
@@ -115,7 +116,8 @@ const styles = StyleSheet.create({
     paddingTop: PDF_PAGE.paddingTop,
     paddingBottom: PDF_PAGE.paddingBottom,
     paddingHorizontal: PDF_PAGE.paddingHorizontal,
-    lineHeight: 1.4,
+    // Keep line height unset here: fixed footer relayouts can multiply an inherited
+    // numeric line height across pages until PDF coordinates become invalid.
   },
   // Membrete
   header: {
@@ -355,6 +357,8 @@ export function FichaPdfDocument({ data }: { data: FichaPdfData }): ReactElement
           </View>
         ) : null}
 
+        {data.alcance ? <Text style={styles.body}>{data.alcance}</Text> : null}
+
         {/* Evolución (D2): últimas N sesiones. wrap multipágina por defecto —
             watermark y pie son fixed y se repiten en cada página. Las filas NO
             llevan wrap={false}: un SOAP largo (hasta 4×5000 chars) puede superar
@@ -364,7 +368,7 @@ export function FichaPdfDocument({ data }: { data: FichaPdfData }): ReactElement
         {evolucion.length > 0 ? (
           <View style={styles.section}>
             <Text style={styles.sectionTitle} minPresenceAhead={40}>
-              {`Evolución — últimas ${evolucion.length} sesiones`}
+              {`Evolución autorizada — ${evolucion.length} sesiones`}
             </Text>
             {evolucion.map((ev, i) => (
               <View key={`${ev.fecha}-${i}`} style={styles.evolucionRow}>
@@ -372,6 +376,11 @@ export function FichaPdfDocument({ data }: { data: FichaPdfData }): ReactElement
                   {`${orDash(ev.fecha)}  ·  ${orDash(ev.servicio)}`}
                 </Text>
                 <Text style={styles.evolucionResumen}>{orDash(ev.resumen)}</Text>
+                {ev.notas ? <Text style={styles.body}>{ev.notas}</Text> : null}
+                {(ev.enmiendas ?? []).map(e => <View key={e.id}>
+                  <Text style={styles.evolucionHead}>{`Enmienda · ${formatGeneradoTs(e.fecha)} · autor registrado: ${e.autor}`}</Text>
+                  <Text style={styles.body}>{`Motivo: ${e.motivo}`}</Text><Text style={styles.body}>{e.texto}</Text>
+                </View>)}
                 {ev.soap ? (
                   <>
                     {(
