@@ -20,6 +20,14 @@ M116 retira adicionalmente la función antigua `pseudonimizar_paciente`: conserv
 
 ## Continuación
 
+### Cierre solicitado del smoke — 9 de septiembre
+
+PR **#162**, `codex/walk-in-modal-smoke`, head `96c70113ad9d842abc48e0bb73299a21808e68e7`: cuatro fallos del formulario de creación reproducidos y corregidos. Navegador final **14/14** en creación; **16/16** en agenda; 2.067 unitarias en integración, tipos y lint aprobados. El ajuste final también verifica que «Revisar agenda» navega al calendario de la fecha/profesional enviados desde una ficha, sin usar ediciones posteriores del formulario.
+
+La primera versión del PR pasó App CI, SQL y preview. El último ajuste de navegación volvió a pasar navegador, tipos y lint localmente y fue subido para repetir CI. **Publicación pendiente al registrar este cierre**: el usuario pidió terminar con 1 % de cuota. La conversación de revisión se resolvió con reproducción y prueba; GitHub rechazó habilitar auto-merge porque el repositorio no permite esa función. No se cambiaron sus reglas. Verificar el estado y el head exacto de #162 antes de fusionar; después comprobar el despliegue y actualizar master y esta rama. La corrección final también está preservada aquí en `33765f1`.
+
+El smoke fue aislado, con respuestas simuladas: no certifica un recorrido autenticado/persistencia real ni cobros externos. Detalles y riesgo pendiente de paciente creado antes de un conflicto de turno en `SMOKE-WALK-IN-2026-09-09.md`.
+
 1. Leer `INTEGRACION-Y-DESPLIEGUE.md` y `plans/2026-09-08-market-readiness.md`. Mantener la publicación acotada y el resto de la preparación identificados por separado.
 2. Conservar la reconciliación comprobada; usar el commit de merge como punto de comparación al continuar. Desplegar migraciones compatibles antes del código según la guía, con activaciones independientes.
 3. Validar la cadena completa, Auth/Storage reales, proveedores, recuperación integral y carga antes de activar controles o declarar apto el piloto.
