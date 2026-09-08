@@ -108,12 +108,16 @@ export function TurnoCreateModal({
   const [submitErr, setSubmitErr] = useState<string | null>(null);
   const [outcomeUnknown, setOutcomeUnknown] = useState(false);
   const creationPhase = useRef<"idle" | "pending" | "uncertain" | "confirmed">("idle");
+  const recoveryAgenda = useRef("/calendario");
   const toast = useToast();
   const router = useRouter();
   const handleClose = () => {
     // The ref also covers a backdrop/Escape event before React commits pending UI.
     if (creationPhase.current === "pending") return;
-    if (creationPhase.current === "uncertain") router.refresh();
+    if (creationPhase.current === "uncertain") {
+      router.refresh();
+      router.push(recoveryAgenda.current);
+    }
     onClose();
   };
 
@@ -274,6 +278,11 @@ export function TurnoCreateModal({
     let isoInicio: string;
     try { isoInicio = localDatetimeToIso(inicioLocal); }
     catch { setSubmitErr("Revisá la fecha y hora del turno."); return; }
+    // Bind recovery to the submitted encounter, not later edits or the caller's page.
+    const fechaAgenda = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Cordoba", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(isoInicio));
+    const recoveryParams = new URLSearchParams({ w: fechaAgenda, mes: fechaAgenda.slice(0, 7) });
+    if (profesionalId) recoveryParams.set("prof", profesionalId);
+    recoveryAgenda.current = `/calendario?${recoveryParams}`;
     creationPhase.current = "pending";
     startTransition(async () => {
       let result: Awaited<ReturnType<typeof createTurnoAction>>;
