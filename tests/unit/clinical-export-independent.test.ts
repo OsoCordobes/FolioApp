@@ -43,6 +43,7 @@ function routeFixture(kind:'json'|'pdf',failure:string){
   '@/lib/patient/export-builder':{buildPatientExport:async()=>{if(failure==='transport')throw Error('SECRET transport');return {ok:true,data:{ok:true,synthetic:true}};}},
   '@/lib/db/paciente-ficha':{getPacienteFicha:async()=>({ok:true,data:fixtureFicha})},
   '@/lib/patient/export-instruments':{readExportInstruments:async()=>({ok:true,data:[]})},
+  '@/lib/pdf/history-reader':{readPdfHistory:async()=>[],readPdfCollection:async()=>[]},
   '@/lib/pdf/ficha-pdf':{buildFichaPdf:async()=>{if(failure==='transport')throw Error('SECRET renderer');return Buffer.from('%PDF synthetic');}},
   '@/lib/db/audit':{writeAuditEntry:async()=>{auditCalls++;phase='finished';return {ok:true};}},
  };

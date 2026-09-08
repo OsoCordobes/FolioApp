@@ -19,16 +19,29 @@ test('existing request and confirmation render human review without an execution
  const message=JSON.stringify(confirmation);assert.ok(message.includes('No se borrarán automáticamente'));assert.ok(!message.includes('30 días'));
 });
 
-for(const missing of [false,true])test(`request and withdrawal only update the verified user's marker (missing row ${missing})`,async()=>{
- const writes:Array<Record<string,unknown>>=[];const filters:Array<[string,unknown]>=[];const calls:string[]=[];
- const q={update:(value:Record<string,unknown>)=>{writes.push(value);return q;},eq:(column:string,value:unknown)=>{filters.push([column,value]);return q;},select:()=>q,maybeSingle:async()=>({data:missing?null:{id:'actor'},error:null})};
+test('missing or failed profile read never renders an empty successful request state',async()=>{
+ for(const failure of [false,true]) {
+  const query={select:()=>query,eq:()=>query,maybeSingle:async()=>({data:null,error:failure?{message:'PRIVATE READ FAILURE'}:null})};
+  const exports:{OwnDataPage?:(props:unknown)=>Promise<unknown>}={};
+  const jsx=(type:unknown,props:unknown)=>({type,props});
+  const imports:Record<string,unknown>={'server-only':{},'react/jsx-runtime':{jsx,jsxs:jsx},'next/navigation':{redirect:()=>{throw Error('unexpected redirect');}},'@/app/(app)/configuracion/datos/datos-client':{DatosClient:'DatosClient'},'@/lib/auth/mfa-access':{verifyMfaSession:async()=>({ok:true,data:{user:{id:'actor'}}})},'@/lib/support':{supportMailto:()=>"mailto:support@example.invalid"},'@/lib/supabase/server':{createSupabaseServerClient:async()=>({from:()=>query})}};
+  runInNewContext(compiled('components/configuracion/own-data-page.tsx'),{exports,require:(name:string)=>{if(name in imports)return imports[name];throw Error(name);}});
+  const rendered=JSON.stringify(await exports.OwnDataPage!({returnPath:'/configuracion/datos'}));
+  assert.ok(rendered.includes('alert'));assert.ok(!rendered.includes('DatosClient'));assert.ok(!rendered.includes('PRIVATE READ FAILURE'));
+ }
+});
+
+for(const missing of [false,true,'error','foreign'])test(`request and withdrawal only update the verified user's marker (result ${missing})`,async()=>{
+ const writes:Array<Record<string,unknown>>=[];const filters:Array<[string,unknown]>=[];const calls:string[]=[];const revalidated:string[]=[];
+ const q={update:(value:Record<string,unknown>)=>{writes.push(value);return q;},eq:(column:string,value:unknown)=>{filters.push([column,value]);return q;},select:()=>q,maybeSingle:async()=>({data:missing===true?null:{id:missing==='foreign'?'other':'actor'},error:missing==='error'?{message:'PRIVATE DATABASE FAILURE'}:null})};
  const exports:Record<string,(reason?:string)=>Promise<{ok:boolean;status?:string;scheduledFor?:string}>>={};
- const imports:Record<string,unknown>={'next/cache':{revalidatePath:()=>{}},'@/lib/auth/mfa-access':{verifyMfaSession:async()=>({ok:true,data:{user:{id:'actor'}}})},'@/lib/me/personal-export':{},'@/lib/crypto':{},'@/lib/support':{},'@/lib/supabase/server':{createSupabaseServerClient:async()=>({}),createSupabaseServiceClient:()=>({from:(table:string)=>{calls.push(table);return q;}})}};
+ const imports:Record<string,unknown>={'next/cache':{revalidatePath:(path:string)=>{revalidated.push(path);}},'@/lib/auth/mfa-access':{verifyMfaSession:async()=>({ok:true,data:{user:{id:'actor'}}})},'@/lib/me/personal-export':{},'@/lib/crypto':{},'@/lib/support':{},'@/lib/supabase/server':{createSupabaseServerClient:async()=>({}),createSupabaseServiceClient:()=>({from:(table:string)=>{calls.push(table);return q;}})}};
  runInNewContext(compiled('app/(app)/configuracion/datos/actions.ts'),{exports,Date,require:(name:string)=>{if(name in imports)return imports[name];throw Error(name);}});
  const request=await exports.requestAccountDeletionAction('synthetic reason');assert.equal(request.ok,!missing);assert.equal(request.scheduledFor,undefined);
  if(!missing)assert.equal(request.status,'manual_review_required');
  const cancel=await exports.cancelAccountDeletionAction();assert.equal(cancel.ok,!missing);
+ assert.deepEqual(revalidated,missing?[]:['/configuracion/datos','/mis-datos','/configuracion/datos','/mis-datos']);
+ assert.ok(!JSON.stringify([request,cancel]).includes('PRIVATE DATABASE FAILURE'));
  assert.deepEqual(calls,['profile','profile']);assert.deepEqual(filters,[['id','actor'],['id','actor']]);
  assert.equal(writes[0].deletion_reason,'synthetic reason');assert.equal(typeof writes[0].deletion_requested_at,'string');assert.equal(writes[1].deletion_requested_at,null);assert.equal(writes[1].deletion_reason,null);
 });
-

@@ -74,7 +74,7 @@ export async function requestAccountDeletionAction(
     })
     .eq("id", user.id).select("id").maybeSingle();
 
-  if (error || !updated) return { ok: false, error: "No se pudo registrar la solicitud de baja." };
+  if (error || !updated || updated.id !== user.id) return { ok: false, error: "No se pudo registrar la solicitud de baja." };
 
   revalidatePath("/configuracion/datos");
   revalidatePath("/mis-datos");
@@ -93,7 +93,7 @@ export async function cancelAccountDeletionAction(): Promise<Result<void>> {
     .update({ deletion_requested_at: null, deletion_reason: null })
     .eq("id", user.id).select("id").maybeSingle();
 
-  if (error || !updated) {
+  if (error || !updated || updated.id !== user.id) {
     return { ok: false, error: { code: "db_error", message: "No se pudo cancelar la solicitud de baja." } };
   }
 

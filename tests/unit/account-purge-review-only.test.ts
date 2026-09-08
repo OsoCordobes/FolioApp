@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 import * as legacyPurge from '../../lib/me/account-purge';
@@ -34,4 +34,10 @@ for(const count of [undefined,null,-1,'1001',Number.NaN])test(`missing or invali
 });
 test('deployment configuration contains no automatic account-purge schedule',()=>{
  const config=JSON.parse(readFileSync('vercel.json','utf8'));assert.ok(config.crons.every((entry:{path:string})=>entry.path!=='/api/cron/account-purge'));
+});
+
+test('privileged one-shot routes and seed workflow are removed from this release',()=>{
+ for(const name of ['confirm-user','migrate','seed-demo','seed-hoy-demo']) assert.equal(existsSync(`app/api/admin/${name}/route.ts`),false);
+ assert.equal(existsSync('.github/workflows/seed-demo.yml'),false);
+ assert.ok(!readFileSync('next.config.ts','utf8').includes('"/api/admin/migrate"'));
 });

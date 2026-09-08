@@ -103,7 +103,7 @@ export interface FichaPdfData {
   /** Resultados de instrumentos/planillas (score + banda). */
   instrumentos: FichaPdfInstrumento[];
   /**
-   * D2 · Evolución: últimas N sesiones (DESC) con fecha · servicio · resumen y
+   * Evolución: todas las visitas autorizadas (DESC) con fecha · servicio · resumen y
    * SOAP compacto (ya en claro, armado por evolucionDesdeSesiones en la route).
    * [] = se omite la sección (paciente sin visitas cerradas).
    */
@@ -123,7 +123,8 @@ const styles = StyleSheet.create({
     paddingTop: PDF_PAGE.paddingTop,
     paddingBottom: PDF_PAGE.paddingBottom,
     paddingHorizontal: PDF_PAGE.paddingHorizontal,
-    lineHeight: 1.4,
+    // A numeric lineHeight inherited by the fixed footer is multiplied on
+    // repeated layouts, eventually overflowing long PDFs. Keep it off Page.
   },
   // Membrete
   header: {
@@ -374,7 +375,7 @@ export function FichaPdfDocument({ data }: { data: FichaPdfData }): ReactElement
           </View>
         ) : null}
 
-        {/* Evolución (D2): últimas N sesiones. wrap multipágina por defecto —
+        {/* Evolución completa: wrap multipágina por defecto —
             watermark y pie son fixed y se repiten en cada página. Las filas NO
             llevan wrap={false}: un SOAP largo (hasta 4×5000 chars) puede superar
             una página y wrap={false} lo clipearía; el borde izquierdo continúa

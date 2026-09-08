@@ -41,6 +41,9 @@ jobs:
       - name: Unit tests
         run: pnpm test:unit
 
+      - name: Render long clinical PDFs with synthetic data
+        run: node tests/pdf/render-real.cjs
+
       - name: Recovery format tests (synthetic keys only)
         run: pnpm test:recovery
 

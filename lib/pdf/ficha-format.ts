@@ -66,6 +66,7 @@ export function tieneSoap(soap: { s: string; o: string; a: string; p: string }):
  * lib/db, que arrastra crypto/supabase y rompería los tests de node:test).
  */
 export interface EvolucionSesionInput {
+  sesionId?: string | null;
   enmiendas?: import("@/lib/ficha/enmienda").EnmiendaClinica[];
   notas?: string | null;
   profesionalId?: string | null;
@@ -79,6 +80,7 @@ export interface EvolucionSesionInput {
 
 /** Una entrada de la sección "Evolución" del PDF (todo ya en claro). */
 export interface EvolucionPdfEntrada {
+  sesionId?: string | null;
   enmiendas?: import("@/lib/ficha/enmienda").EnmiendaClinica[];
   notas?: string | null;
   profesionalId?: string | null;
@@ -105,6 +107,7 @@ export function evolucionDesdeSesiones(
   max: number = sesiones.length,
 ): EvolucionPdfEntrada[] {
   return sesiones.slice(0, Math.max(0, max)).map((s) => ({
+    sesionId: s.sesionId,
     fecha: s.fecha,
     servicio: s.servicio,
     resumen: s.cambio,
@@ -114,4 +117,23 @@ export function evolucionDesdeSesiones(
     profesionalId: s.profesionalId,
     lockedAt: s.lockedAt,
   }));
+}
+
+/** Preserve all visits, including those without a clinical session. Validated
+ * original data replaces each clinical row; a changing inventory fails. */
+export function evolucionValidada(
+  sesiones: EvolucionSesionInput[],
+  history: (EvolucionPdfEntrada & { sesionId: string })[],
+): EvolucionPdfEntrada[] {
+  const byId = new Map(history.map((row) => [row.sesionId, row]));
+  const seen = new Set<string>();
+  const entries = evolucionDesdeSesiones(sesiones).map((visit) => {
+    if (!visit.sesionId) return visit;
+    const clinical = byId.get(visit.sesionId);
+    if (!clinical || seen.has(visit.sesionId)) throw new Error("pdf_history_changed");
+    seen.add(visit.sesionId);
+    return { ...visit, ...clinical };
+  });
+  if (byId.size !== history.length || seen.size !== history.length) throw new Error("pdf_history_changed");
+  return entries;
 }
