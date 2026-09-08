@@ -44,4 +44,3 @@ for(const missing of [false,true,'error','foreign'])test(`request and withdrawal
  assert.deepEqual(calls,['profile','profile']);assert.deepEqual(filters,[['id','actor'],['id','actor']]);
  assert.equal(writes[0].deletion_reason,'synthetic reason');assert.equal(typeof writes[0].deletion_requested_at,'string');assert.equal(writes[1].deletion_requested_at,null);assert.equal(writes[1].deletion_reason,null);
 });
-
