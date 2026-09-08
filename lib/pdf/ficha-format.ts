@@ -75,6 +75,9 @@ export interface EvolucionSesionInput {
 
 /** Una entrada de la sección "Evolución" del PDF (todo ya en claro). */
 export interface EvolucionPdfEntrada {
+  sesionId?: string;
+  notas?: string | null;
+  enmiendas?: { id: string; autor: string; fecha: string; motivo: string; texto: string }[];
   fecha: string;
   servicio: string;
   resumen: string;
@@ -93,7 +96,7 @@ export const EVOLUCION_PDF_MAX = 10;
  */
 export function evolucionDesdeSesiones(
   sesiones: EvolucionSesionInput[],
-  max: number = EVOLUCION_PDF_MAX,
+  max: number = sesiones.length,
 ): EvolucionPdfEntrada[] {
   return sesiones.slice(0, Math.max(0, max)).map((s) => ({
     fecha: s.fecha,

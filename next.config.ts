@@ -112,9 +112,6 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  outputFileTracingIncludes: {
-    "/api/admin/migrate": ["./supabase/migrations/*.sql", "./supabase/seed/*.sql"],
-  },
   async headers() {
     return [
       {

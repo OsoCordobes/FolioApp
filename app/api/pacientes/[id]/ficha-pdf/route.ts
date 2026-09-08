@@ -30,13 +30,12 @@ import { NextResponse } from "next/server";
 import { writeAuditEntry } from "@/lib/db/audit";
 import { getActiveContext } from "@/lib/db/active-context";
 import { getPacienteFicha } from "@/lib/db/paciente-ficha";
-import { getSesionCompleta, sesionPerteneceAPaciente } from "@/lib/db/sesiones";
+import { readPdfHistory, readPdfCollection, PDF_MAX_BYTES } from "@/lib/pdf/history-reader";
 import {
   ESPECIALIDADES_META,
   getEspecialidadMetaByToolId,
 } from "@/lib/especialidades/meta";
 import { getInstrumento } from "@/lib/instrumentos";
-import { evolucionDesdeSesiones } from "@/lib/pdf/ficha-format";
 import { buildFichaPdf, type FichaPdfData } from "@/lib/pdf/ficha-pdf";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -55,7 +54,7 @@ const ROLES_PUEDEN_VER_PHI = new Set(["OWNER", "DIRECTOR", "PROFESIONAL"]);
 const UUID_RE = /^[0-9a-f-]{36}$/i;
 
 function jsonError(code: string, message: string, status: number): NextResponse {
-  return NextResponse.json({ ok: false, error: { code, message } }, { status });
+  return NextResponse.json({ ok: false, error: { code, message } }, { status, headers: { "Cache-Control": "no-store" } });
 }
 
 export async function GET(
@@ -74,9 +73,14 @@ export async function GET(
     return jsonError(ctx.error.code, ctx.error.message, status);
   }
 
-  if (!ROLES_PUEDEN_VER_PHI.has(ctx.data.session.role)) {
+  if (!ROLES_PUEDEN_VER_PHI.has(ctx.data.session.role) || (ctx.data.session.role === "DIRECTOR" && ctx.data.session.esColegiado !== true)) {
     return jsonError("forbidden", "No tenés permiso para exportar esta ficha.", 403);
   }
+
+  const url = new URL(_request.url);
+  const sesionId = url.searchParams.get("sesion");
+  if (sesionId !== null && !UUID_RE.test(sesionId)) return jsonError("validation", "ID de sesión inválido.", 400);
+  const pidioSesionPuntual = sesionId !== null;
 
   // Ficha completa (PII/PHI desencriptada server-side). El scoping org+paciente
   // + caja-fuerte lo aplica RLS acá dentro: si el paciente no es de la org o el
@@ -87,12 +91,8 @@ export async function GET(
     ctx.data.organization.especialidad,
     null,
     ctx.data.organization.timezone,
-    // Historia COMPLETA: este PDF es el ejercicio del derecho de acceso (Ley
-    // 26.529 art. 14) y el audit lo registra como tal. Entregaba las últimas 10
-    // visitas: un paciente con 62 recibía 10 y nadie se lo decía.
-    // El export de UNA sesión (?sesion=) no necesita el resto, pero pedirlo
-    // completo acá es más simple y no lo usa.
-    true,
+    // The PDF reads its own complete, authorized session collection below.
+    false,
   );
   if (!fichaRes.ok) {
     if (fichaRes.error.code === "not_found") {
@@ -121,44 +121,17 @@ export async function GET(
   const resumenHerramienta =
     ultimaToolData != null ? metaActiva.resumenSesion(ultimaToolData) : null;
 
-  // SOAP: por defecto el de la ficha (última sesión). Si el caller pidió una
-  // sesión puntual (?sesion=<uuid>), la traemos descifrada y usamos SU SOAP.
-  let soap = ficha.plan.soap;
-  let fechaSesion: string | null = null;
-  const url = new URL(_request.url);
-  const sesionIdRaw = url.searchParams.get("sesion");
-  // ¿El caller pidió el PDF de UNA sesión puntual (?sesion=<uuid> válido)? Ese
-  // documento está pensado para compartir UNA visita con un colega: no debe
-  // arrastrar la Evolución (SOAP de las últimas 10 sesiones) — sobre-exposición
-  // de PHI. Un valor no-uuid se ignora (export de la HC entera, como siempre).
-  const sesionId = sesionIdRaw != null && UUID_RE.test(sesionIdRaw) ? sesionIdRaw : null;
-  const pidioSesionPuntual = sesionId != null;
-  if (sesionId != null) {
-    const sesionRes = await getSesionCompleta(sesionId);
-    // La sesión debe pertenecer al MISMO paciente de la URL. getSesionCompleta
-    // scopea por org (no por paciente): sin este check, un actor con acceso
-    // clínico podría pedir ?sesion=<uuid-de-otro-paciente-de-su-org> y obtener
-    // un PDF con el membrete/identidad del paciente A pero el SOAP del paciente
-    // B — una HC legal mislabeled. No es fuga cross-tenant (ambos son de la org
-    // y ya son legibles bajo RLS), pero sí un documento clínico con datos del
-    // paciente equivocado. Si no coincide, se descarta la sesión y cae al SOAP
-    // de la ficha (mismo comportamiento que "sesión no encontrada").
-    if (sesionRes.ok && sesionPerteneceAPaciente(sesionRes.data.paciente_id, pacienteId)) {
-      const row = sesionRes.data;
-      const soapRow = row.soap as { s: string | null; o: string | null; a: string | null; p: string | null } | undefined;
-      soap = {
-        subjetivo: soapRow?.s ?? "",
-        objetivo: soapRow?.o ?? "",
-        analisis: soapRow?.a ?? "",
-        plan: soapRow?.p ?? "",
-      };
-      const createdAt = row.created_at;
-      fechaSesion = typeof createdAt === "string" ? createdAt.slice(0, 10) : null;
-    }
-    // Una sesión no encontrada / de otra org (getSesionCompleta scopea por org)
-    // / de OTRO paciente de la misma org NO rompe el export: cae al SOAP de la
-    // ficha. No se filtra nada cross-tenant ni se mislabela la HC.
+  const supabase = await createSupabaseServerClient();
+  let history: Awaited<ReturnType<typeof readPdfHistory>>;
+  let instrumentos: FichaPdfData["instrumentos"];
+  try {
+    history = await readPdfHistory(supabase, ctx.data.organization.id, pacienteId, sesionId);
+    instrumentos = await loadInstrumentos(pacienteId, ctx.data.organization.id, sesionId);
+  } catch {
+    return jsonError("db_error", "No se pudo leer toda la historia autorizada. No se generó un PDF incompleto. Reintentá.", 500);
   }
+  const soap = history[0]?.soap ?? { s: "", o: "", a: "", p: "" };
+  const fechaSesion = pidioSesionPuntual ? history[0]?.fecha ?? null : null;
 
   const profesionalNombre =
     [ctx.data.profile.nombre, ctx.data.profile.apellido].filter(Boolean).join(" ").trim() || null;
@@ -172,6 +145,7 @@ export async function GET(
   );
 
   const pdfData: FichaPdfData = {
+    alcance: "Historial autorizado para el rol actual: puede excluir registros restringidos a otros profesionales. Incluye sesiones originales y enmiendas accesibles, sin adjuntos ni firmas. No es un archivo completo restaurable ni un snapshot transaccional único.",
     organizacion: ctx.data.organization.nombre,
     profesional: profesionalNombre,
     matricula,
@@ -181,27 +155,21 @@ export async function GET(
     motivo: ficha.paciente.motivo,
     fechaSesion,
     soap: {
-      s: soap.subjetivo,
-      o: soap.objetivo,
-      a: soap.analisis,
-      p: soap.plan,
+      s: soap.s,
+      o: soap.o,
+      a: soap.a,
+      p: soap.p,
     },
-    resumenHerramienta,
+    resumenHerramienta: pidioSesionPuntual ? null : resumenHerramienta,
     especialidad: metaActiva.nombre,
-    // Instrumentos: best-effort (la tabla instrumento_respuesta llega en C2/M73).
-    // Hoy degrada a [] sin romper el export; cuando la tabla exista, se llena.
-    instrumentos: await loadInstrumentosBestEffort(pacienteId, ctx.data.organization.id),
-    // D2 · Evolución: últimas N sesiones cerradas (fecha · servicio · resumen +
-    // SOAP compacto). plan.sesiones ya viene DESC con el SOAP descifrado
-    // server-side (getPacienteFicha) — sin queries ni descifrados extra.
-    // SOLO en el export de la HC entera: con ?sesion= (documento de UNA visita
-    // para compartir con un colega) la Evolución se OMITE — incluir el SOAP de
-    // las últimas 10 sesiones ahí sobre-expone PHI que el receptor no necesita.
-    evolucion: pidioSesionPuntual ? [] : evolucionDesdeSesiones(ficha.plan.sesiones),
+    instrumentos,
+    // A punctual delivery contains only that session, including its amendments.
+    evolucion: history,
     generadoTs: new Date().toISOString(),
   };
 
   const pdf = await buildFichaPdf(pdfData);
+  if (pdf.length > PDF_MAX_BYTES) return jsonError("validation", "El PDF supera 4 MB. Solicitá una entrega por sesión; no se generó un archivo incompleto.", 413);
 
   // Audit del export (best-effort, fail-safe: no rompe el export si falla). Deja
   // constancia de QUIÉN exportó PHI de QUIÉN, DESDE DÓNDE, y qué sesión (si se
@@ -222,6 +190,26 @@ export async function GET(
       basis: "Ley 26.529 art. 18 (registro de acceso a HC)",
     },
   });
+
+  // Reauthorize after rendering/audit: a revoked member cannot receive bytes
+  // merely because they were allowed when generation started.
+  try {
+    const current = await getActiveContext();
+    if (!current.ok || current.data.session.memberId !== ctx.data.session.memberId || current.data.session.userId !== ctx.data.session.userId ||
+      current.data.session.esColegiado !== ctx.data.session.esColegiado ||
+      current.data.organization.id !== ctx.data.organization.id || current.data.session.role !== ctx.data.session.role || !ROLES_PUEDEN_VER_PHI.has(current.data.session.role) ||
+      (current.data.session.role === "DIRECTOR" && current.data.session.esColegiado !== true)) {
+      return jsonError("forbidden", "No se pudo confirmar el acceso al finalizar la entrega.", 403);
+    }
+    const scope = await supabase.from("paciente").select("id").eq("id", pacienteId).eq("organization_id", ctx.data.organization.id).is("deleted_at", null).maybeSingle();
+    if (scope.error || scope.data?.id !== pacienteId) return jsonError("forbidden", "No se pudo confirmar el acceso al paciente.", 403);
+    for (let index = 0; index < history.length; index += 100) {
+      const ids = history.slice(index, index + 100).map(row => row.sesionId!);
+      const allowed = await readPdfCollection<{ id: string }>((from, to) => supabase.from("sesion").select("id", { count: "exact" })
+        .eq("organization_id", ctx.data.organization.id).eq("paciente_id", pacienteId).in("id", ids).order("id", { ascending: true }).range(from, to));
+      if (allowed.length !== ids.length || allowed.some(row => !ids.includes(row.id))) return jsonError("forbidden", "Cambió el acceso a una sesión durante la entrega.", 403);
+    }
+  } catch { return jsonError("forbidden", "No se pudo confirmar el acceso al finalizar la entrega.", 403); }
 
   const filename = `folio-ficha-${pacienteId.slice(0, 8)}-${new Date().toISOString().slice(0, 10)}.pdf`;
   // Content-Length ancla el stream para clientes que lo esperan; Buffer.length
@@ -262,59 +250,20 @@ async function resolveMatriculaVisible(
   }
 }
 
-/**
- * Carga resultados de instrumentos/planillas del paciente (score + banda), sin
- * respuestas crudas. BEST-EFFORT: la tabla `instrumento_respuesta` llega en C2
- * (M73, Ola 2). Mientras no exista, la query falla con 42P01 y degradamos a []
- * — el PDF simplemente omite la sección. Cuando C2 aterrice, esta función ya la
- * consume sin cambios de contrato (score/banda ya vienen en claro por diseño de
- * la biblioteca de instrumentos). No se descifra nada acá: score/banda son
- * metadata en claro; las respuestas cifradas NO se leen para el PDF.
- */
-async function loadInstrumentosBestEffort(
-  pacienteId: string,
-  organizationId: string,
-): Promise<FichaPdfData["instrumentos"]> {
-  try {
-    const supabase = await createSupabaseServerClient();
-    const { data, error } = await supabase
-      .from("instrumento_respuesta")
-      .select("instrumento_id, score_total, banda, created_at")
-      .eq("paciente_id", pacienteId)
-      .eq("organization_id", organizationId)
-      .order("created_at", { ascending: false })
-      .limit(20);
-    if (error || !data) {
-      // 42P01 = tabla aún no aplicada en este entorno (degradación esperada,
-      // silenciosa). Cualquier OTRO código es un bug real (p. ej. drift de
-      // columna) y NO debe pasar desapercibido → se loguea [audit-fixes · ALTO-2].
-      if (error && error.code !== "42P01") {
-        console.warn(
-          `[ficha-pdf] instrumento_respuesta query falló (code=${error.code}); sección omitida`,
-        );
-      }
-      return [];
-    }
-    return (data as InstrumentoRespuestaRow[]).map((r) => {
-      const meta = getInstrumentoNombre(r.instrumento_id);
-      return {
-        nombre: meta,
-        total: r.score_total != null ? String(r.score_total) : "—",
-        banda: r.banda ?? null,
-        fecha: typeof r.created_at === "string" ? r.created_at.slice(0, 10) : null,
-      };
-    });
-  } catch {
-    return [];
-  }
+/** Paginated M73 records; no best-effort omission and no cross-session rows. */
+async function loadInstrumentos(pacienteId: string, organizationId: string, sesionId: string | null): Promise<FichaPdfData["instrumentos"]> {
+  const client = await createSupabaseServerClient();
+  const rows = await readPdfCollection<InstrumentoRespuestaRow>((from, to) => {
+    let query = client.from("instrumento_respuesta").select("id,instrumento_id,score_total,banda,created_at", { count: "exact" })
+      .eq("paciente_id", pacienteId).eq("organization_id", organizationId);
+    if (sesionId) query = query.eq("sesion_id", sesionId);
+    return query.order("created_at", { ascending: false }).order("id", { ascending: false }).range(from, to);
+  });
+  return rows.map(r => ({ nombre: getInstrumentoNombre(r.instrumento_id), total: r.score_total == null ? "—" : String(r.score_total), banda: r.banda,
+    fecha: new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Cordoba", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(r.created_at)) }));
 }
-
-/** Fila de instrumento_respuesta (C2/M73). Tipada localmente hasta que exista. */
 interface InstrumentoRespuestaRow {
-  instrumento_id: string;
-  score_total: number | null;
-  banda: string | null;
-  created_at: string;
+  id: string; instrumento_id: string; score_total: number | null; banda: string | null; created_at: string;
 }
 
 /**

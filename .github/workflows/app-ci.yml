@@ -54,8 +54,8 @@ jobs:
       # Vercel (donde existen): así un futuro prerender que las lea no
       # rompe CI por `requireEnv` cuando en prod buildearía bien.
       # Valores dummy — nunca apuntan a un proyecto real.
-      - name: Build
-        run: pnpm build
+      - name: Isolated build
+        run: pnpm test:build
         env:
           NEXT_PUBLIC_SUPABASE_URL: "https://dummy.supabase.co"
           NEXT_PUBLIC_SUPABASE_ANON_KEY: "dummy"

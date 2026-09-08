@@ -115,12 +115,12 @@ test("evolucionDesdeSesiones: SOAP vacío o null se omite (no imprime cuatro '�
   assert.equal(out[1].soap, null);
 });
 
-test("evolucionDesdeSesiones: capea a EVOLUCION_PDF_MAX preservando el orden DESC", () => {
+test("evolucionDesdeSesiones: conserva todo el historial autorizado sin el antiguo límite de diez", () => {
   const muchas = Array.from({ length: EVOLUCION_PDF_MAX + 5 }, (_, i) =>
     sesion({ fecha: `2026-06-${String(i + 1).padStart(2, "0")}` }),
   );
   const out = evolucionDesdeSesiones(muchas);
-  assert.equal(out.length, EVOLUCION_PDF_MAX);
+  assert.equal(out.length, muchas.length);
   // Toma las PRIMERAS N (el historial ya viene DESC: las más recientes).
   assert.equal(out[0].fecha, "2026-06-01");
 });

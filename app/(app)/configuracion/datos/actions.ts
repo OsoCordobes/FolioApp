@@ -9,8 +9,8 @@
  *      as a download. Implements art. 14 (right of access) + art. 16
  *      (portability).
  *   2. requestAccountDeletionAction — set profile.deletion_requested_at.
- *      The /api/cron/account-purge cron processes profiles >30 days
- *      since the request. Implements the right of erasure.
+ *      The request is preserved for human review of retention and authorized
+ *      delivery. Elapsed time never triggers deletion automatically.
  *
  * Scope del export — MISMO criterio que /api/me/export (route canónica):
  *   - PHI de pacientes NO se exporta: los datos clínicos no son datos
@@ -115,7 +115,7 @@ export async function exportMyDataAction(): Promise<ExportResult> {
 
 interface DeletionResult {
   ok: boolean;
-  scheduledFor?: string;
+  status?: "manual_review_required";
   error?: string;
 }
 
@@ -130,20 +130,18 @@ export async function requestAccountDeletionAction(
 
   const service = createSupabaseServiceClient();
   const now = new Date();
-  const scheduledFor = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-
-  const { error } = await service
+  const { data: updated, error } = await service
     .from("profile")
     .update({
       deletion_requested_at: now.toISOString(),
       deletion_reason: reason ?? null,
     })
-    .eq("id", user.id);
+    .eq("id", user.id).select("id").maybeSingle();
 
-  if (error) return { ok: false, error: error.message };
+  if (error || !updated || updated.id !== user.id) return { ok: false, error: "No se pudo registrar la solicitud de baja." };
 
   revalidatePath("/configuracion/datos");
-  return { ok: true, scheduledFor: scheduledFor.toISOString() };
+  return { ok: true, status: "manual_review_required" };
 }
 
 export async function cancelAccountDeletionAction(): Promise<Result<void>> {
@@ -156,13 +154,13 @@ export async function cancelAccountDeletionAction(): Promise<Result<void>> {
   }
 
   const service = createSupabaseServiceClient();
-  const { error } = await service
+  const { data: updated, error } = await service
     .from("profile")
     .update({ deletion_requested_at: null, deletion_reason: null })
-    .eq("id", user.id);
+    .eq("id", user.id).select("id").maybeSingle();
 
-  if (error) {
-    return { ok: false, error: { code: "db_error", message: error.message } };
+  if (error || !updated || updated.id !== user.id) {
+    return { ok: false, error: { code: "db_error", message: "No se pudo cancelar la solicitud de baja." } };
   }
 
   revalidatePath("/configuracion/datos");
