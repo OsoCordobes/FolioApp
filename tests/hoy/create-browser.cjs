@@ -14,7 +14,7 @@ window.qa={calls:[],jobs:[],created:[],closed:0,refreshes:0,settle(value){this.j
 function App(){const[open,setOpen]=useState(true);return <ToastProvider>{open?<TurnoCreateModal origen='WALK_IN' defaultInicio='2026-09-09T15:00:00Z' onClose={()=>{qa.closed++;setOpen(false)}} onCreated={id=>{qa.created.push(id);setOpen(false)}}/>:<p>Agenda sintética</p>}</ToastProvider>};
 createRoot(document.getElementById('root')).render(<StrictMode><App/></StrictMode>);`;
 const stubs = {
-    'next/navigation': 'export const useRouter=()=>({refresh(){qa.refreshes++}});',
+    'next/navigation': 'export const useRouter=()=>({refresh(){qa.refreshes++},push(url){qa.destination=url}});',
     '@/app/(app)/hoy/actions': `export async function loadCreateTurnoMeta(){if(location.search.includes('metadata-failure'))throw Error('synthetic metadata failure');return {ok:true,data:{servicios:[{id:'synthetic-service',nombre:'Consulta sintética',duracionMin:30}],pacientes:[],profesionales:[{id:'synthetic-member',displayName:'Profesional sintético'}],sessionMemberId:'synthetic-member'}}};export async function searchPacientesAction(){return {ok:true,data:[]}};export function createTurnoAction(input){qa.calls.push(input);return new Promise((resolve,reject)=>qa.jobs.push({resolve,reject}))}`,
 };
 (async () => {
@@ -64,9 +64,12 @@ const stubs = {
                 await page.getByRole('button',{name:'Crear turno',exact:true}).evaluate(el=>el.click());assert.equal(await page.evaluate(()=>qa.calls.length),1);assert.equal(await page.locator('.fi-toast').count(),0);
             });
             await run('reviewing agenda after lost response refreshes once without repeating creation',async page=>{
-                await fill(page);await page.getByRole('button',{name:'Crear turno',exact:true}).click();await page.evaluate(()=>qa.reject());
+                await fill(page);await page.evaluate(()=>history.replaceState(null,'','/pacientes/synthetic-patient'));await page.getByRole('button',{name:'Crear turno',exact:true}).click();await page.evaluate(()=>qa.reject());
+                // Later form edits must not redirect recovery to a different visit.
+                await page.locator('input[type="datetime-local"]').fill('2026-10-01T12:00');
                 await page.getByRole('button',{name:'Revisar agenda',exact:true}).click();await page.getByText('Agenda sintética',{exact:true}).waitFor();
                 assert.equal(await page.evaluate(()=>qa.refreshes),1);assert.equal(await page.evaluate(()=>qa.closed),1);assert.equal(await page.evaluate(()=>qa.calls.length),1);assert.equal(await page.evaluate(()=>qa.created.length),0);assert.equal(await page.locator('.fi-toast').count(),0);
+                assert.equal(await page.evaluate(()=>qa.destination),'/calendario?w=2026-09-09&mes=2026-09&prof=synthetic-member');
             });
             await run('a confirmed validation failure permits correction and a new attempt',async page=>{
                 await fill(page);await page.getByRole('button',{name:'Crear turno',exact:true}).click();await page.evaluate(()=>qa.settle({ok:false,error:{code:'validation',message:'Revisá la duración sintética'}}));

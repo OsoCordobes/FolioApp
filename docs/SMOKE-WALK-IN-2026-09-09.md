@@ -11,7 +11,7 @@ El nuevo navegador usa `TurnoCreateModal`, React y el CSS reales. Las respuestas
 - Una excepción al cargar datos dejaba el formulario indefinidamente en «Cargando datos».
 - Una respuesta perdida al crear propagaba una excepción y dejaba al usuario sin recuperación.
 
-La corrección serializa los envíos con una referencia síncrona, bloquea todas las salidas mientras espera, ofrece reintento de la carga inicial y conserva el formulario ante una respuesta incierta. En ese último caso bloquea otro envío y ofrece «Revisar agenda», que refresca los datos antes de salir. No afirma que el turno no se creó: el servidor pudo guardar antes de perder la respuesta.
+La corrección serializa los envíos con una referencia síncrona, bloquea todas las salidas mientras espera, ofrece reintento de la carga inicial y conserva el formulario ante una respuesta incierta. En ese último caso bloquea otro envío y ofrece «Revisar agenda», que solicita datos frescos y navega al calendario de la fecha y profesional enviados, incluso desde una ficha o el directorio. Cambios posteriores del formulario no alteran ese destino. No afirma que el turno no se creó: el servidor pudo guardar antes de perder la respuesta.
 
 El primer intento del harness tuvo un problema propio de codificación UTF-8; se corrigieron los encabezados HTTP antes de obtener la reproducción válida. La reproducción válida registró **ocho fallos y dos aprobaciones** (cinco escenarios en dos modos). El componente corregido pasó los mismos diez escenarios; la revisión añadió comprobación de los controles de recuperación: **14/14 aprobados** al finalizar. No se cambiaron base, precios ni proveedores.
 
