@@ -41,6 +41,12 @@ jobs:
       - name: Unit tests
         run: pnpm test:unit
 
+      - name: Install Chromium for isolated walk-in smoke
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Verify walk-in creation with synthetic server responses
+        run: node tests/hoy/run-isolated.mjs browser-create
+
       - name: Render long clinical PDFs with synthetic data
         run: node tests/pdf/render-real.cjs
 
