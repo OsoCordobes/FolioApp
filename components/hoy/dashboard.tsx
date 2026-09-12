@@ -341,7 +341,7 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
           title="Agendar un walk-in (turno ahora)"
           onClick={() => setWalkInOpen(true)}
         >
-          <I.Plus size={14} /> Walk-in
+          <I.Plus size={14} /> Sin turno
         </button>
       ) : null}
 
@@ -385,10 +385,11 @@ function EmptyState({ fechaLarga }: { fechaLarga: string }) {
         <h2 className="fi-empty-title">Sin turnos para hoy</h2>
         <p className="fi-empty-sub">
           No tenés turnos agendados para el {fechaLarga.toLowerCase()}. Creá uno con el botón
-          «Turno walk-in» o compartí tu link de reservas online (lo encontrás en Configuración)
+          «Sin turno» o compartí tu link de reservas online (lo encontrás en Configuración)
           para que tus pacientes pidan turno solos.
         </p>
       </div>
     </section>
   );
 }
+

@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Tres maneras de sentir Folio</title>
+  <style>
+    @font-face { font-family: "Plus Jakarta Sans"; src: url("/fonts/plus-jakarta-sans.ttf") format("truetype"); font-style: normal; font-weight: 200 800; font-display: swap; }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 82px; }
+    body { margin: 0; font-family: "Segoe UI", Arial, sans-serif; color: #242333; background: #fff; }
+    a { color: inherit; }
+    a:focus-visible { outline: 3px solid currentColor; outline-offset: 5px; }
+    a { -webkit-tap-highlight-color: transparent; }
+    h1, h2, h3, p, figure { margin: 0; }
+    h1, h2, h3 { text-wrap: balance; }
+    p { text-wrap: pretty; }
+    svg { display: block; flex: none; }
+    .study-bar { position: sticky; z-index: 10; top: 0; min-height: 64px; display: flex; align-items: center; gap: 32px; padding: 12px clamp(20px, 4vw, 64px); background: #fff; border-bottom: 1px solid #e6e5ec; }
+    .study-label { font-size: 13px; font-weight: 650; white-space: nowrap; }
+    .study-links { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+    .study-links a { padding: 8px 12px; border-radius: 6px; font-size: 13px; text-decoration: none; }
+    .study-links a:hover { background: #f0eff5; }
+    .study-links a:first-child { color: #5446ae; }
+    .study-links a:nth-child(2) { color: #18533d; }
+    .study-links a:nth-child(3) { color: #1543bb; }
+    .study { scroll-margin-top: 0; }
+    .brand { display: inline-flex; gap: 9px; align-items: center; font-size: 31px; font-weight: 750; letter-spacing: -1.9px; text-decoration: none; line-height: 1; }
+    .brand-mark { width: 29px; height: 32px; }
+    .site-nav { display: flex; align-items: center; justify-content: space-between; gap: 25px; }
+    .nav-note { font-size: 13px; }
+    .login-link { font-size: 14px; font-weight: 600; text-decoration: none; }
+    .login-link:hover { text-decoration: underline; text-underline-offset: 5px; }
+    .study-note { display: flex; gap: 30px; justify-content: space-between; align-items: baseline; padding: 25px 0; font-size: 13px; line-height: 1.55; border-top: 1px solid; }
+    .study-note p { max-width: 580px; }
+    .study-note strong { display: block; margin-bottom: 4px; font-size: 14px; }
+    .study-note a { flex: none; text-underline-offset: 4px; }
+    .avatar { display: grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 50%; background: #efedf8; color: #55489e; font-size: 11px; font-weight: 650; }
+    .muted { color: #767288; }
+    .person-name { font-size: 12px; font-weight: 650; }
+    .person-detail { margin-top: 3px; font-size: 10px; }
+    .mock-caption { padding-top: 13px; text-align: center; font-size: 11px; line-height: 1.5; }
+    .dot { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: currentColor; vertical-align: middle; margin-right: 4px; }
+    /* Clínica clara: the invitation and the working day share one horizontal plane. */
+    .clear { --ink: #302c63; --accent: #6255c5; font-family: "Plus Jakarta Sans", "Segoe UI", Arial, sans-serif; color: var(--ink); background: #f8f7fc; padding: 0 clamp(22px, 5vw, 80px); }
+    .clear .site-nav { padding: 32px 0; border-bottom: 1px solid #e9e7f2; }
+    .clear .brand { color: #5143aa; }
+    .clear .nav-note { margin-right: auto; margin-left: 29px; color: #706c85; }
+    .clear-hero { max-width: 1480px; margin: auto; min-height: 680px; padding: 66px 0 70px; display: grid; grid-template-columns: .87fr 1.25fr; gap: clamp(30px, 4vw, 70px); align-items: center; }
+    .clear-intro { padding-bottom: 30px; }
+    .clear-intro h1 { max-width: 530px; font-size: clamp(42px, 4.65vw, 70px); line-height: 1.04; letter-spacing: -3px; font-weight: 620; }
+    .clear-intro > p { max-width: 395px; margin-top: 27px; font-size: 17px; line-height: 1.7; color: #716c89; }
+    .clear-actions { display: flex; gap: 19px; align-items: center; flex-wrap: wrap; margin-top: 32px; }
+    .clear-main-link { padding: 14px 22px; border-radius: 8px; color: white; background: var(--accent); text-decoration: none; font-size: 14px; font-weight: 600; box-shadow: 0 4px 10px #6255c51a; }
+    .clear-main-link:hover { background: #5043af; }
+    .clear-secondary { font-size: 13px; text-decoration-color: #aaa4c9; text-underline-offset: 4px; }
+    .clear-small { display: flex; gap: 9px; align-items: flex-start; margin-top: 35px; color: #827d95; font-size: 12px; line-height: 1.5; }
+    .clear-small svg { width: 17px; height: 17px; }
+    .clear-preview { min-width: 0; }
+    .clear-window { border: 1px solid #e4e0f0; border-radius: 15px; background: white; box-shadow: 0 18px 70px #302c6310, 0 3px 12px #302c6307; overflow: hidden; }
+    .clear-window-top { display: flex; gap: 8px; align-items: center; height: 39px; padding: 0 17px; border-bottom: 1px solid #efedf5; background: #fcfbfe; }
+    .window-dot { width: 5px; height: 5px; border-radius: 50%; background: #d8d4e5; }
+    .window-location { margin: 0 auto; padding-right: 31px; font-size: 9px; color: #9691a6; }
+    .clear-window-body { display: grid; grid-template-columns: 113px 1fr; min-height: 458px; }
+    .clear-sidebar { background: #fcfbff; padding: 22px 10px; border-right: 1px solid #efedf5; }
+    .clear-sidebar-brand { padding: 0 8px 24px; font-size: 22px; font-weight: 750; letter-spacing: -1.5px; }
+    .clear-sidebar-item { display: flex; align-items: center; gap: 8px; padding: 9px 8px; margin-bottom: 5px; border-radius: 5px; font-size: 10px; color: #858097; }
+    .clear-sidebar-item.active { background: #efedf9; color: #6255c5; font-weight: 650; }
+    .sidebar-symbol { width: 12px; font-size: 12px; }
+    .clear-team { margin: 165px 7px 0; font-size: 9px; line-height: 1.5; color: #928ba2; }
+    .clear-team strong { display: block; color: #6e6781; font-size: 10px; font-weight: 500; }
+    .clear-agenda { padding: 25px 23px 21px; min-width: 0; }
+    .clear-agenda-heading { display: flex; align-items: center; gap: 12px; justify-content: space-between; }
+    .clear-agenda-heading h3 { font-weight: 650; font-size: 24px; letter-spacing: -.7px; }
+    .clear-date { color: #8c879b; font-size: 10px; margin-top: 5px; }
+    .clear-doctor { width: 29px; height: 29px; font-size: 9px; background: #eee8f0; color: #8d6c89; }
+    .clear-day-line { display: flex; justify-content: space-between; align-items: center; margin: 25px 0 18px; font-size: 10px; color: #7b758f; }
+    .clear-day-line strong { color: #575068; font-weight: 600; }
+    .clear-appointment { display: grid; grid-template-columns: 37px 1fr auto; align-items: start; gap: 10px; padding: 17px 0; border-top: 1px solid #efedf5; }
+    .clear-time { font-size: 10px; color: #797489; padding-top: 1px; }
+    .clear-patient { display: flex; align-items: center; gap: 10px; }
+    .clear-status { border-radius: 4px; padding: 4px 6px; font-size: 8px; white-space: nowrap; background: #f0f5f0; color: #547661; }
+    .clear-status.waiting { color: #826227; background: #fcf6e9; }
+    .clear-status.current { background: #efedf9; color: #6255c5; }
+    .clear-appointment.in-room { margin: 0 -9px; padding: 15px 9px; background: #f8f7fd; border: 1px solid #eae6f5; border-radius: 7px; }
+    .clear-appointment.in-room + .clear-appointment { border-top: 0; }
+    .clear-pause { display: flex; align-items: center; gap: 9px; padding: 6px 0 13px 47px; font-size: 9px; color: #aaa3b8; }
+    .clear-pause::after { content: ""; height: 1px; background: #efedf5; flex: 1; }
+    .clear-follow-up { display: flex; gap: 9px; align-items: center; margin-top: 9px; padding: 11px 12px; background: #f5f9f6; border-radius: 5px; font-size: 9px; color: #5d7964; }
+    .clear .mock-caption { color: #928bA5; }
+    .clear .study-note { border-color: #e4e1ee; color: #7a728e; }
+    .clear .study-note strong { color: #51486f; }
+    /* Archivo vivo: a patient record as a continuous, tactile editorial object. */
+    .archive { color: #143f30; background: #edf5ed; padding: 0 clamp(22px, 5.5vw, 88px); }
+    .archive .site-nav { padding: 35px 0; border-bottom: 1px solid #d2e3d4; }
+    .archive .brand { font-family: Georgia, "Times New Roman", serif; font-size: 38px; font-weight: 400; letter-spacing: -2px; }
+    .archive .nav-note { color: #648371; }
+    .archive-title { padding: 75px 0 39px; text-align: center; }
+    .archive-title h2 { font-family: Georgia, "Times New Roman", serif; font-size: clamp(48px, 5.7vw, 84px); line-height: 1.05; font-weight: 400; letter-spacing: -3px; max-width: 860px; margin: auto; }
+    .archive-title p { color: #66816f; max-width: 445px; margin: 23px auto 0; font-size: 16px; line-height: 1.8; }
+    .archive-title a { display: inline-block; margin-top: 24px; font-size: 14px; text-underline-offset: 6px; text-decoration-thickness: 1px; }
+    .archive-record { max-width: 875px; padding: 0 25px 57px 0; margin: 0 auto; }
+    .record-tabs { display: flex; padding-left: 35px; gap: 4px; color: #52715e; font-size: 11px; }
+    .record-tabs span { background: #d8e8d9; padding: 11px 24px; border: 1px solid #cfdfd0; border-bottom: 0; border-radius: 9px 9px 0 0; }
+    .record-tabs span:first-child { background: #fdfefb; color: #214f37; position: relative; z-index: 2; }
+    .record-paper { position: relative; padding: 36px 44px 32px; background: #fdfefb; border: 1px solid #cfdfd0; box-shadow: 7px 8px 0 #d9e6d8, 8px 9px 0 #c7d9c8; }
+    .record-paper::after { content: "Seguimiento"; position: absolute; right: -30px; top: 85px; padding: 16px 8px; border-radius: 0 5px 5px 0; background: #1b5b43; color: #eaf3e6; writing-mode: vertical-rl; font-size: 10px; }
+    .record-top { display: flex; align-items: center; justify-content: space-between; gap: 15px; font-size: 10px; color: #6d8876; padding-bottom: 19px; border-bottom: 1px solid #dfE8de; }
+    .record-top strong { font-family: Georgia, "Times New Roman", serif; font-size: 17px; font-weight: 400; color: #30573e; }
+    .record-person { display: flex; gap: 20px; align-items: center; padding: 29px 0; }
+    .record-avatar { width: 63px; height: 72px; border-radius: 45% 45% 45% 45%; background: #dcebdc; color: #486f50; font-family: Georgia, "Times New Roman", serif; font-size: 23px; }
+    .record-person h3 { font-family: Georgia, "Times New Roman", serif; font-weight: 400; font-size: 31px; letter-spacing: -1px; }
+    .record-person p { color: #7d8f7d; margin-top: 6px; font-size: 11px; }
+    .record-tag { margin-left: auto; color: #5e8267; font-size: 10px; border-bottom: 1px solid #bdd5bf; padding-bottom: 5px; }
+    .record-content { display: grid; grid-template-columns: 166px 1fr; border-top: 1px solid #dfe8de; padding-top: 25px; gap: 30px; }
+    .record-context { color: #738974; font-size: 11px; line-height: 1.65; border-right: 1px solid #e3eade; padding-right: 24px; }
+    .record-context dl { margin: 0; }
+    .record-context dt { color: #748575; font-size: 10px; margin-bottom: 3px; }
+    .record-context dd { margin: 0 0 19px; color: #375b40; }
+    .record-context .record-allergy { color: #846335; }
+    .record-story-title { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-bottom: 21px; }
+    .record-story-title h4 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-weight: 400; font-size: 23px; }
+    .record-story-title span { font-size: 9px; color: #7c917d; }
+    .record-entry { position: relative; border-left: 1px solid #d3e1d0; margin-left: 3px; padding: 0 0 24px 22px; }
+    .record-entry::before { content: ""; position: absolute; width: 7px; height: 7px; top: 4px; left: -4px; border-radius: 50%; background: #fdfefb; border: 1px solid #94b495; }
+    .record-entry:first-of-type::before { background: #3f7551; border-color: #3f7551; }
+    .record-entry:last-child { padding-bottom: 2px; }
+    .record-entry time { font-size: 10px; color: #80927f; }
+    .record-entry h5 { margin: 7px 0 6px; font-size: 12px; font-weight: 600; color: #3c5b3d; }
+    .record-entry p { max-width: 365px; color: #7b8c75; font-size: 11px; line-height: 1.65; }
+    .record-saved { margin-top: 23px; padding-top: 15px; border-top: 1px solid #e1eadd; color: #8b9a85; font-size: 9px; text-align: right; }
+    .archive .mock-caption { padding-top: 22px; color: #748b76; }
+    .archive .study-note { border-color: #cfdfcf; color: #6a826e; }
+    .archive .study-note strong { color: #365d41; }
+    /* Centro de práctica: an operational wall, with a fixed visual spine. */
+    .practice { --cobalt: #204cc5; background: #fff; color: #163793; display: grid; grid-template-columns: 182px minmax(0, 1fr); }
+    .practice-spine { background: var(--cobalt); color: white; padding: 43px 24px 30px; display: flex; flex-direction: column; gap: 48px; }
+    .practice-spine .brand { font-size: 34px; }
+    .practice-spine p { max-width: 125px; font-size: 13px; line-height: 1.6; color: #d9e4ff; }
+    .practice-spine nav { display: flex; flex-direction: column; gap: 20px; }
+    .practice-spine nav a { font-size: 12px; text-decoration: none; line-height: 1.5; color: #d9e4ff; }
+    .practice-spine nav a:hover { color: #fff; text-decoration: underline; text-underline-offset: 5px; }
+    .spine-footer { margin-top: auto; padding-top: 35px; font-size: 10px; color: #bbceff; line-height: 1.6; }
+    .practice-main { padding: 0 clamp(24px, 4.2vw, 66px); min-width: 0; }
+    .practice-top { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #204cc5; padding: 30px 0 22px; gap: 20px; }
+    .practice-top p { font-size: 12px; }
+    .practice-title { display: grid; grid-template-columns: 1.3fr .65fr; align-items: end; gap: 35px; padding: 43px 0 35px; }
+    .practice-title h2 { font-family: Impact, "Arial Narrow", "Franklin Gothic Condensed", sans-serif; font-size: clamp(56px, 6.8vw, 98px); line-height: .99; letter-spacing: -1.7px; text-transform: uppercase; font-weight: 400; }
+    .practice-title p { max-width: 240px; font-size: 15px; line-height: 1.7; color: #657799; margin-bottom: 7px; }
+    .practice-agenda { border: 1px solid #c6d4f2; min-width: 0; }
+    .practice-agenda-head { background: #f4f7fe; display: flex; justify-content: space-between; align-items: center; gap: 15px; padding: 19px 21px; border-bottom: 1px solid #c6d4f2; }
+    .practice-agenda-head h3 { font-size: 24px; letter-spacing: -.6px; font-weight: 700; }
+    .practice-agenda-head p { font-size: 11px; color: #6380b2; margin-top: 4px; }
+    .practice-legend { font-size: 9px; color: #657ca5; display: flex; flex-wrap: wrap; gap: 13px; }
+    .practice-legend span:first-child { color: #2551be; }
+    .practice-legend span:last-child { color: #688773; }
+    .practice-agenda-scroll { overflow-x: auto; }
+    .practice-schedule { min-width: 640px; }
+    .practice-team-head { display: grid; grid-template-columns: 51px repeat(3, 1fr); border-bottom: 1px solid #dce4f4; }
+    .practice-team-head > div { padding: 14px 14px 12px; border-left: 1px solid #dce4f4; }
+    .practice-team-head > div:first-child { border-left: 0; }
+    .practice-team-head h4 { margin: 0; font-size: 11px; font-weight: 650; }
+    .practice-team-head p { margin-top: 4px; font-size: 9px; color: #8091ae; }
+    .practice-time-row { display: grid; grid-template-columns: 51px repeat(3, 1fr); min-height: 81px; }
+    .practice-time-row > div { padding: 7px; border-left: 1px solid #e1e7f3; border-bottom: 1px solid #e1e7f3; }
+    .practice-time-row:last-child > div { border-bottom: 0; }
+    .practice-time-row > div:first-child { border-left: 0; }
+    .practice-time-row .practice-time { font-size: 9px; color: #8697b6; padding: 12px 8px; }
+    .practice-slot { height: 100%; padding: 10px 9px; border-left: 3px solid #5980df; background: #edf2fe; }
+    .practice-slot strong { display: block; font-size: 11px; font-weight: 650; }
+    .practice-slot p { font-size: 9px; margin-top: 5px; color: #7483a2; }
+    .practice-slot.arrived { border-color: #85a793; background: #f0f6f2; color: #526f5e; }
+    .practice-slot.arrived p { color: #7e9789; }
+    .practice-slot.active { background: #204cc5; color: white; border-color: #204cc5; }
+    .practice-slot.active p { color: #cad8ff; }
+    .practice-slot.break { background: repeating-linear-gradient(135deg, #f8fafe 0px, #f8fafe 4px, #f0f4fa 4px, #f0f4fa 5px); border: 0; color: #8a9bb8; display: flex; align-items: center; justify-content: center; font-size: 10px; }
+    .practice-queue { display: flex; gap: 18px; align-items: center; margin-top: 16px; padding: 17px 0; border-top: 2px solid #204cc5; border-bottom: 1px solid #dce4f4; color: #7a8bad; font-size: 11px; }
+    .practice-queue strong { color: #204cc5; font-weight: 600; }
+    .practice-queue p { padding-left: 18px; border-left: 1px solid #ced9f0; }
+    .practice .mock-caption { text-align: left; color: #8291ab; padding: 14px 0 33px; }
+    .practice .study-note { color: #7081a3; border-color: #c9d5ed; }
+    .practice .study-note strong { color: #244796; }
+    .page-footer { padding: 22px clamp(22px, 5vw, 80px); color: #92909b; font-size: 11px; line-height: 1.7; background: #fafafa; border-top: 1px solid #e9e8ed; }
+    @media (min-width: 1600px) { .clear, .archive { padding-left: max(70px, calc((100vw - 1480px) / 2)); padding-right: max(70px, calc((100vw - 1480px) / 2)); } }
+    @media (max-width: 1100px) {
+      .clear-hero { gap: 28px; grid-template-columns: .8fr 1.2fr; }
+      .clear-intro h1 { letter-spacing: -2px; }
+      .clear-intro > p { font-size: 15px; }
+      .clear-window-body { grid-template-columns: 87px 1fr; }
+      .clear-sidebar { padding: 20px 6px; }
+      .clear-sidebar-item { gap: 5px; padding: 9px 5px; font-size: 9px; }
+      .clear-agenda { padding: 23px 16px 18px; }
+      .clear-patient { gap: 7px; }
+      .clear-patient .avatar { display: none; }
+      .clear-appointment { gap: 7px; grid-template-columns: 34px 1fr auto; }
+      .clear-team { margin-top: 177px; }
+      .practice { grid-template-columns: 150px minmax(0, 1fr); }
+      .practice-spine { padding: 35px 19px; }
+      .practice-title { grid-template-columns: 1fr; gap: 20px; }
+      .practice-title p { max-width: 440px; }
+    }
+    @media (max-width: 800px) {
+      html { scroll-padding-top: 99px; }
+      .study-bar { gap: 9px; flex-direction: column; align-items: flex-start; padding: 12px 20px 9px; }
+      .study-label { font-size: 11px; }
+      .study-links { gap: 3px; margin-left: -8px; flex-wrap: nowrap; }
+      .study-links a { font-size: 11px; padding: 7px 8px; }
+      .clear .site-nav { padding: 24px 0; }
+      .clear .nav-note { display: none; }
+      .clear-hero { grid-template-columns: 1fr; padding: 46px 0 40px; gap: 25px; }
+      .clear-intro { padding: 0; }
+      .clear-intro h1 { max-width: 470px; font-size: clamp(43px, 8vw, 64px); }
+      .clear-intro > p { max-width: 445px; margin-top: 19px; font-size: 16px; }
+      .clear-actions { margin-top: 23px; }
+      .clear-small { margin-top: 24px; }
+      .clear-window { max-width: 610px; margin: 5px auto 0; }
+      .clear-window-body { grid-template-columns: 108px 1fr; }
+      .clear-sidebar-item { font-size: 10px; }
+      .clear-agenda { padding: 25px 22px; }
+      .clear-patient .avatar { display: grid; }
+      .clear-appointment { grid-template-columns: 36px 1fr auto; gap: 9px; }
+      .clear-team { margin-top: 165px; }
+      .study-note { gap: 17px; flex-direction: column; }
+      .archive .site-nav { padding: 28px 0; }
+      .archive .nav-note { display: none; }
+      .archive-title { padding: 47px 0 35px; }
+      .archive-title h2 { font-size: 55px; letter-spacing: -2px; }
+      .archive-title p { font-size: 15px; }
+      .record-paper { padding: 27px; }
+      .record-content { grid-template-columns: 125px 1fr; gap: 22px; }
+      .record-context { padding-right: 16px; }
+      .record-tag { display: none; }
+      .record-person h3 { font-size: 28px; }
+      .record-tabs { padding-left: 16px; }
+      .record-tabs span { padding: 10px 16px; }
+      .practice { display: block; }
+      .practice-spine { padding: 22px; flex-direction: row; justify-content: space-between; gap: 20px; align-items: center; }
+      .practice-spine > p, .spine-footer { display: none; }
+      .practice-spine nav { gap: 15px; flex-direction: row; }
+      .practice-spine nav a { font-size: 10px; max-width: 69px; }
+      .practice-main { padding: 0 22px; }
+      .practice-top { padding: 22px 0; }
+      .practice-title { padding: 33px 0; }
+      .practice-title h2 { font-size: 71px; }
+    }
+    @media (max-width: 480px) {
+      .brand { font-size: 28px; }
+      .brand-mark { width: 25px; height: 28px; }
+      .clear, .archive { padding: 0 20px; }
+      .clear-intro h1 { font-size: 44px; letter-spacing: -1.9px; }
+      .clear-intro > p { font-size: 15px; line-height: 1.7; }
+      .clear-actions { gap: 17px; }
+      .clear-main-link { padding: 13px 17px; font-size: 13px; }
+      .clear-window-body { grid-template-columns: 1fr; min-height: 0; }
+      .clear-sidebar { display: none; }
+      .clear-window-top { height: 32px; }
+      .clear-agenda { padding: 22px 16px; }
+      .clear-patient .avatar { display: none; }
+      .person-name { font-size: 11px; }
+      .clear-appointment { grid-template-columns: 33px 1fr auto; gap: 7px; }
+      .clear-status { font-size: 8px; }
+      .archive-title h2 { font-size: 43px; letter-spacing: -1.5px; }
+      .archive-title p { font-size: 14px; }
+      .archive-record { padding-right: 15px; }
+      .record-tabs { padding-left: 6px; gap: 3px; font-size: 9px; }
+      .record-tabs span { padding: 10px 12px; }
+      .record-paper { padding: 20px 18px; }
+      .record-paper::after { right: -22px; padding: 12px 5px; font-size: 9px; }
+      .record-top { font-size: 8px; }
+      .record-top strong { font-size: 15px; }
+      .record-person { padding: 23px 0; gap: 13px; }
+      .record-avatar { width: 45px; height: 52px; font-size: 17px; }
+      .record-person h3 { font-size: 24px; }
+      .record-person p { font-size: 9px; }
+      .record-content { grid-template-columns: 1fr; padding-top: 17px; gap: 0; }
+      .record-context { padding-right: 0; border-right: 0; }
+      .record-context dl { display: flex; flex-wrap: wrap; column-gap: 7px; border-bottom: 1px solid #dfe8de; margin-bottom: 20px; }
+      .record-context dt { font-size: 9px; }
+      .record-context dd { font-size: 9px; margin-bottom: 12px; margin-right: 13px; }
+      .record-context dt:nth-of-type(2), .record-context dd:nth-of-type(2), .record-context dt:nth-of-type(3), .record-context dd:nth-of-type(3) { display: none; }
+      .record-story-title h4 { font-size: 22px; }
+      .record-story-title span { font-size: 8px; }
+      .record-entry { padding-left: 17px; }
+      .record-entry p { font-size: 10px; }
+      .practice-spine { padding: 21px 20px; }
+      .practice-spine .brand { font-size: 28px; }
+      .practice-spine nav a { font-size: 9px; }
+      .practice-spine nav { gap: 12px; }
+      .practice-top p { max-width: 185px; line-height: 1.5; font-size: 11px; }
+      .practice .login-link { font-size: 12px; }
+      .practice-title h2 { font-size: 58px; letter-spacing: -1px; }
+      .practice-title p { font-size: 14px; }
+      .practice-agenda-head { padding: 15px; align-items: flex-start; }
+      .practice-agenda-head h3 { font-size: 21px; }
+      .practice-legend { flex-direction: column; gap: 6px; margin-top: 3px; font-size: 8px; }
+      .practice-queue { gap: 10px; align-items: flex-start; font-size: 10px; line-height: 1.6; }
+      .practice-queue p { padding-left: 11px; }
+      .practice .mock-caption { max-width: 295px; font-size: 10px; }
+    }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  </style>
+</head>
+<body>
+  <header class="study-bar">
+    <span class="study-label">Folio / Estudios de dirección</span>
+    <nav class="study-links" aria-label="Comparar direcciones visuales">
+      <a href="#clinica-clara">Clínica clara</a>
+      <a href="#archivo-vivo">Archivo vivo</a>
+      <a href="#centro-de-practica">Centro de práctica</a>
+    </nav>
+  </header>
+  <main>
+    <section class="study clear" id="clinica-clara" aria-labelledby="clear-heading">
+      <div class="site-nav">
+        <a class="brand" href="/" aria-label="Folio, inicio">
+          <svg class="brand-mark" viewBox="0 0 32 36" fill="none" aria-hidden="true"><path d="M6 32V9C6 5.7 8.7 3 12 3H28V10H16C14.3 10 13 11.3 13 13V32H6Z" fill="currentColor"/><path d="M16 17H27V23H16V17Z" fill="currentColor" opacity=".55"/></svg>folio
+        </a>
+        <span class="nav-note">Tu consultorio, en orden.</span>
+        <a class="login-link" href="/login">Ingresar a Folio</a>
+      </div>
+      <div class="clear-hero">
+        <div class="clear-intro">
+          <h1 id="clear-heading">Más presente<br>en cada consulta.</h1>
+          <p>La agenda, la historia de cada paciente y el día del consultorio, en un mismo lugar.</p>
+          <div class="clear-actions">
+            <a class="clear-main-link" href="/login">Entrar a mi consultorio</a>
+            <a class="clear-secondary" href="#archivo-vivo">Ver otra dirección</a>
+          </div>
+          <div class="clear-small"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M5 17V4.5A1.5 1.5 0 0 1 6.5 3H15v14H5Z" stroke="currentColor"/><path d="M8 6h4M8 9h4M8 12h2" stroke="currentColor" stroke-linecap="round"/></svg><span>Pensado para el trabajo de médicos<br>y equipos de salud en Argentina.</span></div>
+        </div>
+        <figure class="clear-preview" aria-label="Ilustración de una agenda de Folio con datos ficticios">
+          <div class="clear-window">
+            <div class="clear-window-top"><span class="window-dot"></span><span class="window-dot"></span><span class="window-dot"></span><span class="window-location">Folio / Consultorio de ejemplo</span></div>
+            <div class="clear-window-body">
+              <div class="clear-sidebar" aria-hidden="true">
+                <div class="clear-sidebar-brand">folio</div>
+                <div class="clear-sidebar-item active"><span class="sidebar-symbol">◷</span>Hoy</div>
+                <div class="clear-sidebar-item"><span class="sidebar-symbol">▦</span>Agenda</div>
+                <div class="clear-sidebar-item"><span class="sidebar-symbol">♧</span>Pacientes</div>
+                <div class="clear-sidebar-item"><span class="sidebar-symbol">▤</span>Cobros</div>
+                <div class="clear-team"><strong>Dra. Lucía Molina</strong>Consultorio de ejemplo</div>
+              </div>
+              <div class="clear-agenda">
+                <div class="clear-agenda-heading"><div><h3>Buen día, Lucía</h3><p class="clear-date">Martes 15 de septiembre</p></div><div class="avatar clear-doctor">LM</div></div>
+                <div class="clear-day-line"><strong>Tu agenda de hoy</strong><span>Consultorio 1</span></div>
+                <div class="clear-appointment"><time class="clear-time">09:00</time><div class="clear-patient"><span class="avatar">MR</span><div><p class="person-name">Martina Ríos</p><p class="person-detail muted">Consulta de seguimiento</p></div></div><span class="clear-status">Atendida</span></div>
+                <div class="clear-appointment in-room"><time class="clear-time">09:30</time><div class="clear-patient"><span class="avatar">TA</span><div><p class="person-name">Tomás Acosta</p><p class="person-detail muted">Primera consulta</p></div></div><span class="clear-status current">En consulta</span></div>
+                <div class="clear-appointment"><time class="clear-time">10:00</time><div class="clear-patient"><span class="avatar">EV</span><div><p class="person-name">Elena Vidal</p><p class="person-detail muted">Control clínico</p></div></div><span class="clear-status waiting">En espera</span></div>
+                <div class="clear-pause">10:30 · Pausa</div>
+                <div class="clear-appointment"><time class="clear-time">11:00</time><div class="clear-patient"><span class="avatar">NP</span><div><p class="person-name">Nicolás Peralta</p><p class="person-detail muted">Consulta de seguimiento</p></div></div><span class="clear-status">Confirmado</span></div>
+                <div class="clear-follow-up"><span aria-hidden="true">✓</span>La consulta de Martina quedó guardada.</div>
+              </div>
+            </div>
+          </div>
+          <figcaption class="mock-caption">Vista ilustrativa. Personas y datos ficticios.</figcaption>
+        </figure>
+      </div>
+      <div class="study-note"><p><strong>Clínica clara</strong>Una bienvenida cercana y una agenda fácil de leer. El violeta organiza la atención; el blanco deja respirar el trabajo.</p><a href="#archivo-vivo">Comparar con Archivo vivo</a></div>
+    </section>
+
+    <section class="study archive" id="archivo-vivo" aria-labelledby="archive-heading">
+      <div class="site-nav"><a class="brand" href="/" aria-label="Folio, inicio">folio</a><span class="nav-note">Cada consulta forma parte de una historia.</span><a class="login-link" href="/login">Ingresar</a></div>
+      <div class="archive-title">
+        <h2 id="archive-heading">El cuidado continúa.<br>La historia, también.</h2>
+        <p>Un lugar para leer lo que pasó, registrar lo que ves y acompañar lo que sigue.</p>
+        <a href="/login">Abrir mi consultorio</a>
+      </div>
+      <figure class="archive-record" aria-label="Ilustración de una historia clínica con datos ficticios">
+        <div class="record-tabs" aria-hidden="true"><span>Historia clínica</span><span>Documentos</span><span>Datos personales</span></div>
+        <div class="record-paper">
+          <div class="record-top"><strong>Consultorio de ejemplo</strong><span>Paciente ficticia</span></div>
+          <div class="record-person"><span class="avatar record-avatar">MR</span><div><h3>Martina Ríos</h3><p>Paciente de ejemplo · 38 años</p></div><span class="record-tag">Seguimiento clínico</span></div>
+          <div class="record-content">
+            <aside class="record-context" aria-label="Contexto clínico ficticio"><dl><dt>Profesional</dt><dd>Dra. Lucía Molina</dd><dt>Primera consulta</dt><dd>12 de marzo de 2026</dd><dt>Próximo encuentro</dt><dd>13 de octubre</dd><dt>Alergias</dt><dd class="record-allergy">Sin datos registrados</dd></dl></aside>
+            <div class="record-story">
+              <div class="record-story-title"><h4>Historia de atención</h4><span>Más reciente primero</span></div>
+              <article class="record-entry"><time datetime="2026-09-15">15 de septiembre de 2026</time><h5>Consulta de seguimiento</h5><p>Refiere buena evolución desde la última consulta. Se revisan los estudios aportados y se registra el plan de seguimiento.</p></article>
+              <article class="record-entry"><time datetime="2026-08-18">18 de agosto de 2026</time><h5>Control clínico</h5><p>Se actualizan los antecedentes y se acuerda revisar resultados en la próxima visita.</p></article>
+              <article class="record-entry"><time datetime="2026-03-12">12 de marzo de 2026</time><h5>Primera consulta</h5><p>Se abre la historia clínica y se registra el motivo de consulta.</p></article>
+            </div>
+          </div>
+          <p class="record-saved">Registro guardado por Dra. Lucía Molina · 15 sep., 09:24</p>
+        </div>
+        <figcaption class="mock-caption">Vista ilustrativa. Personas y datos clínicos ficticios.</figcaption>
+      </figure>
+      <div class="study-note"><p><strong>Archivo vivo</strong>La historia clínica lleva el relato. Tipografía editorial, verde sereno y un expediente continuo para leer con atención.</p><a href="#centro-de-practica">Comparar con Centro de práctica</a></div>
+    </section>
+
+    <section class="study practice" id="centro-de-practica" aria-labelledby="practice-heading">
+      <aside class="practice-spine"><a class="brand" href="/" aria-label="Folio, inicio">folio</a><p>El punto de encuentro de tu práctica.</p><nav aria-label="Otras direcciones"><a href="#clinica-clara">Clínica clara</a><a href="#archivo-vivo">Archivo vivo</a></nav><div class="spine-footer">Hecho para el día a día<br>del consultorio.</div></aside>
+      <div class="practice-main">
+        <div class="practice-top"><p>Agenda, atención y equipo en un mismo lugar.</p><a class="login-link" href="/login">Ingresar a Folio</a></div>
+        <div class="practice-title"><h2 id="practice-heading">Todo el equipo.<br>El mismo día.</h2><p>Quién llega, quién atiende, qué sigue. Una mirada compartida para organizar el consultorio.</p></div>
+        <figure aria-label="Ilustración de una agenda de equipo con datos ficticios">
+          <div class="practice-agenda">
+            <div class="practice-agenda-head"><div><h3>Martes 15</h3><p>Septiembre de 2026 · Consultorio de ejemplo</p></div><div class="practice-legend"><span><i class="dot"></i>En consulta</span><span><i class="dot"></i>Programado</span><span><i class="dot"></i>Presente</span></div></div>
+            <div class="practice-agenda-scroll" tabindex="0" role="region" aria-label="Agenda ilustrativa, desplazable horizontalmente en pantallas pequeñas">
+              <div class="practice-schedule">
+                <div class="practice-team-head"><div></div><div><h4>Dra. Lucía Molina</h4><p>Clínica médica · Consultorio 1</p></div><div><h4>Dr. Julián Ferrer</h4><p>Cardiología · Consultorio 2</p></div><div><h4>Dra. Paula Luna</h4><p>Clínica médica · Consultorio 3</p></div></div>
+                <div class="practice-time-row"><div class="practice-time">09:00</div><div><div class="practice-slot arrived"><strong>Martina Ríos</strong><p>Seguimiento · Atendida</p></div></div><div><div class="practice-slot"><strong>Gabriel Soria</strong><p>Control · Atendido</p></div></div><div><div class="practice-slot"><strong>Carolina Díaz</strong><p>Primera consulta · Atendida</p></div></div></div>
+                <div class="practice-time-row"><div class="practice-time">09:30</div><div><div class="practice-slot active"><strong>Tomás Acosta</strong><p>Primera consulta · En consulta</p></div></div><div><div class="practice-slot active"><strong>Valeria Costa</strong><p>Control · En consulta</p></div></div><div><div class="practice-slot arrived"><strong>Mateo Salas</strong><p>Seguimiento · En espera</p></div></div></div>
+                <div class="practice-time-row"><div class="practice-time">10:00</div><div><div class="practice-slot arrived"><strong>Elena Vidal</strong><p>Control · En espera</p></div></div><div><div class="practice-slot"><strong>Bruno Prieto</strong><p>Primera consulta · Confirmado</p></div></div><div><div class="practice-slot break">Disponible</div></div></div>
+                <div class="practice-time-row"><div class="practice-time">10:30</div><div><div class="practice-slot break">Pausa</div></div><div><div class="practice-slot"><strong>Ana Torres</strong><p>Seguimiento · Confirmado</p></div></div><div><div class="practice-slot"><strong>Florencia Paz</strong><p>Control · Confirmado</p></div></div></div>
+              </div>
+            </div>
+          </div>
+          <div class="practice-queue"><strong>Recepción</strong><p>Elena Vidal llegó para su turno de las 10:00.</p></div>
+          <figcaption class="mock-caption">Vista ilustrativa. Personas y datos ficticios. En el celular, deslizá la agenda para ver al resto del equipo.</figcaption>
+        </figure>
+        <div class="study-note"><p><strong>Centro de práctica</strong>Una agenda panorámica con presencia de equipo. El azul y la tipografía firme hacen que los tiempos, las personas y los estados se distingan rápido.</p><a href="#clinica-clara">Volver a Clínica clara</a></div>
+      </div>
+    </section>
+  </main>
+  <footer class="page-footer">Estudios visuales para Folio. Las vistas de producto son ilustraciones, con personas y datos ficticios. Los enlaces de ingreso abren la aplicación.</footer>
+</body>
+</html>

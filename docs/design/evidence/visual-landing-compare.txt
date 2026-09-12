@@ -1,0 +1,19 @@
+
+Running 10 tests using 1 worker
+
+(node:19608) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:19608) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok  1 tests\visual\landing.spec.ts:36:7 › landing · hero desktop · light (1.5s)
+  ok  2 tests\visual\landing.spec.ts:40:7 › landing · recorrido interactivo (#producto) · light (1.3s)
+  ok  3 tests\visual\landing.spec.ts:47:7 › landing · continuidad de atención (#dia) · light (1.3s)
+  ok  4 tests\visual\landing.spec.ts:52:7 › landing · cuidado de información (#seguridad) · light (1.2s)
+  ok  5 tests\visual\landing.spec.ts:59:9 › landing · móvil · light › hero y navegación sin desbordamiento (1.2s)
+  ok  6 tests\visual\landing.spec.ts:36:7 › landing · hero desktop · dark (1.2s)
+  ok  7 tests\visual\landing.spec.ts:40:7 › landing · recorrido interactivo (#producto) · dark (1.3s)
+  ok  8 tests\visual\landing.spec.ts:47:7 › landing · continuidad de atención (#dia) · dark (1.3s)
+  ok  9 tests\visual\landing.spec.ts:52:7 › landing · cuidado de información (#seguridad) · dark (1.2s)
+  ok 10 tests\visual\landing.spec.ts:59:9 › landing · móvil · dark › hero y navegación sin desbordamiento (1.2s)
+
+  10 passed (14.1s)

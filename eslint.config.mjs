@@ -1,15 +1,16 @@
 import { dirname } from "path";
 import { fileURLToPath } from "url";
-import { FlatCompat } from "@eslint/eslintrc";
 import { createRequire } from "node:module";
+import { FlatCompat } from "@eslint/eslintrc";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+const require = createRequire(import.meta.url);
 
 const compat = new FlatCompat({
   baseDirectory: __dirname,
-  // pnpm keeps Next's plugins alongside its config, including build workers.
-  resolvePluginsRelativeTo: dirname(createRequire(import.meta.url).resolve("eslint-config-next/package.json")),
+  // Resolve Next's declared plugins without depending on pnpm's shell NODE_PATH.
+  resolvePluginsRelativeTo: dirname(require.resolve("eslint-config-next/package.json")),
 });
 
 const eslintConfig = [
@@ -32,17 +33,6 @@ const eslintConfig = [
       // sin esta línea, lintear el checkout principal revienta con OOM.
       ".claude/**",
     ],
-  },
-  {
-    // Root layout deliberadamente carga folio.css como static asset y Geist
-    // via CDN para preservar fidelidad pixel-perfect con el prototipo Claude
-    // Design (ver app/layout.tsx). Esos two warnings son irrelevantes en App
-    // Router con root layout.
-    files: ["app/layout.tsx"],
-    rules: {
-      "@next/next/no-page-custom-font": "off",
-      "@next/next/no-css-tags": "off",
-    },
   },
   {
     // Convencion: parametros y variables que empiezan con `_` son

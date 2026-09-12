@@ -69,6 +69,7 @@ export function Step9Moment({
   planPriceCents,
 }: Step9MomentProps) {
   const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState(false);
   const [finalized, setFinalized] = useState(false);
   const [retrying, setRetrying] = useState(false);
 
@@ -100,6 +101,8 @@ export function Step9Moment({
     instagramHandle: data.instagram,
     direccionCompleta: data.direccion,
     acentoHex: accent,
+    logoUrl: data.logoUrl ?? undefined,
+    cardMood: data.cardMood,
     slug: slug ?? undefined,
     servicios: data.servicios
       .filter((s) => s.nombre.trim())
@@ -112,12 +115,13 @@ export function Step9Moment({
 
   const onCopy = async () => {
     if (!publicUrl) return;
+    setCopyError(false);
     try {
       await navigator.clipboard.writeText(publicUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
     } catch {
-      // ignore
+      setCopyError(true);
     }
   };
 
@@ -132,9 +136,9 @@ export function Step9Moment({
         <FolioMark size={56} color={accent} fg="#FBF9F4" />
       </div>
 
-      <h1 className="onb-moment-head onb-anim-head">Tu consultorio está listo.</h1>
+      <h1 className="onb-moment-head onb-anim-head">{finalizeOk ? "Tu consultorio está listo." : error ? "Falta confirmar la configuración." : "Terminando la configuración…"}</h1>
       <p className="onb-moment-sub onb-anim-head">
-        Compartí tu link y empezá a recibir reservas hoy mismo.
+        {finalizeOk ? "Compartí tu enlace para que tus pacientes puedan reservar." : error ? "Revisá el mensaje y reintentá para terminar de preparar tu consultorio." : "Esperá la confirmación antes de entrar al panel. Tus datos siguen en pantalla."}
       </p>
       {/* Fusión del viejo Step 8: trial + precio (canónico MP_PLAN_PRICE_CENTS,
           mismo valor que el cobro real — nunca un hardcode que driftee). */}
@@ -143,10 +147,17 @@ export function Step9Moment({
         {formatArsFromCents(planPriceCents)} / mes — lo activás desde Configuración.
       </p>
 
+      {error ? (
+        <div className="onb-moment-finalize-err">
+          <p className="au-err onb-banner-err" role="alert">{error}</p>
+          <button type="button" className="fi-btn fi-btn-secondary" onClick={onRetryFinish} disabled={retrying}>
+            {retrying ? "Reintentando…" : "Reintentar"}
+          </button>
+        </div>
+      ) : null}
+
       <div className="onb-moment-card onb-anim-card">
-        {/* onCta = mismo handler que "Ver mi página": abre /book/<slug> en
-            nueva tab. Solo handler — el layout del Step 9 tiene baseline
-            visual (tests/snapshots/onboarding-*.png) y no se toca. */}
+        {/* La vista conserva el estilo elegido y comparte el enlace público. */}
         <PublicCard data={cardData} variant="full" appUrl={APP_URL} onCta={onSeePage} />
       </div>
 
@@ -174,21 +185,8 @@ export function Step9Moment({
         </div>
       ) : null}
 
-      {error ? (
-        <div className="onb-moment-finalize-err">
-          <p className="au-err onb-banner-err" role="alert">
-            {error}
-          </p>
-          <button
-            type="button"
-            className="fi-btn fi-btn-secondary"
-            onClick={onRetryFinish}
-            disabled={retrying}
-          >
-            {retrying ? "Reintentando…" : "Reintentar"}
-          </button>
-        </div>
-      ) : null}
+      {copied ? <p className="onb-moment-feedback" role="status">Enlace copiado.</p> : null}
+      {copyError ? <p className="onb-moment-feedback" role="alert">No pudimos copiar el enlace. Podés seleccionarlo arriba y copiarlo manualmente.</p> : null}
 
       <div className="onb-moment-ctas">
         <button

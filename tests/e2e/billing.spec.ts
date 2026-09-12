@@ -28,12 +28,12 @@ test.beforeEach(async ({ context }) => {
 /** Login con usuario OWNER existente → /hoy. No escribe nada. */
 async function login(page: Page): Promise<void> {
   await page.goto("/login");
-  await expect(page.getByRole("heading", { name: /entrar/i })).toBeVisible({
+  await expect(page.getByRole("heading", { level: 1, name: "Volvé a tu consultorio." })).toBeVisible({
     timeout: 15_000,
   });
   await page.locator('input[type="email"]').fill(EMAIL);
   await page.locator('input[type="password"]').fill(PASSWORD);
-  await page.getByRole("button", { name: /^entrar/i }).click();
+  await page.getByRole("button", { name: "Ingresar a Folio", exact: true }).click();
   await page.waitForURL(/\/hoy/, { timeout: 30_000 });
 }
 

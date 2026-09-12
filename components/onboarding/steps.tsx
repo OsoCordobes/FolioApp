@@ -204,7 +204,7 @@ export function Step2Profesional({ data, set, next, back, orgSlug }: StepProps) 
   const validate = (field: keyof OnboardingDataState, value: string): string => {
     if (field === "nombre" && !value.trim()) return "Necesitamos tu nombre.";
     if (field === "apellido" && !value.trim()) return "Necesitamos tu apellido.";
-    if (field === "tel" && value && !TEL_RE.test(value)) return "Formato no parece teléfono.";
+    if (field === "tel" && value && !TEL_RE.test(value)) return "Revisá el teléfono e incluí el código de área.";
     return "";
   };
 
@@ -224,7 +224,7 @@ export function Step2Profesional({ data, set, next, back, orgSlug }: StepProps) 
     // vacía (contradicción: Continuar deshabilitado pero Saltar habilitado).
     <StepShell stepIdx={2} back={back} next={next} canSkip={false}
       headline="¿Cómo te llamás?"
-      sub="Aparece en el sidebar y en tu link público. Lo cambiás cuando quieras."
+      sub="Tu nombre aparece en Folio y en tu perfil público. Podés cambiarlo después."
       nextDisabled={!canContinue}
       previewData={previewDataFor(data)}
       slug={orgSlug}
@@ -362,7 +362,7 @@ export function Step3Consultorio({ data, set, next, back, orgId, orgSlug }: Step
     // canSkip=false: igual que el Step 2 — este paso define la card pública.
     <StepShell stepIdx={3} back={back} next={handleNext} canSkip={false}
       headline="¿Dónde está tu consultorio?"
-      sub="Esta info aparece en tu link público de reservas."
+      sub="Estos datos aparecen en tu perfil público de reservas."
       nextDisabled={!canContinue}
       previewData={previewDataFor(data)}
       slug={draftSlug || orgSlug}
@@ -397,7 +397,7 @@ export function Step3Consultorio({ data, set, next, back, orgId, orgSlug }: Step
             })}
           </div>
           <span className="onb-hint">
-            Define la herramienta clínica de la ficha del paciente y los servicios sugeridos. La podés cambiar después desde Configuración.
+            Personaliza la ficha del paciente y los servicios sugeridos. Podés cambiarla en Configuración.
           </span>
         </div>
 
@@ -426,19 +426,19 @@ export function Step3Consultorio({ data, set, next, back, orgId, orgSlug }: Step
           </div>
           <span className="onb-hint">
             {data.tipo === "CLINICA"
-              ? "La clínica suma equipo: después del onboarding vas a poder invitar profesionales y secretaría desde Configuración."
+              ? "Al terminar, podés invitar profesionales y personal de secretaría desde Configuración."
               : "Atendés y gestionás la agenda vos. Si más adelante sumás equipo, pasás a Clínica."}
           </span>
         </div>
 
-        <Field label="Tu link público">
+        <div className="onb-field">
           <SlugEditor
             value={draftSlug || orgSlug || ""}
             onChange={onSlugChange}
             baseSuggestion={`${slugifyClient(data.nombre)}-${slugifyClient(data.apellido)}`.replace(/^-|-$/g, "")}
             currentOrgId={orgId}
           />
-        </Field>
+        </div>
 
         <div className="onb-form-row-2">
           <Field label="Ciudad" error={errors.ciudad}>
@@ -461,7 +461,7 @@ export function Step3Consultorio({ data, set, next, back, orgId, orgSlug }: Step
             incentiva abrirlo sin obligar. */}
         <details className="onb-optional">
           <summary>
-            Completá tu card pública <span className="onb-optional-tag">opcional</span>
+            Completá tu perfil público <span className="onb-optional-tag">opcional</span>
           </summary>
           <div className="onb-optional-body">
             <Field label="Dirección">
@@ -478,7 +478,7 @@ export function Step3Consultorio({ data, set, next, back, orgId, orgSlug }: Step
               </div>
             </Field>
 
-            <Field label="Instagram" hint="Aparece como link en tu card pública.">
+            <Field label="Instagram" hint="Aparece como enlace en tu perfil público.">
               <div className="onb-input-prefix">
                 <span className="fm-mono">@</span>
                 <input type="text" placeholder="lorenzo.consultorio"
@@ -487,7 +487,7 @@ export function Step3Consultorio({ data, set, next, back, orgId, orgSlug }: Step
             </Field>
 
             <Field label="Descripción corta" error={errors.bio}
-              hint={`Una o dos oraciones. Aparece en tu card pública.`}>
+              hint="Una o dos oraciones para presentarte en tu perfil público.">
               <textarea
                 placeholder={data.ciudad ? `Atención personalizada en ${data.ciudad}.` : "Contale a tus pacientes qué hacés."}
                 value={data.bio}
@@ -521,7 +521,7 @@ export function Step4Personalizacion({ data, set, next, back, skip, orgSlug }: S
   return (
     <StepShell stepIdx={4} back={back} next={next} skip={skip}
       headline="Tu identidad visual"
-      sub="Cómo se ve tu link público: logo, color y estilo. Lo cambiás cuando quieras."
+      sub="Elegí cómo se presenta tu consultorio: logo, color y estilo. Podés cambiarlo después."
       previewData={previewDataFor(data)}
       slug={orgSlug}
     >
@@ -529,7 +529,7 @@ export function Step4Personalizacion({ data, set, next, back, skip, orgSlug }: S
         <section className="onb-identity-section">
           <h2 className="onb-identity-h">Logo</h2>
           <p className="onb-identity-hint">
-            Opcional. Si lo subís, reemplaza el avatar de iniciales en tu card.
+            Opcional. Aparecerá en tu perfil público en lugar de tus iniciales.
           </p>
           <LogoUpload
             currentLogoUrl={data.logoUrl}
@@ -541,8 +541,7 @@ export function Step4Personalizacion({ data, set, next, back, skip, orgSlug }: S
         <section className="onb-identity-section">
           <h2 className="onb-identity-h">Color de acento</h2>
           <p className="onb-identity-hint">
-            Aparece en CTAs, tu mark, y la card pública. (En el mood Clínico se
-            atempera hacia ink-blue para preservar el registro clínico.)
+            Se usa en los botones y detalles de tu perfil público.
           </p>
           <div className="onb-acentos">
             {ACENTOS_CURADOS.map(a => {
@@ -580,7 +579,7 @@ export function Step4Personalizacion({ data, set, next, back, skip, orgSlug }: S
         </section>
 
         <section className="onb-identity-section">
-          <h2 className="onb-identity-h">Estilo de tu card</h2>
+          <h2 className="onb-identity-h">Estilo de tu perfil</h2>
           <p className="onb-identity-hint">
             Define la tipografía, el contraste y la decoración. Elegí el que más
             se parezca a tu práctica.
@@ -632,7 +631,7 @@ export function Step5Horarios({ data, set, next, back, skip, orgSlug }: StepProp
   return (
     <StepShell stepIdx={5} back={back} next={next} skip={skip}
       headline="¿Cuándo atendés?"
-      sub="Los pacientes solo van a ver slots disponibles dentro de estos horarios."
+      sub="Los pacientes podrán reservar dentro de los días y horarios que elijas."
       nextDisabled={!canContinue}
       previewData={previewDataFor(data)}
       slug={orgSlug}
@@ -662,17 +661,17 @@ export function Step5Horarios({ data, set, next, back, skip, orgSlug }: StepProp
               return (
                 <div key={i}>
                   <div className="onb-franja">
-                    <input type="time" value={f[0]} onChange={(e) => setFranja(i, 0, e.target.value)}/>
+                    <input type="time" aria-label={`Inicio de franja ${i + 1}`} aria-invalid={Boolean(franjaErr)} aria-describedby={franjaErr ? `onb-franja-error-${i}` : undefined} value={f[0]} onChange={(e) => setFranja(i, 0, e.target.value)}/>
                     <span className="muted">a</span>
-                    <input type="time" value={f[1]} onChange={(e) => setFranja(i, 1, e.target.value)}/>
+                    <input type="time" aria-label={`Fin de franja ${i + 1}`} aria-invalid={Boolean(franjaErr)} aria-describedby={franjaErr ? `onb-franja-error-${i}` : undefined} value={f[1]} onChange={(e) => setFranja(i, 1, e.target.value)}/>
                     {data.franjas.length > 1 ? (
                       <button type="button" className="onb-franja-remove"
-                        onClick={() => removeFranja(i)} aria-label="Quitar franja">
+                        onClick={() => removeFranja(i)} aria-label={`Quitar franja ${i + 1}`}>
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
                       </button>
                     ) : null}
                   </div>
-                  {franjaErr ? <span className="onb-err" role="alert">{franjaErr}</span> : null}
+                  {franjaErr ? <span id={`onb-franja-error-${i}`} className="onb-err" role="alert">{franjaErr}</span> : null}
                 </div>
               );
             })}
@@ -683,7 +682,7 @@ export function Step5Horarios({ data, set, next, back, skip, orgSlug }: StepProp
           </div>
         </div>
         <label className="onb-field">
-          <span>Duración por slot</span>
+          <span>Duración de cada turno</span>
           <select value={data.slotMin} onChange={(e) => set({ slotMin: Number(e.target.value) })}>
             <option value={30}>30 minutos</option>
             <option value={45}>45 minutos</option>
@@ -735,21 +734,21 @@ export function Step6Servicios({ data, set, next, back, skip, orgSlug }: StepPro
       <div className="onb-servicios">
         {data.servicios.map((s, i) => (
           <div key={s.id} className="onb-servicio-row">
-            <input className="onb-serv-name" type="text" value={s.nombre}
+            <input className="onb-serv-name" type="text" value={s.nombre} aria-label={`Nombre del servicio ${i + 1}`}
               placeholder="Nombre del servicio"
               onChange={(e) => setServ(i, { nombre: e.target.value })}/>
             <div className="onb-serv-num">
-              <input type="number" value={s.dur} step={15} min={15}
+              <input type="number" value={s.dur} step={15} min={15} aria-label={`Duración en minutos de ${s.nombre || `servicio ${i + 1}`}`}
                 onChange={(e) => setServ(i, { dur: Number(e.target.value) })}/>
               <span className="fm-mono">min</span>
             </div>
             <div className="onb-serv-num">
               <span className="fm-mono">$</span>
-              <input type="number" value={s.precio} step={1000} min={0}
+              <input type="number" value={s.precio} step={1000} min={0} aria-label={`Precio en pesos de ${s.nombre || `servicio ${i + 1}`}`}
                 onChange={(e) => setServ(i, { precio: Number(e.target.value) })}/>
             </div>
             <button type="button" className="onb-serv-remove"
-              onClick={() => removeServ(i)} aria-label="Quitar">
+              onClick={() => removeServ(i)} aria-label={`Quitar ${s.nombre || `servicio ${i + 1}`}`}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
             </button>
           </div>
@@ -804,7 +803,7 @@ export function Step7Google({ data, next, back, skip, orgSlug, connected, connec
   return (
     <StepShell stepIdx={7} back={back} next={next} skip={skip} canSkip={!connected}
       headline="¿Conectamos tu Google Calendar?"
-      sub="Los eventos personales que crees en Google bloquean slots automáticamente. Las reservas confirmadas se sincronizan a tu calendar."
+      sub="Tus eventos de Google ocupan esos horarios en Folio. Las reservas confirmadas se sincronizan con tu calendario."
       previewData={previewDataFor(data)}
       slug={orgSlug}
     >
@@ -816,7 +815,7 @@ export function Step7Google({ data, next, back, skip, orgSlug, connected, connec
             </div>
             <div className="onb-oauth-body">
               <b>Google Calendar conectado ✓</b>
-              <p>Tus eventos bloquean slots y las reservas confirmadas se sincronizan a tu calendar.</p>
+              <p>Tus eventos ocupan esos horarios y las reservas confirmadas se sincronizan con tu calendario.</p>
             </div>
           </div>
         ) : (
@@ -831,7 +830,7 @@ export function Step7Google({ data, next, back, skip, orgSlug, connected, connec
             </div>
             <div className="onb-oauth-body">
               <b>{pending ? "Abriendo Google…" : "Conectar Google Calendar"}</b>
-              <p>Pedimos permiso para leer y crear eventos en tu calendar primario.</p>
+              <p>Pedimos permiso para leer y crear eventos en tu calendario principal.</p>
             </div>
             <div className="onb-oauth-arrow">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
@@ -849,11 +848,11 @@ export function Step7Google({ data, next, back, skip, orgSlug, connected, connec
           </p>
         ) : null}
         <p className="onb-fine">
-          Tus datos del calendar quedan privados. Solo leemos eventos para bloquear slots; no se comparten con pacientes.
+          Los eventos se usan para marcar horarios ocupados. Sus detalles no se muestran a los pacientes.
         </p>
         {!connected ? (
           <p className="onb-fine" style={{ marginTop: 4 }}>
-            Después del consent en Google volvés acá. Si querés saltar este paso, podés conectarlo más tarde desde <b>Configuración → Integraciones</b>.
+            Después de autorizar la conexión en Google volvés acá. También podés conectarlo más tarde desde <b>Configuración → Integraciones</b>.
           </p>
         ) : null}
       </div>
@@ -893,7 +892,7 @@ function Field({
     <label className={"onb-field" + (error ? " is-err" : "")}>
       <span>{label}</span>
       {children}
-      {error ? <span className="onb-err">{error}</span> : hint ? <span className="onb-hint">{hint}</span> : null}
+      {error ? <span className="onb-err" role="alert">{error}</span> : hint ? <span className="onb-hint">{hint}</span> : null}
     </label>
   );
 }

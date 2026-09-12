@@ -88,7 +88,7 @@ export function CoberturaModal({ pacienteId, prefill, onClose }: CoberturaModalP
         zIndex: 1000,
         padding: 16,
       }}
-      onClick={onClose}
+      onClick={() => { if (!pending) onClose(); }}
     >
       <form
         onSubmit={handleSubmit}
@@ -127,7 +127,6 @@ export function CoberturaModal({ pacienteId, prefill, onClose }: CoberturaModalP
             style={inputStyle}
             maxLength={120}
             placeholder="OSDE, Swiss Medical, PAMI…"
-            autoFocus
           />
         </Field>
         <datalist id="cobertura-os-datalist">
@@ -146,7 +145,7 @@ export function CoberturaModal({ pacienteId, prefill, onClose }: CoberturaModalP
           />
         </Field>
 
-        <Field label="Nº de afiliado (opcional)" hint="Se cifra en la DB, como el DNI.">
+        <Field label="Nº de afiliado (opcional)" hint="Como figura en la credencial. Se guarda cifrado.">
           <input
             type="text"
             value={nroAfiliado}

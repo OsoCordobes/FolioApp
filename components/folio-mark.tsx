@@ -1,16 +1,12 @@
 /**
- * Folio · brand mark (stack + F)
+ * Folio · Hoja clara
  *
- * Logo "stack of papers + F" — la marca oficial. Inline SVG porque el
- * sidebar tiene que resolverse sin depender del archivo de brand exploration.
- * Port directo del prototipo (sidebar.jsx · FolioMark).
+ * Una hoja y una F de trazos abiertos, legibles desde 16 px. El pliegue
+ * conserva la referencia a la historia clínica sin capas superpuestas.
  *
- * El id del clipPath usa useId() (SSR-safe, soportado en server components
- * en React 19): dos marks del mismo `size` en la misma página ya no
- * colisionan ids. role="img" + aria-label: el SVG se anuncia como imagen.
+ * La hoja y la F son trazados independientes de fuentes y de IDs de React.
+ * Así la marca mantiene su geometría en servidor, navegador e impresión.
  */
-
-import { useId } from "react";
 
 interface FolioMarkProps {
   size?: number;
@@ -22,35 +18,16 @@ interface FolioMarkProps {
 export function FolioMark({
   size = 28,
   color,
-  fg = "#FBF9F4",
+  fg,
   foldShade,
 }: FolioMarkProps) {
   const c = color ?? "var(--accent)";
-  const fs = foldShade ?? "var(--accent-2)";
-  const cid = useId();
+  const foreground = fg ?? (color ? "#FFFFFF" : "var(--on-accent, #FFFFFF)");
   return (
-    <svg width={size} height={size} viewBox="0 0 100 100" role="img" aria-label="Folio">
-      <defs>
-        <clipPath id={cid}>
-          <path d="M 6 22 L 64 22 L 84 42 L 84 96 L 6 96 Z" />
-        </clipPath>
-      </defs>
-      <rect x="24" y="8" width="70" height="74" rx="8" fill={c} opacity="0.26" />
-      <rect x="15" y="15" width="70" height="74" rx="8" fill={c} opacity="0.50" />
-      <rect x="6" y="22" width="78" height="74" rx="8" fill={c} clipPath={`url(#${cid})`} />
-      <path d="M 64 22 L 84 42 L 64 42 Z" fill={fs} />
-      <text
-        x="42"
-        y="77"
-        textAnchor="middle"
-        fontFamily="Geist, sans-serif"
-        fontWeight="700"
-        fontSize="54"
-        letterSpacing="-2.5"
-        fill={fg}
-      >
-        F
-      </text>
+    <svg width={size} height={size} viewBox="0 0 48 48" role="img" aria-label="Folio">
+      <path d="M12 4H29L42 17V36Q42 44 34 44H12Q5 44 5 37V11Q5 4 12 4Z" fill={c} />
+      <path d="M29 4V12Q29 17 34 17H42Z" fill={foldShade ?? foreground} opacity={foldShade ? 1 : .25} />
+      <path d="M14 15H28V21H20V26H27V32H20V38H14Z" fill={foreground} />
     </svg>
   );
 }

@@ -1,0 +1,20 @@
+{
+  "date": "2026-09-12T19:03:36.114Z",
+  "scope": "Synthetic local landing, 1440/768/390/320, three product views, five specialties, FAQ, mobile menu. Unused here does not mean safe to delete: other routes, dark mode, pointer states and print not exercised.",
+  "sheets": [
+    {
+      "path": "/_next/static/chunks/_94658742._.css",
+      "sourceBytes": 528638,
+      "observedUsedCharacters": 42653,
+      "sourceCharacters": 528634,
+      "observedUsedPercent": 8.07
+    },
+    {
+      "path": "/_next/static/chunks/styles_specialty-showcase_9f1ac890.css",
+      "sourceBytes": 10583,
+      "observedUsedCharacters": 9685,
+      "sourceCharacters": 10583,
+      "observedUsedPercent": 91.51
+    }
+  ]
+}

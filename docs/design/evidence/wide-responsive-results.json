@@ -1,0 +1,476 @@
+{
+  "time": "2026-09-12T20:05:42.710Z",
+  "scope": "CSS viewport sizes, local synthetic content; no external requests or submissions.",
+  "samples": [
+    {
+      "width": 320,
+      "viewport": 320,
+      "hero": {
+        "width": 320,
+        "left": 0,
+        "right": 320,
+        "fontSize": "14px"
+      },
+      "title": {
+        "width": 276,
+        "left": 22,
+        "right": 298,
+        "fontSize": "44px"
+      },
+      "paragraph": {
+        "width": 276,
+        "left": 22,
+        "right": 298,
+        "fontSize": "14px"
+      },
+      "product": {
+        "width": 276,
+        "left": 22,
+        "right": 298,
+        "fontSize": "14px"
+      },
+      "productWindow": {
+        "width": 276,
+        "left": 22,
+        "right": 298,
+        "fontSize": "14px"
+      },
+      "specialty": {
+        "width": 276,
+        "left": 22,
+        "right": 298,
+        "fontSize": "14px"
+      },
+      "overflow": 0,
+      "panelHeights": [
+        673,
+        673,
+        673
+      ],
+      "errors": []
+    },
+    {
+      "width": 390,
+      "viewport": 390,
+      "hero": {
+        "width": 390,
+        "left": 0,
+        "right": 390,
+        "fontSize": "14px"
+      },
+      "title": {
+        "width": 346,
+        "left": 22,
+        "right": 368,
+        "fontSize": "44px"
+      },
+      "paragraph": {
+        "width": 346,
+        "left": 22,
+        "right": 368,
+        "fontSize": "14px"
+      },
+      "product": {
+        "width": 346,
+        "left": 22,
+        "right": 368,
+        "fontSize": "14px"
+      },
+      "productWindow": {
+        "width": 346,
+        "left": 22,
+        "right": 368,
+        "fontSize": "14px"
+      },
+      "specialty": {
+        "width": 346,
+        "left": 22,
+        "right": 368,
+        "fontSize": "14px"
+      },
+      "overflow": 0,
+      "panelHeights": [
+        638.5,
+        638.5,
+        638.5
+      ],
+      "errors": []
+    },
+    {
+      "width": 768,
+      "viewport": 768,
+      "hero": {
+        "width": 768,
+        "left": 0,
+        "right": 768,
+        "fontSize": "14px"
+      },
+      "title": {
+        "width": 560,
+        "left": 32,
+        "right": 592,
+        "fontSize": "56px"
+      },
+      "paragraph": {
+        "width": 420,
+        "left": 32,
+        "right": 452,
+        "fontSize": "15px"
+      },
+      "product": {
+        "width": 704,
+        "left": 32,
+        "right": 736,
+        "fontSize": "14px"
+      },
+      "productWindow": {
+        "width": 704,
+        "left": 32,
+        "right": 736,
+        "fontSize": "14px"
+      },
+      "specialty": {
+        "width": 704,
+        "left": 32,
+        "right": 736,
+        "fontSize": "14px"
+      },
+      "overflow": 0,
+      "panelHeights": [
+        635,
+        635,
+        635
+      ],
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "viewport": 1440,
+      "hero": {
+        "width": 1320,
+        "left": 60,
+        "right": 1380,
+        "fontSize": "14px"
+      },
+      "title": {
+        "width": 507.75,
+        "left": 108,
+        "right": 615.75,
+        "fontSize": "65px"
+      },
+      "paragraph": {
+        "width": 400,
+        "left": 108,
+        "right": 508,
+        "fontSize": "16px"
+      },
+      "product": {
+        "width": 1000,
+        "left": 220,
+        "right": 1220,
+        "fontSize": "14px"
+      },
+      "productWindow": {
+        "width": 1000,
+        "left": 220,
+        "right": 1220,
+        "fontSize": "14px"
+      },
+      "specialty": {
+        "width": 1120,
+        "left": 160,
+        "right": 1280,
+        "fontSize": "14px"
+      },
+      "overflow": 0,
+      "panelHeights": [
+        647,
+        647,
+        647
+      ],
+      "errors": []
+    },
+    {
+      "width": 1600,
+      "viewport": 1600,
+      "hero": {
+        "width": 1432,
+        "left": 84,
+        "right": 1516,
+        "fontSize": "14px"
+      },
+      "title": {
+        "width": 555.625,
+        "left": 132,
+        "right": 687.625,
+        "fontSize": "66.8px"
+      },
+      "paragraph": {
+        "width": 419.828125,
+        "left": 132,
+        "right": 551.828125,
+        "fontSize": "16.3px"
+      },
+      "product": {
+        "width": 1112,
+        "left": 244,
+        "right": 1356,
+        "fontSize": "14px"
+      },
+      "productWindow": {
+        "width": 1000,
+        "left": 300,
+        "right": 1300,
+        "fontSize": "14px"
+      },
+      "specialty": {
+        "width": 1232,
+        "left": 184,
+        "right": 1416,
+        "fontSize": "14px"
+      },
+      "overflow": 0,
+      "panelHeights": [
+        647.796875,
+        647.796875,
+        647.796875
+      ],
+      "errors": []
+    },
+    {
+      "width": 1799,
+      "viewport": 1799,
+      "hero": {
+        "width": 1571.296875,
+        "left": 113.84375,
+        "right": 1685.140625,
+        "fontSize": "14px"
+      },
+      "title": {
+        "width": 589.78125,
+        "left": 161.84375,
+        "right": 751.625,
+        "fontSize": "69.0387px"
+      },
+      "paragraph": {
+        "width": 444.515625,
+        "left": 161.84375,
+        "right": 606.359375,
+        "fontSize": "16.6731px"
+      },
+      "product": {
+        "width": 1251.296875,
+        "left": 273.84375,
+        "right": 1525.140625,
+        "fontSize": "14px"
+      },
+      "productWindow": {
+        "width": 1000,
+        "left": 399.484375,
+        "right": 1399.484375,
+        "fontSize": "14px"
+      },
+      "specialty": {
+        "width": 1371.296875,
+        "left": 213.84375,
+        "right": 1585.140625,
+        "fontSize": "14px"
+      },
+      "overflow": 0,
+      "panelHeights": [
+        648.78125,
+        648.78125,
+        648.78125
+      ],
+      "errors": []
+    },
+    {
+      "width": 1800,
+      "viewport": 1800,
+      "hero": {
+        "width": 1572,
+        "left": 114,
+        "right": 1686,
+        "fontSize": "14px"
+      },
+      "title": {
+        "width": 589.953125,
+        "left": 162,
+        "right": 751.953125,
+        "fontSize": "69.05px"
+      },
+      "paragraph": {
+        "width": 444.625,
+        "left": 162,
+        "right": 606.625,
+        "fontSize": "16.675px"
+      },
+      "product": {
+        "width": 1372,
+        "left": 214,
+        "right": 1586,
+        "fontSize": "14px"
+      },
+      "productWindow": {
+        "width": 942.65625,
+        "left": 643.34375,
+        "right": 1586,
+        "fontSize": "14px"
+      },
+      "specialty": {
+        "width": 1372,
+        "left": 214,
+        "right": 1586,
+        "fontSize": "14px"
+      },
+      "overflow": 0,
+      "panelHeights": [
+        665.90625,
+        665.90625,
+        665.90625
+      ],
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "viewport": 1920,
+      "hero": {
+        "width": 1656,
+        "left": 132,
+        "right": 1788,
+        "fontSize": "14px"
+      },
+      "title": {
+        "width": 601.484375,
+        "left": 180,
+        "right": 781.484375,
+        "fontSize": "70.4px"
+      },
+      "paragraph": {
+        "width": 459.515625,
+        "left": 180,
+        "right": 639.515625,
+        "fontSize": "16.9px"
+      },
+      "product": {
+        "width": 1456,
+        "left": 232,
+        "right": 1688,
+        "fontSize": "14px"
+      },
+      "productWindow": {
+        "width": 1000,
+        "left": 688,
+        "right": 1688,
+        "fontSize": "14px"
+      },
+      "specialty": {
+        "width": 1456,
+        "left": 232,
+        "right": 1688,
+        "fontSize": "14px"
+      },
+      "overflow": 0,
+      "panelHeights": [
+        669.4375,
+        669.4375,
+        669.4375
+      ],
+      "errors": []
+    },
+    {
+      "width": 2560,
+      "viewport": 2560,
+      "hero": {
+        "width": 2104,
+        "left": 228,
+        "right": 2332,
+        "fontSize": "14px"
+      },
+      "title": {
+        "width": 663,
+        "left": 276,
+        "right": 939,
+        "fontSize": "77.6px"
+      },
+      "paragraph": {
+        "width": 538.875,
+        "left": 276,
+        "right": 814.875,
+        "fontSize": "18.1px"
+      },
+      "product": {
+        "width": 1904,
+        "left": 328,
+        "right": 2232,
+        "fontSize": "14px"
+      },
+      "productWindow": {
+        "width": 1305.890625,
+        "left": 926.109375,
+        "right": 2232,
+        "fontSize": "14px"
+      },
+      "specialty": {
+        "width": 1904,
+        "left": 328,
+        "right": 2232,
+        "fontSize": "14px"
+      },
+      "overflow": 0,
+      "panelHeights": [
+        701.328125,
+        701.328125,
+        701.328125
+      ],
+      "errors": []
+    },
+    {
+      "width": 3440,
+      "viewport": 3440,
+      "hero": {
+        "width": 2440,
+        "left": 500,
+        "right": 2940,
+        "fontSize": "14px"
+      },
+      "title": {
+        "width": 709.140625,
+        "left": 548,
+        "right": 1257.140625,
+        "fontSize": "83px"
+      },
+      "paragraph": {
+        "width": 598.390625,
+        "left": 548,
+        "right": 1146.390625,
+        "fontSize": "19px"
+      },
+      "product": {
+        "width": 2240,
+        "left": 600,
+        "right": 2840,
+        "fontSize": "14px"
+      },
+      "productWindow": {
+        "width": 1541.1875,
+        "left": 1298.8125,
+        "right": 2840,
+        "fontSize": "14px"
+      },
+      "specialty": {
+        "width": 2240,
+        "left": 600,
+        "right": 2840,
+        "fontSize": "14px"
+      },
+      "overflow": 0,
+      "panelHeights": [
+        730.5,
+        730.5,
+        730.5
+      ],
+      "errors": []
+    }
+  ]
+}

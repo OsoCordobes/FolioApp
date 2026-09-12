@@ -1,0 +1,3 @@
+
+> folio-app@0.1.0 lint C:\Users\amiun\Documents\Codex\folio-experience
+> eslint

@@ -22,7 +22,7 @@
  * (Step 3 del onboarding o /configuracion) decide cuándo guardar.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { getAppHost } from "@/lib/config/app-url";
 import { checkSlugAvailability } from "@/lib/onboarding/slug-actions";
@@ -63,6 +63,7 @@ export function SlugEditor({
   prefix = getAppHost(),
   disabled = false,
 }: SlugEditorProps) {
+  const inputId = useId();
   const [local, setLocal] = useState(value);
   const [check, setCheck] = useState<CheckState>({ kind: "idle" });
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -136,6 +137,7 @@ export function SlugEditor({
   return (
     <div className="slug-editor" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       <label
+        htmlFor={inputId}
         style={{
           fontSize: 11,
           fontWeight: 600,
@@ -144,7 +146,7 @@ export function SlugEditor({
           letterSpacing: "0.06em",
         }}
       >
-        Tu link público
+        Tu enlace público
       </label>
 
       <div
@@ -174,6 +176,7 @@ export function SlugEditor({
           {prefix}/book/
         </span>
         <input
+          id={inputId}
           type="text"
           value={local}
           onChange={(e) => onLocalChange(e.target.value)}

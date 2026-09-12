@@ -114,7 +114,7 @@ export function PlanTratamientoModal({ pacienteId, prefill, onClose }: PlanTrata
         zIndex: 1000,
         padding: 16,
       }}
-      onClick={onClose}
+      onClick={() => { if (!pending) onClose(); }}
     >
       <form
         onSubmit={handleSubmit}
@@ -152,7 +152,6 @@ export function PlanTratamientoModal({ pacienteId, prefill, onClose }: PlanTrata
             max={1000}
             step={1}
             inputMode="numeric"
-            autoFocus
           />
         </Field>
 
@@ -175,7 +174,7 @@ export function PlanTratamientoModal({ pacienteId, prefill, onClose }: PlanTrata
           />
         </Field>
 
-        <Field label="Diagnóstico (opcional)" hint="Se cifra en la DB.">
+        <Field label="Diagnóstico (opcional)" hint="Se guarda cifrado.">
           <textarea
             value={form.diagnostico}
             onChange={(e) => setForm((f) => ({ ...f, diagnostico: e.target.value }))}
@@ -184,7 +183,7 @@ export function PlanTratamientoModal({ pacienteId, prefill, onClose }: PlanTrata
           />
         </Field>
 
-        <Field label="Notas del plan (opcional)" hint="Se cifra en la DB.">
+        <Field label="Notas del plan (opcional)" hint="Se guardan cifradas.">
           <textarea
             value={form.notas}
             onChange={(e) => setForm((f) => ({ ...f, notas: e.target.value }))}

@@ -1,0 +1,31 @@
+
+Running 22 tests using 1 worker
+
+(node:28776) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:28776) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok  1 tests\e2e\design-print.spec.ts:14:7 › Impresión · sólo estilos y DOM sintético › la ficha conserva papel blanco con tema oscuro y oculta controles (1.6s)
+  ok  2 tests\e2e\design-print.spec.ts:27:7 › Impresión · sólo estilos y DOM sintético › el panel Hoy con varios pacientes permanece oculto en papel (1.1s)
+  ok  3 tests\e2e\landing.spec.ts:32:7 › Landing · anónimo › / responde 200 sin redirect y muestra el h1 del hero (598ms)
+  ok  4 tests\e2e\landing.spec.ts:40:7 › Landing · anónimo › CTA del hero apunta a /onboarding e Ingresar del header a /login (608ms)
+  ok  5 tests\e2e\landing.spec.ts:50:7 › Landing · anónimo › links legales del footer responden 200 (incluye /cookies, fix de middleware) (1.2s)
+  ok  6 tests\e2e\landing.spec.ts:69:7 › Landing · SEO (JSON-LD + sitemap + robots) › JSON-LD parseable con SoftwareApplication y FAQPage (608ms)
+  ok  7 tests\e2e\landing.spec.ts:83:7 › Landing · SEO (JSON-LD + sitemap + robots) › /sitemap.xml responde 200 con XML (sin redirect al login) (7.4s)
+  ok  8 tests\e2e\landing.spec.ts:89:7 › Landing · SEO (JSON-LD + sitemap + robots) › /robots.txt responde 200 con text/plain (sin redirect al login) (309ms)
+  ok  9 tests\e2e\landing.spec.ts:97:7 › Landing · interacciones › el primer <details> del FAQ se abre con teclado y muestra la respuesta (676ms)
+  ok 10 tests\e2e\landing.spec.ts:111:7 › Landing · interacciones › las anclas del header navegan: Precios → #precios en viewport (692ms)
+  ok 11 tests\e2e\landing.spec.ts:118:7 › Landing · interacciones › las anclas del header navegan: Cómo funciona → #dia en viewport (1.1s)
+  ok 12 tests\e2e\landing.spec.ts:125:7 › Landing · interacciones › las pestañas del producto cambian por flechas, Home y End, con selección y panel asociados (724ms)
+  ok 13 tests\e2e\landing.spec.ts:145:7 › Landing · contenido server-rendered › recorrido y cuidado de los datos llegan con contenido en el HTML inicial (912ms)
+  ok 14 tests\e2e\landing.spec.ts:173:7 › Landing · mobile (375px) › el toggle de nav abre el panel mobile y muestra Ingresar (820ms)
+  ok 15 tests\e2e\side-art.spec.ts:17:7 › Acceso · ilustración estable y formulario › recuperar acceso hidrata sin errores al abrir y recargar (2.2s)
+  ok 16 tests\e2e\side-art.spec.ts:34:7 › Acceso · ilustración estable y formulario › la agenda ilustrativa mantiene su contenido mientras se escribe (785ms)
+  ok 17 tests\e2e\side-art.spec.ts:48:7 › Acceso · ilustración estable y formulario › la contraseña se muestra y oculta por teclado sin perder el valor (744ms)
+  ok 18 tests\e2e\side-art.spec.ts:61:7 › Acceso · ilustración estable y formulario › se puede cambiar a crear cuenta y recuperar el acceso sin enviar datos (958ms)
+  ok 19 tests\e2e\side-art.spec.ts:71:7 › Acceso · ilustración estable y formulario › la marca devuelve al inicio sin confundirla con una acción de acceso (936ms)
+  ok 20 tests\e2e\side-art.spec.ts:78:7 › Acceso · ilustración estable y formulario › el portal identifica la consulta ilustrativa y presenta el email del paciente (569ms)
+  ok 21 tests\e2e\side-art.spec.ts:85:7 › Acceso · ilustración estable y formulario › movimiento reducido conserva el formulario y la ilustración visibles (550ms)
+  ok 22 tests\e2e\side-art.spec.ts:96:7 › Acceso · móvil › el formulario cabe sin la ilustración y mantiene acceso a recuperar contraseña (594ms)
+
+  22 passed (27.3s)

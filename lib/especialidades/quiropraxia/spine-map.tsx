@@ -79,7 +79,8 @@ export function SpineMap({ data, onChange, readOnly }: SpineMapProps) {
   // scroll el panel quedaba fuera de vista y parecía que el click no hizo nada.
   useEffect(() => {
     if (selected == null) return;
-    panelRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    panelRef.current?.scrollIntoView({ block: "nearest", behavior: reducedMotion ? "auto" : "smooth" });
   }, [selected]);
 
   const setVista = (next: VistaQuiro) => {
@@ -146,6 +147,19 @@ export function SpineMap({ data, onChange, readOnly }: SpineMapProps) {
         )}
       </div>
 
+      <label className="fi-wi-field pc-quiro-location no-print">
+        <span>Ubicar vértebra o ilíaco</span>
+        <select value={selected ?? ""} onChange={(event) => setSelected(event.target.value || null)}>
+          <option value="">Elegí una zona del mapa</option>
+          {POSTERIOR_VERTEBRAS.map((vertebra) => (
+            <option key={vertebra.id} value={vertebra.id}>{vertebra.label}</option>
+          ))}
+          {POSTERIOR_ILIACOS.map((iliaco) => (
+            <option key={iliaco.id} value={iliaco.id}>{iliaco.nombre}</option>
+          ))}
+        </select>
+      </label>
+
       {selected ? (
         <div className="pc-quiro-vert-panel" ref={panelRef}>
           <div className="pc-quiro-vert-panel-head">
@@ -209,7 +223,7 @@ function PosteriorSvg({
       className="pc-quiro-svg"
       viewBox={`0 0 ${POSTERIOR_VIEWBOX_W} ${POSTERIOR_VIEWBOX_H}`}
       preserveAspectRatio="xMidYMid meet"
-      role="img"
+      role="group"
       aria-label="Columna vertebral — vista posterior"
     >
       {/* Línea media (ligamento supraespinoso): ata la cadena de apófisis
@@ -527,7 +541,7 @@ function LateralSvg({
       className="pc-quiro-svg"
       viewBox="0 0 220 620"
       preserveAspectRatio="xMidYMid meet"
-      role="img"
+      role="group"
       aria-label="Columna vertebral — vista lateral"
     >
       <defs>

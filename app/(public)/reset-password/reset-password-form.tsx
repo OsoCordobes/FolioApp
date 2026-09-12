@@ -103,18 +103,17 @@ export function ResetPasswordForm() {
 
   if (exchangeError) {
     return (
-      <div className="au-form-pane" style={{ maxWidth: 420 }}>
-        <h2>El link expiró</h2>
-        <p style={{ color: "var(--ink-3)" }}>
-          El link de recuperación dejó de ser válido. Pedí uno nuevo desde el
-          login.
-        </p>
+      <div className="au-form-pane fx-auth-form">
+        <header className="au-form-head">
+          <h1>Necesitás un enlace nuevo.</h1>
+          <p>Este enlace de recuperación ya no es válido. Podés pedir otro para recuperar el acceso.</p>
+        </header>
         <button
           type="button"
           className="fi-btn fi-btn-primary au-submit"
-          onClick={() => router.push("/login")}
+          onClick={() => router.push("/forgot")}
         >
-          Volver a /login
+          Pedir un nuevo enlace
         </button>
       </div>
     );
@@ -122,11 +121,11 @@ export function ResetPasswordForm() {
 
   if (exchanging) {
     return (
-      <div className="au-form-pane" style={{ maxWidth: 420 }}>
-        <h2>Verificando link…</h2>
-        <p style={{ color: "var(--ink-3)", fontSize: 13 }}>
-          Esto tarda un segundo.
-        </p>
+      <div className="au-form-pane fx-auth-form" role="status" aria-busy="true">
+        <header className="au-form-head">
+          <h1>Verificando el enlace…</h1>
+          <p>Esperá mientras comprobamos el acceso a tu cuenta.</p>
+        </header>
       </div>
     );
   }
@@ -134,13 +133,13 @@ export function ResetPasswordForm() {
   return (
     <form
       onSubmit={onSubmit}
-      className="au-form-pane au-form"
-      style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 420, width: "100%" }}
+      className="au-form-pane au-form fx-auth-form"
+      aria-busy={pending}
     >
       <header className="au-form-head">
-        <h2>Elegí una nueva contraseña</h2>
-        <p style={{ color: "var(--ink-3)", marginTop: 4, fontSize: 13 }}>
-          Mínimo 8 caracteres. La guardamos cifrada por Supabase Auth.
+        <h1>Elegí una nueva contraseña.</h1>
+        <p>
+          Usá al menos 8 caracteres y repetila para confirmar.
         </p>
       </header>
 
@@ -149,6 +148,7 @@ export function ResetPasswordForm() {
         <input
           type="password"
           autoComplete="new-password"
+          aria-describedby={err ? "fx-reset-error" : undefined}
           value={password}
           onChange={(e) => {
             setPassword(e.target.value);
@@ -163,6 +163,7 @@ export function ResetPasswordForm() {
         <input
           type="password"
           autoComplete="new-password"
+          aria-describedby={err ? "fx-reset-error" : undefined}
           value={confirm}
           onChange={(e) => {
             setConfirm(e.target.value);
@@ -172,10 +173,10 @@ export function ResetPasswordForm() {
         />
       </label>
 
-      {err ? <p className="au-err">{err}</p> : null}
+      {err ? <p id="fx-reset-error" className="au-err" role="alert">{err}</p> : null}
       {ok ? (
-        <p style={{ color: "var(--green)", fontSize: 13 }}>
-          Listo. Te redirijo a /hoy…
+        <p role="status" style={{ color: "var(--green)", fontSize: 13 }}>
+          Contraseña actualizada. Abriendo tu consultorio…
         </p>
       ) : null}
 

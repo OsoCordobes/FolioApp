@@ -199,6 +199,13 @@ function MobileMoreSheet({
       >
         <div className="fi-mnav-sheet-grip" aria-hidden />
 
+        <div className="fi-mnav-sheet-head">
+          <div><b>{organization.nombre}</b><span>Tu espacio de trabajo</span></div>
+          <button type="button" onClick={onClose} className="fi-mnav-close" aria-label="Cerrar más opciones">
+            <I.X size={18} />
+          </button>
+        </div>
+
         {/* Búsqueda: mismo destino que el buscador del sidebar (/pacientes?q=). */}
         <form className="fi-search fi-mnav-search" action="/pacientes" method="GET">
           <span className="fi-search-ico" aria-hidden>

@@ -1,0 +1,22 @@
+{
+  "date": "2026-09-12",
+  "scope": "Functional review and QA source after the Folio experience redesign",
+  "checks": [
+    {
+      "command": "node --import ./scripts/testing/app-bootstrap.mjs node_modules/typescript/bin/tsc --noEmit",
+      "exitCode": 0,
+      "log": "qa-typecheck.txt"
+    },
+    {
+      "command": "pnpm exec eslint playwright.design.config.ts scripts/design-interactions-qa.mjs tests/e2e/side-art.spec.ts tests/e2e/landing.spec.ts tests/e2e/auth.spec.ts tests/e2e/onboarding.spec.ts tests/e2e/demo-path.spec.ts tests/e2e/billing.spec.ts tests/e2e/open-redirect.spec.ts tests/e2e/signup-consent-ratelimit.spec.ts",
+      "exitCode": 0,
+      "log": "qa-lint.txt"
+    },
+    {
+      "command": "pnpm exec eslint tests/visual/landing.spec.ts tests/e2e/side-art.spec.ts tests/e2e/design-print.spec.ts playwright.design.config.ts playwright.design-visual.config.ts",
+      "exitCode": 0,
+      "log": "visual-qa-lint.txt"
+    }
+  ],
+  "limitations": "No live auth, database writes, external providers or production verification. Empty logs mean no diagnostics."
+}

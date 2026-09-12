@@ -1,0 +1,90 @@
+{"mode":"development","case":"patient name opens once by Enter without bubbling into row","pass":true}
+{"mode":"development","case":"patient checkbox toggles by keyboard and never opens chart","pass":true}
+{"mode":"development","case":"patient checkbox label selects once and never opens chart","pass":true}
+{"mode":"development","case":"scheduling action opens only its modal","pass":true}
+{"mode":"development","case":"onboarding preview traps focus, closes with Escape and restores trigger without advancing","pass":true}
+{"mode":"development","case":"mobile more sheet closes with button and Escape, restoring focus","pass":true}
+{"mode":"development","case":"assistant role does not gain finance navigation","pass":true}
+{"mode":"production","case":"patient name opens once by Enter without bubbling into row","pass":true}
+{"mode":"production","case":"patient checkbox toggles by keyboard and never opens chart","pass":true}
+{"mode":"production","case":"patient checkbox label selects once and never opens chart","pass":true}
+{"mode":"production","case":"scheduling action opens only its modal","pass":true}
+{"mode":"production","case":"onboarding preview traps focus, closes with Escape and restores trigger without advancing","pass":true}
+{"mode":"production","case":"mobile more sheet closes with button and Escape, restoring focus","pass":true}
+{"mode":"production","case":"assistant role does not gain finance navigation","pass":true}
+{
+  "passed": 14,
+  "failed": 0,
+  "results": [
+    {
+      "mode": "development",
+      "case": "patient name opens once by Enter without bubbling into row",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "patient checkbox toggles by keyboard and never opens chart",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "patient checkbox label selects once and never opens chart",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "scheduling action opens only its modal",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "onboarding preview traps focus, closes with Escape and restores trigger without advancing",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "mobile more sheet closes with button and Escape, restoring focus",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "assistant role does not gain finance navigation",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "patient name opens once by Enter without bubbling into row",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "patient checkbox toggles by keyboard and never opens chart",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "patient checkbox label selects once and never opens chart",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "scheduling action opens only its modal",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "onboarding preview traps focus, closes with Escape and restores trigger without advancing",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "mobile more sheet closes with button and Escape, restoring focus",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "assistant role does not gain finance navigation",
+      "pass": true
+    }
+  ]
+}

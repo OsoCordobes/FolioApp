@@ -1,0 +1,19 @@
+
+Running 14 tests using 1 worker
+
+  ok  1 tests\visual\landing.spec.ts:36:7 › landing · hero desktop · light (1.4s)
+  ok  2 tests\visual\landing.spec.ts:40:7 › landing · recorrido interactivo (#producto) · light (1.5s)
+  ok  3 tests\visual\landing.spec.ts:47:7 › landing · continuidad de atención (#dia) · light (1.4s)
+  ok  4 tests\visual\landing.spec.ts:52:7 › landing · cuidado de información (#seguridad) · light (1.2s)
+  ok  5 tests\visual\landing.spec.ts:59:9 › landing · móvil · light › hero y navegación sin desbordamiento (1.2s)
+  ok  6 tests\visual\landing.spec.ts:36:7 › landing · hero desktop · dark (1.3s)
+  ok  7 tests\visual\landing.spec.ts:40:7 › landing · recorrido interactivo (#producto) · dark (1.4s)
+  ok  8 tests\visual\landing.spec.ts:47:7 › landing · continuidad de atención (#dia) · dark (1.5s)
+  ok  9 tests\visual\landing.spec.ts:52:7 › landing · cuidado de información (#seguridad) · dark (1.5s)
+  ok 10 tests\visual\landing.spec.ts:59:9 › landing · móvil · dark › hero y navegación sin desbordamiento (1.2s)
+  ok 11 tests\visual\landing.spec.ts:67:5 › landing · ficha cardiovascular en escritorio (1.3s)
+  ok 12 tests\visual\landing.spec.ts:74:5 › landing · ficha por segmento en móvil (1.4s)
+  ok 13 tests\visual\landing.spec.ts:82:5 › landing · portada en monitor de 2560 px (2.3s)
+  ok 14 tests\visual\landing.spec.ts:88:5 › landing · cobros y explicación en dos columnas a 1920 px (1.8s)
+
+  14 passed (21.9s)

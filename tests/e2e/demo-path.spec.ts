@@ -57,24 +57,22 @@ test.describe("Demo path · médico logueado", () => {
 
     // ── Login con usuario existente ─────────────────────────────────────
     await page.goto("/login");
-    await expect(page.getByRole("heading", { name: /entrar/i })).toBeVisible({
+    await expect(page.getByRole("heading", { level: 1, name: "Volvé a tu consultorio." })).toBeVisible({
       timeout: 15_000,
     });
     await page.locator('input[type="email"]').fill(EMAIL);
     await page.locator('input[type="password"]').fill(PASSWORD);
-    await page.getByRole("button", { name: /^entrar/i }).click();
+    await page.getByRole("button", { name: "Ingresar a Folio", exact: true }).click();
 
     // ── /hoy carga ──────────────────────────────────────────────────────
     await page.waitForURL(/\/hoy/, { timeout: 30_000 });
     await expect(
-      page.getByRole("heading", { name: /tu agenda hoy/i }),
+      page.getByRole("heading", { level: 1, name: "Tu día en Folio" }),
     ).toBeVisible({ timeout: 30_000 });
 
     // ── Modal de crear turno: abrir y cerrar SIN crear ──────────────────
-    // /hoy tiene DOS botones que abren el modal: "Turno walk-in" (header) y
-    // el FAB "Walk-in" (fi-fab, siempre visible). El regex anclado matchea
-    // solo el FAB — /walk-in/i sin anclar viola strict mode.
-    await page.getByRole("button", { name: /^walk-in$/i }).click();
+    // En desktop la acción está en la cabecera; el FAB está reservado para móvil.
+    await page.locator(".fi-page-head").getByRole("button", { name: "Sin turno", exact: true }).click();
     const modal = page.getByRole("dialog");
     await expect(modal).toBeVisible();
     await expect(

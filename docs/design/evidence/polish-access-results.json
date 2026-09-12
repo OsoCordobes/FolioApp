@@ -1,0 +1,86 @@
+{
+  "passed": 16,
+  "failed": 0,
+  "results": [
+    {
+      "mode": "development",
+      "case": "recovery validates locally, returns focus and preserves email across views",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "recovery pending locks the submitted address and success receives focus",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "portal expired notice does not blame email; validation and success focus are explicit",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "native select and time Enter/Escape do not navigate onboarding",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "IME, handled events, textarea and focus outside wizard do not navigate",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "confirmation countdown is visible but excluded from the live status",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "booking CTA appears after hero, focuses the flow and leaves its controls unobstructed",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "access touch targets, keyboard focus, responsive widths and reduced motion",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "recovery validates locally, returns focus and preserves email across views",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "recovery pending locks the submitted address and success receives focus",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "portal expired notice does not blame email; validation and success focus are explicit",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "native select and time Enter/Escape do not navigate onboarding",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "IME, handled events, textarea and focus outside wizard do not navigate",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "confirmation countdown is visible but excluded from the live status",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "booking CTA appears after hero, focuses the flow and leaves its controls unobstructed",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "access touch targets, keyboard focus, responsive widths and reduced motion",
+      "pass": true
+    }
+  ]
+}

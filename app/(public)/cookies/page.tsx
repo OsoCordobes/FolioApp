@@ -9,6 +9,7 @@
  */
 
 import Link from "next/link";
+import "@/styles/states-experience.css";
 
 export { COOKIES_VERSION } from "@/lib/legal/versions";
 import { COOKIES_VERSION } from "@/lib/legal/versions";
@@ -51,13 +52,15 @@ export default function CookiesPage() {
           (PostHog). No usamos cookies publicitarias, de marketing ni de
           rastreo entre sitios.
         </p>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, marginTop: 16 }}>
+        <p className="fx-cookie-table-hint" id="cookie-table-hint">En pantallas pequeñas, desplazá la tabla para ver las cuatro columnas.</p>
+        <div className="fx-cookie-table" role="region" aria-label="Detalle de cookies" aria-describedby="cookie-table-hint" tabIndex={0}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
           <thead>
             <tr style={{ background: "var(--surface-2)" }}>
-              <th style={{ textAlign: "left", padding: 8 }}>Nombre</th>
-              <th style={{ textAlign: "left", padding: 8 }}>Propósito</th>
-              <th style={{ textAlign: "left", padding: 8 }}>Duración</th>
-              <th style={{ textAlign: "left", padding: 8 }}>Categoría</th>
+              <th scope="col" style={{ textAlign: "left", padding: 8 }}>Nombre</th>
+              <th scope="col" style={{ textAlign: "left", padding: 8 }}>Propósito</th>
+              <th scope="col" style={{ textAlign: "left", padding: 8 }}>Duración</th>
+              <th scope="col" style={{ textAlign: "left", padding: 8 }}>Categoría</th>
             </tr>
           </thead>
           <tbody>
@@ -93,6 +96,7 @@ export default function CookiesPage() {
             </tr>
           </tbody>
         </table>
+        </div>
       </section>
 
       <section style={{ marginBottom: 32 }}>

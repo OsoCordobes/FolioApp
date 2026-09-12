@@ -10,6 +10,8 @@
 
 "use client";
 
+import Link from "next/link";
+
 import type {
   PortalConsentimientoView,
   PortalResumenView,
@@ -62,11 +64,12 @@ export function ResumenView({ resumen }: { resumen: PortalResumenView }) {
   if (vacio) {
     return (
       <div className="pt-empty pt-empty-hero">
-        <p className="pt-empty-title">Todavía no hay nada para mostrar</p>
+        <h2 className="pt-empty-title">Todavía no hay atenciones para mostrar</h2>
         <p className="pt-empty-sub">
           Después de tu primera atención vas a ver acá tu historial y tus
           consentimientos firmados.
         </p>
+        <Link href="/portal/turnos" className="fi-btn fi-btn-secondary pt-empty-action">Ver mis turnos</Link>
       </div>
     );
   }

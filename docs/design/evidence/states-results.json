@@ -1,0 +1,126 @@
+{
+  "passed": 24,
+  "failed": 0,
+  "results": [
+    {
+      "mode": "development",
+      "case": "toast stays while focused and resumes only remaining reading time",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "pointer and focus pauses overlap without prematurely restarting timer",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "unmount clears pending toast timeouts",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "pausing one notice does not pause another notice",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "error toast keeps severity, accessible dismissal and reduced motion",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "error gives neutral recovery copy and preserves reset action",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "global gives neutral recovery copy and preserves reset action",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "cookie table scrolls inside a named keyboard region without page overflow",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "404 fits a mobile viewport and keeps reduced motion",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "privacy fits a mobile viewport and keeps reduced motion",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "terms fits a mobile viewport and keeps reduced motion",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "loading fits a mobile viewport and keeps reduced motion",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "toast stays while focused and resumes only remaining reading time",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "pointer and focus pauses overlap without prematurely restarting timer",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "unmount clears pending toast timeouts",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "pausing one notice does not pause another notice",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "error toast keeps severity, accessible dismissal and reduced motion",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "error gives neutral recovery copy and preserves reset action",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "global gives neutral recovery copy and preserves reset action",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "cookie table scrolls inside a named keyboard region without page overflow",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "404 fits a mobile viewport and keeps reduced motion",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "privacy fits a mobile viewport and keeps reduced motion",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "terms fits a mobile viewport and keeps reduced motion",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "loading fits a mobile viewport and keeps reduced motion",
+      "pass": true
+    }
+  ]
+}

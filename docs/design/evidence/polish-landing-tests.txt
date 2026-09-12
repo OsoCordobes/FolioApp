@@ -1,0 +1,23 @@
+
+Running 14 tests using 1 worker
+
+(node:29448) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:29448) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok  1 tests\e2e\design-motion.spec.ts:10:7 › recorrido de producto: altura constante y una sola pantalla accesible a 1440px (2.3s)
+  ok  2 tests\e2e\design-motion.spec.ts:10:7 › recorrido de producto: altura constante y una sola pantalla accesible a 768px (1.9s)
+  ok  3 tests\e2e\design-motion.spec.ts:10:7 › recorrido de producto: altura constante y una sola pantalla accesible a 390px (3.9s)
+  ok  4 tests\e2e\design-motion.spec.ts:10:7 › recorrido de producto: altura constante y una sola pantalla accesible a 320px (6.3s)
+  ok  5 tests\e2e\design-motion.spec.ts:27:5 › indicador animado se detiene con movimiento reducido (2.4s)
+  ok  6 tests\e2e\design-motion.spec.ts:38:5 › menú de tablet abre entre 768 y 800 px y se cierra al salir (2.1s)
+  ok  7 tests\e2e\design-motion.spec.ts:54:5 › navegación móvil por teclado coloca el foco en el destino (2.4s)
+  ok  8 tests\e2e\design-specialties.spec.ts:18:7 › cinco fichas distintas y marco estable a 1440px (2.2s)
+  ok  9 tests\e2e\design-specialties.spec.ts:18:7 › cinco fichas distintas y marco estable a 1024px (1.2s)
+  ok 10 tests\e2e\design-specialties.spec.ts:18:7 › cinco fichas distintas y marco estable a 768px (2.1s)
+  ok 11 tests\e2e\design-specialties.spec.ts:18:7 › cinco fichas distintas y marco estable a 390px (1.2s)
+  ok 12 tests\e2e\design-specialties.spec.ts:18:7 › cinco fichas distintas y marco estable a 320px (1.2s)
+  ok 13 tests\e2e\design-specialties.spec.ts:39:5 › acordeón por teclado: una descripción abierta y cierre sin perder la ficha (970ms)
+  ok 14 tests\e2e\design-specialties.spec.ts:59:5 › sin movimiento reducido no hay animación continua ni cambio automático (916ms)
+
+  14 passed (36.8s)

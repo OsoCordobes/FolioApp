@@ -1,0 +1,11 @@
+{
+  "checkedAt": "2026-09-12T19:19:57.313Z",
+  "origin": "http://127.0.0.1:4410",
+  "route": "/opengraph-image-pwu6ef",
+  "status": 200,
+  "contentType": "image/png",
+  "bytes": 68425,
+  "width": 1200,
+  "height": 630,
+  "source": "Next.js development endpoint; ImageResponse using shared FolioMark with explicit colors."
+}

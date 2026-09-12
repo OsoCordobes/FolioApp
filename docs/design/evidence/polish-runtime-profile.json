@@ -1,0 +1,499 @@
+{
+  "timestamp": "2026-09-12T20:13:00.713Z",
+  "scope": "Compiled loopback app. Cold browser contexts, synthetic throttling and fictional content; not real-user performance.",
+  "samples": [
+    {
+      "setup": {
+        "width": 1440,
+        "height": 900,
+        "cpu": 1,
+        "latency": 0
+      },
+      "load": {
+        "shifts": [],
+        "largestPaints": [
+          {
+            "time": 188,
+            "element": "H1",
+            "text": "Tu consultorio.Todo a mano."
+          }
+        ],
+        "longTasks": [],
+        "domElements": 899,
+        "overflow": 0,
+        "resources": [
+          {
+            "path": "/_next/static/media/plus_jakarta_sans_latin-s.p.23e35025.woff2",
+            "type": "link",
+            "duration": 13,
+            "encodedBytes": 27348,
+            "decodedBytes": 27348,
+            "transferredBytes": 27648
+          },
+          {
+            "path": "/_next/static/chunks/055790797d6d0267.css",
+            "type": "link",
+            "duration": 13.299999982118607,
+            "encodedBytes": 487,
+            "decodedBytes": 487,
+            "transferredBytes": 787
+          },
+          {
+            "path": "/_next/static/chunks/df1a1e8558428386.css",
+            "type": "link",
+            "duration": 14.099999994039536,
+            "encodedBytes": 2339,
+            "decodedBytes": 10688,
+            "transferredBytes": 2639
+          },
+          {
+            "path": "/_next/static/chunks/bac8ab398e117d6f.css",
+            "type": "link",
+            "duration": 19.69999998807907,
+            "encodedBytes": 53525,
+            "decodedBytes": 338951,
+            "transferredBytes": 53825
+          },
+          {
+            "path": "/_next/static/chunks/c7764c8e44e73da9.css",
+            "type": "link",
+            "duration": 15.5,
+            "encodedBytes": 17987,
+            "decodedBytes": 96132,
+            "transferredBytes": 18287
+          },
+          {
+            "path": "/_next/static/chunks/eb40eaee33994172.js",
+            "type": "link",
+            "duration": 24.80000001192093,
+            "encodedBytes": 2514,
+            "decodedBytes": 7636,
+            "transferredBytes": 2814
+          },
+          {
+            "path": "/_next/static/chunks/eb91993a0d3b7da1.js",
+            "type": "script",
+            "duration": 24.900000005960464,
+            "encodedBytes": 5801,
+            "decodedBytes": 21808,
+            "transferredBytes": 6101
+          },
+          {
+            "path": "/_next/static/chunks/431aac30e956e490.js",
+            "type": "script",
+            "duration": 25.599999994039536,
+            "encodedBytes": 8499,
+            "decodedBytes": 38695,
+            "transferredBytes": 8799
+          },
+          {
+            "path": "/_next/static/chunks/111ed183d23b4f62.js",
+            "type": "script",
+            "duration": 35.30000001192093,
+            "encodedBytes": 117083,
+            "decodedBytes": 380339,
+            "transferredBytes": 117383
+          },
+          {
+            "path": "/_next/static/chunks/45f0e968881cb2ce.js",
+            "type": "script",
+            "duration": 27.099999994039536,
+            "encodedBytes": 19314,
+            "decodedBytes": 70926,
+            "transferredBytes": 19614
+          },
+          {
+            "path": "/_next/static/chunks/a12fce6acb7cdde4.js",
+            "type": "script",
+            "duration": 27.299999982118607,
+            "encodedBytes": 20807,
+            "decodedBytes": 65836,
+            "transferredBytes": 21107
+          },
+          {
+            "path": "/_next/static/chunks/23f25157d860632b.js",
+            "type": "script",
+            "duration": 30,
+            "encodedBytes": 12870,
+            "decodedBytes": 40574,
+            "transferredBytes": 13170
+          },
+          {
+            "path": "/_next/static/chunks/turbopack-2c622c914c2186ae.js",
+            "type": "script",
+            "duration": 30.19999998807907,
+            "encodedBytes": 3910,
+            "decodedBytes": 9969,
+            "transferredBytes": 4210
+          },
+          {
+            "path": "/_next/static/chunks/e96362936e1a7b8d.js",
+            "type": "script",
+            "duration": 31.400000005960464,
+            "encodedBytes": 2657,
+            "decodedBytes": 6518,
+            "transferredBytes": 2957
+          },
+          {
+            "path": "/_next/static/chunks/4302e11fcf7aafbd.js",
+            "type": "script",
+            "duration": 32.400000005960464,
+            "encodedBytes": 7285,
+            "decodedBytes": 32110,
+            "transferredBytes": 7585
+          },
+          {
+            "path": "/_next/static/chunks/c88d211fa15d3ee3.js",
+            "type": "script",
+            "duration": 31.900000005960464,
+            "encodedBytes": 2544,
+            "decodedBytes": 6050,
+            "transferredBytes": 2844
+          },
+          {
+            "path": "/_next/static/chunks/fdcc58dd0611e570.js",
+            "type": "script",
+            "duration": 34,
+            "encodedBytes": 2893,
+            "decodedBytes": 7197,
+            "transferredBytes": 3193
+          },
+          {
+            "path": "/_next/static/chunks/479d429d691ad3b6.js",
+            "type": "script",
+            "duration": 35.30000001192093,
+            "encodedBytes": 1169,
+            "decodedBytes": 2353,
+            "transferredBytes": 1469
+          },
+          {
+            "path": "/_next/static/chunks/c1654ab581d468b6.js",
+            "type": "script",
+            "duration": 35,
+            "encodedBytes": 9129,
+            "decodedBytes": 32731,
+            "transferredBytes": 9429
+          },
+          {
+            "path": "/login",
+            "type": "fetch",
+            "duration": 11,
+            "encodedBytes": 2164,
+            "decodedBytes": 8751,
+            "transferredBytes": 2464
+          },
+          {
+            "path": "/onboarding",
+            "type": "fetch",
+            "duration": 11.5,
+            "encodedBytes": 159,
+            "decodedBytes": 195,
+            "transferredBytes": 459
+          },
+          {
+            "path": "/_next/static/chunks/142915cdfe2a31c0.js",
+            "type": "script",
+            "duration": 6.0999999940395355,
+            "encodedBytes": 1688,
+            "decodedBytes": 4067,
+            "transferredBytes": 1988
+          },
+          {
+            "path": "/_next/static/chunks/5f67cf3218a56513.js",
+            "type": "script",
+            "duration": 6.800000011920929,
+            "encodedBytes": 9393,
+            "decodedBytes": 29567,
+            "transferredBytes": 9693
+          },
+          {
+            "path": "/_next/static/chunks/d21508bd59d69fa2.js",
+            "type": "script",
+            "duration": 6.700000017881393,
+            "encodedBytes": 21183,
+            "decodedBytes": 62182,
+            "transferredBytes": 21483
+          }
+        ],
+        "navigation": [
+          {
+            "duration": 159.59999999403954,
+            "domContentLoaded": 132.19999998807907,
+            "encodedBytes": 16987,
+            "decodedBytes": 97071
+          }
+        ]
+      },
+      "transitions": [
+        {
+          "label": "La historia clínica",
+          "heightBefore": 647,
+          "heightAfter": 647
+        },
+        {
+          "label": "Los cobros",
+          "heightBefore": 647,
+          "heightAfter": 647
+        },
+        {
+          "label": "La agenda",
+          "heightBefore": 647,
+          "heightAfter": 647
+        }
+      ],
+      "errors": [],
+      "refused": []
+    },
+    {
+      "setup": {
+        "width": 390,
+        "height": 844,
+        "cpu": 4,
+        "latency": 150
+      },
+      "load": {
+        "shifts": [],
+        "largestPaints": [
+          {
+            "time": 1912,
+            "element": "H1",
+            "text": "Tu consultorio.Todo a mano."
+          }
+        ],
+        "longTasks": [
+          {
+            "start": 1692,
+            "duration": 205
+          },
+          {
+            "start": 2234.9000000059605,
+            "duration": 162
+          }
+        ],
+        "domElements": 899,
+        "overflow": 0,
+        "resources": [
+          {
+            "path": "/_next/static/media/plus_jakarta_sans_latin-s.p.23e35025.woff2",
+            "type": "link",
+            "duration": 818.9000000059605,
+            "encodedBytes": 27348,
+            "decodedBytes": 27348,
+            "transferredBytes": 27648
+          },
+          {
+            "path": "/_next/static/chunks/055790797d6d0267.css",
+            "type": "link",
+            "duration": 220.59999999403954,
+            "encodedBytes": 487,
+            "decodedBytes": 487,
+            "transferredBytes": 787
+          },
+          {
+            "path": "/_next/static/chunks/bac8ab398e117d6f.css",
+            "type": "link",
+            "duration": 1444.0999999940395,
+            "encodedBytes": 53525,
+            "decodedBytes": 338951,
+            "transferredBytes": 53825
+          },
+          {
+            "path": "/_next/static/chunks/c7764c8e44e73da9.css",
+            "type": "link",
+            "duration": 666.3000000119209,
+            "encodedBytes": 17987,
+            "decodedBytes": 96132,
+            "transferredBytes": 18287
+          },
+          {
+            "path": "/_next/static/chunks/df1a1e8558428386.css",
+            "type": "link",
+            "duration": 280.7000000178814,
+            "encodedBytes": 2339,
+            "decodedBytes": 10688,
+            "transferredBytes": 2639
+          },
+          {
+            "path": "/_next/static/chunks/eb40eaee33994172.js",
+            "type": "link",
+            "duration": 308,
+            "encodedBytes": 2514,
+            "decodedBytes": 7636,
+            "transferredBytes": 2814
+          },
+          {
+            "path": "/_next/static/chunks/431aac30e956e490.js",
+            "type": "script",
+            "duration": 634,
+            "encodedBytes": 8499,
+            "decodedBytes": 38695,
+            "transferredBytes": 8799
+          },
+          {
+            "path": "/_next/static/chunks/eb91993a0d3b7da1.js",
+            "type": "script",
+            "duration": 671.8000000119209,
+            "encodedBytes": 5801,
+            "decodedBytes": 21808,
+            "transferredBytes": 6101
+          },
+          {
+            "path": "/_next/static/chunks/111ed183d23b4f62.js",
+            "type": "script",
+            "duration": 1994.5999999940395,
+            "encodedBytes": 117083,
+            "decodedBytes": 380339,
+            "transferredBytes": 117383
+          },
+          {
+            "path": "/_next/static/chunks/45f0e968881cb2ce.js",
+            "type": "script",
+            "duration": 1341.4000000059605,
+            "encodedBytes": 19314,
+            "decodedBytes": 70926,
+            "transferredBytes": 19614
+          },
+          {
+            "path": "/_next/static/chunks/a12fce6acb7cdde4.js",
+            "type": "script",
+            "duration": 1410.7000000178814,
+            "encodedBytes": 20807,
+            "decodedBytes": 65836,
+            "transferredBytes": 21107
+          },
+          {
+            "path": "/_next/static/chunks/turbopack-2c622c914c2186ae.js",
+            "type": "script",
+            "duration": 1132.5999999940395,
+            "encodedBytes": 3910,
+            "decodedBytes": 9969,
+            "transferredBytes": 4210
+          },
+          {
+            "path": "/_next/static/chunks/23f25157d860632b.js",
+            "type": "script",
+            "duration": 1222.9000000059605,
+            "encodedBytes": 12870,
+            "decodedBytes": 40574,
+            "transferredBytes": 13170
+          },
+          {
+            "path": "/_next/static/chunks/e96362936e1a7b8d.js",
+            "type": "script",
+            "duration": 1389.199999988079,
+            "encodedBytes": 2657,
+            "decodedBytes": 6518,
+            "transferredBytes": 2957
+          },
+          {
+            "path": "/_next/static/chunks/4302e11fcf7aafbd.js",
+            "type": "script",
+            "duration": 1497.300000011921,
+            "encodedBytes": 7285,
+            "decodedBytes": 32110,
+            "transferredBytes": 7585
+          },
+          {
+            "path": "/_next/static/chunks/c88d211fa15d3ee3.js",
+            "type": "script",
+            "duration": 1542.800000011921,
+            "encodedBytes": 2544,
+            "decodedBytes": 6050,
+            "transferredBytes": 2844
+          },
+          {
+            "path": "/_next/static/chunks/fdcc58dd0611e570.js",
+            "type": "script",
+            "duration": 1634.199999988079,
+            "encodedBytes": 2893,
+            "decodedBytes": 7197,
+            "transferredBytes": 3193
+          },
+          {
+            "path": "/_next/static/chunks/c1654ab581d468b6.js",
+            "type": "script",
+            "duration": 1711.7000000178814,
+            "encodedBytes": 9129,
+            "decodedBytes": 32731,
+            "transferredBytes": 9429
+          },
+          {
+            "path": "/_next/static/chunks/479d429d691ad3b6.js",
+            "type": "script",
+            "duration": 1649.9000000059605,
+            "encodedBytes": 1169,
+            "decodedBytes": 2353,
+            "transferredBytes": 1469
+          },
+          {
+            "path": "/login",
+            "type": "fetch",
+            "duration": 194.90000000596046,
+            "encodedBytes": 2164,
+            "decodedBytes": 8751,
+            "transferredBytes": 2464
+          },
+          {
+            "path": "/onboarding",
+            "type": "fetch",
+            "duration": 194,
+            "encodedBytes": 159,
+            "decodedBytes": 195,
+            "transferredBytes": 459
+          },
+          {
+            "path": "/_next/static/chunks/142915cdfe2a31c0.js",
+            "type": "script",
+            "duration": 219.59999999403954,
+            "encodedBytes": 1688,
+            "decodedBytes": 4067,
+            "transferredBytes": 1988
+          },
+          {
+            "path": "/_next/static/chunks/5f67cf3218a56513.js",
+            "type": "script",
+            "duration": 292.80000001192093,
+            "encodedBytes": 9393,
+            "decodedBytes": 29567,
+            "transferredBytes": 9693
+          },
+          {
+            "path": "/_next/static/chunks/d21508bd59d69fa2.js",
+            "type": "script",
+            "duration": 361.10000002384186,
+            "encodedBytes": 21183,
+            "decodedBytes": 62182,
+            "transferredBytes": 21483
+          }
+        ],
+        "navigation": [
+          {
+            "duration": 2407,
+            "domContentLoaded": 1913,
+            "encodedBytes": 16987,
+            "decodedBytes": 97071
+          }
+        ]
+      },
+      "transitions": [
+        {
+          "label": "La historia clínica",
+          "heightBefore": 638.5,
+          "heightAfter": 638.5
+        },
+        {
+          "label": "Los cobros",
+          "heightBefore": 638.5,
+          "heightAfter": 638.5
+        },
+        {
+          "label": "La agenda",
+          "heightBefore": 638.5,
+          "heightAfter": 638.5
+        }
+      ],
+      "errors": [],
+      "refused": []
+    }
+  ]
+}
