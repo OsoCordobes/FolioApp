@@ -18,7 +18,7 @@ El procedimiento específico está en [CLINICAL-LOCAL.md](../../scripts/testing/
 Auth, TOTP y Storage reales, y usa exclusivamente `http://localhost:4420` para
 no ocupar el puerto 4410 del runner ordinario/visual. Valida el perfil completo
 antes de iniciar su aplicación o navegador y rechaza cualquier override de URL
-distinto. Crea tres consultorios sintéticos y comprueba el
+distinto. La suite integrada prepara datos propios para cada caso y comprueba el
 recorrido de cada especialidad: paciente sin turno previo, atención, guardado,
 archivo, cobro en efectivo registrado y lectura después de volver a iniciar sesión.
 También intenta accesos AAL1, entre consultorios, escritura clínica directa y
@@ -76,3 +76,13 @@ acceso, archivo autorizado con suscripción pausada y revocación Auth. Baseline
 e7da69f con fixture/perfil/selectores autorizados, sin M120/M121. No acredita
 producción ni Mercado Pago. Evidencia y ejecuciones fallidas anteriores en
 [CLINICAL-LOCAL.md](../../scripts/testing/CLINICAL-LOCAL.md).
+
+Suite integrada preparada: doce casos independientes con nueve controles de
+política obligatorios antes de crear fixtures, sin activarlos desde cada test.
+Agrega cierre clínico sin cobro automático, registro explícito en agenda,
+recuperación tras respuestas perdidas con commit SQL comprobado y roles reales
+ASISTENTE/COORDINADOR en contextos limpios. Los POST se ligan a la sesión AAL2 del
+navegador y al intento/pago exacto. La limpieza revoca sesiones y conserva datos.
+17/17 comprobaciones focales pasaron e incluyen discovery de doce casos; el ensayo
+real integrado aún no se ejecutó ni se aplicaron M120/M121 al runtime histórico.
+La evidencia7/7 anterior corresponde únicamente al baseline señalado arriba.

@@ -63,7 +63,7 @@ test('real runner bootstrap carries the protected clinical opt-in but still stri
 test('canonical clinical default reaches discovery while the ordinary app remains on 127.0.0.1:4410',()=>{
  assert.equal(testAppConfig({}).appUrl,'http://127.0.0.1:4410');
  const result=spawnSync(process.execPath,['scripts/testing/run-clinical.mjs','--list'],{encoding:'utf8',timeout:30000,env:{...process.env,NODE_OPTIONS:'',E2E_BASE_URL:undefined,FOLIO_TEST_SUPABASE_URL:source.supabaseUrl,FOLIO_TEST_SUPABASE_ANON_KEY:source.anonKey,FOLIO_TEST_SUPABASE_SERVICE_KEY:source.serviceKey,FOLIO_TEST_DATABASE_URL:source.databaseUrl}});
- assert.equal(result.status,0,result.stderr);assert.match(result.stdout,/Total: 7 tests in 1 file/);
+ assert.equal(result.status,0,result.stderr);assert.match(result.stdout,/Total: 12 tests in 1 file/);
 });
 
 test('clinical command rejects alternate app origins before application or browser launch',()=>{
@@ -71,4 +71,76 @@ test('clinical command rejects alternate app origins before application or brows
   const result=spawnSync(process.execPath,['scripts/testing/run-clinical.mjs','--list'],{encoding:'utf8',timeout:15000,env:{...process.env,NODE_OPTIONS:'',E2E_BASE_URL:appUrl,FOLIO_TEST_SUPABASE_URL:source.supabaseUrl,FOLIO_TEST_SUPABASE_ANON_KEY:source.anonKey,FOLIO_TEST_SUPABASE_SERVICE_KEY:source.serviceKey,FOLIO_TEST_DATABASE_URL:source.databaseUrl}});
   assert.notEqual(result.status,0);assert.match(result.stderr,/dedicated 4420\/54321\/54322 local profile/);assert.doesNotMatch(result.stdout,/Listing tests|Running \d+ tests/);
  }
+});
+
+test('integrated safety: disabled or missing close/settlement gates cannot provision fixtures',async()=>{
+ const {assertIntegratedPolicies}=await import('../fixtures/clinical-safety');
+ const good={...Object.fromEntries(CLINICAL_POLICY_KEYS.map(key=>[key,true])),atomic_close:true,payment_settlement:true};
+ assert.doesNotThrow(()=>assertIntegratedPolicies(good));
+ for(const key of ['atomic_close','payment_settlement'])for(const value of [false,null,undefined,'true'])assert.throws(()=>assertIntegratedPolicies({...good,[key]:value}));
+});
+
+test('integrated safety: action binding rejects confused operations and external forwarding',async()=>{
+ const {parseClinicalAction}=await import('../fixtures/clinical-safety');
+ const turnoId='12000000-0000-4000-8000-000000000001',operacionId='12000000-0000-4000-8000-000000000002';
+ const close={turnoId,operacionId,to:'cerrado',duracionRealMin:20,cobro:{montoCents:1200,metodo:'EFECTIVO',pagado:false}};
+ const wire=(input:unknown,url='http://localhost:4420/hoy')=>({url,method:'POST',actionId:'a'.repeat(40),body:JSON.stringify([input]),contentType:'text/plain;charset=UTF-8'});
+ assert.equal(parseClinicalAction(wire(close)).action,'CLOSE');
+ for(const bad of [wire(close,'http://127.0.0.1:4420/hoy'),wire(close,'https://example.com/hoy'),wire({...close,action:'RESOLVE'}),wire({...close,cobro:{...close.cobro,pagado:'false'}}),wire({...close,to:'en_sala'}),wire({turnoId,pagoId:operacionId,operacionId}),{...wire(close),body:'["$1"]'}])assert.throws(()=>parseClinicalAction(bad));
+});
+
+test('integrated safety: failures settle the intercepted route and cannot look committed',async()=>{
+ const {forwardThenLose}=await import('../fixtures/clinical-safety');
+ for(const failure of ['fetch','commit'] as const){
+  const events:string[]=[];
+  await assert.rejects(forwardThenLose({fetch:async()=>{events.push('fetch');if(failure==='fetch')throw Error('transport');return {};},commit:async()=>{events.push('commit');throw Error('no matching committed receipt');},abort:async()=>{events.push('abort');}}));
+  assert.deepEqual(events,failure==='fetch'?['fetch','abort']:['fetch','commit','abort']);
+ }
+ const events:string[]=[];
+ await forwardThenLose({fetch:async()=>{events.push('fetch');return {};},commit:async()=>{events.push('committed');},abort:async()=>{events.push('abort');}});
+ assert.deepEqual(events,['fetch','committed','abort']);
+});
+
+test('integrated safety: enrollment failure revokes the first login and cleanup failures stay visible',async()=>{
+ const {CleanupRegistry,authenticateRegistered}=await import('../fixtures/clinical-safety');
+ const cleanup=new CleanupRegistry(),events:string[]=[];
+ await assert.rejects(authenticateRegistered(cleanup,{login:async()=>{events.push('login');},enroll:async()=>{events.push('enroll');throw Error('challenge lost');},revoke:async()=>{events.push('revoke');}}));
+ await cleanup.close();assert.deepEqual(events,['login','enroll','revoke']);
+ const failed=new CleanupRegistry();failed.add('auth session',async()=>{throw Error('sensitive detail');});failed.add('database',async()=>{events.push('db closed');});
+ await assert.rejects(failed.close(),error=>error instanceof Error&&/auth session/.test(error.message)&&!/sensitive detail/.test(error.message));assert.equal(events.at(-1),'db closed');
+});
+
+test('integrated safety: only a real successful Flight action result can confirm a write',async()=>{
+ const {actionResult,bindExpected}=await import('../fixtures/clinical-response-loss');
+ assert.deepEqual(actionResult('0:{"a":"$@2","f":[]}\n2:{"ok":true,"data":{"persisted":true}}\n'),{ok:true,data:{persisted:true}});
+ for(const body of ['0:{"a":"$@2"}\n2:{"ok":false,"error":"denied"}', '0:{"a":"$@2"}', '0:{"a":"$@2"}\n2:{"ok":true}', '0:{"a":"$@2"}\n2:["unrelated UI"]'])assert.throws(()=>actionResult(body));
+ const turnoId='12000000-0000-4000-8000-000000000001',operacionId='12000000-0000-4000-8000-000000000002';
+ const request={action:'CLOSE' as const,turnoId,operacionId,duracionRealMin:20,cobro:{montoCents:1200,metodo:'EFECTIVO' as const,pagado:false}};
+ const expected={action:'CLOSE' as const,turnoId,duracionRealMin:20,cobro:request.cobro};
+ assert.doesNotThrow(()=>bindExpected(request,expected));
+ for(const patch of [{turnoId:operacionId},{action:'RESOLVE' as const},{duracionRealMin:21},{cobro:{...request.cobro,pagado:true}}])assert.throws(()=>bindExpected(request,{...expected,...patch}));
+ assert.throws(()=>bindExpected({action:'SETTLE',turnoId,pagoId:operacionId},{action:'SETTLE',turnoId,pagoId:turnoId}));
+});
+
+test('integrated safety: interceptor exceptions reject observed and remove the route',async()=>{
+ const {observeClinicalAction}=await import('../fixtures/clinical-response-loss');
+ const {CleanupRegistry}=await import('../fixtures/clinical-safety');
+ type Route=import('@playwright/test').Route;
+ let handler:((route:Route)=>Promise<void>)|undefined;const events:string[]=[];
+ const page={route:async(_pattern:string,callback:(route:Route)=>Promise<void>)=>{handler=callback;},unroute:async()=>{events.push('unroute');}} as unknown as import('@playwright/test').Page;
+ const cleanup=new CleanupRegistry(),fixture={cleanup} as import('../fixtures/clinical-local').ClinicalFixture;
+ const observer=await observeClinicalAction(fixture,page,{} as import('../fixtures/clinical-local').ClinicalAccount,{action:'CLOSE',turnoId:'12000000-0000-4000-8000-000000000001'});
+ const route={request:()=>({allHeaders:async()=>{throw Error('secret cookie details');}}),abort:async()=>{events.push('abort');}} as unknown as Route;
+ assert.ok(handler);await handler(route);
+ await assert.rejects(observer.observed,error=>error instanceof Error&&/failed at request/.test(error.message)&&!/secret/.test(error.message));
+ assert.deepEqual(events,['abort','unroute']);await cleanup.close();
+});
+
+test('integrated safety: fixture cleanup rejects an unobserved action instead of leaving it pending',async()=>{
+ const {observeClinicalAction}=await import('../fixtures/clinical-response-loss');
+ const {CleanupRegistry}=await import('../fixtures/clinical-safety');
+ let removed=0;const page={route:async()=>{},unroute:async()=>{removed++;}} as unknown as import('@playwright/test').Page;
+ const cleanup=new CleanupRegistry(),fixture={cleanup} as import('../fixtures/clinical-local').ClinicalFixture;
+ const observer=await observeClinicalAction(fixture,page,{} as import('../fixtures/clinical-local').ClinicalAccount,{action:'CLOSE',turnoId:'12000000-0000-4000-8000-000000000001'});
+ await cleanup.close();await assert.rejects(observer.observed,/not observed/);assert.equal(removed,1);
 });

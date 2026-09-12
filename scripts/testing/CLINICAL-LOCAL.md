@@ -1,6 +1,6 @@
 # Ensayo clínico con Supabase local real
 
-Estado al 12 de septiembre de 2026: **7/7 escenarios aprobados**, cero fallidos
+Baseline ejecutado al 12 de septiembre de 2026: **7/7 escenarios aprobados**, cero fallidos
 y cero no ejecutados, en 2,3 minutos (run-10). Supabase PostgreSQL 17.6 ejecutó
 113 migraciones y cinco catálogos. Las tres especialidades completaron creación,
 llegada, guardado cifrado, adjunto real, cobro efectivo y reapertura tras nuevo
@@ -72,13 +72,13 @@ Crea consultorios con `is_synthetic=true` (bloqueo durable de comunicaciones) y
 suscripción pagada. Inscribe el segundo factor antes de crear membresías para
 que un error de enrolamiento no deje personal activo sin autenticador.
 
-Activa por las RPC administrativas reales y comprueba en la base los siete
+El fixture integrado sólo comprueba en la base los siete
 controles: preparación de MFA, exigencia de MFA, adjuntos, representación/firma,
 población de instrumentos, guardado atómico y revisión de disponibilidad.
-Un estado apagado o ausente falla. El motivo y referencia de activación señalan
-que es un ensayo sintético; el SHA identifica la base del checkout, que puede
-incluir cambios locales. Esa referencia nunca acredita un despliegue.
-
+Además requiere cierre atómico M120 y liquidación M121: nueve condiciones
+obligatorias antes de crear una cuenta o dato. Un estado apagado o ausente falla.
+El fixture no activa ni repara políticas. La activación administrativa local,
+con M106 vigente y UI compatible revisada, es un paso separado del cutover.
 La prueba usa navegador en Pacific/Auckland y organización en Córdoba. Registra
 narrativa de quiropraxia en «Notas libres», y SOAP en cardiología/psicología,
 sin habilitar escalas para el paciente cuya fecha de nacimiento no se conoce.
@@ -86,15 +86,10 @@ Comprueba ciphertext descifrado con claves sintéticas, exactamente una ficha,
 turno, sesión y pago, bloqueo tras cierre, subida a Storage y los mismos bytes
 desde el proxy autenticado antes y después de volver a entrar.
 
-El conteo final de pagos obtiene el consultorio mediante
-`pago.turno_id → turno.organization_id`; `pago` no tiene una columna
-`organization_id`. La revisión estática del resto de las consultas del fixture
-contra las migraciones no encontró otro nombre de tabla, columna o RPC
-incompatible. En PostgreSQL 16 local se reprodujo el error de columna de la
-consulta anterior y el JOIN corregido devolvió cero filas en un consultorio sin
-datos. Esto confirma validez SQL; el caso positivo y el recorrido sobre el perfil
-Supabase/PostgreSQL 17 con Auth/Storage reales siguen pendientes.
-
+El conteo de pagos obtiene el consultorio mediante
+`pago.turno_id → turno.organization_id`; `pago` no tiene `organization_id`.
+Los contratos nuevos se cotejan con M120/M121, pero el resultado real de los
+doce escenarios integrados sigue pendiente del cambio local revisado.
 Una lectura protegida con AAL1 puede quedar filtrada como lista vacía o devolver
 la denegación explícita `42501`. El ensayo acepta únicamente esas dos formas sin
 filas; sigue fallando ante filas visibles, resultados incompletos y errores de red
@@ -106,7 +101,7 @@ El bloqueo de red del servidor y navegador se conserva. Los fallos de Auth,
 Storage, RLS o selectores no se sustituyen por respuestas ficticias.
 
 Los fixtures y archivos sintéticos se conservan para inspección; al terminar se
-cierran las conexiones y sesiones API del ensayo. No hay borrado automático ni
+revocan las sesiones API y de navegador y se cierran contextos y conexiones. La limpieza se registra antes del primer login y sus fallos se informan aunque falle el enrolamiento. No hay borrado automático ni
 archivo presentado como respaldo. Los informes sólo adjuntan conteos y estados,
 sin contraseñas, códigos TOTP o contenido de pacientes reales.
 
@@ -121,15 +116,10 @@ clínico falla antes de levantar una aplicación cuando no recibe la configuraci
 necesaria. El runner normal mantiene 4410 y omite el spec clínico sin la
 habilitación específica.
 
-Pendiente: ampliar roles/menores y consentimiento, pruebas de fallos
-de guardado y proveedor y restauración completa. El sexto escenario prepara
-una suscripción sintética pausada, confirma la redirección de la interfaz común
-a cobros y descarga PDF/JSON desde el archivo clínico autorizado, manteniendo el
-aislamiento entre consultorios. Tampoco se ejecutó: no prueba todavía la continuidad
-real, y sus aserciones de navegación no acreditan un bloqueo de escrituras directas
-en servidor o base. Sólo un informe de ejecución sin omisiones podrá cerrar
-los comportamientos que realmente haya comprobado.
-
+Pendiente: ejecutar los doce casos integrados con las migraciones nuevas y UI
+revisada; menores/consentimiento, fallos de guardado/proveedor y restauración
+completa siguen fuera de esta campaña. El archivo autorizado sí pasó en el
+baseline histórico; esa evidencia no acredita un bloqueo de escrituras directas.
 Referencias: [desarrollo local](https://supabase.com/docs/guides/local-development),
 [TOTP y APIs de enrolamiento/desafío/verificación](https://supabase.com/docs/guides/auth/auth-mfa/totp).
 
@@ -137,9 +127,9 @@ Referencias: [desarrollo local](https://supabase.com/docs/guides/local-developme
 
 La primera preparación falló porque Windows estaba entre 973 y 975 ms adelantado
 respecto de PostgreSQL: p_after se calculaba en el host y la comprobación estricta
-staff_enforce_after <= now() todavía no se cumplía. El fixture ahora obtiene
+staff_enforce_after <= now() todavía no se cumplía. El fixture del baseline obtuvo
 clock_timestamp() de la misma base local ya validada, exige una fecha válida y
-la usa para activar MFA. Si la lectura falla o es inválida, no hay alternativa
+la usó para activar MFA. El fixture integrado sólo comprueba el estado ya activo. Si la lectura falla o es inválida, no hay alternativa
 con el reloj del host. Se mantienen los siete controles obligatorios.
 
 El runtime está separado en folio-clinical-runtime y conserva e7da69f más
@@ -259,3 +249,31 @@ sintética pausada y cero cargos de suscripción. Trazas desactivadas; logs
 sanitizados locales. Tipos y lint final del spec pasaron; autorrevisión confirmó
 que SQL polls, negativas, ausencia, URL de billing y límites de servicios no
 cambiaron. El baseline no aplica las nuevas migraciones de cierre.
+
+## Implementación integrada preparada (13 de septiembre de 2026)
+
+Tasks1–2 incorporan doce casos independientes, cada uno con nuevas cuentas y
+prerrequisitos propios: AAL1; tres especialidades; acceso cruzado; archivo pausado;
+revocación; respuesta perdida tras CLOSE, RESOLVE y liquidación; ASISTENTE y
+COORDINADOR. No consumen fixtures de otro test ni secretos de cuentas antiguas.
+El OWNER prepara el caso de recepción y cierra/revoca su contexto; el rol ingresa
+en uno nuevo por contraseña y TOTP. Auth, membresía, alcance y AAL2 se comprueban
+con el token del navegador y de los POST reales, nunca con credenciales admin.
+
+La interceptación sólo reconoce el server action compilado y la solicitud ligada
+al turno, decisión/duración o pago. Reenvía la petición real, verifica el resultado
+Flight y el recibo/estado SQL comprometido antes de abortar la respuesta. Una
+petición normal observada conserva íntegra la respuesta real. Formatos React no
+soportados, errores de transporte o prueba de commit rechazan el observador y
+retiran la ruta; no generan confirmaciones. Los reintentos deliberados conservan
+la operación o el pago original y las pruebas comparan originales, revisión,
+duración, transición, recordatorio y recibos sin duplicarlos.
+
+Validación de código: 17/17 pruebas focales de seguridad, sin omisiones, incluyen
+el descubrimiento de doce casos; tipos y lint focal pasaron. Esto **no ejecutó los
+doce casos reales**. Runtime, sus113 migraciones, cuentas y volúmenes no cambiaron.
+M120/M121 y los gates nuevos siguen pendientes de cutover autorizado. Se conservan
+DOM30s, MFA60s, proveedor12s, SQL15s y caso180s; negativas, ausencia, polls y límites
+de acciones no se amplían. Sin trazas ni retries globales. El futuro cambio local
+debe confirmar visibilidad RPC en PostgREST después del commit de DDL, antes de
+atribuir un error de caché de esquema al producto.
