@@ -21,6 +21,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 
 import {
   createTurnoAction,
@@ -90,6 +91,7 @@ export function TurnoCreateModal({
   const [meta, setMeta] = useState<CreateTurnoMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadErr, setLoadErr] = useState<string | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   const [mode, setMode] = useState<"existente" | "nuevo">("existente");
   const [pacienteId, setPacienteId] = useState<string | null>(preselectPacienteId ?? null);
@@ -104,13 +106,28 @@ export function TurnoCreateModal({
   const [duracion, setDuracion] = useState<number>(45);
   const [submitting, startTransition] = useTransition();
   const [submitErr, setSubmitErr] = useState<string | null>(null);
+  const [outcomeUnknown, setOutcomeUnknown] = useState(false);
+  const creationPhase = useRef<"idle" | "pending" | "uncertain" | "confirmed">("idle");
+  const recoveryAgenda = useRef("/calendario");
   const toast = useToast();
+  const router = useRouter();
+  const handleClose = () => {
+    // The ref also covers a backdrop/Escape event before React commits pending UI.
+    if (creationPhase.current === "pending") return;
+    if (creationPhase.current === "uncertain") {
+      router.refresh();
+      router.push(recoveryAgenda.current);
+    }
+    onClose();
+  };
 
   // Hidratar metadata. La pre-selección de paciente la usamos una sola vez
   // al montar — si cambia el prop después, ignoramos (el modal se rerenderea
   // si el caller lo desmonta y monta de nuevo).
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setLoadErr(null);
     (async () => {
       const result = await loadCreateTurnoMeta();
       if (cancelled) return;
@@ -145,19 +162,23 @@ export function TurnoCreateModal({
         setMode("nuevo");
       }
       setLoading(false);
-    })();
+    })().catch(() => {
+      if (cancelled) return;
+      setLoadErr("No pudimos cargar los datos. Revisá tu conexión y reintentá.");
+      setLoading(false);
+    });
     return () => {
       cancelled = true;
     };
     // defaultProfesionalId solo afecta el default inicial del picker; ambos
     // props son estables durante la vida del modal (el caller lo desmonta y
     // remonta para "cambiarlos").
-  }, [preselectPacienteId, defaultProfesionalId]);
+  }, [preselectPacienteId, defaultProfesionalId, loadAttempt]);
 
   // A11y de modal compartida: focus trap + Escape (deshabilitado en submit) +
   // foco inicial + restore focus al cerrar. Ver lib/use-modal-a11y.ts.
   const dialogRef = useRef<HTMLDivElement | null>(null);
-  useModalA11y(dialogRef, { onClose, closeDisabled: submitting });
+  useModalA11y(dialogRef, { onClose: handleClose, closeDisabled: submitting });
 
   // Focus inicial: cuando termina de cargar, enfocamos el primer input
   // relevante según el modo. Mejor a11y para usuarios de teclado.
@@ -240,6 +261,7 @@ export function TurnoCreateModal({
 
   const canSubmit =
     !submitting &&
+    !outcomeUnknown &&
     servicioId != null &&
     inicioLocal.length > 0 &&
     duracion >= 5 &&
@@ -250,11 +272,22 @@ export function TurnoCreateModal({
       : nuevo.nombre.length > 0 && nuevo.apellido.length > 0 && nuevo.telefono.length >= 6);
 
   const handleSubmit = () => {
+    if (!canSubmit || creationPhase.current !== "idle") return;
     setSubmitErr(null);
     if (!servicioId || !inicioLocal) return;
-    const isoInicio = localDatetimeToIso(inicioLocal);
+    let isoInicio: string;
+    try { isoInicio = localDatetimeToIso(inicioLocal); }
+    catch { setSubmitErr("Revisá la fecha y hora del turno."); return; }
+    // Bind recovery to the submitted encounter, not later edits or the caller's page.
+    const fechaAgenda = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Cordoba", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(isoInicio));
+    const recoveryParams = new URLSearchParams({ w: fechaAgenda, mes: fechaAgenda.slice(0, 7) });
+    if (profesionalId) recoveryParams.set("prof", profesionalId);
+    recoveryAgenda.current = `/calendario?${recoveryParams}`;
+    creationPhase.current = "pending";
     startTransition(async () => {
-      const result = await createTurnoAction({
+      let result: Awaited<ReturnType<typeof createTurnoAction>>;
+      try {
+        result = await createTurnoAction({
         servicioId,
         // Si hay un colegiado resuelto (picker o único), viaja explícito; el
         // server igual valida y resuelve el fallback (sesión colegiada).
@@ -267,11 +300,21 @@ export function TurnoCreateModal({
         ...(mode === "existente"
           ? { pacienteId: pacienteId ?? undefined }
           : { pacienteNuevo: nuevo }),
-      });
+        });
+      } catch {
+        // The server may have committed before the response was lost. This
+        // legacy creation is not idempotent: never offer a blind retry.
+        creationPhase.current = "uncertain";
+        setOutcomeUnknown(true);
+        setSubmitErr("No pudimos confirmar si se creó el turno. Revisá la agenda y el paciente antes de volver a crearlo; la respuesta pudo perderse después de guardar.");
+        return;
+      }
       if (!result.ok) {
+        creationPhase.current = "idle";
         setSubmitErr(result.error.message);
         return;
       }
+      creationPhase.current = "confirmed";
       // C4 · feedback: hasta acá crear un turno cerraba el modal en silencio.
       // Nombre según modo: existente → row de la metadata; nuevo → form inline.
       const pac = mode === "existente" ? meta?.pacientes.find((p) => p.id === pacienteId) : null;
@@ -302,7 +345,7 @@ export function TurnoCreateModal({
         zIndex: 1000,
         padding: 16,
       }}
-      onClick={onClose}
+      onClick={handleClose}
     >
       <div
         style={{
@@ -328,16 +371,20 @@ export function TurnoCreateModal({
         {loading ? (
           <p style={{ color: "var(--ink-3)", fontSize: 14 }}>Cargando datos…</p>
         ) : loadErr ? (
-          <p role="alert" style={{ color: "var(--red)", fontSize: 14 }}>
-            {loadErr}
-          </p>
+          <div>
+            <p role="alert" style={{ color: "var(--red)", fontSize: 14 }}>{loadErr}</p>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button type="button" className="fi-btn fi-btn-ghost" onClick={handleClose}>Cerrar</button>
+              <button type="button" className="fi-btn fi-btn-primary" onClick={() => setLoadAttempt((attempt) => attempt + 1)}>Reintentar</button>
+            </div>
+          </div>
         ) : meta == null ? null : meta.servicios.length === 0 ? (
           <div>
             <p style={{ color: "var(--ink-3)", fontSize: 14 }}>
               No tenés servicios activos en tu org. Creá uno desde Configuración → Servicios.
             </p>
             <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
-              <button type="button" className="fi-btn fi-btn-ghost" onClick={onClose}>
+              <button type="button" className="fi-btn fi-btn-ghost" onClick={handleClose}>
                 Cerrar
               </button>
             </div>
@@ -524,8 +571,8 @@ export function TurnoCreateModal({
             ) : null}
 
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
-              <button type="button" className="fi-btn fi-btn-ghost" onClick={onClose} disabled={submitting}>
-                Cancelar
+              <button type="button" className="fi-btn fi-btn-ghost" onClick={handleClose} disabled={submitting}>
+                {outcomeUnknown ? "Revisar agenda" : "Cancelar"}
               </button>
               <button
                 type="button"
