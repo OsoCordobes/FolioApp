@@ -35,8 +35,8 @@ test("public receipt database failure stops without captcha, fallback inserts or
 
 test("manual booking from a request forwards explicit repaired identity to atomic conversion before any write",async()=>{
  let converted:unknown;const np={nombre:"Synthetic",apellido:"Patient",telefono:"3515551100"};
- const loaded=load("app/(app)/hoy/actions.ts",{"next/cache":{revalidatePath:()=>{}},"@/lib/crypto":{},"@/lib/db/members":{},"@/lib/db/session":{getActiveSession:()=>{throw Error("Unexpected manual write path")}},"@/lib/db/pacientes":{},"@/lib/db/profesional-destino":{},"@/lib/db/turnos":{},"@/lib/supabase/server":{},"@/lib/db/pedidos":{aceptarPedidoConHorario:async(_id:string,input:unknown)=>{converted=input;return{ok:true,data:{turnoId:id,pacienteId:id}}}}});
- const result=await loaded.createTurnoAction({pedidoId:id,pacienteNuevo:np,servicioId:id,inicio:publicInput.inicio,duracionMin:30}) as {ok:boolean};assert.equal(result.ok,true);assert.equal(JSON.stringify((converted as {pacienteNuevo:unknown}).pacienteNuevo),JSON.stringify(np));
+ const loaded=load("app/(app)/hoy/actions.ts",{"next/cache":{revalidatePath:()=>{}},"@/lib/crypto":{},"@/lib/db/manual-turno":{},"@/lib/db/members":{},"@/lib/db/session":{getActiveSession:()=>{throw Error("Unexpected manual write path")}},"@/lib/db/pacientes":{},"@/lib/db/profesional-destino":{},"@/lib/db/turnos":{},"@/lib/supabase/server":{},"@/lib/db/pedidos":{aceptarPedidoConHorario:async(_id:string,input:unknown)=>{converted=input;return{ok:true,data:{turnoId:id,pacienteId:id}}}}});
+ const result=await loaded.createTurnoAction({operacionId:id,pedidoId:id,pacienteNuevo:np,servicioId:id,inicio:publicInput.inicio,duracionMin:30}) as {ok:boolean};assert.equal(result.ok,true);assert.equal(JSON.stringify((converted as {pacienteNuevo:unknown}).pacienteNuevo),JSON.stringify(np));
 });
 
 test("explicit manual first and last names retain compound given names",async()=>{

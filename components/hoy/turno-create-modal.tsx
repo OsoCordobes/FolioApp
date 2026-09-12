@@ -27,6 +27,7 @@ import {
   createTurnoAction,
   loadCreateTurnoMeta,
   searchPacientesAction,
+  type CreateTurnoActionInput,
   type CreateTurnoMeta,
   type PacientePickerRow,
   type ServicioPickerRow,
@@ -109,6 +110,7 @@ export function TurnoCreateModal({
   const [outcomeUnknown, setOutcomeUnknown] = useState(false);
   const creationPhase = useRef<"idle" | "pending" | "uncertain" | "confirmed">("idle");
   const recoveryAgenda = useRef("/calendario");
+  const attempt = useRef<{ input: CreateTurnoActionInput; label: string } | null>(null);
   const toast = useToast();
   const router = useRouter();
   const handleClose = () => {
@@ -271,60 +273,60 @@ export function TurnoCreateModal({
       ? pacienteId != null
       : nuevo.nombre.length > 0 && nuevo.apellido.length > 0 && nuevo.telefono.length >= 6);
 
-  const handleSubmit = () => {
-    if (!canSubmit || creationPhase.current !== "idle") return;
-    setSubmitErr(null);
-    if (!servicioId || !inicioLocal) return;
-    let isoInicio: string;
-    try { isoInicio = localDatetimeToIso(inicioLocal); }
-    catch { setSubmitErr("Revisá la fecha y hora del turno."); return; }
-    // Bind recovery to the submitted encounter, not later edits or the caller's page.
-    const fechaAgenda = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Cordoba", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(isoInicio));
-    const recoveryParams = new URLSearchParams({ w: fechaAgenda, mes: fechaAgenda.slice(0, 7) });
-    if (profesionalId) recoveryParams.set("prof", profesionalId);
-    recoveryAgenda.current = `/calendario?${recoveryParams}`;
+  const markUncertain = () => {
+    creationPhase.current = "uncertain";
+    setOutcomeUnknown(true);
+    setSubmitErr("No pudimos confirmar si se creó el turno. Comprobá el guardado para recuperar este mismo intento sin duplicar el paciente ni el turno.");
+  };
+  const submitAttempt = () => {
+    const pending = attempt.current;
+    if (!pending || creationPhase.current === "pending" || creationPhase.current === "confirmed") return;
+    const wasUncertain = creationPhase.current === "uncertain";
     creationPhase.current = "pending";
+    setSubmitErr(null);
     startTransition(async () => {
       let result: Awaited<ReturnType<typeof createTurnoAction>>;
-      try {
-        result = await createTurnoAction({
-        servicioId,
-        // Si hay un colegiado resuelto (picker o único), viaja explícito; el
-        // server igual valida y resuelve el fallback (sesión colegiada).
-        profesionalId: profesionalId ?? undefined,
-        inicio: isoInicio,
-        duracionMin: duracion,
-        origen,
-        // Pedido de origen (bandeja): el server lo marca CONFIRMADO al crear.
-        pedidoId: pedidoId ?? undefined,
-        ...(mode === "existente"
-          ? { pacienteId: pacienteId ?? undefined }
-          : { pacienteNuevo: nuevo }),
-        });
-      } catch {
-        // The server may have committed before the response was lost. This
-        // legacy creation is not idempotent: never offer a blind retry.
-        creationPhase.current = "uncertain";
-        setOutcomeUnknown(true);
-        setSubmitErr("No pudimos confirmar si se creó el turno. Revisá la agenda y el paciente antes de volver a crearlo; la respuesta pudo perderse después de guardar.");
-        return;
-      }
+      try { result = await createTurnoAction(pending.input); }
+      catch { markUncertain(); return; }
       if (!result.ok) {
+        // A rejected recovery (for example, revoked access) cannot prove that
+        // the original request failed before committing. Keep its identity.
+        if (wasUncertain) { markUncertain(); return; }
+        if (result.error.code === "network" || result.error.code === "db_error") { markUncertain(); return; }
         creationPhase.current = "idle";
+        attempt.current = null;
+        setOutcomeUnknown(false);
         setSubmitErr(result.error.message);
         return;
       }
       creationPhase.current = "confirmed";
-      // C4 · feedback: hasta acá crear un turno cerraba el modal en silencio.
-      // Nombre según modo: existente → row de la metadata; nuevo → form inline.
-      const pac = mode === "existente" ? meta?.pacientes.find((p) => p.id === pacienteId) : null;
-      const nombre =
-        mode === "existente"
-          ? (pac ? `${pac.nombre} ${pac.apellido}`.trim() : pacienteQuery.trim() || "paciente")
-          : `${nuevo.nombre} ${nuevo.apellido}`.trim();
-      toast.show({ titulo: `Turno creado · ${localDatetimeToastLabel(inicioLocal)} · ${nombre}` });
+      setOutcomeUnknown(false);
+      toast.show({ titulo: `Turno creado · ${pending.label}` });
       onCreated(result.data.turnoId);
     });
+  };
+  const handleSubmit = () => {
+    if (!canSubmit || creationPhase.current !== "idle" || !servicioId || !inicioLocal) return;
+    let isoInicio: string;
+    try { isoInicio = localDatetimeToIso(inicioLocal); }
+    catch { setSubmitErr("Revisá la fecha y hora del turno."); return; }
+    const fechaAgenda = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Cordoba", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(isoInicio));
+    const recoveryParams = new URLSearchParams({ w: fechaAgenda, mes: fechaAgenda.slice(0, 7) });
+    if (profesionalId) recoveryParams.set("prof", profesionalId);
+    recoveryAgenda.current = `/calendario?${recoveryParams}`;
+    const pac = mode === "existente" ? meta?.pacientes.find((p) => p.id === pacienteId) : null;
+    const nombre = mode === "existente"
+      ? (pac ? `${pac.nombre} ${pac.apellido}`.trim() : pacienteQuery.trim() || "paciente")
+      : `${nuevo.nombre} ${nuevo.apellido}`.trim();
+    attempt.current = {
+      input: {
+        operacionId: crypto.randomUUID(), servicioId, profesionalId: profesionalId ?? undefined,
+        inicio: isoInicio, duracionMin: duracion, origen, pedidoId: pedidoId ?? undefined,
+        ...(mode === "existente" ? { pacienteId: pacienteId ?? undefined } : { pacienteNuevo: { ...nuevo } }),
+      },
+      label: `${localDatetimeToastLabel(inicioLocal)} · ${nombre}`,
+    };
+    submitAttempt();
   };
 
   return (
@@ -571,6 +573,9 @@ export function TurnoCreateModal({
             ) : null}
 
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
+              {outcomeUnknown ? <button type="button" className="fi-btn fi-btn-primary" disabled={submitting} onClick={submitAttempt}>
+                {submitting ? "Comprobando…" : "Comprobar guardado"}
+              </button> : null}
               <button type="button" className="fi-btn fi-btn-ghost" onClick={handleClose} disabled={submitting}>
                 {outcomeUnknown ? "Revisar agenda" : "Cancelar"}
               </button>

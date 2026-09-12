@@ -71,9 +71,32 @@ const stubs = {
                 assert.equal(await page.evaluate(()=>qa.refreshes),1);assert.equal(await page.evaluate(()=>qa.closed),1);assert.equal(await page.evaluate(()=>qa.calls.length),1);assert.equal(await page.evaluate(()=>qa.created.length),0);assert.equal(await page.locator('.fi-toast').count(),0);
                 assert.equal(await page.evaluate(()=>qa.destination),'/calendario?w=2026-09-09&mes=2026-09&prof=synthetic-member');
             });
+            await run('uncertain retry reuses the frozen operation and submitted details after later edits',async page=>{
+                await fill(page);await page.getByRole('button',{name:'Crear turno',exact:true}).click();await page.evaluate(()=>qa.reject());
+                await page.getByRole('alert').waitFor();await page.getByPlaceholder('Nombre',{exact:true}).fill('Nombre editado');
+                await page.locator('input[type="datetime-local"]').fill('2026-10-01T12:00');
+                await page.getByRole('button',{name:'Comprobar guardado',exact:true}).evaluate(el=>{el.click();el.click()});
+                assert.equal(await page.evaluate(()=>qa.calls.length),2);assert.equal(await page.evaluate(()=>JSON.stringify(qa.calls[0])===JSON.stringify(qa.calls[1])),true);
+                assert.match(await page.evaluate(()=>qa.calls[0].operacionId),/^[a-f0-9-]{36}$/);
+                await page.evaluate(()=>qa.settle({ok:true,data:{turnoId:'synthetic-turno',pacienteId:'synthetic-patient'}}));
+                await page.getByText('Agenda sintética',{exact:true}).waitFor();assert.equal(await page.evaluate(()=>qa.created.length),1);
+                assert.match(await page.locator('.fi-toast').innerText(),/Paciente Sintético/);assert.doesNotMatch(await page.locator('.fi-toast').innerText(),/Nombre editado/);
+            });
+            await run('a network Result stays uncertain and never creates a fresh operation',async page=>{
+                await fill(page);await page.getByRole('button',{name:'Crear turno',exact:true}).click();await page.evaluate(()=>qa.settle({ok:false,error:{code:'network',message:'Uncertain'}}));
+                await page.getByRole('button',{name:'Comprobar guardado',exact:true}).waitFor();assert.equal(await page.getByRole('button',{name:'Crear turno',exact:true}).isDisabled(),true);
+                await page.getByRole('button',{name:'Comprobar guardado',exact:true}).click();assert.equal(await page.evaluate(()=>qa.calls[0].operacionId===qa.calls[1].operacionId),true);
+            });
+            await run('a denied recovery does not turn an unknown original save into a fresh attempt',async page=>{
+                await fill(page);await page.getByRole('button',{name:'Crear turno',exact:true}).click();await page.evaluate(()=>qa.reject());
+                await page.getByRole('button',{name:'Comprobar guardado',exact:true}).click();await page.evaluate(()=>qa.settle({ok:false,error:{code:'forbidden',message:'Access changed'}}));
+                await page.getByRole('alert').waitFor();assert.equal(await page.getByRole('button',{name:'Crear turno',exact:true}).isDisabled(),true);
+                await page.getByRole('button',{name:'Comprobar guardado',exact:true}).click();assert.equal(await page.evaluate(()=>qa.calls.length),3);
+                assert.equal(await page.evaluate(()=>qa.calls.every(call=>call.operacionId===qa.calls[0].operacionId)),true);
+            });
             await run('a confirmed validation failure permits correction and a new attempt',async page=>{
                 await fill(page);await page.getByRole('button',{name:'Crear turno',exact:true}).click();await page.evaluate(()=>qa.settle({ok:false,error:{code:'validation',message:'Revisá la duración sintética'}}));
-                await page.getByRole('alert').waitFor();await page.getByRole('button',{name:'Crear turno',exact:true}).click();assert.equal(await page.evaluate(()=>qa.calls.length),2);
+                await page.getByRole('alert').waitFor();await page.getByRole('button',{name:'Crear turno',exact:true}).click();assert.equal(await page.evaluate(()=>qa.calls.length),2);assert.equal(await page.evaluate(()=>qa.calls[0].operacionId!==qa.calls[1].operacionId),true);
                 await page.evaluate(()=>qa.settle({ok:true,data:{turnoId:'synthetic-turno',pacienteId:'synthetic-patient'}}));await page.getByText('Agenda sintética',{exact:true}).waitFor();
             });
         }

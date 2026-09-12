@@ -22,15 +22,14 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import type { ProfesionalLite } from "@/lib/agenda/profesional";
-import { blindIndex, blindIndexPhone, encryptColumn } from "@/lib/crypto";
+import { createManualTurno } from "@/lib/db/manual-turno";
 import { normalizarBusqueda } from "@/lib/format/busqueda";
-import { err, mapSupabaseError, ok, type Result } from "@/lib/db/errors";
+import { err, ok, type Result } from "@/lib/db/errors";
 import { aceptarPedidoConHorario } from "@/lib/db/pedidos";
 import { listProfesionalesLite } from "@/lib/db/members";
 import { getActiveSession } from "@/lib/db/session";
 import { listPacientesDirectorio } from "@/lib/db/pacientes";
-import { resolveProfesionalDestino } from "@/lib/db/profesional-destino";
-import { createTurno, reagendarTurno, transitionTurno, type TransitionTurnoResult } from "@/lib/db/turnos";
+import { reagendarTurno, transitionTurno, type TransitionTurnoResult } from "@/lib/db/turnos";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { EstadoTurno } from "@/lib/types";
 
@@ -253,6 +252,7 @@ export async function searchPacientesAction(q: string): Promise<Result<PacienteP
 
 const createTurnoActionSchema = z
   .object({
+    operacionId: z.string().uuid(),
     pacienteId: z.string().uuid().optional(),
     pacienteNuevo: z
       .object({
@@ -281,17 +281,13 @@ const createTurnoActionSchema = z
      */
     pedidoId: z.string().uuid().optional(),
   })
-  .refine((d) => d.pacienteId != null || d.pacienteNuevo != null, {
+  .refine((d) => (d.pacienteId != null) !== (d.pacienteNuevo != null), {
     message: "Hay que elegir un paciente existente o crear uno nuevo.",
   });
 
 export type CreateTurnoActionInput = z.infer<typeof createTurnoActionSchema>;
 
-/**
- * Crea un turno desde el modal. Si `pacienteNuevo` viene set, primero crea
- * la identidad + paciente (rollback manual de identidad si paciente falla),
- * después crea el turno usando createTurno (que también agenda recordatorios).
- */
+/** El paciente y el turno se confirman juntos mediante un intento durable. */
 export async function createTurnoAction(
   input: CreateTurnoActionInput,
 ): Promise<Result<{ turnoId: string; pacienteId: string }>> {
@@ -310,96 +306,9 @@ export async function createTurnoAction(
     return converted;
   }
 
-  const session = await getActiveSession();
-  if (!session.ok) return session;
-
-  const supabase = await createSupabaseServerClient();
-
-  // 0. Resolver el profesional destino ANTES de crear nada (CLINICA-3,
-  //    hallazgo A): un err de validación acá no deja paciente huérfano. La
-  //    validación server-side (colegiado activo de la org, vía RLS) es el
-  //    gate real — el picker de la UI es solo UX.
-  const profRes = await resolveProfesionalDestino(supabase, {
-    organizationId: session.data.organizationId,
-    profesionalId: d.profesionalId ?? null,
-    sessionMemberId: session.data.memberId,
-    sessionEsColegiado: session.data.esColegiado,
-  });
-  if (!profRes.ok) return profRes;
-  const profesionalId = profRes.data;
-
-  // 1. Resolver paciente
-  let pacienteId: string;
-  if (d.pacienteId) {
-    pacienteId = d.pacienteId;
-  } else if (d.pacienteNuevo) {
-    const np = d.pacienteNuevo;
-    const nombreFull = `${np.nombre} ${np.apellido}`.trim();
-    const { data: identidad, error: idErr } = await supabase
-      .from("paciente_identidad")
-      .insert({
-        organization_id: session.data.organizationId,
-        nombre_cifrado: encryptColumn(np.nombre)!,
-        apellido_cifrado: encryptColumn(np.apellido)!,
-        tipo_doc: "DNI",
-        telefono_cifrado: encryptColumn(np.telefono)!,
-        email_cifrado: encryptColumn(np.email && np.email.length > 0 ? np.email : null),
-        // Per-tenant salt (Sprint 1 T1.5.3 / audit A2)
-        nombre_hash: blindIndex(nombreFull, session.data.organizationId),
-        telefono_hash: blindIndexPhone(np.telefono, session.data.organizationId),
-      })
-      .select("id")
-      .single();
-    if (idErr || !identidad) {
-      const mapped = idErr ? mapSupabaseError(idErr) : { code: "db_error" as const, message: "No se creó la identidad." };
-      return err(mapped.code, mapped.message, idErr?.message);
-    }
-    const { data: paciente, error: pacErr } = await supabase
-      .from("paciente")
-      .insert({
-        organization_id: session.data.organizationId,
-        identidad_id: identidad.id,
-        tags: [],
-        // El paciente nuevo hereda el profesional ELEGIDO, no la sesión: si
-        // la secretaria agenda para la Dra. Gómez, el paciente es de Gómez.
-        profesional_principal_id: profesionalId,
-      })
-      .select("id")
-      .single();
-    if (pacErr || !paciente) {
-      await supabase.from("paciente_identidad").delete().eq("id", identidad.id);
-      const mapped = pacErr ? mapSupabaseError(pacErr) : { code: "db_error" as const, message: "No se creó el paciente." };
-      return err(mapped.code, mapped.message, pacErr?.message);
-    }
-    pacienteId = paciente.id;
-  } else {
-    return err("validation", "Falta paciente.");
-  }
-
-  // 2. Servicio: leer precio_cents para pasar al insert
-  const { data: servicio } = await supabase
-    .from("servicio")
-    .select("precio_cents")
-    .eq("id", d.servicioId)
-    .eq("organization_id", session.data.organizationId)
-    .maybeSingle();
-
-  // 3. Crear turno via createTurno (incluye scheduleRecordatorios + chequeo
-  //    de solapamiento CR-6). Si el horario está ocupado, createTurno devuelve
-  //    err("conflict", "Ese horario ya está ocupado.") que propagamos tal cual.
-  const result = await createTurno({
-    paciente_id: pacienteId,
-    servicio_id: d.servicioId,
-    profesional_id: profesionalId,
-    inicio: d.inicio,
-    duracion_min: d.duracionMin,
-    precio_cents: (servicio?.precio_cents as number | undefined) ?? 0,
-    origen: d.origen,
-  });
-
+  const result = await createManualTurno(d);
   if (!result.ok) return result;
-
-  revalidatePath("/hoy");
-  revalidatePath("/calendario");
-  return ok({ turnoId: result.data.id, pacienteId });
+  // The visit is committed. A cache invalidation failure cannot change that fact.
+  try { revalidatePath("/hoy"); revalidatePath("/calendario"); revalidatePath("/pacientes"); } catch { /* The next navigation reloads persisted data. */ }
+  return result;
 }
