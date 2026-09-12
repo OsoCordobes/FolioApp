@@ -1,30 +1,35 @@
 # Folio — controles para publicar y abrir el piloto
 
-Actualizado el 8 de septiembre de 2026. Este documento sustituye las recomendaciones
+Orden de entrega actualizado el 12 de septiembre de 2026. Este documento sustituye las recomendaciones
 anteriores que trataban correo, respaldos y límites de acceso como opcionales.
 La lista de trabajo y la evidencia vigente están en
 [el registro de implementación](plans/2026-09-08-market-readiness.md).
 **Folio todavía no está habilitado por este proceso para atención clínica real.**
 
-## Estado confirmado
+## Evidencia histórica del 8 de septiembre de 2026
 
-- Producción conserva el código `2bfbe54137603e373a0fa2ab439d367dedf93415`.
-  Las mejoras de seguridad, clínica y operaciones se preparan en `codex/market-ready`.
+Estas observaciones no se reconfirmaron como estado actual en la goal de confiabilidad.
+Conservarlas como registro fechado; antes de publicar hace falta inventariar el destino
+autorizado. Una referencia Git no prueba qué código está desplegado. La evidencia del
+candidato local está en [el registro de confiabilidad](LAUNCH-RELIABILITY-LOG.md).
+
+- En esa consulta, producción tenía el código `2bfbe54137603e373a0fa2ab439d367dedf93415`.
+  Las mejoras de seguridad, clínica y operaciones se preparaban en `codex/market-ready`.
 - Se recuperaron las 42 variables de producción en un paquete cifrado fuera del
-  repositorio. Las claves actuales pasan el formato de 32 bytes y no hay claves
-  `_NEXT` activadas. La frase de recuperación fuera de esta PC sigue pendiente.
-- Existe un checkpoint cifrado y autenticado de la base, roles y configuración
+  repositorio. En ese control, las claves pasaban el formato de 32 bytes y no había claves
+  `_NEXT` activadas. La frase de recuperación fuera de esta PC seguía pendiente.
+- Se registró un checkpoint cifrado y autenticado de la base, roles y configuración
   observada. Storage tenía cuatro buckets y cero objetos. Una restauración de
   estructura seleccionada pasó; el restablecimiento completo del servicio no.
 - Se corrigió en Supabase Auth la URL del sitio a `https://foliosalud.com` y se
   retiraron dos entradas de redirección malformadas. Los tres destinos canónicos
   de acceso/portal/contraseña se comprobaron antes y después, sin enviar correo.
   Esta configuración cambió después del checkpoint y tiene registro separado.
-- `master` exige PR, los checks `app-ci` y `sql-specs` con base actualizada,
-  resolución de conversaciones e historial lineal. Las reglas incluyen al admin;
-  no permiten borrado ni push forzado. Sólo está habilitada la integración squash
-  y se elimina la rama remota integrada. **Aprobación humana adicional pendiente:**
-  hoy sólo hay un colaborador; el contador de aprobaciones requerido es cero.
+- Las reglas observadas de `master` exigían PR, los checks `app-ci` y `sql-specs` con base actualizada,
+  resolución de conversaciones e historial lineal. Incluían al admin;
+  no permitían borrado ni push forzado. Estaban habilitadas sólo la integración squash
+  y la eliminación de la rama remota integrada. **Aprobación humana adicional pendiente en ese registro:**
+  había un colaborador; el contador de aprobaciones requerido era cero.
 
 ## Antes de cualquier despliegue
 
@@ -51,18 +56,28 @@ no habilita el piloto ni acredita el resto del plan.
 No aplicar todo el directorio de migraciones indiscriminadamente sobre producción.
 La etapa de expansión debe mantener funcionando la aplicación anterior.
 
-1. Aplicar las expansiones revisadas M98–M103 y M105 en adelante que el código
-   final realmente necesite, registrando sus versiones canónicas. Las migraciones
-   todavía en construcción no son instrucciones de despliegue.
-2. **Posponer M104**: restringe escrituras de adjuntos y debe ejecutarse después de
-   publicar los endpoints y escritores compatibles. Su posición numérica no cambia
-   este orden operativo. Registrar y cerrar la diferencia temporal del inventario.
-3. Publicar el código compatible mediante PR con checks aprobados y revisar los
-   recorridos sintéticos esenciales. Confirmar commit desplegado, región y dominio.
-4. Aplicar M104 y las activaciones de una vía según sus guías: preparación/MFA del
-   personal, decisiones de consentimiento, población de instrumentos y escritor
-   clínico atómico. Cada activación necesita su evidencia, no sólo un cambio de env.
-5. Verificar permisos directos por acciones, PostgREST, funciones y archivos antes
+1. Comparar cada versión canónica con el ledger y los objetos del destino autorizado.
+   El [manifiesto local del candidato](LAUNCH-RELIABILITY-MIGRATIONS.md) contiene 23 altas
+   frente a la referencia publicada observada, con M118 ya presente. No determinar
+   pendientes por el máximo timestamp ni asumir que ese manifiesto inventaría producción.
+2. Instalar sólo las versiones faltantes revisadas antes de su código dependiente,
+   con ledger en la misma transacción y guards diferidos inicialmente apagados.
+   **M104 se instala antes del código; se pospone su activación**, después de verificar
+   endpoints y escritores compatibles. Aplicarla sola no cierra el acceso directo antiguo.
+3. Preparar y verificar el escritor clínico compatible, activar M106 y sólo entonces
+   exponer los consumidores completos del nuevo cierre. CLOSE M120 exige M106 activa
+   aunque el guard M120 esté apagado. La versión intermedia debe estar identificada y
+   revisada; publicar el final con todos los controles apagados no sustituye ese paso.
+4. Integrar mediante PR con checks aprobados y verificar clínica, cierre/recuperación
+   y saldo mediante M121 en agenda y Finanzas. Confirmar commit desplegado, región y dominio.
+   Activar M120 y luego M121 mediante sus funciones auditadas. No volver a escritores
+   antiguos después de esos cortes; conservar una versión de retorno compatible.
+5. Preparar y activar los otros controles según sus guías, por separado: MFA del
+   personal, consentimiento, adjuntos M104, población y disponibilidad M113. M104 exige
+   motivo, SHA completo del build y referencia revisados; M113 exige configuración y
+   onboarding compatibles antes de su activación. Cada control necesita su propia evidencia;
+   no activar todo automáticamente ni deducir preparación de un cambio de env.
+6. Verificar permisos directos por acciones, PostgREST, funciones y archivos antes
    de dar por cerrado el cambio. No desactivar RLS para resolver un incidente.
 
 Guías por frente: [MFA](MFA-ROLLOUT.md), [adjuntos](ADJUNTOS-CLINICOS.md),
@@ -70,7 +85,10 @@ Guías por frente: [MFA](MFA-ROLLOUT.md), [adjuntos](ADJUNTOS-CLINICOS.md),
 [población de instrumentos](INSTRUMENTOS-POBLACION.md),
 [guardado](GUARDADO-CLINICO.md), [cobros](OPERACIONES-COBRO.md),
 [Google Calendar](GOOGLE-CALENDAR-CONFIABILIDAD.md),
-[contactos familiares](CONTACTOS-FAMILIARES.md).
+[contactos familiares](CONTACTOS-FAMILIARES.md),
+[disponibilidad](HORARIOS-CONCURRENTES.md),
+[cierre y recuperación](M120-TURNO-CLOSE-ATOMIC.md),
+[saldo autorizado](M121-PAYMENT-SETTLEMENT.md).
 
 ## Puertas del piloto: todas deben quedar aprobadas
 
@@ -86,9 +104,9 @@ Guías por frente: [MFA](MFA-ROLLOUT.md), [adjuntos](ADJUNTOS-CLINICOS.md),
 | Capacidad | Informe local y campaña alojada acotada con latencias, errores y consumo medidos, incluyendo espacio sintético conservado. |
 | Servicio y profesionales | Títulos/matrículas/alcance comprobados; contratos, privacidad, conservación, transferencias y facturación revisados por responsables competentes. |
 
-La configuración actual de Supabase conserva SMTP predeterminado; no es la solución
-aprobada para producción. Falta provisionar/verificar el envío real y habilitar su
-interruptor de entrega. Google, WhatsApp, recetas y ampliaciones no se ofrecen hasta
+La consulta histórica del 8 de septiembre encontró SMTP predeterminado en Supabase.
+El envío real y su interruptor de entrega siguen requiriendo evidencia actual del
+destino antes de aprobarlos. Google, WhatsApp, recetas y ampliaciones no se ofrecen hasta
 aprobar sus circuitos. No interpretar una variable presente como una integración probada.
 
 El limitador debe tener Upstash configurado y verificado, sin la excepción de fallo
