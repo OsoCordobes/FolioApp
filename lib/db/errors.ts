@@ -25,6 +25,7 @@ export interface FolioError {
   code: FolioErrorCode;
   message: string;           // mensaje user-facing en español
   detail?: string;           // código de diagnóstico de catálogo; nunca SQL/mensajes crudos
+  mutationOutcome?: "rejected" | "uncertain" | "review_required";
 }
 
 export type Result<T> = { ok: true; data: T } | { ok: false; error: FolioError };

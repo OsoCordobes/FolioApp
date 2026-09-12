@@ -1,231 +1,86 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import test from "node:test";
-import { runInNewContext } from "node:vm";
-import ts from "typescript";
-import { z } from "zod";
-import { capabilitiesFor, type Role } from "../../lib/auth/capabilities";
-import { finanzasScopeMemberId } from "../../lib/auth/finanzas-scope";
-import { err, mapSupabaseError, ok, type Result } from "../../lib/db/errors";
+import type * as Finance from "../../app/(app)/finanzas/actions";
+import type * as Agenda from "../../app/(app)/hoy/actions";
+import { binding, closeHarness, ids, payment, type HarnessOptions } from "../fixtures/close-action-harness";
 
-const PAYMENT_ID = "00000000-0000-4000-8000-000000000001";
-const EXISTING_TIMESTAMP = "2026-09-10T13:00:00.000Z";
-type Payment = {
-  id: string;
-  estado: string;
-  pagado_ts: string | null;
-  turno: { organization_id: string; profesional_id: string | null } | null;
-};
-type DbError = { code: string; message: string };
-type Options = {
-  role?: Role;
-  sessionError?: boolean;
-  initial?: Payment | null;
-  beforeUpdate?: Payment | null;
-  suppressUpdate?: boolean;
-  readErrorAt?: number;
-  updateError?: DbError;
-};
-const payment = (overrides: Partial<Payment> = {}): Payment => ({
-  id: PAYMENT_ID,
-  estado: "PENDIENTE",
-  pagado_ts: null,
-  turno: { organization_id: "active-org", profesional_id: "active-member" },
-  ...overrides,
-});
-const source = ts.transpileModule(readFileSync("app/(app)/finanzas/actions.ts", "utf8"), {
-  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-}).outputText;
-
-// Execute the real action; only session, persistence and framework boundaries are replaced.
-function scenario(options: Options = {}) {
-  let stored = options.initial === undefined ? payment() : structuredClone(options.initial);
-  const reads: string[] = [];
-  const writes: { values: { estado: string; pagado_ts: string }; filters: unknown[][] }[] = [];
-  const revalidated: string[] = [];
-  let clients = 0;
-  const client = { from(table: string) {
-    assert.equal(table, "pago");
-    return {
-      select(columns: string) {
-        // Both reads must carry the joined authorization data.
-        assert.equal(columns, "id, estado, turno:turno_id!inner(organization_id, profesional_id)");
-        return { eq(column: string, id: string) {
-          assert.equal(column, "id");
-          assert.equal(id, PAYMENT_ID);
-          return { async maybeSingle() {
-            reads.push(id);
-            if (options.readErrorAt === reads.length) {
-              return { data: null, error: { code: "42501", message: "synthetic read denied" } };
-            }
-            return { data: structuredClone(stored), error: null };
-          } };
-        } };
-      },
-      update(values: { estado: string; pagado_ts: string }) {
-        const write = { values, filters: [] as unknown[][] };
-        writes.push(write);
-        const query = {
-          eq(column: string, value: unknown) { write.filters.push(["eq", column, value]); return query; },
-          neq(column: string, value: unknown) { write.filters.push(["neq", column, value]); return query; },
-          async select(columns: string) {
-            assert.equal(columns, "id");
-            if ("beforeUpdate" in options) stored = structuredClone(options.beforeUpdate ?? null);
-            if (options.updateError) return { data: null, error: options.updateError };
-            const matches = stored && write.filters.every(([op, column, value]) =>
-              op === "eq" ? stored![column as keyof Payment] === value : stored![column as keyof Payment] !== value);
-            if (!matches || options.suppressUpdate) return { data: [], error: null };
-            stored = { ...stored!, ...values };
-            return { data: [{ id: stored.id }], error: null };
-          },
-        };
-        return query;
-      },
-    };
-  } };
-  const exports: { marcarPagoCobradoAction?: (id: string) => Promise<Result<void>> } = {};
-  runInNewContext(source, { exports, require(name: string) {
-    switch (name) {
-      case "zod": return { z };
-      case "next/cache": return { revalidatePath: (path: string) => revalidated.push(path) };
-      case "@/lib/auth/capabilities": return { capabilitiesFor };
-      case "@/lib/auth/finanzas-scope": return { finanzasScopeMemberId };
-      case "@/lib/db/errors": return { err, mapSupabaseError, ok };
-      case "@/lib/db/session": return { getActiveSession: async () => options.sessionError
-        ? err("auth_required", "Volvé a iniciar sesión.")
-        : ok({ role: options.role ?? "PROFESIONAL", esColegiado: true,
-          organizationId: "active-org", memberId: "active-member" }) };
-      case "@/lib/supabase/server": return { createSupabaseServerClient: async () => { clients++; return client; } };
-      // These exports are outside this action's path. Fail if any gets invoked.
-      case "@/lib/afip/comprobantes":
-      case "@/lib/auth/guard":
-      case "@/lib/db/active-context":
-      case "@/lib/db/finanzas-read":
-      case "@/lib/finanzas/filter-schema": return {};
-      default: throw new Error(`Unexpected dependency: ${name}`);
-    }
-  } });
-  return { execute: exports.marcarPagoCobradoAction!, reads, writes, revalidated,
-    get stored() { return stored; }, get clients() { return clients; } };
+const settled = { turnoId: ids.turno, alreadyPaid: false, pago: payment };
+function scenario(options: HarnessOptions = {}) {
+  const h = closeHarness({ response: { data: settled, error: null }, ...options });
+  return { ...h, finance: h.load("app/(app)/finanzas/actions.ts") as typeof Finance,
+    agenda: h.load("app/(app)/hoy/actions.ts") as typeof Agenda };
 }
-
-function assertFailure(result: Result<void>, code: string) {
-  assert.equal(result.ok, false);
-  if (!result.ok) assert.equal(result.error.code, code);
-}
-
-test("empty payment update followed by an absent payment cannot announce collection", async () => {
-  const run = scenario({ beforeUpdate: null });
-  assertFailure(await run.execute(PAYMENT_ID), "not_found");
-  assert.equal(run.writes.length, 1);
-  assert.equal(run.reads.length, 2);
-  assert.deepEqual(run.revalidated, []);
-});
-
-test("invalid input, inactive session and forbidden roles stop before persistence", async () => {
-  for (const [options, id, code] of [
-    [{}, "invalid", "validation"],
-    [{ sessionError: true }, PAYMENT_ID, "auth_required"],
-    [{ role: "COORDINADOR" }, PAYMENT_ID, "forbidden"],
-    [{ role: "ASISTENTE" }, PAYMENT_ID, "forbidden"],
-  ] as const) {
-    const run = scenario(options);
-    assertFailure(await run.execute(id), code);
-    assert.equal(run.clients, 0);
-    assert.deepEqual(run.writes, []);
-    assert.deepEqual(run.revalidated, []);
+test("empty settlement response cannot announce collection (former zero-row regression)", async () => {
+  for (const data of [null, [], {}, { ...settled, pago: { ...payment, estado: "PENDIENTE", pagadoTs: null } }]) {
+    const f = scenario({ response: { data, error: null } }); const r = await f.finance.marcarPagoCobradoAction(ids.pago);
+    assert.equal(r.ok, false); if (!r.ok) assert.equal(r.error.mutationOutcome, "uncertain");
+    assert.equal(f.cached.length, 0); assert.equal(f.rpcCalls.length, 1); assert.equal(f.updates.length, 0);
   }
 });
-
-test("initial read rejects absent, unjoined, foreign organization and other professional payments", async () => {
-  for (const [initial, code] of [
-    [null, "not_found"],
-    [payment({ turno: null }), "not_found"],
-    [payment({ turno: { organization_id: "foreign-org", profesional_id: "active-member" } }), "not_found"],
-    [payment({ turno: { organization_id: "active-org", profesional_id: "other-member" } }), "forbidden"],
-  ] as const) {
-    const run = scenario({ initial });
-    assertFailure(await run.execute(PAYMENT_ID), code);
-    assert.equal(run.writes.length, 0);
-    assert.deepEqual(run.revalidated, []);
+test("finance wrapper preserves both capability gates and requires a valid identity/session", async () => {
+  for (const options of [{ role: "COORDINADOR" as const }, { role: "ASISTENTE" as const }, { sessionError: true }]) {
+    const f = scenario(options); assert.equal((await f.finance.marcarPagoCobradoAction(ids.pago)).ok, false);
+    assert.equal(f.reads.length + f.rpcCalls.length, 0);
+  }
+  const f = scenario(); assert.equal((await f.finance.marcarPagoCobradoAction("invalid")).ok, false); assert.equal(f.reads.length + f.rpcCalls.length, 0);
+});
+test("absent, unjoined, wrong organization or professional payment never reaches settlement", async () => {
+  for (const row of [null, { ...binding, turno: null }, { ...binding, turno: { ...binding.turno, organization_id: ids.other } },
+    { ...binding, turno: { ...binding.turno, profesional_id: ids.other } }, { ...binding, id: ids.other }]) {
+    const f = scenario({ binding: row }); assert.equal((await f.finance.marcarPagoCobradoAction(ids.pago)).ok, false);
+    assert.equal(f.rpcCalls.length, 0); assert.equal(f.cached.length, 0);
   }
 });
-
-test("already collected payment succeeds without a write or timestamp change", async () => {
-  const run = scenario({ initial: payment({ estado: "PAGADO", pagado_ts: EXISTING_TIMESTAMP }) });
-  assert.deepEqual(await run.execute(PAYMENT_ID), { ok: true, data: undefined });
-  assert.equal(run.writes.length, 0);
-  assert.equal(run.stored?.pagado_ts, EXISTING_TIMESTAMP);
+for (const role of ["OWNER", "DIRECTOR", "PROFESIONAL"] as const) test(`${role} finance settlement returns the actual M121 payment`, async () => {
+  const f = scenario({ role, cacheThrows: true, binding: { ...binding, turno: { ...binding.turno, profesional_id: role === "PROFESIONAL" ? ids.member : ids.other } } });
+  const r = await f.finance.marcarPagoCobradoAction(ids.pago); assert.equal(r.ok, true);
+  if (r.ok) { assert.equal(r.data.pago.id, ids.pago); assert.equal(r.data.pago.updatedAt, payment.updatedAt); assert.equal(r.data.pago.pagadoTs, payment.pagadoTs); }
+  assert.equal(f.rpcCalls.length, 1); assert.equal(f.rpcCalls[0].name, "settle_pago_atomic");
+  assert.equal(JSON.stringify(f.rpcCalls[0].args), JSON.stringify({ p_org: ids.org, p_turno: ids.turno, p_pago: ids.pago }));
+  assert.equal(f.updates.length, 0); assert.ok(f.cached.includes("/hoy"));
 });
-
-test("a returned updated row confirms collection for pending and partial payments", async () => {
-  for (const estado of ["PENDIENTE", "PARCIAL"]) {
-    const run = scenario({ initial: payment({ estado }) });
-    assert.deepEqual(await run.execute(PAYMENT_ID), { ok: true, data: undefined });
-    assert.equal(run.writes.length, 1);
-    assert.equal(run.reads.length, 1);
-    assert.equal(run.stored?.estado, "PAGADO");
-    assert.ok(Number.isFinite(Date.parse(run.stored!.pagado_ts!)));
-    assert.deepEqual(run.writes[0].filters, [["eq", "id", PAYMENT_ID], ["neq", "estado", "PAGADO"]]);
-    assert.deepEqual(run.revalidated, ["/finanzas"]);
+test("already paid or concurrently settled uses RPC and preserves stored timestamp", async () => {
+  const f = scenario({ response: { data: { ...settled, alreadyPaid: true }, error: null } });
+  const r = await f.finance.marcarPagoCobradoAction(ids.pago); assert.equal(r.ok, true);
+  if (r.ok) { assert.equal(r.data.alreadyPaid, true); assert.equal(r.data.pago.pagadoTs, payment.pagadoTs); assert.equal(r.data.pago.updatedAt, payment.updatedAt); }
+  assert.equal(f.rpcCalls.length, 1); assert.equal(f.updates.length, 0);
+});
+test("authorization revoked after preflight read is rejected by M121 without fallback", async () => {
+  const f = scenario({ response: { data: null, error: { code: "42501", message: "synthetic revoked authority" } } });
+  const r = await f.finance.marcarPagoCobradoAction(ids.pago); assert.equal(r.ok, false);
+  if (!r.ok) { assert.equal(r.error.code, "forbidden"); assert.equal(r.error.mutationOutcome, "rejected"); }
+  assert.equal(f.reads.length, 1); assert.equal(f.rpcCalls.length, 1); assert.equal(f.updates.length + f.cached.length, 0);
+});
+test("payment read error cannot initiate collection", async () => {
+  const f = scenario({ readError: { code: "42501" } }); assert.equal((await f.finance.marcarPagoCobradoAction(ids.pago)).ok, false); assert.equal(f.rpcCalls.length, 0);
+});
+test("lost settlement response preserves uncertainty and never retries automatically", async () => {
+  const f = scenario({ rpcThrows: true }); const r = await f.finance.marcarPagoCobradoAction(ids.pago);
+  assert.equal(r.ok, false); if (!r.ok) assert.equal(r.error.mutationOutcome, "uncertain");
+  assert.equal(f.rpcCalls.length, 1); assert.equal(f.cached.length + f.updates.length, 0);
+});
+test("assistant settles from its closed agenda without gaining finance access", async () => {
+  const f = scenario({ role: "ASISTENTE" }); assert.equal((await f.agenda.marcarPagoCobradoAgendaAction({ turnoId: ids.turno, pagoId: ids.pago })).ok, true);
+  assert.equal(f.rpcCalls[0].name, "settle_pago_atomic");
+  assert.equal((await f.finance.marcarPagoCobradoAction(ids.pago)).ok, false); assert.equal(f.rpcCalls.length, 1);
+});
+test("agenda settlement rejects coordinator, wrong turno/payment, other professional and open visit", async () => {
+  for (const options of [{ role: "COORDINADOR" as const }, { binding: { ...binding, turno_id: ids.other } }, { binding: { ...binding, id: ids.other } },
+    { binding: { ...binding, turno: { ...binding.turno, profesional_id: ids.other } } },
+    { role: "OWNER" as const, binding: { ...binding, turno: { ...binding.turno, estado: "ATENDIENDO" } } }]) {
+    const f = scenario(options); assert.equal((await f.agenda.marcarPagoCobradoAgendaAction({ turnoId: ids.turno, pagoId: ids.pago })).ok, false); assert.equal(f.rpcCalls.length, 0);
   }
 });
-
-test("owner and director retain access to another professional in the active organization", async () => {
-  for (const role of ["OWNER", "DIRECTOR"] as const) {
-    const run = scenario({ role, initial: payment({ turno: { organization_id: "active-org", profesional_id: "other-member" } }) });
-    assert.equal((await run.execute(PAYMENT_ID)).ok, true);
-    assert.equal(run.writes.length, 1);
+test("agenda cannot omit requested turno or recover revoked reception scope through fallback", async () => {
+  const f = scenario({ role: "ASISTENTE", response: { data: null, error: { code: "42501" } } });
+  assert.equal((await f.agenda.marcarPagoCobradoAgendaAction({ pagoId: ids.pago } as {turnoId:string;pagoId:string})).ok, false); assert.equal(f.rpcCalls.length, 0);
+  const r = await f.agenda.marcarPagoCobradoAgendaAction({ pagoId: ids.pago, turnoId: ids.turno });
+  assert.equal(r.ok, false); if (!r.ok) assert.equal(r.error.mutationOutcome, "rejected"); assert.equal(f.rpcCalls.length, 1); assert.equal(f.updates.length, 0);
+});
+test("settlement receipt must bind both identities and real timestamp", async () => {
+  for (const data of [{ ...settled, turnoId: ids.other }, { ...settled, pago: { ...payment, id: ids.other } },
+    { ...settled, pago: { ...payment, updatedAt: null } }, { ...settled, pago: { ...payment, pagadoTs: null } }]) {
+    const f = scenario({ response: { data, error: null } }); const r = await f.finance.marcarPagoCobradoAction(ids.pago);
+    assert.equal(r.ok, false); if (!r.ok) assert.equal(r.error.mutationOutcome, "uncertain");
   }
-});
-
-test("concurrent collection succeeds only after rereading and preserves its recorded timestamp", async () => {
-  const run = scenario({ beforeUpdate: payment({ estado: "PAGADO", pagado_ts: EXISTING_TIMESTAMP }) });
-  assert.deepEqual(await run.execute(PAYMENT_ID), { ok: true, data: undefined });
-  assert.equal(run.reads.length, 2);
-  assert.equal(run.writes.length, 1);
-  assert.equal(run.stored?.pagado_ts, EXISTING_TIMESTAMP);
-  assert.deepEqual(run.revalidated, ["/finanzas"]);
-});
-
-test("empty update with a still unpaid payment returns a recoverable conflict without retry", async () => {
-  for (const estado of ["PENDIENTE", "PARCIAL"]) {
-    const run = scenario({ beforeUpdate: payment({ estado }), suppressUpdate: true });
-    assertFailure(await run.execute(PAYMENT_ID), "conflict");
-    assert.equal(run.reads.length, 2);
-    assert.equal(run.writes.length, 1);
-    assert.equal(run.stored?.pagado_ts, null);
-    assert.deepEqual(run.revalidated, []);
-  }
-});
-
-test("reread cannot confirm a paid payment after organization or professional reassignment", async () => {
-  for (const [turno, code] of [
-    [{ organization_id: "foreign-org", profesional_id: "active-member" }, "not_found"],
-    [{ organization_id: "active-org", profesional_id: "other-member" }, "forbidden"],
-    [null, "not_found"],
-  ] as const) {
-    const run = scenario({ beforeUpdate: payment({ estado: "PAGADO", pagado_ts: EXISTING_TIMESTAMP, turno }) });
-    assertFailure(await run.execute(PAYMENT_ID), code);
-    assert.equal(run.writes.length, 1);
-    assert.equal(run.reads.length, 2);
-    assert.deepEqual(run.revalidated, []);
-  }
-});
-
-test("initial and confirmation read errors retain their mapped error without announcing success", async () => {
-  for (const readErrorAt of [1, 2]) {
-    const run = scenario({ readErrorAt, suppressUpdate: true });
-    assertFailure(await run.execute(PAYMENT_ID), "forbidden");
-    assert.equal(run.writes.length, readErrorAt - 1);
-    assert.deepEqual(run.revalidated, []);
-  }
-});
-
-test("update errors are mapped and cannot trigger a retry or successful revalidation", async () => {
-  const run = scenario({ updateError: { code: "23514", message: "synthetic constraint failure" } });
-  assertFailure(await run.execute(PAYMENT_ID), "validation");
-  assert.equal(run.writes.length, 1);
-  assert.equal(run.reads.length, 1);
-  assert.deepEqual(run.revalidated, []);
 });

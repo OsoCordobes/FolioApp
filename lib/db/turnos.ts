@@ -10,17 +10,18 @@
 import { z } from "zod";
 
 import { runAfterResponse } from "@/lib/after-response";
-import { MONTO_MAX_CENTS, MONTO_MAX_PESOS } from "@/lib/format/currency";
+import { MONTO_MAX_PESOS } from "@/lib/format/currency";
 import { cancelTurnoEnGoogle, pushTurnoToGoogle } from "@/lib/google/sync";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import { err, mapSupabaseError, ok, type Result } from "./errors";
 import {
   cancelRecordatoriosForTurno,
-  schedulePostVisitaForTurno,
   scheduleRecordatoriosForTurno,
 } from "./recordatorios";
 import { getActiveSession } from "./session";
+import { closeTurnoAtomic } from "./turno-close";
+import { closeDecisionSchema, type CloseReceipt } from "@/lib/turnos/close-contract";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -40,26 +41,13 @@ const turnoSchema = z.object({
   modalidad: z.enum(["presencial", "telemedicina"]).default("presencial"),
 });
 
-/**
- * Cobro explícito del cierre (E1 · finanzas): lo que la recepción/el médico
- * eligió en el mini-diálogo de cobro al cerrar el turno. Opcional: los
- * callers que no lo mandan (Guardar y cerrar de la ficha, flujos legacy)
- * conservan el comportamiento histórico — efectivo PAGADO por el precio del
- * turno. `pagado=false` ("quedó debiendo") crea el pago en estado PENDIENTE,
- * que /finanzas lista como deuda por cobrar.
- */
-const cobroCierreSchema = z.object({
-  // Techo = int4 de pago.monto_cents (review PR #118: el techo anterior de
-  // $1M rechazaba el cierre ENTERO de un turno caro — configuración admite
-  // precios de hasta $10M — con el genérico "Datos de transición inválidos").
-  montoCents: z.number().int().min(0).max(MONTO_MAX_CENTS),
-  metodo: z.enum(["EFECTIVO", "TRANSFERENCIA", "MERCADOPAGO", "TARJETA", "OBRA_SOCIAL", "OTRO"]),
-  pagado: z.boolean(),
-});
+/** Explicit payment intent only; an absent decision never infers a payment. */
+const cobroCierreSchema = closeDecisionSchema;
 
-export type CobroCierre = z.infer<typeof cobroCierreSchema>;
+export type CobroCierre = z.input<typeof cobroCierreSchema>;
 
 const transitionSchema = z.object({
+  operacionId: z.string().uuid().optional(),
   turnoId: z.string().uuid(),
   to: z.enum([
     "AGENDADO", "CONFIRMADO", "EN_SALA", "ATENDIENDO",
@@ -423,26 +411,21 @@ export async function createTurno(
  */
 export const ESTADOS_CANCELAN_SIDE_EFFECTS = ["CANCELADO", "REAGENDADO", "NO_ASISTIO"] as const;
 
-/**
- * Resultado de transitionTurno (review PR #118): el cierre del turno y el
- * registro del cobro NO son atómicos — el UPDATE puede persistir y el upsert
- * de `pago` fallar igual (ej.: COORDINADOR puede cerrar turnos pero
- * `pago_write_admin` de M09 lo excluye de escribir pagos). Antes ese fallo se
- * tragaba en silencio (captureException + ok(void)) y la UI mostraba "deuda
- * registrada" según la INTENCIÓN del cliente. Ahora el caller sabe la verdad:
- *
- *   - `pagoRegistrado: true`  → el pago quedó registrado (o ya existía).
- *   - `pagoRegistrado: false` → el turno CERRÓ pero el pago NO se registró
- *                                (RLS u otro error) — la UI debe avisar.
- *   - `pagoRegistrado: null`  → no aplicaba (no era cierre, o monto 0).
- */
-export interface TransitionTurnoResult {
-  pagoRegistrado: boolean | null;
-}
+/** Ordinary transitions retain compatibility; a close carries its persisted receipt. */
+export type TransitionTurnoResult =
+  | { pagoRegistrado: null; cierre?: never }
+  | { pagoRegistrado: boolean | null; cierre: CloseReceipt };
 
 export async function transitionTurno(
-  input: z.infer<typeof transitionSchema>,
+  input: z.input<typeof transitionSchema>,
 ): Promise<Result<TransitionTurnoResult>> {
+  if (input?.to === "CERRADO") {
+    const result = await closeTurnoAtomic({ turnoId: input.turnoId, operacionId: input.operacionId as string,
+      duracionRealMin: input.duracionRealMin, cobro: input.cobro });
+    if (!result.ok) return result;
+    return ok({ cierre: result.data, pagoRegistrado: result.data.clasificacion === "REGISTRADO" ? true
+      : result.data.clasificacion === "SIN_CARGO" ? null : false });
+  }
   const parsed = transitionSchema.safeParse(input);
   if (!parsed.success) {
     // Mensaje específico para monto fuera de rango (review PR #118): el
@@ -475,9 +458,6 @@ export async function transitionTurno(
     // turno en atención viola el CHECK y la transición se rechaza siempre.
     patch.atendiendo_desde = null;
   }
-  if (parsed.data.to === "CERRADO" && parsed.data.duracionRealMin != null) {
-    patch.duracion_real_min = parsed.data.duracionRealMin;
-  }
   // M90 · registrar quién confirmó. Solo al ENTRAR a CONFIRMADO; una
   // cancelación posterior no lo borra (queda como constancia — ver M90).
   if (parsed.data.to === "CONFIRMADO") {
@@ -504,68 +484,6 @@ export async function transitionTurno(
   }
 
   const profesionalMemberId = (updatedRows?.[0]?.profesional_id as string | undefined) ?? null;
-  const precioCents = (updatedRows?.[0]?.precio_cents as number | undefined) ?? 0;
-
-  // Registrar el cobro al cerrar. El dashboard de /hoy ya cuenta los turnos
-  // CERRADOS como recaudado; sin esta fila /finanzas (que lee `pago`) mostraba
-  // $0 para el mismo día. Idempotente vía UNIQUE(turno_id); no-fatal: si la
-  // RLS lo rechaza (rol sin permiso de pagos) el cierre del turno sigue
-  // valiendo y el pago se puede registrar después desde finanzas — pero el
-  // fallo YA NO es silencioso: viaja como `pagoRegistrado: false` en el
-  // Result para que la UI no afirme un cobro que se descartó (PR #118).
-  //
-  // E1 · con `cobro` explícito (mini-diálogo de /hoy) se respeta monto, método
-  // y estado elegidos: "quedó debiendo" crea el pago PENDIENTE (pagado_ts NULL,
-  // CHECK pago_consistency de M09). Sin `cobro`, comportamiento histórico:
-  // efectivo PAGADO por el precio del turno.
-  let pagoRegistrado: boolean | null = null;
-  if (parsed.data.to === "CERRADO") {
-    const cobro = parsed.data.cobro;
-    const montoCents = cobro ? cobro.montoCents : precioCents;
-    const pagado = cobro ? cobro.pagado : true;
-    if (montoCents > 0) {
-      const { error: pagoErr } = await supabase.from("pago").upsert(
-        {
-          turno_id: parsed.data.turnoId,
-          monto_cents: montoCents,
-          metodo: cobro?.metodo ?? "EFECTIVO",
-          estado: pagado ? "PAGADO" : "PENDIENTE",
-          pagado_ts: pagado ? new Date().toISOString() : null,
-          notas: cobro
-            ? "Registrado en el cierre del turno."
-            : "Registrado automáticamente al cerrar el turno.",
-        },
-        { onConflict: "turno_id", ignoreDuplicates: true },
-      );
-      pagoRegistrado = !pagoErr;
-      if (pagoErr) {
-        const { captureException } = await import("@sentry/nextjs");
-        captureException(new Error(`pago auto-registro falló: ${pagoErr.message}`), {
-          tags: { component: "turno-transition", op: "autoPago" },
-          extra: { turnoId: parsed.data.turnoId },
-        });
-      }
-    }
-  }
-
-  // Hooks de transición de estado para la cola de recordatorios.
-  // Post-respuesta vía after() con captura Sentry DENTRO del callback
-  // (mismo razonamiento que createTurno).
-  if (parsed.data.to === "CERRADO") {
-    runAfterResponse(() =>
-      schedulePostVisitaForTurno({
-        organizationId: session.data.organizationId,
-        turnoId: parsed.data.turnoId,
-        closedAt: new Date(),
-      }).catch(async (err) => {
-        const { captureException } = await import("@sentry/nextjs");
-        captureException(err, {
-          tags: { component: "turno-transition", op: "schedulePostVisita" },
-          extra: { turnoId: parsed.data.turnoId },
-        });
-      }),
-    );
-  }
   if ((ESTADOS_CANCELAN_SIDE_EFFECTS as readonly string[]).includes(parsed.data.to)) {
     runAfterResponse(() =>
       cancelRecordatoriosForTurno(parsed.data.turnoId).catch(async (err) => {
@@ -596,7 +514,7 @@ export async function transitionTurno(
     }
   }
 
-  return ok({ pagoRegistrado });
+  return ok({ pagoRegistrado: null });
 }
 
 // ─── Reagendar turno ────────────────────────────────────────────────────

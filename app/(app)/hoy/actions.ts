@@ -20,6 +20,10 @@ import { safeLog } from "@/lib/observability/safe-log";
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { getTurnoCloseStatus, getTurnoCloseReceipt, resolveTurnoClose } from "@/lib/db/turno-close";
+import { settlePayment } from "@/lib/db/payment-settlement";
+import type { CloseDecision, CloseReceiptRequest, ResolveCloseRequest } from "@/lib/turnos/close-contract";
+import { mutationFailure } from "@/lib/db/mutation-result";
 
 import type { ProfesionalLite } from "@/lib/agenda/profesional";
 import { createManualTurno } from "@/lib/db/manual-turno";
@@ -59,31 +63,47 @@ export interface CobroCierreActionInput {
 }
 
 export interface TransitionTurnoActionInput {
+  operacionId?: string;
   turnoId: string;
   to: EstadoTurno;
   duracionRealMin?: number;
   /** Solo con to === "cerrado": método/monto/estado del cobro registrado. */
-  cobro?: CobroCierreActionInput;
+  cobro?: CobroCierreActionInput | CloseDecision;
 }
 
-/**
- * PR #118: el Result propaga `pagoRegistrado` de transitionTurno para que el
- * cliente pueda avisar cuando el turno cerró pero el cobro NO se registró
- * (cierre y pago no son atómicos — ver TransitionTurnoResult en lib/db/turnos).
- */
+/** Close confirmation includes the validated M120 receipt. */
 export async function transitionTurnoAction(
   input: TransitionTurnoActionInput,
 ): Promise<Result<TransitionTurnoResult>> {
+  if (!input || typeof input !== "object") return mutationFailure("validation", "Datos de transición inválidos.", "rejected");
   const result = await transitionTurno({
     turnoId: input.turnoId,
     to: ESTADO_UI_TO_DB[input.to],
+    operacionId: input.operacionId,
     duracionRealMin: input.duracionRealMin,
     cobro: input.to === "cerrado" ? input.cobro : undefined,
   });
 
-  if (result.ok) {
-    revalidatePath("/hoy");
+  if (result.ok) refreshCloseViews();
+  return result;
+}
+
+function refreshCloseViews() {
+  for (const path of ["/hoy", "/calendario", "/finanzas"]) {
+    try { revalidatePath(path); } catch { /* Confirmed writes survive cache failures. */ }
   }
+  try { revalidatePath("/pacientes/[id]", "page"); } catch { /* Best effort. */ }
+}
+export async function resolveTurnoCloseAction(input: ResolveCloseRequest) {
+  const result = await resolveTurnoClose(input);
+  if (result.ok) refreshCloseViews();
+  return result;
+}
+export async function getTurnoCloseStatusAction(turnoId: string) { return getTurnoCloseStatus(turnoId); }
+export async function getTurnoCloseReceiptAction(input: CloseReceiptRequest) { return getTurnoCloseReceipt(input); }
+export async function marcarPagoCobradoAgendaAction(input: { turnoId: string; pagoId: string }) {
+  const result = await settlePayment(input, "agenda");
+  if (result.ok) refreshCloseViews();
   return result;
 }
 

@@ -52,7 +52,7 @@ import { createPaciente, updatePacienteCobertura } from "@/lib/db/pacientes";
 import { savePlanTratamiento } from "@/lib/db/plan-tratamiento";
 import { getActiveSession } from "@/lib/db/session";
 import { addEnmienda, sesionPerteneceAPaciente, upsertSesion, readClinicalSessionRevision } from "@/lib/db/sesiones";
-import { transitionTurno } from "@/lib/db/turnos";
+import { getTurnoCloseStatus } from "@/lib/db/turno-close";
 import { err, ok, type Result } from "@/lib/db/errors";
 import { buildUpsertSesionInput } from "@/lib/especialidades/draft";
 import { ESPECIALIDAD_SLUGS } from "@/lib/especialidades/meta";
@@ -376,7 +376,9 @@ export async function saveSesionFichaAction(input:SaveSesionFichaActionInput):Pr
     const v=parsed.data;
     const result=await upsertSesion(buildUpsertSesionInput({...v,toolValue:v.toolValue??null,intencion:v.autosave?"AUTOSAVE":"SAVE"}));
     if(!result.ok)return result;
-    revalidatePath(`/pacientes/${v.pacienteId}`);if(!v.autosave)revalidatePath("/hoy");
+    for(const path of [`/pacientes/${v.pacienteId}`, ...(!v.autosave?["/hoy"]:[])]) {
+      try { revalidatePath(path); } catch { /* A cache failure cannot undo the clinical receipt. */ }
+    }
     return ok({sesionId:result.data.id,revision:result.data.revision,updatedAt:result.data.updatedAt,operationId:result.data.operationId,cerrado:result.data.closed});
   }catch{return err("network","No pudimos confirmar la respuesta. Conservá el borrador y reintentá la misma operación.");}
 }
@@ -388,14 +390,17 @@ export async function saveSesionYCerrarAction(input:SaveSesionFichaActionInput):
     const v=parsed.data;
     const result=await upsertSesion(buildUpsertSesionInput({...v,toolValue:v.toolValue??null,intencion:"CLOSE"}));
     if(!result.ok)return result;
-    // Core close and immutable original already committed atomically. Reuse the
-    // existing idempotent scheduling/payment follow-ups; their failure cannot
-    // turn the successful clinical close into a misleading failed-save result.
+    // M106 owns the close, immutable original and durable job. Only read afterward.
     let aviso:string|undefined;
-    try{const followup=await transitionTurno({turnoId:v.turnoId,to:"CERRADO"});
-      if(!followup.ok||followup.data.pagoRegistrado===false)aviso="La atención quedó guardada y cerrada. Revisá las gestiones posteriores y el registro del cobro en la agenda.";
-    }catch{aviso="La atención quedó guardada y cerrada. No pudimos confirmar las gestiones posteriores; revisalas en la agenda.";}
-    revalidatePath("/hoy");revalidatePath(`/pacientes/${v.pacienteId}`);
+    const unconfirmed="La atención quedó guardada y cerrada. No pudimos confirmar el estado del cobro; revisalo en la agenda.";
+    try {
+      const status=await getTurnoCloseStatus(v.turnoId);
+      if(!status.ok || status.data.estado!=="CERRADO") aviso=unconfirmed;
+      else if(status.data.clasificacion==="REQUIERE_REGISTRO") aviso="La atención quedó guardada y cerrada. Falta completar el registro del cobro en la agenda.";
+    } catch { aviso=unconfirmed; }
+    for(const path of ["/hoy", "/calendario", "/finanzas", `/pacientes/${v.pacienteId}`]) {
+      try { revalidatePath(path); } catch { /* Keep the confirmed clinical receipt. */ }
+    }
     return ok({sesionId:result.data.id,revision:result.data.revision,updatedAt:result.data.updatedAt,operationId:result.data.operationId,cerrado:result.data.closed,...(aviso?{aviso}:{})});
   }catch{return err("network","No pudimos confirmar si se guardó y cerró. Conservá el borrador y reintentá la misma operación.");}
 }

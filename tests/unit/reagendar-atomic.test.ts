@@ -67,6 +67,7 @@ function fixture() {
       module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022,
     } }).outputText, { exports, Date, JSON, require: (name: string) => name in mocks ? mocks[name]
       : name === "zod" ? actual(name)
+      : name === "@/lib/turnos/close-contract" ? actual(resolve("lib/turnos/close-contract.ts"))
       : name === "./errors" || name === "@/lib/db/errors" ? actual(resolve("lib/db/errors.ts")) : {} });
     return exports;
   }
