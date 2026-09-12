@@ -2,14 +2,29 @@
 -- The production runner owns BEGIN and the ledger insert. A migration must
 -- never commit that transaction before its canonical version is recorded.
 \set ON_ERROR_STOP on
-DO $$ BEGIN
-  IF current_database() !~ '^folio_test($|_)'
-    OR coalesce(host(inet_server_addr()),'') NOT IN ('127.0.0.1','::1')
-    OR current_setting('server_version_num')::int NOT BETWEEN 160000 AND 169999
-    OR to_regnamespace('folio_billing_authority_private') IS NOT NULL
-    OR NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid='public.suscripcion'::regclass AND polname='suscripcion_write_owner')
-  THEN RAISE EXCEPTION 'M118 transaction regression requires isolated PostgreSQL 16 baseline'; END IF;
-END $$;
+-- Hosted CI connects to a local published Docker port; PostgreSQL sees its
+-- private bridge address. Permit that only in explicit GitHub Actions with a
+-- loopback PGHOST, never as a general remote database exception.
+\set m118_ci_bridge false
+\getenv m118_actions GITHUB_ACTIONS
+\getenv m118_host PGHOST
+\if :{?m118_actions}
+  \if :{?m118_host}
+    SELECT :'m118_actions'='true' AND :'m118_host' IN ('localhost','127.0.0.1','::1') AS m118_ci_bridge \gset
+  \endif
+\endif
+SELECT current_database() ~ '^folio_test($|_)'
+  AND (coalesce(host(inet_server_addr()),'') IN ('127.0.0.1','::1')
+    OR (:'m118_ci_bridge'::boolean AND inet_server_addr() <<= inet '172.16.0.0/12'))
+  AND current_setting('server_version_num')::int BETWEEN 160000 AND 169999
+  AND to_regnamespace('folio_billing_authority_private') IS NULL
+  AND EXISTS(SELECT 1 FROM pg_policy WHERE polrelid='public.suscripcion'::regclass AND polname='suscripcion_write_owner')
+  AS m118_baseline_allowed \gset
+\if :m118_baseline_allowed
+\else
+  \echo 'M118 transaction regression requires isolated PostgreSQL 16 baseline'
+  \quit 1
+\endif
 CREATE SCHEMA IF NOT EXISTS supabase_migrations;
 CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations(version text PRIMARY KEY,name text,statements text[]);
 CREATE TEMP TABLE m118_prior_acl AS
