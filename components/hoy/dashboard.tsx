@@ -362,6 +362,7 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
       {reagendarFor ? (
         <TurnoReagendarModal
           turnoId={reagendarFor.id}
+          profesionalId={reagendarFor.profesionalId}
           pacienteNombre={pacientes[reagendarFor.pacienteId]?.nombre ?? "Paciente"}
           servicioNombre={reagendarFor.servicio}
           inicioIso={`${fechaIso}T${reagendarFor.hora}`}

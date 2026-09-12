@@ -18,6 +18,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === self) {
     build: ["node_modules/next/dist/bin/next", "build", "--turbopack"],
     browser: ["tests/hoy/browser.cjs"],
     "browser-create": ["tests/hoy/create-browser.cjs"],
+    "browser-reschedule": ["tests/hoy/reschedule-browser.cjs"],
     "browser-archive": ["tests/clinical-archive/browser.cjs"],
   };
   if (!(mode in commands)) throw new Error("Unknown hotfix check");

@@ -13,8 +13,9 @@
  */
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 
-import { reagendarTurnoAction } from "@/app/(app)/hoy/actions";
+import { reagendarTurnoAction, type ReagendarTurnoActionInput } from "@/app/(app)/hoy/actions";
 import { useToast } from "@/components/ui/toast";
 import {
   isoToLocalDatetimeExact,
@@ -25,6 +26,8 @@ import { useModalA11y } from "@/lib/use-modal-a11y";
 
 interface TurnoReagendarModalProps {
   turnoId: string;
+  /** Only for returning to the original agenda; DB resolves authority itself. */
+  profesionalId?: string | null;
   pacienteNombre: string;
   servicioNombre: string;
   /** Inicio actual del turno — default del picker de horario nuevo. */
@@ -37,6 +40,7 @@ interface TurnoReagendarModalProps {
 
 export function TurnoReagendarModal({
   turnoId,
+  profesionalId,
   pacienteNombre,
   servicioNombre,
   inicioIso,
@@ -50,12 +54,24 @@ export function TurnoReagendarModal({
   const [duracion, setDuracion] = useState<number>(duracionMin);
   const [submitting, startTransition] = useTransition();
   const [submitErr, setSubmitErr] = useState<string | null>(null);
+  const [outcomeUnknown, setOutcomeUnknown] = useState(false);
+  const phase = useRef<"idle" | "pending" | "uncertain" | "confirmed">("idle");
+  const attempt = useRef<{ input: ReagendarTurnoActionInput; label: string; agenda: string } | null>(null);
   const toast = useToast();
+  const router = useRouter();
+  const handleClose = () => {
+    if (phase.current === "pending") return;
+    if (phase.current === "uncertain") {
+      router.refresh();
+      router.push(attempt.current?.agenda ?? "/calendario");
+    }
+    onClose();
+  };
 
   // A11y de modal compartida (PR #45): focus trap + Escape (deshabilitado en
   // submit) + foco inicial + restore focus. Ver lib/use-modal-a11y.ts.
   const dialogRef = useRef<HTMLDivElement | null>(null);
-  useModalA11y(dialogRef, { onClose, closeDisabled: submitting });
+  useModalA11y(dialogRef, { onClose: handleClose, closeDisabled: submitting });
 
   // Focus inicial en el picker de fecha/hora (a11y teclado).
   const focusTargetRef = useRef<HTMLInputElement | null>(null);
@@ -64,28 +80,55 @@ export function TurnoReagendarModal({
     return () => clearTimeout(t);
   }, []);
 
-  const canSubmit = !submitting && inicioLocal.length > 0 && duracion >= 5 && duracion <= 480;
-
-  const handleSubmit = () => {
+  const canSubmit = !submitting && !outcomeUnknown && inicioLocal.length > 0 && Number.isInteger(duracion) && duracion >= 5 && duracion <= 480;
+  const markUncertain = () => {
+    phase.current = "uncertain";
+    setOutcomeUnknown(true);
+    setSubmitErr("No pudimos confirmar si cambió el turno. Comprobá este mismo intento o revisá la agenda antes de reagendar otra vez.");
+  };
+  const submitAttempt = () => {
+    const pending = attempt.current;
+    if (!pending || phase.current === "pending" || phase.current === "confirmed") return;
+    const wasUncertain = phase.current === "uncertain";
+    phase.current = "pending";
     setSubmitErr(null);
-    if (!inicioLocal) return;
-    const isoInicio = localDatetimeToIso(inicioLocal);
     startTransition(async () => {
-      const result = await reagendarTurnoAction({
-        turnoId,
-        nuevoInicio: isoInicio,
-        nuevaDuracionMin: duracion,
-      });
+      let result: Awaited<ReturnType<typeof reagendarTurnoAction>>;
+      try { result = await reagendarTurnoAction(pending.input); }
+      catch { markUncertain(); return; }
       if (!result.ok) {
+        // A denied recovery cannot prove that the earlier request did not commit.
+        if (wasUncertain || result.error.code === "network" || result.error.code === "db_error") {
+          markUncertain(); return;
+        }
+        phase.current = "idle";
+        attempt.current = null;
+        setOutcomeUnknown(false);
         setSubmitErr(result.error.message);
         return;
       }
-      // C4 · feedback: confirma el nuevo horario (con fecha si no es hoy).
+      phase.current = "confirmed";
+      setOutcomeUnknown(false);
       toast.show({
-        titulo: `Turno reagendado · ${localDatetimeToastLabel(inicioLocal)} · ${pacienteNombre}`,
+        titulo: `Turno reagendado · ${pending.label}`,
       });
       onDone(result.data.nuevoTurnoId);
     });
+  };
+  const handleSubmit = () => {
+    if (!canSubmit || phase.current !== "idle") return;
+    let isoInicio: string;
+    try { isoInicio = localDatetimeToIso(inicioLocal); }
+    catch { setSubmitErr("Revisá la fecha y hora del turno."); return; }
+    const day = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Cordoba", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(isoInicio));
+    const agenda = new URLSearchParams({ w: day, mes: day.slice(0, 7) });
+    if (profesionalId) agenda.set("prof", profesionalId);
+    attempt.current = {
+      input: { operacionId: crypto.randomUUID(), turnoId, nuevoInicio: isoInicio, nuevaDuracionMin: duracion },
+      label: `${localDatetimeToastLabel(inicioLocal)} · ${pacienteNombre}`,
+      agenda: `/calendario?${agenda}`,
+    };
+    submitAttempt();
   };
 
   return (
@@ -108,9 +151,7 @@ export function TurnoReagendarModal({
       }}
       // Guard de submit (review PR #44, M2): el click en el overlay no cierra
       // mientras el reagendado está en vuelo — mismo criterio que Escape.
-      onClick={() => {
-        if (!submitting) onClose();
-      }}
+      onClick={handleClose}
     >
       <div
         style={{
@@ -153,6 +194,7 @@ export function TurnoReagendarModal({
             <input
               ref={focusTargetRef}
               type="datetime-local"
+              disabled={submitting || outcomeUnknown}
               value={inicioLocal}
               onChange={(e) => setInicioLocal(e.target.value)}
               style={inputStyle}
@@ -161,6 +203,7 @@ export function TurnoReagendarModal({
           <Field label="Duración (min)">
             <input
               type="number"
+              disabled={submitting || outcomeUnknown}
               value={duracion}
               min={5}
               max={480}
@@ -183,17 +226,22 @@ export function TurnoReagendarModal({
         ) : null}
 
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
-          <button type="button" className="fi-btn fi-btn-ghost" onClick={onClose} disabled={submitting}>
-            Cancelar
+          <button type="button" className="fi-btn fi-btn-ghost" onClick={handleClose} disabled={submitting}>
+            {outcomeUnknown ? "Ver agenda" : "Cancelar"}
           </button>
-          <button
+          {outcomeUnknown ? (
+            <button type="button" className="fi-btn fi-btn-primary" onClick={submitAttempt} disabled={submitting}>
+              {submitting ? "Comprobando…" : "Comprobar cambio"}
+            </button>
+          ) : null}
+          {!outcomeUnknown ? <button
             type="button"
             className="fi-btn fi-btn-primary"
             onClick={handleSubmit}
             disabled={!canSubmit}
           >
             {submitting ? "Reagendando…" : "Reagendar turno"}
-          </button>
+          </button> : null}
         </div>
       </div>
     </div>

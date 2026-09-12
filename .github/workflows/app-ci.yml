@@ -47,6 +47,9 @@ jobs:
       - name: Verify walk-in creation with synthetic server responses
         run: node tests/hoy/run-isolated.mjs browser-create
 
+      - name: Verify rescheduling and uncertain response recovery
+        run: node tests/hoy/run-isolated.mjs browser-reschedule
+
       - name: Verify clinical archive navigation and interrupted downloads
         run: node tests/hoy/run-isolated.mjs browser-archive
 

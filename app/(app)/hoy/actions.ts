@@ -90,6 +90,7 @@ export async function transitionTurnoAction(
 // ─── Reagendar turno ─────────────────────────────────────────────────────────
 
 const reagendarTurnoActionSchema = z.object({
+  operacionId: z.string().uuid(),
   turnoId: z.string().uuid(),
   nuevoInicio: z.string().datetime({ offset: true }),
   nuevaDuracionMin: z.number().int().min(5).max(480).optional(),
@@ -103,12 +104,8 @@ export type ReagendarTurnoActionInput = z.infer<typeof reagendarTurnoActionSchem
  * horario elegido. La sesión activa la valida `reagendarTurno` (lib/db) como
  * primer paso — igual que transitionTurnoAction delega en transitionTurno.
  *
- * Revalidación (review PR #44, I2): va atada a la MUTACIÓN, no al éxito.
- * `onTransitioned` dispara apenas el original queda REAGENDADO — si el create
- * posterior falla (orphan path), /hoy y /calendario igual se refrescan para
- * no seguir mostrando el turno viejo como agendado hasta el polling. Si el
- * flujo corta antes (validación, conflicto del pre-check), no hubo mutación
- * y no se revalida nada.
+ * M119: ambas escrituras y sus trabajos se confirman juntas. La revalidación
+ * posterior no convierte una operación confirmada en un resultado incierto.
  */
 export async function reagendarTurnoAction(
   input: ReagendarTurnoActionInput,
@@ -118,12 +115,14 @@ export async function reagendarTurnoAction(
     return err("validation", "Datos del reagendado inválidos.", parsed.error.message);
   }
 
-  return reagendarTurno(parsed.data, {
-    onTransitioned: () => {
+  const result = await reagendarTurno(parsed.data);
+  if (result.ok) {
+    try {
       revalidatePath("/hoy");
       revalidatePath("/calendario");
-    },
-  });
+    } catch { /* El recibo confirmado conserva su resultado. */ }
+  }
+  return result;
 }
 
 // ─── Create turno (modal walk-in / agendar manual) ──────────────────────────
