@@ -18,12 +18,13 @@
 
 ### Task 1: Align the strict local profile and prove real login
 
-**Files:** scripts/testing/run-clinical.mjs, clinical-config.mjs, CLINICAL-LOCAL.md; supabase/config.toml; tests/unit/clinical-fixture-safety.test.ts; tests/e2e/README.md. Add a focused runner regression only if needed; no production code changes.
+**Files:** scripts/testing/run-clinical.mjs, clinical-config.mjs, CLINICAL-LOCAL.md; supabase/config.toml; tests/unit/clinical-fixture-safety.test.ts; tests/e2e/README.md. The diagnostic-backed MFA completion wait below may change only that assertion in tests/fixtures/clinical-local.ts. No production code changes.
 
 - [ ] Capture prior RED and verify localhost resolves/connects through the existing allowed loopback/browser policy and app bind. Do not relax the general isolation policy.
 - [ ] Change the clinical default and exact accepted app origin to localhost4420, and local Auth site_url/redirects together. Keep generic app defaults unchanged. Add negative tests for the old127app, alternateIPv6host, wrongport and API/DB mismatch.
 - [ ] Mirror only this profile diff and the approved clockfix to runtime. Read current own-project counts before reload, stop only folio-local-clinical preserving all volumes, start same project with prior analytics exclusions, then verify non-secret Auth origin settings and unchanged fixtures/migration history.
 - [ ] Typecheck/lint and focused safety tests, then the real seven-case clinical suite with traces off. Verify login/MFA stay on localhost4420 and use real credentials through UI. Report exact pass/fail/not-run counts, preserve strict negatives and investigate the next failure without unrelated source edits.
+- [ ] Root ruling after the local observer: Auth verification returned200 in about129ms; the complete UI POST finished in4.8s, then cold Next development compilation of /hoy ran for10.7s. UI completion was present at30s. Extend only the MFA-completion assertion from15s to60s to tolerate this measured development compilation; preserve actual heading/navigation assertions, the180s scenario bound,12s provider and15s SQL limits. Do not claim a passing slow dev run certifies production latency or relax an unresolved authentication error.
 - [ ] Update source docs and ignored runtime report with exact snapshot/diff and evidence. Commit scoped files only; independent review checks profile consistency and guard preservation.
 
 ## Preflight review
