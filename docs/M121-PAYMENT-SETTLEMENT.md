@@ -73,6 +73,7 @@ El checker privado invocable por el trigger sólo verifica la política y la aut
 
 - Defecto previo reproducido con PostgreSQL16: tres UPDATE en espera confirmaron una fila PAGADO después de perder autorización, mientras un control posterior del mismo usuario actualizaba cero filas.
 - Replay final en una base sintética nueva: **115 migraciones / 63 specs SQL PASS** con verificación predeterminada de cuerpos de funciones.
+- Actualización local desde `28ab28a` hacia `34dc605`: **92 migraciones publicadas primero (M118 incluida), luego 23 faltantes y 63 specs SQL PASS**. Ledger final de 115 versiones exactas, sin modificar archivos compartidos. Este orden distinto del replay cronológico también quedó verificado; informe `.flow/launch-reliability/published-upgrade-report.md`.
 - Concurrencia M121: **6/6 PASS** — corte de versión antigua mientras espera, repetición simultánea/recuperación del mismo pago, reasignación, revocación de miembro, pérdida de alcance de asistente y retención de autorización mientras espera el pago y hasta commit.
 - Evidencia almacenada: 21 pagos existentes, sólo 2 saldados por los casos autorizados, cero autoridades residuales, una activación, originales clínicos y trabajos de recordatorio idénticos al snapshot inicial.
 
