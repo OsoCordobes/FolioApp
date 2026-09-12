@@ -28,3 +28,19 @@
 2. Corregir/preparar el ensayo clínico: conteo por JOIN y puerto 4420 dedicado, manteniendo los rechazos de destinos externos, puertos de desarrollo y DB con datos ajenos.
 3. Reproducir cierre sin pago y diseñar la corrección teniendo en cuenta el cierre clínico M106, permisos y pagos ya existentes.
 4. Preparar evidencia SQL real en una base nueva propia del servidor local 55439.
+
+## Primer cambio aprobado y preparación SQL
+
+- Finanzas: commit `7bc3f3f`, 18 pruebas focales y 2122 unitarias completas aprobadas, tipos/lint aprobados. Revisión independiente de `/root/finance_review`: cumplimiento y calidad aprobados, sin hallazgos. Este tramo está cerrado; no acredita persistencia/Auth/RLS reales por sí solo.
+- PostgreSQL local: la recuperación terminó y una sesión WSL propia mantiene disponible la instancia. Se creó el rol sintético exclusivo `folio_test_launch_20260912` y bases nuevas propias; nunca se cambió el password de postgres ni se borraron bases ajenas.
+- El primer replay aplicó 113 migraciones, pero el primer spec rechazó el nombre del administrador sintético: los guards exigen la identidad de plataforma `postgres`. Se preservó esa base para inspección y no se modificaron los guards.
+- Un segundo replay en `folio_test_launch_baseline_pg_20260912`, con identidad de sesión postgres, aprobó **113 migraciones con checks por defecto y 60 specs SQL**. Copia local del runner `.flow/launch-reliability/replay-postgres-identity.mjs`: mantiene validación loopback/base vacía y agrega `SET SESSION AUTHORIZATION postgres` al inicio de cada invocación psql. Log `.flow/launch-reliability/baseline-sql-postgres.log`. Auth/Storage siguen siendo stubs en este ensayo.
+- Se reprodujo realmente `42703` por `pago.organization_id` y se ejecutó correctamente el JOIN con turno en esa base. Evidencia `.flow/launch-reliability/clinical-count-proof.sql` y `.log`; es una comprobación SQL de la consulta, no el recorrido clínico completo.
+- Preflight clínico: implementación en revisión previa a commit por `/root/clinical_preflight_fix`, puerto 4420, conteo y contrato de denegación AAL1. Las siete pruebas del recorrido están enumeradas; no ejecutadas con servicios reales.
+- Se solicitó al usuario abrir Docker Desktop mediante pregunta asincrónica; puede continuar el trabajo independiente mientras responde. El motivo es el rechazo de inicio automático registrado en el ensayo anterior.
+
+### Próxima iteración de producto
+
+- Ruling: Guardar y cerrar no debe convertir ausencia de información financiera en efectivo PAGADO — el cierre dejará cobro sin registrar; Cobrar y cerrar conservará confirmación explícita y atómica — cuesta un paso financiero explícito cuando se cierra desde la ficha, documentado y visible.
+- Especificación `docs/CLOSE-RELIABILITY-SPEC.md`; plan SQL `docs/superpowers/plans/2026-09-12-atomic-visit-close.md`. Agente `/root/atomic_close_sql` implementa únicamente nueva migración, pruebas SQL/concurrencia y contrato; los callers y la recuperación en agenda se integrarán después de revisar esa frontera.
+- Se mantiene pendiente la integración con la rama visual activa y la autorización final de publicación. No hay despliegue ni migraciones de producción desde esta goal.
