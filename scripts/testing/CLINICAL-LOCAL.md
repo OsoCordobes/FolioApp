@@ -1,11 +1,12 @@
 # Ensayo clínico con Supabase local real
 
-Estado al 12 de septiembre de 2026: infraestructura de ensayo implementada;
-**recorrido real todavía no ejecutado**. El usuario abrió Docker Desktop y se
-verificó que el motor responde. La primera instancia clínica real se prepara en
-la copia aislada `folio-clinical-runtime`, desde `e7da69f`. La validación
-de tipos, lint y las pruebas del aislamiento no acreditan Auth, Storage ni el
-recorrido del profesional.
+Estado al 12 de septiembre de 2026: primer arranque real completado sobre
+Supabase PostgreSQL 17.6, con 113 migraciones y los cinco catálogos. El recorrido
+clínico completo **sigue pendiente**. Después de corregir la hora de activación
+de MFA, la ejecución real pasó el control AAL1 y falló al entrar desde la UI:
+una redirección cambia de 127.0.0.1 a localhost y vuelve a login antes de MFA.
+Resultado: **1 aprobado, 1 fallido, 5 no ejecutados** por dependencia serial.
+No acredita todavía guardado, Storage, cobro, archivo ni uso en producción.
 
 ## Preparación de la instancia
 
@@ -27,8 +28,9 @@ otra ejecución; no usar `db reset` para descartar datos desconocidos.
 La lista de seeds referencia los cinco archivos reales en `supabase/seed/`, en
 orden: obras sociales, CIE-10, plantillas, geografía y textos de analítica. Son
 catálogos sin cuentas, pacientes, tokens o claves. Se revisaron sus columnas y
-destinos contra las migraciones; la ejecución completa de esos seeds en Supabase
-17 sigue pendiente. Cargar las plantillas no certifica su contenido clínico o
+destinos contra las migraciones; el replay real en Supabase
+17.6 completó los cinco seeds (25 obras sociales, 77 CIE-10, 10 plantillas,
+74 regiones y 20 textos de analítica). Cargar las plantillas no certifica su contenido clínico o
 legal, especialmente el texto histórico sobre menores. No usarlas como aprobación
 del piloto.
 
@@ -116,9 +118,9 @@ clínico falla antes de levantar una aplicación cuando no recibe la configuraci
 necesaria. El runner normal mantiene 4410 y omite el spec clínico sin la
 habilitación específica.
 
-Pendiente: primer replay y ejecución sobre Supabase 17 real, investigar todos
-los fallos que revele, ampliar roles/menores y consentimiento, pruebas de fallos
-de guardado y proveedor y restauración completa. El séptimo escenario prepara
+Pendiente: resolver el cambio de host durante login y completar los siete
+escenarios sobre Supabase 17 real, ampliar roles/menores y consentimiento, pruebas de fallos
+de guardado y proveedor y restauración completa. El sexto escenario prepara
 una suscripción sintética pausada, confirma la redirección de la interfaz común
 a cobros y descarga PDF/JSON desde el archivo clínico autorizado, manteniendo el
 aislamiento entre consultorios. Tampoco se ejecutó: no prueba todavía la continuidad
@@ -128,3 +130,32 @@ los comportamientos que realmente haya comprobado.
 
 Referencias: [desarrollo local](https://supabase.com/docs/guides/local-development),
 [TOTP y APIs de enrolamiento/desafío/verificación](https://supabase.com/docs/guides/auth/auth-mfa/totp).
+
+## Corrección de reloj y resultado real
+
+La primera preparación falló porque Windows estaba entre 973 y 975 ms adelantado
+respecto de PostgreSQL: p_after se calculaba en el host y la comprobación estricta
+staff_enforce_after <= now() todavía no se cumplía. El fixture ahora obtiene
+clock_timestamp() de la misma base local ya validada, exige una fecha válida y
+la usa para activar MFA. Si la lectura falla o es inválida, no hay alternativa
+con el reloj del host. Se mantienen los siete controles obligatorios.
+
+El runtime está separado en folio-clinical-runtime y conserva e7da69f más
+únicamente esa corrección del fixture; no incluye M120. El comando fue
+node scripts/testing/run-clinical.mjs --trace=off --reporter=list, con las
+credenciales de supabase status -o json sólo en memoria y salida local sanitizada.
+Las trazas se deshabilitan para no conservar contraseña o TOTP del acceso UI.
+
+La ejecución con el cambio definitivo pasó la preparación y el escenario
+AAL1 (membresía y portal dual protegidos), pero el recorrido de quiropraxia falló
+antes de MFA. Una lectura sin credenciales también confirmó que /seguridad/mfa
+en 127.0.0.1:4420 devuelve 307 hacia localhost:4420/login. Ese cambio de host
+está pendiente de corregir; los otros cinco escenarios no se ejecutaron. La
+existencia de Storage real no prueba una subida o descarga todavía.
+
+Los resultados completos y las limitaciones quedan en el informe local ignorado
+.flow/launch-reliability/clinical-real-runtime-report.md. La CLI 2.98.2 publicó
+los servicios Docker en 0.0.0.0 por defecto; el runner sólo accede a loopback.
+No se modificaron el firewall ni las redes del host. Logflare y Vector quedaron
+excluidos del arranque para evitar la configuración adicional de Docker Windows;
+Auth, Storage y REST reales permanecieron activos.

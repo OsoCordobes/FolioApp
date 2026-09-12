@@ -103,9 +103,11 @@ export async function createClinicalFixture():Promise<ClinicalFixture> {
 
   const reason='Dedicated synthetic local clinical integration, never production';
   const sha=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8',timeout:5000}).trim();assert.match(sha,/^[a-f0-9]{40}$/);
+  const {rows:[activation]}=await db.query<{activation_time:Date}>('SELECT clock_timestamp() AS activation_time');
+  assert.ok(activation?.activation_time instanceof Date&&Number.isFinite(activation.activation_time.getTime()),'Local database must provide a valid MFA activation timestamp');
   for(const [name,args] of [
    ['mfa_enable_preparation',{p_reason:reason}],
-   ['mfa_set_staff_enforcement',{p_after:new Date().toISOString(),p_reason:reason}],
+   ['mfa_set_staff_enforcement',{p_after:activation.activation_time.toISOString(),p_reason:reason}],
    ['enable_clinical_attachments',{p_reason:reason,p_build_sha:sha,p_reference:'LOCAL-CLINICAL-SYNTHETIC'}],
    ['consent_enable_reviewed_signatures',{p_reason:reason}],
    ['enable_instrument_population_policy',{p_reason:reason}],
