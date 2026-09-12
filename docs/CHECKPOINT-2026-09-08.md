@@ -1,5 +1,7 @@
 # Checkpoint de implementación — 8 de septiembre de 2026
 
+**Continuación del 12/09:** #162 fue fusionado y está publicado; hay un respaldo nuevo verificado y continúa la implementación. Este archivo conserva el cierre anterior. Consultar [estado actual](ESTADO-ACTUAL.md) para retomar.
+
 Esta rama conserva el trabajo del plan de preparación. **No está desplegada ni lista para pacientes reales.** Sus migraciones M98–M116 todavía no fueron aplicadas a producción. Vercel no debe desplegar automáticamente `codex/market-ready`; la configuración de esta rama lo desactiva expresamente.
 
 El arreglo de llegadas y cobros del video está publicado mediante #160, SHA `a6eecc55a78c20310e30b2e1498aa28e11bc59b4`. El usuario pidió conservar el avance y publicar un corte adicional acotado antes de agotar su cuota. **El segundo checkpoint fue publicado mediante #161**, sin las migraciones nuevas.

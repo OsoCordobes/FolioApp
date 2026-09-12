@@ -1,5 +1,7 @@
 # Baja de cuenta, suspensión y entrega de historias
 
+**Actualización del 12/09:** esta auditoría se conserva como evidencia histórica. La purga fue retirada de producción, los exports personales/clínicos se ampliaron en la rama de preparación y M116 retira la pseudonimización destructiva (todavía no aplicada a producción). La nueva [pantalla de archivo clínico](ARCHIVO-CLINICO-CONTINUIDAD.md) completa el acceso visible durante suspensión para roles de entrega completa. Ver [estado actual](ESTADO-ACTUAL.md) antes de interpretar los hallazgos siguientes como trabajo sin iniciar.
+
 Revisión técnica local del 8 de septiembre de 2026. No se consultó ni modificó producción. Los textos legales se compararon entre sí y contra el código; esto no constituye validación jurídica de un plazo ni de una causal de supresión.
 
 ## Cierre de la purga automática
