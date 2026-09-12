@@ -41,7 +41,7 @@ const stubs={
   });
   await run('lost response and null probe retain an immutable request for deliberate retry',async page=>{
    await page.getByRole('button',{name:'Cerrar turno',exact:true}).click();await page.getByLabel('Monto en pesos').fill('175');await page.getByRole('button',{name:'Transferencia',exact:true}).click();await page.getByLabel('Quedó debiendo').check();await page.getByRole('button',{name:'Cerrar con deuda',exact:true}).click();
-   await page.evaluate(()=>qa.reject());await page.getByRole('button',{name:'Comprobar resultado',exact:true}).click();
+   await page.evaluate(()=>{qa.reject();const r=qa.receipt();qa.refresh({estado:'cerrado',cobro:{id:r.pago.id,estado:'pagado',montoCents:17500,metodo:'TRANSFERENCIA',ts:'2026-09-12T12:02:00Z',updatedAt:'2026-09-12T12:02:00Z'}})});await page.waitForFunction(()=>qa.state[0].cobro?.estado==='pagado');await page.getByRole('button',{name:'Comprobar resultado',exact:true}).click();
    assert.equal(await page.evaluate(()=>qa.calls[1].name),'PROBE');await page.evaluate(()=>qa.finish({ok:true,data:null}));
    await page.getByText('Aún no hay un recibo.',{exact:false}).waitFor();assert.equal(await page.getByLabel('Monto en pesos').inputValue(),'175');assert.equal(await page.getByLabel('Monto en pesos').isDisabled(),true);
    await page.getByRole('button',{name:'Reintentar misma solicitud',exact:true}).click();
@@ -134,6 +134,18 @@ const stubs={
    await page.evaluate(()=>qa.refresh({estado:'cerrado',cobro:{id:'12000000-0000-4000-8000-000000000050',estado:'pagado',montoCents:10000,metodo:'EFECTIVO',ts:'2026-09-12T12:02:00Z',updatedAt:'2026-09-12T12:02:00Z'}}));await page.waitForFunction(()=>qa.state[0].cobro?.estado==='pagado');
    await page.evaluate(()=>qa.readJobs.shift()({ok:true,data:qa.status}));await page.waitForFunction(()=>!document.querySelector('[role="dialog"]').textContent.includes('Consultando el estado actual'));
    assert.equal(await page.getByRole('button',{name:'Marcar cobrado',exact:true}).count(),0);assert.equal(await page.evaluate(()=>qa.state[0].cobro.estado),'pagado');assert.equal(await page.evaluate(()=>qa.state[0].cobroPorRevisar),true);
+  });
+  await run('accepted status invalidates after a later contradictory SSR until explicit fresh read',async page=>{
+   await page.evaluate(()=>{qa.status={...qa.status,estado:'CERRADO',origen:'HISTORICO',clasificacion:'REGISTRADO',pago:{id:'12000000-0000-4000-8000-000000000050',estado:'PENDIENTE',montoCents:10000,metodo:'EFECTIVO',pagadoTs:null,updatedAt:'2026-09-12T12:00:00Z'}};qa.refresh({estado:'cerrado'})});
+   await page.getByRole('button',{name:'Revisar cobro',exact:true}).click();await page.getByRole('button',{name:'Marcar cobrado',exact:true}).waitFor();
+   await page.evaluate(()=>qa.refresh([...qa.state,{...qa.state[0],id:'12000000-0000-4000-8000-000000000002',estado:'programado',cobro:undefined}]));
+   await page.waitForFunction(()=>qa.state.length===2);assert.equal(await page.getByRole('button',{name:'Marcar cobrado',exact:true}).count(),1);assert.equal(await page.evaluate(()=>qa.statusReads),1);
+   await page.evaluate(()=>qa.refresh({estado:'cerrado',cobro:{id:'12000000-0000-4000-8000-000000000050',estado:'pagado',montoCents:10000,metodo:'EFECTIVO',ts:'2026-09-12T12:02:00Z',updatedAt:'2026-09-12T12:02:00Z'}}));await page.waitForFunction(()=>qa.state[0].cobroPorRevisar===true);
+   assert.equal(await page.getByRole('button',{name:'Marcar cobrado',exact:true}).count(),0);assert.equal(await page.evaluate(()=>qa.statusReads),1);
+   await page.getByText('Hay información nueva del cobro.',{exact:false}).waitFor();assert.equal(await page.getByText('Se cerrará la atención sin registrar un cobro.',{exact:true}).count(),0);
+   await page.evaluate(()=>{qa.status={...qa.status,pago:{...qa.status.pago,estado:'PAGADO',pagadoTs:'2026-09-12T12:02:00Z',updatedAt:'2026-09-12T12:02:00Z'}}});
+   await page.getByRole('button',{name:'Actualizar estado',exact:true}).click();await page.waitForFunction(()=>qa.state[0].cobro.estado==='pagado'&&!qa.state[0].cobroPorRevisar);
+   assert.equal(await page.evaluate(()=>qa.statusReads),2);assert.equal(await page.evaluate(()=>qa.calls.length),0);
   });
   await run('malformed success keeps the request uncertain without projecting money',async page=>{
    await page.getByRole('button',{name:'Cerrar turno',exact:true}).click();await page.getByRole('button',{name:'Cobrar y cerrar',exact:true}).click();await page.evaluate(()=>qa.finish({ok:true,data:{pagoRegistrado:true}}));

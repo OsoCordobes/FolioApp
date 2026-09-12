@@ -13,6 +13,7 @@ type Attempt = CloseReceiptRequest | { action: "SETTLE"; turnoId: string; pagoId
 const METHODS = [["EFECTIVO", "Efectivo"], ["TRANSFERENCIA", "Transferencia"], ["MERCADOPAGO", "Mercado Pago"], ["TARJETA", "Tarjeta"], ["OBRA_SOCIAL", "Obra social"]] as const;
 export interface CobroCierreDialogProps {
   turno: Turno; mode: "CLOSE" | "RESOLVE"; pacienteNombre: string; canRegistrarCobro: boolean;
+  financialObservation: number;
   getObservation: () => number; onConfirmed: (status: CloseStatus, readObservation?: number) => void; onClose: () => void;
 }
 
@@ -25,7 +26,12 @@ export function CobroCierreDialog(props: CobroCierreDialogProps) {
   const [debiendo, setDebiendo] = useState(false);
   const [duration, setDuration] = useState(() => String(closeDuration(turno)));
   const [phase, setPhase] = useState<Phase>("editing");
-  const [status, setStatus] = useState<CloseStatus | null>(null);
+  const [acceptedStatus, setStatus] = useState<CloseStatus | null>(null);
+  const statusObservation = useRef(props.financialObservation);
+  // Later contradictory observations of this appointment invalidate authority,
+  // while the immutable attempt and entered fields remain available for recovery.
+  const status = statusObservation.current === props.financialObservation ? acceptedStatus : null;
+  const statusOutdated = acceptedStatus !== null && status === null;
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
   const attempt = useRef<Attempt | null>(null);
@@ -47,6 +53,7 @@ export function CobroCierreDialog(props: CobroCierreDialogProps) {
       // A newer SSR observation overtook this read. Keep its evidence for the
       // row merge, but do not present it as current authority in this dialog.
       if (!currentObservation) { setStatus(null); return null; }
+      statusObservation.current = live.current.financialObservation;
       setStatus(parsed.data);
       return parsed.data;
     } catch { if (seq === sequence.current) setStatus(null); return null; }
@@ -92,7 +99,7 @@ export function CobroCierreDialog(props: CobroCierreDialogProps) {
         const result = await marcarPagoCobradoAgendaAction({ turnoId: snapshot.turnoId, pagoId: snapshot.pagoId });
         if (result.ok) {
           // The adapter validates payment identity and timestamps; refresh current status before offering more actions.
-          const current = status;
+          const current = acceptedStatus;
           if (!current || !settlementReceiptSchema.safeParse(result.data).success || result.data.turnoId !== turno.id || result.data.pago.id !== snapshot.pagoId) throw Error("Unconfirmed receipt");
           await confirm({ ...current, pago: result.data.pago, clasificacion: "REGISTRADO" });
         } else fail(result.error, recovering);
@@ -144,7 +151,10 @@ export function CobroCierreDialog(props: CobroCierreDialogProps) {
     const snapshot: Attempt = Object.freeze({ action: "SETTLE", turnoId: turno.id, pagoId: status.pago.id });
     attempt.current = snapshot; void execute(snapshot);
   }
-  const retryAllowed = attempt.current && (attempt.current.action !== "SETTLE" && !attempt.current.cobro || financial);
+  // An exact retry keeps the already submitted decision; it is not a new
+  // financial choice. Current role changes still revoke monetary retries.
+  const retryAllowed = attempt.current && (attempt.current.action !== "SETTLE" && !attempt.current.cobro
+    || canRegistrarCobro && acceptedStatus?.puedeRegistrar === true);
   return <div ref={dialogRef} role="dialog" aria-modal="true" aria-busy={phase === "pending" || loading} aria-labelledby="fi-cobro-title" tabIndex={-1} className="a11y-modal-root"
     style={{ position: "fixed", inset: 0, background: "rgba(20,14,8,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}
     onClick={event => { event.stopPropagation(); if (!locked && !loading && !busy.current && !attempt.current) props.onClose(); }}>
@@ -152,6 +162,7 @@ export function CobroCierreDialog(props: CobroCierreDialogProps) {
       <header><span className="fi-eyebrow">{props.mode === "CLOSE" ? "cierre de atención" : "registro del cobro"}</span>
         <h2 id="fi-cobro-title" style={{ margin: "4px 0 12px", fontSize: 18 }}>{props.mode === "CLOSE" ? "Cerrar turno de" : "Revisar cobro de"} {pacienteNombre}</h2></header>
       {loading ? <p role="status">Consultando el estado actual…</p> : null}
+      {statusOutdated ? <p role="alert">Hay información nueva del cobro. {locked ? "Conservamos tu solicitud para comprobar el resultado." : "Actualizá el estado antes de continuar."}</p> : null}
       {message ? <p role={phase === "confirmed" || phase === "pending" ? "status" : "alert"}>{message}</p> : null}
       {status?.origen === "HISTORICO" ? <p>Atención histórica: la fecha de cierre no está registrada.</p> : null}
       {closed && status?.clasificacion === "REQUIERE_REGISTRO" ? <p>Registro por revisar. Todavía no hay un cobro ni una decisión sin cargo.</p> : null}
@@ -168,7 +179,7 @@ export function CobroCierreDialog(props: CobroCierreDialogProps) {
           <div className="fi-cobro-field" role="group" aria-label="Método de pago"><span className="fi-cobro-lbl">Método</span><div className="fi-cobro-metodos">{METHODS.map(([id,label]) => <button key={id} type="button" className={"fi-cobro-metodo"+(metodo===id?" is-active":"")} aria-pressed={metodo===id} disabled={!editable} onClick={()=>edit(()=>setMetodo(id))}>{label}</button>)}</div></div>
           <label className="fi-cobro-deuda"><input type="checkbox" checked={debiendo} disabled={!editable} onChange={e=>edit(()=>setDebiendo(e.target.checked))}/><span>Quedó debiendo<small>El pago se registra como pendiente.</small></span></label>
         </> : null}
-        {!financial && !closed ? <p>Se cerrará la atención sin registrar un cobro.</p> : null}
+        {props.mode === "CLOSE" && status && !financial && !closed ? <p>Se cerrará la atención sin registrar un cobro.</p> : null}
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end", marginTop: 16 }}>
           <button type="button" className="fi-btn fi-btn-ghost" disabled={locked || loading} onClick={()=>{if(!busy.current&&!attempt.current)props.onClose();}}>{phase==="confirmed"?"Listo":"Volver"}</button>
           {phase === "uncertain" ? <><button type="button" className="fi-btn fi-btn-secondary" onClick={()=>{if(attempt.current)void execute(attempt.current,true);}}>Comprobar resultado</button><button type="button" className="fi-btn fi-btn-primary" disabled={!retryAllowed} onClick={()=>{if(attempt.current)void execute(attempt.current);}}>Reintentar misma solicitud</button></> : null}

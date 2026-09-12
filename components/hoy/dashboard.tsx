@@ -23,7 +23,7 @@ import { TurnoCreateModal } from "@/components/hoy/turno-create-modal";
 import { TurnoReagendarModal } from "@/components/hoy/turno-reagendar-modal";
 import { useToast } from "@/components/ui/toast";
 import type { ProfesionalLite } from "@/lib/agenda/profesional";
-import { mergeFinancialTurno, withCloseStatus } from "@/lib/hoy/close-operation";
+import { mergeFinancialTurno, samePayment, withCloseStatus } from "@/lib/hoy/close-operation";
 import { CobroCierreDialog } from "@/components/hoy/cobro-cierre-dialog";
 import type { CloseStatus } from "@/lib/turnos/close-contract";
 import { applyTransition, isTurnoStatePredecessor } from "@/lib/turno-states";
@@ -100,6 +100,7 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
   const [closeFor, setCloseFor] = useState<{ turno: Turno; mode: "CLOSE" | "RESOLVE" } | null>(null);
   const closeSelection = useRef<string | null>(null);
   const observation = useRef(0);
+  const closeFinancialObservation = useRef(0);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const returnFocus = useRef<string | null>(null);
   /** Turno con el modal de reagendar abierto (null = cerrado). */
@@ -132,6 +133,11 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
       const base = confirmed && isTurnoStatePredecessor(turno.estado, confirmed.estado) ? { ...turno, estado: confirmed.estado } : turno;
       const merged = confirmed ? mergeFinancialTurno(confirmed, base) : base;
       const current = canRegistrarCobro ? merged : { ...merged, cobro: undefined, cobroPorRevisar: false };
+      if (closeSelection.current === turno.id && confirmed && (
+        !samePayment(confirmed.cobro, current.cobro)
+        || confirmed.cierreClasificacion !== current.cierreClasificacion
+        || !!confirmed.cobroPorRevisar !== !!current.cobroPorRevisar
+      )) closeFinancialObservation.current++;
       confirmedTurnos.current.set(turno.id, current);
       const pending = pendingTurnos.current.get(turno.id);
       // A later server state (including cancellation) takes precedence over
@@ -355,6 +361,7 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
         pacienteNombre={pacientes[closeFor.turno.pacienteId]?.nombre ?? "Paciente"}
         canRegistrarCobro={canRegistrarCobro}
         getObservation={() => observation.current}
+        financialObservation={closeFinancialObservation.current}
         onConfirmed={confirmClose}
         onClose={() => { returnFocus.current = closeFor.turno.id; closeSelection.current = null; setCloseFor(null); router.refresh(); }}
       /> : null}
