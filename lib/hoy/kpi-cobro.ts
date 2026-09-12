@@ -97,4 +97,3 @@ export function computeCobroKpi(turnos: readonly TurnoCobroLike[]): CobroKpi {
     porCobrarPesos: deudaPesos + esperadoPesos,
   };
 }
-
