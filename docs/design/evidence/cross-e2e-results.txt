@@ -1,0 +1,18 @@
+
+Running 9 tests using 1 worker
+
+(node:16528) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:16528) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 1 tests\e2e\design-cross-review.spec.ts:10:7 › teclado, píldora y panel coinciden a 1440px (1.2s)
+  ok 2 tests\e2e\design-cross-review.spec.ts:10:7 › teclado, píldora y panel coinciden a 1024px (1.3s)
+  ok 3 tests\e2e\design-cross-review.spec.ts:10:7 › teclado, píldora y panel coinciden a 768px (1.3s)
+  ok 4 tests\e2e\design-cross-review.spec.ts:10:7 › teclado, píldora y panel coinciden a 720px (1.3s)
+  ok 5 tests\e2e\design-cross-review.spec.ts:10:7 › teclado, píldora y panel coinciden a 390px (1.4s)
+  ok 6 tests\e2e\design-cross-review.spec.ts:10:7 › teclado, píldora y panel coinciden a 320px (1.2s)
+  ok 7 tests\e2e\design-cross-review.spec.ts:44:5 › el SVG público y la marca de cabecera conservan los mismos trazados (1.2s)
+  ok 8 tests\e2e\design-cross-review.spec.ts:56:7 › controles de cabecera alcanzables con texto al 200% a 390px (887ms)
+  ok 9 tests\e2e\design-cross-review.spec.ts:56:7 › controles de cabecera alcanzables con texto al 200% a 320px (951ms)
+
+  9 passed (12.3s)

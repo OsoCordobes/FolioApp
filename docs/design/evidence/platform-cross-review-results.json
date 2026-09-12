@@ -1,0 +1,42 @@
+{
+  "passed": 6,
+  "failed": 0,
+  "results": [
+    {
+      "mode": "development",
+      "variant": "basic",
+      "passed": true,
+      "accessibleTree": "- button \"Elena Torres · 09:00 · Consulta inicial\":\n  - text: Elena T.\n  - img\n  - text: 09:00 · Inicial"
+    },
+    {
+      "mode": "development",
+      "variant": "rich",
+      "passed": true,
+      "accessibleTree": "- button \"Elena Torres · 09:00 · Consulta inicial · Dra. Profesional Sintética · Sincronizado de Google\":\n  - text: Elena T.\n  - img\n  - img\n  - text: 09:00 · Inicial DS"
+    },
+    {
+      "mode": "development",
+      "variant": "narrow",
+      "passed": true,
+      "accessibleTree": "- button \"Elena Torres · 09:00 · Consulta inicial · Dra. Profesional Sintética · Sincronizado de Google\":\n  - text: ET\n  - img\n  - text: 09:00 DS"
+    },
+    {
+      "mode": "production",
+      "variant": "basic",
+      "passed": true,
+      "accessibleTree": "- button \"Elena Torres · 09:00 · Consulta inicial\":\n  - text: Elena T.\n  - img\n  - text: 09:00 · Inicial"
+    },
+    {
+      "mode": "production",
+      "variant": "rich",
+      "passed": true,
+      "accessibleTree": "- button \"Elena Torres · 09:00 · Consulta inicial · Dra. Profesional Sintética · Sincronizado de Google\":\n  - text: Elena T.\n  - img\n  - img\n  - text: 09:00 · Inicial DS"
+    },
+    {
+      "mode": "production",
+      "variant": "narrow",
+      "passed": true,
+      "accessibleTree": "- button \"Elena Torres · 09:00 · Consulta inicial · Dra. Profesional Sintética · Sincronizado de Google\":\n  - text: ET\n  - img\n  - text: 09:00 DS"
+    }
+  ]
+}

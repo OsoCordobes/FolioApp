@@ -2,6 +2,8 @@
 
 Fecha: 12 de septiembre de 2026. Entorno: worktree `folio-experience`, rama `codex/folio-experience`. Las pruebas siguientes usan datos sintéticos; no leen archivos `.env`, no acceden a producción y no registran pacientes, cuentas ni cobros reales.
 
+Este documento conserva la evidencia de la ronda original. El cierre posterior del pulido está en [POLISH-VERIFICATION.md](POLISH-VERIFICATION.md): 73 de 73 escenarios públicos integrados, 14 de 14 comparaciones visuales sin regenerar, 1.628 de 1.628 unidades, tipos/lint finales correctos y build local `2d02096` verificado. Los resultados por módulo y sus repeticiones no se suman como pruebas únicas; la publicación se registra por separado.
+
 ## Resultados comprobados
 
 | Comprobación | Resultado | Evidencia |
@@ -9,8 +11,8 @@ Fecha: 12 de septiembre de 2026. Entorno: worktree `folio-experience`, rama `cod
 | Suite unitaria completa | 1.628 aprobadas; 0 fallos, omitidas o canceladas | [unit-results.txt](evidence/unit-results.txt) |
 | Panel Hoy, componentes React reales con acciones diferidas sintéticas | 16/16 escenarios; desarrollo y producción de React | [hoy-browser-results.json](evidence/hoy-browser-results.json), [salida](evidence/hoy-browser-results.txt) |
 | Creación de atención sin turno, modal real con acciones sintéticas | 14/14 escenarios; desarrollo y producción de React | [create-browser-results.json](evidence/create-browser-results.json), [salida](evidence/create-browser-results.txt) |
-| Teclado, selección y diálogos | 14/14 escenarios; desarrollo y producción de React | [interaction-results.json](evidence/interaction-results.json), [salida](evidence/interaction-results.txt) |
-| Landing, acceso y estilos de impresión, servidor Next aislado en 4410 | 22/22; 0 fallos, omitidas o reintentos | [public-e2e-results.json](evidence/public-e2e-results.json), [salida](evidence/public-e2e-results.txt) |
+| Teclado, selección y diálogos | 18/18 escenarios tras el segundo ciclo; desarrollo y producción de React | [interaction-results.json](evidence/interaction-results.json), [salida](evidence/platform-interactions-after.txt) |
+| Landing, acceso y estilos de impresión, servidor Next aislado en 4410 | Ronda inicial: 22/22; 0 fallos, omitidas o reintentos | [salida de la ronda inicial](evidence/public-e2e-results.txt) |
 | Comparación visual de landing después de inspeccionar y generar los baselines nuevos | 10/10, segunda ejecución sin regenerar imágenes | [visual-landing-results.json](evidence/visual-landing-results.json), [comparación](evidence/visual-landing-compare.txt) |
 | TypeScript global tras actualizar los specs | Salida 0 | [qa-typecheck.txt](evidence/qa-typecheck.txt), [qa-checks.json](evidence/qa-checks.json) |
 | ESLint de los archivos de QA modificados | Salida 0, sin diagnósticos | [qa-lint.txt](evidence/qa-lint.txt), [qa-checks.json](evidence/qa-checks.json) |

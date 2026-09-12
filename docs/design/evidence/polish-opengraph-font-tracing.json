@@ -1,0 +1,16 @@
+{
+  "checkedAt": "2026-09-12T19:20:22.922Z",
+  "trace": ".next/server/app/(marketing)/opengraph-image-pwu6ef/route.js.nft.json",
+  "traceModifiedAt": "2026-09-12T19:11:11.729Z",
+  "scope": "Existing intermediate production build trace, before the symbol-only edit. Font loader unchanged; verify again in next integrated build.",
+  "fonts": [
+    {
+      "file": "../../../../../assets/fonts/PlusJakartaSans-Regular.ttf",
+      "bytes": 128972
+    },
+    {
+      "file": "../../../../../assets/fonts/PlusJakartaSans-SemiBold.ttf",
+      "bytes": 129288
+    }
+  ]
+}

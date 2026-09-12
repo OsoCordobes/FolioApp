@@ -1,5 +1,5 @@
 {
-  "passed": 14,
+  "passed": 18,
   "failed": 0,
   "results": [
     {
@@ -20,6 +20,16 @@
     {
       "mode": "development",
       "case": "scheduling action opens only its modal",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "select-all reflects visible identities after filtering, not equal counts",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "search shortcut cannot steal focus from a WhatsApp confirmation",
       "pass": true
     },
     {
@@ -55,6 +65,16 @@
     {
       "mode": "production",
       "case": "scheduling action opens only its modal",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "select-all reflects visible identities after filtering, not equal counts",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "search shortcut cannot steal focus from a WhatsApp confirmation",
       "pass": true
     },
     {

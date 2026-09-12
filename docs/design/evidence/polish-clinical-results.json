@@ -1,0 +1,69 @@
+{
+  "environment": "local synthetic gallery; network fence active",
+  "mobile": [
+    {
+      "especialidad": "cardiologia",
+      "documentWidth": 380,
+      "selected": "Plan",
+      "visibleControls": 32,
+      "width": 390
+    },
+    {
+      "especialidad": "kinesiologia",
+      "documentWidth": 380,
+      "selected": "Plan",
+      "visibleControls": 13,
+      "width": 390
+    },
+    {
+      "especialidad": "nutricion",
+      "documentWidth": 380,
+      "selected": "Plan",
+      "visibleControls": 14,
+      "width": 390
+    },
+    {
+      "especialidad": "quiropraxia",
+      "documentWidth": 380,
+      "selected": "Plan",
+      "visibleControls": 11,
+      "width": 390
+    }
+  ],
+  "desktop": [
+    {
+      "especialidad": "cardiologia",
+      "documentWidth": 1430,
+      "width": 1440
+    },
+    {
+      "especialidad": "nutricion",
+      "documentWidth": 1430,
+      "width": 1440
+    },
+    {
+      "especialidad": "quiropraxia",
+      "documentWidth": 1430,
+      "width": 1440
+    }
+  ],
+  "keyboard": {
+    "phqOpen": "first radio focused, no answer selected",
+    "phqRemove": "load trigger focused",
+    "mseOpen": "first extended select focused",
+    "ndiOpen": "first radio focused, no answer selected",
+    "ndiRemove": "load trigger focused",
+    "borgOpen": "select focused",
+    "tabDraft": "unsaved ROM note retained across Information / Plan; cleared after check"
+  },
+  "motion": {
+    "browserPreference": "no-preference",
+    "reducedMotionExecuted": true,
+    "runner": "isolated Playwright with local GET/HEAD route fence",
+    "specialties": ["cardiologia", "psicologia", "kinesiologia", "nutricion", "quiropraxia"],
+    "transitions": { "reduce": "0s", "no-preference": "0.12s" },
+    "spineScroll": { "reduce": "auto", "no-preference": "smooth" }
+  },
+  "regression": { "file": "tests/e2e/design-clinical-polish.spec.ts", "passed": 7, "failed": 0 },
+  "scope": "No scoring, validation, data callbacks or save safeguards changed"
+}

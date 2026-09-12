@@ -1,0 +1,1100 @@
+{
+  "checkedAt": "2026-09-12T19:35:29.773Z",
+  "samples": [
+    {
+      "width": 1920,
+      "height": 1080,
+      "states": [
+        {
+          "id": "producto",
+          "active": [
+            {
+              "href": "#producto",
+              "current": "location",
+              "class": "fl-nav-link is-active"
+            },
+            {
+              "href": "#producto",
+              "current": "location",
+              "class": "fl-mobile-link is-active"
+            }
+          ],
+          "entries": [
+            {
+              "id": "producto",
+              "margin": "-486px 0px -540px 0px",
+              "intersecting": false,
+              "root": {
+                "x": 0,
+                "y": 486,
+                "width": 1920,
+                "height": 54,
+                "top": 486,
+                "right": 1920,
+                "bottom": 540,
+                "left": 0
+              }
+            },
+            {
+              "id": "dia",
+              "margin": "-486px 0px -540px 0px",
+              "intersecting": false,
+              "root": {
+                "x": 0,
+                "y": 486,
+                "width": 1920,
+                "height": 54,
+                "top": 486,
+                "right": 1920,
+                "bottom": 540,
+                "left": 0
+              }
+            },
+            {
+              "id": "precios",
+              "margin": "-486px 0px -540px 0px",
+              "intersecting": false,
+              "root": {
+                "x": 0,
+                "y": 486,
+                "width": 1920,
+                "height": 54,
+                "top": 486,
+                "right": 1920,
+                "bottom": 540,
+                "left": 0
+              }
+            },
+            {
+              "id": "producto",
+              "margin": "-486px 0px -540px 0px",
+              "intersecting": true,
+              "root": {
+                "x": 0,
+                "y": 486,
+                "width": 1920,
+                "height": 54,
+                "top": 486,
+                "right": 1920,
+                "bottom": 540,
+                "left": 0
+              }
+            }
+          ]
+        },
+        {
+          "id": "dia",
+          "active": [
+            {
+              "href": "#dia",
+              "current": "location",
+              "class": "fl-nav-link is-active"
+            },
+            {
+              "href": "#dia",
+              "current": "location",
+              "class": "fl-mobile-link is-active"
+            }
+          ],
+          "entries": [
+            {
+              "id": "producto",
+              "margin": "-486px 0px -540px 0px",
+              "intersecting": false,
+              "root": {
+                "x": 0,
+                "y": 486,
+                "width": 1920,
+                "height": 54,
+                "top": 486,
+                "right": 1920,
+                "bottom": 540,
+                "left": 0
+              }
+            },
+            {
+              "id": "dia",
+              "margin": "-486px 0px -540px 0px",
+              "intersecting": true,
+              "root": {
+                "x": 0,
+                "y": 486,
+                "width": 1920,
+                "height": 54,
+                "top": 486,
+                "right": 1920,
+                "bottom": 540,
+                "left": 0
+              }
+            }
+          ]
+        },
+        {
+          "id": "precios",
+          "active": [
+            {
+              "href": "#precios",
+              "current": "location",
+              "class": "fl-nav-link is-active"
+            },
+            {
+              "href": "#precios",
+              "current": "location",
+              "class": "fl-mobile-link is-active"
+            }
+          ],
+          "entries": [
+            {
+              "id": "dia",
+              "margin": "-486px 0px -540px 0px",
+              "intersecting": false,
+              "root": {
+                "x": 0,
+                "y": 486,
+                "width": 1920,
+                "height": 54,
+                "top": 486,
+                "right": 1920,
+                "bottom": 540,
+                "left": 0
+              }
+            },
+            {
+              "id": "precios",
+              "margin": "-486px 0px -540px 0px",
+              "intersecting": true,
+              "root": {
+                "x": 0,
+                "y": 486,
+                "width": 1920,
+                "height": 54,
+                "top": 486,
+                "right": 1920,
+                "bottom": 540,
+                "left": 0
+              }
+            }
+          ]
+        },
+        {
+          "id": "precios-accessibility",
+          "nodes": [
+            {
+              "nodeId": "62",
+              "ignored": false,
+              "role": {
+                "type": "role",
+                "value": "link"
+              },
+              "chromeRole": {
+                "type": "internalRole",
+                "value": 110
+              },
+              "name": {
+                "type": "computedString",
+                "value": "Producto",
+                "sources": [
+                  {
+                    "type": "relatedElement",
+                    "attribute": "aria-labelledby"
+                  },
+                  {
+                    "type": "attribute",
+                    "attribute": "aria-label"
+                  },
+                  {
+                    "type": "contents",
+                    "value": {
+                      "type": "computedString",
+                      "value": "Producto"
+                    }
+                  },
+                  {
+                    "type": "attribute",
+                    "attribute": "title",
+                    "superseded": true
+                  }
+                ]
+              },
+              "properties": [
+                {
+                  "name": "focusable",
+                  "value": {
+                    "type": "booleanOrUndefined",
+                    "value": true
+                  }
+                },
+                {
+                  "name": "url",
+                  "value": {
+                    "type": "string",
+                    "value": "http://127.0.0.1:4410/#producto"
+                  }
+                }
+              ],
+              "parentId": "61",
+              "childIds": [
+                "1046"
+              ],
+              "backendDOMNodeId": 62
+            },
+            {
+              "nodeId": "63",
+              "ignored": false,
+              "role": {
+                "type": "role",
+                "value": "link"
+              },
+              "chromeRole": {
+                "type": "internalRole",
+                "value": 110
+              },
+              "name": {
+                "type": "computedString",
+                "value": "Cómo funciona",
+                "sources": [
+                  {
+                    "type": "relatedElement",
+                    "attribute": "aria-labelledby"
+                  },
+                  {
+                    "type": "attribute",
+                    "attribute": "aria-label"
+                  },
+                  {
+                    "type": "contents",
+                    "value": {
+                      "type": "computedString",
+                      "value": "Cómo funciona"
+                    }
+                  },
+                  {
+                    "type": "attribute",
+                    "attribute": "title",
+                    "superseded": true
+                  }
+                ]
+              },
+              "properties": [
+                {
+                  "name": "focusable",
+                  "value": {
+                    "type": "booleanOrUndefined",
+                    "value": true
+                  }
+                },
+                {
+                  "name": "url",
+                  "value": {
+                    "type": "string",
+                    "value": "http://127.0.0.1:4410/#dia"
+                  }
+                }
+              ],
+              "parentId": "61",
+              "childIds": [
+                "1047"
+              ],
+              "backendDOMNodeId": 63
+            },
+            {
+              "nodeId": "64",
+              "ignored": false,
+              "role": {
+                "type": "role",
+                "value": "link"
+              },
+              "chromeRole": {
+                "type": "internalRole",
+                "value": 110
+              },
+              "name": {
+                "type": "computedString",
+                "value": "Precios",
+                "sources": [
+                  {
+                    "type": "relatedElement",
+                    "attribute": "aria-labelledby"
+                  },
+                  {
+                    "type": "attribute",
+                    "attribute": "aria-label"
+                  },
+                  {
+                    "type": "contents",
+                    "value": {
+                      "type": "computedString",
+                      "value": "Precios"
+                    }
+                  },
+                  {
+                    "type": "attribute",
+                    "attribute": "title",
+                    "superseded": true
+                  }
+                ]
+              },
+              "properties": [
+                {
+                  "name": "focusable",
+                  "value": {
+                    "type": "booleanOrUndefined",
+                    "value": true
+                  }
+                },
+                {
+                  "name": "url",
+                  "value": {
+                    "type": "string",
+                    "value": "http://127.0.0.1:4410/#precios"
+                  }
+                }
+              ],
+              "parentId": "61",
+              "childIds": [
+                "1048"
+              ],
+              "backendDOMNodeId": 64
+            }
+          ]
+        },
+        {
+          "screenshot": "docs/design/evidence/scrollspy-1920-precios-after.png"
+        },
+        {
+          "id": "hero",
+          "active": 0
+        }
+      ]
+    },
+    {
+      "width": 2560,
+      "height": 1440,
+      "states": [
+        {
+          "id": "producto",
+          "active": [
+            {
+              "href": "#producto",
+              "current": "location",
+              "class": "fl-nav-link is-active"
+            },
+            {
+              "href": "#producto",
+              "current": "location",
+              "class": "fl-mobile-link is-active"
+            }
+          ],
+          "entries": [
+            {
+              "id": "producto",
+              "margin": "-648px 0px -720px 0px",
+              "intersecting": false,
+              "root": {
+                "x": 0,
+                "y": 648,
+                "width": 2560,
+                "height": 72,
+                "top": 648,
+                "right": 2560,
+                "bottom": 720,
+                "left": 0
+              }
+            },
+            {
+              "id": "dia",
+              "margin": "-648px 0px -720px 0px",
+              "intersecting": false,
+              "root": {
+                "x": 0,
+                "y": 648,
+                "width": 2560,
+                "height": 72,
+                "top": 648,
+                "right": 2560,
+                "bottom": 720,
+                "left": 0
+              }
+            },
+            {
+              "id": "precios",
+              "margin": "-648px 0px -720px 0px",
+              "intersecting": false,
+              "root": {
+                "x": 0,
+                "y": 648,
+                "width": 2560,
+                "height": 72,
+                "top": 648,
+                "right": 2560,
+                "bottom": 720,
+                "left": 0
+              }
+            },
+            {
+              "id": "producto",
+              "margin": "-648px 0px -720px 0px",
+              "intersecting": true,
+              "root": {
+                "x": 0,
+                "y": 648,
+                "width": 2560,
+                "height": 72,
+                "top": 648,
+                "right": 2560,
+                "bottom": 720,
+                "left": 0
+              }
+            }
+          ]
+        },
+        {
+          "id": "dia",
+          "active": [
+            {
+              "href": "#dia",
+              "current": "location",
+              "class": "fl-nav-link is-active"
+            },
+            {
+              "href": "#dia",
+              "current": "location",
+              "class": "fl-mobile-link is-active"
+            }
+          ],
+          "entries": [
+            {
+              "id": "producto",
+              "margin": "-648px 0px -720px 0px",
+              "intersecting": false,
+              "root": {
+                "x": 0,
+                "y": 648,
+                "width": 2560,
+                "height": 72,
+                "top": 648,
+                "right": 2560,
+                "bottom": 720,
+                "left": 0
+              }
+            },
+            {
+              "id": "dia",
+              "margin": "-648px 0px -720px 0px",
+              "intersecting": true,
+              "root": {
+                "x": 0,
+                "y": 648,
+                "width": 2560,
+                "height": 72,
+                "top": 648,
+                "right": 2560,
+                "bottom": 720,
+                "left": 0
+              }
+            }
+          ]
+        },
+        {
+          "id": "precios",
+          "active": [
+            {
+              "href": "#precios",
+              "current": "location",
+              "class": "fl-nav-link is-active"
+            },
+            {
+              "href": "#precios",
+              "current": "location",
+              "class": "fl-mobile-link is-active"
+            }
+          ],
+          "entries": [
+            {
+              "id": "dia",
+              "margin": "-648px 0px -720px 0px",
+              "intersecting": false,
+              "root": {
+                "x": 0,
+                "y": 648,
+                "width": 2560,
+                "height": 72,
+                "top": 648,
+                "right": 2560,
+                "bottom": 720,
+                "left": 0
+              }
+            },
+            {
+              "id": "precios",
+              "margin": "-648px 0px -720px 0px",
+              "intersecting": true,
+              "root": {
+                "x": 0,
+                "y": 648,
+                "width": 2560,
+                "height": 72,
+                "top": 648,
+                "right": 2560,
+                "bottom": 720,
+                "left": 0
+              }
+            }
+          ]
+        },
+        {
+          "id": "precios-accessibility",
+          "nodes": [
+            {
+              "nodeId": "62",
+              "ignored": false,
+              "role": {
+                "type": "role",
+                "value": "link"
+              },
+              "chromeRole": {
+                "type": "internalRole",
+                "value": 110
+              },
+              "name": {
+                "type": "computedString",
+                "value": "Producto",
+                "sources": [
+                  {
+                    "type": "relatedElement",
+                    "attribute": "aria-labelledby"
+                  },
+                  {
+                    "type": "attribute",
+                    "attribute": "aria-label"
+                  },
+                  {
+                    "type": "contents",
+                    "value": {
+                      "type": "computedString",
+                      "value": "Producto"
+                    }
+                  },
+                  {
+                    "type": "attribute",
+                    "attribute": "title",
+                    "superseded": true
+                  }
+                ]
+              },
+              "properties": [
+                {
+                  "name": "focusable",
+                  "value": {
+                    "type": "booleanOrUndefined",
+                    "value": true
+                  }
+                },
+                {
+                  "name": "url",
+                  "value": {
+                    "type": "string",
+                    "value": "http://127.0.0.1:4410/#producto"
+                  }
+                }
+              ],
+              "parentId": "61",
+              "childIds": [
+                "1046"
+              ],
+              "backendDOMNodeId": 62
+            },
+            {
+              "nodeId": "63",
+              "ignored": false,
+              "role": {
+                "type": "role",
+                "value": "link"
+              },
+              "chromeRole": {
+                "type": "internalRole",
+                "value": 110
+              },
+              "name": {
+                "type": "computedString",
+                "value": "Cómo funciona",
+                "sources": [
+                  {
+                    "type": "relatedElement",
+                    "attribute": "aria-labelledby"
+                  },
+                  {
+                    "type": "attribute",
+                    "attribute": "aria-label"
+                  },
+                  {
+                    "type": "contents",
+                    "value": {
+                      "type": "computedString",
+                      "value": "Cómo funciona"
+                    }
+                  },
+                  {
+                    "type": "attribute",
+                    "attribute": "title",
+                    "superseded": true
+                  }
+                ]
+              },
+              "properties": [
+                {
+                  "name": "focusable",
+                  "value": {
+                    "type": "booleanOrUndefined",
+                    "value": true
+                  }
+                },
+                {
+                  "name": "url",
+                  "value": {
+                    "type": "string",
+                    "value": "http://127.0.0.1:4410/#dia"
+                  }
+                }
+              ],
+              "parentId": "61",
+              "childIds": [
+                "1047"
+              ],
+              "backendDOMNodeId": 63
+            },
+            {
+              "nodeId": "64",
+              "ignored": false,
+              "role": {
+                "type": "role",
+                "value": "link"
+              },
+              "chromeRole": {
+                "type": "internalRole",
+                "value": 110
+              },
+              "name": {
+                "type": "computedString",
+                "value": "Precios",
+                "sources": [
+                  {
+                    "type": "relatedElement",
+                    "attribute": "aria-labelledby"
+                  },
+                  {
+                    "type": "attribute",
+                    "attribute": "aria-label"
+                  },
+                  {
+                    "type": "contents",
+                    "value": {
+                      "type": "computedString",
+                      "value": "Precios"
+                    }
+                  },
+                  {
+                    "type": "attribute",
+                    "attribute": "title",
+                    "superseded": true
+                  }
+                ]
+              },
+              "properties": [
+                {
+                  "name": "focusable",
+                  "value": {
+                    "type": "booleanOrUndefined",
+                    "value": true
+                  }
+                },
+                {
+                  "name": "url",
+                  "value": {
+                    "type": "string",
+                    "value": "http://127.0.0.1:4410/#precios"
+                  }
+                }
+              ],
+              "parentId": "61",
+              "childIds": [
+                "1048"
+              ],
+              "backendDOMNodeId": 64
+            }
+          ]
+        },
+        {
+          "id": "hero",
+          "active": 0
+        }
+      ]
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "states": [
+        {
+          "id": "producto",
+          "active": [
+            {
+              "href": "#producto",
+              "current": "location",
+              "class": "fl-nav-link is-active"
+            },
+            {
+              "href": "#producto",
+              "current": "location",
+              "class": "fl-mobile-link is-active"
+            }
+          ],
+          "entries": [
+            {
+              "id": "producto",
+              "margin": "-379px 0px -422px 0px",
+              "intersecting": false,
+              "root": {
+                "x": 0,
+                "y": 379,
+                "width": 390,
+                "height": 43,
+                "top": 379,
+                "right": 390,
+                "bottom": 422,
+                "left": 0
+              }
+            },
+            {
+              "id": "dia",
+              "margin": "-379px 0px -422px 0px",
+              "intersecting": false,
+              "root": {
+                "x": 0,
+                "y": 379,
+                "width": 390,
+                "height": 43,
+                "top": 379,
+                "right": 390,
+                "bottom": 422,
+                "left": 0
+              }
+            },
+            {
+              "id": "precios",
+              "margin": "-379px 0px -422px 0px",
+              "intersecting": false,
+              "root": {
+                "x": 0,
+                "y": 379,
+                "width": 390,
+                "height": 43,
+                "top": 379,
+                "right": 390,
+                "bottom": 422,
+                "left": 0
+              }
+            },
+            {
+              "id": "producto",
+              "margin": "-379px 0px -422px 0px",
+              "intersecting": true,
+              "root": {
+                "x": 0,
+                "y": 379,
+                "width": 390,
+                "height": 43,
+                "top": 379,
+                "right": 390,
+                "bottom": 422,
+                "left": 0
+              }
+            }
+          ]
+        },
+        {
+          "id": "dia",
+          "active": [
+            {
+              "href": "#dia",
+              "current": "location",
+              "class": "fl-nav-link is-active"
+            },
+            {
+              "href": "#dia",
+              "current": "location",
+              "class": "fl-mobile-link is-active"
+            }
+          ],
+          "entries": [
+            {
+              "id": "producto",
+              "margin": "-379px 0px -422px 0px",
+              "intersecting": false,
+              "root": {
+                "x": 0,
+                "y": 379,
+                "width": 390,
+                "height": 43,
+                "top": 379,
+                "right": 390,
+                "bottom": 422,
+                "left": 0
+              }
+            },
+            {
+              "id": "dia",
+              "margin": "-379px 0px -422px 0px",
+              "intersecting": true,
+              "root": {
+                "x": 0,
+                "y": 379,
+                "width": 390,
+                "height": 43,
+                "top": 379,
+                "right": 390,
+                "bottom": 422,
+                "left": 0
+              }
+            }
+          ]
+        },
+        {
+          "id": "precios",
+          "active": [
+            {
+              "href": "#precios",
+              "current": "location",
+              "class": "fl-nav-link is-active"
+            },
+            {
+              "href": "#precios",
+              "current": "location",
+              "class": "fl-mobile-link is-active"
+            }
+          ],
+          "entries": [
+            {
+              "id": "dia",
+              "margin": "-379px 0px -422px 0px",
+              "intersecting": false,
+              "root": {
+                "x": 0,
+                "y": 379,
+                "width": 390,
+                "height": 43,
+                "top": 379,
+                "right": 390,
+                "bottom": 422,
+                "left": 0
+              }
+            },
+            {
+              "id": "precios",
+              "margin": "-379px 0px -422px 0px",
+              "intersecting": true,
+              "root": {
+                "x": 0,
+                "y": 379,
+                "width": 390,
+                "height": 43,
+                "top": 379,
+                "right": 390,
+                "bottom": 422,
+                "left": 0
+              }
+            }
+          ]
+        },
+        {
+          "id": "precios-accessibility",
+          "nodes": [
+            {
+              "nodeId": "76",
+              "ignored": false,
+              "role": {
+                "type": "role",
+                "value": "link"
+              },
+              "chromeRole": {
+                "type": "internalRole",
+                "value": 110
+              },
+              "name": {
+                "type": "computedString",
+                "value": "Producto",
+                "sources": [
+                  {
+                    "type": "relatedElement",
+                    "attribute": "aria-labelledby"
+                  },
+                  {
+                    "type": "attribute",
+                    "attribute": "aria-label"
+                  },
+                  {
+                    "type": "contents",
+                    "value": {
+                      "type": "computedString",
+                      "value": "Producto"
+                    }
+                  },
+                  {
+                    "type": "attribute",
+                    "attribute": "title",
+                    "superseded": true
+                  }
+                ]
+              },
+              "properties": [
+                {
+                  "name": "focusable",
+                  "value": {
+                    "type": "booleanOrUndefined",
+                    "value": true
+                  }
+                },
+                {
+                  "name": "url",
+                  "value": {
+                    "type": "string",
+                    "value": "http://127.0.0.1:4410/#producto"
+                  }
+                }
+              ],
+              "parentId": "75",
+              "childIds": [
+                "1052"
+              ],
+              "backendDOMNodeId": 76
+            },
+            {
+              "nodeId": "77",
+              "ignored": false,
+              "role": {
+                "type": "role",
+                "value": "link"
+              },
+              "chromeRole": {
+                "type": "internalRole",
+                "value": 110
+              },
+              "name": {
+                "type": "computedString",
+                "value": "Cómo funciona",
+                "sources": [
+                  {
+                    "type": "relatedElement",
+                    "attribute": "aria-labelledby"
+                  },
+                  {
+                    "type": "attribute",
+                    "attribute": "aria-label"
+                  },
+                  {
+                    "type": "contents",
+                    "value": {
+                      "type": "computedString",
+                      "value": "Cómo funciona"
+                    }
+                  },
+                  {
+                    "type": "attribute",
+                    "attribute": "title",
+                    "superseded": true
+                  }
+                ]
+              },
+              "properties": [
+                {
+                  "name": "focusable",
+                  "value": {
+                    "type": "booleanOrUndefined",
+                    "value": true
+                  }
+                },
+                {
+                  "name": "url",
+                  "value": {
+                    "type": "string",
+                    "value": "http://127.0.0.1:4410/#dia"
+                  }
+                }
+              ],
+              "parentId": "75",
+              "childIds": [
+                "1053"
+              ],
+              "backendDOMNodeId": 77
+            },
+            {
+              "nodeId": "78",
+              "ignored": false,
+              "role": {
+                "type": "role",
+                "value": "link"
+              },
+              "chromeRole": {
+                "type": "internalRole",
+                "value": 110
+              },
+              "name": {
+                "type": "computedString",
+                "value": "Precios",
+                "sources": [
+                  {
+                    "type": "relatedElement",
+                    "attribute": "aria-labelledby"
+                  },
+                  {
+                    "type": "attribute",
+                    "attribute": "aria-label"
+                  },
+                  {
+                    "type": "contents",
+                    "value": {
+                      "type": "computedString",
+                      "value": "Precios"
+                    }
+                  },
+                  {
+                    "type": "attribute",
+                    "attribute": "title",
+                    "superseded": true
+                  }
+                ]
+              },
+              "properties": [
+                {
+                  "name": "focusable",
+                  "value": {
+                    "type": "booleanOrUndefined",
+                    "value": true
+                  }
+                },
+                {
+                  "name": "url",
+                  "value": {
+                    "type": "string",
+                    "value": "http://127.0.0.1:4410/#precios"
+                  }
+                }
+              ],
+              "parentId": "75",
+              "childIds": [
+                "1054"
+              ],
+              "backendDOMNodeId": 78
+            }
+          ]
+        },
+        {
+          "screenshot": "docs/design/evidence/scrollspy-390-precios-after.png"
+        },
+        {
+          "id": "hero",
+          "active": 0
+        }
+      ]
+    }
+  ]
+}

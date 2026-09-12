@@ -1,0 +1,149 @@
+{
+  "scope": "Synthetic DOM with complete current CSS; no source edits; order-only and removal comparison, not Next asset proof",
+  "result": [
+    {
+      "scenario": "ficha",
+      "width": 390,
+      "media": "screen",
+      "targetOrder": "relocatedLast",
+      "diffs": []
+    },
+    {
+      "scenario": "ficha",
+      "width": 390,
+      "media": "print",
+      "targetOrder": "relocatedLast",
+      "diffs": []
+    },
+    {
+      "scenario": "ficha",
+      "width": 1440,
+      "media": "screen",
+      "targetOrder": "relocatedLast",
+      "diffs": []
+    },
+    {
+      "scenario": "ficha",
+      "width": 1440,
+      "media": "print",
+      "targetOrder": "relocatedLast",
+      "diffs": []
+    },
+    {
+      "scenario": "hoy",
+      "width": 390,
+      "media": "screen",
+      "targetOrder": "relocatedLast",
+      "diffs": []
+    },
+    {
+      "scenario": "hoy",
+      "width": 390,
+      "media": "print",
+      "targetOrder": "relocatedLast",
+      "diffs": []
+    },
+    {
+      "scenario": "hoy",
+      "width": 1440,
+      "media": "screen",
+      "targetOrder": "relocatedLast",
+      "diffs": []
+    },
+    {
+      "scenario": "hoy",
+      "width": 1440,
+      "media": "print",
+      "targetOrder": "relocatedLast",
+      "diffs": []
+    },
+    {
+      "scenario": "quiroLegacy",
+      "width": 390,
+      "media": "screen",
+      "targetOrder": "relocatedLast",
+      "diffs": []
+    },
+    {
+      "scenario": "quiroLegacy",
+      "width": 390,
+      "media": "print",
+      "targetOrder": "relocatedLast",
+      "diffs": []
+    },
+    {
+      "scenario": "quiroLegacy",
+      "width": 1440,
+      "media": "screen",
+      "targetOrder": "relocatedLast",
+      "diffs": []
+    },
+    {
+      "scenario": "quiroLegacy",
+      "width": 1440,
+      "media": "print",
+      "targetOrder": "relocatedLast",
+      "diffs": []
+    },
+    {
+      "scenario": "public",
+      "width": 390,
+      "media": "screen",
+      "targetOrder": "withoutClinical",
+      "diffs": []
+    },
+    {
+      "scenario": "public",
+      "width": 390,
+      "media": "print",
+      "targetOrder": "withoutClinical",
+      "diffs": [
+        {
+          "path": "tokens.--bg",
+          "current": "#FFFFFF",
+          "next": "#F5F5FA"
+        },
+        {
+          "path": "tokens.--ink",
+          "current": "#111111",
+          "next": "#292641"
+        },
+        {
+          "path": "tokens.--accent",
+          "current": "#6E5119",
+          "next": "#6255C5"
+        }
+      ]
+    },
+    {
+      "scenario": "public",
+      "width": 1440,
+      "media": "screen",
+      "targetOrder": "withoutClinical",
+      "diffs": []
+    },
+    {
+      "scenario": "public",
+      "width": 1440,
+      "media": "print",
+      "targetOrder": "withoutClinical",
+      "diffs": [
+        {
+          "path": "tokens.--bg",
+          "current": "#FFFFFF",
+          "next": "#F5F5FA"
+        },
+        {
+          "path": "tokens.--ink",
+          "current": "#111111",
+          "next": "#292641"
+        },
+        {
+          "path": "tokens.--accent",
+          "current": "#6E5119",
+          "next": "#6255C5"
+        }
+      ]
+    }
+  ]
+}

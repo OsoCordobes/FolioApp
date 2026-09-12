@@ -1,0 +1,62 @@
+{"mode":"development","case":"resend stays pending once, first wait ends at 60 seconds, subsequent wait is five minutes and clock becomes idle","pass":false,"error":"expired cooldown must release its interval\n\n1 !== 0\n","pageErrors":[]}
+{"mode":"development","case":"failed resend leaves the error and allows a deliberate retry without starting a wait","pass":true}
+{"mode":"development","case":"unmount stops callbacks and reload restores only the remaining wait","pass":false,"error":"Expected values to be strictly equal:\n\n1 !== 0\n","pageErrors":[]}
+{"mode":"development","case":"an already expired stored wait does not create a timer or block resending","pass":true}
+{"mode":"production","case":"resend stays pending once, first wait ends at 60 seconds, subsequent wait is five minutes and clock becomes idle","pass":false,"error":"expired cooldown must release its interval\n\n1 !== 0\n","pageErrors":[]}
+{"mode":"production","case":"failed resend leaves the error and allows a deliberate retry without starting a wait","pass":true}
+{"mode":"production","case":"unmount stops callbacks and reload restores only the remaining wait","pass":false,"error":"Expected values to be strictly equal:\n\n1 !== 0\n","pageErrors":[]}
+{"mode":"production","case":"an already expired stored wait does not create a timer or block resending","pass":true}
+{
+  "passed": 4,
+  "failed": 4,
+  "results": [
+    {
+      "mode": "development",
+      "case": "resend stays pending once, first wait ends at 60 seconds, subsequent wait is five minutes and clock becomes idle",
+      "pass": false,
+      "error": "expired cooldown must release its interval\n\n1 !== 0\n",
+      "pageErrors": []
+    },
+    {
+      "mode": "development",
+      "case": "failed resend leaves the error and allows a deliberate retry without starting a wait",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "unmount stops callbacks and reload restores only the remaining wait",
+      "pass": false,
+      "error": "Expected values to be strictly equal:\n\n1 !== 0\n",
+      "pageErrors": []
+    },
+    {
+      "mode": "development",
+      "case": "an already expired stored wait does not create a timer or block resending",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "resend stays pending once, first wait ends at 60 seconds, subsequent wait is five minutes and clock becomes idle",
+      "pass": false,
+      "error": "expired cooldown must release its interval\n\n1 !== 0\n",
+      "pageErrors": []
+    },
+    {
+      "mode": "production",
+      "case": "failed resend leaves the error and allows a deliberate retry without starting a wait",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "unmount stops callbacks and reload restores only the remaining wait",
+      "pass": false,
+      "error": "Expected values to be strictly equal:\n\n1 !== 0\n",
+      "pageErrors": []
+    },
+    {
+      "mode": "production",
+      "case": "an already expired stored wait does not create a timer or block resending",
+      "pass": true
+    }
+  ]
+}

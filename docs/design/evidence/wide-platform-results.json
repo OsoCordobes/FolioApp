@@ -1,0 +1,1125 @@
+{
+  "date": "2026-09-12T19:25:04.935Z",
+  "kind": "local synthetic gallery, no services or submissions",
+  "samples": [
+    {
+      "panel": "hoy",
+      "width": 1920,
+      "main": {
+        "left": 252,
+        "right": 1920,
+        "width": 1668,
+        "height": 1118.421875,
+        "maxWidth": "none",
+        "padding": "0px",
+        "scrollWidth": 1668,
+        "clientWidth": 1668
+      },
+      "content": {
+        "left": 390,
+        "right": 1782,
+        "width": 1392,
+        "height": 1118.421875,
+        "maxWidth": "1392px",
+        "padding": "36px 40px 96px",
+        "scrollWidth": 1392,
+        "clientWidth": 1392
+      },
+      "table": null,
+      "grid": {
+        "left": 430,
+        "right": 1742,
+        "width": 1312,
+        "height": 127.046875,
+        "maxWidth": "none",
+        "padding": "0px",
+        "scrollWidth": 1312,
+        "clientWidth": 1312
+      },
+      "horizontalOverflow": false,
+      "controls": 11,
+      "lowContrast": [],
+      "clippedAmounts": [],
+      "tableColumns": [],
+      "pageErrors": []
+    },
+    {
+      "panel": "calendario",
+      "width": 1920,
+      "main": {
+        "left": 252,
+        "right": 1920,
+        "width": 1668,
+        "height": 1080,
+        "maxWidth": "none",
+        "padding": "0px",
+        "scrollWidth": 1668,
+        "clientWidth": 1668
+      },
+      "content": {
+        "left": 252,
+        "right": 1920,
+        "width": 1668,
+        "height": 1080,
+        "maxWidth": "none",
+        "padding": "32px 32px 80px",
+        "scrollWidth": 1668,
+        "clientWidth": 1668
+      },
+      "table": null,
+      "grid": {
+        "left": 284,
+        "right": 1888,
+        "width": 1604,
+        "height": 618,
+        "maxWidth": "none",
+        "padding": "0px",
+        "scrollWidth": 1602,
+        "clientWidth": 1602
+      },
+      "horizontalOverflow": false,
+      "controls": 15,
+      "lowContrast": [],
+      "clippedAmounts": [],
+      "tableColumns": [],
+      "dialog": {
+        "left": 0,
+        "right": 1920,
+        "top": 0,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080,
+        "fits": true
+      },
+      "focusReturned": true,
+      "pageErrors": []
+    },
+    {
+      "panel": "pacientes",
+      "width": 1920,
+      "main": {
+        "left": 252,
+        "right": 1920,
+        "width": 1668,
+        "height": 1080,
+        "maxWidth": "none",
+        "padding": "0px",
+        "scrollWidth": 1668,
+        "clientWidth": 1668
+      },
+      "content": {
+        "left": 390,
+        "right": 1782,
+        "width": 1392,
+        "height": 1080,
+        "maxWidth": "1392px",
+        "padding": "36px 40px 96px",
+        "scrollWidth": 1392,
+        "clientWidth": 1392
+      },
+      "table": {
+        "left": 431,
+        "right": 1741,
+        "width": 1310,
+        "height": 452,
+        "maxWidth": "none",
+        "padding": "0px",
+        "scrollWidth": 1310,
+        "clientWidth": 1310
+      },
+      "grid": null,
+      "horizontalOverflow": false,
+      "controls": 23,
+      "lowContrast": [],
+      "clippedAmounts": [],
+      "tableColumns": [
+        {
+          "text": "",
+          "left": 431,
+          "right": 469,
+          "width": 38,
+          "height": 50.5,
+          "maxWidth": "none",
+          "padding": "15px 4px 15px 18px",
+          "scrollWidth": 38,
+          "clientWidth": 38
+        },
+        {
+          "text": "Paciente",
+          "left": 469,
+          "right": 847.34375,
+          "width": 378.34375,
+          "height": 50.5,
+          "maxWidth": "none",
+          "padding": "15px 14px",
+          "scrollWidth": 378,
+          "clientWidth": 378
+        },
+        {
+          "text": "Cobertura",
+          "left": 847.34375,
+          "right": 1124.4375,
+          "width": 277.09375,
+          "height": 50.5,
+          "maxWidth": "none",
+          "padding": "15px 14px",
+          "scrollWidth": 277,
+          "clientWidth": 277
+        },
+        {
+          "text": "Etiquetas",
+          "left": 1124.4375,
+          "right": 1254.078125,
+          "width": 129.640625,
+          "height": 50.5,
+          "maxWidth": "none",
+          "padding": "15px 14px",
+          "scrollWidth": 130,
+          "clientWidth": 130
+        },
+        {
+          "text": "Última",
+          "left": 1254.078125,
+          "right": 1357.421875,
+          "width": 103.34375,
+          "height": 50.5,
+          "maxWidth": "none",
+          "padding": "15px 14px",
+          "scrollWidth": 103,
+          "clientWidth": 103
+        },
+        {
+          "text": "Sesiones",
+          "left": 1357.421875,
+          "right": 1482.921875,
+          "width": 125.5,
+          "height": 50.5,
+          "maxWidth": "none",
+          "padding": "15px 14px",
+          "scrollWidth": 126,
+          "clientWidth": 126
+        },
+        {
+          "text": "Próximo",
+          "left": 1482.921875,
+          "right": 1616.609375,
+          "width": 133.6875,
+          "height": 50.5,
+          "maxWidth": "none",
+          "padding": "15px 14px",
+          "scrollWidth": 134,
+          "clientWidth": 134
+        },
+        {
+          "text": "Estado",
+          "left": 1616.609375,
+          "right": 1741,
+          "width": 124.390625,
+          "height": 50.5,
+          "maxWidth": "none",
+          "padding": "15px 14px",
+          "scrollWidth": 124,
+          "clientWidth": 124
+        }
+      ],
+      "tableKeyboardScroll": 0,
+      "pageErrors": []
+    },
+    {
+      "panel": "finanzas",
+      "width": 1920,
+      "main": {
+        "left": 252,
+        "right": 1920,
+        "width": 1668,
+        "height": 1210.8125,
+        "maxWidth": "none",
+        "padding": "0px",
+        "scrollWidth": 1668,
+        "clientWidth": 1668
+      },
+      "content": {
+        "left": 390,
+        "right": 1782,
+        "width": 1392,
+        "height": 1210.8125,
+        "maxWidth": "1392px",
+        "padding": "36px 40px 96px",
+        "scrollWidth": 1392,
+        "clientWidth": 1392
+      },
+      "table": {
+        "left": 431,
+        "right": 1741,
+        "width": 1310,
+        "height": 366,
+        "maxWidth": "none",
+        "padding": "0px",
+        "scrollWidth": 1310,
+        "clientWidth": 1310
+      },
+      "grid": null,
+      "horizontalOverflow": false,
+      "controls": 5,
+      "lowContrast": [],
+      "clippedAmounts": [],
+      "tableColumns": [
+        {
+          "text": "Fecha",
+          "left": 431,
+          "right": 655.890625,
+          "width": 224.890625,
+          "height": 45.5,
+          "maxWidth": "none",
+          "padding": "15px 22px",
+          "scrollWidth": 225,
+          "clientWidth": 225
+        },
+        {
+          "text": "Paciente",
+          "left": 655.890625,
+          "right": 886.234375,
+          "width": 230.34375,
+          "height": 45.5,
+          "maxWidth": "none",
+          "padding": "15px 22px",
+          "scrollWidth": 230,
+          "clientWidth": 230
+        },
+        {
+          "text": "Servicio",
+          "left": 886.234375,
+          "right": 1102.25,
+          "width": 216.015625,
+          "height": 45.5,
+          "maxWidth": "none",
+          "padding": "15px 22px",
+          "scrollWidth": 216,
+          "clientWidth": 216
+        },
+        {
+          "text": "Método",
+          "left": 1102.25,
+          "right": 1345.390625,
+          "width": 243.140625,
+          "height": 45.5,
+          "maxWidth": "none",
+          "padding": "15px 22px",
+          "scrollWidth": 243,
+          "clientWidth": 243
+        },
+        {
+          "text": "Estado",
+          "left": 1345.390625,
+          "right": 1559.09375,
+          "width": 213.703125,
+          "height": 45.5,
+          "maxWidth": "none",
+          "padding": "15px 22px",
+          "scrollWidth": 214,
+          "clientWidth": 214
+        },
+        {
+          "text": "Monto",
+          "left": 1559.09375,
+          "right": 1741,
+          "width": 181.90625,
+          "height": 45.5,
+          "maxWidth": "none",
+          "padding": "15px 22px",
+          "scrollWidth": 182,
+          "clientWidth": 182
+        }
+      ],
+      "tableKeyboardScroll": 0,
+      "pageErrors": []
+    },
+    {
+      "panel": "configuracion",
+      "width": 1920,
+      "main": {
+        "left": 252,
+        "right": 1920,
+        "width": 1668,
+        "height": 1841.953125,
+        "maxWidth": "none",
+        "padding": "0px",
+        "scrollWidth": 1668,
+        "clientWidth": 1668
+      },
+      "content": {
+        "left": 426,
+        "right": 1746,
+        "width": 1320,
+        "height": 1841.953125,
+        "maxWidth": "1320px",
+        "padding": "36px 40px 96px",
+        "scrollWidth": 1320,
+        "clientWidth": 1320
+      },
+      "table": null,
+      "grid": {
+        "left": 466,
+        "right": 1706,
+        "width": 1240,
+        "height": 1600.375,
+        "maxWidth": "none",
+        "padding": "0px",
+        "scrollWidth": 1240,
+        "clientWidth": 1240
+      },
+      "horizontalOverflow": false,
+      "controls": 14,
+      "lowContrast": [],
+      "clippedAmounts": [],
+      "tableColumns": [],
+      "pageErrors": []
+    },
+    {
+      "panel": "hoy",
+      "width": 2560,
+      "main": {
+        "left": 252,
+        "right": 2560,
+        "width": 2308,
+        "height": 1118.421875,
+        "maxWidth": "none",
+        "padding": "0px",
+        "scrollWidth": 2308,
+        "clientWidth": 2308
+      },
+      "content": {
+        "left": 710,
+        "right": 2102,
+        "width": 1392,
+        "height": 1118.421875,
+        "maxWidth": "1392px",
+        "padding": "36px 40px 96px",
+        "scrollWidth": 1392,
+        "clientWidth": 1392
+      },
+      "table": null,
+      "grid": {
+        "left": 750,
+        "right": 2062,
+        "width": 1312,
+        "height": 127.046875,
+        "maxWidth": "none",
+        "padding": "0px",
+        "scrollWidth": 1312,
+        "clientWidth": 1312
+      },
+      "horizontalOverflow": false,
+      "controls": 11,
+      "lowContrast": [],
+      "clippedAmounts": [],
+      "tableColumns": [],
+      "pageErrors": []
+    },
+    {
+      "panel": "calendario",
+      "width": 2560,
+      "main": {
+        "left": 252,
+        "right": 2560,
+        "width": 2308,
+        "height": 1080,
+        "maxWidth": "none",
+        "padding": "0px",
+        "scrollWidth": 2308,
+        "clientWidth": 2308
+      },
+      "content": {
+        "left": 252,
+        "right": 2560,
+        "width": 2308,
+        "height": 1080,
+        "maxWidth": "none",
+        "padding": "32px 32px 80px",
+        "scrollWidth": 2308,
+        "clientWidth": 2308
+      },
+      "table": null,
+      "grid": {
+        "left": 284,
+        "right": 2528,
+        "width": 2244,
+        "height": 618,
+        "maxWidth": "none",
+        "padding": "0px",
+        "scrollWidth": 2242,
+        "clientWidth": 2242
+      },
+      "horizontalOverflow": false,
+      "controls": 15,
+      "lowContrast": [],
+      "clippedAmounts": [],
+      "tableColumns": [],
+      "dialog": {
+        "left": 0,
+        "right": 2560,
+        "top": 0,
+        "bottom": 1080,
+        "width": 2560,
+        "height": 1080,
+        "fits": true
+      },
+      "focusReturned": true,
+      "pageErrors": []
+    },
+    {
+      "panel": "pacientes",
+      "width": 2560,
+      "main": {
+        "left": 252,
+        "right": 2560,
+        "width": 2308,
+        "height": 1080,
+        "maxWidth": "none",
+        "padding": "0px",
+        "scrollWidth": 2308,
+        "clientWidth": 2308
+      },
+      "content": {
+        "left": 710,
+        "right": 2102,
+        "width": 1392,
+        "height": 1080,
+        "maxWidth": "1392px",
+        "padding": "36px 40px 96px",
+        "scrollWidth": 1392,
+        "clientWidth": 1392
+      },
+      "table": {
+        "left": 751,
+        "right": 2061,
+        "width": 1310,
+        "height": 452,
+        "maxWidth": "none",
+        "padding": "0px",
+        "scrollWidth": 1310,
+        "clientWidth": 1310
+      },
+      "grid": null,
+      "horizontalOverflow": false,
+      "controls": 23,
+      "lowContrast": [],
+      "clippedAmounts": [],
+      "tableColumns": [
+        {
+          "text": "",
+          "left": 751,
+          "right": 789,
+          "width": 38,
+          "height": 50.5,
+          "maxWidth": "none",
+          "padding": "15px 4px 15px 18px",
+          "scrollWidth": 38,
+          "clientWidth": 38
+        },
+        {
+          "text": "Paciente",
+          "left": 789,
+          "right": 1167.34375,
+          "width": 378.34375,
+          "height": 50.5,
+          "maxWidth": "none",
+          "padding": "15px 14px",
+          "scrollWidth": 378,
+          "clientWidth": 378
+        },
+        {
+          "text": "Cobertura",
+          "left": 1167.34375,
+          "right": 1444.4375,
+          "width": 277.09375,
+          "height": 50.5,
+          "maxWidth": "none",
+          "padding": "15px 14px",
+          "scrollWidth": 277,
+          "clientWidth": 277
+        },
+        {
+          "text": "Etiquetas",
+          "left": 1444.4375,
+          "right": 1574.078125,
+          "width": 129.640625,
+          "height": 50.5,
+          "maxWidth": "none",
+          "padding": "15px 14px",
+          "scrollWidth": 130,
+          "clientWidth": 130
+        },
+        {
+          "text": "Última",
+          "left": 1574.078125,
+          "right": 1677.421875,
+          "width": 103.34375,
+          "height": 50.5,
+          "maxWidth": "none",
+          "padding": "15px 14px",
+          "scrollWidth": 103,
+          "clientWidth": 103
+        },
+        {
+          "text": "Sesiones",
+          "left": 1677.421875,
+          "right": 1802.921875,
+          "width": 125.5,
+          "height": 50.5,
+          "maxWidth": "none",
+          "padding": "15px 14px",
+          "scrollWidth": 126,
+          "clientWidth": 126
+        },
+        {
+          "text": "Próximo",
+          "left": 1802.921875,
+          "right": 1936.609375,
+          "width": 133.6875,
+          "height": 50.5,
+          "maxWidth": "none",
+          "padding": "15px 14px",
+          "scrollWidth": 134,
+          "clientWidth": 134
+        },
+        {
+          "text": "Estado",
+          "left": 1936.609375,
+          "right": 2061,
+          "width": 124.390625,
+          "height": 50.5,
+          "maxWidth": "none",
+          "padding": "15px 14px",
+          "scrollWidth": 124,
+          "clientWidth": 124
+        }
+      ],
+      "tableKeyboardScroll": 0,
+      "pageErrors": []
+    },
+    {
+      "panel": "finanzas",
+      "width": 2560,
+      "main": {
+        "left": 252,
+        "right": 2560,
+        "width": 2308,
+        "height": 1210.8125,
+        "maxWidth": "none",
+        "padding": "0px",
+        "scrollWidth": 2308,
+        "clientWidth": 2308
+      },
+      "content": {
+        "left": 710,
+        "right": 2102,
+        "width": 1392,
+        "height": 1210.8125,
+        "maxWidth": "1392px",
+        "padding": "36px 40px 96px",
+        "scrollWidth": 1392,
+        "clientWidth": 1392
+      },
+      "table": {
+        "left": 751,
+        "right": 2061,
+        "width": 1310,
+        "height": 366,
+        "maxWidth": "none",
+        "padding": "0px",
+        "scrollWidth": 1310,
+        "clientWidth": 1310
+      },
+      "grid": null,
+      "horizontalOverflow": false,
+      "controls": 5,
+      "lowContrast": [],
+      "clippedAmounts": [],
+      "tableColumns": [
+        {
+          "text": "Fecha",
+          "left": 751,
+          "right": 975.890625,
+          "width": 224.890625,
+          "height": 45.5,
+          "maxWidth": "none",
+          "padding": "15px 22px",
+          "scrollWidth": 225,
+          "clientWidth": 225
+        },
+        {
+          "text": "Paciente",
+          "left": 975.890625,
+          "right": 1206.234375,
+          "width": 230.34375,
+          "height": 45.5,
+          "maxWidth": "none",
+          "padding": "15px 22px",
+          "scrollWidth": 230,
+          "clientWidth": 230
+        },
+        {
+          "text": "Servicio",
+          "left": 1206.234375,
+          "right": 1422.25,
+          "width": 216.015625,
+          "height": 45.5,
+          "maxWidth": "none",
+          "padding": "15px 22px",
+          "scrollWidth": 216,
+          "clientWidth": 216
+        },
+        {
+          "text": "Método",
+          "left": 1422.25,
+          "right": 1665.390625,
+          "width": 243.140625,
+          "height": 45.5,
+          "maxWidth": "none",
+          "padding": "15px 22px",
+          "scrollWidth": 243,
+          "clientWidth": 243
+        },
+        {
+          "text": "Estado",
+          "left": 1665.390625,
+          "right": 1879.09375,
+          "width": 213.703125,
+          "height": 45.5,
+          "maxWidth": "none",
+          "padding": "15px 22px",
+          "scrollWidth": 214,
+          "clientWidth": 214
+        },
+        {
+          "text": "Monto",
+          "left": 1879.09375,
+          "right": 2061,
+          "width": 181.90625,
+          "height": 45.5,
+          "maxWidth": "none",
+          "padding": "15px 22px",
+          "scrollWidth": 182,
+          "clientWidth": 182
+        }
+      ],
+      "tableKeyboardScroll": 0,
+      "pageErrors": []
+    },
+    {
+      "panel": "configuracion",
+      "width": 2560,
+      "main": {
+        "left": 252,
+        "right": 2560,
+        "width": 2308,
+        "height": 1841.953125,
+        "maxWidth": "none",
+        "padding": "0px",
+        "scrollWidth": 2308,
+        "clientWidth": 2308
+      },
+      "content": {
+        "left": 746,
+        "right": 2066,
+        "width": 1320,
+        "height": 1841.953125,
+        "maxWidth": "1320px",
+        "padding": "36px 40px 96px",
+        "scrollWidth": 1320,
+        "clientWidth": 1320
+      },
+      "table": null,
+      "grid": {
+        "left": 786,
+        "right": 2026,
+        "width": 1240,
+        "height": 1600.375,
+        "maxWidth": "none",
+        "padding": "0px",
+        "scrollWidth": 1240,
+        "clientWidth": 1240
+      },
+      "horizontalOverflow": false,
+      "controls": 14,
+      "lowContrast": [],
+      "clippedAmounts": [],
+      "tableColumns": [],
+      "pageErrors": []
+    },
+    {
+      "panel": "hoy",
+      "width": 390,
+      "main": {
+        "left": 0,
+        "right": 390,
+        "width": 390,
+        "height": 1595.96875,
+        "maxWidth": "none",
+        "padding": "0px",
+        "scrollWidth": 390,
+        "clientWidth": 390
+      },
+      "content": {
+        "left": 0,
+        "right": 390,
+        "width": 390,
+        "height": 1595.96875,
+        "maxWidth": "1392px",
+        "padding": "24px 16px 110px",
+        "scrollWidth": 390,
+        "clientWidth": 390
+      },
+      "table": null,
+      "grid": {
+        "left": 16,
+        "right": 374,
+        "width": 358,
+        "height": 247,
+        "maxWidth": "none",
+        "padding": "0px",
+        "scrollWidth": 358,
+        "clientWidth": 358
+      },
+      "horizontalOverflow": false,
+      "controls": 11,
+      "lowContrast": [],
+      "clippedAmounts": [],
+      "tableColumns": [],
+      "pageErrors": []
+    },
+    {
+      "panel": "calendario",
+      "width": 390,
+      "main": {
+        "left": 0,
+        "right": 390,
+        "width": 390,
+        "height": 1214.359375,
+        "maxWidth": "none",
+        "padding": "0px",
+        "scrollWidth": 390,
+        "clientWidth": 390
+      },
+      "content": {
+        "left": 0,
+        "right": 390,
+        "width": 390,
+        "height": 1214.359375,
+        "maxWidth": "none",
+        "padding": "24px 16px 110px",
+        "scrollWidth": 390,
+        "clientWidth": 390
+      },
+      "table": null,
+      "grid": {
+        "left": 16,
+        "right": 680,
+        "width": 664,
+        "height": 618,
+        "maxWidth": "none",
+        "padding": "0px",
+        "scrollWidth": 662,
+        "clientWidth": 662
+      },
+      "horizontalOverflow": false,
+      "controls": 15,
+      "lowContrast": [],
+      "clippedAmounts": [],
+      "tableColumns": [],
+      "dialog": {
+        "left": 0,
+        "right": 390,
+        "top": 0,
+        "bottom": 844,
+        "width": 390,
+        "height": 844,
+        "fits": true
+      },
+      "focusReturned": true,
+      "pageErrors": []
+    },
+    {
+      "panel": "pacientes",
+      "width": 390,
+      "main": {
+        "left": 0,
+        "right": 390,
+        "width": 390,
+        "height": 1022.15625,
+        "maxWidth": "none",
+        "padding": "0px",
+        "scrollWidth": 390,
+        "clientWidth": 390
+      },
+      "content": {
+        "left": 0,
+        "right": 390,
+        "width": 390,
+        "height": 1022.15625,
+        "maxWidth": "1392px",
+        "padding": "24px 16px 110px",
+        "scrollWidth": 390,
+        "clientWidth": 390
+      },
+      "table": {
+        "left": 17,
+        "right": 777,
+        "width": 760,
+        "height": 486,
+        "maxWidth": "none",
+        "padding": "0px",
+        "scrollWidth": 760,
+        "clientWidth": 760
+      },
+      "grid": null,
+      "horizontalOverflow": false,
+      "controls": 23,
+      "lowContrast": [],
+      "clippedAmounts": [],
+      "tableColumns": [
+        {
+          "text": "",
+          "left": 17,
+          "right": 55,
+          "width": 38,
+          "height": 50.5,
+          "maxWidth": "none",
+          "padding": "15px 4px 15px 18px",
+          "scrollWidth": 38,
+          "clientWidth": 38
+        },
+        {
+          "text": "Paciente",
+          "left": 55,
+          "right": 266.421875,
+          "width": 211.421875,
+          "height": 50.5,
+          "maxWidth": "none",
+          "padding": "15px 14px",
+          "scrollWidth": 211,
+          "clientWidth": 211
+        },
+        {
+          "text": "Cobertura",
+          "left": 266.421875,
+          "right": 425.140625,
+          "width": 158.71875,
+          "height": 50.5,
+          "maxWidth": "none",
+          "padding": "15px 14px",
+          "scrollWidth": 159,
+          "clientWidth": 159
+        },
+        {
+          "text": "Etiquetas",
+          "left": 425.140625,
+          "right": 499.40625,
+          "width": 74.265625,
+          "height": 50.5,
+          "maxWidth": "none",
+          "padding": "15px 14px",
+          "scrollWidth": 74,
+          "clientWidth": 74
+        },
+        {
+          "text": "Última",
+          "left": 499.40625,
+          "right": 558.609375,
+          "width": 59.203125,
+          "height": 50.5,
+          "maxWidth": "none",
+          "padding": "15px 14px",
+          "scrollWidth": 59,
+          "clientWidth": 59
+        },
+        {
+          "text": "Sesiones",
+          "left": 558.609375,
+          "right": 630.5,
+          "width": 71.890625,
+          "height": 50.5,
+          "maxWidth": "none",
+          "padding": "15px 14px",
+          "scrollWidth": 72,
+          "clientWidth": 72
+        },
+        {
+          "text": "Próximo",
+          "left": 630.5,
+          "right": 705.765625,
+          "width": 75.265625,
+          "height": 50.5,
+          "maxWidth": "none",
+          "padding": "15px 14px",
+          "scrollWidth": 75,
+          "clientWidth": 75
+        },
+        {
+          "text": "Estado",
+          "left": 705.765625,
+          "right": 777,
+          "width": 71.234375,
+          "height": 50.5,
+          "maxWidth": "none",
+          "padding": "15px 14px",
+          "scrollWidth": 71,
+          "clientWidth": 71
+        }
+      ],
+      "tableKeyboardScroll": 38,
+      "pageErrors": []
+    },
+    {
+      "panel": "finanzas",
+      "width": 390,
+      "main": {
+        "left": 0,
+        "right": 390,
+        "width": 390,
+        "height": 2106.90625,
+        "maxWidth": "none",
+        "padding": "0px",
+        "scrollWidth": 390,
+        "clientWidth": 390
+      },
+      "content": {
+        "left": 0,
+        "right": 390,
+        "width": 390,
+        "height": 2106.90625,
+        "maxWidth": "1392px",
+        "padding": "24px 16px 110px",
+        "scrollWidth": 390,
+        "clientWidth": 390
+      },
+      "table": {
+        "left": 17,
+        "right": 697,
+        "width": 680,
+        "height": 459,
+        "maxWidth": "none",
+        "padding": "0px",
+        "scrollWidth": 680,
+        "clientWidth": 680
+      },
+      "grid": null,
+      "horizontalOverflow": false,
+      "controls": 5,
+      "lowContrast": [],
+      "clippedAmounts": [],
+      "tableColumns": [
+        {
+          "text": "Fecha",
+          "left": 17,
+          "right": 122.984375,
+          "width": 105.984375,
+          "height": 45.5,
+          "maxWidth": "none",
+          "padding": "15px 22px",
+          "scrollWidth": 106,
+          "clientWidth": 106
+        },
+        {
+          "text": "Paciente",
+          "left": 122.984375,
+          "right": 234.484375,
+          "width": 111.5,
+          "height": 45.5,
+          "maxWidth": "none",
+          "padding": "15px 22px",
+          "scrollWidth": 112,
+          "clientWidth": 112
+        },
+        {
+          "text": "Servicio",
+          "left": 234.484375,
+          "right": 351.375,
+          "width": 116.890625,
+          "height": 45.5,
+          "maxWidth": "none",
+          "padding": "15px 22px",
+          "scrollWidth": 117,
+          "clientWidth": 117
+        },
+        {
+          "text": "Método",
+          "left": 351.375,
+          "right": 482.9375,
+          "width": 131.5625,
+          "height": 45.5,
+          "maxWidth": "none",
+          "padding": "15px 22px",
+          "scrollWidth": 132,
+          "clientWidth": 132
+        },
+        {
+          "text": "Estado",
+          "left": 482.9375,
+          "right": 598.578125,
+          "width": 115.640625,
+          "height": 45.5,
+          "maxWidth": "none",
+          "padding": "15px 22px",
+          "scrollWidth": 116,
+          "clientWidth": 116
+        },
+        {
+          "text": "Monto",
+          "left": 598.578125,
+          "right": 697,
+          "width": 98.421875,
+          "height": 45.5,
+          "maxWidth": "none",
+          "padding": "15px 22px",
+          "scrollWidth": 98,
+          "clientWidth": 98
+        }
+      ],
+      "tableKeyboardScroll": 34,
+      "pageErrors": []
+    },
+    {
+      "panel": "configuracion",
+      "width": 390,
+      "main": {
+        "left": 0,
+        "right": 390,
+        "width": 390,
+        "height": 2372.234375,
+        "maxWidth": "none",
+        "padding": "0px",
+        "scrollWidth": 390,
+        "clientWidth": 390
+      },
+      "content": {
+        "left": 0,
+        "right": 390,
+        "width": 390,
+        "height": 2372.234375,
+        "maxWidth": "1320px",
+        "padding": "24px 16px 110px",
+        "scrollWidth": 390,
+        "clientWidth": 390
+      },
+      "table": null,
+      "grid": {
+        "left": 16,
+        "right": 374,
+        "width": 358,
+        "height": 2090.875,
+        "maxWidth": "none",
+        "padding": "0px",
+        "scrollWidth": 358,
+        "clientWidth": 358
+      },
+      "horizontalOverflow": false,
+      "controls": 14,
+      "lowContrast": [],
+      "clippedAmounts": [],
+      "tableColumns": [],
+      "pageErrors": []
+    }
+  ]
+}

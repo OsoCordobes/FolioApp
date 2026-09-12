@@ -1,0 +1,17 @@
+
+Running 8 tests using 1 worker
+
+(node:5380) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:5380) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 1 tests\e2e\design-platform.spec.ts:15:5 › calendario anuncia la vista activa y conserva el control por teclado (4.1s)
+  ok 2 tests\e2e\design-platform.spec.ts:35:5 › los filtros del calendario caben en móvil y anuncian la selección (800ms)
+  ok 3 tests\e2e\design-platform.spec.ts:48:5 › turno semanal tiene nombre completo accesible y el detalle devuelve el foco (1.0s)
+  ok 4 tests\e2e\design-platform.spec.ts:65:5 › buscar un nombre sin tildes conserva los filtros de cobro (808ms)
+  ok 5 tests\e2e\design-platform.spec.ts:80:7 › la tabla móvil de pacientes indica y permite desplazarse con teclado (871ms)
+  ok 6 tests\e2e\design-platform.spec.ts:80:7 › la tabla móvil de finanzas indica y permite desplazarse con teclado (923ms)
+  ok 7 tests\e2e\design-platform.spec.ts:95:7 › el desplazamiento automático respeta movimiento reduce (935ms)
+  ok 8 tests\e2e\design-platform.spec.ts:95:7 › el desplazamiento automático respeta movimiento no-preference (920ms)
+
+  8 passed (11.9s)

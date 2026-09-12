@@ -1,0 +1,226 @@
+{
+  "scope": "Compiled local landing, Chromium, two viewport measurements with same page and selected state retained",
+  "samples": [
+    {
+      "viewport": {
+        "width": 3840,
+        "height": 2160
+      },
+      "hero": {
+        "width": 2440,
+        "height": 1007.5,
+        "left": 700,
+        "right": 3140,
+        "top": 97,
+        "bottom": 1104.5,
+        "fontSize": "14px",
+        "lineHeight": "21px"
+      },
+      "heroTitle": {
+        "width": 709.140625,
+        "height": 185.90625,
+        "left": 748,
+        "right": 1457.140625,
+        "top": 386.015625,
+        "bottom": 571.921875,
+        "fontSize": "83px",
+        "lineHeight": "92.96px"
+      },
+      "paragraph": {
+        "width": 598.390625,
+        "height": 70.28125,
+        "left": 748,
+        "right": 1346.390625,
+        "top": 594.921875,
+        "bottom": 665.203125,
+        "fontSize": "19px",
+        "lineHeight": "35.15px"
+      },
+      "actions": {
+        "width": 986.46875,
+        "height": 57,
+        "left": 748,
+        "right": 1734.46875,
+        "top": 696.203125,
+        "bottom": 753.203125,
+        "fontSize": "14px",
+        "lineHeight": "21px"
+      },
+      "heroWindow": {
+        "width": 1255.53125,
+        "height": 772,
+        "left": 1836.46875,
+        "right": 3092,
+        "top": 209,
+        "bottom": 981,
+        "fontSize": "14px",
+        "lineHeight": "21px"
+      },
+      "product": {
+        "width": 2240,
+        "height": 1200.59375,
+        "left": 800,
+        "right": 3040,
+        "top": 1176.5,
+        "bottom": 2377.09375,
+        "fontSize": "14px",
+        "lineHeight": "21px"
+      },
+      "productWindow": {
+        "width": 1541.1875,
+        "height": 730.5,
+        "left": 1498.8125,
+        "right": 3040,
+        "top": 1397.5,
+        "bottom": 2128,
+        "fontSize": "14px",
+        "lineHeight": "21px"
+      },
+      "specialty": {
+        "width": 2240,
+        "height": 1225.671875,
+        "left": 800,
+        "right": 3040,
+        "top": 3112.15625,
+        "bottom": 4337.828125,
+        "fontSize": "14px",
+        "lineHeight": "21px"
+      },
+      "specialtyFigure": {
+        "width": 1048,
+        "height": 781.796875,
+        "left": 800,
+        "right": 1848,
+        "top": 3420.03125,
+        "bottom": 4201.828125,
+        "fontSize": "14px",
+        "lineHeight": "21px"
+      },
+      "specialtyParagraph": {
+        "width": 472.859375,
+        "height": 61.1875,
+        "left": 1992,
+        "right": 2464.859375,
+        "top": 3313.84375,
+        "bottom": 3375.03125,
+        "fontSize": "17px",
+        "lineHeight": "30.6px"
+      },
+      "overflow": 0,
+      "scrollY": 0,
+      "selectedTab": "Los cobros",
+      "selectedSpecialty": "Cardiología"
+    },
+    {
+      "viewport": {
+        "width": 1920,
+        "height": 700
+      },
+      "hero": {
+        "width": 1656,
+        "height": 844.015625,
+        "left": 132,
+        "right": 1788,
+        "top": 91.390625,
+        "bottom": 935.40625,
+        "fontSize": "14px",
+        "lineHeight": "21px"
+      },
+      "heroTitle": {
+        "width": 601.484375,
+        "height": 157.6875,
+        "left": 180,
+        "right": 781.484375,
+        "top": 307.6875,
+        "bottom": 465.375,
+        "fontSize": "70.4px",
+        "lineHeight": "78.848px"
+      },
+      "paragraph": {
+        "width": 459.515625,
+        "height": 93.796875,
+        "left": 180,
+        "right": 639.515625,
+        "top": 488.375,
+        "bottom": 582.171875,
+        "fontSize": "16.9px",
+        "lineHeight": "31.265px"
+      },
+      "actions": {
+        "width": 651.375,
+        "height": 51.390625,
+        "left": 180,
+        "right": 831.375,
+        "top": 613.171875,
+        "bottom": 664.5625,
+        "fontSize": "14px",
+        "lineHeight": "21px"
+      },
+      "heroWindow": {
+        "width": 829.03125,
+        "height": 633.03125,
+        "left": 910.96875,
+        "right": 1740,
+        "top": 192.1875,
+        "bottom": 825.21875,
+        "fontSize": "14px",
+        "lineHeight": "21px"
+      },
+      "product": {
+        "width": 1456,
+        "height": 1087.546875,
+        "left": 232,
+        "right": 1688,
+        "top": 1004.265625,
+        "bottom": 2091.8125,
+        "fontSize": "14px",
+        "lineHeight": "21px"
+      },
+      "productWindow": {
+        "width": 1000,
+        "height": 669.4375,
+        "left": 688,
+        "right": 1688,
+        "top": 1202.859375,
+        "bottom": 1872.296875,
+        "fontSize": "14px",
+        "lineHeight": "21px"
+      },
+      "specialty": {
+        "width": 1456,
+        "height": 1066.078125,
+        "left": 232,
+        "right": 1688,
+        "top": 2744.0625,
+        "bottom": 3810.140625,
+        "fontSize": "14px",
+        "lineHeight": "21px"
+      },
+      "specialtyFigure": {
+        "width": 678.40625,
+        "height": 682.390625,
+        "left": 232,
+        "right": 910.40625,
+        "top": 3014.15625,
+        "bottom": 3696.546875,
+        "fontSize": "14px",
+        "lineHeight": "21px"
+      },
+      "specialtyParagraph": {
+        "width": 414.453125,
+        "height": 53.65625,
+        "left": 1009.59375,
+        "right": 1424.046875,
+        "top": 2915.5,
+        "bottom": 2969.15625,
+        "fontSize": "14.9px",
+        "lineHeight": "26.82px"
+      },
+      "overflow": 0,
+      "scrollY": 0,
+      "selectedTab": "Los cobros",
+      "selectedSpecialty": "Cardiología"
+    }
+  ],
+  "errors": []
+}

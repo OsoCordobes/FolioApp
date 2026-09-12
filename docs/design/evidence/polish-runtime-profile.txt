@@ -1,0 +1,1 @@
+2 compiled browser profiles captured; three stable transitions per profile and no errors.
