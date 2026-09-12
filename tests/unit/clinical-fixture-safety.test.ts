@@ -144,3 +144,15 @@ test('integrated safety: fixture cleanup rejects an unobserved action instead of
  const observer=await observeClinicalAction(fixture,page,{} as import('../fixtures/clinical-local').ClinicalAccount,{action:'CLOSE',turnoId:'12000000-0000-4000-8000-000000000001'});
  await cleanup.close();await assert.rejects(observer.observed,/not observed/);assert.equal(removed,1);
 });
+
+test('integrated safety: an idempotent writer with the same operation cannot satisfy the browser receipt probe',async()=>{
+ const {bindReceiptProbe}=await import('../fixtures/clinical-safety');
+ const turnoId='12000000-0000-4000-8000-000000000001',operacionId='12000000-0000-4000-8000-000000000002';
+ const original={action:'CLOSE' as const,turnoId,operacionId,duracionRealMin:20,cobro:{montoCents:1200,metodo:'EFECTIVO' as const,pagado:true}};
+ const wire={url:'http://localhost:4420/hoy',method:'POST',actionId:'a'.repeat(40),contentType:'text/plain;charset=UTF-8',body:JSON.stringify([original])};
+ assert.deepEqual(bindReceiptProbe(wire,'getTurnoCloseReceiptAction',original),original);
+ const {action:_action,...sameWrite}=original;
+ for(const name of ['transitionTurnoAction','resolveTurnoCloseAction','marcarPagoCobradoAgendaAction'])assert.throws(()=>bindReceiptProbe({...wire,body:JSON.stringify([{...sameWrite,to:'cerrado'}])},name,original),/Writer invoked during receipt recovery/);
+ for(const patch of [{operacionId:turnoId},{turnoId:operacionId},{duracionRealMin:21},{cobro:{...original.cobro,pagado:false}}])assert.throws(()=>bindReceiptProbe({...wire,body:JSON.stringify([{...original,...patch}])},'getTurnoCloseReceiptAction',original));
+ assert.equal(bindReceiptProbe(wire,'getTurnoCloseStatusAction',original),null);
+});

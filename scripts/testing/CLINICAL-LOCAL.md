@@ -277,3 +277,12 @@ DOM30s, MFA60s, proveedor12s, SQL15s y caso180s; negativas, ausencia, polls y l�
 de acciones no se amplían. Sin trazas ni retries globales. El futuro cambio local
 debe confirmar visibilidad RPC en PostgREST después del commit de DDL, antes de
 atribuir un error de caché de esquema al producto.
+
+Corrección de evidencia del caso8: «Comprobar resultado» ahora se observa como
+`getTurnoCloseReceiptAction` real, con identidad compilada, cookie del actor y
+solicitud original completa. Su recibo devuelto debe coincidir con el commit y el
+recibo original. Un detector permanece activo durante toda la recuperación y
+rechaza CLOSE/RESOLVE/SETTLE, incluso con la misma clave idempotente y aunque ya
+haya llegado una respuesta de lectura. El RPC adicional desde Node sólo aporta
+una comprobación complementaria. La prueba focal nueva reprodujo RED antes del
+soporte y pasó con éste:18/18 seguridad, sin skips; discovery conserva12casos.

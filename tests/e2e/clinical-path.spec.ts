@@ -4,7 +4,7 @@ import type {Browser,Page,Download} from '@playwright/test';
 import {test as base,expect} from '../fixtures/local-test';
 import {createClinicalCaseFixture,assertPolicies,assertBrowserActor,loginClinical,firstFactorClient,requireSuccess,type ClinicalAccount,type ClinicalFixture} from '../fixtures/clinical-local';
 import {prepareSavedVisit,closeClinically,registerFromAgenda,reopenVisit,assertFinalCounts,assertClosedVisit,assertDocumentDownload,clinicalInvariant,openReview,enterDecision,uiExpect,type VisitEvidence} from '../fixtures/clinical-journey';
-import {observeClinicalAction,type ExpectedAction,type CommittedAction} from '../fixtures/clinical-response-loss';
+import {observeClinicalAction,observeClinicalReceiptProbe,type ExpectedAction,type CommittedAction} from '../fixtures/clinical-response-loss';
 import {assertAal1ProtectedRead} from '../../scripts/testing/clinical-config.mjs';
 
 const test=base.extend<{caseOptions:NonNullable<Parameters<typeof createClinicalCaseFixture>[0]>;clinical:ClinicalFixture}>({
@@ -99,8 +99,12 @@ test('direct CLOSE lost after commit is confirmed by the same read-only receipt'
  const first=await recover(f,page,f.owner,{action:'CLOSE',turnoId:visit.turnoId,cobro:cash,duracionRealMin:20},'Cobrar y cerrar');
  await assertClosedVisit(f,visit);const invariant=await clinicalInvariant(f,visit),payment=await currentPayment(f,visit),count=await receipts(f,visit);
  await expect(page.getByLabel('Monto en pesos',{exact:true})).toBeDisabled();await expect(page.getByLabel('Duración real (min)',{exact:true})).toHaveValue('20');
- await page.getByRole('button',{name:'Comprobar resultado',exact:true}).click();await uiExpect(page.getByRole('button',{name:'Listo',exact:true})).toBeVisible();await confirmReceipt(f,page,f.owner,first);
- expect(await clinicalInvariant(f,visit)).toBe(invariant);expect(await currentPayment(f,visit)).toEqual(payment);expect(await receipts(f,visit)).toBe(count);await assertFinalCounts(f,visit);
+ const probe=await observeClinicalReceiptProbe(f,page,f.owner,first);
+ try {
+  await page.getByRole('button',{name:'Comprobar resultado',exact:true}).click();const result=await probe.observed;expect(result.request).toEqual(first.request);expect(result.receipt).toEqual(first.receipt);
+  await uiExpect(page.getByRole('button',{name:'Listo',exact:true})).toBeVisible();await confirmReceipt(f,page,f.owner,first);
+  expect(await clinicalInvariant(f,visit)).toBe(invariant);expect(await currentPayment(f,visit)).toEqual(payment);expect(await receipts(f,visit)).toBe(count);await assertFinalCounts(f,visit);
+ }finally {await probe.dispose();}
  await testInfo.attach('lost-close.json',{contentType:'application/json',body:JSON.stringify({action:'CLOSE',operationId:first.receipt?.operationId,commitBeforeAbort:true,recovery:'receipt probe',payments:1})});
 });
 test('RESOLVE lost after commit retries the same immutable decision without repeating close or payment',async({clinical:f,browser},testInfo)=>{

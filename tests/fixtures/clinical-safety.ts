@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {z} from 'zod';
 import {assertClinicalPolicies} from '../../scripts/testing/clinical-config.mjs';
-import {closeRequestSchema,resolveCloseRequestSchema,type CloseReceiptRequest} from '../../lib/turnos/close-contract';
+import {closeRequestSchema,resolveCloseRequestSchema,closeReceiptRequestSchema,type CloseReceiptRequest} from '../../lib/turnos/close-contract';
 
 export function assertIntegratedPolicies(value:Record<string,unknown>):void {
  assertClinicalPolicies(value);
@@ -26,7 +26,7 @@ export async function authenticateRegistered<T>(cleanup:CleanupRegistry,steps:{l
 export type ClinicalAction=CloseReceiptRequest|{action:'SETTLE';turnoId:string;pagoId:string};
 export interface ActionWire {url:string;method:string;actionId:string;body:string;contentType:string;}
 const settle=z.object({turnoId:z.string().uuid(),pagoId:z.string().uuid()}).strict();
-export function parseClinicalAction(wire:ActionWire):ClinicalAction {
+function parseActionInput(wire:ActionWire):Record<string,unknown> {
  const url=new URL(wire.url);
  assert.ok(url.origin==='http://localhost:4420'&&url.pathname==='/hoy'&&!url.username&&!url.password,'Unexpected clinical action destination');
  assert.equal(wire.method,'POST');assert.match(wire.actionId,/^[a-f0-9]{40}$/);
@@ -34,13 +34,23 @@ export function parseClinicalAction(wire:ActionWire):ClinicalAction {
  // These actions take one plain JSON object; reject React references/multipart instead of guessing.
  const args:unknown=JSON.parse(wire.body,(_key,value)=>{if(value==='$undefined')return undefined;if(typeof value==='string'&&value.startsWith('$'))throw Error('Unsupported action reference');return value;});
  assert.ok(Array.isArray(args)&&args.length===1&&args[0]&&typeof args[0]==='object');
- const input=args[0] as Record<string,unknown>;
+ return args[0] as Record<string,unknown>;
+}
+export function parseClinicalAction(wire:ActionWire):ClinicalAction {
+ const input=parseActionInput(wire);
  if(Object.hasOwn(input,'to')){
   const parsed=closeRequestSchema.extend({to:z.literal('cerrado')}).parse(input);
   const {to:_to,...request}=parsed;return {action:'CLOSE',...request};
  }
  if(Object.hasOwn(input,'pagoId'))return {action:'SETTLE',...settle.parse(input)};
  return {action:'RESOLVE',...resolveCloseRequestSchema.parse(input)};
+}
+
+export function bindReceiptProbe(wire:ActionWire,compiledName:string|undefined,original:CloseReceiptRequest):CloseReceiptRequest|null {
+ assert.ok(!['transitionTurnoAction','resolveTurnoCloseAction','marcarPagoCobradoAgendaAction'].includes(compiledName??''),'Writer invoked during receipt recovery');
+ if(compiledName!=='getTurnoCloseReceiptAction')return null;
+ const request=closeReceiptRequestSchema.parse(parseActionInput(wire));
+ assert.deepEqual(request,original,'Receipt probe must preserve the complete original close snapshot');return request;
 }
 
 /** Transport failure after COMMIT is different from a failed fetch or failed SQL proof. */

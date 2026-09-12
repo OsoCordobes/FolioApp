@@ -3,7 +3,7 @@ import {readFile} from 'node:fs/promises';
 import type {Page,Route} from '@playwright/test';
 import {closeReceiptSchema,settlementReceiptSchema,type CloseDecision,type CloseReceipt,type SettlementReceipt} from '../../lib/turnos/close-contract';
 import {assertBrowserActor,type ClinicalAccount,type ClinicalFixture} from './clinical-local';
-import {parseClinicalAction,forwardThenLose,type ClinicalAction} from './clinical-safety';
+import {parseClinicalAction,bindReceiptProbe,forwardThenLose,type ClinicalAction} from './clinical-safety';
 
 export interface ExpectedAction {action:'CLOSE'|'RESOLVE'|'SETTLE';turnoId:string;cobro?:CloseDecision;duracionRealMin?:number;pagoId?:string;}
 export interface CommittedAction {request:ClinicalAction;actionId:string;receipt?:CloseReceipt;settlement?:SettlementReceipt;}
@@ -28,14 +28,14 @@ export function bindExpected(request:ClinicalAction,expected:ExpectedAction):voi
  assert.deepEqual(request.cobro,expected.cobro);
  assert.equal(request.action==='CLOSE'?request.duracionRealMin:undefined,expected.duracionRealMin);
 }
-async function committed(fixture:ClinicalFixture,actor:ClinicalAccount,request:ClinicalAction,responseBody:string):Promise<Omit<CommittedAction,'actionId'>> {
+async function committed(fixture:ClinicalFixture,actor:ClinicalAccount,request:ClinicalAction,responseBody:string,receiptOnly=false):Promise<Omit<CommittedAction,'actionId'>> {
  const actual=actionResult(responseBody);
  if(request.action==='SETTLE'){
   const settlement=settlementReceiptSchema.parse(actual.data);assert.equal(settlement.turnoId,request.turnoId);assert.equal(settlement.pago.id,request.pagoId);
   const {rows}=await fixture.db.query(`SELECT jsonb_build_object('id',p.id,'montoCents',p.monto_cents,'metodo',p.metodo,'estado',p.estado,'pagadoTs',p.pagado_ts,'updatedAt',p.updated_at) AS pago FROM public.pago p JOIN public.turno t ON t.id=p.turno_id WHERE p.id=$1 AND t.id=$2 AND t.organization_id=$3`,[request.pagoId,request.turnoId,actor.organizationId]);
   assert.equal(rows.length,1);assert.deepEqual(settlement.pago,rows[0].pago);return {request,settlement};
  }
- const receipt=closeReceiptSchema.parse(request.action==='CLOSE'?(actual.data as {cierre?:unknown})?.cierre:actual.data);
+ const receipt=closeReceiptSchema.parse(request.action==='CLOSE'&&!receiptOnly?(actual.data as {cierre?:unknown})?.cierre:actual.data);
  const {rows}=await fixture.db.query('SELECT bound_input,result FROM folio_close_private.receipt WHERE organization_id=$1 AND actor_id=$2 AND operation_id=$3 AND turno_id=$4',[actor.organizationId,actor.memberId,request.operacionId,request.turnoId]);
  assert.equal(rows.length,1,'The exact action must commit before browser interruption');
  assert.deepEqual(rows[0].bound_input,[request.turnoId,request.action,request.action==='CLOSE'?request.duracionRealMin??null:null,request.cobro??null]);
@@ -74,4 +74,36 @@ export async function observeClinicalAction(fixture:ClinicalFixture,page:Page,ac
  await page.route(pattern,handler);
  const dispose=async()=>{await page.unroute(pattern,handler);if(!settled){settled=true;reject(new Error('Expected clinical action was not observed'));}};
  fixture.cleanup.add('action interceptor',dispose);return {observed,dispose};
+}
+
+/** Keep the writer detector installed through UI acknowledgement and all recovery assertions. */
+export async function observeClinicalReceiptProbe(fixture:ClinicalFixture,page:Page,actor:ClinicalAccount,original:CommittedAction):Promise<{observed:Promise<CommittedAction>;dispose:()=>Promise<void>}> {
+ assert.ok(original.request.action!=='SETTLE'&&original.receipt,'A committed close receipt is required');const snapshot=original.request;
+ let resolve!:(value:CommittedAction)=>void,reject!:(reason:Error)=>void,settled=false,claimed=false,failure:Error|undefined;
+ const observed=new Promise<CommittedAction>((yes,no)=>{resolve=yes;reject=no;});void observed.catch(()=>{});
+ const pattern='http://localhost:4420/hoy**',inFlight=new Set<Promise<void>>();
+ async function handle(route:Route):Promise<void> {
+  let stage='request';
+  try {
+   const request=route.request(),headers=await request.allHeaders(),actionId=headers['next-action'];
+   if(request.method()!=='POST'||!actionId)return await route.fallback();
+   stage='compiled action and read-only binding';
+   const bound=bindReceiptProbe({url:request.url(),method:request.method(),actionId,body:request.postData()??'',contentType:headers['content-type']??''},await exportedName(actionId),snapshot);
+   if(!bound)return await route.fallback();
+   assert.ok(!claimed,'Only one receipt probe is expected');claimed=true;
+   stage='browser identity';assert.ok(headers.cookie);await assertBrowserActor(fixture,page,actor,headers.cookie);
+   stage='receipt transport';const response=await route.fetch({maxRetries:0,maxRedirects:0,timeout:12000});assert.equal(response.status(),200);assert.ok(!response.headers()['x-action-redirect']);
+   stage='returned receipt and committed SQL';const evidence={...await committed(fixture,actor,bound,await response.text(),true),actionId};assert.deepEqual(evidence.receipt,original.receipt);
+   await route.fulfill({response});settled=true;resolve(evidence);
+  }catch {failure=new Error(`Clinical receipt probe failed at ${stage}`);settled=true;reject(failure);try{await route.abort('failed');}catch{/* The response may already have been consumed. */}}
+ }
+ function handler(route:Route):Promise<void> {const task=handle(route);inFlight.add(task);void task.then(()=>inFlight.delete(task),()=>inFlight.delete(task));return task;}
+ await page.route(pattern,handler);
+ const dispose=async()=>{
+  await page.unroute(pattern,handler);await Promise.all(inFlight);
+  if(!settled){settled=true;reject(new Error('Expected browser receipt probe was not observed'));}
+  // A writer after the observed promise resolved must still fail the recovery window.
+  if(failure)throw failure;
+ };
+ fixture.cleanup.add('receipt probe and writer detector',dispose);return {observed,dispose};
 }
