@@ -36,3 +36,14 @@
 | App / Auth | Persisted container config differs from edited file | Reload owned project preserving its volumes and verify settings/counts |
 | Profile / isolation | Localhost already allowed, exact clinical checks remain | Narrow accepted app origin instead of allowing both origins |
 | Real E2E / next defect | No false pass from skipped serial tests | Report next blocker separately and preserve actual negatives |
+
+### Task 2: Bound clinical DOM hydration waits consistently
+
+**Evidence:** Runtime run 6 passed real login/MFA, walk-in, arrival and encrypted clinical save. The first reload assertion exceeded the default five-second DOM wait; its later error context contained the correct saved marker. Result was one passed, one failed and five not run. This is not evidence of production latency or a completed clinical journey.
+
+**Files:** `tests/e2e/clinical-path.spec.ts`, a short explanation in `scripts/testing/CLINICAL-LOCAL.md` and the ignored runtime report. Mirror only this exact approved test diff into the existing baseline runtime.
+
+- [ ] Introduce `uiExpect = expect.configure({timeout:30000})` for positive page/locator rendering assertions in this dedicated real-services development suite. Keep explicit existing positive DOM limits when longer; replace shorter positive rendering limits consistently with the single 30-second bound. Do not change click/navigation action defaults without separate evidence.
+- [ ] Keep ordinary `expect` for SQL values, API responses, authorization negatives, absence/count-zero assertions, decrypted bytes and data equality. Preserve all `expect.poll` SQL predicates and their existing timeouts, helper MFA 60 seconds, provider 12 seconds, SQL operation 15 seconds and each scenario 180 seconds. No retries, fixed sleeps, assertion removal or fake success.
+- [ ] Rerun the real seven-case suite against the preserved owned services with traces off. Report exact results and the first remaining failure. Investigate a new failure before changing product code or further broadening waits.
+- [ ] Run typecheck and lint after the final scoped edit; commit explicit source/docs files only after coordinating the index. Independent review must compare assertion semantics and ensure the new bound applies only to DOM rendering.
