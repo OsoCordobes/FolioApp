@@ -1,48 +1,15 @@
 import { ImageResponse } from "next/og";
+import { loadFolioOgFonts } from "@/lib/opengraph-fonts";
 
 import { formatRubro } from "@/lib/format/identity";
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
 
-/**
- * Folio · /book/[slug] — imagen OpenGraph 1200×630 por consultorio.
- *
- * Mejora el preview cuando el médico comparte su link por WhatsApp/Instagram:
- * el consultorio es la estrella (nombre + especialidad/ciudad + su acento),
- * Folio aparece sutil al pie. Mismo chassis brass/cream que la OG de marketing.
- *
- * Los hex base acá son intencionales (asset de marca, no CSS del design
- * system): fondo #F5F2EB, tinta #1B1812, acento default #8A6722 (se reemplaza
- * por organization.acento_hex). Fraunces se fetchea de Google Fonts; si la red
- * está bloqueada degrada a serif del sistema (la imagen DEBE generarse igual).
- */
+/** Booking link image: the practice keeps its name and chosen accent. Fonts are bundled locally. */
 
 export const alt = "Reservá tu turno online · Folio";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 export const revalidate = 300;
-
-const FRAUNCES_CSS_URL =
-  "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&display=swap";
-
-let frauncesPromise: Promise<ArrayBuffer | null> | null = null;
-
-function loadFraunces(): Promise<ArrayBuffer | null> {
-  frauncesPromise ??= (async () => {
-    try {
-      const cssRes = await fetch(FRAUNCES_CSS_URL, { cache: "force-cache" });
-      if (!cssRes.ok) return null;
-      const css = await cssRes.text();
-      const match = css.match(/src:\s*url\((https:[^)]+\.ttf)\)/);
-      if (!match) return null;
-      const fontRes = await fetch(match[1], { cache: "force-cache" });
-      if (!fontRes.ok) return null;
-      return await fontRes.arrayBuffer();
-    } catch {
-      return null;
-    }
-  })();
-  return frauncesPromise;
-}
 
 const ESP_NOMBRE: Record<string, string> = {
   quiropraxia: "Quiropraxia",
@@ -56,12 +23,12 @@ function isValidHex(s: string | null | undefined): s is string {
 
 export default async function Image({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const fraunces = await loadFraunces();
-  const displayFamily = fraunces ? "Fraunces" : "Georgia, 'Times New Roman', serif";
+  const fonts = await loadFolioOgFonts();
+  const displayFamily = "Plus Jakarta Sans";
 
   let nombre = "Reservá tu turno";
   let sub = "Turnos online con profesionales de la salud";
-  let acento = "#8A6722";
+  let acento = "#6255C5";
 
   try {
     const service = createSupabaseServiceClient();
@@ -91,11 +58,12 @@ export default async function Image({ params }: { params: Promise<{ slug: string
         style={{
           width: "100%",
           height: "100%",
+          fontFamily: displayFamily,
           display: "flex",
           flexDirection: "column",
           justifyContent: "space-between",
-          backgroundColor: "#F5F2EB",
-          color: "#1B1812",
+          backgroundColor: "#F5F5FA",
+          color: "#292641",
           padding: "72px 80px",
         }}
       >
@@ -126,15 +94,13 @@ export default async function Image({ params }: { params: Promise<{ slug: string
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", width: 120, height: 6, borderRadius: 9999, backgroundColor: acento }} />
-          <div style={{ fontSize: 26, color: "#79735F" }}>Hecho con Folio</div>
+          <div style={{ fontSize: 26, color: "#69657D" }}>Hecho con Folio</div>
         </div>
       </div>
     ),
     {
       ...size,
-      fonts: fraunces
-        ? [{ name: "Fraunces", data: fraunces, weight: 600 as const, style: "normal" as const }]
-        : undefined,
+      fonts,
     },
   );
 }

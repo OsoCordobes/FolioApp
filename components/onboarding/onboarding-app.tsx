@@ -30,6 +30,7 @@ import { safeLog } from "@/lib/observability/safe-log";
 import dynamic from "next/dynamic";
 import { AvailabilityDraft } from "@/lib/agenda/availability-draft";
 import { setupHoursWeek, uniformSetupHours } from "@/lib/onboarding/availability";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 
@@ -545,15 +546,15 @@ export function OnboardingApp({
   // ─── Step 1: layout split con SideArt (mismo del /login) ──────────────────
   if (stepIdx === 1) {
     return (
-      <div className="au-app onb-step1-app">
+      <div className="au-app onb-step1-app fx-onboarding">
         <SideArt />
-        <div className="au-main onb-step1-main">
+        <main className="au-main onb-step1-main">
           <div className="onb-step1-pane">
             <header className="onb-step1-head">
-              <div className="onb-app-brand">
+              <Link className="onb-app-brand fx-auth-brand" href="/" aria-label="Folio, volver al inicio">
                 <FolioMark size={24} />
                 <span className="onb-brand-name">folio</span>
-              </div>
+              </Link>
             </header>
             <div key={stepKey} className={`onb-anim onb-anim-${direction}`}>
               {authedEmail ? (
@@ -580,19 +581,19 @@ export function OnboardingApp({
               )}
             </div>
           </div>
-        </div>
+        </main>
       </div>
     );
   }
 
   // ─── Steps 2-8: layout estándar con PublicCard lateral integrado en StepShell ─
   return (
-    <div className="onb-app">
+    <div className="onb-app fx-onboarding">
       <header className="onb-app-head">
-        <div className="onb-app-brand">
+        <Link className="onb-app-brand fx-auth-brand" href="/" aria-label="Folio, volver al inicio">
           <FolioMark size={24} />
           <span className="onb-brand-name">folio</span>
-        </div>
+        </Link>
         {stepIdx < ONB_TOTAL ? (
           <SaveIndicator state={saveState} onRetry={retrySave} />
         ) : (

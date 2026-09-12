@@ -37,7 +37,7 @@ for(const specialty of ['quiropraxia','cardiologia','psicologia'] as const){
   const account=fixture.accounts.find(item=>item.specialty===specialty)!;
   const marker=`SINTETICO-${fixture.runId}-${specialty}`;
   await loginClinical(page,account);
-  await page.getByRole('button',{name:/^walk-in$/i}).click();
+  await page.getByRole('button',{name:'Sin turno',exact:true}).click();
   const modal=page.getByRole('dialog');await uiExpect(modal).toBeVisible();
   await modal.getByRole('button',{name:'Nuevo',exact:true}).click();
   await modal.getByPlaceholder('Nombre',{exact:true}).fill(`E2E ${fixture.runId}`);
@@ -160,7 +160,7 @@ test('paused subscription redirects ordinary UI to billing but preserves the aut
  await loginClinical(page,account,'billing');
  await page.goto('/hoy');
  await expect(page).toHaveURL(/\/configuracion\/billing(?:\?|$)/);
- await expect(page.getByRole('button',{name:/^walk-in$/i})).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Sin turno',exact:true})).toHaveCount(0);
  await page.goto('/archivo-clinico');
  await uiExpect(page.getByRole('heading',{name:'Archivo clínico',exact:true})).toBeVisible();
  await uiExpect(page.getByRole('heading',{name:/^1 paciente disponible/})).toBeVisible();

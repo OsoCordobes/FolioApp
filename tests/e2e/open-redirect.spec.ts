@@ -50,6 +50,6 @@ test.describe("Open-redirect mitigation · safeRedirect()", () => {
 
   test("login page renders normally with safe redirect", async ({ page }) => {
     await page.goto("/login?redirect=/pacientes");
-    await expect(page.getByRole("heading", { name: /entrar/i })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Volvé a tu consultorio." })).toBeVisible();
   });
 });

@@ -1,0 +1,12 @@
+{
+  "method": "WCAG sRGB relative luminance, (Llight + .05) / (Ldark + .05); source token pairs, not a whole-page accessibility audit",
+  "sourceCheckedAtUtc": "2026-09-12T19:14:42Z",
+  "pairs": [
+    { "label": "texto secundario", "fg": "#706B84", "bg": "#FFFFFF", "ratio": 5.09 },
+    { "label": "texto secundario sobre panel", "fg": "#706B84", "bg": "#F0EFF8", "ratio": 4.46 },
+    { "label": "acento sobre blanco", "fg": "#6255C5", "bg": "#FFFFFF", "ratio": 5.79 },
+    { "label": "botón primario", "fg": "#FFFFFF", "bg": "#6255C5", "ratio": 5.79 },
+    { "label": "etiqueta verde", "fg": "#19725D", "bg": "#E5F2EC", "ratio": 5.06 },
+    { "label": "pendiente", "fg": "#886012", "bg": "#FBF1D9", "ratio": 5.01 }
+  ]
+}

@@ -1,0 +1,617 @@
+{
+  "samples": [
+    {
+      "width": 320,
+      "product": [
+        {
+          "label": "La agenda",
+          "panelHeight": 703,
+          "screenHeight": 671,
+          "lastContentBottom": 497.5,
+          "emptyBelow": 173.5,
+          "hiddenFocusable": 0,
+          "visibleScreenCount": 1,
+          "animation": "none",
+          "paymentWidths": [
+            {
+              "text": "$ 45.000",
+              "scrollWidth": 86,
+              "clientWidth": 86
+            },
+            {
+              "text": "$ 20.000",
+              "scrollWidth": 86,
+              "clientWidth": 86
+            }
+          ]
+        },
+        {
+          "label": "La historia clínica",
+          "panelHeight": 703,
+          "screenHeight": 671,
+          "lastContentBottom": 537.1875,
+          "emptyBelow": 133.8125,
+          "hiddenFocusable": 0,
+          "visibleScreenCount": 1,
+          "animation": "none",
+          "paymentWidths": [
+            {
+              "text": "$ 45.000",
+              "scrollWidth": 86,
+              "clientWidth": 86
+            },
+            {
+              "text": "$ 20.000",
+              "scrollWidth": 86,
+              "clientWidth": 86
+            }
+          ]
+        },
+        {
+          "label": "Los cobros",
+          "panelHeight": 703,
+          "screenHeight": 671,
+          "lastContentBottom": 655,
+          "emptyBelow": 16,
+          "hiddenFocusable": 0,
+          "visibleScreenCount": 1,
+          "animation": "none",
+          "paymentWidths": [
+            {
+              "text": "$ 45.000",
+              "scrollWidth": 86,
+              "clientWidth": 86
+            },
+            {
+              "text": "$ 20.000",
+              "scrollWidth": 86,
+              "clientWidth": 86
+            }
+          ]
+        }
+      ],
+      "specialties": [
+        {
+          "name": "Psicología",
+          "height": 678.09375,
+          "stageHeight": 590.59375,
+          "scrollWidth": 242,
+          "clientWidth": 242,
+          "activeName": "Ficha de ejemplo de Psicología",
+          "animation": "none",
+          "visibleRecords": 1
+        },
+        {
+          "name": "Cardiología",
+          "height": 678.09375,
+          "stageHeight": 590.59375,
+          "scrollWidth": 242,
+          "clientWidth": 242,
+          "activeName": "Ficha de ejemplo de Cardiología",
+          "animation": "none",
+          "visibleRecords": 1
+        },
+        {
+          "name": "Kinesiología",
+          "height": 678.09375,
+          "stageHeight": 590.59375,
+          "scrollWidth": 242,
+          "clientWidth": 242,
+          "activeName": "Ficha de ejemplo de Kinesiología",
+          "animation": "none",
+          "visibleRecords": 1
+        },
+        {
+          "name": "Nutrición",
+          "height": 678.09375,
+          "stageHeight": 590.59375,
+          "scrollWidth": 242,
+          "clientWidth": 242,
+          "activeName": "Ficha de ejemplo de Nutrición",
+          "animation": "none",
+          "visibleRecords": 1
+        },
+        {
+          "name": "Quiropraxia",
+          "height": 678.09375,
+          "stageHeight": 590.59375,
+          "scrollWidth": 242,
+          "clientWidth": 242,
+          "activeName": "Ficha de ejemplo de Quiropraxia",
+          "animation": "none",
+          "visibleRecords": 1
+        }
+      ],
+      "errors": [],
+      "tabEnd": {
+        "selected": "true",
+        "focused": true
+      },
+      "nextTabFocus": {
+        "role": "tabpanel",
+        "label": "product-tour-cobros"
+      },
+      "textClipping": [
+        {
+          "text": "Mostrando ficha de",
+          "ancestor": "sr-only",
+          "textWidth": 130.375,
+          "ancestorWidth": 1
+        },
+        {
+          "text": "Quiropraxia",
+          "ancestor": "sr-only",
+          "textWidth": 77.546875,
+          "ancestorWidth": 1
+        },
+        {
+          "text": ".",
+          "ancestor": "sr-only",
+          "textWidth": 4.015625,
+          "ancestorWidth": 1
+        }
+      ],
+      "pageOverflow": 0
+    },
+    {
+      "width": 650,
+      "product": [
+        {
+          "label": "La agenda",
+          "panelHeight": 665,
+          "screenHeight": 628,
+          "lastContentBottom": 556.5,
+          "emptyBelow": 71.5,
+          "hiddenFocusable": 0,
+          "visibleScreenCount": 1,
+          "animation": "none",
+          "paymentWidths": [
+            {
+              "text": "$ 45.000",
+              "scrollWidth": 164,
+              "clientWidth": 164
+            },
+            {
+              "text": "$ 20.000",
+              "scrollWidth": 164,
+              "clientWidth": 164
+            }
+          ]
+        },
+        {
+          "label": "La historia clínica",
+          "panelHeight": 665,
+          "screenHeight": 628,
+          "lastContentBottom": 517.28125,
+          "emptyBelow": 110.71875,
+          "hiddenFocusable": 0,
+          "visibleScreenCount": 1,
+          "animation": "none",
+          "paymentWidths": [
+            {
+              "text": "$ 45.000",
+              "scrollWidth": 164,
+              "clientWidth": 164
+            },
+            {
+              "text": "$ 20.000",
+              "scrollWidth": 164,
+              "clientWidth": 164
+            }
+          ]
+        },
+        {
+          "label": "Los cobros",
+          "panelHeight": 665,
+          "screenHeight": 628,
+          "lastContentBottom": 604,
+          "emptyBelow": 24,
+          "hiddenFocusable": 0,
+          "visibleScreenCount": 1,
+          "animation": "none",
+          "paymentWidths": [
+            {
+              "text": "$ 45.000",
+              "scrollWidth": 164,
+              "clientWidth": 164
+            },
+            {
+              "text": "$ 20.000",
+              "scrollWidth": 164,
+              "clientWidth": 164
+            }
+          ]
+        }
+      ],
+      "specialties": [
+        {
+          "name": "Psicología",
+          "height": 650.5,
+          "stageHeight": 563,
+          "scrollWidth": 254,
+          "clientWidth": 254,
+          "activeName": "Ficha de ejemplo de Psicología",
+          "animation": "none",
+          "visibleRecords": 1
+        },
+        {
+          "name": "Cardiología",
+          "height": 650.5,
+          "stageHeight": 563,
+          "scrollWidth": 254,
+          "clientWidth": 254,
+          "activeName": "Ficha de ejemplo de Cardiología",
+          "animation": "none",
+          "visibleRecords": 1
+        },
+        {
+          "name": "Kinesiología",
+          "height": 650.5,
+          "stageHeight": 563,
+          "scrollWidth": 254,
+          "clientWidth": 254,
+          "activeName": "Ficha de ejemplo de Kinesiología",
+          "animation": "none",
+          "visibleRecords": 1
+        },
+        {
+          "name": "Nutrición",
+          "height": 650.5,
+          "stageHeight": 563,
+          "scrollWidth": 254,
+          "clientWidth": 254,
+          "activeName": "Ficha de ejemplo de Nutrición",
+          "animation": "none",
+          "visibleRecords": 1
+        },
+        {
+          "name": "Quiropraxia",
+          "height": 650.5,
+          "stageHeight": 563,
+          "scrollWidth": 254,
+          "clientWidth": 254,
+          "activeName": "Ficha de ejemplo de Quiropraxia",
+          "animation": "none",
+          "visibleRecords": 1
+        }
+      ],
+      "errors": [],
+      "tabEnd": {
+        "selected": "true",
+        "focused": true
+      },
+      "nextTabFocus": {
+        "role": "tabpanel",
+        "label": "product-tour-cobros"
+      },
+      "textClipping": [
+        {
+          "text": "Mostrando ficha de",
+          "ancestor": "sr-only",
+          "textWidth": 130.375,
+          "ancestorWidth": 1
+        },
+        {
+          "text": "Quiropraxia",
+          "ancestor": "sr-only",
+          "textWidth": 77.546875,
+          "ancestorWidth": 1
+        },
+        {
+          "text": ".",
+          "ancestor": "sr-only",
+          "textWidth": 4.015625,
+          "ancestorWidth": 1
+        }
+      ],
+      "pageOverflow": 0,
+      "specialtyEndFocus": "specialty-quiropraxia"
+    },
+    {
+      "width": 1024,
+      "product": [
+        {
+          "label": "La agenda",
+          "panelHeight": 677,
+          "screenHeight": 640,
+          "lastContentBottom": 564.5,
+          "emptyBelow": 75.5,
+          "hiddenFocusable": 0,
+          "visibleScreenCount": 1,
+          "animation": "none",
+          "paymentWidths": [
+            {
+              "text": "$ 45.000",
+              "scrollWidth": 300,
+              "clientWidth": 300
+            },
+            {
+              "text": "$ 20.000",
+              "scrollWidth": 300,
+              "clientWidth": 300
+            }
+          ]
+        },
+        {
+          "label": "La historia clínica",
+          "panelHeight": 677,
+          "screenHeight": 640,
+          "lastContentBottom": 503.6875,
+          "emptyBelow": 136.3125,
+          "hiddenFocusable": 0,
+          "visibleScreenCount": 1,
+          "animation": "none",
+          "paymentWidths": [
+            {
+              "text": "$ 45.000",
+              "scrollWidth": 300,
+              "clientWidth": 300
+            },
+            {
+              "text": "$ 20.000",
+              "scrollWidth": 300,
+              "clientWidth": 300
+            }
+          ]
+        },
+        {
+          "label": "Los cobros",
+          "panelHeight": 677,
+          "screenHeight": 640,
+          "lastContentBottom": 612,
+          "emptyBelow": 28,
+          "hiddenFocusable": 0,
+          "visibleScreenCount": 1,
+          "animation": "none",
+          "paymentWidths": [
+            {
+              "text": "$ 45.000",
+              "scrollWidth": 300,
+              "clientWidth": 300
+            },
+            {
+              "text": "$ 20.000",
+              "scrollWidth": 300,
+              "clientWidth": 300
+            }
+          ]
+        }
+      ],
+      "specialties": [
+        {
+          "name": "Psicología",
+          "height": 552.484375,
+          "stageHeight": 464.984375,
+          "scrollWidth": 382,
+          "clientWidth": 382,
+          "activeName": "Ficha de ejemplo de Psicología",
+          "animation": "none",
+          "visibleRecords": 1
+        },
+        {
+          "name": "Cardiología",
+          "height": 552.484375,
+          "stageHeight": 464.984375,
+          "scrollWidth": 382,
+          "clientWidth": 382,
+          "activeName": "Ficha de ejemplo de Cardiología",
+          "animation": "none",
+          "visibleRecords": 1
+        },
+        {
+          "name": "Kinesiología",
+          "height": 552.484375,
+          "stageHeight": 464.984375,
+          "scrollWidth": 382,
+          "clientWidth": 382,
+          "activeName": "Ficha de ejemplo de Kinesiología",
+          "animation": "none",
+          "visibleRecords": 1
+        },
+        {
+          "name": "Nutrición",
+          "height": 552.484375,
+          "stageHeight": 464.984375,
+          "scrollWidth": 382,
+          "clientWidth": 382,
+          "activeName": "Ficha de ejemplo de Nutrición",
+          "animation": "none",
+          "visibleRecords": 1
+        },
+        {
+          "name": "Quiropraxia",
+          "height": 552.484375,
+          "stageHeight": 464.984375,
+          "scrollWidth": 382,
+          "clientWidth": 382,
+          "activeName": "Ficha de ejemplo de Quiropraxia",
+          "animation": "none",
+          "visibleRecords": 1
+        }
+      ],
+      "errors": [],
+      "tabEnd": {
+        "selected": "true",
+        "focused": true
+      },
+      "nextTabFocus": {
+        "role": "tabpanel",
+        "label": "product-tour-cobros"
+      },
+      "textClipping": [
+        {
+          "text": "Mostrando ficha de",
+          "ancestor": "sr-only",
+          "textWidth": 130.375,
+          "ancestorWidth": 1
+        },
+        {
+          "text": "Quiropraxia",
+          "ancestor": "sr-only",
+          "textWidth": 77.546875,
+          "ancestorWidth": 1
+        },
+        {
+          "text": ".",
+          "ancestor": "sr-only",
+          "textWidth": 4.015625,
+          "ancestorWidth": 1
+        }
+      ],
+      "pageOverflow": 0
+    },
+    {
+      "width": 2560,
+      "product": [
+        {
+          "label": "La agenda",
+          "panelHeight": 718,
+          "screenHeight": 675.40625,
+          "lastContentBottom": 621.140625,
+          "emptyBelow": 54.265625,
+          "hiddenFocusable": 0,
+          "visibleScreenCount": 1,
+          "animation": "none",
+          "paymentWidths": [
+            {
+              "text": "$ 45.000",
+              "scrollWidth": 461,
+              "clientWidth": 461
+            },
+            {
+              "text": "$ 20.000",
+              "scrollWidth": 461,
+              "clientWidth": 461
+            }
+          ]
+        },
+        {
+          "label": "La historia clínica",
+          "panelHeight": 718,
+          "screenHeight": 675.40625,
+          "lastContentBottom": 523.109375,
+          "emptyBelow": 152.296875,
+          "hiddenFocusable": 0,
+          "visibleScreenCount": 1,
+          "animation": "none",
+          "paymentWidths": [
+            {
+              "text": "$ 45.000",
+              "scrollWidth": 461,
+              "clientWidth": 461
+            },
+            {
+              "text": "$ 20.000",
+              "scrollWidth": 461,
+              "clientWidth": 461
+            }
+          ]
+        },
+        {
+          "label": "Los cobros",
+          "panelHeight": 718,
+          "screenHeight": 675.40625,
+          "lastContentBottom": 637.8125,
+          "emptyBelow": 37.59375,
+          "hiddenFocusable": 0,
+          "visibleScreenCount": 1,
+          "animation": "none",
+          "paymentWidths": [
+            {
+              "text": "$ 45.000",
+              "scrollWidth": 461,
+              "clientWidth": 461
+            },
+            {
+              "text": "$ 20.000",
+              "scrollWidth": 461,
+              "clientWidth": 461
+            }
+          ]
+        }
+      ],
+      "specialties": [
+        {
+          "name": "Psicología",
+          "height": 643.53125,
+          "stageHeight": 541.5625,
+          "scrollWidth": 809,
+          "clientWidth": 809,
+          "activeName": "Ficha de ejemplo de Psicología",
+          "animation": "none",
+          "visibleRecords": 1
+        },
+        {
+          "name": "Cardiología",
+          "height": 643.53125,
+          "stageHeight": 541.5625,
+          "scrollWidth": 809,
+          "clientWidth": 809,
+          "activeName": "Ficha de ejemplo de Cardiología",
+          "animation": "none",
+          "visibleRecords": 1
+        },
+        {
+          "name": "Kinesiología",
+          "height": 643.53125,
+          "stageHeight": 541.5625,
+          "scrollWidth": 809,
+          "clientWidth": 809,
+          "activeName": "Ficha de ejemplo de Kinesiología",
+          "animation": "none",
+          "visibleRecords": 1
+        },
+        {
+          "name": "Nutrición",
+          "height": 643.53125,
+          "stageHeight": 541.5625,
+          "scrollWidth": 809,
+          "clientWidth": 809,
+          "activeName": "Ficha de ejemplo de Nutrición",
+          "animation": "none",
+          "visibleRecords": 1
+        },
+        {
+          "name": "Quiropraxia",
+          "height": 643.53125,
+          "stageHeight": 541.5625,
+          "scrollWidth": 809,
+          "clientWidth": 809,
+          "activeName": "Ficha de ejemplo de Quiropraxia",
+          "animation": "none",
+          "visibleRecords": 1
+        }
+      ],
+      "errors": [],
+      "tabEnd": {
+        "selected": "true",
+        "focused": true
+      },
+      "nextTabFocus": {
+        "role": "tabpanel",
+        "label": "product-tour-cobros"
+      },
+      "textClipping": [
+        {
+          "text": "Mostrando ficha de",
+          "ancestor": "sr-only",
+          "textWidth": 130.375,
+          "ancestorWidth": 1
+        },
+        {
+          "text": "Quiropraxia",
+          "ancestor": "sr-only",
+          "textWidth": 77.546875,
+          "ancestorWidth": 1
+        },
+        {
+          "text": ".",
+          "ancestor": "sr-only",
+          "textWidth": 4.015625,
+          "ancestorWidth": 1
+        }
+      ],
+      "pageOverflow": 0
+    }
+  ]
+}

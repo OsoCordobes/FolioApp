@@ -7,9 +7,11 @@
  */
 
 import { Suspense } from "react";
+import Link from "next/link";
 
 import { SideArt } from "@/components/auth/side-art";
 import { MotionProvider } from "@/components/motion/motion-provider";
+import { FolioMark } from "@/components/folio-mark";
 
 import { PortalLoginForm } from "./login-form";
 
@@ -37,9 +39,12 @@ export default async function PortalLoginPage({
   return (
     <MotionProvider>
       <div className="au-app">
-        <SideArt />
+        <SideArt audience="patient" />
         <Suspense fallback={<main className="au-main" />}>
-          <main className="au-main">
+          <main className="au-main fx-auth-main">
+            <Link className="fx-auth-brand fx-auth-form-brand" href="/" aria-label="Folio, volver al inicio">
+              <FolioMark size={29} /><span>folio</span>
+            </Link>
             <PortalLoginForm initialError={initialError} />
           </main>
         </Suspense>

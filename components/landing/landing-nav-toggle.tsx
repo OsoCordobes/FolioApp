@@ -28,6 +28,13 @@ export function LandingNavToggle({ targetId = "fl-mobile-nav" }: LandingNavToggl
     panel.classList.toggle("is-open", open);
     if (!open) return;
 
+    const header = btnRef.current?.closest("header");
+    const outside = (event: Event) => {
+      if (event.target instanceof Node && !header?.contains(event.target)) setOpen(false);
+    };
+    const desktop = window.matchMedia("(min-width: 801px)");
+    const onDesktop = () => { if (desktop.matches) setOpen(false); };
+
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       setOpen(false);
@@ -36,13 +43,32 @@ export function LandingNavToggle({ targetId = "fl-mobile-nav" }: LandingNavToggl
     // Cierre al navegar: cualquier click sobre un <a> del panel colapsa el menú.
     const onPanelClick = (event: MouseEvent) => {
       const target = event.target as HTMLElement | null;
-      if (target?.closest("a")) setOpen(false);
+      const link = target?.closest("a");
+      if (!link) return;
+      setOpen(false);
+      const href = link.getAttribute("href");
+      if (event.detail !== 0 || !href?.startsWith("#")) return;
+      const destination = document.getElementById(href.slice(1));
+      if (!destination) return;
+      requestAnimationFrame(() => {
+        if (!destination.isConnected) return;
+        const temporary = !destination.hasAttribute("tabindex");
+        if (temporary) destination.setAttribute("tabindex", "-1");
+        destination.focus({ preventScroll:true });
+        if (temporary) destination.addEventListener("blur", () => destination.removeAttribute("tabindex"), { once:true });
+      });
     };
 
     document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("pointerdown", outside);
+    document.addEventListener("focusin", outside);
+    desktop.addEventListener("change", onDesktop);
     panel.addEventListener("click", onPanelClick);
     return () => {
       document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("pointerdown", outside);
+      document.removeEventListener("focusin", outside);
+      desktop.removeEventListener("change", onDesktop);
       panel.removeEventListener("click", onPanelClick);
     };
   }, [open, targetId]);

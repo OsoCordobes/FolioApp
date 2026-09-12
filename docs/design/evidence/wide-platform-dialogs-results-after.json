@@ -1,0 +1,71 @@
+{
+  "date": "2026-09-12T19:41:29.039Z",
+  "kind": "local synthetic gallery, no services or real submissions",
+  "samples": [
+    {
+      "panel": "wide-breakpoint",
+      "breakpoint": [
+        {
+          "width": 1799,
+          "contentWidth": 1392.015625
+        },
+        {
+          "width": 1800,
+          "contentWidth": 1392
+        },
+        {
+          "width": 1801,
+          "contentWidth": 1392.484375
+        }
+      ]
+    },
+    {
+      "panel": "patient-create-dialog",
+      "width": 1920,
+      "form": {
+        "x": 700,
+        "y": 9,
+        "width": 520,
+        "height": 1048
+      },
+      "cancelReachable": true,
+      "focusReturned": true,
+      "pendingProtected": true,
+      "explicitRetry": true,
+      "syntheticCalls": 2,
+      "realSubmissions": 0
+    },
+    {
+      "panel": "patient-create-dialog",
+      "width": 2560,
+      "form": {
+        "x": 1020,
+        "y": 9,
+        "width": 520,
+        "height": 1048
+      },
+      "cancelReachable": true,
+      "focusReturned": true,
+      "pendingProtected": true,
+      "explicitRetry": true,
+      "syntheticCalls": 2,
+      "realSubmissions": 0
+    },
+    {
+      "panel": "patient-create-dialog",
+      "width": 390,
+      "form": {
+        "x": 16,
+        "y": 9,
+        "width": 358,
+        "height": 812
+      },
+      "cancelReachable": true,
+      "focusReturned": true,
+      "pendingProtected": true,
+      "explicitRetry": true,
+      "syntheticCalls": 2,
+      "realSubmissions": 0
+    }
+  ]
+}

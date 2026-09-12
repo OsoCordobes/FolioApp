@@ -1,0 +1,86 @@
+{
+  "scope": "Temporary browser CSS only; no product source edited",
+  "proposal": ".fx-payment-row padding-block 19px to 14px",
+  "result": [
+    {
+      "width": 320,
+      "panels": [
+        {
+          "label": "La agenda",
+          "height": 673,
+          "emptyBelow": 143.5
+        },
+        {
+          "label": "La historia clínica",
+          "height": 673,
+          "emptyBelow": 103.8125
+        },
+        {
+          "label": "Los cobros",
+          "height": 673,
+          "emptyBelow": 16
+        }
+      ]
+    },
+    {
+      "width": 650,
+      "panels": [
+        {
+          "label": "La agenda",
+          "height": 635,
+          "emptyBelow": 41.5
+        },
+        {
+          "label": "La historia clínica",
+          "height": 635,
+          "emptyBelow": 80.71875
+        },
+        {
+          "label": "Los cobros",
+          "height": 635,
+          "emptyBelow": 24
+        }
+      ]
+    },
+    {
+      "width": 1024,
+      "panels": [
+        {
+          "label": "La agenda",
+          "height": 647,
+          "emptyBelow": 45.5
+        },
+        {
+          "label": "La historia clínica",
+          "height": 647,
+          "emptyBelow": 106.3125
+        },
+        {
+          "label": "Los cobros",
+          "height": 647,
+          "emptyBelow": 28
+        }
+      ]
+    },
+    {
+      "width": 2560,
+      "panels": [
+        {
+          "label": "La agenda",
+          "height": 701.328125,
+          "emptyBelow": 37.59375
+        },
+        {
+          "label": "La historia clínica",
+          "height": 701.328125,
+          "emptyBelow": 135.625
+        },
+        {
+          "label": "Los cobros",
+          "height": 701.328125,
+          "emptyBelow": 50.921875
+        }
+      ]
+    }
+  ]
+}

@@ -250,7 +250,7 @@ function LineChart({ dias, hoyFecha }: { dias: FinanzasDiaIngreso[]; hoyFecha: s
               strokeWidth="1"
               strokeDasharray={t === 0 ? "0" : "2 3"}
             />
-            <text x={PAD_L - 8} y={y + 3} textAnchor="end" fill="var(--ink-3)" fontSize="10" fontFamily="Geist Mono" letterSpacing="0">
+            <text x={PAD_L - 8} y={y + 3} textAnchor="end" fill="var(--ink-3)" fontSize="10" fontFamily="var(--font-sans)" letterSpacing="0">
               {t === 0 ? "0" : fmtMonth(t)}
             </text>
           </g>
@@ -260,7 +260,7 @@ function LineChart({ dias, hoyFecha }: { dias: FinanzasDiaIngreso[]; hoyFecha: s
       {labelIdxFor(n).map((i) => {
         const p = points[i];
         return (
-          <text key={p.fecha} x={p.x} y={PAD_T + H + 16} textAnchor="middle" fill="var(--ink-3)" fontSize="10" fontFamily="Geist Mono">
+          <text key={p.fecha} x={p.x} y={PAD_T + H + 16} textAnchor="middle" fill="var(--ink-3)" fontSize="10" fontFamily="var(--font-sans)">
             {p.label}
           </text>
         );
@@ -282,7 +282,7 @@ function LineChart({ dias, hoyFecha }: { dias: FinanzasDiaIngreso[]; hoyFecha: s
       {labPoints.length > 0 ? (
         <>
           <line x1={lastPoint.x} y1={PAD_T} x2={lastPoint.x} y2={PAD_T + H} stroke="var(--accent)" strokeWidth="1" strokeDasharray="2 3" opacity="0.5" />
-          <text x={lastPoint.x} y={PAD_T - 2} textAnchor="middle" fill="var(--accent-2)" fontSize="10" fontFamily="Geist Mono" letterSpacing=".08em">
+          <text x={lastPoint.x} y={PAD_T - 2} textAnchor="middle" fill="var(--accent-2)" fontSize="10" fontFamily="var(--font-sans)" letterSpacing=".08em">
             {lastPoint.fecha === hoyFecha ? "HOY" : lastPoint.label}
           </text>
         </>
@@ -346,7 +346,7 @@ function BarChartMensual({ meses }: { meses: FinanzasMesIngreso[] }) {
               strokeWidth="1"
               strokeDasharray={t === 0 ? "0" : "2 3"}
             />
-            <text x={PAD_L - 8} y={y + 3} textAnchor="end" fill="var(--ink-3)" fontSize="10" fontFamily="Geist Mono" letterSpacing="0">
+            <text x={PAD_L - 8} y={y + 3} textAnchor="end" fill="var(--ink-3)" fontSize="10" fontFamily="var(--font-sans)" letterSpacing="0">
               {t === 0 ? "0" : fmtMonth(t)}
             </text>
           </g>
@@ -362,7 +362,7 @@ function BarChartMensual({ meses }: { meses: FinanzasMesIngreso[] }) {
             <rect x={x} y={y} width={barW} height={h} rx="2" fill="var(--accent)" opacity="0.85">
               <title>{`${mes.label} · ${(mes.montoCents ? formatCents(mes.montoCents) : fmtMoney(mes.monto))}`}</title>
             </rect>
-            <text x={x + barW / 2} y={PAD_T + H + 16} textAnchor="middle" fill="var(--ink-3)" fontSize="10" fontFamily="Geist Mono">
+            <text x={x + barW / 2} y={PAD_T + H + 16} textAnchor="middle" fill="var(--ink-3)" fontSize="10" fontFamily="var(--font-sans)">
               {mes.label}
             </text>
           </g>
@@ -413,10 +413,10 @@ function Donut({ servicios }: { servicios: FinanzasServicioBreakdown[] }) {
         {arcs.map((a) => (
           <path key={a.id} d={a.path} stroke={a.color} strokeWidth={stroke} fill="none" strokeLinecap="butt" />
         ))}
-        <text x={cx} y={cy - 4} textAnchor="middle" fontFamily="Geist Mono" fontSize="9" fill="var(--ink-3)" letterSpacing=".08em">
+        <text x={cx} y={cy - 4} textAnchor="middle" fontFamily="var(--font-sans)" fontSize="9" fill="var(--ink-3)" letterSpacing=".08em">
           TOTAL
         </text>
-        <text x={cx} y={cy + 14} textAnchor="middle" fontFamily="Geist" fontWeight="600" fontSize="11" letterSpacing="-.015em" fill="var(--ink)">
+        <text x={cx} y={cy + 14} textAnchor="middle" fontFamily="var(--font-sans)" fontWeight="600" fontSize="11" letterSpacing="-.015em" fill="var(--ink)">
           <title>{formatCents(String(totalCents))}</title>
           {formatCents(String(totalCents))}
         </text>
@@ -556,8 +556,7 @@ function TablaTransacciones({ initialPage, window, mesLabel, periodo, canMarcarC
             />
             <button type="submit" className="fi-btn fi-btn-secondary" disabled={loading}>Buscar</button>
           </form>
-          {/* E2 · export server-side SIN cap: baja TODO el período, no solo
-              las ≤20 filas renderizadas. */}
+          {/* Export uses the current server filter and explicit row/byte bounds. */}
           <form method="post" action="/finanzas/export">
             <input type="hidden" name="periodo" value={periodo} />
             <input type="hidden" name="status" value={estadoFiltro} />
@@ -574,6 +573,8 @@ function TablaTransacciones({ initialPage, window, mesLabel, periodo, canMarcarC
         Los indicadores superiores corresponden al período completo. Orden: registro más reciente.
       </p>
       <p role="status" style={{ padding: "0 16px" }}>{loading ? "Cargando movimientos…" : loadError}</p>
+      {filtered.length > 0 ? <p className="fi-table-scroll-hint">Deslizá la tabla para ver todos los datos →</p> : null}
+      <div className="fn-table-scroll" role="region" aria-label="Tabla de transacciones" tabIndex={filtered.length > 0 ? 0 : undefined}>
       {filtered.length === 0 ? (
         <p className="muted" style={{ padding: 24, textAlign: "center" }}>
           Sin resultados para los filtros aplicados.
@@ -634,6 +635,7 @@ function TablaTransacciones({ initialPage, window, mesLabel, periodo, canMarcarC
           </tbody>
         </table>
       )}
+      </div>
       <footer className="fn-table-foot">
         <span className="muted">{page.totalCount} resultados · página {history.length} · {mesLabel}</span>
         <button type="button" className="fi-btn fi-btn-secondary" disabled={loading || history.length === 1}

@@ -36,8 +36,8 @@ export function PageHeader({ turnos, pacientes, fechaLarga, fechaAnio, now, time
   return (
     <header className="fi-page-head">
       <div>
-        <span className="fi-eyebrow">{fechaLarga} · {fechaAnio}</span>
-        <h1>Tu agenda hoy</h1>
+        <span className="fi-eyebrow fi-page-date">{fechaLarga}, {fechaAnio}</span>
+        <h1>Tu día en Folio</h1>
         <p className="fi-page-sub">
           {activos === 1 ? "1 turno por delante" : `${activos} turnos por delante`}
           {eta && proximoPaciente ? (
@@ -59,11 +59,11 @@ export function PageHeader({ turnos, pacientes, fechaLarga, fechaAnio, now, time
         </button>
         <button
           type="button"
-          className="fi-btn fi-btn-secondary"
+          className="fi-btn fi-btn-primary fi-page-walkin"
           onClick={() => onOpenWalkIn?.()}
-          title="Agendar un walk-in (turno ahora)"
+          title="Agendar una atención sin turno"
         >
-          <I.Plus size={13} /> Turno walk-in
+          <I.Plus size={16} /> Sin turno
         </button>
       </div>
     </header>

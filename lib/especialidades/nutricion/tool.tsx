@@ -29,7 +29,7 @@
  * <SerieEvolucion>.
  */
 
-import { useMemo, useState, type CSSProperties } from "react";
+import { useId, useMemo, useState, type CSSProperties } from "react";
 
 import * as I from "@/components/icons";
 import { ObjetivosBlock } from "@/lib/instrumentos/components";
@@ -292,6 +292,7 @@ export function NutricionTool({
   readOnly,
   historial,
 }: SpecialtyToolProps) {
+  const historialId = useId();
   const draft = useMemo(() => parseDraft(value), [value]);
   const series = useMemo(() => deriveNutriSeries(historial), [historial]);
   const imc = useMemo(() => computeImc(draft.peso, draft.talla), [draft.peso, draft.talla]);
@@ -471,7 +472,7 @@ export function NutricionTool({
         <header className="pc-card-head">
           <span className="fi-eyebrow">Circunferencias</span>
           {circHistorial.length > 4 ? (
-            <button type="button" className="pc-link" onClick={() => setCircExpandido((v) => !v)}>
+            <button type="button" className="pc-link" onClick={() => setCircExpandido((v) => !v)} aria-expanded={circExpandido} aria-controls={`${historialId}-circunferencias`}>
               {circExpandido ? "Mostrar menos" : `Ver todas (${circHistorial.length})`}
             </button>
           ) : null}
@@ -537,7 +538,7 @@ export function NutricionTool({
           </div>
         ) : null}
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <div id={`${historialId}-circunferencias`} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <span className="muted" style={{ fontSize: 11, fontWeight: 500 }}>
             Historial
           </span>
@@ -559,7 +560,7 @@ export function NutricionTool({
         <header className="pc-card-head">
           <span className="fi-eyebrow">Pliegues cutáneos</span>
           {plieguesHistorial.length > 4 ? (
-            <button type="button" className="pc-link" onClick={() => setPlieguesExpandido((v) => !v)}>
+            <button type="button" className="pc-link" onClick={() => setPlieguesExpandido((v) => !v)} aria-expanded={plieguesExpandido} aria-controls={`${historialId}-pliegues`}>
               {plieguesExpandido ? "Mostrar menos" : `Ver todos (${plieguesHistorial.length})`}
             </button>
           ) : null}
@@ -625,7 +626,7 @@ export function NutricionTool({
           </div>
         ) : null}
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <div id={`${historialId}-pliegues`} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <span className="muted" style={{ fontSize: 11, fontWeight: 500 }}>
             Historial
           </span>

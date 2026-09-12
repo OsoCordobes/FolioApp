@@ -1,13 +1,10 @@
 /**
  * Folio · Landing de marketing — página raíz pública (/).
  *
- * Narrativa: hero (08:00, el día arranca) → timeline del día (#dia) →
- * bóveda de seguridad (#seguridad) → bento de producto (#producto) →
- * precios (#precios) → FAQ (#faq) → CTA de cierre. Server components
- * en su totalidad — la timeline y las demos del bento animan con CSS puro
- * (animation-timeline: view()); los únicos islands client son el toggle de
- * nav mobile, LandingAnalytics (PostHog, no-op sin cookie consent) y
- * StickyCta (barra CTA mobile fixed-bottom, post-hero).
+ * Clínica clara: agenda → recorrido del producto → día de atención →
+ * especialidades → conexiones → privacidad → precios → FAQ y cierre.
+ * Renderizado en servidor; recorrido por pestañas y navegación son islas
+ * interactivas. LandingAnalytics respeta el consentimiento de cookies.
  * Anclas estables para el header: #dia, #seguridad, #producto, #precios, #faq.
  *
  * JSON-LD (Fase C · SEO): un solo script con `@graph` —
@@ -16,21 +13,10 @@
  * FAQPage desde FAQ_ITEMS, la misma data que renderiza <Faq />.
  */
 
+import { FolioExperience } from "@/components/landing/experience";
 import { FAQ_ITEMS } from "@/components/landing/faq-data";
 import { LandingAnalytics } from "@/components/landing/landing-analytics";
-import { Bento } from "@/components/landing/sections/bento";
-import { DayTimeline } from "@/components/landing/sections/day-timeline";
-import { EspecialidadesFicha } from "@/components/landing/sections/especialidades-ficha";
-import { Faq } from "@/components/landing/sections/faq";
-import { Ficha } from "@/components/landing/sections/ficha";
-import { FinalCta } from "@/components/landing/sections/final-cta";
-import { Hero } from "@/components/landing/sections/hero";
-import { Pricing } from "@/components/landing/sections/pricing";
-import { SpecialtyStrip } from "@/components/landing/sections/specialty-strip";
-import { Testimonials } from "@/components/landing/sections/testimonials";
-import { Vault } from "@/components/landing/sections/vault";
 import { AuthRetornoAviso } from "@/components/landing/auth-retorno-aviso";
-import { StickyCta } from "@/components/landing/sticky-cta";
 import { getAppUrl } from "@/lib/config/app-url";
 import { resolveClinicBasePriceCents } from "@/lib/billing/pricing";
 import { MP_PLAN_PRICE_CENTS } from "@/lib/mercadopago/client";
@@ -58,7 +44,7 @@ function buildJsonLd(): string {
         url: BASE_URL,
         publisher: { "@id": `${BASE_URL}#org` },
         description:
-          "El día de tu consultorio, armado solo: turnos, reservas online, recordatorios automáticos e historias clínicas cifradas. Para profesionales de la salud en Argentina.",
+          "Agenda, historia clínica y cobros para organizar el trabajo de profesionales y equipos de salud en Argentina.",
         offers: [
           {
             "@type": "Offer",
@@ -105,20 +91,10 @@ export default function LandingPage() {
           que quede registro en ningún lado. Rinde null en el 99.9% de las
           visitas, que no traen nada en la URL. */}
       <AuthRetornoAviso />
-      <Hero />
-      <DayTimeline />
-      <SpecialtyStrip />
-      {/* Social proof honesta: null hasta que haya quotes reales cargadas. */}
-      <Testimonials />
-      <Ficha />
-      <EspecialidadesFicha />
-      <Vault />
-      <Bento />
-      <Pricing />
-      <Faq />
-      <FinalCta />
+      <FolioExperience />
       <LandingAnalytics />
-      <StickyCta />
+
     </main>
   );
 }
+

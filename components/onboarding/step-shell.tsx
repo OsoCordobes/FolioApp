@@ -6,9 +6,8 @@
  * Desktop ≥1024px: split horizontal. Form a la izquierda (max 560px),
  * <PublicCardLive /> sticky a la derecha (360px).
  *
- * Mobile <1024px: form full-width. Botón flotante "Ver mi card" abre un
- * drawer con el preview. Footer sticky bottom para que "Continuar" siempre
- * quede visible.
+ * Mobile <1024px: form full-width. Un botón después del formulario abre
+ * la vista previa en un diálogo modal. No tapa campos ni acciones.
  *
  * Step transitions: slide-X (16px) + fade simultáneo, 280ms. Respeta
  * prefers-reduced-motion. Maneja `direction` para slide forward/back.
@@ -24,11 +23,11 @@
  * enfoca el primer campo editable del body — cierra el loop
  * tipear→Enter→tipear que el hint "↵ continuar" promete.
  *
- * Footer: muestra hint "↵ continuar" en desktop como guía sutil de keyboard.
+ * El diálogo contiene el foco y al cerrarse lo devuelve a su apertura.
  */
 
 import type { ReactNode } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import {
   PublicCard,
@@ -62,9 +61,9 @@ const APP_URL_DEFAULT = getAppHost();
 
 // Campos que reciben el autofocus al montar un paso. Excluimos hidden/file/
 // checkbox/radio (enfocar el file input del Step 4 haría ambiguo el Enter) y
-// disabled (el email read-only del Step1Consent).
+// disabled/readOnly (el email de Step1Consent ya está confirmado).
 const FOCUSABLE_FIELD_SELECTOR =
-  'input:not([type="hidden"]):not([type="file"]):not([type="checkbox"]):not([type="radio"]):not([disabled]), select, textarea';
+  'input:not([type="hidden"]):not([type="file"]):not([type="checkbox"]):not([type="radio"]):not([disabled]):not([readonly]), select:not([disabled]), textarea:not([disabled]):not([readonly])';
 
 export function StepShell({
   stepIdx,
@@ -83,7 +82,17 @@ export function StepShell({
   children,
 }: StepShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const shellRef = useRef<HTMLDivElement | null>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
+  const previewRef = useRef<HTMLDialogElement | null>(null);
+  const previewId = useId();
+
+  useEffect(() => {
+    const dialog = previewRef.current;
+    if (!dialog) return;
+    if (drawerOpen && !dialog.open) dialog.showModal();
+    if (!drawerOpen && dialog.open) dialog.close();
+  }, [drawerOpen]);
 
   // Autofocus del primer campo al montar el paso. preventScroll: el layout
   // ya posiciona el form arriba; no queremos saltos de scroll (tampoco con
@@ -97,9 +106,30 @@ export function StepShell({
   // Esc = cerrar drawer del preview, o Atrás.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.defaultPrevented || e.isComposing || e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
       const target = e.target as HTMLElement | null;
       const tag = target?.tagName?.toLowerCase();
+
+      if (drawerOpen && e.key === "Tab") {
+        const controls = Array.from(previewRef.current?.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ) ?? []).filter((element) => element.getClientRects().length > 0);
+        const first = controls[0];
+        const last = controls[controls.length - 1];
+        if (first && last && ((e.shiftKey && target === first) || (!e.shiftKey && target === last))) {
+          e.preventDefault();
+          (e.shiftKey ? last : first).focus();
+        }
+        return;
+      }
+
+      // La selección nativa y sus popovers son dueños de Enter/Escape.
+      // Tampoco consumimos teclas de navegación fuera de este asistente.
+      if (!drawerOpen) {
+        if (!target || !shellRef.current?.contains(target)) return;
+        if (tag === "select") return;
+        if (tag === "input" && ["date", "datetime-local", "month", "time", "week", "color", "range"].includes((target as HTMLInputElement).type)) return;
+      }
 
       if (e.key === "Escape") {
         if (drawerOpen) {
@@ -114,7 +144,7 @@ export function StepShell({
         return;
       }
 
-      if (e.key !== "Enter") return;
+      if (drawerOpen || e.key !== "Enter") return;
       if (tag === "textarea" || target?.isContentEditable) return;
       // Botones/links/summary manejan su propio Enter (click nativo).
       if (tag === "button" || tag === "a" || tag === "summary") return;
@@ -136,11 +166,15 @@ export function StepShell({
     : undefined;
 
   return (
-    <div className={`onb-shell ${showPreview ? "onb-shell-split" : ""}`}>
+    <div ref={shellRef} className={`onb-shell fx-onb-shell ${showPreview ? "onb-shell-split" : ""}`}>
       <div className="onb-shell-form">
         <div className="onb-step">
           {!isFinal ? (
             <header className="onb-step-head">
+              <div className="fx-onb-progress-label">
+                <span className="onb-step-num">Paso {stepIdx} de {ONB_TOTAL}</span>
+                <span>{["", "Tu cuenta", "Tu perfil", "Tu consultorio", "Identidad visual", "Horarios", "Servicios", "Calendario", "Todo listo"][stepIdx]}</span>
+              </div>
               <div
                 className="onb-progress"
                 role="progressbar"
@@ -154,9 +188,6 @@ export function StepShell({
                   style={{ width: `${((stepIdx - 1) / (ONB_TOTAL - 1)) * 100}%` }}
                 />
               </div>
-              <span className="onb-step-num fm-mono">
-                Paso {stepIdx} de {ONB_TOTAL}
-              </span>
               <h1>{headline}</h1>
               {sub ? <p className="onb-step-sub">{sub}</p> : null}
             </header>
@@ -184,7 +215,7 @@ export function StepShell({
               <span className="onb-foot-grow" />
               {canSkip && skip ? (
                 <button type="button" className="onb-skip" onClick={skip}>
-                  Saltar este paso
+                  Configurar después
                 </button>
               ) : null}
               <button
@@ -195,10 +226,6 @@ export function StepShell({
                 title="Continuar (Enter)"
               >
                 {nextLabel}
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M5 12h14M12 5l7 7-7 7" />
-                </svg>
-                <span className="onb-foot-kbd" aria-hidden>↵</span>
               </button>
             </footer>
           ) : null}
@@ -207,16 +234,16 @@ export function StepShell({
 
       {showPreview && previewProps ? (
         <>
-          <aside className="onb-shell-preview" aria-label="Vista previa de tu card pública">
+          <aside className="onb-shell-preview" aria-label="Vista previa de tu perfil público">
             <div className="onb-preview-sticky">
-              <span className="onb-preview-label">Tu card pública</span>
+              <span className="onb-preview-label">Tu perfil público</span>
               <PublicCard
                 data={previewProps}
                 variant="preview"
                 appUrl={appUrl ?? APP_URL_DEFAULT}
               />
               <p className="onb-preview-fine">
-                Así te ven los pacientes en tu link público. Se actualiza mientras escribís.
+                Así se verá tu perfil para los pacientes. La vista previa se actualiza mientras escribís.
               </p>
             </div>
           </aside>
@@ -225,8 +252,9 @@ export function StepShell({
             type="button"
             className={`onb-preview-fab ${drawerOpen ? "is-open" : ""}`}
             onClick={() => setDrawerOpen((v) => !v)}
-            aria-label={drawerOpen ? "Cerrar preview" : "Ver mi card"}
+            aria-label={drawerOpen ? "Cerrar vista previa" : "Ver mi perfil público"}
             aria-expanded={drawerOpen}
+            aria-controls={previewId}
           >
             {drawerOpen ? (
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -238,19 +266,25 @@ export function StepShell({
                 <circle cx="12" cy="12" r="3" />
               </svg>
             )}
-            <span>{drawerOpen ? "Cerrar" : "Ver mi card"}</span>
+            <span>{drawerOpen ? "Cerrar" : "Ver mi perfil público"}</span>
           </button>
 
-          {drawerOpen ? (
-            <div className="onb-preview-drawer" role="dialog" aria-modal="true">
+            <dialog
+              id={previewId}
+              ref={previewRef}
+              className="onb-preview-drawer"
+              aria-labelledby={`${previewId}-title`}
+              onCancel={(event) => { event.preventDefault(); setDrawerOpen(false); }}
+              onClose={() => setDrawerOpen(false)}
+            >
               <div className="onb-preview-drawer-inner">
                 <div className="onb-preview-drawer-head">
-                  <span className="onb-preview-label">Tu card pública</span>
+                  <span id={`${previewId}-title`} className="onb-preview-label">Tu perfil público</span>
                   <button
                     type="button"
                     className="onb-preview-close"
                     onClick={() => setDrawerOpen(false)}
-                    aria-label="Cerrar"
+                    aria-label="Cerrar vista previa"
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M18 6 6 18M6 6l12 12" />
@@ -264,8 +298,7 @@ export function StepShell({
                 />
               </div>
               <div className="onb-preview-drawer-backdrop" onClick={() => setDrawerOpen(false)} />
-            </div>
-          ) : null}
+            </dialog>
         </>
       ) : null}
     </div>

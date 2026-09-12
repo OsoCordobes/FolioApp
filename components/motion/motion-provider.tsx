@@ -4,9 +4,9 @@
  * Folio · MotionProvider
  *
  * Wrap del client tree con framer-motion lazy:
- *   - LazyMotion features={domMax} → carga las layout features (necesarias
- *     para shared elements vía layoutId). +5 KB sobre domAnimation, pero es
- *     el killer feature del SideArt v2 ("$221k" Calendario → "$1.2M" Finanzas).
+ *   - LazyMotion features={domAnimation}: animación y gestos simples.
+ *     El acceso actual no usa drag, layout ni shared elements; no descarga
+ *     las features del carrusel anterior.
  *   - strict={true} → lanza runtime error si alguien usa <motion.*> en vez
  *     de <m.*>. Combinado con el ESLint guard, el bundle no se infla.
  *   - MotionConfig reducedMotion="user" → todos los componentes FM respetan
@@ -17,7 +17,7 @@
  * porque inflaría el bundle de páginas server-only que no necesitan motion.
  */
 
-import { LazyMotion, MotionConfig, domMax } from "framer-motion";
+import { LazyMotion, MotionConfig, domAnimation } from "framer-motion";
 import type { ReactNode } from "react";
 
 interface MotionProviderProps {
@@ -26,7 +26,7 @@ interface MotionProviderProps {
 
 export function MotionProvider({ children }: MotionProviderProps) {
   return (
-    <LazyMotion features={domMax} strict>
+    <LazyMotion features={domAnimation} strict>
       <MotionConfig reducedMotion="user">
         {children}
       </MotionConfig>

@@ -1,0 +1,1034 @@
+[
+  {
+    "width": 1440,
+    "textScale": 1,
+    "viewportsAsZoomNote": "720 CSS px approximates reflow of a 1440px window at 200%; textScale=2 is separate CSS text stress.",
+    "tour": [
+      {
+        "selected": "La agenda",
+        "selectedId": "product-tour-agenda",
+        "panelLabel": "product-tour-agenda",
+        "headings": [
+          "Tu agenda hoy"
+        ],
+        "pillDeltaX": 0,
+        "pillWidth": 176.656,
+        "tabWidth": 176.65625,
+        "panelHeight": 687.5,
+        "pageOverflow": false
+      },
+      {
+        "selected": "La historia clínica",
+        "selectedId": "product-tour-historia",
+        "panelLabel": "product-tour-historia",
+        "headings": [
+          "Martina Ríos"
+        ],
+        "pillDeltaX": -0.0002500000000509317,
+        "pillWidth": 176.656,
+        "tabWidth": 176.671875,
+        "panelHeight": 687.5,
+        "pageOverflow": false
+      },
+      {
+        "selected": "Los cobros",
+        "selectedId": "product-tour-cobros",
+        "panelLabel": "product-tour-cobros",
+        "headings": [
+          "Los números del día"
+        ],
+        "pillDeltaX": -0.016124999999988177,
+        "pillWidth": 176.656,
+        "tabWidth": 176.671875,
+        "panelHeight": 687.5,
+        "pageOverflow": false
+      }
+    ],
+    "specialties": [
+      {
+        "label": "Ficha de ejemplo de Psicología",
+        "height": 552.484375,
+        "pageOverflow": false,
+        "visibleHeadings": [
+          "Registro de sesión"
+        ],
+        "clipped": []
+      },
+      {
+        "label": "Ficha de ejemplo de Cardiología",
+        "height": 552.484375,
+        "pageOverflow": false,
+        "visibleHeadings": [
+          "Registro cardiovascular"
+        ],
+        "clipped": []
+      },
+      {
+        "label": "Ficha de ejemplo de Kinesiología",
+        "height": 552.484375,
+        "pageOverflow": false,
+        "visibleHeadings": [
+          "Evolución funcional"
+        ],
+        "clipped": []
+      },
+      {
+        "label": "Ficha de ejemplo de Nutrición",
+        "height": 552.484375,
+        "pageOverflow": false,
+        "visibleHeadings": [
+          "Seguimiento nutricional"
+        ],
+        "clipped": []
+      },
+      {
+        "label": "Ficha de ejemplo de Quiropraxia",
+        "height": 552.484375,
+        "pageOverflow": false,
+        "visibleHeadings": [
+          "Registro por segmento"
+        ],
+        "clipped": []
+      }
+    ],
+    "pageErrors": []
+  },
+  {
+    "width": 1024,
+    "textScale": 1,
+    "viewportsAsZoomNote": "720 CSS px approximates reflow of a 1440px window at 200%; textScale=2 is separate CSS text stress.",
+    "tour": [
+      {
+        "selected": "La agenda",
+        "selectedId": "product-tour-agenda",
+        "panelLabel": "product-tour-agenda",
+        "headings": [
+          "Tu agenda hoy"
+        ],
+        "pillDeltaX": 0,
+        "pillWidth": 176.656,
+        "tabWidth": 176.65625,
+        "panelHeight": 687.5,
+        "pageOverflow": false
+      },
+      {
+        "selected": "La historia clínica",
+        "selectedId": "product-tour-historia",
+        "panelLabel": "product-tour-historia",
+        "headings": [
+          "Martina Ríos"
+        ],
+        "pillDeltaX": -0.0002499999999940883,
+        "pillWidth": 176.656,
+        "tabWidth": 176.671875,
+        "panelHeight": 687.5,
+        "pageOverflow": false
+      },
+      {
+        "selected": "Los cobros",
+        "selectedId": "product-tour-cobros",
+        "panelLabel": "product-tour-cobros",
+        "headings": [
+          "Los números del día"
+        ],
+        "pillDeltaX": -0.016124999999988177,
+        "pillWidth": 176.656,
+        "tabWidth": 176.671875,
+        "panelHeight": 687.5,
+        "pageOverflow": false
+      }
+    ],
+    "specialties": [
+      {
+        "label": "Ficha de ejemplo de Psicología",
+        "height": 552.484375,
+        "pageOverflow": false,
+        "visibleHeadings": [
+          "Registro de sesión"
+        ],
+        "clipped": []
+      },
+      {
+        "label": "Ficha de ejemplo de Cardiología",
+        "height": 552.484375,
+        "pageOverflow": false,
+        "visibleHeadings": [
+          "Registro cardiovascular"
+        ],
+        "clipped": []
+      },
+      {
+        "label": "Ficha de ejemplo de Kinesiología",
+        "height": 552.484375,
+        "pageOverflow": false,
+        "visibleHeadings": [
+          "Evolución funcional"
+        ],
+        "clipped": []
+      },
+      {
+        "label": "Ficha de ejemplo de Nutrición",
+        "height": 552.484375,
+        "pageOverflow": false,
+        "visibleHeadings": [
+          "Seguimiento nutricional"
+        ],
+        "clipped": []
+      },
+      {
+        "label": "Ficha de ejemplo de Quiropraxia",
+        "height": 552.484375,
+        "pageOverflow": false,
+        "visibleHeadings": [
+          "Registro por segmento"
+        ],
+        "clipped": []
+      }
+    ],
+    "pageErrors": []
+  },
+  {
+    "width": 768,
+    "textScale": 1,
+    "viewportsAsZoomNote": "720 CSS px approximates reflow of a 1440px window at 200%; textScale=2 is separate CSS text stress.",
+    "tour": [
+      {
+        "selected": "La agenda",
+        "selectedId": "product-tour-agenda",
+        "panelLabel": "product-tour-agenda",
+        "headings": [
+          "Tu agenda hoy"
+        ],
+        "pillDeltaX": 0,
+        "pillWidth": 176.656,
+        "tabWidth": 176.65625,
+        "panelHeight": 675.5,
+        "pageOverflow": false
+      },
+      {
+        "selected": "La historia clínica",
+        "selectedId": "product-tour-historia",
+        "panelLabel": "product-tour-historia",
+        "headings": [
+          "Martina Ríos"
+        ],
+        "pillDeltaX": -0.0002499999999940883,
+        "pillWidth": 176.656,
+        "tabWidth": 176.671875,
+        "panelHeight": 675.5,
+        "pageOverflow": false
+      },
+      {
+        "selected": "Los cobros",
+        "selectedId": "product-tour-cobros",
+        "panelLabel": "product-tour-cobros",
+        "headings": [
+          "Los números del día"
+        ],
+        "pillDeltaX": -0.016124999999988177,
+        "pillWidth": 176.656,
+        "tabWidth": 176.671875,
+        "panelHeight": 675.5,
+        "pageOverflow": false
+      }
+    ],
+    "specialties": [
+      {
+        "label": "Ficha de ejemplo de Psicología",
+        "height": 557.5,
+        "pageOverflow": false,
+        "visibleHeadings": [
+          "Registro de sesión"
+        ],
+        "clipped": []
+      },
+      {
+        "label": "Ficha de ejemplo de Cardiología",
+        "height": 557.5,
+        "pageOverflow": false,
+        "visibleHeadings": [
+          "Registro cardiovascular"
+        ],
+        "clipped": []
+      },
+      {
+        "label": "Ficha de ejemplo de Kinesiología",
+        "height": 557.5,
+        "pageOverflow": false,
+        "visibleHeadings": [
+          "Evolución funcional"
+        ],
+        "clipped": []
+      },
+      {
+        "label": "Ficha de ejemplo de Nutrición",
+        "height": 557.5,
+        "pageOverflow": false,
+        "visibleHeadings": [
+          "Seguimiento nutricional"
+        ],
+        "clipped": []
+      },
+      {
+        "label": "Ficha de ejemplo de Quiropraxia",
+        "height": 557.5,
+        "pageOverflow": false,
+        "visibleHeadings": [
+          "Registro por segmento"
+        ],
+        "clipped": []
+      }
+    ],
+    "pageErrors": []
+  },
+  {
+    "width": 390,
+    "textScale": 1,
+    "viewportsAsZoomNote": "720 CSS px approximates reflow of a 1440px window at 200%; textScale=2 is separate CSS text stress.",
+    "tour": [
+      {
+        "selected": "La agenda",
+        "selectedId": "product-tour-agenda",
+        "panelLabel": "product-tour-agenda",
+        "headings": [
+          "Tu agenda hoy"
+        ],
+        "pillDeltaX": 0,
+        "pillWidth": 111.984,
+        "tabWidth": 112,
+        "panelHeight": 593.5,
+        "pageOverflow": false
+      },
+      {
+        "selected": "La historia clínica",
+        "selectedId": "product-tour-historia",
+        "panelLabel": "product-tour-historia",
+        "headings": [
+          "Martina Ríos"
+        ],
+        "pillDeltaX": -0.016000000000019554,
+        "pillWidth": 111.984,
+        "tabWidth": 112,
+        "panelHeight": 593.5,
+        "pageOverflow": false
+      },
+      {
+        "selected": "Los cobros",
+        "selectedId": "product-tour-cobros",
+        "panelLabel": "product-tour-cobros",
+        "headings": [
+          "Los números del día"
+        ],
+        "pillDeltaX": -0.03100000000000591,
+        "pillWidth": 111.984,
+        "tabWidth": 112,
+        "panelHeight": 593.5,
+        "pageOverflow": false
+      }
+    ],
+    "specialties": [
+      {
+        "label": "Ficha de ejemplo de Psicología",
+        "height": 552.5,
+        "pageOverflow": false,
+        "visibleHeadings": [
+          "Registro de sesión"
+        ],
+        "clipped": []
+      },
+      {
+        "label": "Ficha de ejemplo de Cardiología",
+        "height": 552.5,
+        "pageOverflow": false,
+        "visibleHeadings": [
+          "Registro cardiovascular"
+        ],
+        "clipped": []
+      },
+      {
+        "label": "Ficha de ejemplo de Kinesiología",
+        "height": 552.5,
+        "pageOverflow": false,
+        "visibleHeadings": [
+          "Evolución funcional"
+        ],
+        "clipped": []
+      },
+      {
+        "label": "Ficha de ejemplo de Nutrición",
+        "height": 552.5,
+        "pageOverflow": false,
+        "visibleHeadings": [
+          "Seguimiento nutricional"
+        ],
+        "clipped": []
+      },
+      {
+        "label": "Ficha de ejemplo de Quiropraxia",
+        "height": 552.5,
+        "pageOverflow": false,
+        "visibleHeadings": [
+          "Registro por segmento"
+        ],
+        "clipped": []
+      }
+    ],
+    "pageErrors": []
+  },
+  {
+    "width": 320,
+    "textScale": 1,
+    "viewportsAsZoomNote": "720 CSS px approximates reflow of a 1440px window at 200%; textScale=2 is separate CSS text stress.",
+    "tour": [
+      {
+        "selected": "La agenda",
+        "selectedId": "product-tour-agenda",
+        "panelLabel": "product-tour-agenda",
+        "headings": [
+          "Tu agenda hoy"
+        ],
+        "pillDeltaX": 0,
+        "pillWidth": 88.6562,
+        "tabWidth": 88.65625,
+        "panelHeight": 628,
+        "pageOverflow": false
+      },
+      {
+        "selected": "La historia clínica",
+        "selectedId": "product-tour-historia",
+        "panelLabel": "product-tour-historia",
+        "headings": [
+          "Martina Ríos"
+        ],
+        "pillDeltaX": -0.00005000000000165983,
+        "pillWidth": 88.6562,
+        "tabWidth": 88.671875,
+        "panelHeight": 628,
+        "pageOverflow": false
+      },
+      {
+        "selected": "Los cobros",
+        "selectedId": "product-tour-cobros",
+        "panelLabel": "product-tour-cobros",
+        "headings": [
+          "Los números del día"
+        ],
+        "pillDeltaX": -0.016124999999988177,
+        "pillWidth": 88.6562,
+        "tabWidth": 88.65625,
+        "panelHeight": 628,
+        "pageOverflow": false
+      }
+    ],
+    "specialties": [
+      {
+        "label": "Ficha de ejemplo de Psicología",
+        "height": 631.96875,
+        "pageOverflow": false,
+        "visibleHeadings": [
+          "Registro de sesión"
+        ],
+        "clipped": []
+      },
+      {
+        "label": "Ficha de ejemplo de Cardiología",
+        "height": 631.96875,
+        "pageOverflow": false,
+        "visibleHeadings": [
+          "Registro cardiovascular"
+        ],
+        "clipped": []
+      },
+      {
+        "label": "Ficha de ejemplo de Kinesiología",
+        "height": 631.96875,
+        "pageOverflow": false,
+        "visibleHeadings": [
+          "Evolución funcional"
+        ],
+        "clipped": []
+      },
+      {
+        "label": "Ficha de ejemplo de Nutrición",
+        "height": 631.96875,
+        "pageOverflow": false,
+        "visibleHeadings": [
+          "Seguimiento nutricional"
+        ],
+        "clipped": []
+      },
+      {
+        "label": "Ficha de ejemplo de Quiropraxia",
+        "height": 631.96875,
+        "pageOverflow": false,
+        "visibleHeadings": [
+          "Registro por segmento"
+        ],
+        "clipped": []
+      }
+    ],
+    "pageErrors": []
+  },
+  {
+    "width": 1440,
+    "textScale": 2,
+    "viewportsAsZoomNote": "720 CSS px approximates reflow of a 1440px window at 200%; textScale=2 is separate CSS text stress.",
+    "tour": [
+      {
+        "selected": "La agenda",
+        "selectedId": "product-tour-agenda",
+        "panelLabel": "product-tour-agenda",
+        "headings": [
+          "Tu agenda hoy"
+        ],
+        "pillDeltaX": 0,
+        "pillWidth": 176.656,
+        "tabWidth": 176.65625,
+        "panelHeight": 965,
+        "pageOverflow": false
+      },
+      {
+        "selected": "La historia clínica",
+        "selectedId": "product-tour-historia",
+        "panelLabel": "product-tour-historia",
+        "headings": [
+          "Martina Ríos"
+        ],
+        "pillDeltaX": -0.0002500000000509317,
+        "pillWidth": 176.656,
+        "tabWidth": 176.671875,
+        "panelHeight": 965,
+        "pageOverflow": false
+      },
+      {
+        "selected": "Los cobros",
+        "selectedId": "product-tour-cobros",
+        "panelLabel": "product-tour-cobros",
+        "headings": [
+          "Los números del día"
+        ],
+        "pillDeltaX": -0.016124999999988177,
+        "pillWidth": 176.656,
+        "tabWidth": 176.671875,
+        "panelHeight": 965,
+        "pageOverflow": false
+      }
+    ],
+    "specialties": [
+      {
+        "label": "Ficha de ejemplo de Psicología",
+        "height": 855.1875,
+        "pageOverflow": false,
+        "visibleHeadings": [
+          "Registro de sesión"
+        ],
+        "clipped": []
+      },
+      {
+        "label": "Ficha de ejemplo de Cardiología",
+        "height": 855.1875,
+        "pageOverflow": false,
+        "visibleHeadings": [
+          "Registro cardiovascular"
+        ],
+        "clipped": []
+      },
+      {
+        "label": "Ficha de ejemplo de Kinesiología",
+        "height": 855.1875,
+        "pageOverflow": false,
+        "visibleHeadings": [
+          "Evolución funcional"
+        ],
+        "clipped": []
+      },
+      {
+        "label": "Ficha de ejemplo de Nutrición",
+        "height": 855.1875,
+        "pageOverflow": false,
+        "visibleHeadings": [
+          "Seguimiento nutricional"
+        ],
+        "clipped": []
+      },
+      {
+        "label": "Ficha de ejemplo de Quiropraxia",
+        "height": 855.1875,
+        "pageOverflow": false,
+        "visibleHeadings": [
+          "Registro por segmento"
+        ],
+        "clipped": []
+      }
+    ],
+    "pageErrors": []
+  },
+  {
+    "width": 768,
+    "textScale": 2,
+    "viewportsAsZoomNote": "720 CSS px approximates reflow of a 1440px window at 200%; textScale=2 is separate CSS text stress.",
+    "tour": [
+      {
+        "selected": "La agenda",
+        "selectedId": "product-tour-agenda",
+        "panelLabel": "product-tour-agenda",
+        "headings": [
+          "Tu agenda hoy"
+        ],
+        "pillDeltaX": 0,
+        "pillWidth": 176.656,
+        "tabWidth": 176.65625,
+        "panelHeight": 1040,
+        "pageOverflow": false
+      },
+      {
+        "selected": "La historia clínica",
+        "selectedId": "product-tour-historia",
+        "panelLabel": "product-tour-historia",
+        "headings": [
+          "Martina Ríos"
+        ],
+        "pillDeltaX": -0.0002499999999940883,
+        "pillWidth": 176.656,
+        "tabWidth": 176.671875,
+        "panelHeight": 1040,
+        "pageOverflow": false
+      },
+      {
+        "selected": "Los cobros",
+        "selectedId": "product-tour-cobros",
+        "panelLabel": "product-tour-cobros",
+        "headings": [
+          "Los números del día"
+        ],
+        "pillDeltaX": -0.016124999999988177,
+        "pillWidth": 176.656,
+        "tabWidth": 176.671875,
+        "panelHeight": 1040,
+        "pageOverflow": false
+      }
+    ],
+    "specialties": [
+      {
+        "label": "Ficha de ejemplo de Psicología",
+        "height": 1061,
+        "pageOverflow": false,
+        "visibleHeadings": [
+          "Registro de sesión"
+        ],
+        "clipped": []
+      },
+      {
+        "label": "Ficha de ejemplo de Cardiología",
+        "height": 1061,
+        "pageOverflow": false,
+        "visibleHeadings": [
+          "Registro cardiovascular"
+        ],
+        "clipped": [
+          {
+            "className": "fx-specialty-metric",
+            "text": "Presión arterial118/76mmHg",
+            "scrollWidth": 160,
+            "clientWidth": 156
+          },
+          {
+            "className": "",
+            "text": "118/76mmHg",
+            "scrollWidth": 149,
+            "clientWidth": 134
+          }
+        ]
+      },
+      {
+        "label": "Ficha de ejemplo de Kinesiología",
+        "height": 1061,
+        "pageOverflow": false,
+        "visibleHeadings": [
+          "Evolución funcional"
+        ],
+        "clipped": []
+      },
+      {
+        "label": "Ficha de ejemplo de Nutrición",
+        "height": 1061,
+        "pageOverflow": false,
+        "visibleHeadings": [
+          "Seguimiento nutricional"
+        ],
+        "clipped": [
+          {
+            "className": "fx-specialty-record-body",
+            "text": "15 septiembre 2026SeguimientoPeso68,4kgTalla1,67mIMC24,5Registro ",
+            "scrollWidth": 285,
+            "clientWidth": 281
+          },
+          {
+            "className": "fx-specialty-metrics fx-specialty-metrics--three",
+            "text": "Peso68,4kgTalla1,67mIMC24,5",
+            "scrollWidth": 285,
+            "clientWidth": 281
+          },
+          {
+            "className": "fx-specialty-metric",
+            "text": "Peso68,4kg",
+            "scrollWidth": 93,
+            "clientWidth": 89
+          },
+          {
+            "className": "",
+            "text": "68,4kg",
+            "scrollWidth": 82,
+            "clientWidth": 67
+          },
+          {
+            "className": "fx-specialty-metric",
+            "text": "Talla1,67m",
+            "scrollWidth": 93,
+            "clientWidth": 89
+          },
+          {
+            "className": "",
+            "text": "1,67m",
+            "scrollWidth": 82,
+            "clientWidth": 67
+          },
+          {
+            "className": "fx-specialty-metric",
+            "text": "IMC24,5",
+            "scrollWidth": 93,
+            "clientWidth": 89
+          },
+          {
+            "className": "",
+            "text": "24,5",
+            "scrollWidth": 82,
+            "clientWidth": 67
+          }
+        ]
+      },
+      {
+        "label": "Ficha de ejemplo de Quiropraxia",
+        "height": 1061,
+        "pageOverflow": false,
+        "visibleHeadings": [
+          "Registro por segmento"
+        ],
+        "clipped": []
+      }
+    ],
+    "pageErrors": []
+  },
+  {
+    "width": 390,
+    "textScale": 2,
+    "viewportsAsZoomNote": "720 CSS px approximates reflow of a 1440px window at 200%; textScale=2 is separate CSS text stress.",
+    "tour": [
+      {
+        "selected": "La agenda",
+        "selectedId": "product-tour-agenda",
+        "panelLabel": "product-tour-agenda",
+        "headings": [
+          "Tu agenda hoy"
+        ],
+        "pillDeltaX": 0,
+        "pillWidth": 111.984,
+        "tabWidth": 112,
+        "panelHeight": 1163,
+        "pageOverflow": true
+      },
+      {
+        "selected": "La historia clínica",
+        "selectedId": "product-tour-historia",
+        "panelLabel": "product-tour-historia",
+        "headings": [
+          "Martina Ríos"
+        ],
+        "pillDeltaX": -0.016000000000019554,
+        "pillWidth": 111.984,
+        "tabWidth": 112,
+        "panelHeight": 1163,
+        "pageOverflow": true
+      },
+      {
+        "selected": "Los cobros",
+        "selectedId": "product-tour-cobros",
+        "panelLabel": "product-tour-cobros",
+        "headings": [
+          "Los números del día"
+        ],
+        "pillDeltaX": -0.03100000000000591,
+        "pillWidth": 111.984,
+        "tabWidth": 112,
+        "panelHeight": 1163,
+        "pageOverflow": true
+      }
+    ],
+    "specialties": [
+      {
+        "label": "Ficha de ejemplo de Psicología",
+        "height": 1061,
+        "pageOverflow": true,
+        "visibleHeadings": [
+          "Registro de sesión"
+        ],
+        "clipped": []
+      },
+      {
+        "label": "Ficha de ejemplo de Cardiología",
+        "height": 1061,
+        "pageOverflow": true,
+        "visibleHeadings": [
+          "Registro cardiovascular"
+        ],
+        "clipped": [
+          {
+            "className": "fx-specialty-metric",
+            "text": "Presión arterial118/76mmHg",
+            "scrollWidth": 160,
+            "clientWidth": 156
+          },
+          {
+            "className": "",
+            "text": "118/76mmHg",
+            "scrollWidth": 149,
+            "clientWidth": 134
+          }
+        ]
+      },
+      {
+        "label": "Ficha de ejemplo de Kinesiología",
+        "height": 1061,
+        "pageOverflow": true,
+        "visibleHeadings": [
+          "Evolución funcional"
+        ],
+        "clipped": []
+      },
+      {
+        "label": "Ficha de ejemplo de Nutrición",
+        "height": 1061,
+        "pageOverflow": true,
+        "visibleHeadings": [
+          "Seguimiento nutricional"
+        ],
+        "clipped": [
+          {
+            "className": "fx-specialty-record-body",
+            "text": "15 septiembre 2026SeguimientoPeso68,4kgTalla1,67mIMC24,5Registro ",
+            "scrollWidth": 285,
+            "clientWidth": 281
+          },
+          {
+            "className": "fx-specialty-metrics fx-specialty-metrics--three",
+            "text": "Peso68,4kgTalla1,67mIMC24,5",
+            "scrollWidth": 285,
+            "clientWidth": 281
+          },
+          {
+            "className": "fx-specialty-metric",
+            "text": "Peso68,4kg",
+            "scrollWidth": 93,
+            "clientWidth": 89
+          },
+          {
+            "className": "",
+            "text": "68,4kg",
+            "scrollWidth": 82,
+            "clientWidth": 67
+          },
+          {
+            "className": "fx-specialty-metric",
+            "text": "Talla1,67m",
+            "scrollWidth": 93,
+            "clientWidth": 89
+          },
+          {
+            "className": "",
+            "text": "1,67m",
+            "scrollWidth": 82,
+            "clientWidth": 67
+          },
+          {
+            "className": "fx-specialty-metric",
+            "text": "IMC24,5",
+            "scrollWidth": 93,
+            "clientWidth": 89
+          },
+          {
+            "className": "",
+            "text": "24,5",
+            "scrollWidth": 82,
+            "clientWidth": 67
+          }
+        ]
+      },
+      {
+        "label": "Ficha de ejemplo de Quiropraxia",
+        "height": 1061,
+        "pageOverflow": true,
+        "visibleHeadings": [
+          "Registro por segmento"
+        ],
+        "clipped": []
+      }
+    ],
+    "pageErrors": []
+  },
+  {
+    "width": 320,
+    "textScale": 2,
+    "viewportsAsZoomNote": "720 CSS px approximates reflow of a 1440px window at 200%; textScale=2 is separate CSS text stress.",
+    "tour": [
+      {
+        "selected": "La agenda",
+        "selectedId": "product-tour-agenda",
+        "panelLabel": "product-tour-agenda",
+        "headings": [
+          "Tu agenda hoy"
+        ],
+        "pillDeltaX": 0,
+        "pillWidth": 88.6562,
+        "tabWidth": 88.65625,
+        "panelHeight": 1302.75,
+        "pageOverflow": true
+      },
+      {
+        "selected": "La historia clínica",
+        "selectedId": "product-tour-historia",
+        "panelLabel": "product-tour-historia",
+        "headings": [
+          "Martina Ríos"
+        ],
+        "pillDeltaX": -0.00005000000000165983,
+        "pillWidth": 88.6562,
+        "tabWidth": 88.671875,
+        "panelHeight": 1302.75,
+        "pageOverflow": true
+      },
+      {
+        "selected": "Los cobros",
+        "selectedId": "product-tour-cobros",
+        "panelLabel": "product-tour-cobros",
+        "headings": [
+          "Los números del día"
+        ],
+        "pillDeltaX": -0.016124999999988177,
+        "pillWidth": 88.6562,
+        "tabWidth": 88.65625,
+        "panelHeight": 1302.75,
+        "pageOverflow": true
+      }
+    ],
+    "specialties": [
+      {
+        "label": "Ficha de ejemplo de Psicología",
+        "height": 1061,
+        "pageOverflow": true,
+        "visibleHeadings": [
+          "Registro de sesión"
+        ],
+        "clipped": []
+      },
+      {
+        "label": "Ficha de ejemplo de Cardiología",
+        "height": 1061,
+        "pageOverflow": true,
+        "visibleHeadings": [
+          "Registro cardiovascular"
+        ],
+        "clipped": [
+          {
+            "className": "fx-specialty-metric",
+            "text": "Presión arterial118/76mmHg",
+            "scrollWidth": 160,
+            "clientWidth": 156
+          },
+          {
+            "className": "",
+            "text": "118/76mmHg",
+            "scrollWidth": 149,
+            "clientWidth": 134
+          }
+        ]
+      },
+      {
+        "label": "Ficha de ejemplo de Kinesiología",
+        "height": 1061,
+        "pageOverflow": true,
+        "visibleHeadings": [
+          "Evolución funcional"
+        ],
+        "clipped": []
+      },
+      {
+        "label": "Ficha de ejemplo de Nutrición",
+        "height": 1061,
+        "pageOverflow": true,
+        "visibleHeadings": [
+          "Seguimiento nutricional"
+        ],
+        "clipped": [
+          {
+            "className": "fx-specialty-record-body",
+            "text": "15 septiembre 2026SeguimientoPeso68,4kgTalla1,67mIMC24,5Registro ",
+            "scrollWidth": 285,
+            "clientWidth": 281
+          },
+          {
+            "className": "fx-specialty-metrics fx-specialty-metrics--three",
+            "text": "Peso68,4kgTalla1,67mIMC24,5",
+            "scrollWidth": 285,
+            "clientWidth": 281
+          },
+          {
+            "className": "fx-specialty-metric",
+            "text": "Peso68,4kg",
+            "scrollWidth": 93,
+            "clientWidth": 89
+          },
+          {
+            "className": "",
+            "text": "68,4kg",
+            "scrollWidth": 82,
+            "clientWidth": 67
+          },
+          {
+            "className": "fx-specialty-metric",
+            "text": "Talla1,67m",
+            "scrollWidth": 93,
+            "clientWidth": 89
+          },
+          {
+            "className": "",
+            "text": "1,67m",
+            "scrollWidth": 82,
+            "clientWidth": 67
+          },
+          {
+            "className": "fx-specialty-metric",
+            "text": "IMC24,5",
+            "scrollWidth": 93,
+            "clientWidth": 89
+          },
+          {
+            "className": "",
+            "text": "24,5",
+            "scrollWidth": 82,
+            "clientWidth": 67
+          }
+        ]
+      },
+      {
+        "label": "Ficha de ejemplo de Quiropraxia",
+        "height": 1061,
+        "pageOverflow": true,
+        "visibleHeadings": [
+          "Registro por segmento"
+        ],
+        "clipped": []
+      }
+    ],
+    "pageErrors": []
+  }
+]

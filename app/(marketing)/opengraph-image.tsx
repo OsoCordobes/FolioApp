@@ -1,133 +1,50 @@
 import { ImageResponse } from "next/og";
 
-/**
- * Folio · Landing — imagen OpenGraph 1200×630 (Fase C · SEO).
- *
- * Asset de marca generado en build/request — los hex acá son intencionales
- * (no es CSS del design system): fondo #F5F2EB, acento #8A6722, tinta #1B1812.
- *
- * Fraunces (display) se fetchea de Google Fonts en runtime. Si la red está
- * bloqueada (build hermético, sandbox) el fetch falla → degradamos a serif
- * del sistema; la imagen DEBE generarse igual.
- */
+import { FolioMark } from "@/components/folio-mark";
+import { loadFolioOgFonts } from "@/lib/opengraph-fonts";
 
+/** Clínica clara in link previews. Entirely invented appointments. */
 export const alt =
   "Folio — Agenda, historia clínica y cobros para profesionales de la salud";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
-const FRAUNCES_CSS_URL =
-  "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&display=swap";
-
-/**
- * Resuelve el TTF de Fraunces 600 vía el endpoint css2 (sin UA moderno,
- * Google sirve TTF — formato que ImageResponse/satori acepta). Devuelve
- * null ante cualquier falla para que el caller degrade a serif del sistema.
- *
- * Memoizado a nivel módulo (se guarda la Promise) + `force-cache` en ambos
- * fetch: la fuente no cambia entre requests, no hay razón para volver a la
- * red en cada render de la imagen.
- */
-let frauncesPromise: Promise<ArrayBuffer | null> | null = null;
-
-function loadFraunces(): Promise<ArrayBuffer | null> {
-  frauncesPromise ??= (async () => {
-    try {
-      const cssRes = await fetch(FRAUNCES_CSS_URL, { cache: "force-cache" });
-      if (!cssRes.ok) return null;
-      const css = await cssRes.text();
-      const match = css.match(/src:\s*url\((https:[^)]+\.ttf)\)/);
-      if (!match) return null;
-      const fontRes = await fetch(match[1], { cache: "force-cache" });
-      if (!fontRes.ok) return null;
-      return await fontRes.arrayBuffer();
-    } catch {
-      return null;
-    }
-  })();
-  return frauncesPromise;
-}
+const visits = [
+  { time: "09:00", name: "Martina Ríos", service: "Consulta de seguimiento", state: "Atendida", color: "#19725D", background: "#E5F2EC" },
+  { time: "09:30", name: "Tomás Acosta", service: "Primera consulta", state: "En consulta", color: "#6255C5", background: "#EFECFC" },
+  { time: "10:00", name: "Elena Vidal", service: "Control clínico", state: "En espera", color: "#886012", background: "#FBF1D9" },
+];
 
 export default async function OpengraphImage() {
-  const fraunces = await loadFraunces();
-  const displayFamily = fraunces ? "Fraunces" : "Georgia, 'Times New Roman', serif";
-
+  const fonts = await loadFolioOgFonts();
   return new ImageResponse(
-    (
-      <div
-        style={{
-          width: "100%",
-          height: "100%",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "space-between",
-          backgroundColor: "#F5F2EB",
-          color: "#1B1812",
-          padding: "72px 80px",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <div
-            style={{
-              width: 14,
-              height: 14,
-              borderRadius: 9999,
-              backgroundColor: "#8A6722",
-            }}
-          />
-          <div
-            style={{
-              fontFamily: displayFamily,
-              fontSize: 44,
-              fontWeight: 600,
-              letterSpacing: "-0.02em",
-            }}
-          >
-            Folio
+    <div style={{ width: "100%", height: "100%", display: "flex", background: "#F5F5FA", color: "#292641", fontFamily: "Plus Jakarta Sans", padding: "52px 58px", gap: 45 }}>
+      <div style={{ display: "flex", flexDirection: "column", width: 525, justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ width: 43, height: 45, display: "flex", alignItems: "center" }}>
+            <FolioMark size={43} color="#6255C5" fg="#FFFFFF" />
           </div>
+          <span style={{ fontSize: 43, fontWeight: 600, letterSpacing: "-2.5px" }}>folio</span>
         </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
-          <div
-            style={{
-              fontFamily: displayFamily,
-              fontSize: 76,
-              fontWeight: 600,
-              lineHeight: 1.08,
-              letterSpacing: "-0.02em",
-              maxWidth: 980,
-            }}
-          >
-            El día se arma solo. La historia, cifrada.
+        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+          <div style={{ display: "flex", flexDirection: "column", fontSize: 61, fontWeight: 600, lineHeight: 1.12, letterSpacing: "-3px" }}>
+            <span>Tu consultorio.</span><span>Todo a mano.</span>
           </div>
-          <div
-            style={{
-              fontSize: 32,
-              lineHeight: 1.3,
-              color: "#8A6722",
-              maxWidth: 900,
-            }}
-          >
-            Agenda, historia clínica y cobros para profesionales de la salud
-          </div>
+          <div style={{ maxWidth: 455, fontSize: 26, color: "#514D69", lineHeight: 1.55 }}>Agenda, historia clínica y cobros para tu práctica.</div>
         </div>
-
-        <div
-          style={{
-            display: "flex",
-            width: 120,
-            height: 6,
-            borderRadius: 9999,
-            backgroundColor: "#8A6722",
-          }}
-        />
+        <div style={{ display: "flex", fontSize: 16, color: "#69657D", lineHeight: 1.6, maxWidth: 440 }}>Para profesionales y equipos de salud en Argentina.</div>
       </div>
-    ),
-    {
-      ...size,
-      fonts: fraunces
-        ? [{ name: "Fraunces", data: fraunces, weight: 600 as const, style: "normal" as const }]
-        : undefined,
-    },
+      <div style={{ display: "flex", flexDirection: "column", alignSelf: "center", width: 495, border: "1px solid #DAD9E7", background: "white", borderRadius: 20, padding: "28px 25px", boxShadow: "0 10px 32px #2926410B" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 15, color: "#69657D", paddingBottom: 23, borderBottom: "1px solid #ECEBF2" }}><span>Un día en Folio</span><span>Consultorio de ejemplo</span></div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 24, marginBottom: 22 }}><span style={{ fontSize: 29, fontWeight: 600, letterSpacing: "-1px" }}>Tu agenda de hoy</span><span style={{ fontSize: 15, color: "#69657D" }}>Cada paciente, con su contexto.</span></div>
+        {visits.map((visit) => <div key={visit.time} style={{ display: "flex", gap: 14, alignItems: "center", padding: "22px 11px", borderRadius: 11, border: visit.state === "En consulta" ? "1px solid #E2DDF7" : "1px solid transparent", background: visit.state === "En consulta" ? "#F6F5FC" : "white" }}>
+          <span style={{ width: 46, fontSize: 14, color: "#69657D" }}>{visit.time}</span>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: 1 }}><span style={{ fontSize: 18, fontWeight: 600 }}>{visit.name}</span><span style={{ fontSize: 13, color: "#69657D" }}>{visit.service}</span></div>
+          <span style={{ display: "flex", fontSize: 12, color: visit.color, background: visit.background, padding: "6px 9px", borderRadius: 5 }}>{visit.state}</span>
+        </div>)}
+        <div style={{ display: "flex", justifyContent: "center", marginTop: 15, paddingTop: 18, borderTop: "1px solid #ECEBF2", fontSize: 12, color: "#69657D" }}>Vista ilustrativa. Personas y datos ficticios.</div>
+      </div>
+    </div>,
+    { ...size, fonts },
   );
 }

@@ -1,0 +1,91 @@
+{"mode":"development","case":"new walk-in: double click submits once, preserves Cordoba time and reports one success","pass":true}
+{"mode":"development","case":"pending creation cannot be dismissed through backdrop, Escape or Cancel","pass":true}
+{"mode":"development","case":"metadata transport failure leaves loading and shows recoverable error","pass":true}
+{"mode":"development","case":"metadata retry recovers the same modal after connection returns","pass":true}
+{"mode":"development","case":"lost creation response keeps form, announces uncertainty and prevents a blind duplicate","pass":true}
+{"mode":"development","case":"reviewing agenda after lost response refreshes once without repeating creation","pass":true}
+{"mode":"development","case":"a confirmed validation failure permits correction and a new attempt","pass":true}
+{"mode":"production","case":"new walk-in: double click submits once, preserves Cordoba time and reports one success","pass":true}
+{"mode":"production","case":"pending creation cannot be dismissed through backdrop, Escape or Cancel","pass":true}
+{"mode":"production","case":"metadata transport failure leaves loading and shows recoverable error","pass":true}
+{"mode":"production","case":"metadata retry recovers the same modal after connection returns","pass":true}
+{"mode":"production","case":"lost creation response keeps form, announces uncertainty and prevents a blind duplicate","pass":true}
+{"mode":"production","case":"reviewing agenda after lost response refreshes once without repeating creation","pass":true}
+{"mode":"production","case":"a confirmed validation failure permits correction and a new attempt","pass":true}
+{
+  "passed": 14,
+  "failed": 0,
+  "results": [
+    {
+      "mode": "development",
+      "case": "new walk-in: double click submits once, preserves Cordoba time and reports one success",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "pending creation cannot be dismissed through backdrop, Escape or Cancel",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "metadata transport failure leaves loading and shows recoverable error",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "metadata retry recovers the same modal after connection returns",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "lost creation response keeps form, announces uncertainty and prevents a blind duplicate",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "reviewing agenda after lost response refreshes once without repeating creation",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "a confirmed validation failure permits correction and a new attempt",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "new walk-in: double click submits once, preserves Cordoba time and reports one success",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "pending creation cannot be dismissed through backdrop, Escape or Cancel",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "metadata transport failure leaves loading and shows recoverable error",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "metadata retry recovers the same modal after connection returns",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "lost creation response keeps form, announces uncertainty and prevents a blind duplicate",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "reviewing agenda after lost response refreshes once without repeating creation",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "a confirmed validation failure permits correction and a new attempt",
+      "pass": true
+    }
+  ],
+  "artifact": "C:\\Users\\amiun\\AppData\\Local\\Temp\\folio-create-smoke-hexGBb\\results.json"
+}

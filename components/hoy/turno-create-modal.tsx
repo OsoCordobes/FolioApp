@@ -187,8 +187,13 @@ export function TurnoCreateModal({
   const focusTargetRef = useRef<HTMLInputElement | null>(null);
   useEffect(() => {
     if (loading || !meta || meta.servicios.length === 0) return;
-    // Pequeño microtask para que el input ya esté montado en el DOM.
-    const t = setTimeout(() => focusTargetRef.current?.focus(), 50);
+    // Loading may finish after the user has already chosen a field. Preserve
+    // that focus so a delayed callback cannot redirect input into another field.
+    const t = setTimeout(() => {
+      const active = document.activeElement;
+      if (active && active !== document.body && active !== dialogRef.current) return;
+      focusTargetRef.current?.focus();
+    }, 50);
     return () => clearTimeout(t);
   }, [loading, meta, mode]);
 

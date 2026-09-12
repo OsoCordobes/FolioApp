@@ -1,0 +1,48 @@
+{
+  "checkedAt": "2026-09-12T20:12:08.726Z",
+  "commit": "2d02096",
+  "buildId": "Sr0tdXv5RNBdPY4pKAzR_",
+  "scope": "Second compiled Next checkpoint; both generated image routes trace the two existing local TTF files. Booking image endpoint is not invoked.",
+  "traces": [
+    {
+      "trace": ".next/server/app/(marketing)/opengraph-image-pwu6ef/route.js.nft.json",
+      "traceModifiedAt": "2026-09-12T20:08:48.070Z",
+      "fonts": [
+        {
+          "file": "../../../../../assets/fonts/PlusJakartaSans-Regular.ttf",
+          "resolved": "assets\\fonts\\PlusJakartaSans-Regular.ttf",
+          "bytes": 128972,
+          "sha256": "bd6276d4060e3b1ebc45047469e0bb86b08f301ba681cdf1ceb6245ea10478d2",
+          "exists": true
+        },
+        {
+          "file": "../../../../../assets/fonts/PlusJakartaSans-SemiBold.ttf",
+          "resolved": "assets\\fonts\\PlusJakartaSans-SemiBold.ttf",
+          "bytes": 129288,
+          "sha256": "65dbcedb6596a41c30869729eb31cb57d1f5edfe365684314bba8a1994eaa4cb",
+          "exists": true
+        }
+      ]
+    },
+    {
+      "trace": ".next/server/app/(public)/book/[slug]/opengraph-image-obhl4w/route.js.nft.json",
+      "traceModifiedAt": "2026-09-12T20:08:48.094Z",
+      "fonts": [
+        {
+          "file": "../../../../../../../assets/fonts/PlusJakartaSans-Regular.ttf",
+          "resolved": "assets\\fonts\\PlusJakartaSans-Regular.ttf",
+          "bytes": 128972,
+          "sha256": "bd6276d4060e3b1ebc45047469e0bb86b08f301ba681cdf1ceb6245ea10478d2",
+          "exists": true
+        },
+        {
+          "file": "../../../../../../../assets/fonts/PlusJakartaSans-SemiBold.ttf",
+          "resolved": "assets\\fonts\\PlusJakartaSans-SemiBold.ttf",
+          "bytes": 129288,
+          "sha256": "65dbcedb6596a41c30869729eb31cb57d1f5edfe365684314bba8a1994eaa4cb",
+          "exists": true
+        }
+      ]
+    }
+  ]
+}

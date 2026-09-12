@@ -1,69 +1,25 @@
 import type { Metadata } from "next";
-
+import localFont from "next/font/local";
+import "@/public/folio.css";
+import "@/styles/experience.css";
+import "@/styles/platform.css";
+import "@/styles/clinical-experience.css";
+import "@/styles/auth-experience.css";
+import "@/styles/public-experience.css";
 import { CookieBanner } from "@/components/cookie-banner";
 import { FolioPostHogProvider } from "@/lib/observability/posthog-client";
-import { QueryProvider } from "@/lib/query-client";
 import { TweaksProvider } from "@/lib/tweaks-context";
+
+const folioSans = localFont({ src: "../public/fonts/plus-jakarta-sans-latin.woff2", variable: "--font-folio", display: "swap", weight: "200 800", fallback: ["Arial"] });
 
 export const metadata: Metadata = {
   title: { default: "Folio", template: "%s · Folio" },
-  description: "Gestión de turnos, agenda clínica y finanzas para profesionales de la salud.",
+  description: "Agenda, historia clínica y cobros para profesionales y equipos de salud en Argentina.",
 };
 
-/**
- * folio.css se sirve como static asset desde /public/ para garantizar
- * fidelidad 100% byte-perfect con el prototipo Claude Design (12,199 líneas
- * intactas, sin pasar por ningún bundler/postprocessor). Igual que en el
- * prototipo original, se carga vía <link rel="stylesheet">.
- *
- * Cache-busting por deploy: next.config.ts sirve /folio.css con
- * `max-age=31536000, immutable` SOLO en producción, así que el href DEBE
- * cambiar en cada deploy o los usuarios quedarían pegados a un CSS viejo —
- * Vercel inyecta VERCEL_GIT_COMMIT_SHA en build. En dev el header immutable
- * NO se emite (la URL fija ?v=dev dejaría estilos stale al editar folio.css).
- *
- * Fonts: Geist + Geist Mono + Fraunces (display variable, opsz 9..144 +
- * weights 400/500/600) via Google Fonts CDN. Fraunces se usa en
- * <PublicCard> hero, Step 9 reveal y mood "editorial" / "boutique";
- * Geist body y Geist Mono data permanecen. Las tres familias viajan en
- * un único <link> stylesheet (un solo HTTP, un solo cache entry).
- * Self-hosting evaluado en F11 si Lighthouse lo demanda — para entonces
- * las tres se mueven juntas a /public/fonts.
- *
- * `data-theme="light"` se setea en SSR para evitar FOUC; TweaksProvider
- * (en el cliente) puede sobreescribirlo post-hydration leyendo localStorage.
- * `suppressHydrationWarning` protege contra el diff esperado de ese cambio.
- *
- * CookieBanner (Phase 6b) renders fixed-bottom on first visit; the user's
- * choice ('granted' | 'denied') persists in localStorage and gates the
- * PostHog SDK init inside FolioPostHogProvider.
- */
-const FOLIO_CSS_VERSION = process.env.VERCEL_GIT_COMMIT_SHA ?? "dev";
-
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
-  return (
-    <html lang="es-AR" data-theme="light" suppressHydrationWarning>
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&display=swap"
-          rel="stylesheet"
-        />
-        <link rel="stylesheet" href={`/folio.css?v=${FOLIO_CSS_VERSION}`} />
-      </head>
-      <body>
-        <FolioPostHogProvider>
-          <QueryProvider>
-            <TweaksProvider>{children}</TweaksProvider>
-          </QueryProvider>
-        </FolioPostHogProvider>
-        <CookieBanner />
-      </body>
-    </html>
-  );
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  return <html lang="es-AR" data-theme="light" className={folioSans.variable} suppressHydrationWarning>
+    <body><FolioPostHogProvider><TweaksProvider>{children}</TweaksProvider></FolioPostHogProvider><CookieBanner /></body>
+  </html>;
 }
+

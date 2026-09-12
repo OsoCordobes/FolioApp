@@ -8,6 +8,7 @@
 
 import { fmtMoney, minutesTo, relativeTo } from "@/lib/dashboard-helpers";
 import { computeCobroKpi } from "@/lib/hoy/kpi-cobro";
+import * as I from "@/components/icons";
 import type { PacientesById, Turno } from "@/lib/types";
 
 interface KpiStripProps {
@@ -83,10 +84,15 @@ export function KpiStrip({ turnos, pacientes, now, timezone }: KpiStripProps) {
   ];
 
   return (
-    <div className="fi-kpis">
+    <div className="fi-kpis" role="group" aria-label="Resumen del día">
       {kpis.map((k, i) => (
-        <div key={i} className={"fi-kpi " + (k.tone ? "is-" + k.tone : "")}>
-          <span className="fi-kpi-lbl">{k.lbl}</span>
+        <div key={i} className={"fi-kpi fi-kpi--" + k.kind + (k.tone ? " is-" + k.tone : "")}>
+          <div className="fi-kpi-heading">
+            <span className="fi-kpi-lbl">{k.lbl}</span>
+            <span className="fi-kpi-icon" aria-hidden>
+              {i === 0 ? <I.CalendarDay size={17} /> : i === 1 ? <I.Users size={17} /> : <I.Wallet size={17} />}
+            </span>
+          </div>
           <span className={"fi-kpi-val" + (k.kind === "text" ? " is-text" : "")}>
             {k.kind === "money" ? <small>$</small> : null}
             {k.kind === "money" ? String(k.val).replace("$", "") : k.val}

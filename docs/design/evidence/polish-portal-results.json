@@ -1,0 +1,86 @@
+{
+  "passed": 16,
+  "failed": 0,
+  "results": [
+    {
+      "mode": "development",
+      "case": "active portal tab is fully visible on mobile using the production pathname default",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "reagenda disclosure, manual focus, failure preserves input, retry restores trigger focus",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "profile pending and failed save retain the editable contact values",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "invitation signup still requires eight characters; login retains legacy input on retry",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "terminal invitation states stay read-only and pending acceptance still requires consent",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "invitation preview blocks acceptance and account-switch actions",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "directory cards and empty state retain booking/filter links and visible focus",
+      "pass": true
+    },
+    {
+      "mode": "development",
+      "case": "empty summary provides a next step without promising clinical content",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "active portal tab is fully visible on mobile using the production pathname default",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "reagenda disclosure, manual focus, failure preserves input, retry restores trigger focus",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "profile pending and failed save retain the editable contact values",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "invitation signup still requires eight characters; login retains legacy input on retry",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "terminal invitation states stay read-only and pending acceptance still requires consent",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "invitation preview blocks acceptance and account-switch actions",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "directory cards and empty state retain booking/filter links and visible focus",
+      "pass": true
+    },
+    {
+      "mode": "production",
+      "case": "empty summary provides a next step without promising clinical content",
+      "pass": true
+    }
+  ]
+}

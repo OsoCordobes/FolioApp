@@ -1,0 +1,55 @@
+{
+  "checkedAt": "2026-09-12T20:12:08.726Z",
+  "commit": "2d02096",
+  "buildId": "Sr0tdXv5RNBdPY4pKAzR_",
+  "scope": "Actual WOFF2 response and Chromium font used for hero in the compiled local landing; clean context, external/non-GET requests blocked",
+  "status": 200,
+  "source": {
+    "path": "public/fonts/plus-jakarta-sans-latin.woff2",
+    "bytes": 27348,
+    "sha256": "153fc85b70298beeb1d61a5f723331649e7f23bb77302a66e61cb3e2fbdb5e79"
+  },
+  "fontResponses": [
+    {
+      "url": "http://127.0.0.1:4410/_next/static/media/plus_jakarta_sans_latin-s.p.23e35025.woff2",
+      "status": 200,
+      "contentType": "font/woff2",
+      "bytes": 27348,
+      "sha256": "153fc85b70298beeb1d61a5f723331649e7f23bb77302a66e61cb3e2fbdb5e79"
+    }
+  ],
+  "dom": {
+    "computedFamily": "folioSans, \"folioSans Fallback\", Arial, \"Segoe UI\", Arial, sans-serif",
+    "fontFaces": [
+      {
+        "family": "folioSans",
+        "status": "loaded",
+        "weight": "200 800"
+      },
+      {
+        "family": "folioSans Fallback",
+        "status": "unloaded",
+        "weight": "normal"
+      }
+    ],
+    "resources": [
+      {
+        "url": "http://127.0.0.1:4410/_next/static/media/plus_jakarta_sans_latin-s.p.23e35025.woff2",
+        "transferSize": 27648,
+        "encodedBodySize": 27348,
+        "decodedBodySize": 27348
+      }
+    ]
+  },
+  "platformFonts": [
+    {
+      "familyName": "Plus Jakarta Sans",
+      "postScriptName": "Plus-Jakarta-Sans-Bold",
+      "isCustomFont": true,
+      "glyphCount": 27
+    }
+  ],
+  "pageErrors": [],
+  "consoleErrors": [],
+  "blocked": []
+}

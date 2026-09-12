@@ -12,6 +12,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 import type { PortalPerfilView } from "@/lib/db/portal-perfil";
 
@@ -21,10 +22,11 @@ export function PerfilList({ perfiles }: { perfiles: PortalPerfilView[] }) {
   if (perfiles.length === 0) {
     return (
       <div className="pt-empty pt-empty-hero">
-        <p className="pt-empty-title">Todavía no hay fichas vinculadas</p>
+        <h2 className="pt-empty-title">Todavía no hay fichas vinculadas</h2>
         <p className="pt-empty-sub">
           Vinculá tu ficha desde el inicio del portal para gestionar tus datos.
         </p>
+        <Link href="/portal" className="fi-btn fi-btn-secondary pt-empty-action">Ir al inicio del portal</Link>
       </div>
     );
   }
@@ -86,6 +88,8 @@ function PerfilCard({ perfil }: { perfil: PortalPerfilView }) {
   return (
     <form
       className="au-form"
+      aria-busy={pending}
+      aria-label={`Datos de contacto en ${perfil.organizacionNombre ?? "tu consultorio"}`}
       onSubmit={(e) => {
         e.preventDefault();
         guardar();

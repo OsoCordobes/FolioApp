@@ -1,0 +1,112 @@
+
+Running 7 tests using 1 worker
+
+(node:15324) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:15324) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 1 tests\e2e\design-motion.spec.ts:10:7 › recorrido de producto: altura constante y una sola pantalla accesible a 1440px (1.4s)
+  ok 2 tests\e2e\design-motion.spec.ts:10:7 › recorrido de producto: altura constante y una sola pantalla accesible a 768px (1.2s)
+  ok 3 tests\e2e\design-motion.spec.ts:10:7 › recorrido de producto: altura constante y una sola pantalla accesible a 390px (1.2s)
+  ok 4 tests\e2e\design-motion.spec.ts:10:7 › recorrido de producto: altura constante y una sola pantalla accesible a 320px (1.1s)
+  ok 5 tests\e2e\design-motion.spec.ts:27:5 › indicador animado se detiene con movimiento reducido (2.1s)
+  x  6 tests\e2e\design-motion.spec.ts:38:5 › menú de tablet abre entre 768 y 800 px y se cierra al salir (30.1s)
+(node:18736) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:18736) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 7 tests\e2e\design-motion.spec.ts:53:5 › navegación móvil por teclado coloca el foco en el destino (999ms)
+
+
+  1) tests\e2e\design-motion.spec.ts:38:5 › menú de tablet abre entre 768 y 800 px y se cierra al salir 
+
+    [31mTest timeout of 30000ms exceeded.[39m
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+    [2m  - waiting for getByRole('heading', { level: 1 })[22m
+    [2m    - locator resolved to <h1 id="fx-hero-title">…</h1>[22m
+    [2m  - attempting click action[22m
+    [2m    2 × waiting for element to be visible, enabled and stable[22m
+    [2m      - element is visible, enabled and stable[22m
+    [2m      - scrolling into view if needed[22m
+    [2m      - done scrolling[22m
+    [2m      - <div id="fl-mobile-nav" class="fl-mobile-panel is-open">…</div> from <header class="fl-header fx-header">…</header> subtree intercepts pointer events[22m
+    [2m    - retrying click action[22m
+    [2m    - waiting 20ms[22m
+    [2m    - waiting for element to be visible, enabled and stable[22m
+    [2m    - element is visible, enabled and stable[22m
+    [2m    - scrolling into view if needed[22m
+    [2m    - done scrolling[22m
+    [2m    - <div id="fl-mobile-nav" class="fl-mobile-panel is-open">…</div> from <header class="fl-header fx-header">…</header> subtree intercepts pointer events[22m
+    [2m  2 × retrying click action[22m
+    [2m      - waiting 100ms[22m
+    [2m      - waiting for element to be visible, enabled and stable[22m
+    [2m      - element is visible, enabled and stable[22m
+    [2m      - scrolling into view if needed[22m
+    [2m      - done scrolling[22m
+    [2m      - <a href="#dia" class="fl-mobile-link">Cómo funciona</a> from <header class="fl-header fx-header">…</header> subtree intercepts pointer events[22m
+    [2m  13 × retrying click action[22m
+    [2m       - waiting 500ms[22m
+    [2m       - waiting for element to be visible, enabled and stable[22m
+    [2m       - element is visible, enabled and stable[22m
+    [2m       - scrolling into view if needed[22m
+    [2m       - done scrolling[22m
+    [2m       - <div id="fl-mobile-nav" class="fl-mobile-panel is-open">…</div> from <header class="fl-header fx-header">…</header> subtree intercepts pointer events[22m
+    [2m     - retrying click action[22m
+    [2m       - waiting 500ms[22m
+    [2m       - waiting for element to be visible, enabled and stable[22m
+    [2m       - element is visible, enabled and stable[22m
+    [2m       - scrolling into view if needed[22m
+    [2m       - done scrolling[22m
+    [2m       - <div id="fl-mobile-nav" class="fl-mobile-panel is-open">…</div> from <header class="fl-header fx-header">…</header> subtree intercepts pointer events[22m
+    [2m     - retrying click action[22m
+    [2m       - waiting 500ms[22m
+    [2m       - waiting for element to be visible, enabled and stable[22m
+    [2m       - element is visible, enabled and stable[22m
+    [2m       - scrolling into view if needed[22m
+    [2m       - done scrolling[22m
+    [2m       - <a href="#dia" class="fl-mobile-link">Cómo funciona</a> from <header class="fl-header fx-header">…</header> subtree intercepts pointer events[22m
+    [2m     - retrying click action[22m
+    [2m       - waiting 500ms[22m
+    [2m       - waiting for element to be visible, enabled and stable[22m
+    [2m       - element is visible, enabled and stable[22m
+    [2m       - scrolling into view if needed[22m
+    [2m       - done scrolling[22m
+    [2m       - <a href="#dia" class="fl-mobile-link">Cómo funciona</a> from <header class="fl-header fx-header">…</header> subtree intercepts pointer events[22m
+    [2m  2 × retrying click action[22m
+    [2m      - waiting 500ms[22m
+    [2m      - waiting for element to be visible, enabled and stable[22m
+    [2m      - element is visible, enabled and stable[22m
+    [2m      - scrolling into view if needed[22m
+    [2m      - done scrolling[22m
+    [2m      - <div id="fl-mobile-nav" class="fl-mobile-panel is-open">…</div> from <header class="fl-header fx-header">…</header> subtree intercepts pointer events[22m
+    [2m  - retrying click action[22m
+    [2m    - waiting 500ms[22m
+    [2m    - waiting for element to be visible, enabled and stable[22m
+    [2m    - element is visible, enabled and stable[22m
+    [2m    - scrolling into view if needed[22m
+    [2m    - done scrolling[22m
+    [2m    - <a href="#dia" class="fl-mobile-link">Cómo funciona</a> from <header class="fl-header fx-header">…</header> subtree intercepts pointer events[22m
+    [2m  - retrying click action[22m
+    [2m    - waiting 500ms[22m
+
+
+      43 |   const panel=page.locator("#fl-mobile-nav");
+      44 |   await expect(panel.getByRole("link",{name:"Producto",exact:true})).toBeVisible();
+    > 45 |   await page.getByRole("heading",{level:1}).click();
+         |                                             ^
+      46 |   await expect(panel).not.toBeVisible();
+      47 |   await page.getByRole("button",{name:"Abrir menú de navegación"}).click();
+      48 |   await page.setViewportSize({width:1000,height:1000});
+        at C:\Users\amiun\Documents\Codex\folio-experience\tests\e2e\design-motion.spec.ts:45:45
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    docs\design\evidence\public-e2e-artifacts\e2e-design-motion-menú-de--d0867-800-px-y-se-cierra-al-salir\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: docs\design\evidence\public-e2e-artifacts\e2e-design-motion-menú-de--d0867-800-px-y-se-cierra-al-salir\error-context.md
+
+  1 failed
+    tests\e2e\design-motion.spec.ts:38:5 › menú de tablet abre entre 768 y 800 px y se cierra al salir 
+  6 passed (41.5s)

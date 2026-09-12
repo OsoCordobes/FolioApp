@@ -1,0 +1,68 @@
+{
+  "sizes": {
+    "source": 11928,
+    "gzip": 3212,
+    "printBlock": 492,
+    "printBlockGzip": 293
+  },
+  "variants": [
+    {
+      "variant": "current",
+      "values": [
+        {
+          "selector": "fx-auth-art",
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(17, 17, 17)",
+          "borderColor": "rgb(17, 17, 17) rgb(201, 194, 174) rgb(17, 17, 17) rgb(17, 17, 17)"
+        },
+        {
+          "selector": "P",
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "rgb(17, 17, 17)",
+          "borderColor": "rgb(17, 17, 17)"
+        },
+        {
+          "selector": "pt-app",
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(17, 17, 17)",
+          "borderColor": "rgb(17, 17, 17)"
+        },
+        {
+          "selector": "pt-empty",
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(42, 39, 30)",
+          "borderColor": "rgb(221, 213, 192)"
+        }
+      ]
+    },
+    {
+      "variant": "withoutClinical",
+      "values": [
+        {
+          "selector": "fx-auth-art",
+          "background": "rgb(245, 245, 250)",
+          "color": "rgb(41, 38, 65)",
+          "borderColor": "rgb(41, 38, 65) rgb(218, 217, 231) rgb(41, 38, 65) rgb(41, 38, 65)"
+        },
+        {
+          "selector": "P",
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "rgb(41, 38, 65)",
+          "borderColor": "rgb(41, 38, 65)"
+        },
+        {
+          "selector": "pt-app",
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(41, 38, 65)",
+          "borderColor": "rgb(41, 38, 65)"
+        },
+        {
+          "selector": "pt-empty",
+          "background": "rgb(240, 239, 248)",
+          "color": "rgb(75, 72, 95)",
+          "borderColor": "rgb(236, 235, 242)"
+        }
+      ]
+    }
+  ]
+}

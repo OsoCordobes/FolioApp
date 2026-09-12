@@ -1,0 +1,160 @@
+{
+  "date": "2026-09-12T18:57:12.706Z",
+  "note": "Detached esbuild estimate with React external. Not an actual Next route bundle or claimed First Load saving.",
+  "modules": {
+    "queryProvider": {
+      "bytes": 24959,
+      "gzipBytes": 7555,
+      "includedSourceCount": 20,
+      "largestSources": [
+        {
+          "file": "node_modules/.pnpm/@tanstack+query-core@5.100.10/node_modules/@tanstack/query-core/build/modern/query.js",
+          "bytesInOutput": 6264
+        },
+        {
+          "file": "node_modules/.pnpm/@tanstack+query-core@5.100.10/node_modules/@tanstack/query-core/build/modern/queryClient.js",
+          "bytesInOutput": 4029
+        },
+        {
+          "file": "node_modules/.pnpm/@tanstack+query-core@5.100.10/node_modules/@tanstack/query-core/build/modern/mutation.js",
+          "bytesInOutput": 3306
+        },
+        {
+          "file": "node_modules/.pnpm/@tanstack+query-core@5.100.10/node_modules/@tanstack/query-core/build/modern/utils.js",
+          "bytesInOutput": 2703
+        },
+        {
+          "file": "node_modules/.pnpm/@tanstack+query-core@5.100.10/node_modules/@tanstack/query-core/build/modern/mutationCache.js",
+          "bytesInOutput": 1418
+        },
+        {
+          "file": "node_modules/.pnpm/@tanstack+query-core@5.100.10/node_modules/@tanstack/query-core/build/modern/infiniteQueryBehavior.js",
+          "bytesInOutput": 1230
+        },
+        {
+          "file": "node_modules/.pnpm/@tanstack+query-core@5.100.10/node_modules/@tanstack/query-core/build/modern/retryer.js",
+          "bytesInOutput": 1186
+        },
+        {
+          "file": "node_modules/.pnpm/@tanstack+query-core@5.100.10/node_modules/@tanstack/query-core/build/modern/queryCache.js",
+          "bytesInOutput": 1004
+        }
+      ]
+    },
+    "motionDomAnimation": {
+      "bytes": 62432,
+      "gzipBytes": 22175,
+      "includedSourceCount": 180,
+      "largestSources": [
+        {
+          "file": "node_modules/.pnpm/framer-motion@11.11.0_react_b70ae9cd8448d3916634161b0b2a7cfb/node_modules/framer-motion/dist/es/render/VisualElement.mjs",
+          "bytesInOutput": 6143
+        },
+        {
+          "file": "node_modules/.pnpm/framer-motion@11.11.0_react_b70ae9cd8448d3916634161b0b2a7cfb/node_modules/framer-motion/dist/es/animation/animators/MainThreadAnimation.mjs",
+          "bytesInOutput": 4286
+        },
+        {
+          "file": "node_modules/.pnpm/framer-motion@11.11.0_react_b70ae9cd8448d3916634161b0b2a7cfb/node_modules/framer-motion/dist/es/animation/animators/AcceleratedAnimation.mjs",
+          "bytesInOutput": 3282
+        },
+        {
+          "file": "node_modules/.pnpm/framer-motion@11.11.0_react_b70ae9cd8448d3916634161b0b2a7cfb/node_modules/framer-motion/dist/es/value/index.mjs",
+          "bytesInOutput": 2356
+        },
+        {
+          "file": "node_modules/.pnpm/framer-motion@11.11.0_react_b70ae9cd8448d3916634161b0b2a7cfb/node_modules/framer-motion/dist/es/render/utils/animation-state.mjs",
+          "bytesInOutput": 2298
+        },
+        {
+          "file": "node_modules/.pnpm/framer-motion@11.11.0_react_b70ae9cd8448d3916634161b0b2a7cfb/node_modules/framer-motion/dist/es/gestures/press.mjs",
+          "bytesInOutput": 2077
+        },
+        {
+          "file": "node_modules/.pnpm/framer-motion@11.11.0_react_b70ae9cd8448d3916634161b0b2a7cfb/node_modules/framer-motion/dist/es/render/utils/KeyframesResolver.mjs",
+          "bytesInOutput": 1620
+        },
+        {
+          "file": "node_modules/.pnpm/framer-motion@11.11.0_react_b70ae9cd8448d3916634161b0b2a7cfb/node_modules/framer-motion/dist/es/render/dom/DOMKeyframesResolver.mjs",
+          "bytesInOutput": 1486
+        }
+      ]
+    },
+    "motionDomMaxComparison": {
+      "bytes": 105796,
+      "gzipBytes": 34922,
+      "includedSourceCount": 219,
+      "largestSources": [
+        {
+          "file": "node_modules/.pnpm/framer-motion@11.11.0_react_b70ae9cd8448d3916634161b0b2a7cfb/node_modules/framer-motion/dist/es/projection/node/create-projection-node.mjs",
+          "bytesInOutput": 21929
+        },
+        {
+          "file": "node_modules/.pnpm/framer-motion@11.11.0_react_b70ae9cd8448d3916634161b0b2a7cfb/node_modules/framer-motion/dist/es/gestures/drag/VisualElementDragControls.mjs",
+          "bytesInOutput": 6967
+        },
+        {
+          "file": "node_modules/.pnpm/framer-motion@11.11.0_react_b70ae9cd8448d3916634161b0b2a7cfb/node_modules/framer-motion/dist/es/render/VisualElement.mjs",
+          "bytesInOutput": 6141
+        },
+        {
+          "file": "node_modules/.pnpm/framer-motion@11.11.0_react_b70ae9cd8448d3916634161b0b2a7cfb/node_modules/framer-motion/dist/es/animation/animators/MainThreadAnimation.mjs",
+          "bytesInOutput": 4288
+        },
+        {
+          "file": "node_modules/.pnpm/framer-motion@11.11.0_react_b70ae9cd8448d3916634161b0b2a7cfb/node_modules/framer-motion/dist/es/animation/animators/AcceleratedAnimation.mjs",
+          "bytesInOutput": 3283
+        },
+        {
+          "file": "node_modules/.pnpm/framer-motion@11.11.0_react_b70ae9cd8448d3916634161b0b2a7cfb/node_modules/framer-motion/dist/es/value/index.mjs",
+          "bytesInOutput": 2356
+        },
+        {
+          "file": "node_modules/.pnpm/framer-motion@11.11.0_react_b70ae9cd8448d3916634161b0b2a7cfb/node_modules/framer-motion/dist/es/render/utils/animation-state.mjs",
+          "bytesInOutput": 2308
+        },
+        {
+          "file": "node_modules/.pnpm/framer-motion@11.11.0_react_b70ae9cd8448d3916634161b0b2a7cfb/node_modules/framer-motion/dist/es/gestures/pan/PanSession.mjs",
+          "bytesInOutput": 2190
+        }
+      ]
+    }
+  },
+  "styles": [
+    {
+      "file": "public/folio.css",
+      "bytes": 531101,
+      "gzipBytes": 99590
+    },
+    {
+      "file": "styles/experience.css",
+      "bytes": 31757,
+      "gzipBytes": 7170
+    },
+    {
+      "file": "styles/platform.css",
+      "bytes": 30764,
+      "gzipBytes": 6389
+    },
+    {
+      "file": "styles/clinical-experience.css",
+      "bytes": 11465,
+      "gzipBytes": 3038
+    },
+    {
+      "file": "styles/auth-experience.css",
+      "bytes": 19840,
+      "gzipBytes": 4006
+    },
+    {
+      "file": "styles/public-experience.css",
+      "bytes": 2846,
+      "gzipBytes": 1009
+    },
+    {
+      "file": "styles/specialty-showcase.css",
+      "bytes": 9155,
+      "gzipBytes": 2126
+    }
+  ]
+}

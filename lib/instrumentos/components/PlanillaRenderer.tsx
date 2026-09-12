@@ -35,7 +35,8 @@
  * de folio.css (la copia inline SELECT_STYLE se retiró en D3).
  */
 
-import { useId, useState } from "react";
+import { useId, useState, type RefObject } from "react";
+import { useDisclosureFocus } from "@/lib/especialidades/use-disclosure-focus";
 
 import * as I from "@/components/icons";
 import type { InstrumentoDef } from "../types";
@@ -118,6 +119,13 @@ export function PlanillaRenderer({
   const [abiertaLocal, setAbiertaLocal] = useState(false);
   const modo = modoDeInstrumento(def);
   const eligibility=instrumentPopulationEligibility(population);
+  const tieneRespuestas =
+    modo === "numerico"
+      ? normalizarNumerico(respuestas) !== null
+      : normalizarItems(respuestas, def.items.length).some((r) => r !== null);
+  const abierta = !colapsable || abiertaLocal || tieneRespuestas;
+  // Keep hook order stable even when population eligibility changes.
+  const planillaRef = useDisclosureFocus(abierta);
   if(!eligibility.allowed){
     return <section className="pc-card">
       <header className="pc-card-head"><span className="fi-eyebrow">{def.nombre}</span></header>
@@ -142,12 +150,6 @@ export function PlanillaRenderer({
     );
   }
 
-  const tieneRespuestas =
-    modo === "numerico"
-      ? normalizarNumerico(respuestas) !== null
-      : normalizarItems(respuestas, def.items.length).some((r) => r !== null);
-  const abierta = !colapsable || abiertaLocal || tieneRespuestas;
-
   // "Quitar": vacía las respuestas (los consumidores descartan un array todo-null
   // / un numérico null del borrador) y colapsa de nuevo.
   const quitar = () => {
@@ -160,7 +162,7 @@ export function PlanillaRenderer({
 
   if (!abierta) {
     return (
-      <div className="pc-card">
+      <div ref={planillaRef} className="pc-card">
         <header className="pc-card-head">
           <span className="fi-eyebrow">{def.nombre}</span>
         </header>
@@ -173,6 +175,7 @@ export function PlanillaRenderer({
             type="button"
             className="fi-btn fi-btn-secondary"
             onClick={() => setAbiertaLocal(true)}
+            aria-expanded={false}
             style={{ alignSelf: "flex-start" }}
           >
             <I.Plus size={12} /> Cargar {def.nombre}
@@ -187,6 +190,7 @@ export function PlanillaRenderer({
   if (modo === "numerico") {
     return (
       <NumericoBlock
+        containerRef={planillaRef}
         def={def}
         valor={normalizarNumerico(respuestas)}
         // Interacción del usuario mantiene la card abierta: sin esto, elegir
@@ -215,7 +219,7 @@ export function PlanillaRenderer({
   };
 
   return (
-    <div className="pc-card">
+    <div ref={planillaRef} className="pc-card">
       <header className="pc-card-head">
         <span className="fi-eyebrow">{def.nombre}</span>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
@@ -360,6 +364,7 @@ function ItemsBlock({
 // ─── Bloque numérico (Borg y afines: un solo ítem, select de opciones) ───────
 
 function NumericoBlock({
+  containerRef,
   def,
   valor,
   onChange,
@@ -367,6 +372,7 @@ function NumericoBlock({
   mostrarConsigna,
   onQuitar,
 }: {
+  containerRef?: RefObject<HTMLDivElement | null>;
   def: InstrumentoDef;
   valor: RespuestaNumerica;
   onChange(next: RespuestaNumerica): void;
@@ -380,7 +386,7 @@ function NumericoBlock({
   const item = def.items[0];
 
   return (
-    <div className="pc-card">
+    <div ref={containerRef} className="pc-card">
       <header className="pc-card-head">
         <span className="fi-eyebrow">{def.nombre}</span>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>

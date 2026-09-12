@@ -374,9 +374,12 @@ const react = {
   useId: () => "synthetic-id",
   useState: (v: unknown) => [v, () => {}],
   useMemo: (fn: () => unknown) => fn(),
+  useRef: (value: unknown) => ({ current: value }),
+  useEffect: () => {}, // DOM effects are outside this synthetic JSX render.
 };
 const uiOverrides = {
   react,
+  "@/lib/especialidades/use-disclosure-focus": load("lib/especialidades/use-disclosure-focus.ts", { react }),
   "react/jsx-runtime": { jsx, jsxs: jsx, Fragment: "fragment" },
   "@/components/icons": new Proxy({}, { get: () => "icon" }),
 };

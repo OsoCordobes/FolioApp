@@ -1,0 +1,6 @@
+# Live runtime logs and transient failure traces are not review artifacts.
+dev.*.log
+production.*.log
+public-e2e-artifacts/
+visual-artifacts/
+visual-landing-artifacts/

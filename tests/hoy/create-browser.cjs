@@ -35,6 +35,30 @@ const stubs = {
             const run=async(name,scenario)=>{const page=await context.newPage();page.setDefaultTimeout(4000);const errors=[];page.on('pageerror',e=>errors.push(e.message));try{await scenario(page);assert.deepEqual(errors,[]);results.push({mode,case:name,pass:true});}catch(error){results.push({mode,case:name,pass:false,error:error.message.slice(0,700),pageErrors:errors});}finally{console.log(JSON.stringify(results.at(-1)));await page.close();}};
             const open=async(page,query='')=>{await page.goto(`http://127.0.0.1:${server.address().port}/${mode}${query}`);};
             const fill=async page=>{await open(page);await page.getByPlaceholder('Nombre',{exact:true}).fill('Paciente');await page.getByPlaceholder('Apellido',{exact:true}).fill('Sintético');await page.getByPlaceholder('Teléfono',{exact:true}).fill('3510000000');};
+            await run('delayed initial focus preserves a selected field and still initializes an idle dialog',async page=>{
+                // Hold only the modal's 50 ms focus callback so the event order
+                // is deterministic; all other timers and the component stay real.
+                await page.addInitScript(()=>{
+                    const schedule=window.setTimeout.bind(window),cancel=window.clearTimeout.bind(window);
+                    const pending=new Map();window.qaFocusTimers=pending;
+                    window.setTimeout=(callback,delay,...args)=>{
+                        if(delay!==50||typeof callback!=='function')return schedule(callback,delay,...args);
+                        const id=schedule(()=>{},0);pending.set(id,()=>callback(...args));return id;
+                    };
+                    window.clearTimeout=id=>{pending.delete(id);cancel(id)};
+                    window.qaFlushFocus=()=>{const jobs=[...pending.values()];pending.clear();jobs.forEach(run=>run())};
+                });
+                await open(page);const phone=page.getByPlaceholder('Teléfono',{exact:true});
+                await phone.waitFor();await page.waitForFunction(()=>qaFocusTimers.size>0);
+                await phone.focus();await page.evaluate(()=>qaFlushFocus());
+                assert.equal(await phone.evaluate(el=>document.activeElement===el),true);
+                await page.keyboard.type('3510000000');assert.equal(await phone.inputValue(),'3510000000');
+                assert.equal(await page.getByPlaceholder('Nombre',{exact:true}).inputValue(),'');
+                assert.equal(await page.evaluate(()=>qa.calls.length),0);
+                await open(page);await phone.waitFor();await page.waitForFunction(()=>qaFocusTimers.size>0);
+                await page.getByRole('dialog').focus();await page.evaluate(()=>qaFlushFocus());
+                assert.equal(await page.getByPlaceholder('Nombre',{exact:true}).evaluate(el=>document.activeElement===el),true);
+            });
             await run('new walk-in: double click submits once, preserves Cordoba time and reports one success',async page=>{
                 await fill(page);await page.getByRole('button',{name:'Crear turno',exact:true}).evaluate(el=>{el.click();el.click()});
                 assert.equal(await page.evaluate(()=>qa.calls.length),1);

@@ -1,0 +1,433 @@
+{
+  "engine": "Playwright WebKit 26.4 / revision 2287 on Windows; not Safari",
+  "browserLocation": "C:\\Users\\amiun\\AppData\\Local\\Temp\\folio-experience-webkit-20260912",
+  "samples": [
+    {
+      "width": 390,
+      "passed": false,
+      "errors": [],
+      "blocked": [
+        {
+          "url": "https://127.0.0.1:4410/_next/static/media/plus_jakarta_sans_latin-s.p.23e35025.woff2",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/_94658742._.css",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/styles_specialty-showcase_9f1ac890.css",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_291db8aa._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/9154c_next_dist_compiled_react-dom_fee9f161._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/9154c_next_dist_compiled_next-devtools_index_62b081dd.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/9154c_next_dist_compiled_43f605f3._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/9154c_next_dist_client_f2ae0558._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/9154c_next_dist_shared_lib_885b9817._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/9154c_next_dist_19860ebf._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/9154c_next_router_cdf6bcdd.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/4de1b_%40sentry_core_build_esm_e834e689._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/8f169_%40sentry_browser_build_npm_esm_dev_89fdaa02._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/7e3f3_%40sentry-internal_browser-utils_build_esm_7840a293._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/dfbaa_%40sentry_nextjs_build_esm_2bd128f8._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/node_modules__pnpm_a4bebb13._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/_8f8f3e28._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/_a0ff3932._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/turbopack-_7a6db24c._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/9154c_next_dist_4cdfa4a1._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/app_favicon_ico_mjs_59975b63._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/3bf93_posthog-js_dist_module_30edb505.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/_65e5f0e4._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/app_layout_tsx_585086be._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/_474133c0._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/app_error_tsx_637b9725._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/_cefaad6c._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/app_(marketing)_layout_tsx_637b9725._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/_24ff9465._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/app_global-error_tsx_637b9725._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/_e2f51ac9._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/app_(marketing)_page_tsx_10caf556._.js",
+          "method": "GET"
+        }
+      ],
+      "hero": {
+        "width": 374,
+        "height": 849.1875,
+        "font": "-webkit-standard"
+      },
+      "error": "Expected values to be strictly equal:\n\n'false' !== 'true'\n"
+    },
+    {
+      "width": 1440,
+      "passed": false,
+      "errors": [
+        "warning: The resource https://127.0.0.1:4410/_next/static/media/plus_jakarta_sans_latin-s.p.23e35025.woff2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it wasn't preloaded for nothing."
+      ],
+      "blocked": [
+        {
+          "url": "https://127.0.0.1:4410/_next/static/media/plus_jakarta_sans_latin-s.p.23e35025.woff2",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/_94658742._.css",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/styles_specialty-showcase_9f1ac890.css",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_291db8aa._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/9154c_next_dist_compiled_react-dom_fee9f161._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/9154c_next_dist_compiled_next-devtools_index_62b081dd.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/9154c_next_dist_compiled_43f605f3._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/9154c_next_dist_client_f2ae0558._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/9154c_next_dist_shared_lib_885b9817._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/9154c_next_dist_19860ebf._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/9154c_next_router_cdf6bcdd.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/4de1b_%40sentry_core_build_esm_e834e689._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/8f169_%40sentry_browser_build_npm_esm_dev_89fdaa02._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/7e3f3_%40sentry-internal_browser-utils_build_esm_7840a293._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/dfbaa_%40sentry_nextjs_build_esm_2bd128f8._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/node_modules__pnpm_a4bebb13._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/_8f8f3e28._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/_a0ff3932._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/turbopack-_7a6db24c._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/9154c_next_dist_4cdfa4a1._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/app_favicon_ico_mjs_59975b63._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/3bf93_posthog-js_dist_module_30edb505.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/_65e5f0e4._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/app_layout_tsx_585086be._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/_474133c0._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/app_error_tsx_637b9725._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/_cefaad6c._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/app_(marketing)_layout_tsx_637b9725._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/_24ff9465._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/app_global-error_tsx_637b9725._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/_e2f51ac9._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/app_(marketing)_page_tsx_10caf556._.js",
+          "method": "GET"
+        }
+      ],
+      "hero": {
+        "width": 1424,
+        "height": 777.1875,
+        "font": "-webkit-standard"
+      },
+      "error": "locator.waitFor: Timeout 8000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('tabpanel', { name: 'La agenda', exact: true }) to be visible\u001b[22m\n"
+    },
+    {
+      "width": 2560,
+      "passed": false,
+      "errors": [
+        "warning: The resource https://127.0.0.1:4410/_next/static/media/plus_jakarta_sans_latin-s.p.23e35025.woff2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it wasn't preloaded for nothing."
+      ],
+      "blocked": [
+        {
+          "url": "https://127.0.0.1:4410/_next/static/media/plus_jakarta_sans_latin-s.p.23e35025.woff2",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/_94658742._.css",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/styles_specialty-showcase_9f1ac890.css",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_291db8aa._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/9154c_next_dist_compiled_react-dom_fee9f161._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/9154c_next_dist_compiled_next-devtools_index_62b081dd.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/9154c_next_dist_compiled_43f605f3._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/9154c_next_dist_client_f2ae0558._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/9154c_next_dist_shared_lib_885b9817._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/9154c_next_dist_19860ebf._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/9154c_next_router_cdf6bcdd.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/4de1b_%40sentry_core_build_esm_e834e689._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/8f169_%40sentry_browser_build_npm_esm_dev_89fdaa02._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/7e3f3_%40sentry-internal_browser-utils_build_esm_7840a293._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/dfbaa_%40sentry_nextjs_build_esm_2bd128f8._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/node_modules__pnpm_a4bebb13._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/_8f8f3e28._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/_a0ff3932._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/turbopack-_7a6db24c._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/9154c_next_dist_4cdfa4a1._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/app_favicon_ico_mjs_59975b63._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/3bf93_posthog-js_dist_module_30edb505.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/_65e5f0e4._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/app_layout_tsx_585086be._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/_474133c0._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/app_error_tsx_637b9725._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/_cefaad6c._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/app_(marketing)_layout_tsx_637b9725._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/_24ff9465._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/app_global-error_tsx_637b9725._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/_e2f51ac9._.js",
+          "method": "GET"
+        },
+        {
+          "url": "https://127.0.0.1:4410/_next/static/chunks/app_(marketing)_page_tsx_10caf556._.js",
+          "method": "GET"
+        }
+      ],
+      "hero": {
+        "width": 2544,
+        "height": 777.1875,
+        "font": "-webkit-standard"
+      },
+      "error": "locator.waitFor: Timeout 8000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('tabpanel', { name: 'La agenda', exact: true }) to be visible\u001b[22m\n"
+    }
+  ]
+}

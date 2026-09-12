@@ -1,0 +1,212 @@
+{
+  "date": "2026-09-12T19:28:36.018Z",
+  "phase": "before",
+  "passed": 6,
+  "failed": 6,
+  "results": [
+    {
+      "viewport": {
+        "width": 844,
+        "height": 390
+      },
+      "fixture": "create",
+      "pass": true,
+      "geometry": {
+        "top": 16,
+        "bottom": 374,
+        "height": 358,
+        "clientHeight": 356,
+        "scrollHeight": 612,
+        "overflow": "auto"
+      }
+    },
+    {
+      "viewport": {
+        "width": 844,
+        "height": 390
+      },
+      "fixture": "charge",
+      "pass": false,
+      "geometry": {
+        "top": -36.765625,
+        "bottom": 426.765625,
+        "height": 463.53125,
+        "clientHeight": 462,
+        "scrollHeight": 462,
+        "overflow": "visible"
+      },
+      "error": "Dialog panel extends outside viewport: {\"top\":-36.765625,\"bottom\":426.765625,\"height\":463.53125,\"clientHeight\":462,\"scrollHeight\":462,\"overflow\":\"visible\"}",
+      "pageErrors": []
+    },
+    {
+      "viewport": {
+        "width": 844,
+        "height": 390
+      },
+      "fixture": "plan",
+      "pass": false,
+      "geometry": {
+        "top": 9,
+        "bottom": 367,
+        "height": 358,
+        "clientHeight": 356,
+        "scrollHeight": 724,
+        "overflow": "auto"
+      },
+      "error": "expect(locator).toBeFocused() failed\n\nLocator:  getByRole('button', { name: 'Abrir ejemplo' })\nExpected: focused\nReceived: inactive\nTimeout:  5000ms\n\nCall log:\n  - Expect \"to.be.focused\" with timeout 5000ms\n  - waiting for getByRole('button', { name: 'Abrir ejemplo' })\n    14 × locator resolved to <button class=\"fi-btn\">Abrir ejemplo</button>\n       - unexpected value \"inactive\"\n",
+      "pageErrors": []
+    },
+    {
+      "viewport": {
+        "width": 844,
+        "height": 390
+      },
+      "fixture": "confirm",
+      "pass": true,
+      "geometry": {
+        "top": 98.109375,
+        "bottom": 291.890625,
+        "height": 193.78125,
+        "clientHeight": 192,
+        "scrollHeight": 192,
+        "overflow": "visible"
+      }
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "fixture": "create",
+      "pass": true,
+      "geometry": {
+        "top": 16,
+        "bottom": 584,
+        "height": 568,
+        "clientHeight": 566,
+        "scrollHeight": 612,
+        "overflow": "auto"
+      }
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "fixture": "charge",
+      "pass": false,
+      "geometry": {
+        "top": 68.234375,
+        "bottom": 531.765625,
+        "height": 463.53125,
+        "clientHeight": 462,
+        "scrollHeight": 462,
+        "overflow": "visible"
+      },
+      "error": "expect(locator).toBeFocused() failed\n\nLocator:  getByRole('button', { name: 'Abrir ejemplo' })\nExpected: focused\nReceived: inactive\nTimeout:  5000ms\n\nCall log:\n  - Expect \"to.be.focused\" with timeout 5000ms\n  - waiting for getByRole('button', { name: 'Abrir ejemplo' })\n    14 × locator resolved to <button class=\"fi-btn\">Abrir ejemplo</button>\n       - unexpected value \"inactive\"\n",
+      "pageErrors": []
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "fixture": "plan",
+      "pass": false,
+      "geometry": {
+        "top": 9,
+        "bottom": 577,
+        "height": 568,
+        "clientHeight": 566,
+        "scrollHeight": 724,
+        "overflow": "auto"
+      },
+      "error": "expect(locator).toBeFocused() failed\n\nLocator:  getByRole('button', { name: 'Abrir ejemplo' })\nExpected: focused\nReceived: inactive\nTimeout:  5000ms\n\nCall log:\n  - Expect \"to.be.focused\" with timeout 5000ms\n  - waiting for getByRole('button', { name: 'Abrir ejemplo' })\n    14 × locator resolved to <button class=\"fi-btn\">Abrir ejemplo</button>\n       - unexpected value \"inactive\"\n",
+      "pageErrors": []
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "fixture": "confirm",
+      "pass": true,
+      "geometry": {
+        "top": 203.109375,
+        "bottom": 396.890625,
+        "height": 193.78125,
+        "clientHeight": 192,
+        "scrollHeight": 192,
+        "overflow": "visible"
+      }
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 500
+      },
+      "fixture": "create",
+      "pass": true,
+      "geometry": {
+        "top": 16,
+        "bottom": 484,
+        "height": 468,
+        "clientHeight": 466,
+        "scrollHeight": 612,
+        "overflow": "auto"
+      }
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 500
+      },
+      "fixture": "charge",
+      "pass": false,
+      "geometry": {
+        "top": 6.546875,
+        "bottom": 493.46875,
+        "height": 486.921875,
+        "clientHeight": 485,
+        "scrollHeight": 485,
+        "overflow": "visible"
+      },
+      "error": "expect(locator).toBeFocused() failed\n\nLocator:  getByRole('button', { name: 'Abrir ejemplo' })\nExpected: focused\nReceived: inactive\nTimeout:  5000ms\n\nCall log:\n  - Expect \"to.be.focused\" with timeout 5000ms\n  - waiting for getByRole('button', { name: 'Abrir ejemplo' })\n    14 × locator resolved to <button class=\"fi-btn\">Abrir ejemplo</button>\n       - unexpected value \"inactive\"\n",
+      "pageErrors": []
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 500
+      },
+      "fixture": "plan",
+      "pass": false,
+      "geometry": {
+        "top": 9,
+        "bottom": 477,
+        "height": 468,
+        "clientHeight": 466,
+        "scrollHeight": 743,
+        "overflow": "auto"
+      },
+      "error": "expect(locator).toBeFocused() failed\n\nLocator:  getByRole('button', { name: 'Abrir ejemplo' })\nExpected: focused\nReceived: inactive\nTimeout:  5000ms\n\nCall log:\n  - Expect \"to.be.focused\" with timeout 5000ms\n  - waiting for getByRole('button', { name: 'Abrir ejemplo' })\n    14 × locator resolved to <button class=\"fi-btn\">Abrir ejemplo</button>\n       - unexpected value \"inactive\"\n",
+      "pageErrors": []
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 500
+      },
+      "fixture": "confirm",
+      "pass": true,
+      "geometry": {
+        "top": 130.90625,
+        "bottom": 369.078125,
+        "height": 238.171875,
+        "clientHeight": 236,
+        "scrollHeight": 236,
+        "overflow": "visible"
+      }
+    }
+  ]
+}

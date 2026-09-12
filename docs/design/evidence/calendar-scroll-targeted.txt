@@ -1,0 +1,7 @@
+
+Running 2 tests using 1 worker
+
+  ok 1 tests\e2e\design-platform.spec.ts:98:7 › el desplazamiento automático respeta movimiento reduce (2.0s)
+  ok 2 tests\e2e\design-platform.spec.ts:98:7 › el desplazamiento automático respeta movimiento no-preference (2.2s)
+
+  2 passed (6.8s)

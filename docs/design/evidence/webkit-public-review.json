@@ -1,0 +1,202 @@
+{
+  "engine": "Playwright WebKit26.4 revision2287 Windows, not Safari",
+  "override": "Only upgrade-insecure-requests stripped from local document response; all other CSP directives retained",
+  "samples": [
+    {
+      "width": 390,
+      "passed": true,
+      "errors": [],
+      "blocked": [],
+      "hero": {
+        "width": 380,
+        "height": 1001.609375,
+        "font": "folioSans, \"folioSans Fallback\", Arial, \"Segoe UI\", Arial, sans-serif"
+      },
+      "mobileMenu": "Space opens; Escape restores focus; section link closes",
+      "productPanels": [
+        {
+          "height": 638.5,
+          "scrollWidth": 334,
+          "clientWidth": 334,
+          "visible": 1
+        },
+        {
+          "height": 638.5,
+          "scrollWidth": 334,
+          "clientWidth": 334,
+          "visible": 1
+        },
+        {
+          "height": 638.5,
+          "scrollWidth": 334,
+          "clientWidth": 334,
+          "visible": 1
+        }
+      ],
+      "productKeyboard": "Home, Right, End and Tab passed",
+      "specialtyRecords": [
+        {
+          "height": 552.5,
+          "scrollWidth": 302,
+          "clientWidth": 302,
+          "visible": 1
+        },
+        {
+          "height": 552.5,
+          "scrollWidth": 302,
+          "clientWidth": 302,
+          "visible": 1
+        },
+        {
+          "height": 552.5,
+          "scrollWidth": 302,
+          "clientWidth": 302,
+          "visible": 1
+        },
+        {
+          "height": 552.5,
+          "scrollWidth": 302,
+          "clientWidth": 302,
+          "visible": 1
+        },
+        {
+          "height": 552.5,
+          "scrollWidth": 302,
+          "clientWidth": 302,
+          "visible": 1
+        }
+      ],
+      "pageOverflow": -10
+    },
+    {
+      "width": 1440,
+      "passed": true,
+      "errors": [],
+      "blocked": [],
+      "hero": {
+        "width": 1320,
+        "height": 748,
+        "font": "folioSans, \"folioSans Fallback\", Arial, \"Segoe UI\", Arial, sans-serif"
+      },
+      "productPanels": [
+        {
+          "height": 647,
+          "scrollWidth": 998,
+          "clientWidth": 998,
+          "visible": 1
+        },
+        {
+          "height": 647,
+          "scrollWidth": 998,
+          "clientWidth": 998,
+          "visible": 1
+        },
+        {
+          "height": 647,
+          "scrollWidth": 998,
+          "clientWidth": 998,
+          "visible": 1
+        }
+      ],
+      "productKeyboard": "Home, Right, End and Tab passed",
+      "specialtyRecords": [
+        {
+          "height": 552.484375,
+          "scrollWidth": 462,
+          "clientWidth": 462,
+          "visible": 1
+        },
+        {
+          "height": 552.484375,
+          "scrollWidth": 462,
+          "clientWidth": 462,
+          "visible": 1
+        },
+        {
+          "height": 552.484375,
+          "scrollWidth": 462,
+          "clientWidth": 462,
+          "visible": 1
+        },
+        {
+          "height": 552.484375,
+          "scrollWidth": 462,
+          "clientWidth": 462,
+          "visible": 1
+        },
+        {
+          "height": 552.484375,
+          "scrollWidth": 462,
+          "clientWidth": 462,
+          "visible": 1
+        }
+      ],
+      "pageOverflow": -10
+    },
+    {
+      "width": 2560,
+      "passed": true,
+      "errors": [],
+      "blocked": [],
+      "hero": {
+        "width": 2104,
+        "height": 936.9375,
+        "font": "folioSans, \"folioSans Fallback\", Arial, \"Segoe UI\", Arial, sans-serif"
+      },
+      "productPanels": [
+        {
+          "height": 701.3125,
+          "scrollWidth": 1304,
+          "clientWidth": 1304,
+          "visible": 1
+        },
+        {
+          "height": 701.3125,
+          "scrollWidth": 1304,
+          "clientWidth": 1304,
+          "visible": 1
+        },
+        {
+          "height": 701.3125,
+          "scrollWidth": 1304,
+          "clientWidth": 1304,
+          "visible": 1
+        }
+      ],
+      "productKeyboard": "Home, Right, End and Tab passed",
+      "specialtyRecords": [
+        {
+          "height": 643.53125,
+          "scrollWidth": 809,
+          "clientWidth": 809,
+          "visible": 1
+        },
+        {
+          "height": 643.53125,
+          "scrollWidth": 809,
+          "clientWidth": 809,
+          "visible": 1
+        },
+        {
+          "height": 643.53125,
+          "scrollWidth": 809,
+          "clientWidth": 809,
+          "visible": 1
+        },
+        {
+          "height": 643.53125,
+          "scrollWidth": 809,
+          "clientWidth": 809,
+          "visible": 1
+        },
+        {
+          "height": 643.53125,
+          "scrollWidth": 809,
+          "clientWidth": 809,
+          "visible": 1
+        }
+      ],
+      "pageOverflow": -10
+    }
+  ]
+}

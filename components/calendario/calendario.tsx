@@ -258,6 +258,13 @@ function TurnoCardSemana({
       role="button"
       tabIndex={0}
       title={`${paciente.nombre} · ${turno.hora}`}
+      aria-label={[
+        paciente.nombre,
+        turno.hora,
+        turno.servicio,
+        turno.profesionalNombre,
+        isGoogle ? "Sincronizado de Google" : null,
+      ].filter(Boolean).join(" · ")}
       onClick={() => onSelect(turno)}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
@@ -503,16 +510,17 @@ function CalHeader({
           <span className="fi-eyebrow">Agenda</span>
           <h1>Calendario</h1>
         </div>
-        <div className="cal-tabs">
-          <button type="button" className={"cal-tab " + (vista === "semana" ? "is-active" : "")} onClick={() => setVista("semana")}>
+        <div className="cal-tabs" role="group" aria-label="Vista del calendario">
+          <button type="button" className={"cal-tab " + (vista === "semana" ? "is-active" : "")} aria-pressed={vista === "semana"} onClick={() => setVista("semana")}>
             Semana
           </button>
-          <button type="button" className={"cal-tab " + (vista === "mes" ? "is-active" : "")} onClick={() => setVista("mes")}>
+          <button type="button" className={"cal-tab " + (vista === "mes" ? "is-active" : "")} aria-pressed={vista === "mes"} onClick={() => setVista("mes")}>
             Mes
           </button>
           <button
             type="button"
             className={"cal-tab cal-tab-bandeja " + (vista === "bandeja" ? "is-active" : "")}
+            aria-pressed={vista === "bandeja"}
             onClick={() => setVista("bandeja")}
           >
             <I.Inbox size={12} />
@@ -612,8 +620,8 @@ function CalFilters({
   ];
 
   return (
-    <div className="cal-filters">
-      <button type="button" className={"cal-chip " + (todos ? "is-on" : "")} onClick={() => setEstados(new Set())}>
+    <div className="cal-filters" role="group" aria-label="Filtrar turnos por estado">
+      <button type="button" className={"cal-chip " + (todos ? "is-on" : "")} aria-pressed={todos} onClick={() => setEstados(new Set())}>
         Todos
       </button>
       {chips.map(([k, lbl]) => (
@@ -621,6 +629,7 @@ function CalFilters({
           key={k}
           type="button"
           className={"cal-chip " + (!todos && estados.has(k) ? "is-on" : "")}
+          aria-pressed={!todos && estados.has(k)}
           onClick={() => toggle(k)}
         >
           {lbl}
@@ -630,6 +639,7 @@ function CalFilters({
         <button
           type="button"
           className={"cal-chip cal-chip-pedidos " + (mostrarPedidos ? "is-on" : "")}
+          aria-pressed={mostrarPedidos}
           onClick={() => setMostrarPedidos(!mostrarPedidos)}
         >
           <I.Inbox size={11} />
@@ -687,16 +697,18 @@ function VistaSemana({
   const ahoraVisible =
     Number.isFinite(nowMin) && nowMin >= rango.horaInicio * 60 && nowMin <= rango.horaFin * 60;
 
-  // Auto-scroll a la "ahora" line al cargar — port directo del prototipo
-  // (folio/calendario.jsx líneas 445-454). Sin esto, el viewport arranca en
-  // top y el screenshot queda offset respecto al baseline.
+  // Acercar la hora actual al abrir la semana. La preferencia de movimiento
+  // también rige el scroll iniciado por JavaScript, no solo las animaciones CSS.
   useEffect(() => {
     const t = setTimeout(() => {
       const elNow = document.querySelector(".cal-ahora");
       if (!elNow) return;
       const r = elNow.getBoundingClientRect();
       const targetY = window.scrollY + r.top - window.innerHeight / 3;
-      if (targetY > 0) window.scrollTo({ top: targetY, behavior: "smooth" });
+      if (targetY > 0) {
+        const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        window.scrollTo({ top: targetY, behavior: reduceMotion ? "instant" : "smooth" });
+      }
     }, 150);
     return () => clearTimeout(t);
   }, []);
