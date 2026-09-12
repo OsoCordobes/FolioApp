@@ -11,7 +11,7 @@ export function clinicalConfig(env) {
  // This suite is tied to this repository's dedicated Supabase profile. A generic
  // localhost Postgres or ordinary development app is insufficient.
  const api=new URL(config.supabaseUrl),database=new URL(config.databaseUrl);
- if(api.origin!=='http://127.0.0.1:54321'||api.pathname!=='/'||api.search||api.hash||database.hostname!=='127.0.0.1'||database.port!=='54322'||database.pathname!=='/postgres'||config.appUrl!=='http://127.0.0.1:4410')throw isolationError('Clinical integration requires the dedicated 4410/54321/54322 local profile.');
+ if(api.origin!=='http://127.0.0.1:54321'||api.pathname!=='/'||api.search||api.hash||database.hostname!=='127.0.0.1'||database.port!=='54322'||database.pathname!=='/postgres'||config.appUrl!=='http://127.0.0.1:4420')throw isolationError('Clinical integration requires the dedicated 4420/54321/54322 local profile.');
  return config;
 }
 
@@ -23,6 +23,15 @@ export function assertClinicalDatabase(row) {
 export const CLINICAL_POLICY_KEYS=Object.freeze(['mfa_ready','mfa_enforced','attachments','population','sessions','availability','representatives']);
 export function assertClinicalPolicies(row) {
  if(!row||CLINICAL_POLICY_KEYS.some(key=>row[key]!==true))throw isolationError('Clinical policies are not all enforced; an unprotected happy path is not a valid integration result.');
+}
+
+/** A protected AAL1 select may be filtered empty or explicitly denied, but never expose rows or hide another failure. */
+export function assertAal1ProtectedRead(result) {
+ if(!result||typeof result!=='object'||!Object.hasOwn(result,'data')||!Object.hasOwn(result,'error'))throw isolationError('AAL1 protected read returned an unknown result shape.');
+ const {data,error}=result,noRows=data===null||(Array.isArray(data)&&data.length===0);
+ const emptySuccess=error===null&&Array.isArray(data)&&data.length===0;
+ const permissionDenied=noRows&&error!==null&&typeof error==='object'&&error.code==='42501';
+ if(!emptySuccess&&!permissionDenied)throw isolationError('AAL1 protected read must expose no rows and may only return the expected 42501 denial.');
 }
 
 /** RFC 6238 SHA1. Only synthetic local authenticator secrets enter this helper. */

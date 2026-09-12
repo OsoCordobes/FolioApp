@@ -1,6 +1,7 @@
 import {createHash} from 'node:crypto';
 import {test,expect} from '../fixtures/local-test';
 import {assertPolicies,createClinicalFixture,decryptSynthetic,firstFactorClient,loginClinical,type ClinicalFixture,type ClinicalSpecialty} from '../fixtures/clinical-local';
+import {assertAal1ProtectedRead} from '../../scripts/testing/clinical-config.mjs';
 
 // This suite is deliberately absent from ordinary no-database test results.
 // The dedicated run-clinical command fails early if its configuration is absent.
@@ -23,7 +24,7 @@ test('real AAL1 cannot read staff membership or enter the dual patient portal',a
   const status=await client.rpc('mfa_access_status');expect(status.error).toBeNull();
   expect(status.data).toMatchObject({required:true,allowed:false,isStaff:true,hasVerifiedFactor:true,sessionValid:false});
   const members=await client.from('member').select('id').eq('organization_id',account.organizationId);
-  expect(members.error).toBeNull();expect(members.data).toEqual([]);
+  assertAal1ProtectedRead(members);
   const portal=await client.rpc('paciente_cuenta_actual');expect(portal.error?.code).toBe('42501');
  }finally{await client.auth.signOut({scope:'local'});}
 });
@@ -118,7 +119,7 @@ for(const specialty of ['quiropraxia','cardiologia','psicologia'] as const){
    (SELECT count(*)::int FROM public.paciente WHERE organization_id=$1) AS pacientes,
    (SELECT count(*)::int FROM public.turno WHERE organization_id=$1) AS turnos,
    (SELECT count(*)::int FROM public.sesion WHERE organization_id=$1) AS sesiones,
-   (SELECT count(*)::int FROM public.pago WHERE organization_id=$1) AS pagos`,[account.organizationId]);
+   (SELECT count(*)::int FROM public.pago p JOIN public.turno t ON t.id=p.turno_id WHERE t.organization_id=$1) AS pagos`,[account.organizationId]);
   expect(totals.rows[0]).toEqual({pacientes:1,turnos:1,sesiones:1,pagos:1});
   await assertPolicies(fixture.db);
   completed.set(specialty,{patientId:turno.paciente_id,turnoId:turno.id,sessionId:session.id,documentId:document.id,storagePath:document.storage_path,marker});
@@ -138,7 +139,7 @@ test('real cross-tenant and AAL1 clinical reads are denied through REST and the 
  try{
   const login=await aal1.auth.signInWithPassword({email:owner.email,password:owner.password});expect(login.error).toBeNull();
   for(const [table,id] of [['paciente',target.patientId],['sesion',target.sessionId],['documento_clinico',target.documentId]]){
-   const deniedRead=await aal1.from(table).select('id').eq('id',id);expect(deniedRead.error).toBeNull();expect(deniedRead.data).toEqual([]);
+   const deniedRead=await aal1.from(table).select('id').eq('id',id);assertAal1ProtectedRead(deniedRead);
   }
  }finally{await aal1.auth.signOut({scope:'local'});}
 });

@@ -15,7 +15,10 @@ Sin Supabase local, las pantallas públicas y los ejemplos que usan mocks pueden
 
 El procedimiento específico está en [CLINICAL-LOCAL.md](../../scripts/testing/CLINICAL-LOCAL.md).
 `node scripts/testing/run-clinical.mjs` exige la instancia dedicada con PostgreSQL 17,
-Auth, TOTP y Storage reales. Crea tres consultorios sintéticos y comprueba el
+Auth, TOTP y Storage reales, y usa exclusivamente `http://127.0.0.1:4420` para
+no ocupar el puerto 4410 del runner ordinario/visual. Valida el perfil completo
+antes de iniciar su aplicación o navegador y rechaza cualquier override de URL
+distinto. Crea tres consultorios sintéticos y comprueba el
 recorrido de cada especialidad: paciente sin turno previo, atención, guardado,
 archivo, cobro en efectivo registrado y lectura después de volver a iniciar sesión.
 También intenta accesos AAL1, entre consultorios, escritura clínica directa y
@@ -27,7 +30,8 @@ de mutaciones directas en servidor.
 
 El comando falla si faltan sus cuatro variables locales; el spec se omite
 explícitamente en el runner ordinario sin esa habilitación. Sus pruebas preparadas
-no cuentan como evidencia de funcionamiento hasta que se ejecuten sin omisiones.
+no cuentan como evidencia de funcionamiento hasta que se ejecuten sin omisiones
+contra Auth y Storage reales. El listado `--list` sólo acredita descubrimiento.
 No reemplaza las pruebas de suscripción con Mercado Pago, menores, recuperación,
 usabilidad ni carga. No reutilizar para este ensayo una base con datos recuperados
 de producción: la preparación rechaza organizaciones o usuarios ajenos a su
