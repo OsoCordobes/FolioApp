@@ -50,6 +50,9 @@ jobs:
       - name: Verify rescheduling and uncertain response recovery
         run: node tests/hoy/run-isolated.mjs browser-reschedule
 
+      - name: Verify atomic close and payment recovery with synthetic responses
+        run: node tests/hoy/run-isolated.mjs browser-close
+
       - name: Verify clinical archive navigation and interrupted downloads
         run: node tests/hoy/run-isolated.mjs browser-archive
 
