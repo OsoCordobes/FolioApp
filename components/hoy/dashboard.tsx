@@ -23,13 +23,15 @@ import { TurnoCreateModal } from "@/components/hoy/turno-create-modal";
 import { TurnoReagendarModal } from "@/components/hoy/turno-reagendar-modal";
 import { useToast } from "@/components/ui/toast";
 import type { ProfesionalLite } from "@/lib/agenda/profesional";
-import { cobroOptimistaAlCerrar } from "@/lib/hoy/kpi-cobro";
+import { mergeFinancialTurno, withCloseStatus } from "@/lib/hoy/close-operation";
+import { CobroCierreDialog } from "@/components/hoy/cobro-cierre-dialog";
+import type { CloseStatus } from "@/lib/turnos/close-contract";
 import { applyTransition, isTurnoStatePredecessor } from "@/lib/turno-states";
 import { useAgendaAutoRefresh } from "@/lib/use-agenda-refresh";
 import { useNow } from "@/lib/use-now";
 import type { EstadoTurno, PacientesById, Turno } from "@/lib/types";
 
-import { transitionTurnoAction, type CobroCierreActionInput } from "@/app/(app)/hoy/actions";
+import { transitionTurnoAction } from "@/app/(app)/hoy/actions";
 
 interface DashboardProps {
   initialTurnos: Turno[];
@@ -85,10 +87,8 @@ function overlayPending(current: Turno, pending: PendingTransition): Turno {
   return {
     ...current,
     ...pending.patch,
-    // A recorded payment wins over the proposed payment, including when SSR
-    // still shows the previous appointment state (upsert ignores duplicates).
-    cobro: current.cobro?.montoCents != null || !Object.hasOwn(pending.patch, "cobro")
-      ? current.cobro : pending.turno.cobro,
+    // Ordinary transitions never invent or replace financial data.
+    cobro: current.cobro,
   };
 }
 
@@ -97,6 +97,11 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
   const toast = useToast();
   const [turnos, setTurnos] = useState<Turno[]>(initialTurnos);
   const [walkInOpen, setWalkInOpen] = useState(false);
+  const [closeFor, setCloseFor] = useState<{ turno: Turno; mode: "CLOSE" | "RESOLVE" } | null>(null);
+  const closeSelection = useRef<string | null>(null);
+  const observation = useRef(0);
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const returnFocus = useRef<string | null>(null);
   /** Turno con el modal de reagendar abierto (null = cerrado). */
   const [reagendarFor, setReagendarFor] = useState<Turno | null>(null);
   const [transitionError, setTransitionError] = useState<string | null>(null);
@@ -106,6 +111,13 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
   const currentTurnos = useRef(initialTurnos);
   const pendingTurnos = useRef(new Map<string, PendingTransition>());
   const confirmedTurnos = useRef(new Map<string, Turno>());
+  useEffect(() => {
+    if (!closeFor && returnFocus.current) {
+      const target = contentRef.current?.querySelector<HTMLButtonElement>(`button[data-cobro-turno="${CSS.escape(returnFocus.current)}"]`);
+      (target ?? contentRef.current)?.focus();
+      returnFocus.current = null;
+    }
+  }, [closeFor]);
 
   // Resincronizar el estado local cuando el Server Component re-renderiza
   // (revalidatePath tras crear/transicionar un turno, router.refresh del
@@ -117,8 +129,9 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
     // snapshot stays stale even after an equal-state snapshot has arrived.
     const refreshed = initialTurnos.map((turno) => {
       const confirmed = confirmedTurnos.current.get(turno.id);
-      const current = confirmed && isTurnoStatePredecessor(turno.estado, confirmed.estado)
-        ? confirmed : turno;
+      const base = confirmed && isTurnoStatePredecessor(turno.estado, confirmed.estado) ? { ...turno, estado: confirmed.estado } : turno;
+      const merged = confirmed ? mergeFinancialTurno(confirmed, base) : base;
+      const current = canRegistrarCobro ? merged : { ...merged, cobro: undefined, cobroPorRevisar: false };
       confirmedTurnos.current.set(turno.id, current);
       const pending = pendingTurnos.current.get(turno.id);
       // A later server state (including cancellation) takes precedence over
@@ -128,9 +141,10 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
       return pending && isTurnoStatePredecessor(current.estado, pending.turno.estado)
         ? overlayPending(current, pending) : current;
     });
+    observation.current++;
     currentTurnos.current = refreshed;
     setTurnos(refreshed);
-  }, [initialTurnos]);
+  }, [initialTurnos, canRegistrarCobro]);
 
   const agendaSync = useAgendaAutoRefresh(organizationId ?? null, agendaRevision);
 
@@ -144,14 +158,15 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
     id: string,
     to: EstadoTurno,
     extra: Partial<Turno> = {},
-    cobro?: CobroCierreActionInput,
   ) => {
-    if (pendingTurnos.current.has(id)) return false;
+    if (pendingTurnos.current.has(id) || closeSelection.current === id) return false;
+    if (to === "cerrado") { openClose(id, "CLOSE"); return false; }
     const before = currentTurnos.current.find((turno) => turno.id === id);
     if (!before) return false;
-    const extraConCobro = to === "cerrado"
-      ? { ...extra, cobro: cobroOptimistaAlCerrar(before, cobro, new Date().toISOString()) }
-      : extra;
+    const extraConCobro = { ...extra };
+    delete extraConCobro.cobro;
+    delete extraConCobro.cierreClasificacion;
+    delete extraConCobro.cobroPorRevisar;
     const next = applyTransition(before, to, { extra: extraConCobro });
     if (next === before) return false;
 
@@ -176,8 +191,6 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
           turnoId: id,
           to,
           duracionRealMin: typeof extra.duracionMin === "number" ? extra.duracionMin : undefined,
-          // E1 · cobro del mini-diálogo (solo viaja al cerrar).
-          cobro,
         });
         if (!result.ok) {
           setTransitionError(result.error.message);
@@ -186,14 +199,6 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
           return;
         }
         const nombre = pacientes[before.pacienteId]?.nombre ?? "paciente";
-        // El cobro NO se registró: revertir SOLO el cobro optimista (el cierre
-        // del turno sí valió). Sin esto el KPI "Recaudado" seguía sumando plata
-        // que nunca llegó a la tabla `pago` — la misma mentira que este PR
-        // vino a eliminar, en versión transitoria.
-        if (to === "cerrado" && result.data.pagoRegistrado === false) {
-          const withoutPayment = { ...next, cobro: before.cobro };
-          pendingTurnos.current.set(id, { turno: withoutPayment, patch: { ...pending.patch, cobro: before.cobro } });
-        }
         const settled = pendingTurnos.current.get(id) ?? pending;
         const acknowledged = settled.turno;
         const seen = confirmedTurnos.current.get(id);
@@ -204,29 +209,12 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
           // A numeric amount came from a real payment row in the refreshed
           // snapshot. A late ACK has no payment row of its own and must not
           // replace that evidence with the optimistic amount (or rollback).
-          confirmed = seen.estado === acknowledged.estado && to === "cerrado" && seen.cobro?.montoCents == null
-            ? { ...seen, cobro: acknowledged.cobro } : seen;
+          confirmed = seen;
         }
         confirmedTurnos.current.set(id, confirmed);
         replaceTurno(confirmed);
         if (confirmed.estado !== to) return;
-        // PR #118 · el server confirma si el cobro quedó registrado: cierre y
-        // pago NO son atómicos. Si el usuario cargó un cobro y el upsert de
-        // `pago` falló (RLS u otro error), el toast de éxito mentía "deuda
-        // registrada" — ahora avisa con tono error que hay que cargarlo a mano.
-        if (to === "cerrado" && cobro && result.data.pagoRegistrado === false) {
-          toast.show({
-            titulo: `Turno cerrado, pero no pudimos confirmar el cobro solicitado — revisalo en Finanzas · ${before.hora} · ${nombre}`,
-            tono: "error",
-          });
-          return;
-        }
-        // C4 · feedback: toast de éxito recién cuando el server confirmó (el
-        // update optimista ya se ve en la lista; el toast asegura "se guardó").
-        const tituloToast = to === "cerrado" && result.data.pagoRegistrado === true &&
-          confirmed.cobro?.estado === "pendiente" && (confirmed.cobro.montoCents ?? 0) > 0
-          ? "Turno cerrado · deuda registrada"
-          : TRANSITION_TOAST[to];
+        const tituloToast = TRANSITION_TOAST[to];
         if (tituloToast) {
           toast.show({ titulo: `${tituloToast} · ${before.hora} · ${nombre}` });
         }
@@ -242,6 +230,28 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
     return true;
   };
 
+  function openClose(id: string, mode: "CLOSE" | "RESOLVE") {
+    if (closeSelection.current || pendingTurnos.current.has(id)) return;
+    if (mode === "RESOLVE" && !canRegistrarCobro) return;
+    const turno = currentTurnos.current.find(item => item.id === id);
+    if (!turno) return;
+    closeSelection.current = id;
+    setCloseFor({ turno, mode });
+  }
+  function confirmClose(status: CloseStatus, readObservation?: number) {
+    const before = currentTurnos.current.find(item => item.id === status.turnoId) ?? closeFor?.turno;
+    if (!before || before.id !== status.turnoId) return;
+    const incoming = withCloseStatus(before, status);
+    const predecessor = isTurnoStatePredecessor(incoming.estado, before.estado);
+    const result = mergeFinancialTurno(before, predecessor ? { ...incoming, estado: before.estado } : incoming,
+      !predecessor && readObservation === observation.current);
+    const confirmed = canRegistrarCobro ? result : { ...result, cobro: undefined, cobroPorRevisar: false };
+    observation.current++;
+    confirmedTurnos.current.set(confirmed.id, confirmed);
+    currentTurnos.current = currentTurnos.current.map(item => item.id === confirmed.id ? confirmed : item);
+    setTurnos(currentTurnos.current);
+  }
+
   const nextId = useMemo<string | undefined>(() => {
     const [yy, mm, dd] = fechaIso.split("-").map(Number);
     const future = turnos.filter((x) => {
@@ -254,12 +264,13 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
     });
     return future[0]?.id;
   }, [turnos, fechaIso, now]);
+  const visibleTurnos = canRegistrarCobro ? turnos : turnos.map(turno => ({ ...turno, cobro: undefined, cobroPorRevisar: false }));
 
   return (
     <>
-      <div className="fi-content">
+      <div className="fi-content" ref={contentRef} tabIndex={-1}>
         <PageHeader
-          turnos={turnos}
+          turnos={visibleTurnos}
           pacientes={pacientes}
           fechaLarga={fechaLarga}
           fechaAnio={fechaAnio}
@@ -276,7 +287,10 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
         ) : null}
         {primerosPasos}
         <AgendaSyncNotice sync={agendaSync} />
-        <KpiStrip turnos={turnos} pacientes={pacientes} now={now} timezone={timezone} />
+        <KpiStrip turnos={visibleTurnos} pacientes={pacientes} now={now} timezone={timezone} />
+        {visibleTurnos.some(turno => turno.cobroPorRevisar) ? <p role="status" style={{ color: "var(--ink-3)", fontSize: 13 }}>
+          Hay cobros por revisar. Los importes señalados muestran el último dato confirmado.
+        </p> : null}
         {transitionError ? (
           <div
             role="alert"
@@ -308,13 +322,15 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
           <EmptyState fechaLarga={fechaLarga} />
         ) : (
           <TurnoList
-            turnos={turnos}
+            turnos={visibleTurnos}
             pacientes={pacientes}
             nextId={nextId}
             now={now}
             timezone={timezone}
             canRegistrarCobro={canRegistrarCobro}
-            pendingIds={pendingIds}
+            pendingIds={closeFor ? new Set([...pendingIds, closeFor.turno.id]) : pendingIds}
+            onCloseTurno={(id) => openClose(id, "CLOSE")}
+            onReviewCobro={(id) => openClose(id, "RESOLVE")}
             onTransition={handleTransition}
             onReagendar={(turnoId) => {
               if (pendingTurnos.current.has(turnoId)) return;
@@ -322,7 +338,7 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
               if (turno) setReagendarFor(turno);
             }}
             onOpenFicha={(turnoId, transitionStarted) => {
-              if (pendingTurnos.current.has(turnoId) && !transitionStarted) return;
+              if ((pendingTurnos.current.has(turnoId) || closeSelection.current === turnoId) && !transitionStarted) return;
               // Side panel-style ficha planeado para sprint posterior. Mientras
               // tanto, navegar a la ficha completa del paciente — toda la info
               // clínica + plan + sesiones está allí.
@@ -332,6 +348,16 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
           />
         )}
       </div>
+
+      {closeFor ? <CobroCierreDialog
+        turno={closeFor.turno}
+        mode={closeFor.mode}
+        pacienteNombre={pacientes[closeFor.turno.pacienteId]?.nombre ?? "Paciente"}
+        canRegistrarCobro={canRegistrarCobro}
+        getObservation={() => observation.current}
+        onConfirmed={confirmClose}
+        onClose={() => { returnFocus.current = closeFor.turno.id; closeSelection.current = null; setCloseFor(null); router.refresh(); }}
+      /> : null}
 
       {/* FAB walk-in: abre el modal de creación rápida de turno. */}
       {!walkInOpen ? (

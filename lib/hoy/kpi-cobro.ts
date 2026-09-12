@@ -51,15 +51,11 @@ export interface CobroKpi {
  * Monto REGISTRADO en `pago` para un turno, en centavos, o `null` si no hay
  * pago registrado.
  *
- * El fallback a `precio` cubre sólo los turnos marcados como cobrados sin monto
- * (datos mock/legacy del prototipo, y el instante del update optimista): un
- * pago real de la DB SIEMPRE trae `monto_cents`. Un cobro "pendiente" sin monto
- * es la ausencia de fila en `pago` (así lo mapea lib/db/hoy.ts), no una deuda.
+ * Sin monto persistido no hay evidencia de dinero, incluso si un dato legacy dice pagado.
  */
 export function montoRegistradoCents(t: TurnoCobroLike): number | null {
   const c = t.cobro;
   if (!c) return null;
-  if (c.estado === "pagado") return c.montoCents ?? Math.round(t.precio * 100);
   return c.montoCents ?? null;
 }
 
@@ -102,34 +98,3 @@ export function computeCobroKpi(turnos: readonly TurnoCobroLike[]): CobroKpi {
   };
 }
 
-/**
- * Cobro que hay que asumir en el update optimista al cerrar un turno, espejo
- * EXACTO de lo que hace el server en `transitionTurno` (lib/db/turnos.ts):
- *   - con `cobro` explícito (mini-diálogo): respeta monto y "quedó debiendo";
- *   - sin `cobro` (rol sin canRegistrarCobro, camino legacy): efectivo PAGADO
- *     por el precio del turno;
- *   - monto 0 ⇒ el server NO inserta `pago` ⇒ no hay cobro que mostrar;
- *   - el upsert usa `ignoreDuplicates` ⇒ si el turno YA tenía pago, gana el
- *     existente.
- *
- * Sin esto el KPI se quedaba en el valor viejo hasta el próximo refresh (o
- * peor: mostraba el precio de lista de un turno cerrado con deuda).
- */
-export function cobroOptimistaAlCerrar(
-  turno: TurnoCobroLike,
-  cobro: { montoCents: number; pagado: boolean } | undefined,
-  nowIso: string,
-): Cobro {
-  const yaRegistrado = montoRegistradoCents(turno);
-  if (yaRegistrado != null) return turno.cobro as Cobro;
-
-  const montoCents = cobro ? cobro.montoCents : Math.round(turno.precio * 100);
-  const pagado = cobro ? cobro.pagado : true;
-  if (montoCents <= 0) return { estado: "pendiente", ts: null, montoCents: null };
-
-  return {
-    estado: pagado ? "pagado" : "pendiente",
-    ts: pagado ? nowIso : null,
-    montoCents,
-  };
-}

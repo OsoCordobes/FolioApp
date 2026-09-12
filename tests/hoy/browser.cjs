@@ -18,7 +18,7 @@ function App(){const[turnos,setTurnos]=useState([initial]);window.qa.refresh=(up
 createRoot(document.getElementById('root')).render(<StrictMode><App/></StrictMode>);`;
 const stubs = {
     'next/navigation': `export const useRouter=()=>({push(){window.qa.navigations=(window.qa.navigations??0)+1},refresh(){window.qa.refreshes++}});`,
-    '@/app/(app)/hoy/actions': `export const transitionTurnoAction=(input)=>{window.qa.calls.push(input);return new Promise((resolve,reject)=>window.qa.jobs.push({resolve,reject}))};`,
+    '@/app/(app)/hoy/actions': `export const resolveTurnoCloseAction=()=>{throw Error('Covered by browser-close')};export const getTurnoCloseStatusAction=()=>{throw Error('Covered by browser-close')};export const getTurnoCloseReceiptAction=()=>{throw Error('Covered by browser-close')};export const marcarPagoCobradoAgendaAction=()=>{throw Error('Covered by browser-close')};export const transitionTurnoAction=(input)=>{window.qa.calls.push(input);return new Promise((resolve,reject)=>window.qa.jobs.push({resolve,reject}))};`,
     '@/lib/use-agenda-refresh': `export function useAgendaAutoRefresh(){return {status:'active',retry(){}}}`,
     '@/components/agenda/agenda-sync-notice': `export const AgendaSyncNotice=()=>null;`,
     '@/components/hoy/turno-create-modal': `export const TurnoCreateModal=()=>null;`,
@@ -91,32 +91,7 @@ const stubs = {
             assert.equal(await page.locator('.fi-toast').count(), 0);
             assert.equal(await page.evaluate(() => qa.refreshes), 1);
             result.push({ mode, case: 'network failure rollback + reconciliation refresh + no success', pass: true });
-            await reset();
-            await page.evaluate(() => qa.refresh({ estado: 'atendiendo' }));
-            await page.waitForFunction(() => qa.state[0].estado === 'atendiendo');
-            await page.getByRole('button', { name: 'Cerrar turno', exact: true }).click();
-            await page.getByRole('button', { name: 'Cobrar y cerrar', exact: true }).click();
-            await page.waitForFunction(() => qa.state[0].estado === 'cerrado');
-            assert.equal(await page.evaluate(() => qa.state[0].cobro.montoCents), 3000000);
-            assert.equal(await page.evaluate(() => qa.calls.length), 1);
-            await page.evaluate(() => qa.settle({ ok: true, data: { pagoRegistrado: false } }));
-            await page.locator('.fi-toast--error').waitFor();
-            assert.equal(await page.evaluate(() => qa.state[0].estado), 'cerrado');
-            assert.equal(await page.evaluate(() => qa.state[0].cobro.estado), 'pendiente');
-            assert.equal(await page.locator('.fi-toast').count(), 1);
-            result.push({ mode, case: 'close succeeds but failed payment rolls back only money + one error notice', pass: true });
-            await reset();
-            await page.evaluate(() => qa.refresh({ estado: 'atendiendo' }));
-            await page.waitForFunction(() => qa.state[0].estado === 'atendiendo');
-            await page.evaluate(() => qa.transition('synthetic-walk-in', 'cerrado', {}, { montoCents: 3000000, pagado: false }));
-            await page.evaluate(() => qa.refresh({ estado: 'cerrado', servicio: 'Servicio actualizado', cobro: { estado: 'pagado', montoCents: 1234567, ts: null } }));
-            await page.waitForFunction(() => qa.state[0].cobro.montoCents === 1234567 && qa.state[0].servicio === 'Servicio actualizado');
-            assert.equal(await page.locator('.fi-toast').count(), 0);
-            await page.evaluate(() => qa.settle({ ok: true, data: { pagoRegistrado: true } }));
-            await page.locator('.fi-toast').waitFor();
-            assert.equal(await page.evaluate(() => qa.state[0].cobro.montoCents), 1234567);
-            assert.ok(!(await page.locator('.fi-toast').innerText()).includes('deuda registrada'));
-            result.push({ mode, case: 'equal-state SSR payment visible while pending and no false debt toast after ACK', pass: true });
+            // Close/payment lifecycle is verified with immutable M120 receipts in browser-close.
             await reset();
             await page.getByRole('button', { name: 'Marcar llegada', exact: true }).click();
             await page.evaluate(() => qa.settle({ ok: true, data: {} }));
@@ -138,15 +113,8 @@ const stubs = {
             await page.evaluate(() => qa.refresh({ estado: 'en_sala' }));
             await page.waitForTimeout(40);
             assert.equal(await page.evaluate(() => qa.state[0].estado), 'atendiendo');
-            await page.getByRole('button', { name: 'Cerrar turno', exact: true }).click();
-            await page.getByRole('button', { name: 'Cobrar y cerrar', exact: true }).click();
-            await page.evaluate(() => qa.settle({ ok: true, data: { pagoRegistrado: true } }));
-            await page.waitForFunction(() => qa.state[0].estado === 'cerrado');
-            await page.evaluate(() => qa.refresh());
-            await page.waitForTimeout(40);
-            assert.equal(await page.evaluate(() => qa.state[0].estado), 'cerrado');
-            assert.equal(await page.evaluate(() => qa.calls.length), 3);
-            result.push({ mode, case: 'stale after ACK and equal snapshot blocked; real UI arrival -> attending -> closed remains enabled', pass: true });
+            assert.equal(await page.evaluate(() => qa.calls.length), 2);
+            result.push({ mode, case: 'stale after ACK and equal snapshot blocked; arrival -> attending remains enabled', pass: true });
             await reset();
             await page.getByRole('button', { name: 'Marcar llegada', exact: true }).click();
             await page.evaluate(() => qa.refresh({ estado: 'cancelado' }));

@@ -7,6 +7,7 @@ import ts from "typescript";
 import { readCompleteCollection } from "../../lib/db/complete-collection";
 import * as timelineCore from "../../lib/ficha/timeline-core";
 import * as rango from "../../lib/agenda/rango-horario";
+import * as closeContract from "../../lib/turnos/close-contract";
 
 const org="synthetic-org",patient="synthetic-patient";
 const row=(i:number)=>({id:`turno-${String(i).padStart(5,"0")}`,organization_id:org,paciente_id:patient,profesional_id:"member",inicio:"2026-09-08T13:00:00Z",duracion_min:30,estado:"CERRADO",origen:"MANUAL",paciente_tipo:"ACTIVO",servicio_nombre:"Consulta",modalidad:"telemedicina"});
@@ -30,6 +31,7 @@ function fixture(data:Record<string,any[]>, failure?:(call:Call)=>boolean, denie
    }};return q;
  }});
  const imports:Record<string,unknown>={
+  "@/lib/turnos/close-contract":closeContract,
   "@/lib/observability/safe-log":{safeLog(){}},"@/lib/crypto":{decryptColumn:()=>null,tryDecrypt:()=>null},
   "@/lib/auth/capabilities":{capabilitiesFor:()=>({canReadClinical:true})},"./session":{getActiveSession:async()=>denied?{ok:false,error:{code:"forbidden",message:"Denied"}}:{ok:true,data:{role:"OWNER",esColegiado:true}}},
   "./active-context":{getActiveContext:async()=>({ok:true,data:{session:{role:denied?"ASISTENTE":"OWNER",memberId:"member"},organization:{id:org}}})},
@@ -134,4 +136,18 @@ test("a failed clinical session check stops agenda queries",async()=>{
  for(const [file,method,input] of [["hoy","getDashboardHoy",day],["calendario","getCalendarioSemana",week],["calendario","getCalendarioMes",month]] as const){
   const f=fixture({},undefined,true);assert.equal((await f.load(`lib/db/${file}.ts`)[method](input)).ok,false);assert.equal(f.calls.length,0);
  }
+});
+
+
+test("agenda reads payment freshness in batches and replaces the entire older view snapshot",async()=>{
+ const turnos=Array.from({length:201},(_,i)=>({...row(i),pago_id:`12000000-0000-4000-8000-${String(i).padStart(12,"0")}`,pago_estado:"PENDIENTE",pago_monto_cents:100,pago_pagado_ts:null}));
+ const pago=turnos.map(t=>({id:t.pago_id,turno_id:t.id,monto_cents:17500,metodo:"TRANSFERENCIA",estado:"PAGADO",pagado_ts:"2026-09-12T12:00:00Z",updated_at:"2026-09-12T12:01:00Z"}));
+ const f=fixture({turno_extendido:turnos,pago});const result=await f.load("lib/db/hoy.ts").getDashboardHoy(day);
+ assert.equal(result.ok,true);assert.equal(f.calls.filter(c=>c.table==="pago").length,2);
+ assert.equal(result.data.turnos[0].cobro.id,pago[0].id);assert.equal(result.data.turnos[0].cobro.updatedAt,pago[0].updated_at);
+ assert.equal(result.data.turnos[0].cobro.montoCents,17500);assert.equal(result.data.turnos[0].cobro.estado,"pagado");
+ for(const rows of [[],[{...pago[0],turno_id:"wrong-turno"}],[{...pago[0],updated_at:null}]]){
+  const broken=fixture({turno_extendido:[turnos[0]],pago:rows});assert.equal((await broken.load("lib/db/hoy.ts").getDashboardHoy(day)).ok,false);
+ }
+ const denied=fixture({turno_extendido:[turnos[0]],pago},c=>c.table==="pago");assert.equal((await denied.load("lib/db/hoy.ts").getDashboardHoy(day)).ok,false);
 });

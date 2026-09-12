@@ -17,6 +17,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === self) {
     lint: ["node_modules/eslint/bin/eslint.js"],
     build: ["node_modules/next/dist/bin/next", "build", "--turbopack"],
     browser: ["tests/hoy/browser.cjs"],
+    "browser-close": ["tests/hoy/close-browser.cjs"],
     "browser-create": ["tests/hoy/create-browser.cjs"],
     "browser-reschedule": ["tests/hoy/reschedule-browser.cjs"],
     "browser-archive": ["tests/clinical-archive/browser.cjs"],

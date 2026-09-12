@@ -28,6 +28,7 @@ import { err, ok, type Result } from "./errors";
 import { getActiveSession } from "./session";
 import { readCompleteCollection } from "./complete-collection";
 import { normalizeModalidad } from "@/lib/types";
+import { persistedPaymentSchema } from "@/lib/turnos/close-contract";
 import type { ConfirmadoVia, Paciente, PacientesById, EstadoTurno, OrigenTurno, PostVisita, Turno } from "@/lib/types";
 
 // ─── Tipo de fila de turno_extendido ───────────────────────────────────────
@@ -57,6 +58,8 @@ interface TurnoExtendidoRow {
   pago_monto_cents: number | null;
   pago_estado: "PENDIENTE" | "PAGADO" | "PARCIAL" | null;
   pago_pagado_ts: string | null;
+  pago_updated_at?: string;
+  pago_metodo?: string;
   profesional_id: string;
   /** M56 · motivo del booking público (PHI). Solo se descifra para roles clínicos. */
   nota_reserva_cifrado: string | null;
@@ -167,6 +170,22 @@ export async function getDashboardHoy(input: FetcherInput): Promise<Result<Dashb
   if (error) return err("db_error", "No se pudo leer la agenda del día completa. Intentá nuevamente.");
 
   const rows = (data ?? []) as unknown as TurnoExtendidoRow[];
+  // The view lacks updated_at. Read complete payment snapshots in bounded batches,
+  // replacing all money fields together instead of mixing two observation times.
+  const paymentIds = [...new Set(rows.flatMap(row => row.pago_id ? [row.pago_id] : []))];
+  for (let offset = 0; offset < paymentIds.length; offset += 200) {
+    const ids = paymentIds.slice(offset, offset + 200);
+    const payments = await readCompleteCollection<{ id: string; turno_id: string; monto_cents: number; metodo: string; estado: string; pagado_ts: string | null; updated_at: string }>((from, to) => supabase.from("pago")
+      .select("id, turno_id, monto_cents, metodo, estado, pagado_ts, updated_at", { count: "exact" }).in("id", ids).order("id", { ascending: true }).range(from, to));
+    if (payments.error || payments.data.length !== ids.length) return err("db_error", "No pudimos confirmar los cobros de la agenda. Actualizá para revisarlos.");
+    for (const payment of payments.data) {
+      const parsed = persistedPaymentSchema.safeParse({ id: payment.id, montoCents: payment.monto_cents, metodo: payment.metodo, estado: payment.estado, pagadoTs: payment.pagado_ts, updatedAt: payment.updated_at });
+      const row = rows.find(item => item.id === payment.turno_id && item.pago_id === payment.id);
+      if (!parsed.success || !row) return err("db_error", "No pudimos confirmar los cobros de la agenda. Actualizá para revisarlos.");
+      row.pago_monto_cents = parsed.data.montoCents; row.pago_estado = parsed.data.estado;
+      row.pago_pagado_ts = parsed.data.pagadoTs; row.pago_updated_at = parsed.data.updatedAt; row.pago_metodo = parsed.data.metodo;
+    }
+  }
 
   // Si hay turnos cerrados, levantamos las sesiones existentes para saber si
   // ya tienen post-visita registrada (M10: sesion.turno_id 1:1 con turno).
@@ -300,9 +319,12 @@ function rowToTurno(
     // cobro registrado", que es distinto de una deuda de $0.
     cobro: row.pago_id
       ? {
+          id: row.pago_id,
+          updatedAt: row.pago_updated_at,
+          metodo: row.pago_metodo,
           estado: row.pago_estado === "PAGADO" ? "pagado" : "pendiente",
           ts: row.pago_pagado_ts ?? null,
-          montoCents: row.pago_monto_cents ?? 0,
+          montoCents: row.pago_monto_cents,
         }
       : { estado: "pendiente", ts: null, montoCents: null },
     profesionalId: row.profesional_id ?? null,

@@ -17,9 +17,11 @@ interface CerradoRowProps {
   turno: Turno;
   paciente: Paciente;
   onOpenFicha: (id: string) => void;
+  onReviewCobro?: (id: string) => void;
+  pending?: boolean;
 }
 
-export function CerradoRow({ turno, paciente, onOpenFicha }: CerradoRowProps) {
+export function CerradoRow({ turno, paciente, onOpenFicha, onReviewCobro, pending }: CerradoRowProps) {
   const hasImportante = (paciente.notasImportantes ?? "").trim().length > 0;
   // Importe REGISTRADO en `pago`, no el precio de lista: el profesional pudo
   // editarlo o marcar "quedó debiendo" al cerrar (PR #118). Mostrar el precio
@@ -69,9 +71,8 @@ export function CerradoRow({ turno, paciente, onOpenFicha }: CerradoRowProps) {
       </div>
       <div className="fi-cerrado-amount">
         {montoCents == null ? (
-          // Cerrado sin cargo: el server no crea `pago` con monto 0. No es $0
-          // cobrado ni deuda — es que no se cobró nada.
-          <span className="fi-cerrado-sincargo">sin cargo</span>
+          // Absence of a payment never proves free care.
+          <span className="fi-cerrado-sincargo">{turno.cierreClasificacion === "SIN_CARGO" ? "Sin cargo" : "Registro por revisar"}</span>
         ) : (
           <>
             <span className="fi-mono">{fmtMoney(Math.round(montoCents / 100))}</span>
@@ -79,7 +80,13 @@ export function CerradoRow({ turno, paciente, onOpenFicha }: CerradoRowProps) {
           </>
         )}
       </div>
+      {turno.cobroPorRevisar ? <span role="status" className="fi-cerrado-debe">Último importe confirmado · revisar</span> : null}
       <div className="fi-cerrado-cta">
+        {onReviewCobro ? <button type="button" className="fi-btn fi-btn-ghost" disabled={pending} data-cobro-turno={turno.id}
+          onClick={(event) => { event.stopPropagation(); onReviewCobro(turno.id); }}
+          onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") event.stopPropagation(); }}>
+          Revisar cobro
+        </button> : null}
         <span className="fi-btn fi-btn-ghost">
           Ver ficha <I.ArrowRight size={11} />
         </span>
