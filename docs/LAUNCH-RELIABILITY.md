@@ -17,6 +17,7 @@ La entrega debe incluir correcciones implementadas, pruebas reproducibles, revis
 - La tarea visual trabaja en `C:/Users/amiun/Documents/Codex/folio-experience`, rama `codex/folio-experience`, servidor 4410. No modificar su copia ni detener su servidor.
 - Priorizar lógica de servidor, persistencia y pruebas. Registrar cualquier contrato o componente compartido que necesite integración con la rama visual.
 - Datos exclusivamente sintéticos. No leer `.env.local` para ejecutar pruebas. Conservar los bloqueos de red y credenciales del entorno de ensayo.
+- `vercel.json` desactiva el despliegue automático por Git de `codex/launch-reliability`, además de la rama heredada `codex/market-ready`, para poder entregar la revisión sin desplegar el candidato. Es la configuración documentada de [Vercel por rama](https://vercel.com/docs/project-configuration/git-configuration#git.deploymentenabled); no bloquea una invocación manual de despliegue ni autoriza integrar en master.
 
 ## Iteraciones y criterios de cierre
 
