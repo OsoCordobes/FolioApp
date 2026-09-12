@@ -15,7 +15,7 @@ import { getAppUrl } from "@/lib/config/app-url";
 
 const TITLE = "Folio — Agenda, historia clínica y cobros para profesionales de la salud";
 const DESCRIPTION =
-  "El día de tu consultorio, armado solo: turnos, reservas online, recordatorios automáticos e historias clínicas cifradas. Para profesionales de la salud en Argentina.";
+  "Agenda, historia clínica y cobros para organizar el trabajo de profesionales y equipos de salud en Argentina.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(getAppUrl()),
@@ -54,10 +54,11 @@ export default function MarketingLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <div className="fl-root">
+    <div className="fx-marketing">
       <LandingHeader />
       {children}
       <LandingFooter />
     </div>
   );
 }
+

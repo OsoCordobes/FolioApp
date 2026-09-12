@@ -1,0 +1,25 @@
+/* Only this gallery uses query-based navigation; real routes keep their own
+   aria-current and active-state decisions in Sidebar, MobileNav and PortalNav. */
+.preview[data-preview-panel="hoy"] :global(a[href="/hoy"]),
+.preview[data-preview-panel="calendario"] :global(a[href="/calendario"]),
+.preview[data-preview-panel="pacientes"] :global(a[href="/pacientes"]),
+.preview[data-preview-panel="ficha"] :global(a[href="/pacientes"]),
+.preview[data-preview-panel="finanzas"] :global(a[href="/finanzas"]),
+.preview[data-preview-panel="configuracion"] :global(a[href="/configuracion"]),
+.preview[data-preview-panel="portal-turnos"] :global(a[href="/portal/turnos"]),
+.preview[data-preview-panel="portal-resumen"] :global(a[href="/portal/resumen"]),
+.preview[data-preview-panel="portal-perfil"] :global(a[href="/portal/perfil"]) {
+  background: var(--accent-soft);
+  color: var(--accent-2);
+  font-weight: 700;
+  box-shadow: none;
+}
+
+.preview[data-preview-panel="hoy"] :global(a[href="/hoy"] svg),
+.preview[data-preview-panel="calendario"] :global(a[href="/calendario"] svg),
+.preview[data-preview-panel="pacientes"] :global(a[href="/pacientes"] svg),
+.preview[data-preview-panel="ficha"] :global(a[href="/pacientes"] svg),
+.preview[data-preview-panel="finanzas"] :global(a[href="/finanzas"] svg),
+.preview[data-preview-panel="configuracion"] :global(a[href="/configuracion"] svg) {
+  color: var(--accent);
+}

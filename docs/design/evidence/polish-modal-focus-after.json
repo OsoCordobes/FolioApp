@@ -1,0 +1,376 @@
+{
+  "phase": "after",
+  "scope": "Real modal components and hook; synthetic server actions; Chromium; development StrictMode and production; reduced motion; loopback only",
+  "passed": 16,
+  "failed": 0,
+  "results": [
+    {
+      "mode": "development",
+      "width": 1440,
+      "kind": "contacto",
+      "pass": true,
+      "closures": [
+        {
+          "method": "Escape",
+          "restored": true
+        },
+        {
+          "method": "Cancelar",
+          "restored": true
+        },
+        {
+          "method": "fondo",
+          "restored": true
+        }
+      ],
+      "pendingBackdropCloses": false,
+      "failedSaveRetainsInput": true,
+      "retryPayloadIdentical": true
+    },
+    {
+      "mode": "development",
+      "width": 1440,
+      "kind": "cobertura",
+      "pass": true,
+      "closures": [
+        {
+          "method": "Escape",
+          "restored": true
+        },
+        {
+          "method": "Cancelar",
+          "restored": true
+        },
+        {
+          "method": "fondo",
+          "restored": true
+        }
+      ],
+      "pendingBackdropCloses": false,
+      "failedSaveRetainsInput": true,
+      "retryPayloadIdentical": true
+    },
+    {
+      "mode": "development",
+      "width": 1440,
+      "kind": "enmienda",
+      "pass": true,
+      "closures": [
+        {
+          "method": "Escape",
+          "restored": true
+        },
+        {
+          "method": "Cancelar",
+          "restored": true
+        },
+        {
+          "method": "fondo",
+          "restored": true
+        }
+      ],
+      "pendingBackdropCloses": false,
+      "failedSaveRetainsInput": true,
+      "retryPayloadIdentical": true
+    },
+    {
+      "mode": "development",
+      "width": 1440,
+      "kind": "bloqueo",
+      "pass": true,
+      "closures": [
+        {
+          "method": "Escape",
+          "restored": true
+        },
+        {
+          "method": "Cancelar",
+          "restored": true
+        },
+        {
+          "method": "fondo",
+          "restored": true
+        }
+      ],
+      "pendingBackdropCloses": false,
+      "failedSaveRetainsInput": true,
+      "retryPayloadIdentical": true
+    },
+    {
+      "mode": "development",
+      "width": 390,
+      "kind": "contacto",
+      "pass": true,
+      "closures": [
+        {
+          "method": "Escape",
+          "restored": true
+        },
+        {
+          "method": "Cancelar",
+          "restored": true
+        },
+        {
+          "method": "fondo",
+          "restored": true
+        }
+      ],
+      "pendingBackdropCloses": false,
+      "failedSaveRetainsInput": true,
+      "retryPayloadIdentical": true
+    },
+    {
+      "mode": "development",
+      "width": 390,
+      "kind": "cobertura",
+      "pass": true,
+      "closures": [
+        {
+          "method": "Escape",
+          "restored": true
+        },
+        {
+          "method": "Cancelar",
+          "restored": true
+        },
+        {
+          "method": "fondo",
+          "restored": true
+        }
+      ],
+      "pendingBackdropCloses": false,
+      "failedSaveRetainsInput": true,
+      "retryPayloadIdentical": true
+    },
+    {
+      "mode": "development",
+      "width": 390,
+      "kind": "enmienda",
+      "pass": true,
+      "closures": [
+        {
+          "method": "Escape",
+          "restored": true
+        },
+        {
+          "method": "Cancelar",
+          "restored": true
+        },
+        {
+          "method": "fondo",
+          "restored": true
+        }
+      ],
+      "pendingBackdropCloses": false,
+      "failedSaveRetainsInput": true,
+      "retryPayloadIdentical": true
+    },
+    {
+      "mode": "development",
+      "width": 390,
+      "kind": "bloqueo",
+      "pass": true,
+      "closures": [
+        {
+          "method": "Escape",
+          "restored": true
+        },
+        {
+          "method": "Cancelar",
+          "restored": true
+        },
+        {
+          "method": "fondo",
+          "restored": true
+        }
+      ],
+      "pendingBackdropCloses": false,
+      "failedSaveRetainsInput": true,
+      "retryPayloadIdentical": true
+    },
+    {
+      "mode": "production",
+      "width": 1440,
+      "kind": "contacto",
+      "pass": true,
+      "closures": [
+        {
+          "method": "Escape",
+          "restored": true
+        },
+        {
+          "method": "Cancelar",
+          "restored": true
+        },
+        {
+          "method": "fondo",
+          "restored": true
+        }
+      ],
+      "pendingBackdropCloses": false,
+      "failedSaveRetainsInput": true,
+      "retryPayloadIdentical": true
+    },
+    {
+      "mode": "production",
+      "width": 1440,
+      "kind": "cobertura",
+      "pass": true,
+      "closures": [
+        {
+          "method": "Escape",
+          "restored": true
+        },
+        {
+          "method": "Cancelar",
+          "restored": true
+        },
+        {
+          "method": "fondo",
+          "restored": true
+        }
+      ],
+      "pendingBackdropCloses": false,
+      "failedSaveRetainsInput": true,
+      "retryPayloadIdentical": true
+    },
+    {
+      "mode": "production",
+      "width": 1440,
+      "kind": "enmienda",
+      "pass": true,
+      "closures": [
+        {
+          "method": "Escape",
+          "restored": true
+        },
+        {
+          "method": "Cancelar",
+          "restored": true
+        },
+        {
+          "method": "fondo",
+          "restored": true
+        }
+      ],
+      "pendingBackdropCloses": false,
+      "failedSaveRetainsInput": true,
+      "retryPayloadIdentical": true
+    },
+    {
+      "mode": "production",
+      "width": 1440,
+      "kind": "bloqueo",
+      "pass": true,
+      "closures": [
+        {
+          "method": "Escape",
+          "restored": true
+        },
+        {
+          "method": "Cancelar",
+          "restored": true
+        },
+        {
+          "method": "fondo",
+          "restored": true
+        }
+      ],
+      "pendingBackdropCloses": false,
+      "failedSaveRetainsInput": true,
+      "retryPayloadIdentical": true
+    },
+    {
+      "mode": "production",
+      "width": 390,
+      "kind": "contacto",
+      "pass": true,
+      "closures": [
+        {
+          "method": "Escape",
+          "restored": true
+        },
+        {
+          "method": "Cancelar",
+          "restored": true
+        },
+        {
+          "method": "fondo",
+          "restored": true
+        }
+      ],
+      "pendingBackdropCloses": false,
+      "failedSaveRetainsInput": true,
+      "retryPayloadIdentical": true
+    },
+    {
+      "mode": "production",
+      "width": 390,
+      "kind": "cobertura",
+      "pass": true,
+      "closures": [
+        {
+          "method": "Escape",
+          "restored": true
+        },
+        {
+          "method": "Cancelar",
+          "restored": true
+        },
+        {
+          "method": "fondo",
+          "restored": true
+        }
+      ],
+      "pendingBackdropCloses": false,
+      "failedSaveRetainsInput": true,
+      "retryPayloadIdentical": true
+    },
+    {
+      "mode": "production",
+      "width": 390,
+      "kind": "enmienda",
+      "pass": true,
+      "closures": [
+        {
+          "method": "Escape",
+          "restored": true
+        },
+        {
+          "method": "Cancelar",
+          "restored": true
+        },
+        {
+          "method": "fondo",
+          "restored": true
+        }
+      ],
+      "pendingBackdropCloses": false,
+      "failedSaveRetainsInput": true,
+      "retryPayloadIdentical": true
+    },
+    {
+      "mode": "production",
+      "width": 390,
+      "kind": "bloqueo",
+      "pass": true,
+      "closures": [
+        {
+          "method": "Escape",
+          "restored": true
+        },
+        {
+          "method": "Cancelar",
+          "restored": true
+        },
+        {
+          "method": "fondo",
+          "restored": true
+        }
+      ],
+      "pendingBackdropCloses": false,
+      "failedSaveRetainsInput": true,
+      "retryPayloadIdentical": true
+    }
+  ]
+}

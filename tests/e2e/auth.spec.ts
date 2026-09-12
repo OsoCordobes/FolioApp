@@ -44,15 +44,15 @@ test.describe("Auth · signup → onboarding", () => {
     const email = nuevoEmail();
     const password = "TestPassword123!";
 
-    // 1. /login renders with the "Entrar" heading.
+    // 1. /login renders with the practice access heading.
     await page.goto("/login");
-    await expect(page.getByRole("heading", { name: /entrar/i })).toBeVisible({
+    await expect(page.getByRole("heading", { level: 1, name: "Volvé a tu consultorio." })).toBeVisible({
       timeout: 10_000,
     });
 
     // 2. Switch to signup view.
     await page.getByRole("button", { name: /crear cuenta/i }).first().click();
-    await expect(page.getByRole("heading", { name: /crear cuenta/i })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Tu práctica empieza acá." })).toBeVisible();
 
     // 3. Fill signup form and submit. The button label changes to "Creando
     //    cuenta…" while pending, then we get redirected.
@@ -60,7 +60,7 @@ test.describe("Auth · signup → onboarding", () => {
     await page.locator('input[type="password"]').fill(password);
     // Ley 25.326 art. 14 consent (Phase 4): must be ticked before signup.
     await page.locator('input[type="checkbox"]').first().check();
-    await page.getByRole("button", { name: /empezar/i }).click();
+    await page.getByRole("button", { name: "Crear cuenta", exact: true }).click();
 
     // 4. The signup action creates auth.user + org + member, then sets a
     //    session cookie. The Signup component redirects to /onboarding.
@@ -75,10 +75,10 @@ test.describe("Auth · signup → onboarding", () => {
 
   test("login form shows generic error for invalid credentials", async ({ page }) => {
     await page.goto("/login");
-    await expect(page.getByRole("heading", { name: /entrar/i })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Volvé a tu consultorio." })).toBeVisible();
     await page.locator('input[type="email"]').fill("noexiste-e2e@folio.app");
     await page.locator('input[type="password"]').fill("ContraseñaCualquiera1!");
-    await page.getByRole("button", { name: /^entrar/i }).click();
+    await page.getByRole("button", { name: "Ingresar a Folio", exact: true }).click();
     await expect(
       page.getByText(/email o contraseña incorrectos|inválido/i),
     ).toBeVisible({ timeout: 10_000 });
@@ -97,7 +97,7 @@ test.describe("Auth · signup → onboarding", () => {
     await page.locator('input[type="password"]').fill(password);
     // Ley 25.326 art. 14 consent (Phase 4): must be ticked before signup.
     await page.locator('input[type="checkbox"]').first().check();
-    await page.getByRole("button", { name: /empezar/i }).click();
+    await page.getByRole("button", { name: "Crear cuenta", exact: true }).click();
     await page.waitForURL(/\/onboarding/, { timeout: 30_000 });
 
     // Sign out by clearing cookies and going back to /login.
@@ -109,11 +109,11 @@ test.describe("Auth · signup → onboarding", () => {
     await page.locator('input[type="email"]').fill(email);
     await page.locator('input[type="password"]').fill("CompletelyDifferent9!");
     await page.locator('input[type="checkbox"]').first().check();
-    await page.getByRole("button", { name: /empezar/i }).click();
+    await page.getByRole("button", { name: "Crear cuenta", exact: true }).click();
 
     // The flow should detect "already exists" and switch to login view with
     // the notice banner + the email prefilled.
-    await expect(page.getByRole("heading", { name: /entrar/i })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("heading", { level: 1, name: "Volvé a tu consultorio." })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/ya existe/i)).toBeVisible();
     await expect(page.locator('input[type="email"]')).toHaveValue(email);
   });

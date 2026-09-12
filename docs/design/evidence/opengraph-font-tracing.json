@@ -1,0 +1,16 @@
+[
+  {
+    "trace": ".next/server/app/(marketing)/opengraph-image-pwu6ef/route.js.nft.json",
+    "fonts": [
+      "../../../../../assets/fonts/PlusJakartaSans-Regular.ttf",
+      "../../../../../assets/fonts/PlusJakartaSans-SemiBold.ttf"
+    ]
+  },
+  {
+    "trace": ".next/server/app/(public)/book/[slug]/opengraph-image-obhl4w/route.js.nft.json",
+    "fonts": [
+      "../../../../../../../assets/fonts/PlusJakartaSans-Regular.ttf",
+      "../../../../../../../assets/fonts/PlusJakartaSans-SemiBold.ttf"
+    ]
+  }
+]

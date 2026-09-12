@@ -20,7 +20,7 @@
  * disparar el onClick de la fila que abre la ficha).
  */
 
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { formatArs, MONTO_MAX_PESOS } from "@/lib/format/currency";
 import { useModalA11y } from "@/lib/use-modal-a11y";
@@ -46,6 +46,12 @@ export interface CobroCierreDialogProps {
 export function CobroCierreDialog({ pacienteNombre, precioPesos, onConfirm, onClose }: CobroCierreDialogProps) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
   useModalA11y(dialogRef, { onClose });
+  const confirmRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    // Keep the quick Enter path after the modal hook captures the actual opener.
+    // Native autoFocus runs before that capture and loses the return target.
+    confirmRef.current?.focus();
+  }, []);
 
   const [montoStr, setMontoStr] = useState(precioPesos > 0 ? String(precioPesos) : "");
   const [metodo, setMetodo] = useState<CobroCierreActionInput["metodo"]>("EFECTIVO");
@@ -97,6 +103,8 @@ export function CobroCierreDialog({ pacienteNombre, precioPesos, onConfirm, onCl
           width: "100%",
           padding: "20px 22px",
           boxShadow: "0 24px 80px rgba(0,0,0,0.18)",
+          maxHeight: "calc(100dvh - 32px)",
+          overflowY: "auto",
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -162,9 +170,9 @@ export function CobroCierreDialog({ pacienteNombre, precioPesos, onConfirm, onCl
             <button type="button" className="fi-btn fi-btn-ghost" onClick={onClose}>
               Volver
             </button>
-            {/* autoFocus: Enter directo = confirmar con los defaults (efectivo
+            {/* Foco inicial: Enter directo = confirmar con los defaults (efectivo
                 pagado por el precio del turno) — el camino de 1 tap de siempre. */}
-            <button type="submit" className="fi-btn fi-btn-primary" autoFocus disabled={excedeMax}>
+            <button ref={confirmRef} type="submit" className="fi-btn fi-btn-primary" disabled={excedeMax}>
               {debiendo ? "Cerrar con deuda" : montoPesos > 0 ? "Cobrar y cerrar" : "Cerrar sin cargo"}
             </button>
           </div>

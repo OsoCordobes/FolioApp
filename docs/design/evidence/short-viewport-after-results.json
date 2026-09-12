@@ -1,0 +1,1119 @@
+{
+  "date": "2026-09-12T19:41:18.114Z",
+  "phase": "after",
+  "mode": "development",
+  "passed": 33,
+  "failed": 0,
+  "results": [
+    {
+      "viewport": {
+        "width": 844,
+        "height": 390
+      },
+      "fixture": "create",
+      "pass": true,
+      "geometry": {
+        "top": 16,
+        "bottom": 374,
+        "height": 358,
+        "clientHeight": 356,
+        "scrollHeight": 612,
+        "overflow": "auto"
+      }
+    },
+    {
+      "viewport": {
+        "width": 844,
+        "height": 390
+      },
+      "fixture": "charge",
+      "pass": true,
+      "geometry": {
+        "top": 16,
+        "bottom": 374,
+        "height": 358,
+        "clientHeight": 356,
+        "scrollHeight": 462,
+        "overflow": "auto"
+      }
+    },
+    {
+      "viewport": {
+        "width": 844,
+        "height": 390
+      },
+      "fixture": "plan",
+      "pass": true,
+      "geometry": {
+        "top": 9,
+        "bottom": 367,
+        "height": 358,
+        "clientHeight": 356,
+        "scrollHeight": 724,
+        "overflow": "auto"
+      }
+    },
+    {
+      "viewport": {
+        "width": 844,
+        "height": 390
+      },
+      "fixture": "confirm",
+      "pass": true,
+      "geometry": {
+        "top": 98.109375,
+        "bottom": 291.890625,
+        "height": 193.78125,
+        "clientHeight": 192,
+        "scrollHeight": 192,
+        "overflow": "visible"
+      }
+    },
+    {
+      "viewport": {
+        "width": 844,
+        "height": 390
+      },
+      "fixture": "charge-synthetic-success",
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 844,
+        "height": 390
+      },
+      "fixture": "plan-synthetic-success",
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "fixture": "create",
+      "pass": true,
+      "geometry": {
+        "top": 16,
+        "bottom": 584,
+        "height": 568,
+        "clientHeight": 566,
+        "scrollHeight": 612,
+        "overflow": "auto"
+      }
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "fixture": "charge",
+      "pass": true,
+      "geometry": {
+        "top": 68.234375,
+        "bottom": 531.765625,
+        "height": 463.53125,
+        "clientHeight": 462,
+        "scrollHeight": 462,
+        "overflow": "auto"
+      }
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "fixture": "plan",
+      "pass": true,
+      "geometry": {
+        "top": 9,
+        "bottom": 577,
+        "height": 568,
+        "clientHeight": 566,
+        "scrollHeight": 724,
+        "overflow": "auto"
+      }
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "fixture": "confirm",
+      "pass": true,
+      "geometry": {
+        "top": 203.109375,
+        "bottom": 396.890625,
+        "height": 193.78125,
+        "clientHeight": 192,
+        "scrollHeight": 192,
+        "overflow": "visible"
+      }
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "fixture": "charge-synthetic-success",
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "fixture": "plan-synthetic-success",
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 500
+      },
+      "fixture": "create",
+      "pass": true,
+      "geometry": {
+        "top": 16,
+        "bottom": 484,
+        "height": 468,
+        "clientHeight": 466,
+        "scrollHeight": 612,
+        "overflow": "auto"
+      }
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 500
+      },
+      "fixture": "charge",
+      "pass": true,
+      "geometry": {
+        "top": 16,
+        "bottom": 484,
+        "height": 468,
+        "clientHeight": 466,
+        "scrollHeight": 485,
+        "overflow": "auto"
+      }
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 500
+      },
+      "fixture": "plan",
+      "pass": true,
+      "geometry": {
+        "top": 9,
+        "bottom": 477,
+        "height": 468,
+        "clientHeight": 466,
+        "scrollHeight": 743,
+        "overflow": "auto"
+      }
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 500
+      },
+      "fixture": "confirm",
+      "pass": true,
+      "geometry": {
+        "top": 130.90625,
+        "bottom": 369.078125,
+        "height": 238.171875,
+        "clientHeight": 236,
+        "scrollHeight": 236,
+        "overflow": "visible"
+      }
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 500
+      },
+      "fixture": "charge-synthetic-success",
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 500
+      },
+      "fixture": "plan-synthetic-success",
+      "pass": true
+    },
+    {
+      "viewport": {
+        "width": 844,
+        "height": 390
+      },
+      "fixture": "chart-cardiologia",
+      "pass": true,
+      "positions": [
+        {
+          "index": 0,
+          "text": "Imprimir",
+          "visible": true,
+          "top": 182,
+          "bottom": 224,
+          "left": 452.78125,
+          "right": 547.546875,
+          "covering": "fi-btn fi-btn-ghost no-print"
+        },
+        {
+          "index": 19,
+          "text": "Elegí…\nECG\nEcocardiograma\nErgometría\nHolter\nLaboratorio",
+          "visible": true,
+          "top": 138.6875,
+          "bottom": 182.6875,
+          "left": 47,
+          "right": 417,
+          "covering": ""
+        },
+        {
+          "index": 38,
+          "text": "Editar",
+          "visible": true,
+          "top": 180.625,
+          "bottom": 216.625,
+          "left": 318.34375,
+          "right": 351.90625,
+          "covering": "pc-link"
+        },
+        {
+          "sessionAction": "Guardar sesión",
+          "visible": true,
+          "top": 175.625,
+          "bottom": 221.625,
+          "left": 569.015625,
+          "right": 685.40625,
+          "covering": "fi-btn fi-btn-secondary"
+        },
+        {
+          "sessionAction": "Guardar y cerrar",
+          "visible": true,
+          "top": 175.625,
+          "bottom": 221.625,
+          "left": 697.40625,
+          "right": 820,
+          "covering": "fi-btn fi-btn-primary"
+        }
+      ]
+    },
+    {
+      "viewport": {
+        "width": 844,
+        "height": 390
+      },
+      "fixture": "chart-psicologia",
+      "pass": true,
+      "positions": [
+        {
+          "index": 0,
+          "text": "Imprimir",
+          "visible": true,
+          "top": 182,
+          "bottom": 224,
+          "left": 452.78125,
+          "right": 547.546875,
+          "covering": "fi-btn fi-btn-ghost no-print"
+        },
+        {
+          "index": 12,
+          "text": "+ MSE completo (dominios adicionales)",
+          "visible": true,
+          "top": 180.375,
+          "bottom": 216.375,
+          "left": 47,
+          "right": 284.515625,
+          "covering": "pc-link"
+        },
+        {
+          "index": 23,
+          "text": "Editar",
+          "visible": true,
+          "top": 180.9375,
+          "bottom": 216.9375,
+          "left": 318.34375,
+          "right": 351.90625,
+          "covering": "pc-link"
+        },
+        {
+          "sessionAction": "Guardar sesión",
+          "visible": true,
+          "top": 175.9375,
+          "bottom": 221.9375,
+          "left": 569.015625,
+          "right": 685.40625,
+          "covering": "fi-btn fi-btn-secondary"
+        },
+        {
+          "sessionAction": "Guardar y cerrar",
+          "visible": true,
+          "top": 175.9375,
+          "bottom": 221.9375,
+          "left": 697.40625,
+          "right": 820,
+          "covering": "fi-btn fi-btn-primary"
+        }
+      ]
+    },
+    {
+      "viewport": {
+        "width": 844,
+        "height": 390
+      },
+      "fixture": "chart-kinesiologia",
+      "pass": true,
+      "positions": [
+        {
+          "index": 0,
+          "text": "Imprimir",
+          "visible": true,
+          "top": 182,
+          "bottom": 224,
+          "left": 452.78125,
+          "right": 547.546875,
+          "covering": "fi-btn fi-btn-ghost no-print"
+        },
+        {
+          "index": 18,
+          "text": "Elegí…\nCervical\nHombro\nCodo\nMuñeca\nColumna dorsolumbar\nCadera\nRodilla\nTobillo",
+          "visible": true,
+          "top": 138.796875,
+          "bottom": 182.796875,
+          "left": 47,
+          "right": 677,
+          "covering": ""
+        },
+        {
+          "index": 35,
+          "text": "Editar",
+          "visible": true,
+          "top": 180.921875,
+          "bottom": 216.921875,
+          "left": 318.34375,
+          "right": 351.90625,
+          "covering": "pc-link"
+        },
+        {
+          "sessionAction": "Guardar sesión",
+          "visible": true,
+          "top": 175.921875,
+          "bottom": 221.921875,
+          "left": 569.015625,
+          "right": 685.40625,
+          "covering": "fi-btn fi-btn-secondary"
+        },
+        {
+          "sessionAction": "Guardar y cerrar",
+          "visible": true,
+          "top": 175.921875,
+          "bottom": 221.921875,
+          "left": 697.40625,
+          "right": 820,
+          "covering": "fi-btn fi-btn-primary"
+        }
+      ]
+    },
+    {
+      "viewport": {
+        "width": 844,
+        "height": 390
+      },
+      "fixture": "chart-nutricion",
+      "pass": true,
+      "positions": [
+        {
+          "index": 0,
+          "text": "Imprimir",
+          "visible": true,
+          "top": 182,
+          "bottom": 224,
+          "left": 452.78125,
+          "right": 547.546875,
+          "covering": "fi-btn fi-btn-ghost no-print"
+        },
+        {
+          "index": 11,
+          "text": "",
+          "visible": true,
+          "top": 138.171875,
+          "bottom": 182.171875,
+          "left": 590.421875,
+          "right": 690.421875,
+          "covering": ""
+        },
+        {
+          "index": 22,
+          "text": "Editar",
+          "visible": true,
+          "top": 180.484375,
+          "bottom": 216.484375,
+          "left": 318.34375,
+          "right": 351.90625,
+          "covering": "pc-link"
+        },
+        {
+          "sessionAction": "Guardar sesión",
+          "visible": true,
+          "top": 175.484375,
+          "bottom": 221.484375,
+          "left": 569.015625,
+          "right": 685.40625,
+          "covering": "fi-btn fi-btn-secondary"
+        },
+        {
+          "sessionAction": "Guardar y cerrar",
+          "visible": true,
+          "top": 175.484375,
+          "bottom": 221.484375,
+          "left": 697.40625,
+          "right": 820,
+          "covering": "fi-btn fi-btn-primary"
+        }
+      ]
+    },
+    {
+      "viewport": {
+        "width": 844,
+        "height": 390
+      },
+      "fixture": "chart-quiropraxia",
+      "pass": true,
+      "positions": [
+        {
+          "index": 0,
+          "text": "Imprimir",
+          "visible": true,
+          "top": 182,
+          "bottom": 224,
+          "left": 452.78125,
+          "right": 547.546875,
+          "covering": "fi-btn fi-btn-ghost no-print"
+        },
+        {
+          "index": 12,
+          "text": "Supino",
+          "visible": true,
+          "top": 179.84375,
+          "bottom": 217.84375,
+          "left": 329,
+          "right": 395.40625,
+          "covering": "pc-quiro-pill is-active"
+        },
+        {
+          "index": 23,
+          "text": "Editar",
+          "visible": true,
+          "top": 180.53125,
+          "bottom": 216.53125,
+          "left": 318.34375,
+          "right": 351.90625,
+          "covering": "pc-link"
+        },
+        {
+          "sessionAction": "Guardar sesión",
+          "visible": true,
+          "top": 175.53125,
+          "bottom": 221.53125,
+          "left": 569.015625,
+          "right": 685.40625,
+          "covering": "fi-btn fi-btn-secondary"
+        },
+        {
+          "sessionAction": "Guardar y cerrar",
+          "visible": true,
+          "top": 175.53125,
+          "bottom": 221.53125,
+          "left": 697.40625,
+          "right": 820,
+          "covering": "fi-btn fi-btn-primary"
+        }
+      ]
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "fixture": "chart-cardiologia",
+      "pass": true,
+      "positions": [
+        {
+          "index": 0,
+          "text": "Imprimir",
+          "visible": true,
+          "top": 182,
+          "bottom": 224,
+          "left": 632.78125,
+          "right": 727.546875,
+          "covering": "fi-btn fi-btn-ghost no-print"
+        },
+        {
+          "index": 19,
+          "text": "Elegí…\nECG\nEcocardiograma\nErgometría\nHolter\nLaboratorio",
+          "visible": true,
+          "top": 277.9375,
+          "bottom": 321.9375,
+          "left": 299,
+          "right": 633,
+          "covering": ""
+        },
+        {
+          "index": 38,
+          "text": "Editar",
+          "visible": true,
+          "top": 331.875,
+          "bottom": 367.875,
+          "left": 537.609375,
+          "right": 571.171875,
+          "covering": "pc-link"
+        },
+        {
+          "sessionAction": "Guardar sesión",
+          "visible": true,
+          "top": 471.875,
+          "bottom": 517.875,
+          "left": 749.015625,
+          "right": 865.40625,
+          "covering": "fi-btn fi-btn-secondary"
+        },
+        {
+          "sessionAction": "Guardar y cerrar",
+          "visible": true,
+          "top": 471.875,
+          "bottom": 517.875,
+          "left": 877.40625,
+          "right": 1000,
+          "covering": "fi-btn fi-btn-primary"
+        }
+      ]
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "fixture": "chart-psicologia",
+      "pass": true,
+      "positions": [
+        {
+          "index": 0,
+          "text": "Imprimir",
+          "visible": true,
+          "top": 182,
+          "bottom": 224,
+          "left": 632.78125,
+          "right": 727.546875,
+          "covering": "fi-btn fi-btn-ghost no-print"
+        },
+        {
+          "index": 12,
+          "text": "+ MSE completo (dominios adicionales)",
+          "visible": true,
+          "top": 332.375,
+          "bottom": 368.375,
+          "left": 299,
+          "right": 536.515625,
+          "covering": "pc-link"
+        },
+        {
+          "index": 23,
+          "text": "Editar",
+          "visible": true,
+          "top": 331.9375,
+          "bottom": 367.9375,
+          "left": 537.609375,
+          "right": 571.171875,
+          "covering": "pc-link"
+        },
+        {
+          "sessionAction": "Guardar sesión",
+          "visible": true,
+          "top": 471.9375,
+          "bottom": 517.9375,
+          "left": 749.015625,
+          "right": 865.40625,
+          "covering": "fi-btn fi-btn-secondary"
+        },
+        {
+          "sessionAction": "Guardar y cerrar",
+          "visible": true,
+          "top": 471.9375,
+          "bottom": 517.9375,
+          "left": 877.40625,
+          "right": 1000,
+          "covering": "fi-btn fi-btn-primary"
+        }
+      ]
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "fixture": "chart-kinesiologia",
+      "pass": true,
+      "positions": [
+        {
+          "index": 0,
+          "text": "Imprimir",
+          "visible": true,
+          "top": 182,
+          "bottom": 224,
+          "left": 632.78125,
+          "right": 727.546875,
+          "covering": "fi-btn fi-btn-ghost no-print"
+        },
+        {
+          "index": 18,
+          "text": "Elegí…\nCervical\nHombro\nCodo\nMuñeca\nColumna dorsolumbar\nCadera\nRodilla\nTobillo",
+          "visible": true,
+          "top": 278.046875,
+          "bottom": 322.046875,
+          "left": 299,
+          "right": 857,
+          "covering": ""
+        },
+        {
+          "index": 35,
+          "text": "Editar",
+          "visible": true,
+          "top": 332.171875,
+          "bottom": 368.171875,
+          "left": 537.609375,
+          "right": 571.171875,
+          "covering": "pc-link"
+        },
+        {
+          "sessionAction": "Guardar sesión",
+          "visible": true,
+          "top": 327.171875,
+          "bottom": 373.171875,
+          "left": 749.015625,
+          "right": 865.40625,
+          "covering": "fi-btn fi-btn-secondary"
+        },
+        {
+          "sessionAction": "Guardar y cerrar",
+          "visible": true,
+          "top": 327.171875,
+          "bottom": 373.171875,
+          "left": 877.40625,
+          "right": 1000,
+          "covering": "fi-btn fi-btn-primary"
+        }
+      ]
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "fixture": "chart-nutricion",
+      "pass": true,
+      "positions": [
+        {
+          "index": 0,
+          "text": "Imprimir",
+          "visible": true,
+          "top": 182,
+          "bottom": 224,
+          "left": 632.78125,
+          "right": 727.546875,
+          "covering": "fi-btn fi-btn-ghost no-print"
+        },
+        {
+          "index": 11,
+          "text": "",
+          "visible": true,
+          "top": 278.421875,
+          "bottom": 322.421875,
+          "left": 770.421875,
+          "right": 870.421875,
+          "covering": ""
+        },
+        {
+          "index": 22,
+          "text": "Editar",
+          "visible": true,
+          "top": 331.734375,
+          "bottom": 367.734375,
+          "left": 537.609375,
+          "right": 571.171875,
+          "covering": "pc-link"
+        },
+        {
+          "sessionAction": "Guardar sesión",
+          "visible": true,
+          "top": 326.734375,
+          "bottom": 372.734375,
+          "left": 749.015625,
+          "right": 865.40625,
+          "covering": "fi-btn fi-btn-secondary"
+        },
+        {
+          "sessionAction": "Guardar y cerrar",
+          "visible": true,
+          "top": 326.734375,
+          "bottom": 372.734375,
+          "left": 877.40625,
+          "right": 1000,
+          "covering": "fi-btn fi-btn-primary"
+        }
+      ]
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "fixture": "chart-quiropraxia",
+      "pass": true,
+      "positions": [
+        {
+          "index": 0,
+          "text": "Imprimir",
+          "visible": true,
+          "top": 182,
+          "bottom": 224,
+          "left": 632.78125,
+          "right": 727.546875,
+          "covering": "fi-btn fi-btn-ghost no-print"
+        },
+        {
+          "index": 12,
+          "text": "Supino",
+          "visible": true,
+          "top": 330.84375,
+          "bottom": 368.84375,
+          "left": 581,
+          "right": 647.40625,
+          "covering": "pc-quiro-pill is-active"
+        },
+        {
+          "index": 23,
+          "text": "Editar",
+          "visible": true,
+          "top": 331.53125,
+          "bottom": 367.53125,
+          "left": 537.609375,
+          "right": 571.171875,
+          "covering": "pc-link"
+        },
+        {
+          "sessionAction": "Guardar sesión",
+          "visible": true,
+          "top": 471.53125,
+          "bottom": 517.53125,
+          "left": 749.015625,
+          "right": 865.40625,
+          "covering": "fi-btn fi-btn-secondary"
+        },
+        {
+          "sessionAction": "Guardar y cerrar",
+          "visible": true,
+          "top": 471.53125,
+          "bottom": 517.53125,
+          "left": 877.40625,
+          "right": 1000,
+          "covering": "fi-btn fi-btn-primary"
+        }
+      ]
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 500
+      },
+      "fixture": "chart-cardiologia",
+      "pass": true,
+      "positions": [
+        {
+          "index": 0,
+          "text": "Imprimir",
+          "visible": true,
+          "top": 191,
+          "bottom": 235,
+          "left": 199,
+          "right": 355,
+          "covering": "fi-btn fi-btn-ghost no-print"
+        },
+        {
+          "index": 19,
+          "text": "Elegí…\nECG\nEcocardiograma\nErgometría\nHolter\nLaboratorio",
+          "visible": true,
+          "top": 193.4375,
+          "bottom": 237.4375,
+          "left": 33,
+          "right": 190,
+          "covering": ""
+        },
+        {
+          "index": 38,
+          "text": "Editar",
+          "visible": true,
+          "top": 231.46875,
+          "bottom": 275.46875,
+          "left": 323.4375,
+          "right": 357,
+          "covering": "pc-link"
+        },
+        {
+          "sessionAction": "Guardar sesión",
+          "visible": true,
+          "top": 361.46875,
+          "bottom": 407.46875,
+          "left": 16,
+          "right": 189,
+          "covering": "fi-btn fi-btn-secondary"
+        },
+        {
+          "sessionAction": "Guardar y cerrar",
+          "visible": true,
+          "top": 361.46875,
+          "bottom": 407.46875,
+          "left": 201,
+          "right": 374,
+          "covering": "fi-btn fi-btn-primary"
+        }
+      ]
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 500
+      },
+      "fixture": "chart-psicologia",
+      "pass": true,
+      "positions": [
+        {
+          "index": 0,
+          "text": "Imprimir",
+          "visible": true,
+          "top": 191,
+          "bottom": 235,
+          "left": 199,
+          "right": 355,
+          "covering": "fi-btn fi-btn-ghost no-print"
+        },
+        {
+          "index": 12,
+          "text": "+ MSE completo (dominios adicionales)",
+          "visible": true,
+          "top": 231.5625,
+          "bottom": 275.5625,
+          "left": 33,
+          "right": 270.515625,
+          "covering": "pc-link"
+        },
+        {
+          "index": 23,
+          "text": "Editar",
+          "visible": true,
+          "top": 231.3125,
+          "bottom": 275.3125,
+          "left": 323.4375,
+          "right": 357,
+          "covering": "pc-link"
+        },
+        {
+          "sessionAction": "Guardar sesión",
+          "visible": true,
+          "top": 361.3125,
+          "bottom": 407.3125,
+          "left": 16,
+          "right": 189,
+          "covering": "fi-btn fi-btn-secondary"
+        },
+        {
+          "sessionAction": "Guardar y cerrar",
+          "visible": true,
+          "top": 361.3125,
+          "bottom": 407.3125,
+          "left": 201,
+          "right": 374,
+          "covering": "fi-btn fi-btn-primary"
+        }
+      ]
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 500
+      },
+      "fixture": "chart-kinesiologia",
+      "pass": true,
+      "positions": [
+        {
+          "index": 0,
+          "text": "Imprimir",
+          "visible": true,
+          "top": 191,
+          "bottom": 235,
+          "left": 199,
+          "right": 355,
+          "covering": "fi-btn fi-btn-ghost no-print"
+        },
+        {
+          "index": 18,
+          "text": "Elegí…\nCervical\nHombro\nCodo\nMuñeca\nColumna dorsolumbar\nCadera\nRodilla\nTobillo",
+          "visible": true,
+          "top": 193.65625,
+          "bottom": 237.65625,
+          "left": 33,
+          "right": 237,
+          "covering": ""
+        },
+        {
+          "index": 35,
+          "text": "Editar",
+          "visible": true,
+          "top": 231.40625,
+          "bottom": 275.40625,
+          "left": 323.4375,
+          "right": 357,
+          "covering": "pc-link"
+        },
+        {
+          "sessionAction": "Guardar sesión",
+          "visible": true,
+          "top": 361.40625,
+          "bottom": 407.40625,
+          "left": 16,
+          "right": 189,
+          "covering": "fi-btn fi-btn-secondary"
+        },
+        {
+          "sessionAction": "Guardar y cerrar",
+          "visible": true,
+          "top": 361.40625,
+          "bottom": 407.40625,
+          "left": 201,
+          "right": 374,
+          "covering": "fi-btn fi-btn-primary"
+        }
+      ]
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 500
+      },
+      "fixture": "chart-nutricion",
+      "pass": true,
+      "positions": [
+        {
+          "index": 0,
+          "text": "Imprimir",
+          "visible": true,
+          "top": 191,
+          "bottom": 235,
+          "left": 199,
+          "right": 355,
+          "covering": "fi-btn fi-btn-ghost no-print"
+        },
+        {
+          "index": 11,
+          "text": "",
+          "visible": true,
+          "top": 193.71875,
+          "bottom": 237.71875,
+          "left": 150.421875,
+          "right": 250.421875,
+          "covering": ""
+        },
+        {
+          "index": 22,
+          "text": "Editar",
+          "visible": true,
+          "top": 231.71875,
+          "bottom": 275.71875,
+          "left": 323.4375,
+          "right": 357,
+          "covering": "pc-link"
+        },
+        {
+          "sessionAction": "Guardar sesión",
+          "visible": true,
+          "top": 360.71875,
+          "bottom": 406.71875,
+          "left": 16,
+          "right": 189,
+          "covering": "fi-btn fi-btn-secondary"
+        },
+        {
+          "sessionAction": "Guardar y cerrar",
+          "visible": true,
+          "top": 360.71875,
+          "bottom": 406.71875,
+          "left": 201,
+          "right": 374,
+          "covering": "fi-btn fi-btn-primary"
+        }
+      ]
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 500
+      },
+      "fixture": "chart-quiropraxia",
+      "pass": true,
+      "positions": [
+        {
+          "index": 0,
+          "text": "Imprimir",
+          "visible": true,
+          "top": 191,
+          "bottom": 235,
+          "left": 199,
+          "right": 355,
+          "covering": "fi-btn fi-btn-ghost no-print"
+        },
+        {
+          "index": 12,
+          "text": "Supino",
+          "visible": true,
+          "top": 231.65625,
+          "bottom": 275.65625,
+          "left": 37,
+          "right": 103.40625,
+          "covering": "pc-quiro-pill is-active"
+        },
+        {
+          "index": 23,
+          "text": "Editar",
+          "visible": true,
+          "top": 231.625,
+          "bottom": 275.625,
+          "left": 323.4375,
+          "right": 357,
+          "covering": "pc-link"
+        },
+        {
+          "sessionAction": "Guardar sesión",
+          "visible": true,
+          "top": 360.625,
+          "bottom": 406.625,
+          "left": 16,
+          "right": 189,
+          "covering": "fi-btn fi-btn-secondary"
+        },
+        {
+          "sessionAction": "Guardar y cerrar",
+          "visible": true,
+          "top": 360.625,
+          "bottom": 406.625,
+          "left": 201,
+          "right": 374,
+          "covering": "fi-btn fi-btn-primary"
+        }
+      ]
+    }
+  ]
+}

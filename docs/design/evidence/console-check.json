@@ -1,0 +1,190 @@
+{
+  "checkedAt": "2026-09-12T19:39:07.230Z",
+  "scope": "Fresh Chromium contexts against isolated dev4410; same-origin GET only; synthetic data.",
+  "results": [
+    {
+      "pathname": "/",
+      "status": 200,
+      "messages": [
+        {
+          "type": "info",
+          "text": "%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold",
+          "location": {
+            "url": "http://127.0.0.1:4410/_next/static/chunks/9154c_next_dist_compiled_react-dom_fee9f161._.js",
+            "line": 14537,
+            "column": 53,
+            "lineNumber": 14537,
+            "columnNumber": 53
+          }
+        }
+      ],
+      "pageErrors": [],
+      "blocked": [],
+      "failed": [],
+      "httpErrors": [],
+      "portal": [
+        {
+          "buttons": [
+            {
+              "text": "-10 Issue",
+              "label": "Open issues overlay"
+            },
+            {
+              "text": "",
+              "label": "Collapse issues badge"
+            }
+          ],
+          "note": "Shadow DOM text includes hidden animated counters. The visible badge was checked separately in console-issue-overlay.json."
+        }
+      ]
+    },
+    {
+      "pathname": "/login",
+      "status": 200,
+      "messages": [
+        {
+          "type": "info",
+          "text": "%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold",
+          "location": {
+            "url": "http://127.0.0.1:4410/_next/static/chunks/9154c_next_dist_compiled_react-dom_fee9f161._.js",
+            "line": 14537,
+            "column": 53,
+            "lineNumber": 14537,
+            "columnNumber": 53
+          }
+        },
+        {
+          "type": "log",
+          "text": "[Fast Refresh] rebuilding",
+          "location": {
+            "url": "http://127.0.0.1:4410/_next/static/chunks/9154c_next_dist_client_f2ae0558._.js",
+            "line": 7155,
+            "column": 16,
+            "lineNumber": 7155,
+            "columnNumber": 16
+          }
+        }
+      ],
+      "pageErrors": [],
+      "blocked": [],
+      "failed": [],
+      "httpErrors": [],
+      "portal": [
+        {
+          "buttons": [
+            {
+              "text": "-10 Issue",
+              "label": "Open issues overlay"
+            },
+            {
+              "text": "",
+              "label": "Collapse issues badge"
+            }
+          ],
+          "note": "Shadow DOM text includes hidden animated counters. The visible badge was checked separately in console-issue-overlay.json."
+        }
+      ]
+    },
+    {
+      "pathname": "/forgot",
+      "status": 200,
+      "messages": [
+        {
+          "type": "info",
+          "text": "%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold",
+          "location": {
+            "url": "http://127.0.0.1:4410/_next/static/chunks/9154c_next_dist_compiled_react-dom_fee9f161._.js",
+            "line": 14537,
+            "column": 53,
+            "lineNumber": 14537,
+            "columnNumber": 53
+          }
+        },
+        {
+          "type": "log",
+          "text": "[Fast Refresh] rebuilding",
+          "location": {
+            "url": "http://127.0.0.1:4410/_next/static/chunks/9154c_next_dist_client_f2ae0558._.js",
+            "line": 7155,
+            "column": 16,
+            "lineNumber": 7155,
+            "columnNumber": 16
+          }
+        },
+        {
+          "type": "log",
+          "text": "[Fast Refresh] done in 139ms",
+          "location": {
+            "url": "http://127.0.0.1:4410/_next/static/chunks/9154c_next_dist_client_f2ae0558._.js",
+            "line": 7015,
+            "column": 12,
+            "lineNumber": 7015,
+            "columnNumber": 12
+          }
+        }
+      ],
+      "pageErrors": [],
+      "blocked": [],
+      "failed": [],
+      "httpErrors": [],
+      "portal": [
+        {
+          "buttons": [
+            {
+              "text": "-10 Issue",
+              "label": "Open issues overlay"
+            },
+            {
+              "text": "",
+              "label": "Collapse issues badge"
+            }
+          ],
+          "note": "Shadow DOM text includes hidden animated counters. The visible badge was checked separately in console-issue-overlay.json."
+        }
+      ]
+    },
+    {
+      "pathname": "/dev/experience",
+      "status": 200,
+      "messages": [
+        {
+          "type": "info",
+          "text": "%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold",
+          "location": {
+            "url": "http://127.0.0.1:4410/_next/static/chunks/9154c_next_dist_compiled_react-dom_fee9f161._.js",
+            "line": 14537,
+            "column": 53,
+            "lineNumber": 14537,
+            "columnNumber": 53
+          }
+        }
+      ],
+      "pageErrors": [],
+      "blocked": [],
+      "failed": [],
+      "httpErrors": [],
+      "portal": [
+        {
+          "buttons": [
+            {
+              "text": "-10 Issue",
+              "label": "Open issues overlay"
+            },
+            {
+              "text": "",
+              "label": "Collapse issues badge"
+            }
+          ],
+          "note": "Shadow DOM text includes hidden animated counters. The visible badge was checked separately in console-issue-overlay.json."
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "routes": 4,
+    "http200": true,
+    "consoleErrors": 0,
+    "consoleWarnings": 0,
+    "pageErrors": 0
+  }
+}

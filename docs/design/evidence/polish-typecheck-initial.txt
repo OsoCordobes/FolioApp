@@ -1,0 +1,4 @@
+tests/e2e/design-clinical-polish.spec.ts(43,74): error TS2551: Property 'click' does not exist on type 'HTMLElement | SVGElement'. Did you mean 'onclick'?
+  Property 'click' does not exist on type 'SVGElement'.
+tests/e2e/design-clinical-polish.spec.ts(106,102): error TS2551: Property 'click' does not exist on type 'HTMLElement | SVGElement'. Did you mean 'onclick'?
+  Property 'click' does not exist on type 'SVGElement'.

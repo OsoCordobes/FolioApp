@@ -1,0 +1,530 @@
+
+> folio-app@0.1.0 test:build C:\Users\amiun\Documents\Codex\folio-experience
+> node scripts/testing/run-build.mjs
+
+   ▲ Next.js 15.5.24 (Turbopack)
+
+   Creating an optimized production build ...
+ ✓ Finished writing to disk in 270ms
+Turbopack build encountered 52 warnings:
+./node_modules/.pnpm/@opentelemetry+instrumentat_05c1dbe20c09462de13f6c82f6f5ce91/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package import-in-the-middle can't be external
+The request import-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install import-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_05c1dbe20c09462de13f6c82f6f5ce91/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package import-in-the-middle can't be external
+The request import-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install import-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_05c1dbe20c09462de13f6c82f6f5ce91/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package import-in-the-middle can't be external
+The request import-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install import-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_05c1dbe20c09462de13f6c82f6f5ce91/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package import-in-the-middle can't be external
+The request import-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install import-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_05c1dbe20c09462de13f6c82f6f5ce91/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package import-in-the-middle can't be external
+The request import-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install import-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_05c1dbe20c09462de13f6c82f6f5ce91/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package import-in-the-middle can't be external
+The request import-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install import-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_05c1dbe20c09462de13f6c82f6f5ce91/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package import-in-the-middle can't be external
+The request import-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install import-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_05c1dbe20c09462de13f6c82f6f5ce91/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package import-in-the-middle can't be external
+The request import-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install import-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_6bab8c084d97a5e5be695c4d57abd108/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package import-in-the-middle can't be external
+The request import-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install import-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_6bab8c084d97a5e5be695c4d57abd108/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package import-in-the-middle can't be external
+The request import-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install import-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_6bab8c084d97a5e5be695c4d57abd108/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package import-in-the-middle can't be external
+The request import-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install import-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_6bab8c084d97a5e5be695c4d57abd108/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package import-in-the-middle can't be external
+The request import-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install import-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_6bab8c084d97a5e5be695c4d57abd108/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package import-in-the-middle can't be external
+The request import-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install import-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_6bab8c084d97a5e5be695c4d57abd108/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package import-in-the-middle can't be external
+The request import-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install import-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_6bab8c084d97a5e5be695c4d57abd108/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package import-in-the-middle can't be external
+The request import-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install import-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_6bab8c084d97a5e5be695c4d57abd108/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package import-in-the-middle can't be external
+The request import-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install import-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_fad8dcc0f3efd98c26cc4a45a1c38911/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package import-in-the-middle can't be external
+The request import-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install import-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_fad8dcc0f3efd98c26cc4a45a1c38911/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package import-in-the-middle can't be external
+The request import-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install import-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_fad8dcc0f3efd98c26cc4a45a1c38911/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package import-in-the-middle can't be external
+The request import-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install import-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_fad8dcc0f3efd98c26cc4a45a1c38911/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package import-in-the-middle can't be external
+The request import-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install import-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_fad8dcc0f3efd98c26cc4a45a1c38911/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package import-in-the-middle can't be external
+The request import-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install import-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_fad8dcc0f3efd98c26cc4a45a1c38911/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package import-in-the-middle can't be external
+The request import-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install import-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_fad8dcc0f3efd98c26cc4a45a1c38911/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package import-in-the-middle can't be external
+The request import-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install import-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_fad8dcc0f3efd98c26cc4a45a1c38911/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package import-in-the-middle can't be external
+The request import-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install import-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@sentry+node-core@10.53.1_@_a069076ec7da9ab6bb6e077992e982e3/node_modules/@sentry/node-core/build/cjs/sdk
+Package import-in-the-middle can't be external
+The request import-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install import-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@sentry+node-core@10.53.1_@_a069076ec7da9ab6bb6e077992e982e3/node_modules/@sentry/node-core/build/cjs/sdk
+Package import-in-the-middle can't be external
+The request import-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install import-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@sentry+node-core@10.53.1_@_a069076ec7da9ab6bb6e077992e982e3/node_modules/@sentry/node-core/build/cjs/sdk
+Package import-in-the-middle can't be external
+The request import-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install import-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@sentry+node-core@10.53.1_@_a069076ec7da9ab6bb6e077992e982e3/node_modules/@sentry/node-core/build/cjs/sdk
+Package import-in-the-middle can't be external
+The request import-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install import-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_05c1dbe20c09462de13f6c82f6f5ce91/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package require-in-the-middle can't be external
+The request require-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install require-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_05c1dbe20c09462de13f6c82f6f5ce91/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package require-in-the-middle can't be external
+The request require-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install require-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_05c1dbe20c09462de13f6c82f6f5ce91/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package require-in-the-middle can't be external
+The request require-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install require-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_05c1dbe20c09462de13f6c82f6f5ce91/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package require-in-the-middle can't be external
+The request require-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install require-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_05c1dbe20c09462de13f6c82f6f5ce91/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package require-in-the-middle can't be external
+The request require-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install require-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_05c1dbe20c09462de13f6c82f6f5ce91/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package require-in-the-middle can't be external
+The request require-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install require-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_05c1dbe20c09462de13f6c82f6f5ce91/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package require-in-the-middle can't be external
+The request require-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install require-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_05c1dbe20c09462de13f6c82f6f5ce91/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package require-in-the-middle can't be external
+The request require-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install require-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_6bab8c084d97a5e5be695c4d57abd108/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package require-in-the-middle can't be external
+The request require-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install require-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_6bab8c084d97a5e5be695c4d57abd108/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package require-in-the-middle can't be external
+The request require-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install require-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_6bab8c084d97a5e5be695c4d57abd108/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package require-in-the-middle can't be external
+The request require-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install require-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_6bab8c084d97a5e5be695c4d57abd108/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package require-in-the-middle can't be external
+The request require-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install require-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_6bab8c084d97a5e5be695c4d57abd108/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package require-in-the-middle can't be external
+The request require-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install require-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_6bab8c084d97a5e5be695c4d57abd108/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package require-in-the-middle can't be external
+The request require-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install require-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_6bab8c084d97a5e5be695c4d57abd108/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package require-in-the-middle can't be external
+The request require-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install require-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_6bab8c084d97a5e5be695c4d57abd108/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package require-in-the-middle can't be external
+The request require-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install require-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_fad8dcc0f3efd98c26cc4a45a1c38911/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package require-in-the-middle can't be external
+The request require-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install require-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_fad8dcc0f3efd98c26cc4a45a1c38911/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package require-in-the-middle can't be external
+The request require-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install require-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_fad8dcc0f3efd98c26cc4a45a1c38911/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package require-in-the-middle can't be external
+The request require-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install require-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_fad8dcc0f3efd98c26cc4a45a1c38911/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package require-in-the-middle can't be external
+The request require-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install require-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_fad8dcc0f3efd98c26cc4a45a1c38911/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package require-in-the-middle can't be external
+The request require-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install require-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_fad8dcc0f3efd98c26cc4a45a1c38911/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package require-in-the-middle can't be external
+The request require-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install require-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_fad8dcc0f3efd98c26cc4a45a1c38911/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package require-in-the-middle can't be external
+The request require-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install require-in-the-middle from the project directory.
+
+
+./node_modules/.pnpm/@opentelemetry+instrumentat_fad8dcc0f3efd98c26cc4a45a1c38911/node_modules/@opentelemetry/instrumentation/build/esm/platform/node
+Package require-in-the-middle can't be external
+The request require-in-the-middle matches serverExternalPackages (or the default list).
+The request could not be resolved by Node.js from the project directory.
+Packages that should be external need to be installed in the project directory, so they can be resolved from the output files.
+Try to install it into the project directory by running npm install require-in-the-middle from the project directory.
+
+
+ ✓ Compiled successfully in 16.8s
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/32) ...
+   Generating static pages (8/32)
+[directorio] listDirectorioOrgs falló (¿M64 sin aplicar?): TypeError: fetch failed
+[directorio] listDirectorioOrgs falló (¿M64 sin aplicar?): TypeError: fetch failed
+[directorio] listDirectorioOrgs falló (¿M64 sin aplicar?): TypeError: fetch failed
+   Generating static pages (16/32)
+   Generating static pages (24/32)
+[directorio] listDirectorioOrgs falló (¿M64 sin aplicar?): TypeError: fetch failed
+[directorio] listDirectorioOrgs falló (¿M64 sin aplicar?): TypeError: fetch failed
+[directorio] listDirectorioOrgs falló (¿M64 sin aplicar?): TypeError: fetch failed
+[directorio] listDirectorioOrgs falló (¿M64 sin aplicar?): TypeError: fetch failed
+ ✓ Generating static pages (32/32)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                 Size  First Load JS  Revalidate  Expire
+┌ ○ /                                    9.21 kB         223 kB
+├ ○ /_not-found                              0 B         214 kB
+├ ƒ /admin/audit                             0 B         312 kB
+├ ƒ /api/analytics/refresh                   0 B            0 B
+├ ƒ /api/auth/callback                       0 B            0 B
+├ ƒ /api/auth/reset                          0 B            0 B
+├ ƒ /api/auth/signout                        0 B            0 B
+├ ƒ /api/cron/account-purge                  0 B            0 B
+├ ƒ /api/cron/dispatch-recordatorios         0 B            0 B
+├ ƒ /api/cron/google-watch-renew             0 B            0 B
+├ ƒ /api/cron/maintenance                    0 B            0 B
+├ ƒ /api/cron/reconcile-suscripciones        0 B            0 B
+├ ƒ /api/google/callback                     0 B            0 B
+├ ƒ /api/google/webhook                      0 B            0 B
+├ ƒ /api/health                              0 B            0 B
+├ ƒ /api/me/export                           0 B            0 B
+├ ƒ /api/mercadopago/webhook                 0 B            0 B
+├ ƒ /api/pacientes/[id]/ficha-pdf            0 B            0 B
+├ ƒ /api/patient/export                      0 B            0 B
+├ ƒ /api/portal/export                       0 B            0 B
+├ ƒ /api/whatsapp/webhook                    0 B            0 B
+├ ● /book/[slug]                             0 B         225 kB
+├ ƒ /book/[slug]/opengraph-image-obhl4w      0 B            0 B
+├ ƒ /calendario                          5.92 kB         391 kB
+├ ƒ /configuracion                       3.16 kB         331 kB
+├ ƒ /configuracion/billing               4.89 kB         316 kB
+├ ƒ /configuracion/datos                 2.79 kB         314 kB
+├ ƒ /configuracion/importar-pacientes    5.31 kB         317 kB
+├ ƒ /configuracion/vinculaciones         2.28 kB         314 kB
+├ ○ /cookies                                 0 B         214 kB
+├ ○ /cuenta-error                            0 B         214 kB
+├ ○ /dev/book-preview                        0 B         225 kB
+├ ○ /dev/card                            9.27 kB         224 kB
+├ ○ /dev/card-moods                      10.1 kB         224 kB
+├ ○ /dev/decoration                          0 B         214 kB
+├ ƒ /dev/design-directions.html              0 B            0 B
+├ ƒ /dev/directory-preview                   0 B         221 kB
+├ ƒ /dev/experience                      75.1 kB         554 kB
+├ ○ /dev/identidad-visual                12.4 kB         227 kB
+├ ○ /dev/logo-upload                     2.15 kB         216 kB
+├ ○ /dev/quiro-ficha                     2.79 kB         294 kB
+├ ○ /dev/shell-mobile                    11.5 kB         312 kB
+├ ƒ /finanzas                            5.35 kB         317 kB
+├ ƒ /finanzas/export                         0 B            0 B
+├ ○ /forgot                              8.46 kB         257 kB
+├ ƒ /hoy                                 10.7 kB         424 kB
+├ ƒ /invitacion/[token]                  4.63 kB         219 kB
+├ ○ /login                               8.77 kB         257 kB
+├ ƒ /onboarding                          1.93 kB         368 kB
+├ ○ /opengraph-image-pwu6ef                  0 B            0 B
+├ ƒ /pacientes                           11.6 kB         352 kB
+├ ƒ /pacientes/[id]                      5.69 kB         364 kB
+├ ƒ /portal                              1.78 kB         218 kB
+├ ƒ /portal/consentimientos              5.35 kB         222 kB
+├ ƒ /portal/login                        4.02 kB         253 kB
+├ ƒ /portal/perfil                       1.59 kB         218 kB
+├ ƒ /portal/resumen                      1.15 kB         217 kB
+├ ƒ /portal/turnos                       3.16 kB         219 kB
+├ ○ /privacidad                              0 B         214 kB
+├ ○ /profesionales                           0 B         221 kB          5m      1y
+├ ● /profesionales/[especialidad]            0 B         221 kB          5m      1y
+├   ├ /profesionales/quiropraxia                                         5m      1y
+├   ├ /profesionales/cardiologia                                         5m      1y
+├   ├ /profesionales/psicologia                                          5m      1y
+├   └ [+2 more paths]
+├ ƒ /reset-password                      2.87 kB         280 kB
+├ ○ /robots.txt                              0 B            0 B
+├ ○ /sitemap.xml                             0 B            0 B
+├ ƒ /t/[token]                           3.94 kB         218 kB
+└ ○ /terminos                                0 B         214 kB
++ First Load JS shared by all             282 kB
+  ├ chunks/23f25157d860632b.js           12.8 kB
+  ├ chunks/45f0e968881cb2ce.js           19.2 kB
+  ├ chunks/72c2307c81939998.js            117 kB
+  ├ chunks/8c82e80ec0f013e9.js           10.2 kB
+  ├ chunks/a12fce6acb7cdde4.js           20.8 kB
+  ├ chunks/b53313afb58e570e.css          15.9 kB
+  ├ chunks/bac8ab398e117d6f.css          52.9 kB
+  └ other shared chunks (total)          33.1 kB
+
+
+ƒ Middleware                              185 kB
+
+○  (Static)   prerendered as static content
+●  (SSG)      prerendered as static HTML (uses generateStaticParams)
+ƒ  (Dynamic)  server-rendered on demand

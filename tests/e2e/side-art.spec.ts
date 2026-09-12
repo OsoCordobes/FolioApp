@@ -1,142 +1,106 @@
-/**
- * Folio · E2E · SideArt v2 smoke tests.
- *
- * Verifica las features premium del SideArt (carousel auto-rotation,
- * pause on hover, direction-aware nav, progress fill dots, reduced-motion,
- * background tints reactivos). NO depende de auth — solo carga /login.
- *
- * Pre-requisitos:
- *   1. Servidor en E2E_BASE_URL (default localhost:3010).
- *   2. .env.local configurado (Supabase URL/keys mínimos — el SideArt no
- *      hace fetch pero el wrapping de /login sí necesita supabase server client).
- *
- * Run:
- *   pnpm exec playwright test tests/e2e/side-art.spec.ts
- */
-
+/** Public access experience. No account creation, credentials, or server mutations. */
 import { expect, test } from "@playwright/test";
 
-// Phase 6b · pre-dismiss the cookie banner — it's fixed-bottom and can
-// intercept clicks on the SideArt dot navigation.
-test.beforeEach(async ({ context }) => {
+test.beforeEach(async ({ context, baseURL }) => {
+  const origin = new URL(baseURL!).origin;
+  await context.route("**/*", (route) => {
+    const request = route.request();
+    return new URL(request.url()).origin === origin && ["GET", "HEAD"].includes(request.method())
+      ? route.continue() : route.abort("blockedbyclient");
+  });
   await context.addInitScript(() => {
-    try { window.localStorage.setItem("folio.cookieConsent", "denied"); } catch { /* ignore */ }
+    try { localStorage.setItem("folio.cookieConsent", "denied"); } catch { /* storage unavailable */ }
   });
 });
 
-test.describe("SideArt v2", () => {
-  test("auto-rotate cycles through the 4 slides", async ({ page }) => {
-    await page.goto("/login");
-
-    // 4 dots renderizados, 1 activo
-    await expect(page.locator(".au2-dot")).toHaveCount(4);
-    await expect(page.locator(".au2-dot.is-active")).toHaveCount(1);
-
-    const firstActive = await page.locator(".au2-dot.is-active").getAttribute("aria-label");
-    // El slide más largo dura 7500ms (Finanzas). Después de 8s, otro slide debería estar activo.
-    await page.waitForTimeout(8000);
-    const secondActive = await page.locator(".au2-dot.is-active").getAttribute("aria-label");
-    expect(firstActive).not.toBe(secondActive);
-  });
-
-  test("hover sostenido pausa auto-rotation y muestra pause indicator", async ({ page }) => {
-    await page.goto("/login");
-
-    // Hover sostenido — debounce 240ms para indicator
-    await page.locator(".au2-art").hover();
-    await expect(page.locator(".au2-pause-indicator")).toBeVisible({ timeout: 1000 });
-
-    const dotBefore = await page.locator(".au2-dot.is-active").getAttribute("aria-label");
-    // Esperamos más que cualquier slide-dur — si pausa funciona, no rota
-    await page.waitForTimeout(8500);
-    const dotAfter = await page.locator(".au2-dot.is-active").getAttribute("aria-label");
-    expect(dotBefore).toBe(dotAfter);
-  });
-
-  test("arrow nav cambia de slide manualmente", async ({ page }) => {
-    await page.goto("/login");
-
-    // Hover para pausar auto-rotation (evitar race con el click)
-    await page.locator(".au2-art").hover();
-    const idx0 = await page.locator(".au2-dot.is-active").getAttribute("aria-label");
-
-    await page.locator(".au2-nav--next").click();
-    await page.waitForTimeout(600); // transition completa
-
-    const idx1 = await page.locator(".au2-dot.is-active").getAttribute("aria-label");
-    expect(idx1).not.toBe(idx0);
-  });
-
-  test("dots permiten click directo a cualquier slide", async ({ page }) => {
-    await page.goto("/login");
-    await page.locator(".au2-art").hover(); // pausar
-
-    // Click al 4to dot (índice 3 = Reagenda)
-    await page.locator(".au2-dot").nth(3).click();
-    await page.waitForTimeout(500);
-
-    const active = await page.locator(".au2-dot.is-active").getAttribute("aria-label");
-    // El slide Reagenda tiene title que contiene "Reagendá"
-    expect(active?.toLowerCase()).toContain("reagend");
-  });
-
-  test("reduced-motion → todo skip-to-end inmediato", async ({ browser }) => {
-    const context = await browser.newContext({ reducedMotion: "reduce" });
-    // Phase 6b · the test-level newContext doesn't inherit the suite-level
-    // beforeEach init script, so reapply the cookie-banner dismissal here.
-    await context.addInitScript(() => {
-      try { window.localStorage.setItem("folio.cookieConsent", "denied"); } catch { /* ignore */ }
+test.describe("Acceso · ilustración estable y formulario", () => {
+  test("recuperar acceso hidrata sin errores al abrir y recargar", async ({ page }) => {
+    const hydrationErrors: string[] = [];
+    const pageErrors: string[] = [];
+    page.on("console", (message) => {
+      if (/hydrat|server rendered|didn't match|did not match/i.test(message.text())) hydrationErrors.push(message.text());
     });
-    const page = await context.newPage();
-
-    await page.goto("/login");
-    await page.locator(".au2-art").hover(); // pausar para forzar el slide actual
-    await page.locator(".au2-dot").nth(2).click(); // ir a Finanzas
-
-    // Si reduced-motion respetado, count-ups saltan al valor final inmediato
-    // sin esperar los 700ms del tween.
-    await page.waitForTimeout(200);
-    const kpiPrimary = page.locator(".au2-fin3-kpi-1 .au2-fin3-kpi-val");
-    await expect(kpiPrimary).toContainText(/1\.20/, { timeout: 500 });
-
-    await context.close();
+    page.on("pageerror", (error) => pageErrors.push(error.message));
+    await page.goto("/forgot", { waitUntil: "networkidle" });
+    await expect(page.getByRole("heading", { level: 1, name: "Recuperá tu acceso." })).toBeVisible();
+    await page.getByRole("textbox", { name: "Email de tu cuenta" }).fill("apertura@example.invalid");
+    await page.reload({ waitUntil: "networkidle" });
+    await page.getByRole("textbox", { name: "Email de tu cuenta" }).fill("recarga@example.invalid");
+    await expect(page.getByRole("textbox", { name: "Email de tu cuenta" })).toHaveValue("recarga@example.invalid");
+    expect(hydrationErrors).toEqual([]);
+    expect(pageErrors).toEqual([]);
   });
 
-  test("background tint cambia entre slides", async ({ page }) => {
+  test("la agenda ilustrativa mantiene su contenido mientras se escribe", async ({ page }) => {
+    await page.clock.install();
     await page.goto("/login");
-    await page.locator(".au2-art").hover(); // pausar
-
-    // Slide 0 (Agenda) — leer background del glow
-    await page.locator(".au2-dot").nth(0).click();
-    await page.waitForTimeout(800); // dejar que la transition 720ms complete
-    const bg0 = await page.evaluate(() => {
-      const el = document.querySelector(".au2-art-glow") as HTMLElement;
-      return window.getComputedStyle(el).background;
-    });
-
-    // Slide 3 (Reagenda) — tint slate diferente
-    await page.locator(".au2-dot").nth(3).click();
-    await page.waitForTimeout(800);
-    const bg1 = await page.evaluate(() => {
-      const el = document.querySelector(".au2-art-glow") as HTMLElement;
-      return window.getComputedStyle(el).background;
-    });
-
-    expect(bg0).not.toBe(bg1);
+    const illustration = page.getByRole("figure", { name: "Agenda ilustrativa con personas y datos ficticios" });
+    await expect(illustration).toBeVisible();
+    await expect(illustration).toContainText("Vista ilustrativa. Personas y datos ficticios.");
+    const original = await illustration.innerText();
+    await page.getByRole("textbox", { name: "Email", exact: true }).fill("profesional@example.invalid");
+    await page.clock.runFor(16000);
+    expect(await illustration.innerText()).toBe(original);
+    await expect(page.getByRole("textbox", { name: "Email", exact: true })).toHaveValue("profesional@example.invalid");
+    await expect(page.locator(".fx-auth-art button")).toHaveCount(0);
   });
 
-  test("tab visibility pausa el carousel", async ({ page }) => {
+  test("la contraseña se muestra y oculta por teclado sin perder el valor", async ({ page }) => {
     await page.goto("/login");
-    const dotBefore = await page.locator(".au2-dot.is-active").getAttribute("aria-label");
+    const password = page.getByLabel("Contraseña", { exact: true });
+    await password.fill("ClaveSintetica1!");
+    await page.getByRole("button", { name: "Mostrar contraseña", exact: true }).focus();
+    await page.keyboard.press("Enter");
+    await expect(password).toHaveAttribute("type", "text");
+    await expect(password).toHaveValue("ClaveSintetica1!");
+    await page.keyboard.press("Enter");
+    await expect(password).toHaveAttribute("type", "password");
+    await expect(password).toHaveValue("ClaveSintetica1!");
+  });
 
-    // Emular tab hidden
-    await page.evaluate(() => {
-      Object.defineProperty(document, "hidden", { value: true, configurable: true });
-      document.dispatchEvent(new Event("visibilitychange"));
-    });
+  test("se puede cambiar a crear cuenta y recuperar el acceso sin enviar datos", async ({ page }) => {
+    await page.goto("/login");
+    await page.getByRole("button", { name: "Crear cuenta", exact: true }).click();
+    await expect(page.getByRole("heading", { level: 1, name: "Tu práctica empieza acá." })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Crear cuenta", exact: true })).toBeDisabled();
+    await page.goto("/forgot");
+    await expect(page.getByRole("heading", { level: 1, name: "Recuperá tu acceso." })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Email de tu cuenta" })).toBeEditable();
+  });
 
-    await page.waitForTimeout(8500); // más que cualquier slide-dur
-    const dotAfter = await page.locator(".au2-dot.is-active").getAttribute("aria-label");
-    expect(dotBefore).toBe(dotAfter);
+  test("la marca devuelve al inicio sin confundirla con una acción de acceso", async ({ page }) => {
+    await page.goto("/login");
+    await page.locator(".fx-auth-art").getByRole("link", { name: "Folio, volver al inicio" }).click();
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByRole("heading", { level: 1, name: /Tu consultorio\.\s*Todo a mano\./ })).toBeVisible();
+  });
+
+  test("el portal identifica la consulta ilustrativa y presenta el email del paciente", async ({ page }) => {
+    await page.goto("/portal/login");
+    await expect(page.getByRole("figure", { name: "Consulta ilustrativa con personas y datos ficticios" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Tu portal de paciente." })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Email", exact: true })).toBeEditable();
+  });
+
+  test("movimiento reducido conserva el formulario y la ilustración visibles", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/login");
+    await expect(page.getByRole("figure", { name: "Agenda ilustrativa con personas y datos ficticios" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Ingresar a Folio", exact: true })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Email", exact: true })).toBeEditable();
+  });
+});
+
+test.describe("Acceso · móvil", () => {
+  test.use({ viewport: { width: 375, height: 812 } });
+  test("el formulario cabe sin la ilustración y mantiene acceso a recuperar contraseña", async ({ page }) => {
+    await page.goto("/login");
+    await expect(page.locator(".fx-auth-art")).not.toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Volvé a tu consultorio." })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Email", exact: true })).toBeEditable();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+    await page.getByRole("button", { name: "¿La olvidaste?" }).click();
+    await expect(page.getByRole("heading", { level: 1, name: "Recuperá tu acceso." })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Enviar enlace de recuperación" })).toBeVisible();
   });
 });

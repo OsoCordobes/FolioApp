@@ -24,7 +24,7 @@
  */
 
 import { useRouter } from "next/navigation";
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 import { crearBloqueoAction } from "@/app/(app)/calendario/actions";
 import { useModalA11y } from "@/lib/use-modal-a11y";
@@ -52,7 +52,12 @@ export function BloqueoModal({
   const [aviso, setAviso] = useState<string | null>(null);
 
   const dialogRef = useRef<HTMLDivElement | null>(null);
+  const fechaRef = useRef<HTMLInputElement | null>(null);
   useModalA11y(dialogRef, { onClose, closeDisabled: pending });
+  useEffect(() => {
+    // El hook captura primero el botón de origen; después elegimos la fecha.
+    fechaRef.current?.focus();
+  }, []);
 
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -106,7 +111,7 @@ export function BloqueoModal({
         zIndex: 1000,
         padding: 16,
       }}
-      onClick={onClose}
+      onClick={() => { if (!pending) onClose(); }}
     >
       <form
         onSubmit={handleSubmit}
@@ -151,12 +156,12 @@ export function BloqueoModal({
           <>
             <Field label="Desde">
               <input
+                ref={fechaRef}
                 type="date"
                 value={desde}
                 onChange={(e) => setDesde(e.target.value)}
                 style={inputStyle}
                 required
-                autoFocus
               />
             </Field>
             <Field label="Hasta" hint="Incluido: si volvés el 28, poné el 27.">
@@ -179,7 +184,6 @@ export function BloqueoModal({
                 onChange={(e) => setDesde(e.target.value)}
                 style={inputStyle}
                 required
-                autoFocus
               />
             </Field>
             <div style={{ display: "flex", gap: 10 }}>

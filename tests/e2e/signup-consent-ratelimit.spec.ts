@@ -34,7 +34,7 @@ test.describe("/login signup · consent + Turnstile gates", () => {
   test("submit button disabled until consent checkbox ticked", async ({ page }) => {
     await page.goto("/login");
     await page.getByRole("button", { name: /crear cuenta/i }).first().click();
-    const submit = page.getByRole("button", { name: /empezar/i });
+    const submit = page.getByRole("button", { name: "Crear cuenta", exact: true });
 
     // Fill valid email + password first so disable can only be due to consent.
     await page.locator('input[type="email"]').fill("e2e-consent-test@folio.app");

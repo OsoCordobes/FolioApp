@@ -1,0 +1,122 @@
+{
+  "timestamp": "2026-09-12T20:10:06.223Z",
+  "scope": "Compiled local app, synthetic environment, same-origin GET/HEAD only.",
+  "routes": [
+    {
+      "path": "/",
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "bytes": 97071
+    },
+    {
+      "path": "/login",
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "bytes": 14691
+    },
+    {
+      "path": "/forgot",
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "bytes": 15781
+    },
+    {
+      "path": "/cookies",
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "bytes": 26551
+    },
+    {
+      "path": "/dev/experience",
+      "status": 404,
+      "contentType": "text/html; charset=utf-8",
+      "bytes": 12879
+    },
+    {
+      "path": "/dev/directory-preview",
+      "status": 404,
+      "contentType": "text/html; charset=utf-8",
+      "bytes": 10776
+    },
+    {
+      "path": "/dev/design-directions.html",
+      "status": 404,
+      "contentType": "text/plain;charset=UTF-8",
+      "bytes": 9
+    },
+    {
+      "path": "/dev/brand-studies",
+      "status": 404,
+      "contentType": "text/html; charset=utf-8",
+      "bytes": 10634
+    },
+    {
+      "path": "/dev/invitation-preview",
+      "status": 404,
+      "contentType": "text/html; charset=utf-8",
+      "bytes": 10780
+    },
+    {
+      "path": "/favicon.ico",
+      "status": 200,
+      "contentType": "image/x-icon",
+      "bytes": 1285
+    },
+    {
+      "path": "/icon.svg",
+      "status": 200,
+      "contentType": "image/svg+xml",
+      "bytes": 302
+    },
+    {
+      "path": "/opengraph-image-pwu6ef",
+      "status": 200,
+      "contentType": "image/png",
+      "bytes": 68425
+    }
+  ],
+  "pageErrors": [],
+  "consoleErrors": [],
+  "screenshots": [
+    {
+      "width": 1440,
+      "path": "docs/design/evidence/polish-compiled-1440-final.png",
+      "measurements": {
+        "heroWidth": 1320,
+        "sectionWidth": 1120,
+        "productWidth": 1000,
+        "horizontalOverflow": 0
+      }
+    },
+    {
+      "width": 1920,
+      "path": "docs/design/evidence/polish-compiled-1920-final.png",
+      "measurements": {
+        "heroWidth": 1656,
+        "sectionWidth": 1456,
+        "productWidth": 1456,
+        "horizontalOverflow": 0
+      }
+    },
+    {
+      "width": 2560,
+      "path": "docs/design/evidence/polish-compiled-2560-final.png",
+      "measurements": {
+        "heroWidth": 2104,
+        "sectionWidth": 1904,
+        "productWidth": 1904,
+        "horizontalOverflow": 0
+      }
+    },
+    {
+      "width": 3440,
+      "path": "docs/design/evidence/polish-compiled-3440-final.png",
+      "measurements": {
+        "heroWidth": 2440,
+        "sectionWidth": 2240,
+        "productWidth": 2240,
+        "horizontalOverflow": 0
+      }
+    }
+  ]
+}

@@ -27,6 +27,7 @@
  */
 
 import { useId, useMemo, useState, type CSSProperties } from "react";
+import { useDisclosureFocus } from "@/lib/especialidades/use-disclosure-focus";
 
 import { useRouter } from "next/navigation";
 
@@ -323,10 +324,11 @@ function EscalaBlock({
   // Abierta si ya hay respuestas; el profesional puede abrirla vacía.
   const [abiertaLocal, setAbiertaLocal] = useState(false);
   const abierta = abiertaLocal || respuestas !== null;
+  const escalaRef = useDisclosureFocus(abierta);
   const respondidas = respuestas ? respuestas.filter((r) => r !== null).length : 0;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+    <div ref={escalaRef} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <b style={{ fontSize: 13, color: "var(--ink)" }}>{titulo}</b>
         {score ? (
@@ -368,6 +370,7 @@ function EscalaBlock({
             type="button"
             className="fi-btn fi-btn-secondary"
             onClick={() => setAbiertaLocal(true)}
+            aria-expanded={false}
             style={{ alignSelf: "flex-start" }}
           >
             <I.Plus size={12} /> Cargar {titulo}
@@ -788,6 +791,7 @@ export function PsicologiaTool({
   const tieneMseExt = CAMPOS_ESTADO_MENTAL_EXT.some((c) => draft.registro?.[c.campo] != null);
   const [mseExpandido, setMseExpandido] = useState(tieneMseExt);
   const mseAbierto = mseExpandido || tieneMseExt;
+  const mseRef = useDisclosureFocus(mseAbierto);
 
   const emit = (next: PsicologiaDraft) => {
     if (readOnly) return;
@@ -931,35 +935,38 @@ export function PsicologiaTool({
         </div>
 
         {/* Dominios ampliados del MSE (C8) — opcionales, detrás de un toggle. */}
-        {mseAbierto ? (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            {CAMPOS_ESTADO_MENTAL_EXT.map(({ campo, label, opciones, labels }) => (
-              <label key={campo} className="fi-wi-field">
-                <span>{label}</span>
-                <select
-                  value={registro[campo] ?? ""}
-                  onChange={(e) => setCampoRegistro(campo, e.target.value)}
-                  disabled={readOnly}
-                >
-                  <option value="">—</option>
-                  {opciones.map((o) => (
-                    <option key={o} value={o}>{labels[o]}</option>
-                  ))}
-                </select>
-              </label>
-            ))}
-          </div>
-        ) : !readOnly ? (
-          <button
-            type="button"
-            className="pc-link"
-            onClick={() => setMseExpandido(true)}
-            style={{ alignSelf: "flex-start" }}
-            title="Agrega orientación, atención, memoria, sensopercepción, contenido del pensamiento, juicio, insight, lenguaje y psicomotricidad"
-          >
-            + MSE completo (dominios adicionales)
-          </button>
-        ) : null}
+        <div ref={mseRef} className="pc-clinical-disclosure">
+          {mseAbierto ? (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              {CAMPOS_ESTADO_MENTAL_EXT.map(({ campo, label, opciones, labels }) => (
+                <label key={campo} className="fi-wi-field">
+                  <span>{label}</span>
+                  <select
+                    value={registro[campo] ?? ""}
+                    onChange={(e) => setCampoRegistro(campo, e.target.value)}
+                    disabled={readOnly}
+                  >
+                    <option value="">—</option>
+                    {opciones.map((o) => (
+                      <option key={o} value={o}>{labels[o]}</option>
+                    ))}
+                  </select>
+                </label>
+              ))}
+            </div>
+          ) : !readOnly ? (
+            <button
+              type="button"
+              className="pc-link"
+              onClick={() => setMseExpandido(true)}
+              aria-expanded={false}
+              style={{ alignSelf: "flex-start" }}
+              title="Agrega orientación, atención, memoria, sensopercepción, contenido del pensamiento, juicio, insight, lenguaje y psicomotricidad"
+            >
+              + MSE completo (dominios adicionales)
+            </button>
+          ) : null}
+        </div>
 
         <label className="fi-wi-field">
           <span>Riesgo</span>

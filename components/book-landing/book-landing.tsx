@@ -151,7 +151,7 @@ export function BookLanding({
                   : "El consultorio te confirma a la brevedad"}
               </span>
             </div>
-            <p className="bl-trust-micro fm-mono">Datos cifrados · AES-256 · Ley 25.326</p>
+            <p className="bl-trust-micro">Elegí un servicio y un horario para empezar.</p>
           </div>
           <div className="bl-hero-figure">
             {org.logoUrl ? (
@@ -243,19 +243,19 @@ export function BookLanding({
           </section>
         ) : null}
 
-        {/* Seguridad / confianza — Folio como trust signal tasteful. */}
-        <section className="bl-trust" aria-label="Seguridad de tus datos">
-          <h2 className="bl-section-title">Tus datos, protegidos</h2>
-          <p className="bl-trust-lead">{content.trustFraming}</p>
+        {/* Explicación del recorrido antes de abrir el formulario de reserva. */}
+        <section className="bl-trust" aria-label="Cómo reservar tu turno">
+          <h2 className="bl-section-title">Tu reserva, paso a paso</h2>
+          <p className="bl-trust-lead">Revisá los detalles antes de enviar tu solicitud.</p>
           <div className="bl-trust-grid">
-            <TrustItem icon={<IconShield />} title="Cifrado AES-256">
-              Cada dato se cifra antes de tocar la base.
+            <TrustItem icon={<IconCalendar />} title="Servicio y horario">
+              Elegí el servicio, el día y la hora de tu consulta.
             </TrustItem>
-            <TrustItem icon={<IconCertificate />} title="Ley 25.326">
-              Protección de datos personales en Argentina.
+            <TrustItem icon={<IconContact />} title="Tus datos de contacto">
+              Completá tus datos para que el consultorio pueda contactarte.
             </TrustItem>
-            <TrustItem icon={<IconDirect />} title="Directo al consultorio">
-              Tu turno llega derecho a tu profesional.
+            <TrustItem icon={<IconDirect />} title="Estado de la reserva">
+              Al terminar, vas a ver si tu turno quedó confirmado o espera aprobación.
             </TrustItem>
           </div>
         </section>
@@ -363,20 +363,20 @@ function TrustItem({
   );
 }
 
-function IconShield() {
+function IconCalendar() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z" />
-      <path d="M9.5 12l1.8 1.8L15 10" />
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <path d="M16 3v4M8 3v4M3 11h18" />
     </svg>
   );
 }
 
-function IconCertificate() {
+function IconContact() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="12" cy="9" r="5" />
-      <path d="M9 13l-1.5 7L12 18l4.5 2L15 13" />
+      <circle cx="12" cy="8" r="4" />
+      <path d="M5 21v-2a7 7 0 0 1 14 0v2" />
     </svg>
   );
 }

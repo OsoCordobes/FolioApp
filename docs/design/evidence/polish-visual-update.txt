@@ -1,0 +1,29 @@
+
+Running 14 tests using 1 worker
+
+  ok  1 tests\visual\landing.spec.ts:36:7 › landing · hero desktop · light (1.5s)
+C:\Users\amiun\Documents\Codex\folio-experience\tests\snapshots\landing-product-light.png is re-generated, writing actual.
+  ok  2 tests\visual\landing.spec.ts:40:7 › landing · recorrido interactivo (#producto) · light (1.8s)
+C:\Users\amiun\Documents\Codex\folio-experience\tests\snapshots\landing-day-light.png is re-generated, writing actual.
+  ok  3 tests\visual\landing.spec.ts:47:7 › landing · continuidad de atención (#dia) · light (1.6s)
+C:\Users\amiun\Documents\Codex\folio-experience\tests\snapshots\landing-vault-light.png is re-generated, writing actual.
+  ok  4 tests\visual\landing.spec.ts:52:7 › landing · cuidado de información (#seguridad) · light (1.5s)
+  ok  5 tests\visual\landing.spec.ts:59:9 › landing · móvil · light › hero y navegación sin desbordamiento (1.5s)
+  ok  6 tests\visual\landing.spec.ts:36:7 › landing · hero desktop · dark (1.3s)
+C:\Users\amiun\Documents\Codex\folio-experience\tests\snapshots\landing-product-dark.png is re-generated, writing actual.
+  ok  7 tests\visual\landing.spec.ts:40:7 › landing · recorrido interactivo (#producto) · dark (1.8s)
+C:\Users\amiun\Documents\Codex\folio-experience\tests\snapshots\landing-day-dark.png is re-generated, writing actual.
+  ok  8 tests\visual\landing.spec.ts:47:7 › landing · continuidad de atención (#dia) · dark (2.0s)
+C:\Users\amiun\Documents\Codex\folio-experience\tests\snapshots\landing-vault-dark.png is re-generated, writing actual.
+  ok  9 tests\visual\landing.spec.ts:52:7 › landing · cuidado de información (#seguridad) · dark (1.5s)
+  ok 10 tests\visual\landing.spec.ts:59:9 › landing · móvil · dark › hero y navegación sin desbordamiento (1.4s)
+A snapshot doesn't exist at C:\Users\amiun\Documents\Codex\folio-experience\tests\snapshots\landing-specialty-desktop.png, writing actual.
+  ok 11 tests\visual\landing.spec.ts:67:5 › landing · ficha cardiovascular en escritorio (1.9s)
+A snapshot doesn't exist at C:\Users\amiun\Documents\Codex\folio-experience\tests\snapshots\landing-specialty-mobile.png, writing actual.
+  ok 12 tests\visual\landing.spec.ts:74:5 › landing · ficha por segmento en móvil (1.9s)
+A snapshot doesn't exist at C:\Users\amiun\Documents\Codex\folio-experience\tests\snapshots\landing-hero-wide.png, writing actual.
+  ok 13 tests\visual\landing.spec.ts:82:5 › landing · portada en monitor de 2560 px (1.6s)
+A snapshot doesn't exist at C:\Users\amiun\Documents\Codex\folio-experience\tests\snapshots\landing-product-wide.png, writing actual.
+  ok 14 tests\visual\landing.spec.ts:88:5 › landing · cobros y explicación en dos columnas a 1920 px (2.0s)
+
+  14 passed (25.1s)

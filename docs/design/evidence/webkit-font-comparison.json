@@ -1,0 +1,176 @@
+[
+  {
+    "engine": "webkit",
+    "fonts": [
+      {
+        "family": "folioSans",
+        "weight": "200 800",
+        "status": "loaded"
+      },
+      {
+        "family": "\"folioSans Fallback\"",
+        "weight": "normal",
+        "status": "unloaded"
+      },
+      {
+        "family": "__nextjs-Geist",
+        "weight": "400 600",
+        "status": "unloaded"
+      },
+      {
+        "family": "\"__nextjs-Geist Mono\"",
+        "weight": "400 600",
+        "status": "unloaded"
+      },
+      {
+        "family": "__nextjs-Geist",
+        "weight": "400 600",
+        "status": "loaded"
+      },
+      {
+        "family": "\"__nextjs-Geist Mono\"",
+        "weight": "400 600",
+        "status": "unloaded"
+      }
+    ],
+    "measuredWeights": [
+      {
+        "weight": 400,
+        "width": 223.7998809814453
+      },
+      {
+        "weight": 600,
+        "width": 226.9198760986328
+      },
+      {
+        "weight": 700,
+        "width": 228.50392150878906
+      }
+    ],
+    "heading": [
+      {
+        "text": "Tu consultorio.Todo a mano.",
+        "fontFamily": "folioSans, \"folioSans Fallback\", Arial, \"Segoe UI\", Arial, sans-serif",
+        "fontWeight": "650",
+        "fontVariation": "normal",
+        "fontSize": "44px",
+        "width": 336,
+        "height": 99.4375
+      },
+      {
+        "text": "Tu agenda hoy",
+        "fontFamily": "folioSans, \"folioSans Fallback\", Arial, \"Segoe UI\", Arial, sans-serif",
+        "fontWeight": "700",
+        "fontVariation": "normal",
+        "fontSize": "23px",
+        "width": 149.703125,
+        "height": 34.5
+      },
+      {
+        "text": "Martina Ríos",
+        "fontFamily": "folioSans, \"folioSans Fallback\", Arial, \"Segoe UI\", Arial, sans-serif",
+        "fontWeight": "700",
+        "fontVariation": "normal",
+        "fontSize": "23px",
+        "width": 126.859375,
+        "height": 34.5
+      },
+      {
+        "text": "Los números del día",
+        "fontFamily": "folioSans, \"folioSans Fallback\", Arial, \"Segoe UI\", Arial, sans-serif",
+        "fontWeight": "700",
+        "fontVariation": "normal",
+        "fontSize": "23px",
+        "width": 203.796875,
+        "height": 34.5
+      }
+    ]
+  },
+  {
+    "engine": "chromium",
+    "fonts": [
+      {
+        "family": "folioSans",
+        "weight": "200 800",
+        "status": "loaded"
+      },
+      {
+        "family": "folioSans Fallback",
+        "weight": "normal",
+        "status": "unloaded"
+      },
+      {
+        "family": "__nextjs-Geist",
+        "weight": "400 600",
+        "status": "unloaded"
+      },
+      {
+        "family": "__nextjs-Geist Mono",
+        "weight": "400 600",
+        "status": "unloaded"
+      },
+      {
+        "family": "__nextjs-Geist",
+        "weight": "400 600",
+        "status": "unloaded"
+      },
+      {
+        "family": "__nextjs-Geist Mono",
+        "weight": "400 600",
+        "status": "unloaded"
+      }
+    ],
+    "measuredWeights": [
+      {
+        "weight": 400,
+        "width": 223.79983520507812
+      },
+      {
+        "weight": 600,
+        "width": 226.9198760986328
+      },
+      {
+        "weight": 700,
+        "width": 228.50387573242188
+      }
+    ],
+    "heading": [
+      {
+        "text": "Tu consultorio.Todo a mano.",
+        "fontFamily": "folioSans, \"folioSans Fallback\", Arial, \"Segoe UI\", Arial, sans-serif",
+        "fontWeight": "650",
+        "fontVariation": "normal",
+        "fontSize": "44px",
+        "width": 346,
+        "height": 99.4375
+      },
+      {
+        "text": "Tu agenda hoy",
+        "fontFamily": "folioSans, \"folioSans Fallback\", Arial, \"Segoe UI\", Arial, sans-serif",
+        "fontWeight": "700",
+        "fontVariation": "normal",
+        "fontSize": "23px",
+        "width": 149.703125,
+        "height": 34.5
+      },
+      {
+        "text": "Martina Ríos",
+        "fontFamily": "folioSans, \"folioSans Fallback\", Arial, \"Segoe UI\", Arial, sans-serif",
+        "fontWeight": "700",
+        "fontVariation": "normal",
+        "fontSize": "23px",
+        "width": 126.859375,
+        "height": 34.5
+      },
+      {
+        "text": "Los números del día",
+        "fontFamily": "folioSans, \"folioSans Fallback\", Arial, \"Segoe UI\", Arial, sans-serif",
+        "fontWeight": "700",
+        "fontVariation": "normal",
+        "fontSize": "23px",
+        "width": 203.796875,
+        "height": 34.5
+      }
+    ]
+  }
+]

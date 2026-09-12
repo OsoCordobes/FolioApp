@@ -25,6 +25,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -32,6 +33,7 @@ import {
 } from "react";
 
 import * as I from "@/components/icons";
+import "@/styles/states-experience.css";
 
 export type ToastTono = "ok" | "error";
 
@@ -46,28 +48,73 @@ interface ToastItem {
   tono: ToastTono;
 }
 
+type PauseSource = "pointer" | "focus";
+interface ToastTimer {
+  remaining: number;
+  startedAt: number;
+  timeout: number | null;
+  pausedBy: Set<PauseSource>;
+}
+
 interface ToastContextValue {
   show: (toast: ToastInput) => void;
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null);
 
-/** Auto-dismiss: 4 s (suficiente para leer "Turno creado · 10:30 · Ana López"). */
+/** Four seconds of unpaused reading time; focus and pointer keep the notice open. */
 const AUTO_DISMISS_MS = 4000;
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const nextIdRef = useRef(1);
+  const timersRef = useRef(new Map<number, ToastTimer>());
+
+  useEffect(() => {
+    const timers = timersRef.current;
+    return () => {
+      for (const timer of timers.values()) {
+        if (timer.timeout !== null) window.clearTimeout(timer.timeout);
+      }
+      timers.clear();
+    };
+  }, []);
 
   const dismiss = useCallback((id: number) => {
+    const timer = timersRef.current.get(id);
+    if (timer?.timeout != null) window.clearTimeout(timer.timeout);
+    timersRef.current.delete(id);
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
+
+  const pause = useCallback((id: number, source: PauseSource) => {
+    const timer = timersRef.current.get(id);
+    if (!timer || timer.pausedBy.has(source)) return;
+    timer.pausedBy.add(source);
+    if (timer.timeout !== null) {
+      timer.remaining = Math.max(0, timer.remaining - (Date.now() - timer.startedAt));
+      window.clearTimeout(timer.timeout);
+      timer.timeout = null;
+    }
+  }, []);
+
+  const resume = useCallback((id: number, source: PauseSource) => {
+    const timer = timersRef.current.get(id);
+    if (!timer || !timer.pausedBy.delete(source) || timer.pausedBy.size > 0) return;
+    timer.startedAt = Date.now();
+    timer.timeout = window.setTimeout(() => dismiss(id), timer.remaining);
+  }, [dismiss]);
 
   const show = useCallback(
     ({ titulo, tono = "ok" }: ToastInput) => {
       const id = nextIdRef.current++;
       setToasts((prev) => [...prev, { id, titulo, tono }]);
-      window.setTimeout(() => dismiss(id), AUTO_DISMISS_MS);
+      timersRef.current.set(id, {
+        remaining: AUTO_DISMISS_MS,
+        startedAt: Date.now(),
+        timeout: window.setTimeout(() => dismiss(id), AUTO_DISMISS_MS),
+        pausedBy: new Set(),
+      });
     },
     [dismiss],
   );
@@ -86,6 +133,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <div
             key={t.id}
             className={"fi-toast" + (t.tono === "error" ? " fi-toast--error" : "")}
+            onPointerEnter={() => pause(t.id, "pointer")}
+            onPointerLeave={() => resume(t.id, "pointer")}
+            onFocusCapture={() => pause(t.id, "focus")}
+            onBlurCapture={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget)) resume(t.id, "focus");
+            }}
           >
             <span className="fi-toast-ico" aria-hidden>
               {t.tono === "error" ? <I.Alert size={14} /> : <I.Check size={14} />}

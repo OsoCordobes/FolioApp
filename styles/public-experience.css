@@ -1,0 +1,56 @@
+/* Public surfaces. Individual practices keep their chosen accent. */
+.bl-root :is(.bl-header-cta, .bl-btn-lg, .bl-service-cta, .bk-back) { min-height: 44px; }
+.bl-root :is(a, button, input):focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.dir-root :is(a, button):focus-visible, .pt-tabs a:focus-visible, .pt-main :is(a, button):focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.pt-tabs { scroll-padding-inline: 12px; }
+.pt-main :is(.fi-btn, .pt-link-btn) { min-height: 44px; }
+.pt-main .au-field > span:first-child { font-family: var(--font-sans); text-transform: none; letter-spacing: 0; font-size: 13px; font-weight: 550; color: var(--ink); }
+.pt-main .au-field input:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 22%, transparent); outline-offset: 1px; border-color: var(--accent); }
+.pt-main .pt-empty-action { margin-top: 20px; }
+.pt-main h2.pt-empty-title { margin-top: 0; font-size: 16px; line-height: 1.5; }
+.fx-invitation { gap: 22px; }
+.fx-invitation .au-form-head h1 { font-size: clamp(27px, 3vw, 32px); letter-spacing: -.8px; }
+.fx-invitation .au-form-head { gap: 12px; margin-bottom: 0; }
+.fx-invitation .au-form-head p { overflow-wrap: anywhere; }
+.fx-invitation .au-form-switch { margin-top: 0; }
+.dir-root { display: flex; flex-direction: column; min-height: 100svh; }
+.dir-header { min-height: 84px; padding: 20px clamp(23px, 5vw, 72px); background: var(--surface); border-color: var(--line); }
+.dir-brand { font-family: var(--font-sans); font-size: 29px; font-weight: 750; letter-spacing: -1.6px; }
+.dir-header-cta { display: inline-flex; align-items: center; min-height: 44px; font-size: 13px; }
+.dir-main { flex: 1; width: 100%; max-width: 1160px; padding-top: 66px; }
+.dir-intro { margin-bottom: 30px; }
+.dir-title { max-width: 800px; margin-bottom: 17px; font-family: var(--font-sans); font-size: clamp(30px, 4vw, 45px); line-height: 1.17; font-weight: 600; letter-spacing: -1.6px; }
+.dir-subtitle { font-size: 15px; line-height: 1.8; }
+.dir-facets { gap: 9px; margin-bottom: 33px; }
+.dir-chip { display: inline-flex; align-items: center; min-height: 44px; padding: 10px 16px; border-radius: var(--r-md); font-size: 13px; }
+.dir-chip.is-active { color: var(--on-accent); }
+.dir-card { min-width: 0; padding: 25px; border-color: var(--line); gap: 17px; }
+.dir-card:hover { transform: none; box-shadow: var(--shadow-2); }
+.dir-card-name { font-family: var(--font-sans); font-size: 17px; font-weight: 600; letter-spacing: -.4px; line-height: 1.4; }
+.dir-card-esp { margin-top: 6px; font-size: 11px; }
+.dir-card-lugar, .dir-card-bio, .dir-card-cta { font-size: 13px; line-height: 1.7; }
+.dir-card-cta { margin-top: auto; padding-top: 17px; border-top: 1px solid var(--line-soft); font-weight: 600; }
+.dir-empty { border-style: solid; padding: 50px 25px; }
+.dir-empty-title { font-family: var(--font-sans); font-size: 24px; font-weight: 600; line-height: 1.4; letter-spacing: -.6px; }
+.dir-empty-sub { font-size: 14px; line-height: 1.75; }
+.dir-empty > .fi-btn-secondary { margin-bottom: 30px; }
+.dir-footer { background: var(--surface); line-height: 1.7; }
+@media (max-width: 600px) {
+  .pt-main .au-field input { font-size: 16px; }
+  .dir-header { min-height: 77px; gap: 20px; padding: 16px 23px; }
+  .dir-header-cta { max-width: 150px; text-align: right; font-size: 12px; }
+  .dir-main { padding: 35px 20px 45px; }
+  .dir-title { letter-spacing: -.8px; }
+  .dir-grid { grid-template-columns: minmax(0, 1fr); }
+  .dir-card { padding: 22px; }
+  .dir-empty { padding: 32px 20px; }
+  .dir-empty-title { font-size: 21px; }
+  .dir-footer { justify-content: flex-start; padding: 25px 23px; font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dir-root *, .bl-root *, .bl-root *::before, .bl-root *::after {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,58 @@
+[
+  {
+    "file": "landing-day-dark.png",
+    "Hash": "91D0BEEF7C177AE2FDC70909B127067929A58534DBB2E7877DD6B36B9D37B8BB"
+  },
+  {
+    "file": "landing-day-light.png",
+    "Hash": "91D0BEEF7C177AE2FDC70909B127067929A58534DBB2E7877DD6B36B9D37B8BB"
+  },
+  {
+    "file": "landing-hero-dark.png",
+    "Hash": "95741C038DADF6ABC18C2C2AD5CB89D4654F3F3E38C159CA6C660BBA618C9583"
+  },
+  {
+    "file": "landing-hero-light.png",
+    "Hash": "95741C038DADF6ABC18C2C2AD5CB89D4654F3F3E38C159CA6C660BBA618C9583"
+  },
+  {
+    "file": "landing-hero-wide.png",
+    "Hash": "845BA485F24C01ED882E8AAF43FCEAB87B8CB626905904514EBAE89F4CA2777D"
+  },
+  {
+    "file": "landing-mobile-dark.png",
+    "Hash": "EE78C747A77E1F8671F21164DA06245CE3F57C3759C6B018A4C8754E05EC02A5"
+  },
+  {
+    "file": "landing-mobile-light.png",
+    "Hash": "EE78C747A77E1F8671F21164DA06245CE3F57C3759C6B018A4C8754E05EC02A5"
+  },
+  {
+    "file": "landing-product-dark.png",
+    "Hash": "11441F1EDE2E7D17972A15D2333E6B312B6F4238DCB714372DA1D27A20C41CDF"
+  },
+  {
+    "file": "landing-product-light.png",
+    "Hash": "11441F1EDE2E7D17972A15D2333E6B312B6F4238DCB714372DA1D27A20C41CDF"
+  },
+  {
+    "file": "landing-product-wide.png",
+    "Hash": "8EB1B8BCC4C3371BB3D81F475EEC8D583FEE3FDF73A9B01FA8E1A3C1458D549C"
+  },
+  {
+    "file": "landing-specialty-desktop.png",
+    "Hash": "07A0BE58E1C9EACC9CAC4FBACA836A56F35593EB1DB3ACF8BE7C3B71C62027C0"
+  },
+  {
+    "file": "landing-specialty-mobile.png",
+    "Hash": "57952EDD0847BE84465B399CECC5B2255A8CF3A1BFD1A198A0C60871E4D1DB1F"
+  },
+  {
+    "file": "landing-vault-dark.png",
+    "Hash": "FF6A77A73007A479E7B5179AD9B9FB20B7B65FDACFD9FEB943DEA4CCF2A7A4AA"
+  },
+  {
+    "file": "landing-vault-light.png",
+    "Hash": "FF6A77A73007A479E7B5179AD9B9FB20B7B65FDACFD9FEB943DEA4CCF2A7A4AA"
+  }
+]

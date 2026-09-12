@@ -1,0 +1,70 @@
+{
+  "date": "2026-09-12T19:22:36.837Z",
+  "finance": {
+    "before": {
+      "amounts": [
+        "$ 25.000",
+        "$ 25.000",
+        "$ 25.000",
+        "$ 25.000",
+        "$ 25.000",
+        "$ 25.000"
+      ],
+      "summaries": [
+        "$\n875k",
+        "$\n50k",
+        "35",
+        "$\n25k",
+        "$\n2.6M"
+      ]
+    },
+    "filtered": {
+      "amounts": [
+        "$ 25.000"
+      ],
+      "summaries": [
+        "$\n875k",
+        "$\n50k",
+        "35",
+        "$\n25k",
+        "$\n2.6M"
+      ]
+    },
+    "after": {
+      "amounts": [
+        "$ 25.000",
+        "$ 25.000",
+        "$ 25.000",
+        "$ 25.000",
+        "$ 25.000",
+        "$ 25.000"
+      ],
+      "summaries": [
+        "$\n875k",
+        "$\n50k",
+        "35",
+        "$\n25k",
+        "$\n2.6M"
+      ]
+    },
+    "overflow": false
+  },
+  "patients": {
+    "checkbox": {
+      "x": 39,
+      "y": 443.15625,
+      "width": 9,
+      "height": 10
+    },
+    "selectionTarget": {
+      "width": 16,
+      "height": 16
+    },
+    "note": "Header target is inherited 16px label; no selection handler changed in cross review."
+  },
+  "calendar": {
+    "visibleText": "Mateo V.\n11:15\n· Sesión de seguimiento",
+    "accessibleTree": "- button \"Mateo Vidal · 11:15 · Sesión de seguimiento\": Mateo V. 11:15 · Sesión de seguimiento",
+    "label": "Mateo Vidal · 11:15 · Sesión de seguimiento"
+  }
+}

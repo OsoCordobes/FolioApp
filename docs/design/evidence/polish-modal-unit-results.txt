@@ -1,0 +1,236 @@
+
+> folio-app@0.1.0 test:unit C:\Users\amiun\Documents\Codex\folio-experience
+> node scripts/testing/run-unit.mjs "tests/unit/bloqueo-rango.test.ts" "tests/unit/cobertura-paciente.test.ts" "tests/unit/paciente-contacto.test.ts"
+
+TAP version 13
+# Subtest: la medianoche local de Argentina son las 03:00 UTC, no las 00:00
+ok 1 - la medianoche local de Argentina son las 03:00 UTC, no las 00:00
+  ---
+  duration_ms: 15.4836
+  type: 'test'
+  ...
+# Subtest: fechaLocalEnTz devuelve el día del consultorio, no el UTC
+ok 2 - fechaLocalEnTz devuelve el día del consultorio, no el UTC
+  ---
+  duration_ms: 0.9164
+  type: 'test'
+  ...
+# Subtest: sumarDiasIso cruza fin de mes y año bisiesto
+ok 3 - sumarDiasIso cruza fin de mes y año bisiesto
+  ---
+  duration_ms: 0.2174
+  type: 'test'
+  ...
+# Subtest: esFechaIso acepta YYYY-MM-DD y rechaza lo demás
+ok 4 - esFechaIso acepta YYYY-MM-DD y rechaza lo demás
+  ---
+  duration_ms: 0.2316
+  type: 'test'
+  ...
+# Subtest: un all-day de un solo día: start=20, end=21 → bloquea SOLO el 20
+ok 5 - un all-day de un solo día: start=20, end=21 → bloquea SOLO el 20
+  ---
+  duration_ms: 1.029
+  type: 'test'
+  ...
+# Subtest: vacaciones del 20 al 22 llegan como end=23 y son TRES días, no cuatro
+ok 6 - vacaciones del 20 al 22 llegan como end=23 y son TRES días, no cuatro
+  ---
+  duration_ms: 0.8011
+  type: 'test'
+  ...
+# Subtest: un all-day sin end no se pierde: se asume un día
+ok 7 - un all-day sin end no se pierde: se asume un día
+  ---
+  duration_ms: 0.6549
+  type: 'test'
+  ...
+# Subtest: rangoDeDiasCompletos recibe el último día INCLUSIVE
+ok 8 - rangoDeDiasCompletos recibe el último día INCLUSIVE
+  ---
+  duration_ms: 0.584
+  type: 'test'
+  ...
+# Subtest: un end anterior al start no produce rango
+ok 9 - un end anterior al start no produce rango
+  ---
+  duration_ms: 0.2054
+  type: 'test'
+  ...
+# Subtest: un rango de un día produce UN bloqueo de 1440 minutos
+ok 10 - un rango de un día produce UN bloqueo de 1440 minutos
+  ---
+  duration_ms: 1.1152
+  type: 'test'
+  ...
+# Subtest: tres días producen TRES bloqueos, uno por día
+ok 11 - tres días producen TRES bloqueos, uno por día
+  ---
+  duration_ms: 2.7508
+  type: 'test'
+  ...
+# Subtest: ningún segmento viola el CHECK de duración de la tabla
+ok 12 - ningún segmento viola el CHECK de duración de la tabla
+  ---
+  duration_ms: 5.6361
+  type: 'test'
+  ...
+# Subtest: los segmentos son contiguos y no se solapan
+ok 13 - los segmentos son contiguos y no se solapan
+  ---
+  duration_ms: 2.0708
+  type: 'test'
+  ...
+# Subtest: un rango vacío o invertido no produce segmentos
+ok 14 - un rango vacío o invertido no produce segmentos
+  ---
+  duration_ms: 0.6468
+  type: 'test'
+  ...
+# Subtest: coberturaInputSchema: todos opcionales — objeto vacío es válido
+ok 15 - coberturaInputSchema: todos opcionales — objeto vacío es válido
+  ---
+  duration_ms: 3.1577
+  type: 'test'
+  ...
+# Subtest: coberturaInputSchema: acepta valores dentro de los topes (120/40/40)
+ok 16 - coberturaInputSchema: acepta valores dentro de los topes (120/40/40)
+  ---
+  duration_ms: 1.4556
+  type: 'test'
+  ...
+# Subtest: coberturaInputSchema: rechaza nombre > 120
+ok 17 - coberturaInputSchema: rechaza nombre > 120
+  ---
+  duration_ms: 1.146
+  type: 'test'
+  ...
+# Subtest: coberturaInputSchema: rechaza plan > 40 y afiliado > 40
+ok 18 - coberturaInputSchema: rechaza plan > 40 y afiliado > 40
+  ---
+  duration_ms: 0.6983
+  type: 'test'
+  ...
+# Subtest: coberturaInputSchema: string vacío pasa (el writer lo normaliza a null)
+ok 19 - coberturaInputSchema: string vacío pasa (el writer lo normaliza a null)
+  ---
+  duration_ms: 0.4551
+  type: 'test'
+  ...
+# Subtest: normalizarCobertura: trim + vacío → null
+ok 20 - normalizarCobertura: trim + vacío → null
+  ---
+  duration_ms: 0.3906
+  type: 'test'
+  ...
+# Subtest: normalizarCobertura: "Particular" (cualquier case) → null — canónico M89
+ok 21 - normalizarCobertura: "Particular" (cualquier case) → null — canónico M89
+  ---
+  duration_ms: 0.9286
+  type: 'test'
+  ...
+# Subtest: normalizarCobertura: plan y nº afiliado son independientes del nombre
+ok 22 - normalizarCobertura: plan y nº afiliado son independientes del nombre
+  ---
+  duration_ms: 0.2546
+  type: 'test'
+  ...
+# Subtest: normalizarCobertura: undefined/null tolerados
+ok 23 - normalizarCobertura: undefined/null tolerados
+  ---
+  duration_ms: 1.1206
+  type: 'test'
+  ...
+# Subtest: normalizarCobertura: un nombre que CONTIENE "particular" no se borra
+ok 24 - normalizarCobertura: un nombre que CONTIENE "particular" no se borra
+  ---
+  duration_ms: 0.6054
+  type: 'test'
+  ...
+# Subtest: formatCobertura: nombre + plan + afiliado → "OSDE 210 · Nº 123456"
+ok 25 - formatCobertura: nombre + plan + afiliado → "OSDE 210 · Nº 123456"
+  ---
+  duration_ms: 0.2682
+  type: 'test'
+  ...
+# Subtest: formatCobertura: solo nombre
+ok 26 - formatCobertura: solo nombre
+  ---
+  duration_ms: 0.1203
+  type: 'test'
+  ...
+# Subtest: formatCobertura: nombre + afiliado sin plan
+ok 27 - formatCobertura: nombre + afiliado sin plan
+  ---
+  duration_ms: 0.097
+  type: 'test'
+  ...
+# Subtest: formatCobertura: sin nombre → "Particular" (aunque haya plan/afiliado)
+ok 28 - formatCobertura: sin nombre → "Particular" (aunque haya plan/afiliado)
+  ---
+  duration_ms: 0.1088
+  type: 'test'
+  ...
+# Subtest: OBRAS_SOCIALES_AR: incluye las más comunes y no tiene duplicados
+ok 29 - OBRAS_SOCIALES_AR: incluye las más comunes y no tiene duplicados
+  ---
+  duration_ms: 0.2254
+  type: 'test'
+  ...
+# Subtest: recalcula los DOS blind indexes, con la sal de la organización
+ok 30 - recalcula los DOS blind indexes, con la sal de la organización
+  ---
+  duration_ms: 60.4251
+  type: 'test'
+  ...
+# Subtest: el hash del nombre se arma como 'nombre apellido', igual que el alta
+ok 31 - el hash del nombre se arma como 'nombre apellido', igual que el alta
+  ---
+  duration_ms: 0.8043
+  type: 'test'
+  ...
+# Subtest: cambiar el nombre CAMBIA el hash
+ok 32 - cambiar el nombre CAMBIA el hash
+  ---
+  duration_ms: 2.8405
+  type: 'test'
+  ...
+# Subtest: cambiar el teléfono CAMBIA su hash
+ok 33 - cambiar el teléfono CAMBIA su hash
+  ---
+  duration_ms: 0.8161
+  type: 'test'
+  ...
+# Subtest: el dni_hash NO se toca: el documento no se edita desde este modal
+ok 34 - el dni_hash NO se toca: el documento no se edita desde este modal
+  ---
+  duration_ms: 0.5729
+  type: 'test'
+  ...
+# Subtest: email y ocupación vacíos se guardan como NULL, no como cadena vacía
+ok 35 - email y ocupación vacíos se guardan como NULL, no como cadena vacía
+  ---
+  duration_ms: 0.6513
+  type: 'test'
+  ...
+# Subtest: los campos de texto se guardan trimmeados
+ok 36 - los campos de texto se guardan trimmeados
+  ---
+  duration_ms: 0.7616
+  type: 'test'
+  ...
+# Subtest: todas las columnas de PII salen cifradas, nunca en claro
+ok 37 - todas las columnas de PII salen cifradas, nunca en claro
+  ---
+  duration_ms: 0.4619
+  type: 'test'
+  ...
+1..37
+# tests 37
+# suites 0
+# pass 37
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 77217.5395

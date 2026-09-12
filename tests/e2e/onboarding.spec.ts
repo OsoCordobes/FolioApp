@@ -78,18 +78,18 @@ test.beforeEach(async ({ context }) => {
  */
 async function signupHastaOnboarding(page: Page, email: string): Promise<void> {
   await page.goto("/login");
-  await expect(page.getByRole("heading", { name: /entrar/i })).toBeVisible({
+  await expect(page.getByRole("heading", { level: 1, name: "Volvé a tu consultorio." })).toBeVisible({
     timeout: 15_000,
   });
 
   await page.getByRole("button", { name: /crear cuenta/i }).first().click();
-  await expect(page.getByRole("heading", { name: /crear cuenta/i })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Tu práctica empieza acá." })).toBeVisible();
 
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(PASSWORD);
   // Consent Ley 25.326 art. 14: obligatorio antes del signup.
   await page.locator('input[type="checkbox"]').first().check();
-  await page.getByRole("button", { name: /empezar/i }).click();
+  await page.getByRole("button", { name: "Crear cuenta", exact: true }).click();
 
   await page.waitForURL(/\/onboarding/, { timeout: 30_000 });
   // Resume state cae en Step 2 (signup ya hecho): NO debe verse el headline de
@@ -178,7 +178,7 @@ test.describe("Onboarding premium · signup → especialidad", () => {
       const finalizar = page.getByRole("button", { name: /ir al panel|empezar a usar|listo/i });
       if (await finalizar.count()) break;
       const avanzar = page
-        .getByRole("button", { name: /continuar|siguiente|saltar|omitir/i })
+        .getByRole("button", { name: /continuar|siguiente|configurar después|omitir/i })
         .first();
       if (!(await avanzar.count())) break;
       await avanzar.click();

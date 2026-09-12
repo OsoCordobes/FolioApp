@@ -14,7 +14,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 
 import * as I from "@/components/icons";
 import {
@@ -261,6 +261,7 @@ function PlanTratamiento() {
 
 function HistorialReciente() {
   const { plan } = usePacienteFicha();
+  const historialId = useId();
   const [expanded, setExpanded] = useState(false);
   const visibles = expanded ? plan.sesiones : plan.sesiones.slice(0, 4);
 
@@ -268,12 +269,13 @@ function HistorialReciente() {
     <section className="pc-card pc-historial">
       <header className="pc-card-head">
         <span className="fi-eyebrow">Historial reciente</span>
-        <button type="button" className="pc-link" onClick={() => setExpanded((v) => !v)}>
-          {expanded ? "Mostrar menos" : `Ver todas (${plan.sesiones.length})`}
-
-        </button>
+        {plan.sesiones.length > 4 ? (
+          <button type="button" className="pc-link" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded} aria-controls={historialId}>
+            {expanded ? "Mostrar menos" : `Ver todas (${plan.sesiones.length})`}
+          </button>
+        ) : null}
       </header>
-      <div className="pc-historial-list">
+      <div id={historialId} className="pc-historial-list">
         {visibles.map((s, i) => (
           <div key={s.fecha} className="pc-historial-row">
             <div className="pc-historial-marker">
@@ -652,6 +654,7 @@ function TabPlan() {
             historial={filtrarToolHistorial(plan.toolHistorial, especialidad)}
             {...toolExtras}
           />
+          <div className="pc-session-notes">
           {/* Continuidad EXPLÍCITA. La nota de hoy arranca vacía (el SOAP
               editable es el del turno ancla); si el profesional quiere seguir
               desde la visita anterior, la trae él, con la fecha a la vista. En
@@ -696,6 +699,7 @@ function TabPlan() {
                 : undefined
             }
           />
+          </div>
         </div>
       )}
 
@@ -751,7 +755,7 @@ function TabPlan() {
       />
 
       {turnoActivo ? (
-        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 12 }}>
+        <div className="pc-session-actions">
           {saveError ? (
             <span role="alert" style={{ color: "var(--red)", fontSize: 12.5 }}>
               {saveError}
@@ -985,6 +989,7 @@ const SOAP_DETALLE = [
 
 function TabSesiones() {
   const { plan, paciente } = usePacienteFicha();
+  const sesionesId = useId();
   // D2 · filas expandibles: set de keys abiertas (estado local — el panel
   // queda montado con `hidden`, así que sobrevive el cambio de tab).
   const [abiertas, setAbiertas] = useState<ReadonlySet<string>>(new Set());
@@ -1065,6 +1070,7 @@ function TabSesiones() {
                     className="pc-link"
                     onClick={() => toggle(key)}
                     aria-expanded={abierta}
+                    aria-controls={abierta ? `${sesionesId}-${i}` : undefined}
                     title={abierta ? "Ocultar el detalle de esta sesión" : "Ver el SOAP completo de esta sesión"}
                   >
                     {abierta ? "Ocultar detalle" : "Ver detalle"}
@@ -1082,7 +1088,7 @@ function TabSesiones() {
                 )}
               </div>
               {abierta && s.soap ? (
-                <div className="pc-sesion-detalle">
+                <div id={`${sesionesId}-${i}`} className="pc-sesion-detalle">
                   {soapConContenido.length > 0 ? (
                     <div className="pc-sesion-soap">
                       {soapConContenido.map(([k, label]) => (

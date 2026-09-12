@@ -1,0 +1,13 @@
+{
+  "visible": false,
+  "overlay": [
+    "-1 0   Issue "
+  ],
+  "frames": [
+    "{\"action\":\"built\",\"hash\":\"1168\",\"errors\":[],\"warnings\":[]}",
+    "{\"action\":\"sync\",\"errors\":[],\"warnings\":[],\"hash\":\"\",\"versionInfo\":{\"installed\":\"15.5.24\",\"staleness\":\"unknown\"},\"debug\":{},\"devIndicator\":{\"disabledUntil\":0},\"devToolsConfig\":{}}",
+    "{\"action\":\"built\",\"hash\":\"1170\",\"errors\":[],\"warnings\":[]}",
+    "{\"action\":\"built\",\"hash\":\"1172\",\"errors\":[],\"warnings\":[]}",
+    "{\"action\":\"built\",\"hash\":\"1174\",\"errors\":[],\"warnings\":[]}"
+  ]
+}

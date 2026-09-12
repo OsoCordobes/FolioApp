@@ -1,0 +1,9 @@
+{
+  "unit": { "exitCode": 0, "passed": 1628, "failed": 0, "skipped": 0 },
+  "typecheck": { "exitCode": 0 },
+  "lint": { "exitCode": 0 },
+  "interactions": { "exitCode": 0, "passed": 18, "failed": 0 },
+  "platformE2e": { "exitCode": 0, "passed": 8, "failed": 0 },
+  "diffWhitespace": { "exitCode": 0 },
+  "note": "Scoped platform cycle; real component fixtures and local synthetic gallery. No live backend verification."
+}

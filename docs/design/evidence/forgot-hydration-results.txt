@@ -1,0 +1,10 @@
+
+Running 1 test using 1 worker
+
+(node:31116) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:31116) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 1 tests\e2e\side-art.spec.ts:17:7 › Acceso · ilustración estable y formulario › recuperar acceso hidrata sin errores al abrir y recargar (2.1s)
+
+  1 passed (3.5s)

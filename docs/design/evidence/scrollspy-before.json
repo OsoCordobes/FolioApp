@@ -1,0 +1,1679 @@
+[
+  {
+    "width": 1920,
+    "height": 1080,
+    "states": [
+      {
+        "id": "producto",
+        "scrollY": 935,
+        "active": [
+          "#producto"
+        ],
+        "current": [
+          [
+            "#producto",
+            "true"
+          ]
+        ],
+        "entries": [
+          {
+            "id": "producto",
+            "margin": "-45% 0px -50% 0px",
+            "intersecting": false,
+            "root": {
+              "x": 0,
+              "y": 486,
+              "width": 1920,
+              "height": 54,
+              "top": 486,
+              "right": 1920,
+              "bottom": 540,
+              "left": 0
+            },
+            "target": {
+              "x": 232,
+              "y": 1011.265625,
+              "width": 1456,
+              "height": 1125.515625,
+              "top": 1011.265625,
+              "right": 1688,
+              "bottom": 2136.78125,
+              "left": 232
+            }
+          },
+          {
+            "id": "dia",
+            "margin": "-45% 0px -50% 0px",
+            "intersecting": false,
+            "root": {
+              "x": 0,
+              "y": 486,
+              "width": 1920,
+              "height": 54,
+              "top": 486,
+              "right": 1920,
+              "bottom": 540,
+              "left": 0
+            },
+            "target": {
+              "x": 0,
+              "y": 2136.78125,
+              "width": 1920,
+              "height": 652.25,
+              "top": 2136.78125,
+              "right": 1920,
+              "bottom": 2789.03125,
+              "left": 0
+            }
+          },
+          {
+            "id": "precios",
+            "margin": "-45% 0px -50% 0px",
+            "intersecting": false,
+            "root": {
+              "x": 0,
+              "y": 486,
+              "width": 1920,
+              "height": 54,
+              "top": 486,
+              "right": 1920,
+              "bottom": 540,
+              "left": 0
+            },
+            "target": {
+              "x": 232,
+              "y": 4804.25,
+              "width": 1456,
+              "height": 978.578125,
+              "top": 4804.25,
+              "right": 1688,
+              "bottom": 5782.828125,
+              "left": 232
+            }
+          },
+          {
+            "id": "producto",
+            "intersecting": true,
+            "root": {
+              "x": 0,
+              "y": 0,
+              "width": 1920,
+              "height": 1080,
+              "top": 0,
+              "right": 1920,
+              "bottom": 1080,
+              "left": 0
+            },
+            "target": {
+              "x": 232,
+              "y": 1011.265625,
+              "width": 1456,
+              "height": 1125.515625,
+              "top": 1011.265625,
+              "right": 1688,
+              "bottom": 2136.78125,
+              "left": 232
+            }
+          },
+          {
+            "id": "dia",
+            "intersecting": false,
+            "root": {
+              "x": 0,
+              "y": 0,
+              "width": 1920,
+              "height": 1080,
+              "top": 0,
+              "right": 1920,
+              "bottom": 1080,
+              "left": 0
+            },
+            "target": {
+              "x": 0,
+              "y": 2136.78125,
+              "width": 1920,
+              "height": 652.25,
+              "top": 2136.78125,
+              "right": 1920,
+              "bottom": 2789.03125,
+              "left": 0
+            }
+          },
+          {
+            "id": "precios",
+            "intersecting": false,
+            "root": {
+              "x": 0,
+              "y": 0,
+              "width": 1920,
+              "height": 1080,
+              "top": 0,
+              "right": 1920,
+              "bottom": 1080,
+              "left": 0
+            },
+            "target": {
+              "x": 232,
+              "y": 4804.25,
+              "width": 1456,
+              "height": 978.578125,
+              "top": 4804.25,
+              "right": 1688,
+              "bottom": 5782.828125,
+              "left": 232
+            }
+          },
+          {
+            "id": "producto",
+            "margin": "-45% 0px -50% 0px",
+            "intersecting": true,
+            "root": {
+              "x": 0,
+              "y": 486,
+              "width": 1920,
+              "height": 54,
+              "top": 486,
+              "right": 1920,
+              "bottom": 540,
+              "left": 0
+            },
+            "target": {
+              "x": 232,
+              "y": 76.265625,
+              "width": 1456,
+              "height": 1125.515625,
+              "top": 76.265625,
+              "right": 1688,
+              "bottom": 1201.78125,
+              "left": 232
+            }
+          },
+          {
+            "id": "producto",
+            "intersecting": true,
+            "root": {
+              "x": 0,
+              "y": 0,
+              "width": 1920,
+              "height": 1080,
+              "top": 0,
+              "right": 1920,
+              "bottom": 1080,
+              "left": 0
+            },
+            "target": {
+              "x": 232,
+              "y": 76.265625,
+              "width": 1456,
+              "height": 1125.515625,
+              "top": 76.265625,
+              "right": 1688,
+              "bottom": 1201.78125,
+              "left": 232
+            }
+          }
+        ],
+        "ax": "- banner:\n  - link \"Saltar al contenido\":\n    - /url: \"#contenido\"\n  - link \"Folio — inicio\":\n    - /url: /\n    - img \"Folio\"\n    - text: folio.\n  - navigation \"Secciones principales\":\n    - link \"Producto\":\n      - /url: \"#producto\"\n    - link \"Cómo funciona\":\n      - /url: \"#dia\"\n    - link \"Precios\":\n      - /url: \"#precios\"\n  - link \"Ingresar\":\n    - /url: /login\n  - link \"Probar Folio\":\n    - /url: /onboarding"
+      },
+      {
+        "id": "dia",
+        "scrollY": 2061,
+        "active": [
+          "#dia"
+        ],
+        "current": [
+          [
+            "#dia",
+            "true"
+          ]
+        ],
+        "entries": [
+          {
+            "id": "producto",
+            "margin": "-45% 0px -50% 0px",
+            "intersecting": false,
+            "root": {
+              "x": 0,
+              "y": 486,
+              "width": 1920,
+              "height": 54,
+              "top": 486,
+              "right": 1920,
+              "bottom": 540,
+              "left": 0
+            },
+            "target": {
+              "x": 232,
+              "y": -1049.734375,
+              "width": 1456,
+              "height": 1125.515625,
+              "top": -1049.734375,
+              "right": 1688,
+              "bottom": 75.78125,
+              "left": 232
+            }
+          },
+          {
+            "id": "dia",
+            "margin": "-45% 0px -50% 0px",
+            "intersecting": true,
+            "root": {
+              "x": 0,
+              "y": 486,
+              "width": 1920,
+              "height": 54,
+              "top": 486,
+              "right": 1920,
+              "bottom": 540,
+              "left": 0
+            },
+            "target": {
+              "x": 0,
+              "y": 75.78125,
+              "width": 1920,
+              "height": 652.25,
+              "top": 75.78125,
+              "right": 1920,
+              "bottom": 728.03125,
+              "left": 0
+            }
+          },
+          {
+            "id": "producto",
+            "intersecting": true,
+            "root": {
+              "x": 0,
+              "y": 0,
+              "width": 1920,
+              "height": 1080,
+              "top": 0,
+              "right": 1920,
+              "bottom": 1080,
+              "left": 0
+            },
+            "target": {
+              "x": 232,
+              "y": -1049.734375,
+              "width": 1456,
+              "height": 1125.515625,
+              "top": -1049.734375,
+              "right": 1688,
+              "bottom": 75.78125,
+              "left": 232
+            }
+          },
+          {
+            "id": "dia",
+            "intersecting": true,
+            "root": {
+              "x": 0,
+              "y": 0,
+              "width": 1920,
+              "height": 1080,
+              "top": 0,
+              "right": 1920,
+              "bottom": 1080,
+              "left": 0
+            },
+            "target": {
+              "x": 0,
+              "y": 75.78125,
+              "width": 1920,
+              "height": 652.25,
+              "top": 75.78125,
+              "right": 1920,
+              "bottom": 728.03125,
+              "left": 0
+            }
+          }
+        ],
+        "ax": "- banner:\n  - link \"Saltar al contenido\":\n    - /url: \"#contenido\"\n  - link \"Folio — inicio\":\n    - /url: /\n    - img \"Folio\"\n    - text: folio.\n  - navigation \"Secciones principales\":\n    - link \"Producto\":\n      - /url: \"#producto\"\n    - link \"Cómo funciona\":\n      - /url: \"#dia\"\n    - link \"Precios\":\n      - /url: \"#precios\"\n  - link \"Ingresar\":\n    - /url: /login\n  - link \"Probar Folio\":\n    - /url: /onboarding"
+      },
+      {
+        "id": "precios",
+        "scrollY": 4728,
+        "active": [
+          "#precios"
+        ],
+        "current": [
+          [
+            "#precios",
+            "true"
+          ]
+        ],
+        "entries": [
+          {
+            "id": "dia",
+            "margin": "-45% 0px -50% 0px",
+            "intersecting": false,
+            "root": {
+              "x": 0,
+              "y": 486,
+              "width": 1920,
+              "height": 54,
+              "top": 486,
+              "right": 1920,
+              "bottom": 540,
+              "left": 0
+            },
+            "target": {
+              "x": 0,
+              "y": -2591.21875,
+              "width": 1920,
+              "height": 652.25,
+              "top": -2591.21875,
+              "right": 1920,
+              "bottom": -1938.96875,
+              "left": 0
+            }
+          },
+          {
+            "id": "precios",
+            "margin": "-45% 0px -50% 0px",
+            "intersecting": true,
+            "root": {
+              "x": 0,
+              "y": 486,
+              "width": 1920,
+              "height": 54,
+              "top": 486,
+              "right": 1920,
+              "bottom": 540,
+              "left": 0
+            },
+            "target": {
+              "x": 232,
+              "y": 76.25,
+              "width": 1456,
+              "height": 978.578125,
+              "top": 76.25,
+              "right": 1688,
+              "bottom": 1054.828125,
+              "left": 232
+            }
+          },
+          {
+            "id": "producto",
+            "intersecting": false,
+            "root": {
+              "x": 0,
+              "y": 0,
+              "width": 1920,
+              "height": 1080,
+              "top": 0,
+              "right": 1920,
+              "bottom": 1080,
+              "left": 0
+            },
+            "target": {
+              "x": 232,
+              "y": -3716.734375,
+              "width": 1456,
+              "height": 1125.515625,
+              "top": -3716.734375,
+              "right": 1688,
+              "bottom": -2591.21875,
+              "left": 232
+            }
+          },
+          {
+            "id": "dia",
+            "intersecting": false,
+            "root": {
+              "x": 0,
+              "y": 0,
+              "width": 1920,
+              "height": 1080,
+              "top": 0,
+              "right": 1920,
+              "bottom": 1080,
+              "left": 0
+            },
+            "target": {
+              "x": 0,
+              "y": -2591.21875,
+              "width": 1920,
+              "height": 652.25,
+              "top": -2591.21875,
+              "right": 1920,
+              "bottom": -1938.96875,
+              "left": 0
+            }
+          },
+          {
+            "id": "precios",
+            "intersecting": true,
+            "root": {
+              "x": 0,
+              "y": 0,
+              "width": 1920,
+              "height": 1080,
+              "top": 0,
+              "right": 1920,
+              "bottom": 1080,
+              "left": 0
+            },
+            "target": {
+              "x": 232,
+              "y": 76.25,
+              "width": 1456,
+              "height": 978.578125,
+              "top": 76.25,
+              "right": 1688,
+              "bottom": 1054.828125,
+              "left": 232
+            }
+          }
+        ],
+        "ax": "- banner:\n  - link \"Saltar al contenido\":\n    - /url: \"#contenido\"\n  - link \"Folio — inicio\":\n    - /url: /\n    - img \"Folio\"\n    - text: folio.\n  - navigation \"Secciones principales\":\n    - link \"Producto\":\n      - /url: \"#producto\"\n    - link \"Cómo funciona\":\n      - /url: \"#dia\"\n    - link \"Precios\":\n      - /url: \"#precios\"\n  - link \"Ingresar\":\n    - /url: /login\n  - link \"Probar Folio\":\n    - /url: /onboarding"
+      },
+      {
+        "id": "hero",
+        "scrollY": 0,
+        "active": [
+          "#precios"
+        ],
+        "current": [
+          [
+            "#precios",
+            "true"
+          ]
+        ],
+        "entries": [
+          {
+            "id": "precios",
+            "margin": "-45% 0px -50% 0px",
+            "intersecting": false,
+            "root": {
+              "x": 0,
+              "y": 486,
+              "width": 1920,
+              "height": 54,
+              "top": 486,
+              "right": 1920,
+              "bottom": 540,
+              "left": 0
+            },
+            "target": {
+              "x": 232,
+              "y": 4804.25,
+              "width": 1456,
+              "height": 978.578125,
+              "top": 4804.25,
+              "right": 1688,
+              "bottom": 5782.828125,
+              "left": 232
+            }
+          },
+          {
+            "id": "producto",
+            "intersecting": true,
+            "root": {
+              "x": 0,
+              "y": 0,
+              "width": 1920,
+              "height": 1080,
+              "top": 0,
+              "right": 1920,
+              "bottom": 1080,
+              "left": 0
+            },
+            "target": {
+              "x": 232,
+              "y": 1011.265625,
+              "width": 1456,
+              "height": 1125.515625,
+              "top": 1011.265625,
+              "right": 1688,
+              "bottom": 2136.78125,
+              "left": 232
+            }
+          },
+          {
+            "id": "precios",
+            "intersecting": false,
+            "root": {
+              "x": 0,
+              "y": 0,
+              "width": 1920,
+              "height": 1080,
+              "top": 0,
+              "right": 1920,
+              "bottom": 1080,
+              "left": 0
+            },
+            "target": {
+              "x": 232,
+              "y": 4804.25,
+              "width": 1456,
+              "height": 978.578125,
+              "top": 4804.25,
+              "right": 1688,
+              "bottom": 5782.828125,
+              "left": 232
+            }
+          }
+        ],
+        "ax": "- banner:\n  - link \"Saltar al contenido\":\n    - /url: \"#contenido\"\n  - link \"Folio — inicio\":\n    - /url: /\n    - img \"Folio\"\n    - text: folio.\n  - navigation \"Secciones principales\":\n    - link \"Producto\":\n      - /url: \"#producto\"\n    - link \"Cómo funciona\":\n      - /url: \"#dia\"\n    - link \"Precios\":\n      - /url: \"#precios\"\n  - link \"Ingresar\":\n    - /url: /login\n  - link \"Probar Folio\":\n    - /url: /onboarding"
+      }
+    ]
+  },
+  {
+    "width": 2560,
+    "height": 1440,
+    "states": [
+      {
+        "id": "producto",
+        "scrollY": 1033,
+        "active": [
+          "#producto"
+        ],
+        "current": [
+          [
+            "#producto",
+            "true"
+          ]
+        ],
+        "entries": [
+          {
+            "id": "producto",
+            "intersecting": true,
+            "root": {
+              "x": 0,
+              "y": 0,
+              "width": 2560,
+              "height": 1440,
+              "top": 0,
+              "right": 2560,
+              "bottom": 1440,
+              "left": 0
+            },
+            "target": {
+              "x": 328,
+              "y": 1109.203125,
+              "width": 1904,
+              "height": 1170.890625,
+              "top": 1109.203125,
+              "right": 2232,
+              "bottom": 2280.09375,
+              "left": 328
+            }
+          },
+          {
+            "id": "dia",
+            "intersecting": false,
+            "root": {
+              "x": 0,
+              "y": 0,
+              "width": 2560,
+              "height": 1440,
+              "top": 0,
+              "right": 2560,
+              "bottom": 1440,
+              "left": 0
+            },
+            "target": {
+              "x": 0,
+              "y": 2280.09375,
+              "width": 2560,
+              "height": 699.5,
+              "top": 2280.09375,
+              "right": 2560,
+              "bottom": 2979.59375,
+              "left": 0
+            }
+          },
+          {
+            "id": "precios",
+            "intersecting": false,
+            "root": {
+              "x": 0,
+              "y": 0,
+              "width": 2560,
+              "height": 1440,
+              "top": 0,
+              "right": 2560,
+              "bottom": 1440,
+              "left": 0
+            },
+            "target": {
+              "x": 328,
+              "y": 5162.484375,
+              "width": 1904,
+              "height": 1046.046875,
+              "top": 5162.484375,
+              "right": 2232,
+              "bottom": 6208.53125,
+              "left": 328
+            }
+          },
+          {
+            "id": "producto",
+            "margin": "-45% 0px -50% 0px",
+            "intersecting": false,
+            "root": {
+              "x": 0,
+              "y": 648,
+              "width": 2560,
+              "height": 72,
+              "top": 648,
+              "right": 2560,
+              "bottom": 720,
+              "left": 0
+            },
+            "target": {
+              "x": 328,
+              "y": 1109.203125,
+              "width": 1904,
+              "height": 1170.890625,
+              "top": 1109.203125,
+              "right": 2232,
+              "bottom": 2280.09375,
+              "left": 328
+            }
+          },
+          {
+            "id": "dia",
+            "margin": "-45% 0px -50% 0px",
+            "intersecting": false,
+            "root": {
+              "x": 0,
+              "y": 648,
+              "width": 2560,
+              "height": 72,
+              "top": 648,
+              "right": 2560,
+              "bottom": 720,
+              "left": 0
+            },
+            "target": {
+              "x": 0,
+              "y": 2280.09375,
+              "width": 2560,
+              "height": 699.5,
+              "top": 2280.09375,
+              "right": 2560,
+              "bottom": 2979.59375,
+              "left": 0
+            }
+          },
+          {
+            "id": "precios",
+            "margin": "-45% 0px -50% 0px",
+            "intersecting": false,
+            "root": {
+              "x": 0,
+              "y": 648,
+              "width": 2560,
+              "height": 72,
+              "top": 648,
+              "right": 2560,
+              "bottom": 720,
+              "left": 0
+            },
+            "target": {
+              "x": 328,
+              "y": 5162.484375,
+              "width": 1904,
+              "height": 1046.046875,
+              "top": 5162.484375,
+              "right": 2232,
+              "bottom": 6208.53125,
+              "left": 328
+            }
+          },
+          {
+            "id": "producto",
+            "intersecting": true,
+            "root": {
+              "x": 0,
+              "y": 0,
+              "width": 2560,
+              "height": 1440,
+              "top": 0,
+              "right": 2560,
+              "bottom": 1440,
+              "left": 0
+            },
+            "target": {
+              "x": 328,
+              "y": 76.203125,
+              "width": 1904,
+              "height": 1170.890625,
+              "top": 76.203125,
+              "right": 2232,
+              "bottom": 1247.09375,
+              "left": 328
+            }
+          },
+          {
+            "id": "dia",
+            "intersecting": true,
+            "root": {
+              "x": 0,
+              "y": 0,
+              "width": 2560,
+              "height": 1440,
+              "top": 0,
+              "right": 2560,
+              "bottom": 1440,
+              "left": 0
+            },
+            "target": {
+              "x": 0,
+              "y": 1247.09375,
+              "width": 2560,
+              "height": 699.5,
+              "top": 1247.09375,
+              "right": 2560,
+              "bottom": 1946.59375,
+              "left": 0
+            }
+          },
+          {
+            "id": "producto",
+            "margin": "-45% 0px -50% 0px",
+            "intersecting": true,
+            "root": {
+              "x": 0,
+              "y": 648,
+              "width": 2560,
+              "height": 72,
+              "top": 648,
+              "right": 2560,
+              "bottom": 720,
+              "left": 0
+            },
+            "target": {
+              "x": 328,
+              "y": 76.203125,
+              "width": 1904,
+              "height": 1170.890625,
+              "top": 76.203125,
+              "right": 2232,
+              "bottom": 1247.09375,
+              "left": 328
+            }
+          }
+        ],
+        "ax": "- banner:\n  - link \"Saltar al contenido\":\n    - /url: \"#contenido\"\n  - link \"Folio — inicio\":\n    - /url: /\n    - img \"Folio\"\n    - text: folio.\n  - navigation \"Secciones principales\":\n    - link \"Producto\":\n      - /url: \"#producto\"\n    - link \"Cómo funciona\":\n      - /url: \"#dia\"\n    - link \"Precios\":\n      - /url: \"#precios\"\n  - link \"Ingresar\":\n    - /url: /login\n  - link \"Probar Folio\":\n    - /url: /onboarding"
+      },
+      {
+        "id": "dia",
+        "scrollY": 2204,
+        "active": [
+          "#dia"
+        ],
+        "current": [
+          [
+            "#dia",
+            "true"
+          ]
+        ],
+        "entries": [
+          {
+            "id": "producto",
+            "intersecting": true,
+            "root": {
+              "x": 0,
+              "y": 0,
+              "width": 2560,
+              "height": 1440,
+              "top": 0,
+              "right": 2560,
+              "bottom": 1440,
+              "left": 0
+            },
+            "target": {
+              "x": 328,
+              "y": -1094.796875,
+              "width": 1904,
+              "height": 1170.890625,
+              "top": -1094.796875,
+              "right": 2232,
+              "bottom": 76.09375,
+              "left": 328
+            }
+          },
+          {
+            "id": "dia",
+            "intersecting": true,
+            "root": {
+              "x": 0,
+              "y": 0,
+              "width": 2560,
+              "height": 1440,
+              "top": 0,
+              "right": 2560,
+              "bottom": 1440,
+              "left": 0
+            },
+            "target": {
+              "x": 0,
+              "y": 76.09375,
+              "width": 2560,
+              "height": 699.5,
+              "top": 76.09375,
+              "right": 2560,
+              "bottom": 775.59375,
+              "left": 0
+            }
+          },
+          {
+            "id": "producto",
+            "margin": "-45% 0px -50% 0px",
+            "intersecting": false,
+            "root": {
+              "x": 0,
+              "y": 648,
+              "width": 2560,
+              "height": 72,
+              "top": 648,
+              "right": 2560,
+              "bottom": 720,
+              "left": 0
+            },
+            "target": {
+              "x": 328,
+              "y": -1094.796875,
+              "width": 1904,
+              "height": 1170.890625,
+              "top": -1094.796875,
+              "right": 2232,
+              "bottom": 76.09375,
+              "left": 328
+            }
+          },
+          {
+            "id": "dia",
+            "margin": "-45% 0px -50% 0px",
+            "intersecting": true,
+            "root": {
+              "x": 0,
+              "y": 648,
+              "width": 2560,
+              "height": 72,
+              "top": 648,
+              "right": 2560,
+              "bottom": 720,
+              "left": 0
+            },
+            "target": {
+              "x": 0,
+              "y": 76.09375,
+              "width": 2560,
+              "height": 699.5,
+              "top": 76.09375,
+              "right": 2560,
+              "bottom": 775.59375,
+              "left": 0
+            }
+          }
+        ],
+        "ax": "- banner:\n  - link \"Saltar al contenido\":\n    - /url: \"#contenido\"\n  - link \"Folio — inicio\":\n    - /url: /\n    - img \"Folio\"\n    - text: folio.\n  - navigation \"Secciones principales\":\n    - link \"Producto\":\n      - /url: \"#producto\"\n    - link \"Cómo funciona\":\n      - /url: \"#dia\"\n    - link \"Precios\":\n      - /url: \"#precios\"\n  - link \"Ingresar\":\n    - /url: /login\n  - link \"Probar Folio\":\n    - /url: /onboarding"
+      },
+      {
+        "id": "precios",
+        "scrollY": 5086,
+        "active": [
+          "#precios"
+        ],
+        "current": [
+          [
+            "#precios",
+            "true"
+          ]
+        ],
+        "entries": [
+          {
+            "id": "producto",
+            "intersecting": false,
+            "root": {
+              "x": 0,
+              "y": 0,
+              "width": 2560,
+              "height": 1440,
+              "top": 0,
+              "right": 2560,
+              "bottom": 1440,
+              "left": 0
+            },
+            "target": {
+              "x": 328,
+              "y": -3976.796875,
+              "width": 1904,
+              "height": 1170.890625,
+              "top": -3976.796875,
+              "right": 2232,
+              "bottom": -2805.90625,
+              "left": 328
+            }
+          },
+          {
+            "id": "dia",
+            "intersecting": false,
+            "root": {
+              "x": 0,
+              "y": 0,
+              "width": 2560,
+              "height": 1440,
+              "top": 0,
+              "right": 2560,
+              "bottom": 1440,
+              "left": 0
+            },
+            "target": {
+              "x": 0,
+              "y": -2805.90625,
+              "width": 2560,
+              "height": 699.5,
+              "top": -2805.90625,
+              "right": 2560,
+              "bottom": -2106.40625,
+              "left": 0
+            }
+          },
+          {
+            "id": "precios",
+            "intersecting": true,
+            "root": {
+              "x": 0,
+              "y": 0,
+              "width": 2560,
+              "height": 1440,
+              "top": 0,
+              "right": 2560,
+              "bottom": 1440,
+              "left": 0
+            },
+            "target": {
+              "x": 328,
+              "y": 76.484375,
+              "width": 1904,
+              "height": 1046.046875,
+              "top": 76.484375,
+              "right": 2232,
+              "bottom": 1122.53125,
+              "left": 328
+            }
+          },
+          {
+            "id": "dia",
+            "margin": "-45% 0px -50% 0px",
+            "intersecting": false,
+            "root": {
+              "x": 0,
+              "y": 648,
+              "width": 2560,
+              "height": 72,
+              "top": 648,
+              "right": 2560,
+              "bottom": 720,
+              "left": 0
+            },
+            "target": {
+              "x": 0,
+              "y": -2805.90625,
+              "width": 2560,
+              "height": 699.5,
+              "top": -2805.90625,
+              "right": 2560,
+              "bottom": -2106.40625,
+              "left": 0
+            }
+          },
+          {
+            "id": "precios",
+            "margin": "-45% 0px -50% 0px",
+            "intersecting": true,
+            "root": {
+              "x": 0,
+              "y": 648,
+              "width": 2560,
+              "height": 72,
+              "top": 648,
+              "right": 2560,
+              "bottom": 720,
+              "left": 0
+            },
+            "target": {
+              "x": 328,
+              "y": 76.484375,
+              "width": 1904,
+              "height": 1046.046875,
+              "top": 76.484375,
+              "right": 2232,
+              "bottom": 1122.53125,
+              "left": 328
+            }
+          }
+        ],
+        "ax": "- banner:\n  - link \"Saltar al contenido\":\n    - /url: \"#contenido\"\n  - link \"Folio — inicio\":\n    - /url: /\n    - img \"Folio\"\n    - text: folio.\n  - navigation \"Secciones principales\":\n    - link \"Producto\":\n      - /url: \"#producto\"\n    - link \"Cómo funciona\":\n      - /url: \"#dia\"\n    - link \"Precios\":\n      - /url: \"#precios\"\n  - link \"Ingresar\":\n    - /url: /login\n  - link \"Probar Folio\":\n    - /url: /onboarding"
+      },
+      {
+        "id": "hero",
+        "scrollY": 0,
+        "active": [
+          "#precios"
+        ],
+        "current": [
+          [
+            "#precios",
+            "true"
+          ]
+        ],
+        "entries": [
+          {
+            "id": "producto",
+            "intersecting": true,
+            "root": {
+              "x": 0,
+              "y": 0,
+              "width": 2560,
+              "height": 1440,
+              "top": 0,
+              "right": 2560,
+              "bottom": 1440,
+              "left": 0
+            },
+            "target": {
+              "x": 328,
+              "y": 1109.203125,
+              "width": 1904,
+              "height": 1170.890625,
+              "top": 1109.203125,
+              "right": 2232,
+              "bottom": 2280.09375,
+              "left": 328
+            }
+          },
+          {
+            "id": "precios",
+            "intersecting": false,
+            "root": {
+              "x": 0,
+              "y": 0,
+              "width": 2560,
+              "height": 1440,
+              "top": 0,
+              "right": 2560,
+              "bottom": 1440,
+              "left": 0
+            },
+            "target": {
+              "x": 328,
+              "y": 5162.484375,
+              "width": 1904,
+              "height": 1046.046875,
+              "top": 5162.484375,
+              "right": 2232,
+              "bottom": 6208.53125,
+              "left": 328
+            }
+          },
+          {
+            "id": "precios",
+            "margin": "-45% 0px -50% 0px",
+            "intersecting": false,
+            "root": {
+              "x": 0,
+              "y": 648,
+              "width": 2560,
+              "height": 72,
+              "top": 648,
+              "right": 2560,
+              "bottom": 720,
+              "left": 0
+            },
+            "target": {
+              "x": 328,
+              "y": 5162.484375,
+              "width": 1904,
+              "height": 1046.046875,
+              "top": 5162.484375,
+              "right": 2232,
+              "bottom": 6208.53125,
+              "left": 328
+            }
+          }
+        ],
+        "ax": "- banner:\n  - link \"Saltar al contenido\":\n    - /url: \"#contenido\"\n  - link \"Folio — inicio\":\n    - /url: /\n    - img \"Folio\"\n    - text: folio.\n  - navigation \"Secciones principales\":\n    - link \"Producto\":\n      - /url: \"#producto\"\n    - link \"Cómo funciona\":\n      - /url: \"#dia\"\n    - link \"Precios\":\n      - /url: \"#precios\"\n  - link \"Ingresar\":\n    - /url: /login\n  - link \"Probar Folio\":\n    - /url: /onboarding"
+      }
+    ]
+  },
+  {
+    "width": 390,
+    "height": 844,
+    "states": [
+      {
+        "id": "producto",
+        "scrollY": 1078,
+        "active": [
+          "#producto"
+        ],
+        "current": [
+          [
+            "#producto",
+            "true"
+          ]
+        ],
+        "entries": [
+          {
+            "id": "producto",
+            "intersecting": false,
+            "root": {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 844,
+              "top": 0,
+              "right": 390,
+              "bottom": 844,
+              "left": 0
+            },
+            "target": {
+              "x": 22,
+              "y": 1153.609375,
+              "width": 346,
+              "height": 1112.0625,
+              "top": 1153.609375,
+              "right": 368,
+              "bottom": 2265.671875,
+              "left": 22
+            }
+          },
+          {
+            "id": "dia",
+            "intersecting": false,
+            "root": {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 844,
+              "top": 0,
+              "right": 390,
+              "bottom": 844,
+              "left": 0
+            },
+            "target": {
+              "x": 0,
+              "y": 2265.671875,
+              "width": 390,
+              "height": 842.640625,
+              "top": 2265.671875,
+              "right": 390,
+              "bottom": 3108.3125,
+              "left": 0
+            }
+          },
+          {
+            "id": "precios",
+            "intersecting": false,
+            "root": {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 844,
+              "top": 0,
+              "right": 390,
+              "bottom": 844,
+              "left": 0
+            },
+            "target": {
+              "x": 22,
+              "y": 5268.78125,
+              "width": 346,
+              "height": 1338.03125,
+              "top": 5268.78125,
+              "right": 368,
+              "bottom": 6606.8125,
+              "left": 22
+            }
+          },
+          {
+            "id": "producto",
+            "margin": "-45% 0px -50% 0px",
+            "intersecting": false,
+            "root": {
+              "x": 0,
+              "y": 379,
+              "width": 390,
+              "height": 43,
+              "top": 379,
+              "right": 390,
+              "bottom": 422,
+              "left": 0
+            },
+            "target": {
+              "x": 22,
+              "y": 1153.609375,
+              "width": 346,
+              "height": 1112.0625,
+              "top": 1153.609375,
+              "right": 368,
+              "bottom": 2265.671875,
+              "left": 22
+            }
+          },
+          {
+            "id": "dia",
+            "margin": "-45% 0px -50% 0px",
+            "intersecting": false,
+            "root": {
+              "x": 0,
+              "y": 379,
+              "width": 390,
+              "height": 43,
+              "top": 379,
+              "right": 390,
+              "bottom": 422,
+              "left": 0
+            },
+            "target": {
+              "x": 0,
+              "y": 2265.671875,
+              "width": 390,
+              "height": 842.640625,
+              "top": 2265.671875,
+              "right": 390,
+              "bottom": 3108.3125,
+              "left": 0
+            }
+          },
+          {
+            "id": "precios",
+            "margin": "-45% 0px -50% 0px",
+            "intersecting": false,
+            "root": {
+              "x": 0,
+              "y": 379,
+              "width": 390,
+              "height": 43,
+              "top": 379,
+              "right": 390,
+              "bottom": 422,
+              "left": 0
+            },
+            "target": {
+              "x": 22,
+              "y": 5268.78125,
+              "width": 346,
+              "height": 1338.03125,
+              "top": 5268.78125,
+              "right": 368,
+              "bottom": 6606.8125,
+              "left": 22
+            }
+          },
+          {
+            "id": "producto",
+            "intersecting": true,
+            "root": {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 844,
+              "top": 0,
+              "right": 390,
+              "bottom": 844,
+              "left": 0
+            },
+            "target": {
+              "x": 22,
+              "y": 75.609375,
+              "width": 346,
+              "height": 1112.0625,
+              "top": 75.609375,
+              "right": 368,
+              "bottom": 1187.671875,
+              "left": 22
+            }
+          },
+          {
+            "id": "producto",
+            "margin": "-45% 0px -50% 0px",
+            "intersecting": true,
+            "root": {
+              "x": 0,
+              "y": 379,
+              "width": 390,
+              "height": 43,
+              "top": 379,
+              "right": 390,
+              "bottom": 422,
+              "left": 0
+            },
+            "target": {
+              "x": 22,
+              "y": 75.609375,
+              "width": 346,
+              "height": 1112.0625,
+              "top": 75.609375,
+              "right": 368,
+              "bottom": 1187.671875,
+              "left": 22
+            }
+          }
+        ],
+        "ax": "- banner:\n  - link \"Saltar al contenido\":\n    - /url: \"#contenido\"\n  - link \"Folio — inicio\":\n    - /url: /\n    - img \"Folio\"\n    - text: folio.\n  - link \"Ingresar\":\n    - /url: /login\n  - button \"Abrir menú de navegación\""
+      },
+      {
+        "id": "dia",
+        "scrollY": 2190,
+        "active": [
+          "#dia"
+        ],
+        "current": [
+          [
+            "#dia",
+            "true"
+          ]
+        ],
+        "entries": [
+          {
+            "id": "producto",
+            "intersecting": true,
+            "root": {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 844,
+              "top": 0,
+              "right": 390,
+              "bottom": 844,
+              "left": 0
+            },
+            "target": {
+              "x": 22,
+              "y": -1036.390625,
+              "width": 346,
+              "height": 1112.0625,
+              "top": -1036.390625,
+              "right": 368,
+              "bottom": 75.671875,
+              "left": 22
+            }
+          },
+          {
+            "id": "dia",
+            "intersecting": true,
+            "root": {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 844,
+              "top": 0,
+              "right": 390,
+              "bottom": 844,
+              "left": 0
+            },
+            "target": {
+              "x": 0,
+              "y": 75.671875,
+              "width": 390,
+              "height": 842.640625,
+              "top": 75.671875,
+              "right": 390,
+              "bottom": 918.3125,
+              "left": 0
+            }
+          },
+          {
+            "id": "producto",
+            "margin": "-45% 0px -50% 0px",
+            "intersecting": false,
+            "root": {
+              "x": 0,
+              "y": 379,
+              "width": 390,
+              "height": 43,
+              "top": 379,
+              "right": 390,
+              "bottom": 422,
+              "left": 0
+            },
+            "target": {
+              "x": 22,
+              "y": -1036.390625,
+              "width": 346,
+              "height": 1112.0625,
+              "top": -1036.390625,
+              "right": 368,
+              "bottom": 75.671875,
+              "left": 22
+            }
+          },
+          {
+            "id": "dia",
+            "margin": "-45% 0px -50% 0px",
+            "intersecting": true,
+            "root": {
+              "x": 0,
+              "y": 379,
+              "width": 390,
+              "height": 43,
+              "top": 379,
+              "right": 390,
+              "bottom": 422,
+              "left": 0
+            },
+            "target": {
+              "x": 0,
+              "y": 75.671875,
+              "width": 390,
+              "height": 842.640625,
+              "top": 75.671875,
+              "right": 390,
+              "bottom": 918.3125,
+              "left": 0
+            }
+          }
+        ],
+        "ax": "- banner:\n  - link \"Saltar al contenido\":\n    - /url: \"#contenido\"\n  - link \"Folio — inicio\":\n    - /url: /\n    - img \"Folio\"\n    - text: folio.\n  - link \"Ingresar\":\n    - /url: /login\n  - button \"Abrir menú de navegación\""
+      },
+      {
+        "id": "precios",
+        "scrollY": 5193,
+        "active": [
+          "#precios"
+        ],
+        "current": [
+          [
+            "#precios",
+            "true"
+          ]
+        ],
+        "entries": [
+          {
+            "id": "producto",
+            "intersecting": false,
+            "root": {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 844,
+              "top": 0,
+              "right": 390,
+              "bottom": 844,
+              "left": 0
+            },
+            "target": {
+              "x": 22,
+              "y": -4039.390625,
+              "width": 346,
+              "height": 1112.0625,
+              "top": -4039.390625,
+              "right": 368,
+              "bottom": -2927.328125,
+              "left": 22
+            }
+          },
+          {
+            "id": "dia",
+            "intersecting": false,
+            "root": {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 844,
+              "top": 0,
+              "right": 390,
+              "bottom": 844,
+              "left": 0
+            },
+            "target": {
+              "x": 0,
+              "y": -2927.328125,
+              "width": 390,
+              "height": 842.640625,
+              "top": -2927.328125,
+              "right": 390,
+              "bottom": -2084.6875,
+              "left": 0
+            }
+          },
+          {
+            "id": "precios",
+            "intersecting": true,
+            "root": {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 844,
+              "top": 0,
+              "right": 390,
+              "bottom": 844,
+              "left": 0
+            },
+            "target": {
+              "x": 22,
+              "y": 75.78125,
+              "width": 346,
+              "height": 1338.03125,
+              "top": 75.78125,
+              "right": 368,
+              "bottom": 1413.8125,
+              "left": 22
+            }
+          },
+          {
+            "id": "dia",
+            "margin": "-45% 0px -50% 0px",
+            "intersecting": false,
+            "root": {
+              "x": 0,
+              "y": 379,
+              "width": 390,
+              "height": 43,
+              "top": 379,
+              "right": 390,
+              "bottom": 422,
+              "left": 0
+            },
+            "target": {
+              "x": 0,
+              "y": -2927.328125,
+              "width": 390,
+              "height": 842.640625,
+              "top": -2927.328125,
+              "right": 390,
+              "bottom": -2084.6875,
+              "left": 0
+            }
+          },
+          {
+            "id": "precios",
+            "margin": "-45% 0px -50% 0px",
+            "intersecting": true,
+            "root": {
+              "x": 0,
+              "y": 379,
+              "width": 390,
+              "height": 43,
+              "top": 379,
+              "right": 390,
+              "bottom": 422,
+              "left": 0
+            },
+            "target": {
+              "x": 22,
+              "y": 75.78125,
+              "width": 346,
+              "height": 1338.03125,
+              "top": 75.78125,
+              "right": 368,
+              "bottom": 1413.8125,
+              "left": 22
+            }
+          }
+        ],
+        "ax": "- banner:\n  - link \"Saltar al contenido\":\n    - /url: \"#contenido\"\n  - link \"Folio — inicio\":\n    - /url: /\n    - img \"Folio\"\n    - text: folio.\n  - link \"Ingresar\":\n    - /url: /login\n  - button \"Abrir menú de navegación\""
+      },
+      {
+        "id": "hero",
+        "scrollY": 0,
+        "active": [
+          "#precios"
+        ],
+        "current": [
+          [
+            "#precios",
+            "true"
+          ]
+        ],
+        "entries": [
+          {
+            "id": "precios",
+            "intersecting": false,
+            "root": {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 844,
+              "top": 0,
+              "right": 390,
+              "bottom": 844,
+              "left": 0
+            },
+            "target": {
+              "x": 22,
+              "y": 5268.78125,
+              "width": 346,
+              "height": 1338.03125,
+              "top": 5268.78125,
+              "right": 368,
+              "bottom": 6606.8125,
+              "left": 22
+            }
+          },
+          {
+            "id": "precios",
+            "margin": "-45% 0px -50% 0px",
+            "intersecting": false,
+            "root": {
+              "x": 0,
+              "y": 379,
+              "width": 390,
+              "height": 43,
+              "top": 379,
+              "right": 390,
+              "bottom": 422,
+              "left": 0
+            },
+            "target": {
+              "x": 22,
+              "y": 5268.78125,
+              "width": 346,
+              "height": 1338.03125,
+              "top": 5268.78125,
+              "right": 368,
+              "bottom": 6606.8125,
+              "left": 22
+            }
+          }
+        ],
+        "ax": "- banner:\n  - link \"Saltar al contenido\":\n    - /url: \"#contenido\"\n  - link \"Folio — inicio\":\n    - /url: /\n    - img \"Folio\"\n    - text: folio.\n  - link \"Ingresar\":\n    - /url: /login\n  - button \"Abrir menú de navegación\""
+      }
+    ]
+  }
+]

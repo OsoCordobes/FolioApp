@@ -1,0 +1,13 @@
+
+Running 5 tests using 1 worker
+
+
+
+
+
+[1A[2K[1/5] tests\e2e\design-scrollspy.spec.ts:67:7 › sección actual y regreso al inicio a 1920×1080
+[1A[2K[2/5] tests\e2e\design-scrollspy.spec.ts:67:7 › sección actual y regreso al inicio a 2560×1440
+[1A[2K[3/5] tests\e2e\design-scrollspy.spec.ts:67:7 › sección actual y regreso al inicio a 390×844
+[1A[2K[4/5] tests\e2e\design-scrollspy.spec.ts:91:5 › reconstruye la banda al pasar de escritorio a móvil y vuelve a detectar cada sección
+[1A[2K[5/5] tests\e2e\design-scrollspy.spec.ts:108:5 › StrictMode limpia enlaces y observadores al desmontar y admite un montaje nuevo
+[1A[2K  5 passed (6.7s)

@@ -27,6 +27,7 @@ import { useMemo, useState, useTransition, type ReactNode } from "react";
 
 import * as I from "@/components/icons";
 import { useToast } from "@/components/ui/toast";
+import { normalizarBusqueda } from "@/lib/format/busqueda";
 import { niceCeil } from "@/lib/format/nice-ceil";
 import type {
   FinanzasData,
@@ -269,7 +270,7 @@ function LineChart({ dias, hoyFecha }: { dias: FinanzasDiaIngreso[]; hoyFecha: s
               strokeWidth="1"
               strokeDasharray={t === 0 ? "0" : "2 3"}
             />
-            <text x={PAD_L - 8} y={y + 3} textAnchor="end" fill="var(--ink-3)" fontSize="10" fontFamily="Geist Mono" letterSpacing="0">
+            <text x={PAD_L - 8} y={y + 3} textAnchor="end" fill="var(--ink-3)" fontSize="10" fontFamily="var(--font-sans)" letterSpacing="0">
               {t === 0 ? "0" : fmtMonth(t)}
             </text>
           </g>
@@ -279,7 +280,7 @@ function LineChart({ dias, hoyFecha }: { dias: FinanzasDiaIngreso[]; hoyFecha: s
       {labelIdxFor(n).map((i) => {
         const p = points[i];
         return (
-          <text key={p.fecha} x={p.x} y={PAD_T + H + 16} textAnchor="middle" fill="var(--ink-3)" fontSize="10" fontFamily="Geist Mono">
+          <text key={p.fecha} x={p.x} y={PAD_T + H + 16} textAnchor="middle" fill="var(--ink-3)" fontSize="10" fontFamily="var(--font-sans)">
             {p.label}
           </text>
         );
@@ -301,7 +302,7 @@ function LineChart({ dias, hoyFecha }: { dias: FinanzasDiaIngreso[]; hoyFecha: s
       {labPoints.length > 0 ? (
         <>
           <line x1={lastPoint.x} y1={PAD_T} x2={lastPoint.x} y2={PAD_T + H} stroke="var(--accent)" strokeWidth="1" strokeDasharray="2 3" opacity="0.5" />
-          <text x={lastPoint.x} y={PAD_T - 2} textAnchor="middle" fill="var(--accent-2)" fontSize="10" fontFamily="Geist Mono" letterSpacing=".08em">
+          <text x={lastPoint.x} y={PAD_T - 2} textAnchor="middle" fill="var(--accent-2)" fontSize="10" fontFamily="var(--font-sans)" letterSpacing=".08em">
             {lastPoint.fecha === hoyFecha ? "HOY" : lastPoint.label}
           </text>
         </>
@@ -365,7 +366,7 @@ function BarChartMensual({ meses }: { meses: FinanzasMesIngreso[] }) {
               strokeWidth="1"
               strokeDasharray={t === 0 ? "0" : "2 3"}
             />
-            <text x={PAD_L - 8} y={y + 3} textAnchor="end" fill="var(--ink-3)" fontSize="10" fontFamily="Geist Mono" letterSpacing="0">
+            <text x={PAD_L - 8} y={y + 3} textAnchor="end" fill="var(--ink-3)" fontSize="10" fontFamily="var(--font-sans)" letterSpacing="0">
               {t === 0 ? "0" : fmtMonth(t)}
             </text>
           </g>
@@ -381,7 +382,7 @@ function BarChartMensual({ meses }: { meses: FinanzasMesIngreso[] }) {
             <rect x={x} y={y} width={barW} height={h} rx="2" fill="var(--accent)" opacity="0.85">
               <title>{`${mes.label} · ${fmtMoney(mes.monto)}`}</title>
             </rect>
-            <text x={x + barW / 2} y={PAD_T + H + 16} textAnchor="middle" fill="var(--ink-3)" fontSize="10" fontFamily="Geist Mono">
+            <text x={x + barW / 2} y={PAD_T + H + 16} textAnchor="middle" fill="var(--ink-3)" fontSize="10" fontFamily="var(--font-sans)">
               {mes.label}
             </text>
           </g>
@@ -431,10 +432,10 @@ function Donut({ servicios }: { servicios: FinanzasServicioBreakdown[] }) {
         {arcs.map((a) => (
           <path key={a.id} d={a.path} stroke={a.color} strokeWidth={stroke} fill="none" strokeLinecap="butt" />
         ))}
-        <text x={cx} y={cy - 4} textAnchor="middle" fontFamily="Geist Mono" fontSize="9" fill="var(--ink-3)" letterSpacing=".08em">
+        <text x={cx} y={cy - 4} textAnchor="middle" fontFamily="var(--font-sans)" fontSize="9" fill="var(--ink-3)" letterSpacing=".08em">
           TOTAL
         </text>
-        <text x={cx} y={cy + 14} textAnchor="middle" fontFamily="Geist" fontWeight="600" fontSize="17" letterSpacing="-.015em" fill="var(--ink)">
+        <text x={cx} y={cy + 14} textAnchor="middle" fontFamily="var(--font-sans)" fontWeight="600" fontSize="17" letterSpacing="-.015em" fill="var(--ink)">
           ${fmtMonth(total)}
         </text>
       </svg>
@@ -515,10 +516,10 @@ function TablaTransacciones({
       rows = rows.filter((t) => t.estado === target);
     }
     if (!search.trim()) return rows;
-    const q = search.toLowerCase();
+    const q = normalizarBusqueda(search);
     return rows.filter((t) =>
-      t.paciente.toLowerCase().includes(q) ||
-      t.servicio.toLowerCase().includes(q) ||
+      normalizarBusqueda(t.paciente).includes(q) ||
+      normalizarBusqueda(t.servicio).includes(q) ||
       String(t.monto).includes(q),
     );
   }, [transacciones, search, estadoFiltro]);
@@ -566,6 +567,7 @@ function TablaTransacciones({
             <I.Search size={12} />
             <input
               placeholder="Buscar paciente, monto…"
+              aria-label="Buscar transacciones por paciente o monto"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -584,6 +586,8 @@ function TablaTransacciones({
           </a>
         </div>
       </header>
+      {filtered.length > 0 ? <p className="fi-table-scroll-hint">Deslizá la tabla para ver todos los datos →</p> : null}
+      <div className="fn-table-scroll" role="region" aria-label="Tabla de transacciones" tabIndex={filtered.length > 0 ? 0 : undefined}>
       {filtered.length === 0 ? (
         <p className="muted" style={{ padding: 24, textAlign: "center" }}>
           {transacciones.length === 0
@@ -648,6 +652,7 @@ function TablaTransacciones({
           </tbody>
         </table>
       )}
+      </div>
       {/* H1+H4 · el pie ya no puede prometer "las últimas N": la tabla lista
           TODOS los pendientes del período (cada uno con su botón Cobrar, que no
           existe en ninguna otra pantalla) + los cobros más recientes. Decimos

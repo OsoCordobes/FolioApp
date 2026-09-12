@@ -1,0 +1,2196 @@
+{
+  "date": "2026-09-12T18:41:57.519Z",
+  "kind": "synthetic gallery, local development; not production route bundles",
+  "panels": [
+    {
+      "panel": "hoy",
+      "dom": {
+        "heading": "Tu día en Folio",
+        "elements": 813,
+        "horizontalOverflow": false,
+        "animations": [
+          {
+            "target": "fi-t-dot-pulse",
+            "playState": "running",
+            "duration": 1800,
+            "iterations": "infinite"
+          },
+          {
+            "target": "fi-t-live-dot",
+            "playState": "running",
+            "duration": 1600,
+            "iterations": "infinite"
+          }
+        ],
+        "resources": [
+          {
+            "path": "/_next/static/media/plus_jakarta_sans_latin-s.p.23e35025.woff2",
+            "type": "link",
+            "durationMs": 12.599999994039536,
+            "decodedBytes": 27348,
+            "transferBytes": 27648
+          },
+          {
+            "path": "/_next/static/chunks/app_dev_experience_preview_module_18693353.css",
+            "type": "link",
+            "durationMs": 12.599999994039536,
+            "decodedBytes": 2589,
+            "transferBytes": 697
+          },
+          {
+            "path": "/_next/static/chunks/_94658742._.css",
+            "type": "link",
+            "durationMs": 21.899999976158142,
+            "decodedBytes": 525115,
+            "transferBytes": 76217
+          },
+          {
+            "path": "/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_291db8aa._.js",
+            "type": "link",
+            "durationMs": 18.69999998807907,
+            "decodedBytes": 671,
+            "transferBytes": 971
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_compiled_react-dom_fee9f161._.js",
+            "type": "script",
+            "durationMs": 59.400000005960464,
+            "decodedBytes": 900313,
+            "transferBytes": 156994
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_19860ebf._.js",
+            "type": "script",
+            "durationMs": 40.099999994039536,
+            "decodedBytes": 153693,
+            "transferBytes": 26960
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_router_cdf6bcdd.js",
+            "type": "script",
+            "durationMs": 44.5,
+            "decodedBytes": 586,
+            "transferBytes": 886
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_compiled_43f605f3._.js",
+            "type": "script",
+            "durationMs": 43.69999998807907,
+            "decodedBytes": 293429,
+            "transferBytes": 54529
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_shared_lib_885b9817._.js",
+            "type": "script",
+            "durationMs": 43.099999994039536,
+            "decodedBytes": 297956,
+            "transferBytes": 47905
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_client_f2ae0558._.js",
+            "type": "script",
+            "durationMs": 50.30000001192093,
+            "decodedBytes": 596218,
+            "transferBytes": 102648
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_compiled_next-devtools_index_62b081dd.js",
+            "type": "script",
+            "durationMs": 83.90000000596046,
+            "decodedBytes": 1504610,
+            "transferBytes": 267303
+          },
+          {
+            "path": "/_next/static/chunks/8f169_%40sentry_browser_build_npm_esm_dev_89fdaa02._.js",
+            "type": "script",
+            "durationMs": 54.400000005960464,
+            "decodedBytes": 291823,
+            "transferBytes": 41401
+          },
+          {
+            "path": "/_next/static/chunks/7e3f3_%40sentry-internal_browser-utils_build_esm_7840a293._.js",
+            "type": "script",
+            "durationMs": 56.20000001788139,
+            "decodedBytes": 327105,
+            "transferBytes": 42769
+          },
+          {
+            "path": "/_next/static/chunks/dfbaa_%40sentry_nextjs_build_esm_2bd128f8._.js",
+            "type": "script",
+            "durationMs": 58.30000001192093,
+            "decodedBytes": 121920,
+            "transferBytes": 19486
+          },
+          {
+            "path": "/_next/static/chunks/4de1b_%40sentry_core_build_esm_e834e689._.js",
+            "type": "script",
+            "durationMs": 71.5,
+            "decodedBytes": 886338,
+            "transferBytes": 140655
+          },
+          {
+            "path": "/_next/static/chunks/node_modules__pnpm_a4bebb13._.js",
+            "type": "script",
+            "durationMs": 59.80000001192093,
+            "decodedBytes": 10546,
+            "transferBytes": 2852
+          },
+          {
+            "path": "/_next/static/chunks/_8f8f3e28._.js",
+            "type": "script",
+            "durationMs": 61.60000002384186,
+            "decodedBytes": 9174,
+            "transferBytes": 2817
+          },
+          {
+            "path": "/_next/static/chunks/_a0ff3932._.js",
+            "type": "script",
+            "durationMs": 65,
+            "decodedBytes": 1067,
+            "transferBytes": 767
+          },
+          {
+            "path": "/_next/static/chunks/turbopack-_7a6db24c._.js",
+            "type": "script",
+            "durationMs": 67.2000000178814,
+            "decodedBytes": 73810,
+            "transferBytes": 18620
+          },
+          {
+            "path": "/_next/static/chunks/app_favicon_ico_mjs_59975b63._.js",
+            "type": "script",
+            "durationMs": 65.89999997615814,
+            "decodedBytes": 255,
+            "transferBytes": 555
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_4cdfa4a1._.js",
+            "type": "script",
+            "durationMs": 69.09999999403954,
+            "decodedBytes": 147578,
+            "transferBytes": 21716
+          },
+          {
+            "path": "/_next/static/chunks/node_modules__pnpm_e9a1dd8b._.js",
+            "type": "script",
+            "durationMs": 70.69999998807907,
+            "decodedBytes": 2118,
+            "transferBytes": 810
+          },
+          {
+            "path": "/_next/static/chunks/_593d6526._.js",
+            "type": "script",
+            "durationMs": 73.39999997615814,
+            "decodedBytes": 46583,
+            "transferBytes": 8676
+          },
+          {
+            "path": "/_next/static/chunks/node_modules__pnpm_1558e316._.js",
+            "type": "script",
+            "durationMs": 88.09999999403954,
+            "decodedBytes": 436243,
+            "transferBytes": 56115
+          },
+          {
+            "path": "/_next/static/chunks/app_layout_tsx_585086be._.js",
+            "type": "script",
+            "durationMs": 73.5,
+            "decodedBytes": 379,
+            "transferBytes": 679
+          },
+          {
+            "path": "/_next/static/chunks/app_error_tsx_506914de._.js",
+            "type": "script",
+            "durationMs": 75.19999998807907,
+            "decodedBytes": 240,
+            "transferBytes": 540
+          },
+          {
+            "path": "/_next/static/chunks/_474133c0._.js",
+            "type": "script",
+            "durationMs": 76.5,
+            "decodedBytes": 39688,
+            "transferBytes": 8350
+          },
+          {
+            "path": "/_next/static/chunks/app_not-found_tsx_506914de._.js",
+            "type": "script",
+            "durationMs": 84.30000001192093,
+            "decodedBytes": 255,
+            "transferBytes": 555
+          },
+          {
+            "path": "/_next/static/chunks/_4742a972._.js",
+            "type": "script",
+            "durationMs": 85.30000001192093,
+            "decodedBytes": 2557,
+            "transferBytes": 829
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_170ab26a._.js",
+            "type": "script",
+            "durationMs": 85.09999999403954,
+            "decodedBytes": 25409,
+            "transferBytes": 6058
+          },
+          {
+            "path": "/_next/static/chunks/app_(public)_b05a2fb2._.js",
+            "type": "script",
+            "durationMs": 95.19999998807907,
+            "decodedBytes": 291522,
+            "transferBytes": 84267
+          },
+          {
+            "path": "/_next/static/chunks/app_(app)_hoy_143cd820._.js",
+            "type": "script",
+            "durationMs": 89.90000000596046,
+            "decodedBytes": 132833,
+            "transferBytes": 11893
+          },
+          {
+            "path": "/_next/static/chunks/app_(app)_d524d870._.js",
+            "type": "script",
+            "durationMs": 91.80000001192093,
+            "decodedBytes": 67725,
+            "transferBytes": 8745
+          },
+          {
+            "path": "/_next/static/chunks/app_(app)_configuracion_d71d75fb._.js",
+            "type": "script",
+            "durationMs": 93.80000001192093,
+            "decodedBytes": 371952,
+            "transferBytes": 18425
+          },
+          {
+            "path": "/_next/static/chunks/app_0d9fd9e9._.js",
+            "type": "script",
+            "durationMs": 96,
+            "decodedBytes": 234542,
+            "transferBytes": 29834
+          },
+          {
+            "path": "/_next/static/chunks/lib_instrumentos_292feb3e._.js",
+            "type": "script",
+            "durationMs": 99.2000000178814,
+            "decodedBytes": 177247,
+            "transferBytes": 27171
+          },
+          {
+            "path": "/_next/static/chunks/lib_4d85b63a._.js",
+            "type": "script",
+            "durationMs": 103.09999999403954,
+            "decodedBytes": 155544,
+            "transferBytes": 42180
+          },
+          {
+            "path": "/_next/static/chunks/lib_especialidades_cfcf42d5._.js",
+            "type": "script",
+            "durationMs": 110.59999999403954,
+            "decodedBytes": 906187,
+            "transferBytes": 101619
+          },
+          {
+            "path": "/_next/static/chunks/app_(app)_pacientes_eabfe431._.js",
+            "type": "script",
+            "durationMs": 144.80000001192093,
+            "decodedBytes": 1835327,
+            "transferBytes": 527985
+          },
+          {
+            "path": "/_next/static/chunks/components_calendario_2cc3e143._.js",
+            "type": "script",
+            "durationMs": 106.10000002384186,
+            "decodedBytes": 306172,
+            "transferBytes": 28975
+          },
+          {
+            "path": "/_next/static/chunks/components_hoy_65febc55._.js",
+            "type": "script",
+            "durationMs": 107.2000000178814,
+            "decodedBytes": 315724,
+            "transferBytes": 35644
+          },
+          {
+            "path": "/_next/static/chunks/components_configuracion_caac0d62._.js",
+            "type": "script",
+            "durationMs": 111.10000002384186,
+            "decodedBytes": 405804,
+            "transferBytes": 39126
+          },
+          {
+            "path": "/_next/static/chunks/components_pacientes_85d36aca._.js",
+            "type": "script",
+            "durationMs": 114.59999999403954,
+            "decodedBytes": 184450,
+            "transferBytes": 18062
+          },
+          {
+            "path": "/_next/static/chunks/components_onboarding_dee5e8fd._.js",
+            "type": "script",
+            "durationMs": 115,
+            "decodedBytes": 412363,
+            "transferBytes": 44021
+          },
+          {
+            "path": "/_next/static/chunks/components_paciente_2fce7d02._.js",
+            "type": "script",
+            "durationMs": 120.59999999403954,
+            "decodedBytes": 554903,
+            "transferBytes": 52543
+          },
+          {
+            "path": "/_next/static/chunks/components_506d42df._.js",
+            "type": "script",
+            "durationMs": 123.69999998807907,
+            "decodedBytes": 526703,
+            "transferBytes": 50251
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_33ab87e8._.js",
+            "type": "script",
+            "durationMs": 119.5,
+            "decodedBytes": 247944,
+            "transferBytes": 45183
+          },
+          {
+            "path": "/_next/static/chunks/269b1_%40supabase_postgrest-js_dist_index_mjs_1f90ac9e._.js",
+            "type": "script",
+            "durationMs": 125.40000000596046,
+            "decodedBytes": 136692,
+            "transferBytes": 23651
+          },
+          {
+            "path": "/_next/static/chunks/7e061_%40supabase_auth-js_dist_module_e615547d._.js",
+            "type": "script",
+            "durationMs": 133.59999999403954,
+            "decodedBytes": 509103,
+            "transferBytes": 71986
+          },
+          {
+            "path": "/_next/static/chunks/node_modules__pnpm_951eb01e._.js",
+            "type": "script",
+            "durationMs": 138,
+            "decodedBytes": 448309,
+            "transferBytes": 86544
+          },
+          {
+            "path": "/_next/static/chunks/bba8e_framer-motion_dist_es_2cf990a5._.js",
+            "type": "script",
+            "durationMs": 139.19999998807907,
+            "decodedBytes": 904255,
+            "transferBytes": 109984
+          },
+          {
+            "path": "/_next/static/chunks/9f8f1_zod_v4_630878f8._.js",
+            "type": "script",
+            "durationMs": 140.7999999821186,
+            "decodedBytes": 1161444,
+            "transferBytes": 109411
+          },
+          {
+            "path": "/_next/static/chunks/app_dev_experience_page_tsx_506914de._.js",
+            "type": "script",
+            "durationMs": 130.59999999403954,
+            "decodedBytes": 1444,
+            "transferBytes": 882
+          },
+          {
+            "path": "/_next/static/chunks/_24ff9465._.js",
+            "type": "script",
+            "durationMs": 135.09999999403954,
+            "decodedBytes": 12159,
+            "transferBytes": 2913
+          },
+          {
+            "path": "/_next/static/chunks/app_global-error_tsx_506914de._.js",
+            "type": "script",
+            "durationMs": 137.59999999403954,
+            "decodedBytes": 240,
+            "transferBytes": 540
+          },
+          {
+            "path": "/_next/static/chunks/node_modules__pnpm_799ee4f4._.js",
+            "type": "script",
+            "durationMs": 28.30000001192093,
+            "decodedBytes": 945976,
+            "transferBytes": 107834
+          },
+          {
+            "path": "/_next/static/chunks/3e92b_%40tanstack_query-devtools_build_DevtoolsComponent_VKXKX7EQ_fc39c684.js",
+            "type": "script",
+            "durationMs": 17.599999994039536,
+            "decodedBytes": 258,
+            "transferBytes": 558
+          },
+          {
+            "path": "/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_c8c997ce._.js",
+            "type": "script",
+            "durationMs": 17.200000017881393,
+            "decodedBytes": 16539,
+            "transferBytes": 4307
+          },
+          {
+            "path": "/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_bcedfd79._.js",
+            "type": "script",
+            "durationMs": 17,
+            "decodedBytes": 288,
+            "transferBytes": 588
+          }
+        ]
+      },
+      "idleSeconds": 4,
+      "idle": {
+        "TaskDuration": 0.023106,
+        "ScriptDuration": 0.008875,
+        "LayoutDuration": 0.001381,
+        "RecalcStyleDuration": 0.001962,
+        "LayoutCount": 4,
+        "RecalcStyleCount": 24
+      },
+      "errors": []
+    },
+    {
+      "panel": "calendario",
+      "dom": {
+        "heading": "Calendario",
+        "elements": 982,
+        "horizontalOverflow": false,
+        "animations": [
+          {
+            "target": "cal-turno-pulse",
+            "playState": "running",
+            "duration": 1800,
+            "iterations": "infinite"
+          }
+        ],
+        "resources": [
+          {
+            "path": "/_next/static/media/plus_jakarta_sans_latin-s.p.23e35025.woff2",
+            "type": "link",
+            "durationMs": 12.5,
+            "decodedBytes": 27348,
+            "transferBytes": 27648
+          },
+          {
+            "path": "/_next/static/chunks/app_dev_experience_preview_module_18693353.css",
+            "type": "link",
+            "durationMs": 14.800000011920929,
+            "decodedBytes": 2589,
+            "transferBytes": 697
+          },
+          {
+            "path": "/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_291db8aa._.js",
+            "type": "link",
+            "durationMs": 15.200000017881393,
+            "decodedBytes": 671,
+            "transferBytes": 971
+          },
+          {
+            "path": "/_next/static/chunks/_94658742._.css",
+            "type": "link",
+            "durationMs": 28,
+            "decodedBytes": 525115,
+            "transferBytes": 76217
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_compiled_43f605f3._.js",
+            "type": "script",
+            "durationMs": 23.19999998807907,
+            "decodedBytes": 293429,
+            "transferBytes": 54529
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_shared_lib_885b9817._.js",
+            "type": "script",
+            "durationMs": 27.19999998807907,
+            "decodedBytes": 297956,
+            "transferBytes": 47905
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_19860ebf._.js",
+            "type": "script",
+            "durationMs": 31.399999976158142,
+            "decodedBytes": 153693,
+            "transferBytes": 26960
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_client_f2ae0558._.js",
+            "type": "script",
+            "durationMs": 34.099999994039536,
+            "decodedBytes": 596218,
+            "transferBytes": 102648
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_compiled_react-dom_fee9f161._.js",
+            "type": "script",
+            "durationMs": 38.19999998807907,
+            "decodedBytes": 900313,
+            "transferBytes": 156994
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_compiled_next-devtools_index_62b081dd.js",
+            "type": "script",
+            "durationMs": 56.69999998807907,
+            "decodedBytes": 1504610,
+            "transferBytes": 267303
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_router_cdf6bcdd.js",
+            "type": "script",
+            "durationMs": 33.79999998211861,
+            "decodedBytes": 586,
+            "transferBytes": 886
+          },
+          {
+            "path": "/_next/static/chunks/8f169_%40sentry_browser_build_npm_esm_dev_89fdaa02._.js",
+            "type": "script",
+            "durationMs": 42.29999998211861,
+            "decodedBytes": 291823,
+            "transferBytes": 41401
+          },
+          {
+            "path": "/_next/static/chunks/7e3f3_%40sentry-internal_browser-utils_build_esm_7840a293._.js",
+            "type": "script",
+            "durationMs": 43.599999994039536,
+            "decodedBytes": 327105,
+            "transferBytes": 42769
+          },
+          {
+            "path": "/_next/static/chunks/4de1b_%40sentry_core_build_esm_e834e689._.js",
+            "type": "script",
+            "durationMs": 53.5,
+            "decodedBytes": 886338,
+            "transferBytes": 140655
+          },
+          {
+            "path": "/_next/static/chunks/dfbaa_%40sentry_nextjs_build_esm_2bd128f8._.js",
+            "type": "script",
+            "durationMs": 41.5,
+            "decodedBytes": 121920,
+            "transferBytes": 19486
+          },
+          {
+            "path": "/_next/static/chunks/node_modules__pnpm_a4bebb13._.js",
+            "type": "script",
+            "durationMs": 42.900000005960464,
+            "decodedBytes": 10546,
+            "transferBytes": 2852
+          },
+          {
+            "path": "/_next/static/chunks/_8f8f3e28._.js",
+            "type": "script",
+            "durationMs": 48.5,
+            "decodedBytes": 9174,
+            "transferBytes": 2817
+          },
+          {
+            "path": "/_next/static/chunks/_a0ff3932._.js",
+            "type": "script",
+            "durationMs": 48.80000001192093,
+            "decodedBytes": 1067,
+            "transferBytes": 767
+          },
+          {
+            "path": "/_next/static/chunks/turbopack-_7a6db24c._.js",
+            "type": "script",
+            "durationMs": 50.5,
+            "decodedBytes": 73810,
+            "transferBytes": 18620
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_4cdfa4a1._.js",
+            "type": "script",
+            "durationMs": 51.70000001788139,
+            "decodedBytes": 147578,
+            "transferBytes": 21716
+          },
+          {
+            "path": "/_next/static/chunks/app_favicon_ico_mjs_59975b63._.js",
+            "type": "script",
+            "durationMs": 54.10000002384186,
+            "decodedBytes": 255,
+            "transferBytes": 555
+          },
+          {
+            "path": "/_next/static/chunks/node_modules__pnpm_e9a1dd8b._.js",
+            "type": "script",
+            "durationMs": 55.900000005960464,
+            "decodedBytes": 2118,
+            "transferBytes": 810
+          },
+          {
+            "path": "/_next/static/chunks/_593d6526._.js",
+            "type": "script",
+            "durationMs": 59.400000005960464,
+            "decodedBytes": 46583,
+            "transferBytes": 8676
+          },
+          {
+            "path": "/_next/static/chunks/node_modules__pnpm_1558e316._.js",
+            "type": "script",
+            "durationMs": 67.60000002384186,
+            "decodedBytes": 436243,
+            "transferBytes": 56115
+          },
+          {
+            "path": "/_next/static/chunks/app_layout_tsx_585086be._.js",
+            "type": "script",
+            "durationMs": 57.599999994039536,
+            "decodedBytes": 379,
+            "transferBytes": 679
+          },
+          {
+            "path": "/_next/static/chunks/_474133c0._.js",
+            "type": "script",
+            "durationMs": 60.599999994039536,
+            "decodedBytes": 39688,
+            "transferBytes": 8350
+          },
+          {
+            "path": "/_next/static/chunks/app_error_tsx_506914de._.js",
+            "type": "script",
+            "durationMs": 61.79999998211861,
+            "decodedBytes": 240,
+            "transferBytes": 540
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_170ab26a._.js",
+            "type": "script",
+            "durationMs": 63.89999997615814,
+            "decodedBytes": 25409,
+            "transferBytes": 6058
+          },
+          {
+            "path": "/_next/static/chunks/app_not-found_tsx_506914de._.js",
+            "type": "script",
+            "durationMs": 63.099999994039536,
+            "decodedBytes": 255,
+            "transferBytes": 555
+          },
+          {
+            "path": "/_next/static/chunks/_4742a972._.js",
+            "type": "script",
+            "durationMs": 65.2999999821186,
+            "decodedBytes": 2557,
+            "transferBytes": 829
+          },
+          {
+            "path": "/_next/static/chunks/app_(public)_b05a2fb2._.js",
+            "type": "script",
+            "durationMs": 74.2999999821186,
+            "decodedBytes": 291522,
+            "transferBytes": 84267
+          },
+          {
+            "path": "/_next/static/chunks/app_(app)_hoy_143cd820._.js",
+            "type": "script",
+            "durationMs": 68,
+            "decodedBytes": 132833,
+            "transferBytes": 11893
+          },
+          {
+            "path": "/_next/static/chunks/app_(app)_d524d870._.js",
+            "type": "script",
+            "durationMs": 68.80000001192093,
+            "decodedBytes": 67725,
+            "transferBytes": 8745
+          },
+          {
+            "path": "/_next/static/chunks/app_(app)_configuracion_d71d75fb._.js",
+            "type": "script",
+            "durationMs": 71.90000000596046,
+            "decodedBytes": 371952,
+            "transferBytes": 18425
+          },
+          {
+            "path": "/_next/static/chunks/app_0d9fd9e9._.js",
+            "type": "script",
+            "durationMs": 76.40000000596046,
+            "decodedBytes": 234542,
+            "transferBytes": 29834
+          },
+          {
+            "path": "/_next/static/chunks/lib_especialidades_cfcf42d5._.js",
+            "type": "script",
+            "durationMs": 91.09999999403954,
+            "decodedBytes": 906187,
+            "transferBytes": 101619
+          },
+          {
+            "path": "/_next/static/chunks/app_(app)_pacientes_eabfe431._.js",
+            "type": "script",
+            "durationMs": 123.40000000596046,
+            "decodedBytes": 1835327,
+            "transferBytes": 527985
+          },
+          {
+            "path": "/_next/static/chunks/lib_instrumentos_292feb3e._.js",
+            "type": "script",
+            "durationMs": 77.40000000596046,
+            "decodedBytes": 177247,
+            "transferBytes": 27171
+          },
+          {
+            "path": "/_next/static/chunks/lib_4d85b63a._.js",
+            "type": "script",
+            "durationMs": 78.2000000178814,
+            "decodedBytes": 155544,
+            "transferBytes": 42180
+          },
+          {
+            "path": "/_next/static/chunks/components_calendario_2cc3e143._.js",
+            "type": "script",
+            "durationMs": 82.7000000178814,
+            "decodedBytes": 306172,
+            "transferBytes": 28975
+          },
+          {
+            "path": "/_next/static/chunks/components_hoy_65febc55._.js",
+            "type": "script",
+            "durationMs": 88.7000000178814,
+            "decodedBytes": 315724,
+            "transferBytes": 35644
+          },
+          {
+            "path": "/_next/static/chunks/components_configuracion_caac0d62._.js",
+            "type": "script",
+            "durationMs": 90.30000001192093,
+            "decodedBytes": 405804,
+            "transferBytes": 39126
+          },
+          {
+            "path": "/_next/static/chunks/components_onboarding_dee5e8fd._.js",
+            "type": "script",
+            "durationMs": 90.5,
+            "decodedBytes": 412363,
+            "transferBytes": 44021
+          },
+          {
+            "path": "/_next/static/chunks/components_pacientes_85d36aca._.js",
+            "type": "script",
+            "durationMs": 96.30000001192093,
+            "decodedBytes": 184450,
+            "transferBytes": 18062
+          },
+          {
+            "path": "/_next/static/chunks/components_paciente_2fce7d02._.js",
+            "type": "script",
+            "durationMs": 96.60000002384186,
+            "decodedBytes": 554903,
+            "transferBytes": 52543
+          },
+          {
+            "path": "/_next/static/chunks/269b1_%40supabase_postgrest-js_dist_index_mjs_1f90ac9e._.js",
+            "type": "script",
+            "durationMs": 100.89999997615814,
+            "decodedBytes": 136692,
+            "transferBytes": 23651
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_33ab87e8._.js",
+            "type": "script",
+            "durationMs": 103,
+            "decodedBytes": 247944,
+            "transferBytes": 45183
+          },
+          {
+            "path": "/_next/static/chunks/components_506d42df._.js",
+            "type": "script",
+            "durationMs": 106.7999999821186,
+            "decodedBytes": 526703,
+            "transferBytes": 50251
+          },
+          {
+            "path": "/_next/static/chunks/7e061_%40supabase_auth-js_dist_module_e615547d._.js",
+            "type": "script",
+            "durationMs": 113.59999999403954,
+            "decodedBytes": 509103,
+            "transferBytes": 71986
+          },
+          {
+            "path": "/_next/static/chunks/9f8f1_zod_v4_630878f8._.js",
+            "type": "script",
+            "durationMs": 121.89999997615814,
+            "decodedBytes": 1161444,
+            "transferBytes": 109411
+          },
+          {
+            "path": "/_next/static/chunks/app_dev_experience_page_tsx_506914de._.js",
+            "type": "script",
+            "durationMs": 112.69999998807907,
+            "decodedBytes": 1444,
+            "transferBytes": 882
+          },
+          {
+            "path": "/_next/static/chunks/app_global-error_tsx_506914de._.js",
+            "type": "script",
+            "durationMs": 118.2999999821186,
+            "decodedBytes": 240,
+            "transferBytes": 540
+          },
+          {
+            "path": "/_next/static/chunks/node_modules__pnpm_951eb01e._.js",
+            "type": "script",
+            "durationMs": 119.59999999403954,
+            "decodedBytes": 448309,
+            "transferBytes": 86544
+          },
+          {
+            "path": "/_next/static/chunks/_24ff9465._.js",
+            "type": "script",
+            "durationMs": 119.7999999821186,
+            "decodedBytes": 12159,
+            "transferBytes": 2913
+          },
+          {
+            "path": "/_next/static/chunks/bba8e_framer-motion_dist_es_2cf990a5._.js",
+            "type": "script",
+            "durationMs": 121.5,
+            "decodedBytes": 904255,
+            "transferBytes": 109984
+          },
+          {
+            "path": "/_next/static/chunks/node_modules__pnpm_799ee4f4._.js",
+            "type": "script",
+            "durationMs": 31.099999994039536,
+            "decodedBytes": 945976,
+            "transferBytes": 107834
+          },
+          {
+            "path": "/_next/static/chunks/3e92b_%40tanstack_query-devtools_build_DevtoolsComponent_VKXKX7EQ_fc39c684.js",
+            "type": "script",
+            "durationMs": 15.5,
+            "decodedBytes": 258,
+            "transferBytes": 558
+          },
+          {
+            "path": "/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_c8c997ce._.js",
+            "type": "script",
+            "durationMs": 15.100000023841858,
+            "decodedBytes": 16539,
+            "transferBytes": 4307
+          },
+          {
+            "path": "/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_bcedfd79._.js",
+            "type": "script",
+            "durationMs": 14.199999988079071,
+            "decodedBytes": 288,
+            "transferBytes": 588
+          }
+        ]
+      },
+      "idleSeconds": 4,
+      "idle": {
+        "TaskDuration": 0.0059310000000000005,
+        "ScriptDuration": 0.000503,
+        "LayoutDuration": 0,
+        "RecalcStyleDuration": 0.000618,
+        "LayoutCount": 0,
+        "RecalcStyleCount": 10
+      },
+      "errors": []
+    },
+    {
+      "panel": "pacientes",
+      "dom": {
+        "heading": "Pacientes",
+        "elements": 796,
+        "horizontalOverflow": false,
+        "animations": [],
+        "resources": [
+          {
+            "path": "/_next/static/media/plus_jakarta_sans_latin-s.p.23e35025.woff2",
+            "type": "link",
+            "durationMs": 13.199999988079071,
+            "decodedBytes": 27348,
+            "transferBytes": 27648
+          },
+          {
+            "path": "/_next/static/chunks/app_dev_experience_preview_module_18693353.css",
+            "type": "link",
+            "durationMs": 22.099999994039536,
+            "decodedBytes": 2589,
+            "transferBytes": 697
+          },
+          {
+            "path": "/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_291db8aa._.js",
+            "type": "link",
+            "durationMs": 22.200000017881393,
+            "decodedBytes": 671,
+            "transferBytes": 971
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_compiled_43f605f3._.js",
+            "type": "script",
+            "durationMs": 30.200000017881393,
+            "decodedBytes": 293429,
+            "transferBytes": 54529
+          },
+          {
+            "path": "/_next/static/chunks/_94658742._.css",
+            "type": "link",
+            "durationMs": 33.5,
+            "decodedBytes": 525115,
+            "transferBytes": 76217
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_client_f2ae0558._.js",
+            "type": "script",
+            "durationMs": 41.5,
+            "decodedBytes": 596218,
+            "transferBytes": 102648
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_compiled_react-dom_fee9f161._.js",
+            "type": "script",
+            "durationMs": 46.900000005960464,
+            "decodedBytes": 900313,
+            "transferBytes": 156994
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_compiled_next-devtools_index_62b081dd.js",
+            "type": "script",
+            "durationMs": 64.5,
+            "decodedBytes": 1504610,
+            "transferBytes": 267303
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_shared_lib_885b9817._.js",
+            "type": "script",
+            "durationMs": 34.20000001788139,
+            "decodedBytes": 297956,
+            "transferBytes": 47905
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_19860ebf._.js",
+            "type": "script",
+            "durationMs": 38.20000001788139,
+            "decodedBytes": 153693,
+            "transferBytes": 26960
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_router_cdf6bcdd.js",
+            "type": "script",
+            "durationMs": 38.29999998211861,
+            "decodedBytes": 586,
+            "transferBytes": 886
+          },
+          {
+            "path": "/_next/static/chunks/dfbaa_%40sentry_nextjs_build_esm_2bd128f8._.js",
+            "type": "script",
+            "durationMs": 49.19999998807907,
+            "decodedBytes": 121920,
+            "transferBytes": 19486
+          },
+          {
+            "path": "/_next/static/chunks/8f169_%40sentry_browser_build_npm_esm_dev_89fdaa02._.js",
+            "type": "script",
+            "durationMs": 50.599999994039536,
+            "decodedBytes": 291823,
+            "transferBytes": 41401
+          },
+          {
+            "path": "/_next/static/chunks/7e3f3_%40sentry-internal_browser-utils_build_esm_7840a293._.js",
+            "type": "script",
+            "durationMs": 51.39999997615814,
+            "decodedBytes": 327105,
+            "transferBytes": 42769
+          },
+          {
+            "path": "/_next/static/chunks/4de1b_%40sentry_core_build_esm_e834e689._.js",
+            "type": "script",
+            "durationMs": 60.39999997615814,
+            "decodedBytes": 886338,
+            "transferBytes": 140655
+          },
+          {
+            "path": "/_next/static/chunks/node_modules__pnpm_a4bebb13._.js",
+            "type": "script",
+            "durationMs": 52.79999998211861,
+            "decodedBytes": 10546,
+            "transferBytes": 2852
+          },
+          {
+            "path": "/_next/static/chunks/_8f8f3e28._.js",
+            "type": "script",
+            "durationMs": 55.400000005960464,
+            "decodedBytes": 9174,
+            "transferBytes": 2817
+          },
+          {
+            "path": "/_next/static/chunks/_a0ff3932._.js",
+            "type": "script",
+            "durationMs": 56.599999994039536,
+            "decodedBytes": 1067,
+            "transferBytes": 767
+          },
+          {
+            "path": "/_next/static/chunks/turbopack-_7a6db24c._.js",
+            "type": "script",
+            "durationMs": 59.599999994039536,
+            "decodedBytes": 73810,
+            "transferBytes": 18620
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_4cdfa4a1._.js",
+            "type": "script",
+            "durationMs": 59.900000005960464,
+            "decodedBytes": 147578,
+            "transferBytes": 21716
+          },
+          {
+            "path": "/_next/static/chunks/app_favicon_ico_mjs_59975b63._.js",
+            "type": "script",
+            "durationMs": 61,
+            "decodedBytes": 255,
+            "transferBytes": 555
+          },
+          {
+            "path": "/_next/static/chunks/node_modules__pnpm_e9a1dd8b._.js",
+            "type": "script",
+            "durationMs": 61.5,
+            "decodedBytes": 2118,
+            "transferBytes": 810
+          },
+          {
+            "path": "/_next/static/chunks/app_layout_tsx_585086be._.js",
+            "type": "script",
+            "durationMs": 65.59999999403954,
+            "decodedBytes": 379,
+            "transferBytes": 679
+          },
+          {
+            "path": "/_next/static/chunks/_593d6526._.js",
+            "type": "script",
+            "durationMs": 67.19999998807907,
+            "decodedBytes": 46583,
+            "transferBytes": 8676
+          },
+          {
+            "path": "/_next/static/chunks/node_modules__pnpm_1558e316._.js",
+            "type": "script",
+            "durationMs": 76.69999998807907,
+            "decodedBytes": 436243,
+            "transferBytes": 56115
+          },
+          {
+            "path": "/_next/static/chunks/app_error_tsx_506914de._.js",
+            "type": "script",
+            "durationMs": 67.59999999403954,
+            "decodedBytes": 240,
+            "transferBytes": 540
+          },
+          {
+            "path": "/_next/static/chunks/_474133c0._.js",
+            "type": "script",
+            "durationMs": 68.7000000178814,
+            "decodedBytes": 39688,
+            "transferBytes": 8350
+          },
+          {
+            "path": "/_next/static/chunks/app_not-found_tsx_506914de._.js",
+            "type": "script",
+            "durationMs": 70.60000002384186,
+            "decodedBytes": 255,
+            "transferBytes": 555
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_170ab26a._.js",
+            "type": "script",
+            "durationMs": 71,
+            "decodedBytes": 25409,
+            "transferBytes": 6058
+          },
+          {
+            "path": "/_next/static/chunks/_4742a972._.js",
+            "type": "script",
+            "durationMs": 72.30000001192093,
+            "decodedBytes": 2557,
+            "transferBytes": 829
+          },
+          {
+            "path": "/_next/static/chunks/app_(app)_hoy_143cd820._.js",
+            "type": "script",
+            "durationMs": 74.80000001192093,
+            "decodedBytes": 132833,
+            "transferBytes": 11893
+          },
+          {
+            "path": "/_next/static/chunks/app_(public)_b05a2fb2._.js",
+            "type": "script",
+            "durationMs": 81.30000001192093,
+            "decodedBytes": 291522,
+            "transferBytes": 84267
+          },
+          {
+            "path": "/_next/static/chunks/app_(app)_d524d870._.js",
+            "type": "script",
+            "durationMs": 78.2999999821186,
+            "decodedBytes": 67725,
+            "transferBytes": 8745
+          },
+          {
+            "path": "/_next/static/chunks/app_(app)_configuracion_d71d75fb._.js",
+            "type": "script",
+            "durationMs": 80,
+            "decodedBytes": 371952,
+            "transferBytes": 18425
+          },
+          {
+            "path": "/_next/static/chunks/app_0d9fd9e9._.js",
+            "type": "script",
+            "durationMs": 82.59999999403954,
+            "decodedBytes": 234542,
+            "transferBytes": 29834
+          },
+          {
+            "path": "/_next/static/chunks/lib_instrumentos_292feb3e._.js",
+            "type": "script",
+            "durationMs": 85.2999999821186,
+            "decodedBytes": 177247,
+            "transferBytes": 27171
+          },
+          {
+            "path": "/_next/static/chunks/lib_4d85b63a._.js",
+            "type": "script",
+            "durationMs": 89,
+            "decodedBytes": 155544,
+            "transferBytes": 42180
+          },
+          {
+            "path": "/_next/static/chunks/components_calendario_2cc3e143._.js",
+            "type": "script",
+            "durationMs": 90.40000000596046,
+            "decodedBytes": 306172,
+            "transferBytes": 28975
+          },
+          {
+            "path": "/_next/static/chunks/lib_especialidades_cfcf42d5._.js",
+            "type": "script",
+            "durationMs": 95.59999999403954,
+            "decodedBytes": 906187,
+            "transferBytes": 101619
+          },
+          {
+            "path": "/_next/static/chunks/app_(app)_pacientes_eabfe431._.js",
+            "type": "script",
+            "durationMs": 128.69999998807907,
+            "decodedBytes": 1835327,
+            "transferBytes": 527985
+          },
+          {
+            "path": "/_next/static/chunks/components_hoy_65febc55._.js",
+            "type": "script",
+            "durationMs": 90.5,
+            "decodedBytes": 315724,
+            "transferBytes": 35644
+          },
+          {
+            "path": "/_next/static/chunks/components_configuracion_caac0d62._.js",
+            "type": "script",
+            "durationMs": 95.80000001192093,
+            "decodedBytes": 405804,
+            "transferBytes": 39126
+          },
+          {
+            "path": "/_next/static/chunks/components_pacientes_85d36aca._.js",
+            "type": "script",
+            "durationMs": 99.40000000596046,
+            "decodedBytes": 184450,
+            "transferBytes": 18062
+          },
+          {
+            "path": "/_next/static/chunks/components_onboarding_dee5e8fd._.js",
+            "type": "script",
+            "durationMs": 102.40000000596046,
+            "decodedBytes": 412363,
+            "transferBytes": 44021
+          },
+          {
+            "path": "/_next/static/chunks/components_paciente_2fce7d02._.js",
+            "type": "script",
+            "durationMs": 105.40000000596046,
+            "decodedBytes": 554903,
+            "transferBytes": 52543
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_33ab87e8._.js",
+            "type": "script",
+            "durationMs": 105.2000000178814,
+            "decodedBytes": 247944,
+            "transferBytes": 45183
+          },
+          {
+            "path": "/_next/static/chunks/269b1_%40supabase_postgrest-js_dist_index_mjs_1f90ac9e._.js",
+            "type": "script",
+            "durationMs": 107.40000000596046,
+            "decodedBytes": 136692,
+            "transferBytes": 23651
+          },
+          {
+            "path": "/_next/static/chunks/components_506d42df._.js",
+            "type": "script",
+            "durationMs": 107.59999999403954,
+            "decodedBytes": 526703,
+            "transferBytes": 50251
+          },
+          {
+            "path": "/_next/static/chunks/7e061_%40supabase_auth-js_dist_module_e615547d._.js",
+            "type": "script",
+            "durationMs": 115.2000000178814,
+            "decodedBytes": 509103,
+            "transferBytes": 71986
+          },
+          {
+            "path": "/_next/static/chunks/bba8e_framer-motion_dist_es_2cf990a5._.js",
+            "type": "script",
+            "durationMs": 124.5,
+            "decodedBytes": 904255,
+            "transferBytes": 109984
+          },
+          {
+            "path": "/_next/static/chunks/9f8f1_zod_v4_630878f8._.js",
+            "type": "script",
+            "durationMs": 125.5,
+            "decodedBytes": 1161444,
+            "transferBytes": 109411
+          },
+          {
+            "path": "/_next/static/chunks/app_dev_experience_page_tsx_506914de._.js",
+            "type": "script",
+            "durationMs": 112.2999999821186,
+            "decodedBytes": 1444,
+            "transferBytes": 882
+          },
+          {
+            "path": "/_next/static/chunks/_24ff9465._.js",
+            "type": "script",
+            "durationMs": 119.5,
+            "decodedBytes": 12159,
+            "transferBytes": 2913
+          },
+          {
+            "path": "/_next/static/chunks/app_global-error_tsx_506914de._.js",
+            "type": "script",
+            "durationMs": 120.69999998807907,
+            "decodedBytes": 240,
+            "transferBytes": 540
+          },
+          {
+            "path": "/_next/static/chunks/node_modules__pnpm_951eb01e._.js",
+            "type": "script",
+            "durationMs": 122.39999997615814,
+            "decodedBytes": 448309,
+            "transferBytes": 86544
+          },
+          {
+            "path": "/_next/static/chunks/node_modules__pnpm_799ee4f4._.js",
+            "type": "script",
+            "durationMs": 26,
+            "decodedBytes": 945976,
+            "transferBytes": 107834
+          },
+          {
+            "path": "/_next/static/chunks/3e92b_%40tanstack_query-devtools_build_DevtoolsComponent_VKXKX7EQ_fc39c684.js",
+            "type": "script",
+            "durationMs": 15.099999994039536,
+            "decodedBytes": 258,
+            "transferBytes": 558
+          },
+          {
+            "path": "/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_c8c997ce._.js",
+            "type": "script",
+            "durationMs": 14.600000023841858,
+            "decodedBytes": 16539,
+            "transferBytes": 4307
+          },
+          {
+            "path": "/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_bcedfd79._.js",
+            "type": "script",
+            "durationMs": 14.399999976158142,
+            "decodedBytes": 288,
+            "transferBytes": 588
+          }
+        ]
+      },
+      "idleSeconds": 4,
+      "idle": {
+        "TaskDuration": 0.001025,
+        "ScriptDuration": 0.000326,
+        "LayoutDuration": 0,
+        "RecalcStyleDuration": 0,
+        "LayoutCount": 0,
+        "RecalcStyleCount": 0
+      },
+      "errors": []
+    },
+    {
+      "panel": "finanzas",
+      "dom": {
+        "heading": "Ingresos del período",
+        "elements": 797,
+        "horizontalOverflow": false,
+        "animations": [],
+        "resources": [
+          {
+            "path": "/_next/static/media/plus_jakarta_sans_latin-s.p.23e35025.woff2",
+            "type": "link",
+            "durationMs": 14.199999988079071,
+            "decodedBytes": 27348,
+            "transferBytes": 27648
+          },
+          {
+            "path": "/_next/static/chunks/app_dev_experience_preview_module_18693353.css",
+            "type": "link",
+            "durationMs": 14.5,
+            "decodedBytes": 2589,
+            "transferBytes": 697
+          },
+          {
+            "path": "/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_291db8aa._.js",
+            "type": "link",
+            "durationMs": 14.799999982118607,
+            "decodedBytes": 671,
+            "transferBytes": 971
+          },
+          {
+            "path": "/_next/static/chunks/_94658742._.css",
+            "type": "link",
+            "durationMs": 25.899999976158142,
+            "decodedBytes": 525115,
+            "transferBytes": 76217
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_compiled_react-dom_fee9f161._.js",
+            "type": "script",
+            "durationMs": 38.19999998807907,
+            "decodedBytes": 900313,
+            "transferBytes": 156994
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_shared_lib_885b9817._.js",
+            "type": "script",
+            "durationMs": 29.69999998807907,
+            "decodedBytes": 297956,
+            "transferBytes": 47905
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_compiled_43f605f3._.js",
+            "type": "script",
+            "durationMs": 31,
+            "decodedBytes": 293429,
+            "transferBytes": 54529
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_client_f2ae0558._.js",
+            "type": "script",
+            "durationMs": 41.5,
+            "decodedBytes": 596218,
+            "transferBytes": 102648
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_compiled_next-devtools_index_62b081dd.js",
+            "type": "script",
+            "durationMs": 65.69999998807907,
+            "decodedBytes": 1504610,
+            "transferBytes": 267303
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_19860ebf._.js",
+            "type": "script",
+            "durationMs": 35.099999994039536,
+            "decodedBytes": 153693,
+            "transferBytes": 26960
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_router_cdf6bcdd.js",
+            "type": "script",
+            "durationMs": 39.400000005960464,
+            "decodedBytes": 586,
+            "transferBytes": 886
+          },
+          {
+            "path": "/_next/static/chunks/4de1b_%40sentry_core_build_esm_e834e689._.js",
+            "type": "script",
+            "durationMs": 59.099999994039536,
+            "decodedBytes": 886338,
+            "transferBytes": 140655
+          },
+          {
+            "path": "/_next/static/chunks/8f169_%40sentry_browser_build_npm_esm_dev_89fdaa02._.js",
+            "type": "script",
+            "durationMs": 47.30000001192093,
+            "decodedBytes": 291823,
+            "transferBytes": 41401
+          },
+          {
+            "path": "/_next/static/chunks/dfbaa_%40sentry_nextjs_build_esm_2bd128f8._.js",
+            "type": "script",
+            "durationMs": 46.900000005960464,
+            "decodedBytes": 121920,
+            "transferBytes": 19486
+          },
+          {
+            "path": "/_next/static/chunks/7e3f3_%40sentry-internal_browser-utils_build_esm_7840a293._.js",
+            "type": "script",
+            "durationMs": 48.60000002384186,
+            "decodedBytes": 327105,
+            "transferBytes": 42769
+          },
+          {
+            "path": "/_next/static/chunks/node_modules__pnpm_a4bebb13._.js",
+            "type": "script",
+            "durationMs": 46.39999997615814,
+            "decodedBytes": 10546,
+            "transferBytes": 2852
+          },
+          {
+            "path": "/_next/static/chunks/_8f8f3e28._.js",
+            "type": "script",
+            "durationMs": 53.69999998807907,
+            "decodedBytes": 9174,
+            "transferBytes": 2817
+          },
+          {
+            "path": "/_next/static/chunks/_a0ff3932._.js",
+            "type": "script",
+            "durationMs": 54.29999998211861,
+            "decodedBytes": 1067,
+            "transferBytes": 767
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_4cdfa4a1._.js",
+            "type": "script",
+            "durationMs": 56.79999998211861,
+            "decodedBytes": 147578,
+            "transferBytes": 21716
+          },
+          {
+            "path": "/_next/static/chunks/turbopack-_7a6db24c._.js",
+            "type": "script",
+            "durationMs": 56.099999994039536,
+            "decodedBytes": 73810,
+            "transferBytes": 18620
+          },
+          {
+            "path": "/_next/static/chunks/app_favicon_ico_mjs_59975b63._.js",
+            "type": "script",
+            "durationMs": 58.900000005960464,
+            "decodedBytes": 255,
+            "transferBytes": 555
+          },
+          {
+            "path": "/_next/static/chunks/node_modules__pnpm_e9a1dd8b._.js",
+            "type": "script",
+            "durationMs": 62.099999994039536,
+            "decodedBytes": 2118,
+            "transferBytes": 810
+          },
+          {
+            "path": "/_next/static/chunks/node_modules__pnpm_1558e316._.js",
+            "type": "script",
+            "durationMs": 74.19999998807907,
+            "decodedBytes": 436243,
+            "transferBytes": 56115
+          },
+          {
+            "path": "/_next/static/chunks/_593d6526._.js",
+            "type": "script",
+            "durationMs": 65.2000000178814,
+            "decodedBytes": 46583,
+            "transferBytes": 8676
+          },
+          {
+            "path": "/_next/static/chunks/app_layout_tsx_585086be._.js",
+            "type": "script",
+            "durationMs": 64.2000000178814,
+            "decodedBytes": 379,
+            "transferBytes": 679
+          },
+          {
+            "path": "/_next/static/chunks/_474133c0._.js",
+            "type": "script",
+            "durationMs": 67,
+            "decodedBytes": 39688,
+            "transferBytes": 8350
+          },
+          {
+            "path": "/_next/static/chunks/app_error_tsx_506914de._.js",
+            "type": "script",
+            "durationMs": 66.90000000596046,
+            "decodedBytes": 240,
+            "transferBytes": 540
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_170ab26a._.js",
+            "type": "script",
+            "durationMs": 68.90000000596046,
+            "decodedBytes": 25409,
+            "transferBytes": 6058
+          },
+          {
+            "path": "/_next/static/chunks/app_not-found_tsx_506914de._.js",
+            "type": "script",
+            "durationMs": 70,
+            "decodedBytes": 255,
+            "transferBytes": 555
+          },
+          {
+            "path": "/_next/static/chunks/_4742a972._.js",
+            "type": "script",
+            "durationMs": 71.89999997615814,
+            "decodedBytes": 2557,
+            "transferBytes": 829
+          },
+          {
+            "path": "/_next/static/chunks/app_(app)_hoy_143cd820._.js",
+            "type": "script",
+            "durationMs": 75.5,
+            "decodedBytes": 132833,
+            "transferBytes": 11893
+          },
+          {
+            "path": "/_next/static/chunks/app_(public)_b05a2fb2._.js",
+            "type": "script",
+            "durationMs": 79.2999999821186,
+            "decodedBytes": 291522,
+            "transferBytes": 84267
+          },
+          {
+            "path": "/_next/static/chunks/app_(app)_configuracion_d71d75fb._.js",
+            "type": "script",
+            "durationMs": 78.09999999403954,
+            "decodedBytes": 371952,
+            "transferBytes": 18425
+          },
+          {
+            "path": "/_next/static/chunks/app_(app)_pacientes_eabfe431._.js",
+            "type": "script",
+            "durationMs": 132.69999998807907,
+            "decodedBytes": 1835327,
+            "transferBytes": 527985
+          },
+          {
+            "path": "/_next/static/chunks/app_(app)_d524d870._.js",
+            "type": "script",
+            "durationMs": 76.5,
+            "decodedBytes": 67725,
+            "transferBytes": 8745
+          },
+          {
+            "path": "/_next/static/chunks/app_0d9fd9e9._.js",
+            "type": "script",
+            "durationMs": 80.09999999403954,
+            "decodedBytes": 234542,
+            "transferBytes": 29834
+          },
+          {
+            "path": "/_next/static/chunks/lib_instrumentos_292feb3e._.js",
+            "type": "script",
+            "durationMs": 87.40000000596046,
+            "decodedBytes": 177247,
+            "transferBytes": 27171
+          },
+          {
+            "path": "/_next/static/chunks/components_hoy_65febc55._.js",
+            "type": "script",
+            "durationMs": 89.09999999403954,
+            "decodedBytes": 315724,
+            "transferBytes": 35644
+          },
+          {
+            "path": "/_next/static/chunks/components_calendario_2cc3e143._.js",
+            "type": "script",
+            "durationMs": 89,
+            "decodedBytes": 306172,
+            "transferBytes": 28975
+          },
+          {
+            "path": "/_next/static/chunks/lib_4d85b63a._.js",
+            "type": "script",
+            "durationMs": 88.30000001192093,
+            "decodedBytes": 155544,
+            "transferBytes": 42180
+          },
+          {
+            "path": "/_next/static/chunks/lib_especialidades_cfcf42d5._.js",
+            "type": "script",
+            "durationMs": 96.69999998807907,
+            "decodedBytes": 906187,
+            "transferBytes": 101619
+          },
+          {
+            "path": "/_next/static/chunks/components_configuracion_caac0d62._.js",
+            "type": "script",
+            "durationMs": 100.40000000596046,
+            "decodedBytes": 405804,
+            "transferBytes": 39126
+          },
+          {
+            "path": "/_next/static/chunks/components_pacientes_85d36aca._.js",
+            "type": "script",
+            "durationMs": 99.5,
+            "decodedBytes": 184450,
+            "transferBytes": 18062
+          },
+          {
+            "path": "/_next/static/chunks/components_onboarding_dee5e8fd._.js",
+            "type": "script",
+            "durationMs": 100.5,
+            "decodedBytes": 412363,
+            "transferBytes": 44021
+          },
+          {
+            "path": "/_next/static/chunks/components_paciente_2fce7d02._.js",
+            "type": "script",
+            "durationMs": 101.59999999403954,
+            "decodedBytes": 554903,
+            "transferBytes": 52543
+          },
+          {
+            "path": "/_next/static/chunks/269b1_%40supabase_postgrest-js_dist_index_mjs_1f90ac9e._.js",
+            "type": "script",
+            "durationMs": 114.40000000596046,
+            "decodedBytes": 136692,
+            "transferBytes": 23651
+          },
+          {
+            "path": "/_next/static/chunks/components_506d42df._.js",
+            "type": "script",
+            "durationMs": 114.60000002384186,
+            "decodedBytes": 526703,
+            "transferBytes": 50251
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_33ab87e8._.js",
+            "type": "script",
+            "durationMs": 115.5,
+            "decodedBytes": 247944,
+            "transferBytes": 45183
+          },
+          {
+            "path": "/_next/static/chunks/7e061_%40supabase_auth-js_dist_module_e615547d._.js",
+            "type": "script",
+            "durationMs": 122.39999997615814,
+            "decodedBytes": 509103,
+            "transferBytes": 71986
+          },
+          {
+            "path": "/_next/static/chunks/app_dev_experience_page_tsx_506914de._.js",
+            "type": "script",
+            "durationMs": 121.5,
+            "decodedBytes": 1444,
+            "transferBytes": 882
+          },
+          {
+            "path": "/_next/static/chunks/node_modules__pnpm_951eb01e._.js",
+            "type": "script",
+            "durationMs": 131.5,
+            "decodedBytes": 448309,
+            "transferBytes": 86544
+          },
+          {
+            "path": "/_next/static/chunks/9f8f1_zod_v4_630878f8._.js",
+            "type": "script",
+            "durationMs": 128.69999998807907,
+            "decodedBytes": 1161444,
+            "transferBytes": 109411
+          },
+          {
+            "path": "/_next/static/chunks/bba8e_framer-motion_dist_es_2cf990a5._.js",
+            "type": "script",
+            "durationMs": 135,
+            "decodedBytes": 904255,
+            "transferBytes": 109984
+          },
+          {
+            "path": "/_next/static/chunks/_24ff9465._.js",
+            "type": "script",
+            "durationMs": 128.40000000596046,
+            "decodedBytes": 12159,
+            "transferBytes": 2913
+          },
+          {
+            "path": "/_next/static/chunks/app_global-error_tsx_506914de._.js",
+            "type": "script",
+            "durationMs": 129.19999998807907,
+            "decodedBytes": 240,
+            "transferBytes": 540
+          },
+          {
+            "path": "/_next/static/chunks/node_modules__pnpm_799ee4f4._.js",
+            "type": "script",
+            "durationMs": 26.799999982118607,
+            "decodedBytes": 945976,
+            "transferBytes": 107834
+          },
+          {
+            "path": "/_next/static/chunks/3e92b_%40tanstack_query-devtools_build_DevtoolsComponent_VKXKX7EQ_fc39c684.js",
+            "type": "script",
+            "durationMs": 15.699999988079071,
+            "decodedBytes": 258,
+            "transferBytes": 558
+          },
+          {
+            "path": "/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_bcedfd79._.js",
+            "type": "script",
+            "durationMs": 15,
+            "decodedBytes": 288,
+            "transferBytes": 588
+          },
+          {
+            "path": "/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_c8c997ce._.js",
+            "type": "script",
+            "durationMs": 15,
+            "decodedBytes": 16539,
+            "transferBytes": 4307
+          }
+        ]
+      },
+      "idleSeconds": 4,
+      "idle": {
+        "TaskDuration": 0.000542,
+        "ScriptDuration": 0.000321,
+        "LayoutDuration": 0,
+        "RecalcStyleDuration": 0,
+        "LayoutCount": 0,
+        "RecalcStyleCount": 0
+      },
+      "errors": []
+    },
+    {
+      "panel": "configuracion",
+      "dom": {
+        "heading": "Configuración",
+        "elements": 762,
+        "horizontalOverflow": false,
+        "animations": [],
+        "resources": [
+          {
+            "path": "/_next/static/media/plus_jakarta_sans_latin-s.p.23e35025.woff2",
+            "type": "link",
+            "durationMs": 13.099999994039536,
+            "decodedBytes": 27348,
+            "transferBytes": 27648
+          },
+          {
+            "path": "/_next/static/chunks/app_dev_experience_preview_module_18693353.css",
+            "type": "link",
+            "durationMs": 16.399999976158142,
+            "decodedBytes": 2589,
+            "transferBytes": 697
+          },
+          {
+            "path": "/_next/static/chunks/_94658742._.css",
+            "type": "link",
+            "durationMs": 26.899999976158142,
+            "decodedBytes": 525115,
+            "transferBytes": 76217
+          },
+          {
+            "path": "/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_291db8aa._.js",
+            "type": "link",
+            "durationMs": 16.69999998807907,
+            "decodedBytes": 671,
+            "transferBytes": 971
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_compiled_43f605f3._.js",
+            "type": "script",
+            "durationMs": 23.599999994039536,
+            "decodedBytes": 293429,
+            "transferBytes": 54529
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_client_f2ae0558._.js",
+            "type": "script",
+            "durationMs": 38.5,
+            "decodedBytes": 596218,
+            "transferBytes": 102648
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_compiled_react-dom_fee9f161._.js",
+            "type": "script",
+            "durationMs": 39.69999998807907,
+            "decodedBytes": 900313,
+            "transferBytes": 156994
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_compiled_next-devtools_index_62b081dd.js",
+            "type": "script",
+            "durationMs": 58.19999998807907,
+            "decodedBytes": 1504610,
+            "transferBytes": 267303
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_shared_lib_885b9817._.js",
+            "type": "script",
+            "durationMs": 29.30000001192093,
+            "decodedBytes": 297956,
+            "transferBytes": 47905
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_19860ebf._.js",
+            "type": "script",
+            "durationMs": 31.69999998807907,
+            "decodedBytes": 153693,
+            "transferBytes": 26960
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_router_cdf6bcdd.js",
+            "type": "script",
+            "durationMs": 31.200000017881393,
+            "decodedBytes": 586,
+            "transferBytes": 886
+          },
+          {
+            "path": "/_next/static/chunks/8f169_%40sentry_browser_build_npm_esm_dev_89fdaa02._.js",
+            "type": "script",
+            "durationMs": 44.70000001788139,
+            "decodedBytes": 291823,
+            "transferBytes": 41401
+          },
+          {
+            "path": "/_next/static/chunks/7e3f3_%40sentry-internal_browser-utils_build_esm_7840a293._.js",
+            "type": "script",
+            "durationMs": 45,
+            "decodedBytes": 327105,
+            "transferBytes": 42769
+          },
+          {
+            "path": "/_next/static/chunks/4de1b_%40sentry_core_build_esm_e834e689._.js",
+            "type": "script",
+            "durationMs": 57.60000002384186,
+            "decodedBytes": 886338,
+            "transferBytes": 140655
+          },
+          {
+            "path": "/_next/static/chunks/node_modules__pnpm_a4bebb13._.js",
+            "type": "script",
+            "durationMs": 50.89999997615814,
+            "decodedBytes": 10546,
+            "transferBytes": 2852
+          },
+          {
+            "path": "/_next/static/chunks/dfbaa_%40sentry_nextjs_build_esm_2bd128f8._.js",
+            "type": "script",
+            "durationMs": 51.19999998807907,
+            "decodedBytes": 121920,
+            "transferBytes": 19486
+          },
+          {
+            "path": "/_next/static/chunks/_8f8f3e28._.js",
+            "type": "script",
+            "durationMs": 52.69999998807907,
+            "decodedBytes": 9174,
+            "transferBytes": 2817
+          },
+          {
+            "path": "/_next/static/chunks/_a0ff3932._.js",
+            "type": "script",
+            "durationMs": 53.29999998211861,
+            "decodedBytes": 1067,
+            "transferBytes": 767
+          },
+          {
+            "path": "/_next/static/chunks/turbopack-_7a6db24c._.js",
+            "type": "script",
+            "durationMs": 58.19999998807907,
+            "decodedBytes": 73810,
+            "transferBytes": 18620
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_4cdfa4a1._.js",
+            "type": "script",
+            "durationMs": 58.79999998211861,
+            "decodedBytes": 147578,
+            "transferBytes": 21716
+          },
+          {
+            "path": "/_next/static/chunks/app_favicon_ico_mjs_59975b63._.js",
+            "type": "script",
+            "durationMs": 59,
+            "decodedBytes": 255,
+            "transferBytes": 555
+          },
+          {
+            "path": "/_next/static/chunks/node_modules__pnpm_e9a1dd8b._.js",
+            "type": "script",
+            "durationMs": 59.5,
+            "decodedBytes": 2118,
+            "transferBytes": 810
+          },
+          {
+            "path": "/_next/static/chunks/app_layout_tsx_585086be._.js",
+            "type": "script",
+            "durationMs": 64.5,
+            "decodedBytes": 379,
+            "transferBytes": 679
+          },
+          {
+            "path": "/_next/static/chunks/_593d6526._.js",
+            "type": "script",
+            "durationMs": 65.30000001192093,
+            "decodedBytes": 46583,
+            "transferBytes": 8676
+          },
+          {
+            "path": "/_next/static/chunks/node_modules__pnpm_1558e316._.js",
+            "type": "script",
+            "durationMs": 71.59999999403954,
+            "decodedBytes": 436243,
+            "transferBytes": 56115
+          },
+          {
+            "path": "/_next/static/chunks/app_error_tsx_506914de._.js",
+            "type": "script",
+            "durationMs": 65.7000000178814,
+            "decodedBytes": 240,
+            "transferBytes": 540
+          },
+          {
+            "path": "/_next/static/chunks/_474133c0._.js",
+            "type": "script",
+            "durationMs": 65.80000001192093,
+            "decodedBytes": 39688,
+            "transferBytes": 8350
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_dist_170ab26a._.js",
+            "type": "script",
+            "durationMs": 66.90000000596046,
+            "decodedBytes": 25409,
+            "transferBytes": 6058
+          },
+          {
+            "path": "/_next/static/chunks/app_not-found_tsx_506914de._.js",
+            "type": "script",
+            "durationMs": 68.5,
+            "decodedBytes": 255,
+            "transferBytes": 555
+          },
+          {
+            "path": "/_next/static/chunks/_4742a972._.js",
+            "type": "script",
+            "durationMs": 71,
+            "decodedBytes": 2557,
+            "transferBytes": 829
+          },
+          {
+            "path": "/_next/static/chunks/app_(app)_hoy_143cd820._.js",
+            "type": "script",
+            "durationMs": 72.7000000178814,
+            "decodedBytes": 132833,
+            "transferBytes": 11893
+          },
+          {
+            "path": "/_next/static/chunks/app_(app)_configuracion_d71d75fb._.js",
+            "type": "script",
+            "durationMs": 76.5,
+            "decodedBytes": 371952,
+            "transferBytes": 18425
+          },
+          {
+            "path": "/_next/static/chunks/app_(public)_b05a2fb2._.js",
+            "type": "script",
+            "durationMs": 77.5,
+            "decodedBytes": 291522,
+            "transferBytes": 84267
+          },
+          {
+            "path": "/_next/static/chunks/app_(app)_d524d870._.js",
+            "type": "script",
+            "durationMs": 75.7999999821186,
+            "decodedBytes": 67725,
+            "transferBytes": 8745
+          },
+          {
+            "path": "/_next/static/chunks/app_0d9fd9e9._.js",
+            "type": "script",
+            "durationMs": 77.69999998807907,
+            "decodedBytes": 234542,
+            "transferBytes": 29834
+          },
+          {
+            "path": "/_next/static/chunks/lib_instrumentos_292feb3e._.js",
+            "type": "script",
+            "durationMs": 84.59999999403954,
+            "decodedBytes": 177247,
+            "transferBytes": 27171
+          },
+          {
+            "path": "/_next/static/chunks/lib_4d85b63a._.js",
+            "type": "script",
+            "durationMs": 87.09999999403954,
+            "decodedBytes": 155544,
+            "transferBytes": 42180
+          },
+          {
+            "path": "/_next/static/chunks/lib_especialidades_cfcf42d5._.js",
+            "type": "script",
+            "durationMs": 93.19999998807907,
+            "decodedBytes": 906187,
+            "transferBytes": 101619
+          },
+          {
+            "path": "/_next/static/chunks/app_(app)_pacientes_eabfe431._.js",
+            "type": "script",
+            "durationMs": 124.2999999821186,
+            "decodedBytes": 1835327,
+            "transferBytes": 527985
+          },
+          {
+            "path": "/_next/static/chunks/components_calendario_2cc3e143._.js",
+            "type": "script",
+            "durationMs": 87.90000000596046,
+            "decodedBytes": 306172,
+            "transferBytes": 28975
+          },
+          {
+            "path": "/_next/static/chunks/components_hoy_65febc55._.js",
+            "type": "script",
+            "durationMs": 87.69999998807907,
+            "decodedBytes": 315724,
+            "transferBytes": 35644
+          },
+          {
+            "path": "/_next/static/chunks/components_configuracion_caac0d62._.js",
+            "type": "script",
+            "durationMs": 96.40000000596046,
+            "decodedBytes": 405804,
+            "transferBytes": 39126
+          },
+          {
+            "path": "/_next/static/chunks/components_onboarding_dee5e8fd._.js",
+            "type": "script",
+            "durationMs": 101.19999998807907,
+            "decodedBytes": 412363,
+            "transferBytes": 44021
+          },
+          {
+            "path": "/_next/static/chunks/components_paciente_2fce7d02._.js",
+            "type": "script",
+            "durationMs": 102.09999999403954,
+            "decodedBytes": 554903,
+            "transferBytes": 52543
+          },
+          {
+            "path": "/_next/static/chunks/components_pacientes_85d36aca._.js",
+            "type": "script",
+            "durationMs": 97,
+            "decodedBytes": 184450,
+            "transferBytes": 18062
+          },
+          {
+            "path": "/_next/static/chunks/269b1_%40supabase_postgrest-js_dist_index_mjs_1f90ac9e._.js",
+            "type": "script",
+            "durationMs": 105.90000000596046,
+            "decodedBytes": 136692,
+            "transferBytes": 23651
+          },
+          {
+            "path": "/_next/static/chunks/components_506d42df._.js",
+            "type": "script",
+            "durationMs": 106.30000001192093,
+            "decodedBytes": 526703,
+            "transferBytes": 50251
+          },
+          {
+            "path": "/_next/static/chunks/9154c_next_33ab87e8._.js",
+            "type": "script",
+            "durationMs": 107.5,
+            "decodedBytes": 247944,
+            "transferBytes": 45183
+          },
+          {
+            "path": "/_next/static/chunks/app_dev_experience_page_tsx_506914de._.js",
+            "type": "script",
+            "durationMs": 113.5,
+            "decodedBytes": 1444,
+            "transferBytes": 882
+          },
+          {
+            "path": "/_next/static/chunks/7e061_%40supabase_auth-js_dist_module_e615547d._.js",
+            "type": "script",
+            "durationMs": 116,
+            "decodedBytes": 509103,
+            "transferBytes": 71986
+          },
+          {
+            "path": "/_next/static/chunks/_24ff9465._.js",
+            "type": "script",
+            "durationMs": 118.60000002384186,
+            "decodedBytes": 12159,
+            "transferBytes": 2913
+          },
+          {
+            "path": "/_next/static/chunks/node_modules__pnpm_951eb01e._.js",
+            "type": "script",
+            "durationMs": 120.80000001192093,
+            "decodedBytes": 448309,
+            "transferBytes": 86544
+          },
+          {
+            "path": "/_next/static/chunks/bba8e_framer-motion_dist_es_2cf990a5._.js",
+            "type": "script",
+            "durationMs": 124.60000002384186,
+            "decodedBytes": 904255,
+            "transferBytes": 109984
+          },
+          {
+            "path": "/_next/static/chunks/9f8f1_zod_v4_630878f8._.js",
+            "type": "script",
+            "durationMs": 121.7000000178814,
+            "decodedBytes": 1161444,
+            "transferBytes": 109411
+          },
+          {
+            "path": "/_next/static/chunks/app_global-error_tsx_506914de._.js",
+            "type": "script",
+            "durationMs": 120.2999999821186,
+            "decodedBytes": 240,
+            "transferBytes": 540
+          },
+          {
+            "path": "/_next/static/chunks/node_modules__pnpm_799ee4f4._.js",
+            "type": "script",
+            "durationMs": 26.19999998807907,
+            "decodedBytes": 945976,
+            "transferBytes": 107834
+          },
+          {
+            "path": "/_next/static/chunks/3e92b_%40tanstack_query-devtools_build_DevtoolsComponent_VKXKX7EQ_fc39c684.js",
+            "type": "script",
+            "durationMs": 15.700000017881393,
+            "decodedBytes": 258,
+            "transferBytes": 558
+          },
+          {
+            "path": "/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_c8c997ce._.js",
+            "type": "script",
+            "durationMs": 15.299999982118607,
+            "decodedBytes": 16539,
+            "transferBytes": 4307
+          },
+          {
+            "path": "/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_bcedfd79._.js",
+            "type": "script",
+            "durationMs": 15,
+            "decodedBytes": 288,
+            "transferBytes": 588
+          }
+        ]
+      },
+      "idleSeconds": 4,
+      "idle": {
+        "TaskDuration": 0.000814,
+        "ScriptDuration": 0.000267,
+        "LayoutDuration": 0,
+        "RecalcStyleDuration": 0,
+        "LayoutCount": 0,
+        "RecalcStyleCount": 0
+      },
+      "errors": []
+    }
+  ]
+}

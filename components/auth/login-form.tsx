@@ -14,6 +14,7 @@
  */
 
 import Script from "next/script";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 
@@ -30,6 +31,7 @@ import {
 import { signUpAndInitOrganization } from "@/app/(public)/onboarding/actions";
 import { CheckEmailPanel } from "@/components/auth/check-email-panel";
 import { PasswordStrengthMeter } from "@/components/auth/password-strength-meter";
+import { FolioMark } from "@/components/folio-mark";
 import { MENSAJE_OAUTH_GENERICO, mensajeOauth } from "@/lib/auth/oauth-messages";
 import { safeRedirect } from "@/lib/security/safe-redirect";
 import { supportMailto } from "@/lib/support";
@@ -43,7 +45,7 @@ interface AuthShellProps {
 
 function AuthShell({ children, vistaSwitch }: AuthShellProps) {
   return (
-    <div className="au-form-pane">
+    <div className="au-form-pane fx-auth-form">
       <div className="au-form-inner">{children}</div>
       {vistaSwitch ? <div className="au-form-switch">{vistaSwitch}</div> : null}
     </div>
@@ -82,7 +84,7 @@ const EyeClosed = () => (
 // ─── Login ─────────────────────────────────────────────────────────────────
 
 interface SubViewProps {
-  setVista: (v: Vista) => void;
+  setVista: (v: Vista, email?: string) => void;
 }
 
 interface LoginProps extends SubViewProps {
@@ -214,19 +216,12 @@ function Login({ setVista, prefilledEmail, notice, clearNotice }: LoginProps) {
       }
     >
       <header className="au-form-head">
-        <h2>Entrar</h2>
+        <h1>Volvé a tu consultorio.</h1>
+        <p>Ingresá para seguir con tu día en Folio.</p>
       </header>
 
       {notice ? (
-        <p className="au-notice" role="status" style={{
-          margin: "0 0 12px",
-          padding: "10px 12px",
-          background: "var(--accent-warm-soft)",
-          color: "var(--accent-warm-2)",
-          border: "1px solid var(--accent-warm)",
-          borderRadius: "var(--r-md)",
-          fontSize: "var(--fs-sm)",
-        }}>
+        <p className="au-notice fx-auth-notice" role="status">
           {notice}
         </p>
       ) : null}
@@ -240,12 +235,14 @@ function Login({ setVista, prefilledEmail, notice, clearNotice }: LoginProps) {
         <span>o con tu email</span>
       </div>
 
-      <form className="au-form" onSubmit={submit}>
+      <form className="au-form" onSubmit={submit} aria-busy={pending}>
         <label className={"au-field" + (err && !email ? " is-err" : "")}>
           <span>Email</span>
           <input
             type="email"
             autoComplete="email"
+            aria-invalid={Boolean(err && !email)}
+            aria-describedby={err ? "fx-login-error" : undefined}
             placeholder="vos@consultorio.com"
             value={email}
             onChange={(e) => {
@@ -257,21 +254,24 @@ function Login({ setVista, prefilledEmail, notice, clearNotice }: LoginProps) {
             disabled={pending}
           />
         </label>
-        <label className={"au-field" + (err && email && password.length < 8 ? " is-err" : "")}>
+        <div className={"au-field" + (err && email && !password ? " is-err" : "")}>
           <span className="au-field-row">
-            Contraseña
+            <label htmlFor="fx-login-password">Contraseña</label>
             <button
               type="button"
               className="au-link au-link--ghost"
-              onClick={() => setVista("forgot")}
+              onClick={() => setVista("forgot", email)}
             >
               ¿La olvidaste?
             </button>
           </span>
           <div className="au-pw">
             <input
+              id="fx-login-password"
               type={showPw ? "text" : "password"}
               autoComplete="current-password"
+              aria-invalid={Boolean(err && email && !password)}
+              aria-describedby={err ? "fx-login-error" : undefined}
               value={password}
               onChange={(e) => {
                 setPassword(e.target.value);
@@ -289,9 +289,9 @@ function Login({ setVista, prefilledEmail, notice, clearNotice }: LoginProps) {
               {showPw ? <EyeClosed /> : <EyeOpen />}
             </button>
           </div>
-        </label>
+        </div>
 
-        {err ? <p className="au-err">{err}</p> : null}
+        {err ? <p id="fx-login-error" className="au-err" role="alert">{err}</p> : null}
         {errCode === "email_not_confirmed" ? (
           <ResendConfirmationInline email={email} />
         ) : null}
@@ -304,7 +304,7 @@ function Login({ setVista, prefilledEmail, notice, clearNotice }: LoginProps) {
           className="fi-btn fi-btn-primary au-submit"
           disabled={pending || (captchaVisible && Boolean(TURNSTILE_SITE_KEY) && !captchaToken)}
         >
-          {pending ? "Entrando..." : "Entrar"}
+          {pending ? "Ingresando…" : "Ingresar a Folio"}
           <ArrowRightTiny />
         </button>
       </form>
@@ -541,10 +541,11 @@ function Signup({ setVista, switchToLoginWith }: SignupProps) {
       }
     >
       <header className="au-form-head">
-        <h2>Crear cuenta</h2>
+        <h1>Tu práctica empieza acá.</h1>
+        <p>Creá tu cuenta y configurá tu consultorio paso a paso.</p>
       </header>
 
-      <button type="button" className="au-btn-google" onClick={handleGoogle}>
+      <button type="button" className="au-btn-google" onClick={handleGoogle} disabled={pending}>
         <GoogleLogo />
         Continuar con Google
       </button>
@@ -555,6 +556,7 @@ function Signup({ setVista, switchToLoginWith }: SignupProps) {
 
       <form
         className="au-form"
+        aria-busy={pending}
         onSubmit={(e) => {
           e.preventDefault();
           handleSignup();
@@ -638,14 +640,14 @@ function Signup({ setVista, switchToLoginWith }: SignupProps) {
           </>
         ) : null}
 
-        {err ? <p className="au-err">{err}</p> : null}
+        {err ? <p className="au-err" role="alert">{err}</p> : null}
 
         <button
           type="submit"
           className="fi-btn fi-btn-primary au-submit"
           disabled={pending || !consent || (Boolean(TURNSTILE_SITE_KEY) && !captchaToken)}
         >
-          {pending ? "Creando cuenta…" : "Empezar 30 días gratis"}
+          {pending ? "Creando cuenta…" : "Crear cuenta"}
           <ArrowRightTiny />
         </button>
       </form>
@@ -655,14 +657,27 @@ function Signup({ setVista, switchToLoginWith }: SignupProps) {
 
 // ─── Forgot password ───────────────────────────────────────────────────────
 
-function Forgot({ setVista }: { setVista: (v: Vista) => void }) {
-  const [email, setEmail] = useState("");
+function Forgot({ setVista, prefilledEmail = "" }: SubViewProps & { prefilledEmail?: string }) {
+  const [email, setEmail] = useState(prefilledEmail);
+  const [err, setErr] = useState("");
   const [sent, setSent] = useState(false);
   const [pending, startTransition] = useTransition();
+  const emailRef = useRef<HTMLInputElement | null>(null);
+  const sentHeadingRef = useRef<HTMLHeadingElement | null>(null);
+
+  useEffect(() => {
+    if (sent) sentHeadingRef.current?.focus({ preventScroll: true });
+  }, [sent]);
 
   const submit = (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!email.match(/^[^@\s]+@[^@\s]+\.[^@\s]+$/)) return;
+    if (pending) return;
+    if (!email.match(/^[^@\s]+@[^@\s]+\.[^@\s]+$/)) {
+      setErr("Ingresá un email válido para recuperar tu acceso.");
+      emailRef.current?.focus();
+      return;
+    }
+    setErr("");
     startTransition(async () => {
       await requestPasswordReset(email);
       // Siempre marcamos como "enviado" (no confirmar si el email existe).
@@ -675,7 +690,7 @@ function Forgot({ setVista }: { setVista: (v: Vista) => void }) {
       <AuthShell
         vistaSwitch={
           <p>
-            <button type="button" className="au-link" onClick={() => setVista("login")}>
+            <button type="button" className="au-link" onClick={() => setVista("login", email)}>
               ← Volver a entrar
             </button>
           </p>
@@ -688,10 +703,10 @@ function Forgot({ setVista }: { setVista: (v: Vista) => void }) {
               <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
             </svg>
           </div>
-          <h2>Te enviamos un link.</h2>
+          <h1 ref={sentHeadingRef} tabIndex={-1} className="a11y-focus-heading">Revisá tu email.</h1>
           <p>
-            Revisá <b className="fm-mono">{email}</b>. El link expira en 30 minutos. Si no lo ves, revisá la
-            carpeta de spam o promociones.
+            Si hay una cuenta asociada a <b>{email}</b>, recibirás un enlace para recuperar el acceso.
+            Revisá también la carpeta de spam o promociones.
           </p>
           <button type="button" className="au-link au-link--block" onClick={() => setSent(false)}>
             Reintentar con otro email
@@ -706,29 +721,36 @@ function Forgot({ setVista }: { setVista: (v: Vista) => void }) {
       vistaSwitch={
         <p>
           ¿Te acordaste?{" "}
-          <button type="button" className="au-link" onClick={() => setVista("login")}>
+          <button type="button" className="au-link" onClick={() => setVista("login", email)}>
             Volver a entrar
           </button>
         </p>
       }
     >
       <header className="au-form-head">
-        <h2>Recuperar contraseña</h2>
+        <h1>Recuperá tu acceso.</h1>
+        <p>Te enviaremos un enlace para elegir una nueva contraseña.</p>
       </header>
-      <form className="au-form" onSubmit={submit}>
-        <label className="au-field">
+      <form className="au-form" onSubmit={submit} aria-busy={pending} noValidate>
+        <label className={`au-field${err ? " is-err" : ""}`}>
           <span>Email de tu cuenta</span>
           <input
             type="email"
+            ref={emailRef}
             autoComplete="email"
+            required
+            aria-invalid={Boolean(err)}
+            aria-describedby={err ? "fx-forgot-error" : undefined}
             placeholder="vos@consultorio.com"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => { setEmail(e.target.value); setErr(""); }}
+            disabled={pending}
             autoFocus
           />
         </label>
+        {err ? <p id="fx-forgot-error" className="au-err" role="alert">{err}</p> : null}
         <button type="submit" className="fi-btn fi-btn-primary au-submit" disabled={pending}>
-          {pending ? "Enviando…" : "Enviar link"}
+          {pending ? "Enviando…" : "Enviar enlace de recuperación"}
           <ArrowRightTiny />
         </button>
       </form>
@@ -767,12 +789,20 @@ export function AuthForms({ initialVista = "login" }: { initialVista?: Vista }) 
     setVista("login");
   };
   const clearNotice = () => setNotice(null);
+  const switchVista = (next: Vista, email?: string) => {
+    if (email !== undefined) setPrefilledEmail(email);
+    setVista(next);
+  };
 
   return (
-    <main className="au-main">
+    <main className="au-main fx-auth-main">
+      <Link className="fx-auth-brand fx-auth-form-brand" href="/" aria-label="Folio, volver al inicio">
+        <FolioMark size={29} />
+        <span>folio</span>
+      </Link>
       {vista === "login" ? (
         <Login
-          setVista={setVista}
+          setVista={switchVista}
           prefilledEmail={prefilledEmail}
           notice={notice}
           clearNotice={clearNotice}
@@ -781,7 +811,7 @@ export function AuthForms({ initialVista = "login" }: { initialVista?: Vista }) 
       {vista === "signup" ? (
         <Signup setVista={setVista} switchToLoginWith={switchToLoginWith} />
       ) : null}
-      {vista === "forgot" ? <Forgot setVista={setVista} /> : null}
+      {vista === "forgot" ? <Forgot setVista={switchVista} prefilledEmail={prefilledEmail} /> : null}
     </main>
   );
 }

@@ -1,0 +1,16 @@
+{
+  "checkedAt": "2026-09-12",
+  "method": "Playwright browser executablePath() and local file existence; no install or download",
+  "browsers": [
+    {"name": "chromium", "revision": "1223", "executableExists": true},
+    {"name": "firefox", "revision": "1522", "executableExists": false},
+    {"name": "webkit", "revision": "2287", "executableExists": false}
+  ],
+  "limitationAtInitialCheck": "Firefox and WebKit were absent from the default Playwright cache.",
+  "authorizedFollowUp": {
+    "webkitRevision": "2287",
+    "downloadedTo": "C:\\Users\\amiun\\AppData\\Local\\Temp\\folio-experience-webkit-20260912",
+    "report": "../WEBKIT-PUBLIC-REVIEW.md",
+    "note": "Temporary WebKit was subsequently downloaded with authorization and focal public checks completed. Firefox remains untested."
+  }
+}

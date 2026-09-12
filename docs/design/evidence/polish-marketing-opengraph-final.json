@@ -1,0 +1,15 @@
+{
+  "checkedAt": "2026-09-12T20:12:08.726Z",
+  "commit": "2d02096",
+  "buildId": "Sr0tdXv5RNBdPY4pKAzR_",
+  "scope": "Actual marketing endpoint from second compiled Next checkpoint; synthetic appointments only",
+  "endpoint": "/opengraph-image-pwu6ef",
+  "status": 200,
+  "contentType": "image/png",
+  "width": 1200,
+  "height": 630,
+  "bytes": 68425,
+  "sha256": "d4e5eca991d40b1f0ae22ac826f3e2f7c208d9540d2b3f09fd18a77566472ae0",
+  "image": "polish-marketing-opengraph-final.png",
+  "visualInspection": "Opened with view_image after fetching the compiled endpoint: current Hoja clara symbol visible, 1200 x 630 composition and typography legible, no clipping observed."
+}

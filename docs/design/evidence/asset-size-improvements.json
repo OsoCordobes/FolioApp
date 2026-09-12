@@ -1,0 +1,13 @@
+{
+  "removedUnusedCarouselRules": 821,
+  "css": {
+    "beforeBytes": 684048,
+    "afterBytes": 531101,
+    "beforeGzip": 119466,
+    "afterGzip": 99590
+  },
+  "font": {
+    "originalTTFBytes": 176288,
+    "localLatinWoff2Bytes": 27348
+  }
+}
