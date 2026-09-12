@@ -97,9 +97,14 @@ jobs:
           set -e
           for f in supabase/migrations/*.sql; do
             echo "::group::Applying $(basename "$f")"
+            if [[ "$f" == *"_M118_billing_authority.sql" ]]; then
+              psql -X -v ON_ERROR_STOP=1 -f tests/migrations/M118_ledger_transaction.sql
+            fi
             # check_function_bodies off para que pl/pgsql se acepte aun si
             # referencia objetos que no existen hasta la migration siguiente.
-            psql -v ON_ERROR_STOP=1 -c "SET check_function_bodies = off;" -f "$f" || {
+            # The runner owns the transaction, including SET LOCAL safeguards.
+            # Specs keep their own boundaries (M91 tests transaction-local state).
+            psql --single-transaction -v ON_ERROR_STOP=1 -c "SET check_function_bodies = off;" -f "$f" || {
               echo "::error file=$f::Migration failed"
               exit 1
             }
