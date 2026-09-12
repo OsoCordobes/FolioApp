@@ -70,9 +70,8 @@ Validar una instalación hospedada requiere un procedimiento manual separado, au
 El bloqueo protege contra conexiones accidentales del código probado; no es un aislamiento del sistema operativo frente a código hostil. Los permisos de un proceso local y los servicios accesibles en loopback siguen requiriendo una máquina de pruebas controlada.
 
 Última ejecución clínica local (12 de septiembre de 2026): 1 aprobado, 1 fallido
-y 5 no ejecutados. El perfil canónico localhost:4420 llegó a MFA; Auth verificó
-el código y la UI superó la espera de 15 segundos del escenario. Un observador
-separado vio completarse MFA antes de 30 segundos, mientras se compilaba /hoy.
-Ese diagnóstico no cuenta como escenario aprobado. Guardado, Storage, cobro y archivo siguen
-sin acreditación real. El detalle y las comprobaciones se conservan en
+y 5 no ejecutados. Tras las correcciones del perfil y la espera de compilación
+de MFA, creó paciente/turno y guardó una sesión real. Falló al esperar la nota
+tras recargar; el contexto posterior ya muestra el marcador guardado. Storage,
+cobro y archivo todavía no se ejecutaron. El detalle está en
 [CLINICAL-LOCAL.md](../../scripts/testing/CLINICAL-LOCAL.md).

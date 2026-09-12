@@ -1,14 +1,12 @@
 # Ensayo clínico con Supabase local real
 
-Estado al 12 de septiembre de 2026: primer arranque real completado sobre
-Supabase PostgreSQL 17.6, con 113 migraciones y los cinco catálogos. El recorrido
-clínico completo **sigue pendiente**. Después de corregir la hora de activación
-de MFA y el origen del perfil, el acceso llegó a MFA en localhost:4420. Auth
-aceptó el código, pero la UI no mostró la confirmación en los 15 segundos
-del escenario. Un observador separado comprobó la finalización antes de 30
-segundos, con una compilación de /hoy durante la espera.
-Resultado: **1 aprobado, 1 fallido, 5 no ejecutados** por dependencia serial.
-No acredita todavía guardado, Storage, cobro, archivo ni uso en producción.
+Estado al 12 de septiembre de 2026: Supabase PostgreSQL 17.6 arrancó con las
+113 migraciones y cinco catálogos. El recorrido completo **sigue pendiente**.
+La última ejecución pasó AAL1 y avanzó por login/MFA, creación de paciente/turno,
+llegada, guardado y denegación de escritura clínica directa. Falló al esperar
+la nota después de recargar la ficha; el contexto posterior muestra el texto
+guardado. Resultado: **1 aprobado, 1 fallido, 5 no ejecutados** por modo serial.
+No acredita todavía Storage, cobro, archivo ni uso en producción.
 
 ## Preparación de la instancia
 
@@ -120,7 +118,7 @@ clínico falla antes de levantar una aplicación cuando no recibe la configuraci
 necesaria. El runner normal mantiene 4410 y omite el spec clínico sin la
 habilitación específica.
 
-Pendiente: separar la espera de compilación local tras MFA y completar los siete
+Pendiente: medir la recarga de la ficha tras guardar y completar los siete
 escenarios sobre Supabase 17 real, ampliar roles/menores y consentimiento, pruebas de fallos
 de guardado y proveedor y restauración completa. El sexto escenario prepara
 una suscripción sintética pausada, confirma la redirección de la interfaz común
@@ -191,3 +189,19 @@ en localhost:4420. Esto distingue la respuesta terminada de la espera posterior
 de desarrollo. No convierte el escenario fallido en aprobado ni acredita
 el recorrido clínico. El diagnóstico conservó 15 usuarios/factores/consultorios
 sintéticos en total y no creó pacientes.
+
+## Espera medida de desarrollo y siguiente límite
+
+Sólo la aserción de confirmación de MFA se amplió de 15 a 60 segundos después
+del diagnóstico de compilación. Conserva el título y navegación reales, el
+límite total del escenario de 180 segundos, Auth del fixture de 12 segundos y
+SQL de 15 segundos. No cambia MFA del producto ni acredita latencia productiva.
+
+Con esa extensión, run-6 terminó en 1 aprobado, 1 fallido y 5 no ejecutados
+(47,6 segundos). Pasó login/MFA y creó un paciente, turno y sesión de quiropraxia;
+validó el marcador descifrado y el rechazo 42501 de una escritura directa. La
+recarga posterior no encontró «Notas libres» dentro de 5 segundos, pero el
+contexto capturado tras el fallo ya muestra el campo con el marcador correcto.
+No se cambió esa espera: falta medir la presentación después de recargar.
+Se conservan 18 usuarios/TOTP/consultorios sintéticos y una sesión revisión 1
+sin cerrar; no se llegó a Storage, cobro o archivo.

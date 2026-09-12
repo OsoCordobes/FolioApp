@@ -137,7 +137,7 @@ export async function loginClinical(page:Page,account:ClinicalAccount,destinatio
  await expect(page.getByRole('heading',{name:'Verificación en dos pasos'})).toBeVisible();
  await page.getByLabel('Código de seis números').fill(totp(account.secret));
  await page.getByRole('button',{name:'Verificar código',exact:true}).click();
- await expect(page.getByRole('heading',{name:'Verificación completada'})).toBeVisible({timeout:15000});
+ await expect(page.getByRole('heading',{name:'Verificación completada'})).toBeVisible({timeout:60000});
  await page.getByRole('link',{name:'Continuar',exact:true}).click();
  await page.waitForURL(destination==='hoy'?/\/hoy(?:\?|$)/:/\/configuracion\/billing(?:\?|$)/,{timeout:30000});
 }
