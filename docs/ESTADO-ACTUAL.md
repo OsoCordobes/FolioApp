@@ -4,7 +4,7 @@ Este documento distingue lo publicado, la preparación comprobada y las condicio
 
 ## Publicado
 
-Producción sirve `2dae58011e26e5baadd1ccd2c6b2125c195218f8`, PR #162, despliegue Vercel `dpl_E2LGq7LvaAACmbQ375kPfTAX4hpA`, READY en `gru1`. Se comprobaron dominio, inicio, login y health el 12 de septiembre a las 16:20 UTC; el health respondió 200/ok/production y no-store. App CI y SQL del commit fusionado finalizaron correctamente.
+Producción sirve `a0fe34e6853d42c5072741584775983de4f7bc53`, PR #163, despliegue Vercel `dpl_FF56jE36rk5i5BuC56V8MHLLvQjm`, READY en `gru1` y asignado a `foliosalud.com`. Se comprobaron inicio, login y health el 12 de septiembre a las 19:52 UTC; los tres respondieron 200 y el health indicó ok/production y no-store. App CI `34708399378` y SQL `34708399359` del commit fusionado finalizaron correctamente. Este smoke público no prueba una atención clínica autenticada.
 
 Los checkpoints #160, #161 y #162 incluyen el arreglo de llegadas/cobros del video, Next 15.5.24, PDF sin recorte a diez sesiones, enmiendas, retirada de ejecutores administrativos destructivos y protección del modal frente a doble clic, cierre pendiente y respuesta perdida. Las URLs de retorno de autenticación, portal y recuperación de contraseña fueron comprobadas nuevamente el 12 de septiembre.
 
@@ -27,11 +27,11 @@ La rama amplia conserva M98–M119 y el resto de las correcciones del plan. Su d
 - M117 hace transaccional la creación manual de identidad, paciente, turno, recordatorios y comprobante. Los reintentos recuperan la misma operación y los conflictos revierten todo. Pasaron 111 migraciones y 56 pruebas SQL en PostgreSQL 16 local con stubs, cuatro escenarios reales de concurrencia de DB y veinte escenarios de navegador con respuestas sintéticas.
 - El archivo clínico fuera del bloqueo comercial permite consulta y PDF/JSON al titular o dirección clínica autorizados. Se comprobaron quince negativas de permisos y dieciocho escenarios de interfaz. Los archivos y permisos parciales continúan con entrega revisada; véase `ARCHIVO-CLINICO-CONTINUIDAD.md`.
 - Se preparó la prueba clínica real con Supabase local PG17, Auth/TOTP, Storage y controles de seguridad activados. La enumeración de casos y las negativas del entorno pasan; el recorrido integrado no ha sido ejecutado.
-- M118 protege suscripciones, fecha de inicio de prueba y exenciones internas. El archivo aplicado tiene SHA-256 `a8ad760dc9359f85aa355454890b306fee7dfa1a633b295cb44ca3cd1225fc19`. El control posterior confirmó permisos de escritura retirados a usuarios comunes, permisos de servicio y lectura conservados, tres triggers activos y política amplia retirada. No se alteraron suscripciones reales ni las nueve exenciones preexistentes. PR #163 se integró como `a0fe34e6853d42c5072741584775983de4f7bc53`; su despliegue de aplicación se está verificando por separado.
+- M118 protege suscripciones, fecha de inicio de prueba y exenciones internas. El archivo aplicado tiene SHA-256 `a8ad760dc9359f85aa355454890b306fee7dfa1a633b295cb44ca3cd1225fc19`. El control posterior confirmó permisos de escritura retirados a usuarios comunes, permisos de servicio y lectura conservados, tres triggers activos y política amplia retirada. No se alteraron suscripciones reales ni las nueve exenciones preexistentes. PR #163 y su despliegue de aplicación quedaron verificados como se registra arriba.
 - M119 hace la reprogramación como sustitución transaccional con comprobante de operación. El fallo del reemplazo revierte original, recordatorios e intenciones de Google. Pasaron diez unitarias, ocho escenarios de navegador y cuatro carreras con conexiones reales de PostgreSQL.
 - La revisión adicional de M110 cerró casos de autorización en la conversión de pedidos y la recuperación de sus comprobantes, y preservó el comprobante público mínimo. Sus tres archivos de pruebas SQL se incluyeron en el replay completo.
 
-Después de M110/M119 aprobaron **2.111 unitarias, tipos, lint y el replay de 113 migraciones con 60 archivos de pruebas SQL**. El replay final usa transacciones por migración y prueba además que un fallo del registro de M118 revierte todo el cambio. Falta registrar la compilación del árbol integrado. El build anterior conserva advertencias de versiones distintas de instrumentación de OpenTelemetry; no se presentan como una prueba de observabilidad desplegada.
+Después de M110/M119 aprobaron **2.111 unitarias, tipos, lint y el replay de 113 migraciones con 60 archivos de pruebas SQL**. El replay final usa transacciones por migración y prueba además que un fallo del registro de M118 revierte todo el cambio. La integración de producción se resolvió en `a814b33`, sin modificar el árbol previamente probado en `11f0206`. La compilación aislada final de ese árbol terminó con código 0; conserva advertencias de versiones distintas de instrumentación de OpenTelemetry. Evidencia local: `.flow/build-final-20260912.log`. No se presenta como una prueba de observabilidad desplegada.
 
 ## Condiciones para cerrar la preparación
 
@@ -43,3 +43,11 @@ Después de M110/M119 aprobaron **2.111 unitarias, tipos, lint y el replay de 11
 6. Completar validación profesional de instrumentos, menores y consentimientos; responsables de soporte y condiciones del servicio; Vercel Pro y programación; carga local y campaña alojada acotada.
 
 Las pruebas aisladas, la página pública disponible y una compilación correcta son evidencias distintas. Ninguna, por separado, permite marcar listo el lanzamiento.
+
+## Retomar sin este chat
+
+El punto de trabajo completo está en `C:\Users\amiun\Documents\Codex\folio-market-ready`, rama `codex/market-ready`; la carpeta `C:\Users\amiun\Desktop\folio-app` conserva el `master` publicado. No empezar otra implementación desde Desktop sin revisar primero esta rama: contiene los cambios aún no publicados. La rama amplia tiene el despliegue automático desactivado deliberadamente porque requiere migraciones y pruebas integradas antes de producción.
+
+Para continuar, pedir: «Leé docs/ESTADO-ACTUAL.md en C:\Users\amiun\Documents\Codex\folio-market-ready, verificá el estado actual y continuá el plan de Folio desde sus pendientes». La siguiente prioridad es Supabase local real y el recorrido clínico autenticado; después, el control comercial de escrituras y la restauración integral. El plan no está terminado ni se habilitó el piloto con pacientes reales.
+
+La recuperación y la tarea de respaldo están en `C:\Users\amiun\folio-recovery\initial-20260908-182017`, fuera de Git y de este chat. Borrar la conversación no borra el código, las claves ni la tarea de Windows. No borrar esas carpetas al limpiar conversaciones.
