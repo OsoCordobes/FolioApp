@@ -113,6 +113,8 @@
 .cal-tab.is-active { background: var(--surface); box-shadow: none; color: var(--accent-2); }
 .cal-nav { gap: 16px; flex-wrap: wrap; }
 .cal-nav-l, .cal-nav-r { flex-wrap: wrap; }
+.cal-nav-r { min-width: 0; max-width: 100%; }
+.cal-filters { flex-wrap: wrap; }
 .cal-nav-btn, .cal-nav-today { min-height: 40px; border-radius: 9px; background: var(--surface); }
 .cal-nav-btn { width: 40px; }
 .cal-range { font-family: var(--font-sans); font-weight: 650; letter-spacing: -.02em; font-size: 14px; }
@@ -154,6 +156,13 @@
 .pd-name-link:hover { color: var(--accent-2); text-decoration: underline; text-underline-offset: 3px; }
 .pd-name-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .pd-check { cursor: pointer; }
+.pd-check input:focus-visible + .pd-check-box { outline: 2px solid var(--accent); outline-offset: 3px; }
+.pd-check input:indeterminate + .pd-check-box { background: var(--accent); border-color: var(--accent-2); }
+.pd-check input:indeterminate + .pd-check-box::after { content: ''; position: absolute; top: 7px; left: 4px; width: 8px; height: 2px; background: var(--on-accent, #fff); }
+.fi-table-scroll-hint { display: none; }
+.fn-table-scroll { overflow-x: auto; min-width: 0; }
+.fn-table .fn-monto { white-space: nowrap; }
+.pd-table-wrap:focus-visible, .fn-table-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .pd-estado { font-size: 10px; font-weight: 600; }
 .pd-reactivar { background: var(--surface); border-color: var(--line-soft); border-left: 3px solid var(--amber); box-shadow: none; }
 .pd-reactivar-row { border-color: var(--line-soft); }
@@ -287,6 +296,11 @@
   .fi-app .fi-fab { display: none; }
 }
 
+/* Data tables gain room continuously on wide monitors; reading views keep their limit. */
+@media (min-width: 1800px) {
+  .pd-content, .fn-content { max-width: clamp(1392px, calc(50vw + 492px), 1760px); }
+}
+
 @media (min-width: 921px) and (max-height: 840px) {
   .fi-sidebar { padding-top: 18px; gap: 12px; overflow-y: auto; }
   .fi-workspace { padding-top: 10px; padding-bottom: 10px; }
@@ -323,7 +337,9 @@
   .fi-fab { border-radius: 12px; padding: 13px 18px; min-height: 48px; font-family: var(--font-sans); font-size: 13px; font-weight: 650; box-shadow: var(--shadow-2); bottom: calc(84px + env(safe-area-inset-bottom)); }
   .pd-toolbar { grid-template-columns: minmax(0, 1fr) auto; }
   .pd-toolbar .pd-filtros { grid-column: 1 / -1; }
-  .pd-table-wrap, .fn-table-wrap { overflow-x: auto; }
+  .pd-table-wrap { overflow-x: auto; }
+  .fn-table-wrap { overflow: hidden; }
+  .fi-table-scroll-hint { display: block; padding: 10px 14px; margin: 0; font-size: 11px; line-height: 1.5; color: var(--ink-3); }
   .cfg-grid { grid-template-columns: minmax(0, 1fr); gap: 20px; }
   .cfg-sidenav { position: static; flex-direction: row; flex-wrap: wrap; }
   .cfg-sidenav-item { background: var(--surface); border: 1px solid var(--line-soft); }
@@ -417,7 +433,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .fi-t-live-dot, .fi-t-dot-pulse, .cfg-save-dot { animation: none; }
+  .fi-t-live-dot, .fi-t-dot-pulse, .cal-turno-pulse, .cfg-save-dot { animation: none; }
 }
 
 @media print {

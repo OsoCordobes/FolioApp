@@ -1,0 +1,23 @@
+/* Exceptional states and ephemeral feedback; no patient data or action semantics. */
+@media screen {
+  .fx-error { min-height: 100dvh; display: flex; align-items: center; justify-content: center; padding: 48px 24px; background: var(--bg); color: var(--ink); text-align: center; }
+  .fx-error-card { width: 100%; max-width: 500px; display: flex; flex-direction: column; gap: 20px; padding: clamp(24px, 4vw, 40px); border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+  .fx-error-card p, .fx-error-card h1 { margin: 0; }
+  .fx-error-kicker { font-size: 13px; font-weight: 600; color: var(--accent); }
+  .fx-error-card h1 { font-size: clamp(25px, 4vw, 32px); line-height: 1.2; letter-spacing: -.025em; }
+  .fx-error-message { color: var(--ink-2); line-height: 1.65; }
+  .fx-error-message a { color: var(--accent); overflow-wrap: anywhere; }
+  .fx-error-reference { color: var(--ink-3); font: 12px/1.5 var(--font-mono); overflow-wrap: anywhere; }
+  .fx-error-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 4px; }
+  .fx-error-actions .fi-btn { min-height: 44px; }
+  .fx-cookie-table { max-width: 100%; margin-top: 16px; overflow-x: auto; overscroll-behavior-inline: contain; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+  .fx-cookie-table table { min-width: 640px; }
+  .fx-cookie-table th { vertical-align: top; }
+  .fx-cookie-table-hint { margin: 12px 0 0; color: var(--ink-3); font-size: 12px; }
+  .fi-toast { align-items: center; padding: 10px 10px 10px 14px; }
+  .fi-toast-txt { min-width: 0; padding-top: 0; overflow-wrap: anywhere; }
+  .fi-toast-close { width: 44px; height: 44px; }
+  .fi-toast-close:focus-visible, .fx-cookie-table:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  @media (min-width: 720px) { .fx-cookie-table-hint { display: none; } }
+  @media (prefers-reduced-motion: reduce) { .fx-error *, .fi-toast, .fi-toast * { animation: none !important; transition: none !important; } }
+}

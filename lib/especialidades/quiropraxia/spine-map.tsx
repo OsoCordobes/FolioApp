@@ -79,7 +79,8 @@ export function SpineMap({ data, onChange, readOnly }: SpineMapProps) {
   // scroll el panel quedaba fuera de vista y parecía que el click no hizo nada.
   useEffect(() => {
     if (selected == null) return;
-    panelRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    panelRef.current?.scrollIntoView({ block: "nearest", behavior: reducedMotion ? "auto" : "smooth" });
   }, [selected]);
 
   const setVista = (next: VistaQuiro) => {

@@ -21,7 +21,7 @@
  * fm-modal-check / fi-pill / pc-legend-*) + tokens en estilos inline puntuales.
  */
 
-import { useMemo, useState, type CSSProperties } from "react";
+import { useId, useMemo, useState, type CSSProperties } from "react";
 
 import * as I from "@/components/icons";
 import {
@@ -513,6 +513,7 @@ export function CardiologiaTool({
   pacienteNombre,
   organizacionNombre,
 }: SpecialtyToolProps) {
+  const estudiosId = useId();
   const draft = useMemo(() => parseDraft(value), [value]);
   const series = useMemo(() => deriveCardioSeries(historial), [historial]);
   const estudiosHistorial = useMemo(() => {
@@ -747,6 +748,8 @@ export function CardiologiaTool({
               type="button"
               className="pc-link"
               onClick={() => setEstudiosExpandidos((v) => !v)}
+              aria-expanded={estudiosExpandidos}
+              aria-controls={estudiosId}
             >
               {estudiosExpandidos ? "Mostrar menos" : `Ver todos (${estudiosHistorial.length})`}
             </button>
@@ -834,7 +837,7 @@ export function CardiologiaTool({
           </div>
         ) : null}
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <div id={estudiosId} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <span className="muted" style={{ fontSize: 11, fontWeight: 500 }}>
             Historial
           </span>

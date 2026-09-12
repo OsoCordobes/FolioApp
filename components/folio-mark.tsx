@@ -1,9 +1,8 @@
 /**
- * Folio · brand mark (stack + F)
+ * Folio · Hoja clara
  *
- * Logo "stack of papers + F" — la marca oficial. Inline SVG porque el
- * sidebar tiene que resolverse sin depender del archivo de brand exploration.
- * Port directo del prototipo (sidebar.jsx · FolioMark).
+ * Una hoja y una F de trazos abiertos, legibles desde 16 px. El pliegue
+ * conserva la referencia a la historia clínica sin capas superpuestas.
  *
  * La hoja y la F son trazados independientes de fuentes y de IDs de React.
  * Así la marca mantiene su geometría en servidor, navegador e impresión.
@@ -19,18 +18,16 @@ interface FolioMarkProps {
 export function FolioMark({
   size = 28,
   color,
-  fg = "#FFFFFF",
+  fg,
   foldShade,
 }: FolioMarkProps) {
   const c = color ?? "var(--accent)";
-  const fs = foldShade ?? "var(--accent-2)";
+  const foreground = fg ?? (color ? "#FFFFFF" : "var(--on-accent, #FFFFFF)");
   return (
-    <svg width={size} height={size} viewBox="0 0 100 100" role="img" aria-label="Folio">
-      <rect x="24" y="8" width="70" height="74" rx="8" fill={c} opacity="0.26" />
-      <rect x="15" y="15" width="70" height="74" rx="8" fill={c} opacity="0.50" />
-      <path d="M14 22H64L84 42V88Q84 96 76 96H14Q6 96 6 88V30Q6 22 14 22Z" fill={c} />
-      <path d="M 64 22 L 84 42 L 64 42 Z" fill={fs} />
-      <path d="M28 38H59V48H39V58H56V68H39V80H28Z" fill={fg} />
+    <svg width={size} height={size} viewBox="0 0 48 48" role="img" aria-label="Folio">
+      <path d="M12 4H29L42 17V36Q42 44 34 44H12Q5 44 5 37V11Q5 4 12 4Z" fill={c} />
+      <path d="M29 4V12Q29 17 34 17H42Z" fill={foldShade ?? foreground} opacity={foldShade ? 1 : .25} />
+      <path d="M14 15H28V21H20V26H27V32H20V38H14Z" fill={foreground} />
     </svg>
   );
 }

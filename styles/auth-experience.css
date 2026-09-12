@@ -57,7 +57,7 @@
 .fx-auth-form .au-field input:focus, .fx-onb-shell .onb-field input:focus, .fx-onb-shell .onb-field select:focus, .fx-onb-shell .onb-field textarea:focus { outline: 3px solid color-mix(in srgb, var(--accent) 17%, transparent); outline-offset: 1px; border-color: var(--accent); }
 .fx-auth-form .au-field.is-err input, .fx-onb-shell .onb-field.is-err input { border-color: var(--red); background: var(--red-soft); }
 .fx-auth-form .au-pw input { padding-right: 48px; }
-.fx-auth-form .au-pw-toggle { width: 42px; height: 42px; right: 3px; border-radius: 5px; color: var(--ink-2); cursor: pointer; }
+.fx-auth-form .au-pw-toggle { width: 44px; height: 44px; right: 2px; border-radius: 5px; color: var(--ink-2); cursor: pointer; }
 .fx-auth-form .au-pw-toggle svg { width: 18px; height: 18px; }
 .fx-auth-form .au-btn-google, .fx-onb-shell .au-btn-google { min-height: 48px; padding: 12px 15px; border-radius: 7px; background: var(--surface); color: var(--ink); font-size: 13px; font-weight: 550; cursor: pointer; }
 .fx-auth-form .au-btn-google:hover, .fx-onb-shell .au-btn-google:hover { border-color: var(--accent); background: var(--bg); }
@@ -68,7 +68,8 @@
 .fx-auth-form .au-submit:not(:disabled):hover, .fx-onb-shell .onb-foot-next:not(:disabled):hover { background: var(--accent-2); border-color: var(--accent-2); transform: none; }
 .fx-auth-form button:disabled, .fx-onb-shell button:disabled { opacity: .55; cursor: not-allowed; }
 .fx-auth-form .au-link { font-family: var(--font-sans); color: var(--accent); font-size: 13px; font-weight: 550; cursor: pointer; text-underline-offset: 4px; }
-.fx-auth-form .au-link--ghost { padding: 4px 0; font-size: 12px; font-weight: 450; }
+.fx-auth-form button.au-link { min-height: 44px; }
+.fx-auth-form .au-link--ghost { padding: 8px 0; font-size: 12px; font-weight: 450; }
 .fx-auth-form .au-form-switch { padding-top: 23px; border-top-color: var(--line); font-size: 13px; line-height: 1.7; color: var(--ink-2); }
 .fx-auth-form .au-err, .fx-onb-shell .au-err { padding: 12px 14px; border-radius: 7px; font-family: var(--font-sans); font-size: 13px; line-height: 1.65; }
 .fx-auth-notice { margin: 0; padding: 12px 14px; background: var(--accent-soft); color: var(--ink); border: 1px solid var(--line); border-radius: 7px; font-size: 13px; line-height: 1.65; }
@@ -201,5 +202,10 @@
   .fx-onboarding .onb-step1-pane > .onb-anim { padding: 16px 23px 48px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .fx-auth-form *, .fx-onb-shell * { scroll-behavior: auto; transition: none; animation: none; }
+  .fx-auth-form *, .fx-auth-form *::before, .fx-auth-form *::after,
+  .fx-onboarding *, .fx-onboarding *::before, .fx-onboarding *::after {
+    scroll-behavior: auto !important;
+    transition: none !important;
+    animation: none !important;
+  }
 }

@@ -1,5 +1,6 @@
 import { ImageResponse } from "next/og";
 
+import { FolioMark } from "@/components/folio-mark";
 import { loadFolioOgFonts } from "@/lib/opengraph-fonts";
 
 /** Clínica clara in link previews. Entirely invented appointments. */
@@ -20,10 +21,8 @@ export default async function OpengraphImage() {
     <div style={{ width: "100%", height: "100%", display: "flex", background: "#F5F5FA", color: "#292641", fontFamily: "Plus Jakarta Sans", padding: "52px 58px", gap: 45 }}>
       <div style={{ display: "flex", flexDirection: "column", width: 525, justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 43, height: 45, display: "flex", position: "relative" }}>
-            <div style={{ position: "absolute", left: 8, top: 0, width: 35, height: 36, background: "#6255C540", borderRadius: 5 }} />
-            <div style={{ position: "absolute", left: 4, top: 5, width: 35, height: 36, background: "#6255C580", borderRadius: 5 }} />
-            <div style={{ position: "absolute", left: 0, top: 10, width: 35, height: 35, background: "#6255C5", borderRadius: 5, display: "flex", justifyContent: "center", alignItems: "center", color: "white", fontSize: 27, fontWeight: 600 }}>F</div>
+          <div style={{ width: 43, height: 45, display: "flex", alignItems: "center" }}>
+            <FolioMark size={43} color="#6255C5" fg="#FFFFFF" />
           </div>
           <span style={{ fontSize: 43, fontWeight: 600, letterSpacing: "-2.5px" }}>folio</span>
         </div>

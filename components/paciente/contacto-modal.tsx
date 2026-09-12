@@ -96,7 +96,7 @@ export function ContactoModal({
         zIndex: 1000,
         padding: 16,
       }}
-      onClick={onClose}
+      onClick={() => { if (!pending) onClose(); }}
     >
       <form
         onSubmit={handleSubmit}
@@ -132,7 +132,6 @@ export function ContactoModal({
             style={inputStyle}
             maxLength={120}
             required
-            autoFocus
           />
         </Field>
 

@@ -151,6 +151,9 @@ function PreviewBody() {
     }
     const button = target.closest<HTMLButtonElement>("button");
     if (!button) return;
+    // Calendar state filters only update local view state. "Sin confirmar"
+    // must not be mistaken for the confirmation mutation below.
+    if (button.closest(".cal-filters")) return;
     const label = `${button.textContent ?? ""} ${button.getAttribute("aria-label") ?? ""}`.trim();
     if (/guardar|enviar|confirmar|cancelar turno|lleg[oó]|llegada|atender|cerrar turno|sin turno|nuevo paciente|agendar|bloquear|archivar|eliminar|conectar|desconectar|descargar|cobrar|registrar|crear cuenta|activar|suscrib|exportar|subir|invitar/i.test(label)) {
       event.preventDefault(); event.stopPropagation(); blockNotice();
@@ -188,7 +191,7 @@ function PreviewBody() {
             <main className="fi-main" id="main">{content}</main>
             <MobileNav organization={organization} role="OWNER" esColegiado especialidad="kinesiologia" especialidadOverride={null} memberships={[]} activeOrgId="folio-test-experience-org" graceDaysLeft={23} />
           </div> : isPortal ? <div className="pt-app">
-            <header className="pt-shell-header"><div className="pt-shell-header-inner"><div className="pt-brand"><FolioMark size={24} /><span className="pt-brand-text"><span className="pt-brand-name">Folio</span><span className="pt-brand-tag">Portal del paciente</span></span></div></div><PortalNav /></header>
+            <header className="pt-shell-header"><div className="pt-shell-header-inner"><div className="pt-brand"><FolioMark size={24} /><span className="pt-brand-text"><span className="pt-brand-name">Folio</span><span className="pt-brand-tag">Portal del paciente</span></span></div></div><PortalNav activePath={panel === "portal-perfil" ? "/portal/perfil" : panel === "portal-turnos" ? "/portal/turnos" : "/portal/resumen"} /></header>
             <main className="pt-main">{content}</main>
           </div> : content}
         </div>

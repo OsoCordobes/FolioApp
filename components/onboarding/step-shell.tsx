@@ -61,9 +61,9 @@ const APP_URL_DEFAULT = getAppHost();
 
 // Campos que reciben el autofocus al montar un paso. Excluimos hidden/file/
 // checkbox/radio (enfocar el file input del Step 4 haría ambiguo el Enter) y
-// disabled (el email read-only del Step1Consent).
+// disabled/readOnly (el email de Step1Consent ya está confirmado).
 const FOCUSABLE_FIELD_SELECTOR =
-  'input:not([type="hidden"]):not([type="file"]):not([type="checkbox"]):not([type="radio"]):not([disabled]), select, textarea';
+  'input:not([type="hidden"]):not([type="file"]):not([type="checkbox"]):not([type="radio"]):not([disabled]):not([readonly]), select:not([disabled]), textarea:not([disabled]):not([readonly])';
 
 export function StepShell({
   stepIdx,
@@ -82,6 +82,7 @@ export function StepShell({
   children,
 }: StepShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const shellRef = useRef<HTMLDivElement | null>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const previewRef = useRef<HTMLDialogElement | null>(null);
   const previewId = useId();
@@ -105,7 +106,7 @@ export function StepShell({
   // Esc = cerrar drawer del preview, o Atrás.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.defaultPrevented || e.isComposing || e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
       const target = e.target as HTMLElement | null;
       const tag = target?.tagName?.toLowerCase();
 
@@ -120,6 +121,14 @@ export function StepShell({
           (e.shiftKey ? last : first).focus();
         }
         return;
+      }
+
+      // La selección nativa y sus popovers son dueños de Enter/Escape.
+      // Tampoco consumimos teclas de navegación fuera de este asistente.
+      if (!drawerOpen) {
+        if (!target || !shellRef.current?.contains(target)) return;
+        if (tag === "select") return;
+        if (tag === "input" && ["date", "datetime-local", "month", "time", "week", "color", "range"].includes((target as HTMLInputElement).type)) return;
       }
 
       if (e.key === "Escape") {
@@ -157,7 +166,7 @@ export function StepShell({
     : undefined;
 
   return (
-    <div className={`onb-shell fx-onb-shell ${showPreview ? "onb-shell-split" : ""}`}>
+    <div ref={shellRef} className={`onb-shell fx-onb-shell ${showPreview ? "onb-shell-split" : ""}`}>
       <div className="onb-shell-form">
         <div className="onb-step">
           {!isFinal ? (

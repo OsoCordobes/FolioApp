@@ -190,7 +190,7 @@ export function Sidebar({
               <I.ExternalLink size={13} /> Ver sitio público
             </a>
           ) : (
-            <span className="fi-link" style={{ opacity: 0.5, cursor: "not-allowed" }} title="Sin slug configurado">
+            <span className="fi-link" style={{ opacity: 0.5, cursor: "not-allowed" }} title="Todavía no configuraste tu enlace público">
               <I.ExternalLink size={13} /> Ver sitio público
             </span>
           )}

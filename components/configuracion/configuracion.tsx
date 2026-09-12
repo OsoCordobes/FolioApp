@@ -384,7 +384,7 @@ function SecCuenta({
       </Section>
 
       <Section title="Tus datos y derechos" sub="Habeas Data (Ley 25.326): exportar tus datos o solicitar eliminación de cuenta.">
-        <Row label="Acceso a tus datos" sub="Exportar JSON con todo, o solicitar eliminación con grace period de 30 días.">
+        <Row label="Acceso a tus datos" sub="Descargá tus datos personales en un archivo JSON o solicitá la baja de tu cuenta para revisión humana.">
           <a href="/configuracion/datos" className="fi-btn fi-btn-ghost">
             Abrir mis datos →
           </a>

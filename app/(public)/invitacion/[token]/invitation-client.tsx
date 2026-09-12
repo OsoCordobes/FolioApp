@@ -40,7 +40,7 @@ export interface InvitationPreview {
 
 function Pane({ children }: { children: React.ReactNode }) {
   return (
-    <div className="au-form-pane" style={{ maxWidth: 440, width: "100%" }}>
+    <div className="au-form-pane fx-auth-form fx-invitation" style={{ maxWidth: 440, width: "100%" }}>
       {children}
     </div>
   );
@@ -48,11 +48,11 @@ function Pane({ children }: { children: React.ReactNode }) {
 
 function Head({ title, sub }: { title: string; sub?: string }) {
   return (
-    <header className="au-form-head" style={{ marginBottom: 16 }}>
+    <header className="au-form-head">
       <span className="fi-eyebrow">invitación al equipo</span>
-      <h2>{title}</h2>
+      <h1>{title}</h1>
       {sub ? (
-        <p style={{ color: "var(--ink-3)", marginTop: 6, fontSize: 13, lineHeight: 1.55 }}>{sub}</p>
+        <p>{sub}</p>
       ) : null}
     </header>
   );
@@ -100,6 +100,9 @@ export function InvitationAuth({ token }: { token: string }) {
   const [password, setPassword] = useState("");
   const [consent, setConsent] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [fieldError, setFieldError] = useState<"email" | "password" | null>(null);
+  const emailRef = useRef<HTMLInputElement | null>(null);
+  const passwordRef = useRef<HTMLInputElement | null>(null);
   // F-AUTH: con "Confirm email" ON, el alta no abre sesión — hay que mandar al
   // invitado al mail en vez de refrescar una página que se va a ver igual.
   const [confirmarEmail, setConfirmarEmail] = useState(false);
@@ -146,12 +149,17 @@ export function InvitationAuth({ token }: { token: string }) {
 
   const submit = (e?: React.FormEvent) => {
     e?.preventDefault();
+    if (pending) return;
     if (!email.match(/^[^@\s]+@[^@\s]+\.[^@\s]+$/)) {
       setErr("Ingresá un email válido.");
+      setFieldError("email");
+      emailRef.current?.focus();
       return;
     }
-    if (password.length < 8) {
-      setErr("La contraseña tiene mínimo 8 caracteres.");
+    if (!password || (modo === "signup" && password.length < 8)) {
+      setErr(modo === "signup" ? "La contraseña tiene mínimo 8 caracteres." : "Ingresá tu contraseña.");
+      setFieldError("password");
+      passwordRef.current?.focus();
       return;
     }
     if (modo === "signup" && !consent) {
@@ -163,6 +171,7 @@ export function InvitationAuth({ token }: { token: string }) {
       return;
     }
     setErr(null);
+    setFieldError(null);
     startTransition(async () => {
       const result =
         modo === "signup"
@@ -201,26 +210,34 @@ export function InvitationAuth({ token }: { token: string }) {
         <span>{modo === "signup" ? "Creá tu cuenta" : "Entrá con tu cuenta"}</span>
       </div>
 
-      <form className="au-form" onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <label className="au-field">
+      <form className="au-form" onSubmit={submit} aria-busy={pending} noValidate style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <label className={`au-field${err && fieldError === "email" ? " is-err" : ""}`}>
           <span>Email (el que recibió la invitación)</span>
           <input
             type="email"
+            ref={emailRef}
+            required
+            aria-invalid={Boolean(err && fieldError === "email")}
+            aria-describedby={err ? "fx-invitation-auth-error" : undefined}
             autoComplete="email"
             placeholder="vos@clinica.com"
             value={email}
-            onChange={(e) => { setEmail(e.target.value); setErr(null); }}
+            onChange={(e) => { setEmail(e.target.value); setErr(null); setFieldError(null); }}
             disabled={pending}
           />
         </label>
-        <label className="au-field">
+        <label className={`au-field${err && fieldError === "password" ? " is-err" : ""}`}>
           <span>Contraseña</span>
           <input
             type="password"
+            ref={passwordRef}
+            required
+            aria-invalid={Boolean(err && fieldError === "password")}
+            aria-describedby={err ? "fx-invitation-auth-error" : undefined}
             autoComplete={modo === "signup" ? "new-password" : "current-password"}
             placeholder={modo === "signup" ? "Mínimo 8 caracteres" : ""}
             value={password}
-            onChange={(e) => { setPassword(e.target.value); setErr(null); }}
+            onChange={(e) => { setPassword(e.target.value); setErr(null); setFieldError(null); }}
             disabled={pending}
           />
         </label>
@@ -247,7 +264,7 @@ export function InvitationAuth({ token }: { token: string }) {
             dispositivo y volvés acá para aceptar la invitación.
           </p>
         ) : null}
-        {err ? <p className="au-err">{err}</p> : null}
+        {err ? <p id="fx-invitation-auth-error" className="au-err" role="alert">{err}</p> : null}
 
         <button
           type="submit"
@@ -414,9 +431,9 @@ export function InvitationDecision({
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <ConsentCheckbox checked={consent} onChange={(v) => { setConsent(v); setErr(null); }} />
 
-        {err ? <p className="au-err">{err}</p> : null}
+        {err ? <p className="au-err" role="alert">{err}</p> : null}
         {done ? (
-          <p style={{ color: "var(--green)", fontSize: 13 }}>Listo. Te llevamos a Folio…</p>
+          <p role="status" style={{ color: "var(--green)", fontSize: 13 }}>Listo. Te llevamos a Folio…</p>
         ) : null}
 
         <button

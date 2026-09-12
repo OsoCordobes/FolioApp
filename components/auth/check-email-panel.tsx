@@ -62,7 +62,13 @@ export function CheckEmailPanel({ email, onBack }: CheckEmailPanelProps) {
   const [, setNow] = useState(Date.now());
   useEffect(() => {
     if (!cooldownUntil) return;
-    const id = setInterval(() => setNow(Date.now()), 1000);
+    const id = setInterval(() => {
+      const now = Date.now();
+      setNow(now);
+      // Al vencer, el botón queda habilitado y el panel deja de trabajar en reposo.
+      // Un nuevo reenvío cambia cooldownUntil y crea su propio intervalo.
+      if (now >= cooldownUntil) clearInterval(id);
+    }, 1000);
     return () => clearInterval(id);
   }, [cooldownUntil]);
 
@@ -120,10 +126,14 @@ export function CheckEmailPanel({ email, onBack }: CheckEmailPanelProps) {
           </p>
         ) : null}
         {sent && !error ? (
-          <p role="status" style={{ fontSize: 13, color: "var(--ink-2)", margin: 0 }}>
-            Enlace reenviado.{" "}
-            {coolingDown ? `Podés volver a reenviar en ${formatCooldown(secondsLeft)}.` : ""}
-          </p>
+          <div className="fx-auth-help">
+            <p role="status" style={{ margin: 0 }}>Enlace reenviado.</p>
+            {coolingDown ? (
+              <p id="fx-email-cooldown" role="timer" aria-live="off" style={{ margin: "4px 0 0" }}>
+                Podés volver a reenviar en {formatCooldown(secondsLeft)}.
+              </p>
+            ) : null}
+          </div>
         ) : null}
 
         <button
@@ -131,6 +141,8 @@ export function CheckEmailPanel({ email, onBack }: CheckEmailPanelProps) {
           className="fi-btn fi-btn-primary au-submit"
           onClick={onResend}
           disabled={pending || coolingDown}
+          aria-busy={pending}
+          aria-describedby={sent && coolingDown && !error ? "fx-email-cooldown" : undefined}
         >
           {pending ? "Reenviando…" : "Reenviar enlace"}
         </button>

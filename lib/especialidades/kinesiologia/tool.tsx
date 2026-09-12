@@ -31,7 +31,7 @@
  * fi-pill / pc-link) + tokens en estilos inline puntuales. Sin hex off-theme.
  */
 
-import { useMemo, useState, type CSSProperties } from "react";
+import { useId, useMemo, useState, type CSSProperties } from "react";
 
 import * as I from "@/components/icons";
 import { ndi as ndiDef, odi as odiDef, borg as borgDef } from "@/lib/instrumentos";
@@ -312,6 +312,7 @@ export function KinesiologiaTool({
   readOnly,
   historial,
 }: SpecialtyToolProps) {
+  const historialId = useId();
   const draft = useMemo(() => parseDraft(value), [value]);
   const series = useMemo(() => deriveKinesioSeries(historial), [historial]);
 
@@ -497,7 +498,7 @@ export function KinesiologiaTool({
         <header className="pc-card-head">
           <span className="fi-eyebrow">Rango de movilidad (ROM)</span>
           {romHistorial.length > 4 ? (
-            <button type="button" className="pc-link" onClick={() => setRomExpandido((v) => !v)}>
+            <button type="button" className="pc-link" onClick={() => setRomExpandido((v) => !v)} aria-expanded={romExpandido} aria-controls={`${historialId}-rom`}>
               {romExpandido ? "Mostrar menos" : `Ver todos (${romHistorial.length})`}
             </button>
           ) : null}
@@ -578,7 +579,7 @@ export function KinesiologiaTool({
           </div>
         ) : null}
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <div id={`${historialId}-rom`} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <span className="muted" style={{ fontSize: 11, fontWeight: 500 }}>
             Historial
           </span>
@@ -600,7 +601,7 @@ export function KinesiologiaTool({
         <header className="pc-card-head">
           <span className="fi-eyebrow">Tests ortopédicos</span>
           {testsHistorial.length > 4 ? (
-            <button type="button" className="pc-link" onClick={() => setTestsExpandido((v) => !v)}>
+            <button type="button" className="pc-link" onClick={() => setTestsExpandido((v) => !v)} aria-expanded={testsExpandido} aria-controls={`${historialId}-tests`}>
               {testsExpandido ? "Mostrar menos" : `Ver todos (${testsHistorial.length})`}
             </button>
           ) : null}
@@ -681,7 +682,7 @@ export function KinesiologiaTool({
           </div>
         ) : null}
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <div id={`${historialId}-tests`} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <span className="muted" style={{ fontSize: 11, fontWeight: 500 }}>
             Historial
           </span>

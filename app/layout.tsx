@@ -8,7 +8,6 @@ import "@/styles/auth-experience.css";
 import "@/styles/public-experience.css";
 import { CookieBanner } from "@/components/cookie-banner";
 import { FolioPostHogProvider } from "@/lib/observability/posthog-client";
-import { QueryProvider } from "@/lib/query-client";
 import { TweaksProvider } from "@/lib/tweaks-context";
 
 const folioSans = localFont({ src: "../public/fonts/plus-jakarta-sans-latin.woff2", variable: "--font-folio", display: "swap", weight: "200 800", fallback: ["Arial"] });
@@ -20,7 +19,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return <html lang="es-AR" data-theme="light" className={folioSans.variable} suppressHydrationWarning>
-    <body><FolioPostHogProvider><QueryProvider><TweaksProvider>{children}</TweaksProvider></QueryProvider></FolioPostHogProvider><CookieBanner /></body>
+    <body><FolioPostHogProvider><TweaksProvider>{children}</TweaksProvider></FolioPostHogProvider><CookieBanner /></body>
   </html>;
 }
 

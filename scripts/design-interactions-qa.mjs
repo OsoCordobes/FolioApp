@@ -23,8 +23,10 @@ import{StepShell}from'@/components/onboarding/step-shell';
 import{MobileNav}from'@/components/mobile-nav';import{ToastProvider}from'@/components/ui/toast';
 window.qa={destinations:[],next:0,back:0};
 const patient={id:'synthetic-patient',nombre:'Paciente Sintético',tel:'3510000000',email:'synthetic@example.invalid',tipo:'nuevo',sesiones:0,ultima:null,proximo:null,tags:[],estado:'activo',cobertura:null,coberturaPlan:null};
+const patientTwo={...patient,id:'synthetic-second',nombre:'Segundo Ejemplo',tel:'3510000001',estado:'alta'};
 const fixture=new URLSearchParams(location.search).get('fixture');
-createRoot(document.getElementById('root')).render(<StrictMode><ToastProvider>{fixture==='onboarding'?<div className='onb-app fx-onboarding'><StepShell stepIdx={3} headline='Consultorio sintético' next={()=>qa.next++} back={()=>qa.back++} previewData={{nombre:'Profesional sintético',consultorioNombre:'Consultorio sintético',rubro:'Kinesiología',ciudad:'Córdoba',slug:'synthetic'}} appUrl='127.0.0.1'><label>Ciudad<input type='text' defaultValue='Córdoba'/></label></StepShell></div>:fixture==='mobile'?<MobileNav organization={{nombre:'Consultorio sintético',slug:'synthetic'}} role={new URLSearchParams(location.search).get('role')||'ADMIN'}/>:<PacientesDir pacientes={[patient]}/>}</ToastProvider></StrictMode>);
+window.open=()=>{throw new Error('External navigation is forbidden in this fixture')};
+createRoot(document.getElementById('root')).render(<StrictMode><ToastProvider>{fixture==='onboarding'?<div className='onb-app fx-onboarding'><StepShell stepIdx={3} headline='Consultorio sintético' next={()=>qa.next++} back={()=>qa.back++} previewData={{nombre:'Profesional sintético',consultorioNombre:'Consultorio sintético',rubro:'Kinesiología',ciudad:'Córdoba',slug:'synthetic'}} appUrl='127.0.0.1'><label>Ciudad<input type='text' defaultValue='Córdoba'/></label></StepShell></div>:fixture==='mobile'?<MobileNav organization={{nombre:'Consultorio sintético',slug:'synthetic'}} role={new URLSearchParams(location.search).get('role')||'ADMIN'}/>:<PacientesDir pacientes={fixture==='patients-multiple'?[patient,patientTwo]:[patient]}/>}</ToastProvider></StrictMode>);
 `;
 const stubs = {
   'next/navigation': `export const useRouter=()=>({push(url){qa.destinations.push(url)},refresh(){}});export const usePathname=()=>'/hoy';`,
@@ -93,6 +95,36 @@ try {
     });
     await run('scheduling action opens only its modal','patients',async page=>{
       await page.getByRole('button',{name:'Agendar',exact:true}).click();await page.getByRole('dialog',{name:'Agendar fixture'}).waitFor();
+      assert.deepEqual(await page.evaluate(()=>qa.destinations),[]);
+    });
+    await run('select-all reflects visible identities after filtering, not equal counts','patients-multiple',async page=>{
+      const first=page.getByRole('checkbox',{name:'Seleccionar a Paciente Sintético'});
+      await first.check();
+      assert.equal(await page.getByRole('checkbox',{name:'Seleccionar todos los pacientes visibles'}).evaluate(el=>el.indeterminate),true);
+      await page.getByRole('textbox',{name:'Buscar paciente (atajo: /)'}).fill('Segundo');
+      const all=page.getByRole('checkbox',{name:'Seleccionar todos los pacientes visibles'});
+      assert.equal(await all.isChecked(),false);
+      assert.equal(await all.evaluate(el=>el.indeterminate),false);
+      assert.equal(await page.getByRole('checkbox',{name:'Seleccionar a Segundo Ejemplo'}).isChecked(),false);
+      await all.check();
+      assert.equal(await page.getByRole('checkbox',{name:'Seleccionar a Segundo Ejemplo'}).isChecked(),true);
+      await page.getByRole('textbox',{name:'Buscar paciente (atajo: /)'}).fill('');
+      assert.equal(await all.isChecked(),false);
+      assert.equal(await all.evaluate(el=>el.indeterminate),true);
+      assert.deepEqual(await page.evaluate(()=>qa.destinations),[]);
+    });
+    await run('search shortcut cannot steal focus from a WhatsApp confirmation','patients-multiple',async page=>{
+      await page.getByRole('checkbox',{name:'Seleccionar todos los pacientes visibles'}).check();
+      const trigger=page.getByRole('button',{name:'Enviar mensaje WhatsApp'});
+      await trigger.click();
+      const dialog=page.getByRole('alertdialog',{name:'¿Abrir WhatsApp para 2 pacientes?'});
+      await dialog.waitFor();
+      await page.getByRole('button',{name:'Volver',exact:true}).focus();
+      await page.keyboard.press('/');
+      assert.equal(await dialog.evaluate(el=>el.contains(document.activeElement)),true);
+      await page.keyboard.press('Escape');
+      await dialog.waitFor({state:'hidden'});
+      assert.equal(await trigger.evaluate(el=>el===document.activeElement),true);
       assert.deepEqual(await page.evaluate(()=>qa.destinations),[]);
     });
     await run('onboarding preview traps focus, closes with Escape and restores trigger without advancing','onboarding',async page=>{

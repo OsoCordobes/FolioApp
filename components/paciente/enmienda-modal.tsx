@@ -87,7 +87,7 @@ export function EnmiendaModal({
         zIndex: 1000,
         padding: 16,
       }}
-      onClick={onClose}
+      onClick={() => { if (!pending) onClose(); }}
     >
       <form
         onSubmit={handleSubmit}
@@ -128,7 +128,6 @@ export function EnmiendaModal({
             maxLength={MOTIVO_MAX}
             placeholder="Error de transcripción: se anotó C4 en lugar de C5."
             required
-            autoFocus
           />
           {motivoLimpio.length > 0 && motivoLimpio.length < MOTIVO_MIN ? (
             <span style={{ display: "block", fontSize: 12, color: "var(--amber)", marginTop: 4 }}>

@@ -152,7 +152,9 @@ interface TablaPacientesProps {
 }
 
 function TablaPacientes({ pacientes, selected, setSelected, onOpen, onAgendar, totalOrg }: TablaPacientesProps & { totalOrg: number }) {
-  const allOn = pacientes.length > 0 && selected.size === pacientes.length;
+  const selectedVisible = pacientes.filter((p) => selected.has(p.id)).length;
+  const allOn = pacientes.length > 0 && selectedVisible === pacientes.length;
+  const someOn = selectedVisible > 0 && !allOn;
 
   const toggleAll = () => {
     if (allOn) setSelected(new Set());
@@ -204,7 +206,13 @@ function TablaPacientes({ pacientes, selected, setSelected, onOpen, onAgendar, t
         <tr>
           <th className="pd-th-check">
             <label className="pd-check">
-              <input type="checkbox" checked={allOn} onChange={toggleAll} aria-label="Seleccionar todos los pacientes visibles" />
+              <input
+                type="checkbox"
+                checked={allOn}
+                ref={(input) => { if (input) input.indeterminate = someOn; }}
+                onChange={toggleAll}
+                aria-label="Seleccionar todos los pacientes visibles"
+              />
               <span className="pd-check-box" />
             </label>
           </th>
@@ -528,7 +536,7 @@ export function PacientesDir({
   // Solo cuando el foco NO está en un campo editable y no hay modal abierto:
   // dentro de un modal el "/" es texto, no atajo.
   const searchRef = useRef<HTMLInputElement | null>(null);
-  const modalAbierto = createOpen || agendarFor != null;
+  const modalAbierto = createOpen || agendarFor != null || waConfirm != null;
   useEffect(() => {
     if (modalAbierto) return;
     const onKey = (e: KeyboardEvent) => {
@@ -627,7 +635,8 @@ export function PacientesDir({
           coberturas={coberturas}
         />
 
-        <div className="pd-table-wrap">
+        {filtered.length > 0 ? <p className="fi-table-scroll-hint">Deslizá la tabla para ver todos los datos →</p> : null}
+        <div className="pd-table-wrap" role="region" aria-label="Tabla de pacientes" tabIndex={filtered.length > 0 ? 0 : undefined}>
           <TablaPacientes
             pacientes={filtered}
             totalOrg={pacientes.length}

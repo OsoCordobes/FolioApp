@@ -63,3 +63,32 @@ for (const theme of ["light", "dark"] as const) {
     });
   });
 }
+
+test("landing · ficha cardiovascular en escritorio", async ({ page }) => {
+  await loadLanding(page, "light");
+  await page.getByRole("button", { name: "Cardiología", exact: true }).click();
+  await page.addStyleTag({ content: ".fx-header{position:static!important}" });
+  await expect(page.locator("#ficha")).toHaveScreenshot("landing-specialty-desktop.png");
+});
+
+test("landing · ficha por segmento en móvil", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await loadLanding(page, "light");
+  await page.getByLabel("Explorá una especialidad").selectOption("quiropraxia");
+  await page.addStyleTag({ content: ".fx-header{position:static!important}" });
+  await expect(page.locator("#ficha")).toHaveScreenshot("landing-specialty-mobile.png");
+});
+
+test("landing · portada en monitor de 2560 px", async ({ page }) => {
+  await page.setViewportSize({ width: 2560, height: 1440 });
+  await loadLanding(page, "light");
+  await expect(page).toHaveScreenshot("landing-hero-wide.png");
+});
+
+test("landing · cobros y explicación en dos columnas a 1920 px", async ({ page }) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await loadLanding(page, "light");
+  await page.getByRole("tab", { name: "Los cobros", exact: true }).click();
+  await page.addStyleTag({ content: ".fx-header{position:static!important}" });
+  await expect(page.locator("#producto")).toHaveScreenshot("landing-product-wide.png");
+});

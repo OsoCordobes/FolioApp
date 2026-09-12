@@ -27,6 +27,7 @@ import { useMemo, useState, useTransition, type ReactNode } from "react";
 
 import * as I from "@/components/icons";
 import { useToast } from "@/components/ui/toast";
+import { normalizarBusqueda } from "@/lib/format/busqueda";
 import { niceCeil } from "@/lib/format/nice-ceil";
 import type {
   FinanzasData,
@@ -515,10 +516,10 @@ function TablaTransacciones({
       rows = rows.filter((t) => t.estado === target);
     }
     if (!search.trim()) return rows;
-    const q = search.toLowerCase();
+    const q = normalizarBusqueda(search);
     return rows.filter((t) =>
-      t.paciente.toLowerCase().includes(q) ||
-      t.servicio.toLowerCase().includes(q) ||
+      normalizarBusqueda(t.paciente).includes(q) ||
+      normalizarBusqueda(t.servicio).includes(q) ||
       String(t.monto).includes(q),
     );
   }, [transacciones, search, estadoFiltro]);
@@ -585,6 +586,8 @@ function TablaTransacciones({
           </a>
         </div>
       </header>
+      {filtered.length > 0 ? <p className="fi-table-scroll-hint">Deslizá la tabla para ver todos los datos →</p> : null}
+      <div className="fn-table-scroll" role="region" aria-label="Tabla de transacciones" tabIndex={filtered.length > 0 ? 0 : undefined}>
       {filtered.length === 0 ? (
         <p className="muted" style={{ padding: 24, textAlign: "center" }}>
           {transacciones.length === 0
@@ -649,6 +652,7 @@ function TablaTransacciones({
           </tbody>
         </table>
       )}
+      </div>
       {/* H1+H4 · el pie ya no puede prometer "las últimas N": la tabla lista
           TODOS los pendientes del período (cada uno con su botón Cobrar, que no
           existe en ninguna otra pantalla) + los cobros más recientes. Decimos

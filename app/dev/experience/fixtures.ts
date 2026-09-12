@@ -35,7 +35,7 @@ export const patientRows: PacienteDirRow[] = names.map((nombre, index) => ({
   proximo: PREVIEW_DATE,
   tags: index === 3 ? ["ALTA"] : [],
   estado: index === 3 ? "alta" : "activo",
-  cobertura: index % 2 === 0 ? "Particular" : "Cobertura de ejemplo",
+  cobertura: index % 2 === 0 ? null : "Cobertura de ejemplo",
   coberturaPlan: null,
 }));
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type KeyboardEvent } from "react";
+import { useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { CalendarDay, Check, Users, Wallet, Lock, ChevronRight } from "@/components/icons";
 
 type View = "agenda" | "historia" | "cobros";
@@ -32,7 +32,7 @@ export function ProductPreview({ compact = false }: { compact?: boolean }) {
 
   return (
     <div className={`fx-preview${compact ? " fx-preview--hero" : ""}`}>
-      {!compact && <div className="fx-tour-tabs" role="tablist" aria-label="Recorrer las funciones de Folio">
+      {!compact && <div className="fx-tour-tabs" role="tablist" aria-label="Recorrer las funciones de Folio" style={{ "--fx-tab-index": VIEWS.findIndex((item) => item.id === view) } as CSSProperties}>
         {VIEWS.map((item, index) => <button key={item.id} id={`${prefix}-${item.id}`} role="tab" type="button"
           aria-selected={view === item.id} aria-controls={`${prefix}-panel`} tabIndex={view === item.id ? 0 : -1}
           ref={(node) => { buttons.current[index] = node; }} onKeyDown={(event) => onKey(event, index)} onClick={() => setView(item.id)}>
@@ -51,8 +51,9 @@ export function ProductPreview({ compact = false }: { compact?: boolean }) {
               <span className={view === "cobros" ? "is-current" : ""}><Wallet size={16} /> Finanzas</span>
               <span className="fx-rail-profile"><b>LM</b> Lucía Molina</span>
             </aside>
-            <div className="fx-product-screen" key={view}>
-              {view === "agenda" && <>
+            <div className="fx-product-screens">
+            {(compact ? VIEWS.slice(0, 1) : VIEWS).map(({ id: screenView }) => <div className="fx-product-screen" key={screenView} data-visible={view === screenView} aria-hidden={view !== screenView}>
+              {screenView === "agenda" && <>
                 <div className="fx-screen-heading"><div><span>Martes 15 de septiembre</span><ScreenTitle>Tu agenda hoy</ScreenTitle></div><span className="fx-person">LM</span></div>
                 <div className="fx-day-summary"><span><b>4</b> turnos</span><span><b>1</b> en espera</span><span><b>1</b> atendido</span></div>
                 <div className="fx-agenda-heading"><strong>Esta mañana</strong><span>Consultorio 1</span></div>
@@ -63,20 +64,21 @@ export function ProductPreview({ compact = false }: { compact?: boolean }) {
                 <div className="fx-appointment"><time>11:00</time><span className="fx-patient-initials is-blue">NP</span><div><strong>Nicolás Peralta</strong><small>Consulta de seguimiento</small></div><span className="fx-status">Confirmado</span></div>
                 <div className="fx-screen-footer"><Check size={14} /><span>La consulta de Martina quedó registrada.</span></div>
               </>}
-              {view === "historia" && <>
+              {screenView === "historia" && <>
                 <div className="fx-screen-heading"><div><span>Pacientes / Historia clínica</span><h3>Martina Ríos</h3></div><span className="fx-person is-mint">MR</span></div>
                 <div className="fx-record-tags"><span>38 años</span><span>Seguimiento</span><span><Lock size={11} /> Historia cifrada</span></div>
                 <div className="fx-record-alert"><strong>Alergias</strong><span>Sin datos registrados</span></div>
                 <div className="fx-record-note"><span className="fx-note-date">15 septiembre 2026 · Lucía Molina</span><h4>Consulta de seguimiento</h4><p>Se revisan los estudios aportados y la evolución desde la última consulta.</p><h5>Plan de seguimiento</h5><p>Se registra el plan acordado para el próximo encuentro.</p><span className="fx-record-saved"><Check size={13} /> Nota guardada</span></div>
                 <div className="fx-record-previous"><span>18 agosto 2026</span><strong>Control clínico</strong><ChevronRight size={15} aria-hidden="true" /></div>
               </>}
-              {view === "cobros" && <>
+              {screenView === "cobros" && <>
                 <div className="fx-screen-heading"><div><span>Martes 15 de septiembre</span><h3>Los números del día</h3></div><span className="fx-person"><Wallet size={20} /></span></div>
                 <div className="fx-payment-summary"><div><span>Cobrado</span><strong>$ 45.000</strong><small>2 pagos registrados</small></div><div><span>Pendiente</span><strong>$ 20.000</strong><small>1 saldo por cobrar</small></div></div>
                 <div className="fx-agenda-heading"><strong>Movimientos</strong><span>Importes en ARS</span></div>
                 {[{name:"Martina Ríos",method:"Transferencia",amount:"$ 25.000",paid:true},{name:"Gabriel Soria",method:"Efectivo",amount:"$ 20.000",paid:true},{name:"Valeria Costa",method:"Saldo de la consulta",amount:"$ 20.000",paid:false}].map((item) => <div className="fx-payment-row" key={item.name}><span><strong>{item.name}</strong><small>{item.method}</small></span><b>{item.amount}</b><span className={`fx-status ${item.paid ? "is-complete" : "is-waiting"}`}>{item.paid ? "Cobrado" : "Pendiente"}</span></div>)}
                 <div className="fx-screen-footer"><Wallet size={14} /><span>Los cobros se registran en tu consultorio.</span></div>
               </>}
+            </div>)}
             </div>
           </div>
         </div>

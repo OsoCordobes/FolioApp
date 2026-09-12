@@ -35,11 +35,18 @@ const MailGlyph = () => (
 export function PortalLoginForm({ initialError }: { initialError?: string | null }) {
   const [email, setEmail] = useState("");
   const [err, setErr] = useState(initialError ?? "");
+  const [emailInvalid, setEmailInvalid] = useState(false);
   const [sent, setSent] = useState(false);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const captchaContainerRef = useRef<HTMLDivElement | null>(null);
   const captchaWidgetIdRef = useRef<string | null>(null);
+  const emailRef = useRef<HTMLInputElement | null>(null);
+  const sentHeadingRef = useRef<HTMLHeadingElement | null>(null);
+
+  useEffect(() => {
+    if (sent) sentHeadingRef.current?.focus({ preventScroll: true });
+  }, [sent]);
 
   // Render Turnstile (mismo patrón que el signup de staff). Sin site-key
   // (dev/visual) se omite el widget y el server verifica permisivo.
@@ -80,8 +87,11 @@ export function PortalLoginForm({ initialError }: { initialError?: string | null
 
   const submit = (e?: React.FormEvent) => {
     e?.preventDefault();
+    if (pending) return;
     if (!email.match(/^[^@\s]+@[^@\s]+\.[^@\s]+$/)) {
       setErr("Ingresá un email válido.");
+      setEmailInvalid(true);
+      emailRef.current?.focus();
       return;
     }
     if (TURNSTILE_SITE_KEY && !captchaToken) {
@@ -107,7 +117,7 @@ export function PortalLoginForm({ initialError }: { initialError?: string | null
         <div className="au-form-inner">
           <div className="au-sent">
             <div className="au-sent-glyph"><MailGlyph /></div>
-            <h1>Revisá tu email.</h1>
+            <h1 ref={sentHeadingRef} tabIndex={-1} className="a11y-focus-heading">Revisá tu email.</h1>
             <p>
               Si <b className="fm-mono">{email}</b> tiene una cuenta en Folio, te
               enviamos un link para entrar. Expira en unos minutos. Revisá spam o
@@ -136,16 +146,19 @@ export function PortalLoginForm({ initialError }: { initialError?: string | null
           </p>
         </header>
 
-        <form className="au-form" onSubmit={submit} aria-busy={pending}>
-          <label className="au-field">
+        <form className="au-form" onSubmit={submit} aria-busy={pending} noValidate>
+          <label className={`au-field${emailInvalid ? " is-err" : ""}`}>
             <span>Email</span>
             <input
               type="email"
+              ref={emailRef}
               autoComplete="email"
+              required
+              aria-invalid={emailInvalid}
               aria-describedby={err ? "fx-portal-error" : undefined}
               placeholder="vos@email.com"
               value={email}
-              onChange={(e) => { setEmail(e.target.value); setErr(""); }}
+              onChange={(e) => { setEmail(e.target.value); setErr(""); setEmailInvalid(false); }}
               disabled={pending}
               autoFocus
             />

@@ -40,6 +40,3 @@ export function SideArt({ audience = "practice" }: { audience?: "practice" | "pa
     </aside>
   );
 }
-
-// Preserve the existing exports for callers that share motion boundaries.
-export { LazyMotion, domMax } from "framer-motion";

@@ -129,7 +129,7 @@ export function IntakeAvanzadoModal({
             Editar información de {nombreEsp.toLowerCase()}
           </h2>
           <p style={{ margin: "4px 0 0", color: "var(--ink-3)", fontSize: 13 }}>
-            Antecedentes del paciente para esta especialidad. Se cifran en la DB.
+            Antecedentes del paciente para esta especialidad. Se guardan cifrados.
           </p>
         </header>
 
@@ -142,7 +142,7 @@ export function IntakeAvanzadoModal({
           />
         ) : (
           <p style={{ fontSize: 13, color: "var(--ink-3)" }}>
-            No hay campos avanzados para esta especialidad.
+            Esta especialidad no tiene preguntas adicionales.
           </p>
         )}
 

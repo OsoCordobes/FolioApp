@@ -7,7 +7,7 @@ if (process.env.FOLIO_TEST_ISOLATED !== "1" || process.env.E2E_BASE_URL !== "htt
 
 export default defineConfig({
   testDir: "./tests",
-  testMatch: /e2e\/(landing|side-art|design-print)\.spec\.ts/,
+  testMatch: /e2e\/(landing|side-art|design-print|design-platform|design-specialties|design-motion|design-clinical-polish|design-cross-review|design-scrollspy)\.spec\.ts/,
   fullyParallel: false,
   workers: 1,
   retries: 0,

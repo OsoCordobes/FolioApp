@@ -19,8 +19,9 @@
  * sólo maneja la interacción y refresca el segment tras cada cambio.
  */
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 import { fetchSlotsPublico } from "@/app/(public)/book/[slug]/actions";
 import type { Slot } from "@/lib/booking/availability";
@@ -79,14 +80,24 @@ export function TurnosList({ turnos }: { turnos: PortalTurnoView[] }) {
   const [pending, startTransition] = useTransition();
   const [msg, setMsg] = useState<{ id: string; text: string; tone: "ok" | "err" } | null>(null);
   const [reagendaFor, setReagendaFor] = useState<string | null>(null);
+  const requestTriggers = useRef(new Map<string, HTMLButtonElement>());
+  const restoreFocusFor = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!pending && reagendaFor === null && restoreFocusFor.current) {
+      requestTriggers.current.get(restoreFocusFor.current)?.focus({ preventScroll: true });
+      restoreFocusFor.current = null;
+    }
+  }, [pending, reagendaFor]);
 
   if (turnos.length === 0) {
     return (
       <div className="pt-empty pt-empty-hero">
-        <p className="pt-empty-title">Todavía no tenés turnos registrados</p>
+        <h2 className="pt-empty-title">Todavía no tenés turnos registrados</h2>
         <p className="pt-empty-sub">
           Cuando tu consultorio agende un turno a tu nombre, lo vas a ver acá.
         </p>
+        <Link href="/profesionales" className="fi-btn fi-btn-secondary pt-empty-action">Buscar un consultorio</Link>
       </div>
     );
   }
@@ -120,6 +131,7 @@ export function TurnosList({ turnos }: { turnos: PortalTurnoView[] }) {
         setMsg({ id: turnoId, text: res.error.message, tone: "err" });
         return;
       }
+      restoreFocusFor.current = turnoId;
       setReagendaFor(null);
       setMsg({
         id: turnoId,
@@ -139,7 +151,7 @@ export function TurnosList({ turnos }: { turnos: PortalTurnoView[] }) {
         return (
           <li key={t.id} className="pt-card">
             <div className="pt-card-row">
-              <strong className="pt-card-title pt-cap">{formatInicio(t.inicio)}</strong>
+              <strong id={`pt-turno-${t.id}`} className="pt-card-title pt-cap">{formatInicio(t.inicio)}</strong>
               <span className={`pt-chip pt-chip--${tone}`}>
                 {ESTADO_LABEL[t.estado] ?? t.estado}
               </span>
@@ -156,6 +168,10 @@ export function TurnosList({ turnos }: { turnos: PortalTurnoView[] }) {
                 <button
                   type="button"
                   className="fi-btn fi-btn-ghost"
+                  ref={(element) => { if (element) requestTriggers.current.set(t.id, element); else requestTriggers.current.delete(t.id); }}
+                  aria-expanded={reagendaFor === t.id}
+                  aria-controls={reagendaFor === t.id ? `pt-reagenda-${t.id}` : undefined}
+                  aria-describedby={`pt-turno-${t.id}`}
                   disabled={pending}
                   onClick={() => setReagendaFor(reagendaFor === t.id ? null : t.id)}
                 >
@@ -164,6 +180,7 @@ export function TurnosList({ turnos }: { turnos: PortalTurnoView[] }) {
                 <button
                   type="button"
                   className="fi-btn fi-btn-danger"
+                  aria-describedby={`pt-turno-${t.id}`}
                   disabled={pending || !t.cancelable}
                   title={t.cancelable ? undefined : `Se puede cancelar hasta ${t.cutoffHoras} h antes.`}
                   onClick={() => cancelar(t.id)}
@@ -234,6 +251,15 @@ function ReagendaPicker({
   const [slotSel, setSlotSel] = useState<string | null>(null);
   const [fechaManual, setFechaManual] = useState("");
   const [motivo, setMotivo] = useState("");
+  const manualRef = useRef<HTMLInputElement | null>(null);
+  const focusManual = useRef(false);
+
+  useEffect(() => {
+    if (modo === "manual" && focusManual.current) {
+      focusManual.current = false;
+      manualRef.current?.focus();
+    }
+  }, [modo]);
 
   useEffect(() => {
     if (!puedeCargarSlots) return;
@@ -278,7 +304,7 @@ function ReagendaPicker({
   };
 
   return (
-    <form className="au-form pt-reagenda" onSubmit={submit}>
+    <form id={`pt-reagenda-${turno.id}`} className="au-form pt-reagenda" onSubmit={submit} aria-label={`Solicitar otro horario para ${formatInicio(turno.inicio)}`} aria-busy={pending}>
       {modo === "slots" ? (
         <>
           {cargando ? (
@@ -298,7 +324,7 @@ function ReagendaPicker({
               <button
                 type="button"
                 className="fi-btn fi-btn-ghost"
-                onClick={() => setModo("manual")}
+                onClick={() => { focusManual.current = true; setModo("manual"); }}
               >
                 Proponer otro horario
               </button>
@@ -332,6 +358,7 @@ function ReagendaPicker({
                 className="pt-link-btn"
                 onClick={() => {
                   setSlotSel(null);
+                  focusManual.current = true;
                   setModo("manual");
                 }}
               >
@@ -352,6 +379,7 @@ function ReagendaPicker({
             <span>Nuevo horario preferido</span>
             <input
               type="datetime-local"
+              ref={manualRef}
               value={fechaManual}
               onChange={(e) => setFechaManual(e.target.value)}
               disabled={pending}

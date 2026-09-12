@@ -184,7 +184,7 @@ export function PacienteCreateModal({
         zIndex: 1000,
         padding: 16,
       }}
-      onClick={onClose}
+      onClick={() => { if (!pending) onClose(); }}
     >
       <form
         onSubmit={handleSubmit}
@@ -218,7 +218,6 @@ export function PacienteCreateModal({
             value={form.nombre}
             onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))}
             style={inputStyle}
-            autoFocus
             required
           />
         </Field>
@@ -233,7 +232,7 @@ export function PacienteCreateModal({
           />
         </Field>
 
-        <Field label="Teléfono" required hint="Mínimo 6 dígitos. Se cifra en la DB.">
+        <Field label="Teléfono" required hint="Mínimo 6 dígitos. Se guarda cifrado.">
           <input
             type="tel"
             value={form.telefono}
@@ -296,7 +295,7 @@ export function PacienteCreateModal({
           />
         </Field>
 
-        <Field label="DNI (opcional)" hint="Sin puntos. Se cifra y se indexa con SHA-256 para búsqueda.">
+        <Field label="DNI (opcional)" hint="Escribilo sin puntos. Se guarda cifrado.">
           <input
             type="text"
             value={form.numeroDoc}
@@ -317,7 +316,7 @@ export function PacienteCreateModal({
           </span>
           <Field
             label="Obra social / prepaga"
-            hint="Elegí de la lista o tipeá la tuya. Dejalo vacío si es particular."
+            hint="Elegí una opción o escribí el nombre. Dejalo vacío si el paciente es particular."
           >
             <input
               type="text"
@@ -343,7 +342,7 @@ export function PacienteCreateModal({
               maxLength={40}
             />
           </Field>
-          <Field label="Nº de afiliado" hint="Se cifra en la DB, como el DNI.">
+          <Field label="Nº de afiliado" hint="Como figura en la credencial. Se guarda cifrado.">
             <input
               type="text"
               value={form.coberturaNroAfiliado}
@@ -381,7 +380,7 @@ export function PacienteCreateModal({
           {avanzadoOpen ? (
             <div style={{ marginTop: 12 }}>
               {permiteElegirEspecialidad ? (
-                <Field label="Especialidad" hint="Determina qué campos avanzados se cargan.">
+                <Field label="Especialidad" hint="La especialidad define qué información adicional podés completar.">
                   <select
                     value={especialidad}
                     onChange={(e) => cambiarEspecialidad(e.target.value as EspecialidadSlug)}
@@ -405,7 +404,7 @@ export function PacienteCreateModal({
                 />
               ) : (
                 <p style={{ fontSize: 13, color: "var(--ink-3)", margin: 0 }}>
-                  No hay campos avanzados para esta especialidad.
+                  Esta especialidad no tiene preguntas adicionales.
                 </p>
               )}
             </div>

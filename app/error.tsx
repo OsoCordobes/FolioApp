@@ -22,6 +22,7 @@ import Link from "next/link";
 import { useEffect } from "react";
 
 import { SUPPORT_EMAIL } from "@/lib/support";
+import "@/styles/states-experience.css";
 
 interface ErrorBoundaryProps {
   error: Error & { digest?: string };
@@ -38,6 +39,7 @@ export default function ErrorBoundary({ error, reset }: ErrorBoundaryProps) {
 
   return (
     <main
+      className="fx-error"
       style={{
         minHeight: "100dvh",
         display: "flex",
@@ -51,6 +53,7 @@ export default function ErrorBoundary({ error, reset }: ErrorBoundaryProps) {
       }}
     >
       <div
+        className="fx-error-card"
         style={{
           maxWidth: 480,
           width: "100%",
@@ -62,7 +65,7 @@ export default function ErrorBoundary({ error, reset }: ErrorBoundaryProps) {
         <p
           style={{
             margin: 0,
-            color: "var(--accent-warm)",
+            color: "var(--accent)",
             fontWeight: 600,
             letterSpacing: "0.04em",
             textTransform: "uppercase",
@@ -72,11 +75,11 @@ export default function ErrorBoundary({ error, reset }: ErrorBoundaryProps) {
           Error inesperado
         </p>
         <h1 style={{ margin: 0, fontSize: 32, lineHeight: 1.2 }}>
-          Algo se rompió
+          No pudimos cargar esta página
         </h1>
-        <p style={{ margin: 0, color: "var(--ink-2)", lineHeight: 1.6 }}>
-          Ya estamos avisados — Sentry capturó el error y lo estamos viendo.
-          Podés reintentar o volver al inicio. Si sigue fallando, escribinos a{" "}
+        <p className="fx-error-message" style={{ margin: 0, color: "var(--ink-2)", lineHeight: 1.6 }}>
+          Podés volver a intentarlo o ir al inicio. Si el problema continúa,
+          escribinos a{" "}
           <a href={`mailto:${SUPPORT_EMAIL}`} style={{ color: "var(--accent)" }}>
             {SUPPORT_EMAIL}
           </a>
@@ -84,6 +87,7 @@ export default function ErrorBoundary({ error, reset }: ErrorBoundaryProps) {
         </p>
         {error.digest ? (
           <p
+            className="fx-error-reference"
             style={{
               margin: 0,
               fontSize: 12,
@@ -91,10 +95,11 @@ export default function ErrorBoundary({ error, reset }: ErrorBoundaryProps) {
               fontFamily: "var(--font-mono)",
             }}
           >
-            ID del error: {error.digest}
+            Referencia para soporte: {error.digest}
           </p>
         ) : null}
         <div
+          className="fx-error-actions"
           style={{
             display: "flex",
             gap: 12,
