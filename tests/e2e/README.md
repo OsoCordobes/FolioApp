@@ -11,6 +11,28 @@ pnpm test:isolation:browser
 
 Sin Supabase local, las pantallas públicas y los ejemplos que usan mocks pueden comprobarse; los flujos que necesitan Auth, datos clínicos o reservas no quedan verificados. Los escenarios de signup/onboarding y los que requieren login o un consultorio se omiten hasta configurar una instancia local dedicada. Un resultado omitido no es un resultado aprobado.
 
+## Recorrido clínico con servicios reales locales
+
+El procedimiento específico está en [CLINICAL-LOCAL.md](../../scripts/testing/CLINICAL-LOCAL.md).
+`node scripts/testing/run-clinical.mjs` exige la instancia dedicada con PostgreSQL 17,
+Auth, TOTP y Storage reales. Crea tres consultorios sintéticos y comprueba el
+recorrido de cada especialidad: paciente sin turno previo, atención, guardado,
+archivo, cobro en efectivo registrado y lectura después de volver a iniciar sesión.
+También intenta accesos AAL1, entre consultorios, escritura clínica directa y
+uso de un token después de revocar su sesión.
+Un escenario adicional conserva la descarga PDF/JSON del archivo clínico cuando
+la suscripción sintética está pausada, comprobando que la interfaz común vaya a
+cobros y las historias ajenas sigan denegadas; no acredita por sí solo el bloqueo
+de mutaciones directas en servidor.
+
+El comando falla si faltan sus cuatro variables locales; el spec se omite
+explícitamente en el runner ordinario sin esa habilitación. Sus pruebas preparadas
+no cuentan como evidencia de funcionamiento hasta que se ejecuten sin omisiones.
+No reemplaza las pruebas de suscripción con Mercado Pago, menores, recuperación,
+usabilidad ni carga. No reutilizar para este ensayo una base con datos recuperados
+de producción: la preparación rechaza organizaciones o usuarios ajenos a su
+espacio exclusivamente sintético.
+
 ## Instancia local con datos inventados
 
 La instancia debe estar aislada, tener las migraciones y sus fixtures sintéticos. No use túneles, proxies ni puertos reenviados a una base hospedada. El arranque o preparación de esa instancia es un procedimiento separado: este comando no crea, reinicia ni borra bases.

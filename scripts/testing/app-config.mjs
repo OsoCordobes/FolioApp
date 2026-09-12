@@ -17,5 +17,8 @@ export function testAppConfig(env){
  if(email&&!/@(?:[a-z0-9.-]+\.invalid|example\.test)$/i.test(email))throw isolationError('Use a synthetic local login email.');
  const bookingSlug=env.FOLIO_TEST_BOOKING_SLUG;
  if(bookingSlug&&!/^folio-test-[a-z0-9-]+$/.test(bookingSlug))throw isolationError('Use a dedicated folio-test-* booking fixture.');
- return {mode:'app',appUrl:app.origin,supabaseUrl,anonKey,serviceKey,databaseUrl,realSupabase,email,password,bookingSlug,prototypeRoot:env.FOLIO_TEST_PROTOTYPE_ROOT};
+ if(env.FOLIO_TEST_CLINICAL && !['0','1'].includes(env.FOLIO_TEST_CLINICAL))throw isolationError('The clinical suite flag must be 0 or 1.');
+ const clinical=env.FOLIO_TEST_CLINICAL==='1';
+ if(clinical&&(!realSupabase||!databaseUrl))throw isolationError('Clinical integration requires explicit local Supabase URL, both local JWT keys and its local database URL.');
+ return {mode:'app',appUrl:app.origin,supabaseUrl,anonKey,serviceKey,databaseUrl,realSupabase,clinical,email,password,bookingSlug,prototypeRoot:env.FOLIO_TEST_PROTOTYPE_ROOT};
 }
