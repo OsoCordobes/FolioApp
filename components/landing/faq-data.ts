@@ -1,43 +1,13 @@
-/**
- * Folio · Landing — datos del FAQ (Fase B · B2).
- *
- * Fuente única de las preguntas frecuentes: la consume la sección
- * `components/landing/sections/faq.tsx` y el JSON-LD (FAQPage) de Fase C.
- * Solo texto plano — sin markup — para que sirva tal cual en schema.org.
- */
+export interface FaqItem { q: string; a: string; }
 
-export interface FaqItem {
-  q: string;
-  a: string;
-}
-
-export const FAQ_ITEMS: { q: string; a: string }[] = [
-  {
-    q: "¿Necesito tarjeta para probar? ¿Cómo pago después?",
-    a: "No hace falta tarjeta para probar: tenés 30 días con todo habilitado. Si te quedás, activás la suscripción con Mercado Pago, en pesos, mes a mes — sin contratos ni permanencia, cancelás cuando quieras desde la app.",
-  },
-  {
-    q: "¿Cuánto tardo en dejar todo configurado?",
-    a: "Unos 10 minutos. El onboarding te deja la agenda, tu página de reservas y los recordatorios andando.",
-  },
-  {
-    q: "¿Puedo pasar mis pacientes y turnos desde Excel u otra app?",
-    a: "Sí. Importás tu lista de pacientes en el onboarding y cada profesional entra con su propio acceso. Si te trabás, te damos una mano por WhatsApp.",
-  },
-  {
-    q: "¿Sirve para clínicas con varios profesionales?",
-    a: "Sí. Recepción agenda y confirma turnos de todos; cada profesional ve solo sus pacientes y sus fichas; el administrador ve la plata y el equipo. Una sola agenda, sin pisarse, sin planilla compartida.",
-  },
-  {
-    q: "¿Cómo reciben los recordatorios mis pacientes?",
-    a: "Hoy por email, automático: al reservar les llega la confirmación y, 24 horas antes, el recordatorio — menos ausencias y menos llamadas. WhatsApp, próximamente.",
-  },
-  {
-    q: "¿Se integra con mi Google Calendar?",
-    a: "Sí, en los dos sentidos. Lo que agendás en Folio aparece en Google, y tus eventos de Google bloquean esos horarios para nuevas reservas.",
-  },
-  {
-    q: "¿Qué pasa con mis datos si me voy?",
-    a: "Te los llevás: los exportás en CSV desde la app cuando quieras. Las historias clínicas se conservan los 10 años que exige la Ley 26.529, como cualquier registro clínico.",
-  },
+/** Shared by the visible FAQ and structured data. Keep claims tied to implemented capabilities. */
+export const FAQ_ITEMS: FaqItem[] = [
+  { q: "¿Cómo funciona la prueba?", a: "Podés probar Folio durante 30 días sin ingresar una tarjeta. Para continuar después de la prueba, activás una suscripción mensual en pesos con Mercado Pago desde la configuración de tu cuenta." },
+  { q: "¿Qué necesito para empezar?", a: "Creá tu cuenta y completá los datos de tu práctica. Folio te guía para configurar el consultorio, los horarios y los servicios, y preparar tu página de reservas." },
+  { q: "¿Puedo importar mis pacientes?", a: "Sí. En Configuración tenés una herramienta para importar pacientes desde un archivo CSV. Podés revisar los datos antes de confirmar la importación." },
+  { q: "¿Podemos usarlo varios profesionales?", a: "Sí. El plan Clínica permite trabajar con una agenda compartida y accesos por rol para profesionales, recepción y administración. El acceso a la información clínica depende de los permisos asignados." },
+  { q: "¿Cómo se envían los recordatorios?", a: "Los recordatorios de turnos se envían por email. La confirmación de una reserva depende de la configuración del consultorio. Los recordatorios por WhatsApp no forman parte de la oferta actual." },
+  { q: "¿Puedo conectar Google Calendar?", a: "Sí. Podés conectar tu calendario desde Folio para sincronizar los turnos y considerar tus eventos de Google al ofrecer horarios de reserva." },
+  { q: "¿Puedo llevarme mis datos?", a: "Folio incluye exportación de datos desde la configuración y opciones de descarga en la ficha del paciente. Consultá el aviso de privacidad para conocer cómo se trata y conserva la información." },
 ];
+

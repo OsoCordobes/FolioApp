@@ -652,6 +652,7 @@ function TabPlan() {
             historial={filtrarToolHistorial(plan.toolHistorial, especialidad)}
             {...toolExtras}
           />
+          <div className="pc-session-notes">
           {/* Continuidad EXPLÍCITA. La nota de hoy arranca vacía (el SOAP
               editable es el del turno ancla); si el profesional quiere seguir
               desde la visita anterior, la trae él, con la fecha a la vista. En
@@ -696,6 +697,7 @@ function TabPlan() {
                 : undefined
             }
           />
+          </div>
         </div>
       )}
 
@@ -751,7 +753,7 @@ function TabPlan() {
       />
 
       {turnoActivo ? (
-        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 12 }}>
+        <div className="pc-session-actions">
           {saveError ? (
             <span role="alert" style={{ color: "var(--red)", fontSize: 12.5 }}>
               {saveError}

@@ -103,11 +103,11 @@ export function PortalLoginForm({ initialError }: { initialError?: string | null
 
   if (sent) {
     return (
-      <div className="au-form-pane">
+      <div className="au-form-pane fx-auth-form">
         <div className="au-form-inner">
           <div className="au-sent">
             <div className="au-sent-glyph"><MailGlyph /></div>
-            <h2>Revisá tu email.</h2>
+            <h1>Revisá tu email.</h1>
             <p>
               Si <b className="fm-mono">{email}</b> tiene una cuenta en Folio, te
               enviamos un link para entrar. Expira en unos minutos. Revisá spam o
@@ -127,21 +127,22 @@ export function PortalLoginForm({ initialError }: { initialError?: string | null
   }
 
   return (
-    <div className="au-form-pane">
+    <div className="au-form-pane fx-auth-form">
       <div className="au-form-inner">
         <header className="au-form-head">
-          <h2>Portal del paciente</h2>
-          <p style={{ color: "var(--ink-2)", fontSize: "var(--fs-sm)", marginTop: 6 }}>
-            Ingresá con tu email. Te mandamos un link — sin contraseñas.
+          <h1>Tu portal de paciente.</h1>
+          <p>
+            Ingresá tu email y te enviaremos un enlace para acceder a tu espacio.
           </p>
         </header>
 
-        <form className="au-form" onSubmit={submit}>
+        <form className="au-form" onSubmit={submit} aria-busy={pending}>
           <label className="au-field">
             <span>Email</span>
             <input
               type="email"
               autoComplete="email"
+              aria-describedby={err ? "fx-portal-error" : undefined}
               placeholder="vos@email.com"
               value={email}
               onChange={(e) => { setEmail(e.target.value); setErr(""); }}
@@ -157,14 +158,14 @@ export function PortalLoginForm({ initialError }: { initialError?: string | null
             </>
           ) : null}
 
-          {err ? <p className="au-err">{err}</p> : null}
+          {err ? <p id="fx-portal-error" className="au-err" role="alert">{err}</p> : null}
 
           <button
             type="submit"
             className="fi-btn fi-btn-primary au-submit"
             disabled={pending || (Boolean(TURNSTILE_SITE_KEY) && !captchaToken)}
           >
-            {pending ? "Enviando…" : "Enviarme el link"}
+            {pending ? "Enviando…" : "Enviarme el enlace"}
             <ArrowRightTiny />
           </button>
         </form>

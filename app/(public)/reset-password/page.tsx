@@ -1,4 +1,6 @@
 import { Suspense } from "react";
+import Link from "next/link";
+import { FolioMark } from "@/components/folio-mark";
 
 import { ResetPasswordForm } from "./reset-password-form";
 
@@ -25,15 +27,10 @@ export const metadata = { title: "Cambiar contraseña" };
 
 export default function ResetPasswordPage() {
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        display: "grid",
-        placeItems: "center",
-        padding: "32px 24px",
-        background: "var(--bg)",
-      }}
-    >
+    <main className="fx-auth-reset-page">
+      <Link className="fx-auth-brand" href="/" aria-label="Folio, volver al inicio">
+        <FolioMark size={29} /><span>folio</span>
+      </Link>
       <Suspense fallback={<div style={{ color: "var(--ink-3)" }}>Cargando…</div>}>
         <ResetPasswordForm />
       </Suspense>

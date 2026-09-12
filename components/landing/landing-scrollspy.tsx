@@ -15,7 +15,7 @@
 import { useEffect } from "react";
 
 /** IDs de sección que el nav referencia, en orden de scroll del DOM. */
-const SECTION_IDS = ["dia", "seguridad", "producto", "precios", "faq"] as const;
+const SECTION_IDS = ["producto", "dia", "precios"] as const;
 
 export function LandingScrollspy() {
   useEffect(() => {

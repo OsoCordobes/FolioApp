@@ -154,14 +154,13 @@ export function CookieBanner() {
     >
       <strong id="cookie-banner-title" className="fi-cookie-title">Cookies y privacidad</strong>
       <p id="cookie-banner-body" className="fi-cookie-body">
-        Folio usa cookies esenciales para mantener tu sesión (Supabase Auth) y, opcionalmente,
-        analytics anónimo (PostHog) para entender qué partes del producto funcionan mejor.
-        Podés rechazar analytics — la sesión sigue funcionando igual.{" "}
-        <a href="/privacidad" className="au-link">Aviso de Privacidad</a> (Ley 25.326).
+        Usamos cookies para mantener tu sesión. Podés permitir, además, la medición
+        de uso para ayudarnos a mejorar Folio.{" "}
+        <a href="/privacidad" className="au-link">Ver privacidad</a>.
       </p>
       <div className="fi-cookie-actions">
         <button type="button" className="fi-btn fi-btn-primary" onClick={accept}>
-          Aceptar analytics
+          Permitir medición
         </button>
         <button type="button" className="fi-btn fi-btn-ghost" onClick={reject}>
           Solo esenciales

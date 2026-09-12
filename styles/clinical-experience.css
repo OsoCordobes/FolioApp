@@ -1,0 +1,119 @@
+/* Clínica clara — a readable workspace for the five real specialty tools.
+   Presentation only. Clinical values, scoring and persistence stay in the tools.
+   Screen scope deliberately leaves the existing medical print layout in charge. */
+@media screen {
+  .pc-content { max-width: 1500px; margin-inline: auto; padding: 28px 36px 96px; }
+  .pc-head { padding-bottom: 8px; }
+  .pc-back { min-height: 36px; font-size: 13px; }
+  .pc-id-row { gap: 16px; align-items: center; flex-wrap: wrap; }
+  .pc-avatar { width: 54px; height: 54px; border-radius: 16px; background: var(--accent-soft); color: var(--accent); }
+  .pc-id-body { min-width: min(240px, 100%); }
+  .pc-id-body h1 { font-size: 30px; line-height: 1.2; letter-spacing: -.035em; }
+  .pc-id-meta { line-height: 1.5; }
+  .pc-actions { flex-wrap: wrap; gap: 6px; }
+  .pc-actions .fi-btn { min-height: 42px; padding-inline: 12px; }
+  .pc-tabs { gap: 14px; margin: 20px 0 24px; }
+  .pc-tab { min-height: 48px; padding: 10px 4px; font-size: 14px; cursor: pointer; }
+  .pc-tab.is-active { color: var(--accent); }
+  .pc-module-badge { align-self: flex-start; padding: 9px 13px; border-radius: 10px; background: var(--accent-soft); border-color: var(--accent-soft-2); margin: 0; }
+  .pc-module-badge > span:nth-child(2) { font: 600 13px/1.5 var(--font-sans); text-transform: none; letter-spacing: 0; }
+  .pc-module-hint { font-size: 12px; line-height: 1.5; }
+
+  .pc-plan-tab { gap: 20px; }
+  .pc-plan-grid { grid-template-columns: minmax(0, 1.06fr) minmax(0, 1fr); align-items: start; gap: 24px; min-height: 0; }
+  .pc-plan-grid > *, .pc-bottom-grid > *, .pc-info-grid > * { min-width: 0; }
+  .pc-session-notes { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .pc-card, .pc-soap { padding: 22px; border-radius: 14px; border-color: var(--line); box-shadow: none; }
+  .pc-card { gap: 18px; }
+  .pc-card-head { gap: 12px; align-items: center; flex-wrap: wrap; }
+  .pc-content .fi-eyebrow { color: var(--ink); font: 600 13px/1.5 var(--font-sans); letter-spacing: 0; text-transform: none; }
+  .pc-card-head > .fi-eyebrow, .pc-soap-head > .fi-eyebrow { font-size: 15px; letter-spacing: -.015em; }
+  .pc-content .pc-link { min-height: 36px; display: inline-flex; align-items: center; font-size: 12px; color: var(--accent); cursor: pointer; text-underline-offset: 4px; }
+  .pc-content .pc-link:hover { text-decoration: underline; border-color: transparent; }
+  .pc-content .pc-link:disabled { cursor: not-allowed; color: var(--ink-3); }
+  .pc-content .pc-link--accion { display: inline; min-height: auto; }
+  /* Older specialty components set helper sizes inline. Keep their meaning and
+     status colors while giving the shared reading text a consistent floor. */
+  .pc-content .pc-card .muted { font-size: 12px !important; line-height: 1.6; }
+  .pc-content .fi-wi-field { min-width: 0; max-width: 100%; gap: 7px; }
+  .pc-clinical-vitals { align-items: end; }
+  .pc-content .fi-wi-field > span { font-size: 12px; line-height: 1.5; color: var(--ink-2); }
+  .pc-content .fi-wi-field :is(input, select, textarea) { min-width: 0; width: 100%; border-radius: 8px; border-color: var(--line); background: var(--surface); color: var(--ink); font-size: 14px; }
+  .pc-content .fi-wi-field :is(input, select) { min-height: 44px; }
+  .pc-content .fi-wi-field textarea { min-height: 96px; line-height: 1.6; }
+  .pc-content .fi-wi-field :is(input, select, textarea):disabled { opacity: 1; background: var(--bg); color: var(--ink-3); cursor: not-allowed; }
+  .pc-content :is(input, textarea, select):focus-visible { outline: 3px solid var(--accent-soft-2); outline-offset: 1px; border-color: var(--accent); }
+  .pc-content .fm-modal-check { min-height: 40px; align-items: center; gap: 9px; font-size: 12px; }
+  .pc-content .fm-modal-check input { flex-shrink: 0; accent-color: var(--accent); }
+  .pc-content .pc-card label:has(> input[type="radio"]) { min-width: 48px; min-height: 44px; justify-content: center; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+  .pc-content .pc-card label:has(> input[type="radio"]:checked) { background: var(--accent-soft); border-color: var(--accent); font-weight: 600; }
+  .pc-content .pc-card label:has(> input[type="radio"]:focus-visible) { outline: 3px solid var(--accent-soft-2); outline-offset: 2px; }
+  .pc-content .pc-card fieldset:has(> div > label > input[type="radio"]) > legend { margin-bottom: 8px; }
+  .pc-content .fi-escala-seg { flex-wrap: wrap; gap: 6px; border: 0; overflow: visible; }
+  .pc-content .fi-escala-seg-btn { flex: 1 0 36px; min-width: 36px; min-height: 44px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
+  .pc-content .fi-escala-seg-btn[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+  .pc-content .fi-escala-seg-anclas { gap: 20px; font-size: 11px; line-height: 1.5; }
+  .pc-content .fi-escala-seg-anclas > :last-child { text-align: right; }
+
+  .pc-soap { gap: 22px; }
+  .pc-soap-head { gap: 12px; flex-wrap: wrap; align-items: center; padding-bottom: 14px; }
+  .pc-soap-section-head { flex-wrap: wrap; gap: 5px 12px; }
+  .pc-soap-section-head b { font-size: 15px; }
+  .pc-soap-section-hint { font-size: 12px; line-height: 1.5; }
+  .pc-soap-textarea { min-height: 108px; padding: 12px; background: var(--surface); border-color: var(--line); border-radius: 8px; font-size: 14px; line-height: 1.7; }
+  .pc-soap-guia { margin-block: 6px 8px; padding: 12px; border: 0; background: var(--bg); }
+  .pc-soap-guia-prompt { font-size: 12px; line-height: 1.6; }
+  .pc-soap-guia-list { font-size: 12px; line-height: 1.6; }
+  .pc-sin-turno { gap: 10px; border-radius: 10px; font-size: 13px; line-height: 1.65; }
+  .pc-sin-turno > svg { flex-shrink: 0; margin-top: 3px; }
+  .pc-session-actions { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 0; border-top: 1px solid var(--line); }
+  .pc-session-actions > [role="alert"] { flex: 1 1 260px; line-height: 1.6; }
+  .pc-session-actions > .fi-btn { min-height: 46px; }
+
+  .pc-quiro-grid { grid-template-columns: minmax(250px, 300px) minmax(0, 1fr); gap: 24px; }
+  .pc-quiro-col-spine { scrollbar-gutter: stable; }
+  .pc-quiro-pill { min-height: 38px; padding: 8px 12px; }
+  .pc-quiro-pill.is-active { color: var(--on-accent); }
+  .pc-quiro-icon-btn { width: 40px; height: 40px; flex-shrink: 0; }
+  .pc-quiro-input { min-height: 44px; font-size: 14px; border-color: var(--line); background: var(--surface); }
+  .pc-quiro-muted { line-height: 1.65; }
+  .pc-quiro-spine .fi-wi-field select { min-height: 44px; }
+
+  @media (max-width: 1170px) {
+    .pc-content { padding-inline: 24px; }
+    .pc-plan-grid { grid-template-columns: minmax(0, 1fr); }
+    .pc-id-body { flex: 1; }
+    .pc-actions { width: 100%; }
+    .pc-quiro-grid { grid-template-columns: minmax(220px, 260px) minmax(0, 1fr); }
+  }
+  @media (max-width: 767px) {
+    .pc-content { padding: 20px 16px 110px; }
+    .pc-id-row { flex-direction: row; gap: 12px; }
+    .pc-id-body { min-width: 0; }
+    .pc-id-body h1 { font-size: 25px; }
+    .pc-avatar { width: 44px; height: 44px; font-size: 14px; border-radius: 12px; }
+    .pc-id-meta { font-size: 12px; gap: 5px 8px; }
+    .pc-actions { margin-top: 8px; gap: 8px; }
+    .pc-actions > * { flex: 1 1 calc(50% - 8px); }
+    .pc-actions .fi-btn { min-height: 44px; font-size: 12px; }
+    .pc-tabs { gap: 16px; margin-top: 14px; scrollbar-width: thin; padding-bottom: 3px; }
+    .pc-tab { padding-inline: 0; font-size: 13px; }
+    .pc-module-badge { flex-wrap: wrap; row-gap: 5px; }
+    .pc-module-hint { font-size: 11px; }
+    .pc-card, .pc-soap { padding: 18px 16px; }
+    .pc-card-head > .fi-eyebrow, .pc-soap-head > .fi-eyebrow { font-size: 14px; }
+    .pc-content .fi-wi-field :is(input, select, textarea), .pc-soap-textarea, .pc-quiro-input { font-size: 16px; }
+    .pc-content .pc-link { min-height: 44px; }
+    .pc-content .pc-link--accion { min-height: auto; }
+    .pc-content .fm-modal-check { min-height: 44px; }
+    .pc-content .fi-escala-seg-btn { flex-basis: 44px; min-width: 44px; }
+    .pc-plan-grid div:has(> .fi-wi-field) { flex-wrap: wrap; }
+    .pc-plan-grid .pc-card > div:has(> .fi-wi-field + .fi-wi-field + .fi-btn) > .fi-wi-field:first-child { flex-basis: 100%; }
+    .pc-session-actions > .fi-btn { flex: 1 1 145px; justify-content: center; }
+    .pc-session-actions > [role="alert"] { flex-basis: 100%; }
+    .pc-quiro-grid { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+    .pc-quiro-col-spine { position: static; max-height: none; overflow: visible; }
+    .pc-quiro-pill { min-height: 44px; }
+    .pc-quiro-icon-btn { width: 44px; height: 44px; }
+  }
+}

@@ -31,9 +31,9 @@ export function DirectorioPage({
   return (
     <div className="dir-root">
       <header className="dir-header">
-        <Link className="dir-brand" href="/">
+        <Link className="dir-brand" href="/" aria-label="Folio, volver al inicio">
           <FolioMark size={24} />
-          <span>Folio</span>
+          <span>folio</span>
         </Link>
         <Link className="dir-header-cta" href={`/onboarding?ref=${emptyRef}_header`}>
           Sumá tu consultorio
@@ -50,6 +50,7 @@ export function DirectorioPage({
         <nav className="dir-facets" aria-label="Filtrar por especialidad">
           <Link
             className={`dir-chip${activeEspecialidad == null ? " is-active" : ""}`}
+            aria-current={activeEspecialidad == null ? "page" : undefined}
             href="/profesionales"
           >
             Todos
@@ -58,6 +59,7 @@ export function DirectorioPage({
             <Link
               key={slug}
               className={`dir-chip${activeEspecialidad === slug ? " is-active" : ""}`}
+              aria-current={activeEspecialidad === slug ? "page" : undefined}
               href={`/profesionales/${slug}`}
             >
               {getEspecialidadMeta(slug).nombre}
@@ -73,7 +75,9 @@ export function DirectorioPage({
           </div>
         ) : (
           <div className="dir-empty">
-            <p className="dir-empty-title">Todavía no hay consultorios para mostrar acá.</p>
+            <h2 className="dir-empty-title">Todavía no hay consultorios para mostrar acá.</h2>
+            <p className="dir-empty-sub">Podés probar otra especialidad o volver más adelante.</p>
+            {activeEspecialidad ? <Link className="fi-btn fi-btn-secondary" href="/profesionales">Ver todas las especialidades</Link> : null}
             <p className="dir-empty-sub">
               ¿Sos profesional de la salud? Sumá tu consultorio a Folio y aparecé acá.
             </p>
@@ -81,7 +85,7 @@ export function DirectorioPage({
               className="fi-btn fi-btn-primary dir-empty-cta"
               href={`/onboarding?ref=${emptyRef}_empty`}
             >
-              Crear mi página gratis
+              Sumar mi consultorio
             </Link>
           </div>
         )}

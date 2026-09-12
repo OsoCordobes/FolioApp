@@ -46,7 +46,7 @@ export function DirectorioCard({ org }: { org: DirectorioOrg }) {
           <AvatarIniciales fullName={org.nombre} acentoHex={acento} size="md" />
         )}
         <div className="dir-card-id">
-          <p className="dir-card-name">{org.nombre}</p>
+          <h2 className="dir-card-name">{org.nombre}</h2>
           {espLabel ? <span className="dir-card-esp">{espLabel}</span> : null}
         </div>
       </div>

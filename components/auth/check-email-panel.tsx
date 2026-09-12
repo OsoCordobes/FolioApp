@@ -96,17 +96,20 @@ export function CheckEmailPanel({ email, onBack }: CheckEmailPanelProps) {
   };
 
   return (
-    <div className="au-form-pane">
+    <div className="au-form-pane fx-auth-form fx-auth-email">
       <div className="au-form-inner">
+        <div className="fx-auth-email-icon" aria-hidden="true">
+          <svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></svg>
+        </div>
         <header className="au-form-head">
-          <h2>Revisá tu email</h2>
+          <h1>Un paso más: tu email.</h1>
           <p>
-            Te enviamos un link a <b>{email}</b>. Abrilo para confirmar tu
+            Te enviamos un enlace a <b>{email}</b>. Abrilo para confirmar tu
             cuenta y seguir con la configuración.
           </p>
         </header>
 
-        <p style={{ fontSize: 13, color: "var(--ink-3)", margin: 0, lineHeight: 1.5 }}>
+        <p className="fx-auth-help">
           Puede tardar un minuto. Si no lo ves, revisá la carpeta de spam o
           promociones.
         </p>
@@ -118,7 +121,7 @@ export function CheckEmailPanel({ email, onBack }: CheckEmailPanelProps) {
         ) : null}
         {sent && !error ? (
           <p role="status" style={{ fontSize: 13, color: "var(--ink-2)", margin: 0 }}>
-            Link reenviado.{" "}
+            Enlace reenviado.{" "}
             {coolingDown ? `Podés volver a reenviar en ${formatCooldown(secondsLeft)}.` : ""}
           </p>
         ) : null}
@@ -129,7 +132,7 @@ export function CheckEmailPanel({ email, onBack }: CheckEmailPanelProps) {
           onClick={onResend}
           disabled={pending || coolingDown}
         >
-          {pending ? "Reenviando…" : "Reenviar link"}
+          {pending ? "Reenviando…" : "Reenviar enlace"}
         </button>
 
         <p style={{ fontSize: 13, margin: 0 }}>

@@ -98,7 +98,7 @@ function Toolbar({
           ref={searchRef}
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar nombre, teléfono, tag…"
+          placeholder="Buscar nombre, teléfono, etiqueta…"
           aria-label="Buscar paciente (atajo: /)"
         />
         <span className="fi-kbd">/</span>
@@ -109,6 +109,7 @@ function Toolbar({
             key={id}
             type="button"
             className={"pd-filtro " + (filtro === id ? "is-active" : "")}
+            aria-pressed={filtro === id}
             onClick={() => setFiltro(id)}
           >
             {lbl}
@@ -198,17 +199,18 @@ function TablaPacientes({ pacientes, selected, setSelected, onOpen, onAgendar, t
 
   return (
     <table className="pd-table">
+      <caption className="sr-only">Directorio de pacientes</caption>
       <thead>
         <tr>
           <th className="pd-th-check">
             <label className="pd-check">
-              <input type="checkbox" checked={allOn} onChange={toggleAll} />
+              <input type="checkbox" checked={allOn} onChange={toggleAll} aria-label="Seleccionar todos los pacientes visibles" />
               <span className="pd-check-box" />
             </label>
           </th>
           <th>Paciente</th>
           <th>Cobertura</th>
-          <th>Tags</th>
+          <th>Etiquetas</th>
           <th className="ta-r">Última</th>
           <th className="ta-r">Sesiones</th>
           <th>Próximo</th>
@@ -230,7 +232,7 @@ function TablaPacientes({ pacientes, selected, setSelected, onOpen, onAgendar, t
                 }}
               >
                 <label className="pd-check">
-                  <input type="checkbox" checked={isSel} onChange={() => {}} />
+                  <input type="checkbox" checked={isSel} onChange={() => {}} aria-label={`Seleccionar a ${p.nombre}`} />
                   <span className="pd-check-box" />
                 </label>
               </td>
@@ -238,7 +240,14 @@ function TablaPacientes({ pacientes, selected, setSelected, onOpen, onAgendar, t
                 <div className="pd-paciente">
                   <div className="fi-avatar pd-avatar">{iniciales(p.nombre)}</div>
                   <div className="pd-paciente-body">
-                    <b>{p.nombre}</b>
+                    <button
+                      type="button"
+                      className="pd-name-link"
+                      onClick={(event) => { event.stopPropagation(); onOpen(p); }}
+                      aria-label={`Abrir ficha de ${p.nombre}`}
+                    >
+                      {p.nombre}
+                    </button>
                     <span className="fm-mono">{p.tel}</span>
                   </div>
                   {p.tipo === "nuevo" ? <span className="fi-pill fi-pill--new">1ª visita</span> : null}

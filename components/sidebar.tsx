@@ -9,8 +9,8 @@
  *  - Datos del consultorio y Google Sync vienen como props desde el Server Component
  *    layout (`app/(app)/layout.tsx`), NO desde mock-data.
  *
- * Las clases CSS (`fi-sidebar`, `fi-brand`, `fi-nav-item`, etc.) se respetan
- * intactas para garantizar paridad pixel-perfect con el prototipo.
+ * La identidad del espacio y la del profesional se presentan por separado.
+ * Las capacidades, destinos y estado de sesión siguen siendo los del servidor.
  */
 
 import Link from "next/link";
@@ -117,12 +117,18 @@ export function Sidebar({
   return (
     <aside className="fi-sidebar">
       <div className="fi-brand">
-        <FolioMark size={32} />
+        <FolioMark size={38} />
         <div className="fi-brand-text">
           <b>folio</b>
-          <span>
-            {profesionalLine}{rubroLabel ? ` · ${rubroLabel}` : ""}
-          </span>
+          <span>Tu práctica, en orden</span>
+        </div>
+      </div>
+
+      <div className="fi-workspace">
+        <span className="fi-workspace-mark" aria-hidden><I.Stethoscope size={18} /></span>
+        <div>
+          <b title={organization.nombre}>{organization.nombre}</b>
+          <span>{rubroLabel || "Consultorio"}</span>
         </div>
       </div>
 
@@ -143,7 +149,7 @@ export function Sidebar({
 
       <SidebarSearch />
 
-      <nav className="fi-nav">
+      <nav className="fi-nav" aria-label="Navegación principal">
         {navItems.map((item) => {
           const active = isActive(pathname, item);
           return (
@@ -167,6 +173,12 @@ export function Sidebar({
             contacto con billing es el bloqueo duro. Lógica en trial-chip.ts. */}
         <TrialChip chip={trialChip} />
         <GoogleSyncBadge status={googleSync} />
+        <div className="fi-side-profile">
+          <span className="fi-side-profile-avatar" aria-hidden>
+            {(profile.nombre?.[0] ?? "") + (profile.apellido?.[0] ?? "") || "F"}
+          </span>
+          <div><b>{profesionalLine}</b><span>Tu espacio de trabajo</span></div>
+        </div>
         <div className="fi-side-links">
           {organization.slug ? (
             <a
@@ -230,9 +242,9 @@ function SidebarSearch() {
         ref={inputRef}
         name="q"
         placeholder="Buscar paciente…"
-        aria-label="Buscar paciente (Cmd+K)"
+        aria-label="Buscar paciente (Ctrl o Cmd + K)"
       />
-      <span className="fi-kbd" aria-hidden>⌘K</span>
+      <span className="fi-kbd" aria-hidden title="Ctrl o Cmd + K">K</span>
     </form>
   );
 }
@@ -270,21 +282,6 @@ export function InternalAccountBadge() {
     <div
       className="fi-internal-badge"
       title="Esta organización tiene el flag is_internal_account=true. El gate de suscripción no aplica."
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 6,
-        margin: "8px 12px 0",
-        padding: "6px 10px",
-        background: "var(--surface-soft, #fff7e0)",
-        border: "1px solid var(--accent-warm, #d8b766)",
-        borderRadius: 6,
-        fontSize: 11,
-        fontWeight: 600,
-        color: "var(--ink-2, #6b5a2e)",
-        letterSpacing: 0.3,
-        textTransform: "uppercase",
-      }}
     >
       <span aria-hidden style={{ fontSize: 13, lineHeight: 1 }}>●</span>
       Cuenta interna
