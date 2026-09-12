@@ -91,41 +91,45 @@ export async function marcarPagoCobradoAction(pagoId: string): Promise<Result<vo
   }
 
   const supabase = await createSupabaseServerClient();
+  const organizationId = session.data.organizationId;
+  const scopeMemberId = finanzasScopeMemberId(caps, session.data.memberId);
 
   // 1. Leer el pago con su turno para validar org (y profesional, si el rol
   //    solo ve lo propio). La RLS ya filtra, pero el chequeo explícito evita
   //    el cross-org con multi-membresía.
-  const { data: pagoRow, error: selErr } = await supabase
-    .from("pago")
-    .select("id, estado, turno:turno_id!inner(organization_id, profesional_id)")
-    .eq("id", parsed.data)
-    .maybeSingle();
+  type Pago = { id: string; estado: string; turno: { organization_id: string; profesional_id: string | null } | null };
+  const readAuthorizedPago = async (): Promise<Result<Pago>> => {
+    const { data: pagoRow, error: selErr } = await supabase
+      .from("pago")
+      .select("id, estado, turno:turno_id!inner(organization_id, profesional_id)")
+      .eq("id", parsed.data)
+      .maybeSingle();
 
-  if (selErr) {
-    const mapped = mapSupabaseError(selErr);
-    return err(mapped.code, mapped.message, selErr.message);
-  }
-  const pago = pagoRow as
-    | { id: string; estado: string; turno: { organization_id: string; profesional_id: string | null } | null }
-    | null;
-  if (!pago || !pago.turno || pago.turno.organization_id !== session.data.organizationId) {
-    return err("not_found", "El pago no existe o no es de tu organización.");
-  }
+    if (selErr) {
+      const mapped = mapSupabaseError(selErr);
+      return err(mapped.code, mapped.message, selErr.message);
+    }
+    const pago = pagoRow as Pago | null;
+    if (!pago || !pago.turno || pago.turno.organization_id !== organizationId) {
+      return err("not_found", "El pago no existe o no es de tu organización.");
+    }
+    if (scopeMemberId && pago.turno.profesional_id !== scopeMemberId) {
+      return err("forbidden", "Solo podés registrar cobros de tus propios turnos.");
+    }
+    return ok(pago);
+  };
+  const pago = await readAuthorizedPago();
+  if (!pago.ok) return pago;
 
-  const scopeMemberId = finanzasScopeMemberId(caps, session.data.memberId);
-  if (scopeMemberId && pago.turno.profesional_id !== scopeMemberId) {
-    return err("forbidden", "Solo podés registrar cobros de tus propios turnos.");
-  }
-
-  if (pago.estado === "PAGADO") {
+  if (pago.data.estado === "PAGADO") {
     // Idempotente: ya estaba cobrado (doble click, otra pestaña). No es error.
     return ok(undefined);
   }
 
   // 2. Saldar: PAGADO + pagado_ts (el CHECK pago_consistency de M09 exige
   //    ambos juntos). El guard .neq evita pisar un pagado_ts existente si otro
-  //    usuario lo cobró en el medio (carrera benigna → ok igual).
-  const { error: updErr } = await supabase
+  //    usuario lo cobró en el medio; si no actualizó filas, hay que confirmarlo.
+  const { data: updatedRows, error: updErr } = await supabase
     .from("pago")
     .update({ estado: "PAGADO", pagado_ts: new Date().toISOString() })
     .eq("id", parsed.data)
@@ -135,6 +139,14 @@ export async function marcarPagoCobradoAction(pagoId: string): Promise<Result<vo
   if (updErr) {
     const mapped = mapSupabaseError(updErr);
     return err(mapped.code, mapped.message, updErr.message);
+  }
+
+  if (!updatedRows?.length) {
+    const confirmed = await readAuthorizedPago();
+    if (!confirmed.ok) return confirmed;
+    if (confirmed.data.estado !== "PAGADO") {
+      return err("conflict", "No se confirmó el cobro. Actualizá los movimientos y revisá el estado del pago.");
+    }
   }
 
   revalidatePath("/finanzas");
