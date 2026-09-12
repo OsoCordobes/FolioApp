@@ -3,8 +3,10 @@
 Estado al 12 de septiembre de 2026: primer arranque real completado sobre
 Supabase PostgreSQL 17.6, con 113 migraciones y los cinco catálogos. El recorrido
 clínico completo **sigue pendiente**. Después de corregir la hora de activación
-de MFA, la ejecución real pasó el control AAL1 y falló al entrar desde la UI:
-una redirección cambia de 127.0.0.1 a localhost y vuelve a login antes de MFA.
+de MFA y el origen del perfil, el acceso llegó a MFA en localhost:4420. Auth
+aceptó el código, pero la UI no mostró la confirmación en los 15 segundos
+del escenario. Un observador separado comprobó la finalización antes de 30
+segundos, con una compilación de /hoy durante la espera.
 Resultado: **1 aprobado, 1 fallido, 5 no ejecutados** por dependencia serial.
 No acredita todavía guardado, Storage, cobro, archivo ni uso en producción.
 
@@ -46,7 +48,7 @@ $env:FOLIO_TEST_DATABASE_URL = "<DB_URL local, puerto 54322, base postgres>"
 node scripts/testing/run-clinical.mjs
 ```
 
-El comando usa `http://127.0.0.1:4420` por defecto. Si se define
+El comando usa `http://localhost:4420` por defecto. Si se define
 `E2E_BASE_URL`, debe coincidir exactamente con esa URL: cualquier otro puerto se
 rechaza. Antes de iniciar el runner de aplicación/navegador, el comando vuelve a
 validar el perfil completo 4420/54321/54322 y sus credenciales locales.
@@ -118,7 +120,7 @@ clínico falla antes de levantar una aplicación cuando no recibe la configuraci
 necesaria. El runner normal mantiene 4410 y omite el spec clínico sin la
 habilitación específica.
 
-Pendiente: resolver el cambio de host durante login y completar los siete
+Pendiente: separar la espera de compilación local tras MFA y completar los siete
 escenarios sobre Supabase 17 real, ampliar roles/menores y consentimiento, pruebas de fallos
 de guardado y proveedor y restauración completa. El sexto escenario prepara
 una suscripción sintética pausada, confirma la redirección de la interfaz común
@@ -146,11 +148,12 @@ node scripts/testing/run-clinical.mjs --trace=off --reporter=list, con las
 credenciales de supabase status -o json sólo en memoria y salida local sanitizada.
 Las trazas se deshabilitan para no conservar contraseña o TOTP del acceso UI.
 
-La ejecución con el cambio definitivo pasó la preparación y el escenario
+La ejecución inicial con el cambio del reloj pasó la preparación y el escenario
 AAL1 (membresía y portal dual protegidos), pero el recorrido de quiropraxia falló
 antes de MFA. Una lectura sin credenciales también confirmó que /seguridad/mfa
 en 127.0.0.1:4420 devuelve 307 hacia localhost:4420/login. Ese cambio de host
-está pendiente de corregir; los otros cinco escenarios no se ejecutaron. La
+se corrigió después unificando el perfil en localhost:4420. En esa ejecución
+los otros cinco escenarios no se ejecutaron. La
 existencia de Storage real no prueba una subida o descarga todavía.
 
 Los resultados completos y las limitaciones quedan en el informe local ignorado
@@ -159,3 +162,32 @@ los servicios Docker en 0.0.0.0 por defecto; el runner sólo accede a loopback.
 No se modificaron el firewall ni las redes del host. Logflare y Vector quedaron
 excluidos del arranque para evitar la configuración adicional de Docker Windows;
 Auth, Storage y REST reales permanecieron activos.
+
+## Origen canónico del perfil clínico
+
+Next.js 15.5.24 normaliza las direcciones de loopback a localhost. El perfil
+clínico usa ahora únicamente http://localhost:4420 para la aplicación, site_url
+de Auth y sus retornos; la API sigue en 127.0.0.1:54321 y la base en
+127.0.0.1:54322/postgres. Se rechazan el origen anterior de la app, IPv6 y
+puertos alternativos. El runner común mantiene http://127.0.0.1:4410.
+
+Las diez pruebas focales de aislamiento pasaron sin omisiones, junto con tipos
+y lint de los archivos afectados. El perfil folio-local-clinical se detuvo y
+arrancó conservando sus volúmenes: antes y después había 9 usuarios Auth, 9
+factores TOTP verificados, 9 consultorios sintéticos y 113 migraciones. Auth
+confirmó localhost:4420 en sus opciones activas; no se usó db reset.
+
+La siguiente ejecución real (run-5) terminó con 1 aprobado, 1 fallido y 5 no
+ejecutados. La UI llegó a MFA y Auth respondió 200 al desafío y verificación;
+la aplicación continuó mostrando «Verificando…». Esto prueba que el origen
+permite avanzar, pero todavía no acredita la finalización del acceso. La
+investigación de esa respuesta queda separada de la corrección del perfil.
+
+Un observador diagnóstico separado conservó la configuración y el acceso real,
+sin modificar el timeout del spec. El POST de MFA devolvió 200 a los 4,525 s y
+terminó a los 4,777 s. La UI seguía pendiente a los 15 s, durante una compilación
+de /hoy de 10,7 s; a los 30,015 s ya mostraba «Verificación completada», siempre
+en localhost:4420. Esto distingue la respuesta terminada de la espera posterior
+de desarrollo. No convierte el escenario fallido en aprobado ni acredita
+el recorrido clínico. El diagnóstico conservó 15 usuarios/factores/consultorios
+sintéticos en total y no creó pacientes.

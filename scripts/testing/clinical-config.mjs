@@ -11,7 +11,7 @@ export function clinicalConfig(env) {
  // This suite is tied to this repository's dedicated Supabase profile. A generic
  // localhost Postgres or ordinary development app is insufficient.
  const api=new URL(config.supabaseUrl),database=new URL(config.databaseUrl);
- if(api.origin!=='http://127.0.0.1:54321'||api.pathname!=='/'||api.search||api.hash||database.hostname!=='127.0.0.1'||database.port!=='54322'||database.pathname!=='/postgres'||config.appUrl!=='http://127.0.0.1:4420')throw isolationError('Clinical integration requires the dedicated 4420/54321/54322 local profile.');
+ if(api.origin!=='http://127.0.0.1:54321'||api.pathname!=='/'||api.search||api.hash||database.hostname!=='127.0.0.1'||database.port!=='54322'||database.pathname!=='/postgres'||config.appUrl!=='http://localhost:4420')throw isolationError('Clinical integration requires the dedicated 4420/54321/54322 local profile.');
  return config;
 }
 

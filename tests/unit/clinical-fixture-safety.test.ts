@@ -3,16 +3,17 @@ import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
 import {pathToFileURL} from 'node:url';
 import {resolve} from 'node:path';
+import {testAppConfig} from '../../scripts/testing/app-config.mjs';
 import {assertAal1ProtectedRead,assertClinicalDatabase,assertClinicalPolicies,clinicalConfig,CLINICAL_POLICY_KEYS,totp} from '../../scripts/testing/clinical-config.mjs';
 
 const jwt=(role:string)=>`header.${Buffer.from(JSON.stringify({iss:'supabase-demo',role})).toString('base64url')}.synthetic`;
 const hostedJwt=(role:string)=>`header.${Buffer.from(JSON.stringify({iss:'supabase',role,ref:'hosted-project'})).toString('base64url')}.synthetic`;
-const source={clinical:true,appUrl:'http://127.0.0.1:4420',supabaseUrl:'http://127.0.0.1:54321',anonKey:jwt('anon'),serviceKey:jwt('service_role'),databaseUrl:'postgres://postgres:synthetic@127.0.0.1:54322/postgres'};
+const source={clinical:true,appUrl:'http://localhost:4420',supabaseUrl:'http://127.0.0.1:54321',anonKey:jwt('anon'),serviceKey:jwt('service_role'),databaseUrl:'postgres://postgres:synthetic@127.0.0.1:54322/postgres'};
 const env=(patch:Record<string,unknown>={})=>({FOLIO_TEST_ISOLATED:'1',FOLIO_TEST_CLINICAL:'1',FOLIO_TEST_APP_CONFIG:JSON.stringify({...source,...patch})});
 
 test('clinical fixtures require the exact dedicated 4420/54321/54322 profile',()=>{
  assert.equal(clinicalConfig(env()).clinical,true);
- for(const patch of [{clinical:false},{supabaseUrl:'https://grkpayhxndztlfwxobnt.supabase.co'},{databaseUrl:'postgres://postgres:synthetic@127.0.0.1:55439/folio_test_stubs'},{supabaseUrl:'http://127.0.0.1:54321/auth'},{appUrl:'http://127.0.0.1:4410'},{appUrl:'http://127.0.0.1:3000'},{appUrl:'http://127.0.0.1:3010'},{appUrl:'http://127.0.0.1:4499'},{anonKey:hostedJwt('anon')},{anonKey:jwt('service_role')},{databaseUrl:undefined}])assert.throws(()=>clinicalConfig(env(patch)),{code:'FOLIO_TEST_ISOLATION'});
+ for(const patch of [{appUrl:'http://127.0.0.1:4420'},{appUrl:'http://[::1]:4420'},{appUrl:'http://localhost:4410'},{appUrl:'http://localhost:4499'},{supabaseUrl:'http://localhost:54321'},{databaseUrl:'postgres://postgres:synthetic@localhost:54322/postgres'},{clinical:false},{supabaseUrl:'https://grkpayhxndztlfwxobnt.supabase.co'},{databaseUrl:'postgres://postgres:synthetic@127.0.0.1:55439/folio_test_stubs'},{supabaseUrl:'http://127.0.0.1:54321/auth'},{appUrl:'http://127.0.0.1:4410'},{appUrl:'http://127.0.0.1:3000'},{appUrl:'http://127.0.0.1:3010'},{appUrl:'http://127.0.0.1:4499'},{anonKey:hostedJwt('anon')},{anonKey:jwt('service_role')},{databaseUrl:undefined}])assert.throws(()=>clinicalConfig(env(patch)),{code:'FOLIO_TEST_ISOLATION'});
  assert.throws(()=>clinicalConfig({...env(),FOLIO_TEST_ISOLATED:'0'}));
  assert.throws(()=>clinicalConfig({...env(),FOLIO_TEST_APP_CONFIG:'not json'}));
 });
@@ -57,4 +58,17 @@ test('real runner bootstrap carries the protected clinical opt-in but still stri
  assert.equal(child.status,0,child.stderr);
  const refused=spawnSync(process.execPath,['--import',bootstrap,'--input-type=module','-e','throw Error("should not execute")'],{encoding:'utf8',timeout:15000,env:{...process.env,NODE_OPTIONS:'',FOLIO_TEST_APP_CONFIG:JSON.stringify({...config,databaseUrl:undefined})}});
  assert.notEqual(refused.status,0);assert.match(refused.stderr,/Clinical integration requires/);assert.doesNotMatch(refused.stderr,/Error: should not execute/);
+});
+
+test('canonical clinical default reaches discovery while the ordinary app remains on 127.0.0.1:4410',()=>{
+ assert.equal(testAppConfig({}).appUrl,'http://127.0.0.1:4410');
+ const result=spawnSync(process.execPath,['scripts/testing/run-clinical.mjs','--list'],{encoding:'utf8',timeout:30000,env:{...process.env,NODE_OPTIONS:'',E2E_BASE_URL:undefined,FOLIO_TEST_SUPABASE_URL:source.supabaseUrl,FOLIO_TEST_SUPABASE_ANON_KEY:source.anonKey,FOLIO_TEST_SUPABASE_SERVICE_KEY:source.serviceKey,FOLIO_TEST_DATABASE_URL:source.databaseUrl}});
+ assert.equal(result.status,0,result.stderr);assert.match(result.stdout,/Total: 7 tests in 1 file/);
+});
+
+test('clinical command rejects alternate app origins before application or browser launch',()=>{
+ for(const appUrl of ['http://127.0.0.1:4420','http://[::1]:4420','http://localhost:4410','http://localhost:4499']){
+  const result=spawnSync(process.execPath,['scripts/testing/run-clinical.mjs','--list'],{encoding:'utf8',timeout:15000,env:{...process.env,NODE_OPTIONS:'',E2E_BASE_URL:appUrl,FOLIO_TEST_SUPABASE_URL:source.supabaseUrl,FOLIO_TEST_SUPABASE_ANON_KEY:source.anonKey,FOLIO_TEST_SUPABASE_SERVICE_KEY:source.serviceKey,FOLIO_TEST_DATABASE_URL:source.databaseUrl}});
+  assert.notEqual(result.status,0);assert.match(result.stderr,/dedicated 4420\/54321\/54322 local profile/);assert.doesNotMatch(result.stdout,/Listing tests|Running \d+ tests/);
+ }
 });

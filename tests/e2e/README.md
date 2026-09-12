@@ -15,7 +15,7 @@ Sin Supabase local, las pantallas públicas y los ejemplos que usan mocks pueden
 
 El procedimiento específico está en [CLINICAL-LOCAL.md](../../scripts/testing/CLINICAL-LOCAL.md).
 `node scripts/testing/run-clinical.mjs` exige la instancia dedicada con PostgreSQL 17,
-Auth, TOTP y Storage reales, y usa exclusivamente `http://127.0.0.1:4420` para
+Auth, TOTP y Storage reales, y usa exclusivamente `http://localhost:4420` para
 no ocupar el puerto 4410 del runner ordinario/visual. Valida el perfil completo
 antes de iniciar su aplicación o navegador y rechaza cualquier override de URL
 distinto. Crea tres consultorios sintéticos y comprueba el
@@ -68,3 +68,11 @@ Los proveedores externos, captcha, correo, pagos, telemetría y fuentes remotas 
 Validar una instalación hospedada requiere un procedimiento manual separado, autorización específica, inventario de escrituras y datos de prueba revisados. No se admite cambiar `E2E_BASE_URL` a un sitio hospedado ni a los puertos habituales 3000/3010. Este documento no autoriza esa campaña y no modifica los procedimientos manuales de custodia, captura o recuperación.
 
 El bloqueo protege contra conexiones accidentales del código probado; no es un aislamiento del sistema operativo frente a código hostil. Los permisos de un proceso local y los servicios accesibles en loopback siguen requiriendo una máquina de pruebas controlada.
+
+Última ejecución clínica local (12 de septiembre de 2026): 1 aprobado, 1 fallido
+y 5 no ejecutados. El perfil canónico localhost:4420 llegó a MFA; Auth verificó
+el código y la UI superó la espera de 15 segundos del escenario. Un observador
+separado vio completarse MFA antes de 30 segundos, mientras se compilaba /hoy.
+Ese diagnóstico no cuenta como escenario aprobado. Guardado, Storage, cobro y archivo siguen
+sin acreditación real. El detalle y las comprobaciones se conservan en
+[CLINICAL-LOCAL.md](../../scripts/testing/CLINICAL-LOCAL.md).
