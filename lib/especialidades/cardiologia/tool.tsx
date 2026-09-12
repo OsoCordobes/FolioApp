@@ -663,7 +663,7 @@ export function CardiologiaTool({
           ) : null}
         </header>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+        <div className="pc-clinical-vitals" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
           {VITALES_TA_FC.map(({ campo, label }) => (
             <VitalInput
               key={campo}

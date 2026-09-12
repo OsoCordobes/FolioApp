@@ -5,12 +5,9 @@
  * sidebar tiene que resolverse sin depender del archivo de brand exploration.
  * Port directo del prototipo (sidebar.jsx · FolioMark).
  *
- * El id del clipPath usa useId() (SSR-safe, soportado en server components
- * en React 19): dos marks del mismo `size` en la misma página ya no
- * colisionan ids. role="img" + aria-label: el SVG se anuncia como imagen.
+ * La hoja y la F son trazados independientes de fuentes y de IDs de React.
+ * Así la marca mantiene su geometría en servidor, navegador e impresión.
  */
-
-import { useId } from "react";
 
 interface FolioMarkProps {
   size?: number;
@@ -22,35 +19,18 @@ interface FolioMarkProps {
 export function FolioMark({
   size = 28,
   color,
-  fg = "#FBF9F4",
+  fg = "#FFFFFF",
   foldShade,
 }: FolioMarkProps) {
   const c = color ?? "var(--accent)";
   const fs = foldShade ?? "var(--accent-2)";
-  const cid = useId();
   return (
     <svg width={size} height={size} viewBox="0 0 100 100" role="img" aria-label="Folio">
-      <defs>
-        <clipPath id={cid}>
-          <path d="M 6 22 L 64 22 L 84 42 L 84 96 L 6 96 Z" />
-        </clipPath>
-      </defs>
       <rect x="24" y="8" width="70" height="74" rx="8" fill={c} opacity="0.26" />
       <rect x="15" y="15" width="70" height="74" rx="8" fill={c} opacity="0.50" />
-      <rect x="6" y="22" width="78" height="74" rx="8" fill={c} clipPath={`url(#${cid})`} />
+      <path d="M14 22H64L84 42V88Q84 96 76 96H14Q6 96 6 88V30Q6 22 14 22Z" fill={c} />
       <path d="M 64 22 L 84 42 L 64 42 Z" fill={fs} />
-      <text
-        x="42"
-        y="77"
-        textAnchor="middle"
-        fontFamily="Geist, sans-serif"
-        fontWeight="700"
-        fontSize="54"
-        letterSpacing="-2.5"
-        fill={fg}
-      >
-        F
-      </text>
+      <path d="M28 38H59V48H39V58H56V68H39V80H28Z" fill={fg} />
     </svg>
   );
 }

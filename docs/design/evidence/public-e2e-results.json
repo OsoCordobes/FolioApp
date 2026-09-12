@@ -1,0 +1,910 @@
+{
+  "config": {
+    "configFile": "C:\\Users\\amiun\\Documents\\Codex\\folio-experience\\playwright.design.config.ts",
+    "rootDir": "C:/Users/amiun/Documents/Codex/folio-experience/tests",
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "C:/Users/amiun/Documents/Codex/folio-experience/docs/design/evidence/public-e2e-artifacts",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "",
+        "name": "",
+        "testDir": "C:/Users/amiun/Documents/Codex/folio-experience/tests",
+        "testIgnore": [],
+        "testMatch": [
+          "/e2e\\/(landing|side-art|design-print)\\.spec\\.ts/"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "docs/design/evidence/public-e2e-results.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.60.0",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "e2e\\design-print.spec.ts",
+      "file": "e2e/design-print.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Impresión · sólo estilos y DOM sintético",
+          "file": "e2e/design-print.spec.ts",
+          "line": 13,
+          "column": 6,
+          "specs": [
+            {
+              "title": "la ficha conserva papel blanco con tema oscuro y oculta controles",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1623,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-12T18:07:13.958Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "8291abe94ccab781a834-daf1b6c247c28b91caae",
+              "file": "e2e/design-print.spec.ts",
+              "line": 14,
+              "column": 7
+            },
+            {
+              "title": "el panel Hoy con varios pacientes permanece oculto en papel",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1134,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-12T18:07:16.377Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "8291abe94ccab781a834-67067a0704ae2a167c6e",
+              "file": "e2e/design-print.spec.ts",
+              "line": 27,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "e2e\\landing.spec.ts",
+      "file": "e2e/landing.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Landing · anónimo",
+          "file": "e2e/landing.spec.ts",
+          "line": 31,
+          "column": 6,
+          "specs": [
+            {
+              "title": "/ responde 200 sin redirect y muestra el h1 del hero",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 598,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-12T18:07:17.526Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "053c25efb6fce8646eda-28ced0647767ff6241fb",
+              "file": "e2e/landing.spec.ts",
+              "line": 32,
+              "column": 7
+            },
+            {
+              "title": "CTA del hero apunta a /onboarding e Ingresar del header a /login",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 608,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-12T18:07:18.133Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "053c25efb6fce8646eda-b6c06f86e35e6547efa3",
+              "file": "e2e/landing.spec.ts",
+              "line": 40,
+              "column": 7
+            },
+            {
+              "title": "links legales del footer responden 200 (incluye /cookies, fix de middleware)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1223,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-12T18:07:18.751Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "053c25efb6fce8646eda-a39146da83d340ed38b2",
+              "file": "e2e/landing.spec.ts",
+              "line": 50,
+              "column": 7
+            }
+          ]
+        },
+        {
+          "title": "Landing · SEO (JSON-LD + sitemap + robots)",
+          "file": "e2e/landing.spec.ts",
+          "line": 68,
+          "column": 6,
+          "specs": [
+            {
+              "title": "JSON-LD parseable con SoftwareApplication y FAQPage",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 608,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-12T18:07:19.983Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "053c25efb6fce8646eda-d2a48fcdce20c73a0e82",
+              "file": "e2e/landing.spec.ts",
+              "line": 69,
+              "column": 7
+            },
+            {
+              "title": "/sitemap.xml responde 200 con XML (sin redirect al login)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 7353,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-12T18:07:20.600Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "053c25efb6fce8646eda-f9e20ad3193e825f3978",
+              "file": "e2e/landing.spec.ts",
+              "line": 83,
+              "column": 7
+            },
+            {
+              "title": "/robots.txt responde 200 con text/plain (sin redirect al login)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 309,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-12T18:07:27.962Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "053c25efb6fce8646eda-06e151f3f14e62c5952c",
+              "file": "e2e/landing.spec.ts",
+              "line": 89,
+              "column": 7
+            }
+          ]
+        },
+        {
+          "title": "Landing · interacciones",
+          "file": "e2e/landing.spec.ts",
+          "line": 96,
+          "column": 6,
+          "specs": [
+            {
+              "title": "el primer <details> del FAQ se abre con teclado y muestra la respuesta",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 676,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-12T18:07:28.279Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "053c25efb6fce8646eda-0675bed42981e5fff7fc",
+              "file": "e2e/landing.spec.ts",
+              "line": 97,
+              "column": 7
+            },
+            {
+              "title": "las anclas del header navegan: Precios → #precios en viewport",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 692,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-12T18:07:28.963Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "053c25efb6fce8646eda-0fcc06528e0a5d04c4ae",
+              "file": "e2e/landing.spec.ts",
+              "line": 111,
+              "column": 7
+            },
+            {
+              "title": "las anclas del header navegan: Cómo funciona → #dia en viewport",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1143,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-12T18:07:29.664Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "053c25efb6fce8646eda-1e819a56c5b62242752a",
+              "file": "e2e/landing.spec.ts",
+              "line": 118,
+              "column": 7
+            },
+            {
+              "title": "las pestañas del producto cambian por flechas, Home y End, con selección y panel asociados",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 724,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-12T18:07:30.816Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "053c25efb6fce8646eda-2096cf206f2f5f47aeb9",
+              "file": "e2e/landing.spec.ts",
+              "line": 125,
+              "column": 7
+            }
+          ]
+        },
+        {
+          "title": "Landing · contenido server-rendered",
+          "file": "e2e/landing.spec.ts",
+          "line": 144,
+          "column": 6,
+          "specs": [
+            {
+              "title": "recorrido y cuidado de los datos llegan con contenido en el HTML inicial",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 912,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-12T18:07:31.547Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "053c25efb6fce8646eda-76b55e75ea1164f6344d",
+              "file": "e2e/landing.spec.ts",
+              "line": 145,
+              "column": 7
+            }
+          ]
+        },
+        {
+          "title": "Landing · mobile (375px)",
+          "file": "e2e/landing.spec.ts",
+          "line": 170,
+          "column": 6,
+          "specs": [
+            {
+              "title": "el toggle de nav abre el panel mobile y muestra Ingresar",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 820,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-12T18:07:32.468Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "053c25efb6fce8646eda-7ef0677da224dea2180c",
+              "file": "e2e/landing.spec.ts",
+              "line": 173,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "e2e\\side-art.spec.ts",
+      "file": "e2e/side-art.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Acceso · ilustración estable y formulario",
+          "file": "e2e/side-art.spec.ts",
+          "line": 16,
+          "column": 6,
+          "specs": [
+            {
+              "title": "recuperar acceso hidrata sin errores al abrir y recargar",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2185,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-12T18:07:33.300Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "89a8623493ed795d7c2c-f639e67addc3026c4ad7",
+              "file": "e2e/side-art.spec.ts",
+              "line": 17,
+              "column": 7
+            },
+            {
+              "title": "la agenda ilustrativa mantiene su contenido mientras se escribe",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 785,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-12T18:07:35.494Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "89a8623493ed795d7c2c-df4b091691bba5dc75d9",
+              "file": "e2e/side-art.spec.ts",
+              "line": 34,
+              "column": 7
+            },
+            {
+              "title": "la contraseña se muestra y oculta por teclado sin perder el valor",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 744,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-12T18:07:36.289Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "89a8623493ed795d7c2c-ea1e8741de99bc5315d9",
+              "file": "e2e/side-art.spec.ts",
+              "line": 48,
+              "column": 7
+            },
+            {
+              "title": "se puede cambiar a crear cuenta y recuperar el acceso sin enviar datos",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 958,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-12T18:07:37.044Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "89a8623493ed795d7c2c-08b8b9b8e508763b4d27",
+              "file": "e2e/side-art.spec.ts",
+              "line": 61,
+              "column": 7
+            },
+            {
+              "title": "la marca devuelve al inicio sin confundirla con una acción de acceso",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 936,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-12T18:07:38.010Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "89a8623493ed795d7c2c-ba00d71e41486bea7d43",
+              "file": "e2e/side-art.spec.ts",
+              "line": 71,
+              "column": 7
+            },
+            {
+              "title": "el portal identifica la consulta ilustrativa y presenta el email del paciente",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 569,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-12T18:07:38.955Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "89a8623493ed795d7c2c-58f86eb3b31a11b8ae28",
+              "file": "e2e/side-art.spec.ts",
+              "line": 78,
+              "column": 7
+            },
+            {
+              "title": "movimiento reducido conserva el formulario y la ilustración visibles",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 550,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-12T18:07:39.533Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "89a8623493ed795d7c2c-363d3c117d68ae17e553",
+              "file": "e2e/side-art.spec.ts",
+              "line": 85,
+              "column": 7
+            }
+          ]
+        },
+        {
+          "title": "Acceso · móvil",
+          "file": "e2e/side-art.spec.ts",
+          "line": 94,
+          "column": 6,
+          "specs": [
+            {
+              "title": "el formulario cabe sin la ilustración y mantiene acceso a recuperar contraseña",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "",
+                  "projectName": "",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 594,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-09-12T18:07:40.092Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "89a8623493ed795d7c2c-cc644ddd64778a98cec0",
+              "file": "e2e/side-art.spec.ts",
+              "line": 96,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-09-12T18:07:13.415Z",
+    "duration": 27328.638,
+    "expected": 22,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

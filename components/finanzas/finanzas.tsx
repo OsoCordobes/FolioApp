@@ -269,7 +269,7 @@ function LineChart({ dias, hoyFecha }: { dias: FinanzasDiaIngreso[]; hoyFecha: s
               strokeWidth="1"
               strokeDasharray={t === 0 ? "0" : "2 3"}
             />
-            <text x={PAD_L - 8} y={y + 3} textAnchor="end" fill="var(--ink-3)" fontSize="10" fontFamily="Geist Mono" letterSpacing="0">
+            <text x={PAD_L - 8} y={y + 3} textAnchor="end" fill="var(--ink-3)" fontSize="10" fontFamily="var(--font-sans)" letterSpacing="0">
               {t === 0 ? "0" : fmtMonth(t)}
             </text>
           </g>
@@ -279,7 +279,7 @@ function LineChart({ dias, hoyFecha }: { dias: FinanzasDiaIngreso[]; hoyFecha: s
       {labelIdxFor(n).map((i) => {
         const p = points[i];
         return (
-          <text key={p.fecha} x={p.x} y={PAD_T + H + 16} textAnchor="middle" fill="var(--ink-3)" fontSize="10" fontFamily="Geist Mono">
+          <text key={p.fecha} x={p.x} y={PAD_T + H + 16} textAnchor="middle" fill="var(--ink-3)" fontSize="10" fontFamily="var(--font-sans)">
             {p.label}
           </text>
         );
@@ -301,7 +301,7 @@ function LineChart({ dias, hoyFecha }: { dias: FinanzasDiaIngreso[]; hoyFecha: s
       {labPoints.length > 0 ? (
         <>
           <line x1={lastPoint.x} y1={PAD_T} x2={lastPoint.x} y2={PAD_T + H} stroke="var(--accent)" strokeWidth="1" strokeDasharray="2 3" opacity="0.5" />
-          <text x={lastPoint.x} y={PAD_T - 2} textAnchor="middle" fill="var(--accent-2)" fontSize="10" fontFamily="Geist Mono" letterSpacing=".08em">
+          <text x={lastPoint.x} y={PAD_T - 2} textAnchor="middle" fill="var(--accent-2)" fontSize="10" fontFamily="var(--font-sans)" letterSpacing=".08em">
             {lastPoint.fecha === hoyFecha ? "HOY" : lastPoint.label}
           </text>
         </>
@@ -365,7 +365,7 @@ function BarChartMensual({ meses }: { meses: FinanzasMesIngreso[] }) {
               strokeWidth="1"
               strokeDasharray={t === 0 ? "0" : "2 3"}
             />
-            <text x={PAD_L - 8} y={y + 3} textAnchor="end" fill="var(--ink-3)" fontSize="10" fontFamily="Geist Mono" letterSpacing="0">
+            <text x={PAD_L - 8} y={y + 3} textAnchor="end" fill="var(--ink-3)" fontSize="10" fontFamily="var(--font-sans)" letterSpacing="0">
               {t === 0 ? "0" : fmtMonth(t)}
             </text>
           </g>
@@ -381,7 +381,7 @@ function BarChartMensual({ meses }: { meses: FinanzasMesIngreso[] }) {
             <rect x={x} y={y} width={barW} height={h} rx="2" fill="var(--accent)" opacity="0.85">
               <title>{`${mes.label} · ${fmtMoney(mes.monto)}`}</title>
             </rect>
-            <text x={x + barW / 2} y={PAD_T + H + 16} textAnchor="middle" fill="var(--ink-3)" fontSize="10" fontFamily="Geist Mono">
+            <text x={x + barW / 2} y={PAD_T + H + 16} textAnchor="middle" fill="var(--ink-3)" fontSize="10" fontFamily="var(--font-sans)">
               {mes.label}
             </text>
           </g>
@@ -431,10 +431,10 @@ function Donut({ servicios }: { servicios: FinanzasServicioBreakdown[] }) {
         {arcs.map((a) => (
           <path key={a.id} d={a.path} stroke={a.color} strokeWidth={stroke} fill="none" strokeLinecap="butt" />
         ))}
-        <text x={cx} y={cy - 4} textAnchor="middle" fontFamily="Geist Mono" fontSize="9" fill="var(--ink-3)" letterSpacing=".08em">
+        <text x={cx} y={cy - 4} textAnchor="middle" fontFamily="var(--font-sans)" fontSize="9" fill="var(--ink-3)" letterSpacing=".08em">
           TOTAL
         </text>
-        <text x={cx} y={cy + 14} textAnchor="middle" fontFamily="Geist" fontWeight="600" fontSize="17" letterSpacing="-.015em" fill="var(--ink)">
+        <text x={cx} y={cy + 14} textAnchor="middle" fontFamily="var(--font-sans)" fontWeight="600" fontSize="17" letterSpacing="-.015em" fill="var(--ink)">
           ${fmtMonth(total)}
         </text>
       </svg>
@@ -566,6 +566,7 @@ function TablaTransacciones({
             <I.Search size={12} />
             <input
               placeholder="Buscar paciente, monto…"
+              aria-label="Buscar transacciones por paciente o monto"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />

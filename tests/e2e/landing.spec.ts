@@ -11,12 +11,18 @@
 
 import { expect, test } from "@playwright/test";
 
-const HERO_H1 = /el día se arma solo\. la historia, cifrada\./i;
+const HERO_H1 = /Tu consultorio\.\s*Todo a mano\./;
 
 // El cookie banner sale en cada navegación — lo pre-dismisseamos para que
 // las queries de página no choquen con su DOM (mismo approach que el resto
 // de los specs e2e).
-test.beforeEach(async ({ context }) => {
+test.beforeEach(async ({ context, baseURL }) => {
+  const origin = new URL(baseURL!).origin;
+  await context.route("**/*", (route) => {
+    const request = route.request();
+    return new URL(request.url()).origin === origin && ["GET", "HEAD"].includes(request.method())
+      ? route.continue() : route.abort("blockedbyclient");
+  });
   await context.addInitScript(() => {
     try { window.localStorage.setItem("folio.cookieConsent", "denied"); } catch { /* ignore */ }
   });
@@ -33,9 +39,11 @@ test.describe("Landing · anónimo", () => {
 
   test("CTA del hero apunta a /onboarding e Ingresar del header a /login", async ({ page }) => {
     await page.goto("/");
-    await expect(page.locator('[data-fl-cta="hero"]')).toHaveAttribute("href", "/onboarding");
+    const hero = page.getByRole("region", { name: HERO_H1 });
+    await expect(hero.getByRole("link", { name: "Crear mi consultorio", exact: true })).toHaveAttribute("href", "/onboarding");
+    await expect(hero.getByRole("link", { name: "Recorrer Folio", exact: true })).toHaveAttribute("href", "#producto");
     await expect(
-      page.locator(".fl-header-actions").getByRole("link", { name: "Ingresar" }),
+      page.locator(".fx-header-actions").getByRole("link", { name: "Ingresar" }),
     ).toHaveAttribute("href", "/login");
   });
 
@@ -45,7 +53,7 @@ test.describe("Landing · anónimo", () => {
   }) => {
     await page.goto("/");
     // Los tres links existen en el footer…
-    const footer = page.locator(".fl-footer");
+    const footer = page.locator(".fx-footer");
     await expect(footer.getByRole("link", { name: "Privacidad" })).toHaveAttribute("href", "/privacidad");
     await expect(footer.getByRole("link", { name: "Términos" })).toHaveAttribute("href", "/terminos");
     await expect(footer.getByRole("link", { name: "Cookies" })).toHaveAttribute("href", "/cookies");
@@ -97,50 +105,65 @@ test.describe("Landing · interacciones", () => {
     await page.keyboard.press("Enter");
 
     await expect(first).toHaveJSProperty("open", true);
-    await expect(first.locator(".fl-faq-a")).toBeVisible();
+    await expect(first.locator("p")).toBeVisible();
   });
 
   test("las anclas del header navegan: Precios → #precios en viewport", async ({ page }) => {
     await page.goto("/");
-    await page.locator(".fl-nav").getByRole("link", { name: "Precios" }).click();
+    await page.locator(".fx-nav").getByRole("link", { name: "Precios" }).click();
     await expect(page).toHaveURL(/#precios$/);
     await expect(page.locator("#precios")).toBeInViewport();
   });
 
-  test("las anclas del header navegan: Seguridad → #seguridad en viewport", async ({ page }) => {
+  test("las anclas del header navegan: Cómo funciona → #dia en viewport", async ({ page }) => {
     await page.goto("/");
-    await page.locator(".fl-nav").getByRole("link", { name: "Seguridad" }).click();
-    await expect(page).toHaveURL(/#seguridad$/);
-    await expect(page.locator("#seguridad")).toBeInViewport();
+    await page.locator(".fx-nav").getByRole("link", { name: "Cómo funciona" }).click();
+    await expect(page).toHaveURL(/#dia$/);
+    await expect(page.locator("#dia")).toBeInViewport();
+  });
+
+  test("las pestañas del producto cambian por flechas, Home y End, con selección y panel asociados", async ({ page }) => {
+    await page.goto("/");
+    const tabs = page.getByRole("tablist", { name: "Recorrer las funciones de Folio" });
+    const history = tabs.getByRole("tab", { name: "La historia clínica", exact: true });
+    await expect(history).toHaveAttribute("aria-selected", "true");
+    await history.focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(tabs.getByRole("tab", { name: "Los cobros" })).toBeFocused();
+    await expect(page.getByRole("tabpanel", { name: "Los cobros" })).toContainText("Los números del día");
+    await page.keyboard.press("Home");
+    await expect(tabs.getByRole("tab", { name: "La agenda" })).toBeFocused();
+    await expect(page.getByRole("tabpanel", { name: "La agenda" })).toContainText("Tu agenda hoy");
+    await page.keyboard.press("End");
+    await expect(tabs.getByRole("tab", { name: "Los cobros" })).toHaveAttribute("aria-selected", "true");
+    await expect(tabs.locator('[tabindex="0"]')).toHaveCount(1);
+    await expect(page.locator("#producto figcaption")).toContainText("Personas y datos ficticios");
   });
 });
 
 test.describe("Landing · contenido server-rendered", () => {
-  test("timeline (#dia) y bóveda (#seguridad) llegan con su contenido en el HTML inicial", async ({
+  test("recorrido y cuidado de los datos llegan con contenido en el HTML inicial", async ({
     page,
     request,
   }) => {
-    // El HTML inicial (sin ejecutar JS) ya trae las escenas del día y las
-    // cifras de la bóveda — nada depende de un mount client-side diferido.
+    // La información esencial permanece disponible sin JavaScript.
     const res = await request.get("/");
     const html = await res.text();
-    // AES-256-GCM vive en la escena de cifrado (14:00); la bóveda habla en
-    // lenguaje humano (AES-256 / 10 años) para la audiencia médica.
-    for (const needle of ["10:30", "14:00", "20:00", "25.326", "AES-256-GCM"]) {
+    for (const needle of ["Organizá la llegada", "Atendé con el contexto a mano", "Cerrá la consulta, seguí la historia", "permisos de acceso por rol", "registros de actividad"]) {
       expect(html, `el HTML server-rendered debe contener «${needle}»`).toContain(needle);
     }
 
     // Y en el DOM, cada dato vive dentro de su sección/ancla.
     await page.goto("/");
     const dia = page.locator("#dia");
-    await expect(dia).toContainText("10:30");
-    await expect(dia).toContainText("14:00");
-    await expect(dia).toContainText("20:00");
+    await expect(dia).toContainText("Organizá la llegada");
+    await expect(dia).toContainText("Atendé con el contexto a mano");
+    await expect(dia).toContainText("Cerrá la consulta, seguí la historia");
 
     const vault = page.locator("#seguridad");
-    await expect(vault).toContainText("25.326");
-    await expect(vault).toContainText("AES-256");
-    await expect(vault).toContainText("10 años");
+    await expect(vault).toContainText("cifrado de información clínica");
+    await expect(vault).toContainText("permisos de acceso por rol");
+    await expect(vault.getByRole("link", { name: "Cómo tratamos los datos" })).toHaveAttribute("href", "/privacidad");
   });
 });
 
@@ -157,5 +180,10 @@ test.describe("Landing · mobile (375px)", () => {
 
     await expect(panel).toHaveClass(/is-open/);
     await expect(ingresar).toBeVisible();
+    await ingresar.focus();
+    await page.keyboard.press("Escape");
+    await expect(panel).not.toHaveClass(/is-open/);
+    await expect(page.getByRole("button", { name: /abrir menú de navegación/i })).toBeFocused();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
   });
 });

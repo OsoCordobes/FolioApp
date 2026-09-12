@@ -1,0 +1,82 @@
+[
+  {
+    "mode": "development",
+    "case": "pending arrival blocks dependent navigation until ACK then starts attention",
+    "pass": true
+  },
+  {
+    "mode": "development",
+    "case": "double click + refresh pending + 12.5 seconds, one request and peak one toast",
+    "pass": true
+  },
+  {
+    "mode": "development",
+    "case": "network failure rollback + reconciliation refresh + no success",
+    "pass": true
+  },
+  {
+    "mode": "development",
+    "case": "close succeeds but failed payment rolls back only money + one error notice",
+    "pass": true
+  },
+  {
+    "mode": "development",
+    "case": "equal-state SSR payment visible while pending and no false debt toast after ACK",
+    "pass": true
+  },
+  {
+    "mode": "development",
+    "case": "stale after ACK and equal snapshot blocked; real UI arrival -> attending -> closed remains enabled",
+    "pass": true
+  },
+  {
+    "mode": "development",
+    "case": "server cancellation during pending request preserved after late ACK",
+    "pass": true
+  },
+  {
+    "mode": "development",
+    "case": "two concurrent arrivals settle independently; failed appointment can retry",
+    "pass": true
+  },
+  {
+    "mode": "production",
+    "case": "pending arrival blocks dependent navigation until ACK then starts attention",
+    "pass": true
+  },
+  {
+    "mode": "production",
+    "case": "double click + refresh pending + 12.5 seconds, one request and peak one toast",
+    "pass": true
+  },
+  {
+    "mode": "production",
+    "case": "network failure rollback + reconciliation refresh + no success",
+    "pass": true
+  },
+  {
+    "mode": "production",
+    "case": "close succeeds but failed payment rolls back only money + one error notice",
+    "pass": true
+  },
+  {
+    "mode": "production",
+    "case": "equal-state SSR payment visible while pending and no false debt toast after ACK",
+    "pass": true
+  },
+  {
+    "mode": "production",
+    "case": "stale after ACK and equal snapshot blocked; real UI arrival -> attending -> closed remains enabled",
+    "pass": true
+  },
+  {
+    "mode": "production",
+    "case": "server cancellation during pending request preserved after late ACK",
+    "pass": true
+  },
+  {
+    "mode": "production",
+    "case": "two concurrent arrivals settle independently; failed appointment can retry",
+    "pass": true
+  }
+]

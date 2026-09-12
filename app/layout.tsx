@@ -5,6 +5,7 @@ import "@/styles/experience.css";
 import "@/styles/platform.css";
 import "@/styles/clinical-experience.css";
 import "@/styles/auth-experience.css";
+import "@/styles/public-experience.css";
 import { CookieBanner } from "@/components/cookie-banner";
 import { FolioPostHogProvider } from "@/lib/observability/posthog-client";
 import { QueryProvider } from "@/lib/query-client";

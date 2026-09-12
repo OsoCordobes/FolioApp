@@ -12,8 +12,12 @@ El selector «Vista previa» permite recorrer `hoy`, `calendario`, `pacientes`,
 los componentes de producción. Sus enlaces se redirigen al panel equivalente
 dentro de la vista previa. Las filas de pacientes abren la ficha ficticia.
 `&state=empty` muestra estados vacíos de Hoy, pacientes y los tres paneles del
-portal. `&step=2` a `&step=6` permite inspeccionar directamente los formularios
-de onboarding sin completar ni guardar los pasos anteriores.
+portal. `&step=2` a `&step=8` permite inspeccionar los pasos del alta sin
+guardar los anteriores. En el paso 8, `&state=complete`, `pending` o `error`
+muestra cada estado final, rotulado como ejemplo, sin crear una cuenta.
+En la ficha, `&esp=cardiologia` (o psicologia, kinesiologia, nutricion,
+quiropraxia) cambia la especialidad. `&editing=1` habilita la exploración
+local de campos ficticios; las escrituras siguen bloqueadas.
 
 Los datos están en `app/dev/experience/fixtures.ts`; los contratos se comprueban
 con tipos importados de los componentes y del dominio. No se copian consultas,
@@ -42,7 +46,8 @@ su manejo normal; no se sustituyen datos ni se simulan guardados.
   realtime. Los cambios de fecha/periodo no recalculan datos; son fixtures fijos.
 - No existe autenticación, persistencia, confirmación real de turnos ni cobro.
 - Configuración se monta con `canEdit=false`; sus apartados son consultables.
-- La ficha no tiene turno activo: no habilita un guardado clínico ficticio.
+- La ficha empieza en lectura. Su modo de edición usa un turno ficticio para
+  explorar los campos, sin habilitar persistencia ni confirmar guardados.
   Documentos y consentimientos que se cargan por acciones quedan limitados.
 - Onboarding empieza en el paso 2 con datos ficticios y sin organizationId:
   no crea cuentas ni autoguarda. La finalización y conexión Google necesitan
@@ -69,6 +74,8 @@ Sidebar → pacientes → ficha permaneció dentro de `/dev/experience`. El bot�
 «Sin turno» y un POST de prueba quedaron bloqueados sin solicitudes no-GET.
 `pnpm typecheck` y el lint de `app/dev/experience` pasaron.
 
-Con la hoja de estilos vigente durante esta comprobación, onboarding paso 2
-mostró 28px de desborde a 390px; el resto no desbordó. Estas mediciones son de
-infraestructura: repetir la inspección visual cuando se integre el rediseño CSS.
+La comprobación inicial detectó 28px de desborde en onboarding paso 2 a 390px.
+El rediseño integrado corrigió ese desborde. Las revisiones finales de acceso,
+alta y cinco fichas están documentadas en `AUTH.md` y `CLINICAL.md`, con
+capturas de escritorio y móvil. Los resultados de comportamiento y la
+comprobación de las rutas 404 en la compilación están en `VERIFICATION.md`.

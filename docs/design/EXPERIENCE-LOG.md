@@ -32,5 +32,15 @@ Los estudios visuales se guardan en /dev/design-directions.html. Se inspeccionar
 - Los tres estudios permanecen en docs/design y se sirven en una ruta que responde 404 fuera del desarrollo aislado.
 - Pruebas ejecutadas: 1.628 unidades; 16 de agenda y 14 de creación; 14 interacciones nuevas de teclado/selección/diálogo/permisos. Todas aprobadas. Tipos globales aprobados después de integrar fichas y fuente.
 
-## Siguiente prioridad
-Completar capturas de las cinco fichas, pasos de alta, estados públicos y pantallas de gestión; contrastar composición y móvil. Actualizar specs de la presentación reemplazada, ejecutar lint/build aislado y revisar el resultado final compilado. Guardar checkpoint antes de esta revisión final.
+## Cierre de integración
+- Diez capturas de fichas (cinco especialidades, dos tamaños); alta 2–8 y estados de finalización; acceso, directorio, reserva y portal inspeccionados. Los límites de cada recorrido están en AUTH.md y CLINICAL.md.
+- Configuración recibe nombres accesibles para campos y selectores, estado anunciado de navegación y lenguaje comprensible. Se elimina una indicación de edición de datos fiscales que esa pantalla no ofrece. Finanzas conserva filtros/cálculos y añade nombre accesible al buscador y tipografía consistente en gráficos.
+- Se corrigió el logotipo: trazados SVG independientes de IDs y fuentes. La prueba de navegación/recarga de recuperación no detecta errores de hidratación.
+- La paleta de papel se restablece inmediatamente al imprimir. Pruebas DOM confirman ficha individual imprimible y agenda de varios pacientes oculta.
+- Resultado final: 1.628 unidades, 16 escenarios Hoy, 14 creación, 14 interacciones, 22 públicos/impresión y 10 comparaciones visuales aprobados. Lint global aprobado; compilación aislada completa con tipos y lint aprobados.
+- Se hizo un segundo build tras corregir resolución de plugins de ESLint para funcionar sin NODE_PATH heredado. No se deshabilitó el control. Las advertencias de instrumentación Sentry/OpenTelemetry se mantienen registradas; las lecturas de directorio fallan en el build sintético sin Supabase, como corresponde a este entorno.
+- Se arrancó e inspeccionó la versión compilada local: portada/acceso/recuperación/imagen social 200; tres galerías nuevas 404. Pestañas del recorrido responden; consola de esa visita sin errores ni advertencias. Fuentes TTF presentes en trazas de ambas imágenes OpenGraph.
+- Se restableció el servidor de desarrollo en 4410 para recorrer la entrega. No hubo despliegue, migraciones, cuentas ni movimientos reales.
+
+## Siguiente validación antes de publicar
+Entorno de ensayo conectado para autenticación, OAuth/correo, reserva completa, persistencia clínica y cobros reales de prueba. Esta entrega no presenta las vistas sintéticas como prueba de esos servicios.

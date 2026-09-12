@@ -16,6 +16,7 @@ export function ProductPreview({ compact = false }: { compact?: boolean }) {
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
   const selected = VIEWS.find((item) => item.id === view)!;
   const prefix = compact ? "hero-product" : "product-tour";
+  const ScreenTitle = compact ? "h2" : "h3";
 
   function onKey(event: KeyboardEvent<HTMLButtonElement>, index: number) {
     let target: number;
@@ -52,7 +53,7 @@ export function ProductPreview({ compact = false }: { compact?: boolean }) {
             </aside>
             <div className="fx-product-screen" key={view}>
               {view === "agenda" && <>
-                <div className="fx-screen-heading"><div><span>Martes 15 de septiembre</span><h3>Tu agenda hoy</h3></div><span className="fx-person">LM</span></div>
+                <div className="fx-screen-heading"><div><span>Martes 15 de septiembre</span><ScreenTitle>Tu agenda hoy</ScreenTitle></div><span className="fx-person">LM</span></div>
                 <div className="fx-day-summary"><span><b>4</b> turnos</span><span><b>1</b> en espera</span><span><b>1</b> atendido</span></div>
                 <div className="fx-agenda-heading"><strong>Esta mañana</strong><span>Consultorio 1</span></div>
                 <div className="fx-appointment"><time>09:00</time><span className="fx-patient-initials is-mint">MR</span><div><strong>Martina Ríos</strong><small>Consulta de seguimiento</small></div><span className="fx-status is-complete"><Check size={11} /> Atendida</span></div>

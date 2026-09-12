@@ -11,7 +11,7 @@
  * Pago (estado de la suscripción) y WhatsApp (solo si el deploy lo tiene operativo).
  */
 
-import { useEffect, useId, useState, useTransition, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useId, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
 import * as I from "@/components/icons";
@@ -135,12 +135,13 @@ function SideNav({ active, setActive, showEquipo, showPerfilPublico }: { active:
     { id: "plan",          label: "Plan",           icon: <I.Settings size={14} /> },
   ];
   return (
-    <nav className="cfg-sidenav">
+    <nav className="cfg-sidenav" aria-label="Secciones de configuración">
       {items.map((it) => (
         <button
           key={it.id}
           type="button"
           className={"cfg-sidenav-item " + (active === it.id ? "is-active" : "")}
+          aria-pressed={active === it.id}
           onClick={() => setActive(it.id)}
         >
           <span className="cfg-sidenav-ico">{it.icon}</span>
@@ -168,6 +169,8 @@ function Section({ title, sub, children, action }: { title: string; sub?: string
   );
 }
 
+const FieldLabelContext = createContext<string | undefined>(undefined);
+
 function Row({ label, sub, children, vertical }: { label: string; sub?: string; children: ReactNode; vertical?: boolean }) {
   return (
     <div className={"cfg-row " + (vertical ? "is-vertical" : "")}>
@@ -175,23 +178,25 @@ function Row({ label, sub, children, vertical }: { label: string; sub?: string; 
         <span>{label}</span>
         {sub ? <span className="cfg-row-sub">{sub}</span> : null}
       </div>
-      <div className="cfg-row-control">{children}</div>
+      <div className="cfg-row-control"><FieldLabelContext.Provider value={label}>{children}</FieldLabelContext.Provider></div>
     </div>
   );
 }
 
 function TextInput({ value, onChange, placeholder, prefix, type = "text", readOnly }: { value: string; onChange: (v: string) => void; placeholder?: string; prefix?: string; type?: string; readOnly?: boolean }) {
+  const label = useContext(FieldLabelContext);
   if (prefix) {
     return (
       <div className="cfg-input-prefix">
         <span className="fm-mono">{prefix}</span>
-        <input type={type} value={value} placeholder={placeholder} readOnly={readOnly} onChange={(e) => onChange(e.target.value)} />
+        <input type={type} value={value} placeholder={placeholder} aria-label={label} readOnly={readOnly} onChange={(e) => onChange(e.target.value)} />
       </div>
     );
   }
   return (
     <input
       className="cfg-input"
+      aria-label={label}
       type={type}
       value={value}
       placeholder={placeholder}
@@ -201,12 +206,14 @@ function TextInput({ value, onChange, placeholder, prefix, type = "text", readOn
   );
 }
 
-function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+function Toggle({ value, onChange, label }: { value: boolean; onChange: (v: boolean) => void; label?: string }) {
+  const fieldLabel = useContext(FieldLabelContext);
   return (
     <button
       type="button"
       className={"cfg-switch " + (value ? "is-on" : "")}
       role="switch"
+      aria-label={label ?? fieldLabel}
       aria-checked={value}
       onClick={() => onChange(!value)}
     >
@@ -533,7 +540,7 @@ function SecConsultorio({
 
   return (
     <>
-      <Section title="Identidad del consultorio" sub="Aparece en el sidebar, recordatorios y el link público.">
+      <Section title="Identidad del consultorio" sub="Aparece en el menú, los recordatorios y tu página pública.">
         <Row label="Nombre del consultorio">
           <TextInput value={c.nombre} onChange={(v) => set({ nombre: v })} />
         </Row>
@@ -564,9 +571,10 @@ function SecConsultorio({
         <Row label="Especialidad" sub="Aplica a las fichas de toda la organización." vertical={especialidadCambiada && otrasSesiones !== null && otrasSesiones > 0}>
           <select
             className="cfg-input cfg-input-fixed"
+            aria-label="Especialidad del consultorio"
             value={c.especialidad}
             disabled={!canEdit}
-            title={canEdit ? undefined : "Solo OWNER/DIRECTOR puede editar"}
+            title={canEdit ? undefined : "Solo el titular o la dirección pueden editar"}
             onChange={(e) => onEspecialidadChange(e.target.value as EspecialidadSlug)}
           >
             {ESPECIALIDAD_SLUGS.map((slug) => (
@@ -595,8 +603,8 @@ function SecConsultorio({
           label="Tipo de organización"
           sub={
             orgTipo === "CLINICA"
-              ? "Tu organización trabaja en equipo con facturación por seat."
-              : "Pasá a Clínica para trabajar en equipo (roles, multi-profesional y facturación por seat)."
+              ? "Tu organización trabaja en equipo con una suscripción por profesional."
+              : "Pasá a Clínica para compartir la agenda y asignar permisos. La suscripción se calcula por profesional."
           }
           vertical={orgTipo === "INDEPENDIENTE" && isOwner}
         >
@@ -648,16 +656,17 @@ function SecConsultorio({
         <Row label="Ciudad / Provincia">
           <div className="cfg-grid-2">
             <TextInput value={c.ciudad} onChange={(v) => set({ ciudad: v })} />
-            <select className="cfg-input" value={c.provincia} onChange={(e) => set({ provincia: e.target.value })}>
+            <select aria-label="Provincia" className="cfg-input" value={c.provincia} onChange={(e) => set({ provincia: e.target.value })}>
               {["Córdoba", "Buenos Aires", "Santa Fe", "Mendoza", "Neuquén", "Salta", "Tucumán", "Otra"].map((p) => (
                 <option key={p} value={p}>{p}</option>
               ))}
             </select>
           </div>
         </Row>
-        <Row label="Zona horaria" sub="Sin DST · Argentina">
+        <Row label="Zona horaria" sub="Argentina · sin cambio de hora estacional">
           <select
             className="cfg-input cfg-input-fixed"
+            aria-label="Zona horaria"
             value={c.timezone}
             onChange={(e) => set({ timezone: e.target.value })}
           >
@@ -854,14 +863,14 @@ function SecHorarios({ dias, setDias, slotMargenMin, onMargenChange, margenPendi
 
   return (
     <>
-      <Section title="Disponibilidad semanal" sub="Slots que se ofrecen en tu link público. Para vacaciones o una ausencia puntual, usá «Bloquear» en el Calendario.">
+      <Section title="Disponibilidad semanal" sub="Horarios que se ofrecen en tu página de reservas. Para vacaciones o una ausencia puntual, usá «Bloquear» en el Calendario.">
         <div className="cfg-horarios">
           {(Object.keys(dias) as DiaId[]).map((id) => {
             const d = dias[id];
             return (
               <div key={id} className={"cfg-dia " + (d.on ? "" : "is-off")}>
                 <div className="cfg-dia-head">
-                  <Toggle value={d.on} onChange={(v) => setDia(id, { on: v })} />
+                  <Toggle label={`Atención: ${DIAS_LBLS[id]}`} value={d.on} onChange={(v) => setDia(id, { on: v })} />
                   <b>{DIAS_LBLS[id]}</b>
                 </div>
                 <div className="cfg-dia-franjas">
@@ -875,10 +884,10 @@ function SecHorarios({ dias, setDias, slotMargenMin, onMargenChange, margenPendi
                     <>
                       {d.franjas.map((f, i) => (
                         <div key={i} className="cfg-franja">
-                          <input type="time" value={f[0]} onChange={(e) => setFranja(id, i, 0, e.target.value)} />
+                          <input type="time" aria-label={`${DIAS_LBLS[id]}, franja ${i + 1}: desde`} value={f[0]} onChange={(e) => setFranja(id, i, 0, e.target.value)} />
                           <span className="muted">a</span>
-                          <input type="time" value={f[1]} onChange={(e) => setFranja(id, i, 1, e.target.value)} />
-                          <button type="button" className="cfg-franja-x" onClick={() => removeFranja(id, i)} aria-label="Quitar franja">
+                          <input type="time" aria-label={`${DIAS_LBLS[id]}, franja ${i + 1}: hasta`} value={f[1]} onChange={(e) => setFranja(id, i, 1, e.target.value)} />
+                          <button type="button" className="cfg-franja-x" onClick={() => removeFranja(id, i)} aria-label={`Quitar franja ${i + 1} del ${DIAS_LBLS[id]}`}>
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
                               <path d="M18 6 6 18M6 6l12 12" />
                             </svg>
@@ -897,16 +906,17 @@ function SecHorarios({ dias, setDias, slotMargenMin, onMargenChange, margenPendi
         </div>
       </Section>
 
-      <Section title="Slot" sub="Cómo se espacian los turnos que se ofrecen en tu link. La duración la define cada servicio.">
+      <Section title="Espacio entre turnos" sub="Cómo se espacian los turnos que se ofrecen en tu link. La duración la define cada servicio.">
         <Row
           label="Margen entre turnos"
           sub={margenPending ? "Guardando…" : "Tiempo libre entre dos turnos consecutivos"}
         >
           <select
             className="cfg-input cfg-input-fixed"
+            aria-label="Margen entre turnos"
             value={slotMargenMin}
             disabled={!canEdit || margenPending}
-            title={canEdit ? undefined : "Solo OWNER/DIRECTOR puede editar"}
+            title={canEdit ? undefined : "Solo el titular o la dirección pueden editar"}
             onChange={(e) => onMargenChange(Number(e.target.value))}
           >
             {MARGEN_OPTS.map((o) => (
@@ -961,22 +971,24 @@ function SecServicios({ servicios, setServicios }: { servicios: ServicioCfg[]; s
                   value={s.nombre}
                   onChange={(e) => setServ(i, { nombre: e.target.value })}
                   placeholder="Nombre del servicio"
+                  aria-label={`Nombre del servicio ${i + 1}`}
                 />
               </td>
               <td>
                 <div className="cfg-table-num">
-                  <input type="number" value={s.dur} step={15} min={15} onChange={(e) => setServ(i, { dur: Number(e.target.value) })} />
+                  <input type="number" aria-label={`Duración en minutos de ${s.nombre}`} value={s.dur} step={15} min={15} onChange={(e) => setServ(i, { dur: Number(e.target.value) })} />
                   <span className="muted">min</span>
                 </div>
               </td>
               <td>
                 <div className="cfg-table-num">
                   <span className="muted">$</span>
-                  <input type="number" value={s.precio} step={1000} min={0} onChange={(e) => setServ(i, { precio: Number(e.target.value) })} />
+                  <input type="number" aria-label={`Precio en pesos de ${s.nombre}`} value={s.precio} step={1000} min={0} onChange={(e) => setServ(i, { precio: Number(e.target.value) })} />
                 </div>
               </td>
               <td>
                 <select
+                  aria-label={`Pacientes habilitados para ${s.nombre}`}
                   value={s.paraNuevos ? "nuevos" : "todos"}
                   className="cfg-table-input"
                   onChange={(e) => setServ(i, { paraNuevos: e.target.value === "nuevos" })}
@@ -986,7 +998,7 @@ function SecServicios({ servicios, setServicios }: { servicios: ServicioCfg[]; s
                 </select>
               </td>
               <td>
-                <Toggle value={s.activo} onChange={(v) => setServ(i, { activo: v })} />
+                <Toggle label={`Servicio ${s.nombre} activo`} value={s.activo} onChange={(v) => setServ(i, { activo: v })} />
               </td>
               <td>
                 <button type="button" className="cfg-table-x" onClick={() => removeServ(i)} aria-label="Eliminar">
@@ -1798,10 +1810,7 @@ function SecPlan({
         </div>
       </Section>
 
-      <Section title="Facturación" sub="Datos de tu plan y método de pago.">
-        <Row label="Datos de facturación" sub="CUIT, razón social y condición frente al IVA">
-          <span className="muted">Editables desde la sección Consultorio.</span>
-        </Row>
+      <Section title="Facturación" sub="Consultá los cobros de tu suscripción.">
         <Row label="Historial de cobros" sub="Tus últimos movimientos">
           {isOwner ? (
             <a href="/configuracion/billing" className="cfg-link">
@@ -1857,7 +1866,7 @@ function PageHeader({ dirty, onSave, onDiscard, isSaving, saveError, canEdit }: 
               className="fi-btn fi-btn-primary"
               onClick={onSave}
               disabled={!canEdit}
-              title={canEdit ? undefined : "Solo OWNER/DIRECTOR puede editar"}
+              title={canEdit ? undefined : "Solo el titular o la dirección pueden editar"}
             >
               Guardar cambios
             </button>

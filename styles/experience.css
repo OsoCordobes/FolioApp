@@ -110,7 +110,7 @@ input::placeholder, textarea::placeholder { color: var(--ink-3); opacity: 1; }
 .fx-product-screen { padding:27px 22px 20px; min-width:0; animation:fx-screen-in 180ms ease-out; }
 .fx-screen-heading { display:flex; align-items:center; justify-content:space-between; gap:15px; }
 .fx-screen-heading span { font-size:9px; color:#777189; }
-.fx-screen-heading h3 { font-size:23px; letter-spacing:-.8px; font-weight:700; margin-top:5px; }
+.fx-screen-heading :is(h2, h3) { font-size:23px; letter-spacing:-.8px; font-weight:700; margin-top:5px; }
 .fx-person { width:32px; height:32px; display:flex; align-items:center; justify-content:center; border-radius:50%; background:#F0EDF8; flex-shrink:0; color:#655C84 !important; font-size:10px !important; }
 .fx-day-summary { display:flex; gap:22px; border-bottom:1px solid #EEECF5; padding:20px 0; font-size:9px; color:#777189; }
 .fx-day-summary b { font-size:15px; font-weight:600; color:#39334F; margin-right:3px; }
@@ -145,7 +145,7 @@ input::placeholder, textarea::placeholder { color: var(--ink-3); opacity: 1; }
 .fx-tour .fx-product-rail { padding:28px 16px; }
 .fx-tour .fx-product-rail>span:not(.fx-product-wordmark) { font-size:12px; min-height:43px; }
 .fx-tour .fx-product-screen { padding:32px 38px 28px; }
-.fx-tour .fx-screen-heading h3 { font-size:29px; }
+.fx-tour .fx-screen-heading :is(h2, h3) { font-size:29px; }
 .fx-tour .fx-appointment { min-height:69px; grid-template-columns:55px 33px 1fr auto; gap:12px; }
 .fx-tour .fx-appointment strong { font-size:13px; }
 .fx-tour .fx-appointment small, .fx-tour .fx-agenda-heading, .fx-tour .fx-day-summary, .fx-tour .fx-screen-heading span, .fx-tour .fx-appointment time { font-size:11px; }
@@ -353,7 +353,7 @@ input::placeholder, textarea::placeholder { color: var(--ink-3); opacity: 1; }
   .fx-product-rail { display:none; }
   .fx-window-bar { font-size:8px; padding:0 13px; height:30px; }
   .fx-product-screen, .fx-tour .fx-product-screen { padding:22px 16px 16px; }
-  .fx-screen-heading h3, .fx-tour .fx-screen-heading h3 { font-size:23px; }
+  .fx-screen-heading :is(h2, h3), .fx-tour .fx-screen-heading :is(h2, h3) { font-size:23px; }
   .fx-screen-heading span, .fx-tour .fx-screen-heading span { font-size:9px; }
   .fx-day-summary { gap:18px; padding:16px 0; }
   .fx-tour .fx-day-summary { font-size:9px; }

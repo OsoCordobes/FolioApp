@@ -1,38 +1,67 @@
-# Acceso y configuración inicial
+# Acceso, configuración inicial y entrada pública
 
-Dirección: **Clínica clara**. Identidad compartida con el resto de Folio: fondo lavanda tenue, superficies blancas, tinta púrpura, acento violeta y Plus Jakarta Sans local.
+Dirección: **Clínica clara**. Revisión local del 12 de septiembre de 2026, rama `codex/folio-experience`, servidor aislado `127.0.0.1:4410`.
 
-## Qué cambió
+## Cambios implementados
 
-- El panel lateral del acceso muestra una agenda ilustrativa estable. La tipografía y el día de trabajo dan contexto sin rotación automática, carrusel ni promesas publicitarias. Todas las personas y datos están rotulados como ficticios.
-- Los formularios tienen un regreso al inicio a través del logo, título contextual, explicación breve, campos de 48 px y foco visible. El mensaje de error del acceso se anuncia y queda asociado a los campos.
-- Los estados de envío conservan sus botones deshabilitados y sus mensajes. El texto de recuperación no confirma la existencia de una cuenta.
-- La confirmación de email tiene una jerarquía propia y conserva el reenvío, los límites de frecuencia y la recuperación del tiempo de espera.
-- Cada paso de configuración muestra la posición y su propósito. Los campos usan nombres cotidianos: perfil público, horarios disponibles, calendario y duración del turno.
-- La vista previa móvil del perfil usa un diálogo nativo: contiene el foco mientras está abierto, admite Escape y permite regresar al formulario. El botón de apertura forma parte del documento para evitar tapar campos y acciones.
-- Horarios y servicios tienen nombres accesibles para sus campos de hora, duración y precio.
+- Acceso, recuperación, confirmación de correo y portal comparten superficies claras, marca, tipografía local y campos grandes. El panel lateral es estático y rotula las personas como ficticias; la variante del portal habla al paciente.
+- `/forgot` muestra la recuperación directamente. Los mensajes conservan el tratamiento que evita revelar la existencia de una cuenta. El restablecimiento presenta espera, enlace inválido y camino para pedir otro.
+- La contraseña de login tiene una etiqueta independiente de sus botones. No se la marca inválida por tener menos de ocho caracteres: el acceso conserva la compatibilidad con contraseñas antiguas. Errores de recuperación y horarios están asociados a sus campos.
+- El alta muestra ocho pasos con propósito, progreso, regreso y configuración posterior donde ya estaba permitida. El primer paso tiene un elemento `main`.
+- Los servicios usan una grilla adaptable real; en móvil el nombre ocupa una fila y duración/precio/quitar la siguiente. Los días y botones de quitar tienen área táctil de al menos 44 px.
+- La vista previa móvil usa diálogo nativo, ciclo explícito de Tab, Escape y restauración del foco. Su apertura está después del formulario, sin tapar campos.
+- El cierre distingue espera, confirmación y error. El error con su reintento aparece antes de la tarjeta, también en móvil. La tarjeta final conserva `logoUrl` y `cardMood`; copiar tiene confirmación y una alternativa si falla el portapapeles.
+- El directorio conserva enlaces, filtros y contenido públicos. Sus filtros tienen `aria-current`, las tarjetas tienen títulos y el vacío orienta primero al paciente. Se cambió el CTA que insinuaba gratuidad permanente por “Sumar mi consultorio”.
+- La entrada de reservas explica servicio, contacto y estado de solicitud. Se retiraron las afirmaciones universales “Cada dato se cifra” y el sello legal de esa presentación; no se modificó ningún mecanismo de protección ni validación.
 
-## Archivos
+## Evidencia visual actual
 
-- `styles/auth-experience.css`: estilos delimitados con `fx-auth-*`, `fx-onboarding` y `fx-onb-shell`. Cargar después de la base visual.
-- `components/auth/side-art.tsx`: composición estática; conserva `SideArt`, `LazyMotion` y `domMax`.
-- `components/auth/login-form.tsx` y `check-email-panel.tsx`: presentación de formularios y mensajes.
-- `components/onboarding/onboarding-app.tsx`: clases y enlaces de marca del contenedor.
-- `components/onboarding/step-shell.tsx`: progreso, acciones y vista previa.
-- `components/onboarding/steps.tsx`: textos y nombres accesibles.
+Capturas en `docs/design/evidence/`. Escritorio principal: 1440 × 1000; móvil: 390 × 844. La captura de recuperación inválida en escritorio usa 1280 × 720. Son pantallas renderizadas de componentes reales con datos sintéticos.
 
-## Límites deliberados
+| Recorrido | Evidencia |
+| --- | --- |
+| Login escritorio y móvil | `auth-login-desktop.png`, `auth-login-mobile.png` |
+| Recuperar acceso escritorio y móvil | `auth-forgot-desktop.png`, `auth-forgot-mobile.png` |
+| Alta inicial | `onboarding-start-desktop.png` |
+| Perfil profesional, paso 2 | `onboarding-profile-desktop.png` |
+| Consultorio, paso 3 | `onboarding-practice-mobile.png`; inspección adicional de escritorio |
+| Identidad, paso 4 | `onboarding-identity-desktop.png`, `onboarding-identity-mobile.png` |
+| Horarios, paso 5 | `onboarding-hours-desktop.png`, `onboarding-hours-invalid-mobile.png` |
+| Servicios, paso 6 | `onboarding-services-desktop.png`, `onboarding-services-mobile.png` |
+| Calendario, paso 7, sin conectar | `onboarding-calendar-desktop.png` |
+| Cierre, paso 8 | `onboarding-finish-desktop.png`, `onboarding-finish-error-mobile.png`, `onboarding-finish-pending-mobile.png` |
+| Vista previa móvil | `onboarding-preview-dialog-mobile.png` |
+| Recuperación verificando/sin sesión válida | `auth-reset-verifying-mobile.png`, `auth-reset-invalid-mobile.png`, `auth-reset-invalid-desktop.png` |
+| Portal con enlace expirado | `portal-login-expired-mobile.png` |
+| Directorio con ejemplos y vacío | `directory-desktop.png`, `directory-mobile.png`, `directory-empty-desktop.png` |
+| Reserva: servicio → profesional | `booking-professional-desktop.png` |
 
-No se cambiaron acciones de servidor, rutas OAuth, consentimiento, captcha, validaciones, datos iniciales, persistencia, borradores ni reglas de reintento. El diálogo de vista previa es el único comportamiento de interfaz reconstruido. Los estilos de una tarjeta pública elegida por un profesional se conservan.
+Las capturas de galería incluyen su selector y, en algunos casos, las herramientas locales de desarrollo. No son parte de la plataforma de producción.
 
-El panel lateral también se utiliza en el portal de pacientes: el cambio conserva su contrato pero ese contexto requiere revisión visual antes de integrar. Las ilustraciones son figuras sin controles simulados.
+## Interacciones comprobadas
 
-## Verificación
+- Franja 09:00–08:59: mensaje “El fin tiene que ser después del inicio”, `aria-invalid=true`, asociación con el mensaje y Continuar deshabilitado. La prueba se completó con teclado nativo; el llenado directo del control de hora no había producido el cambio de React.
+- Diálogo: Tab permanece en su botón de cierre; Escape cierra y devuelve foco a “Ver mi perfil público”. Se verificó `dialog.contains(document.activeElement)` y restauración posterior.
+- Elección de estilo Clínico: radio marcado y tarjeta del diálogo con `data-card-mood="clinico"`.
+- En el ejemplo de cierre fallido y pendiente no se habilita entrar al panel.
+- Directorio y pasos 3, 5 y 6 sin desbordamiento horizontal en 390 px.
+- Reserva: elegir Consulta inicial presenta profesionales y enfoca el encabezado “Elegí profesional”. No se pidió un horario al servidor ni se envió una reserva.
 
-- `pnpm typecheck`: aprobado.
-- ESLint sobre los seis TSX modificados: aprobado.
-- 46 pruebas existentes de errores de autenticación, fuerza de contraseña, borradores, continuidad de configuración, horarios y plantillas: aprobadas, mediante el ejecutor aislado del repositorio.
-- `git diff --check` en los componentes modificados: aprobado.
-- La inspección visual de acceso y configuración se completa una vez que el contenedor principal carga la nueva hoja de estilo.
+## Entorno y comprobaciones
 
-Estas verificaciones locales no prueban autenticación, captcha, email ni guardado con servicios reales.
+La galería `/dev/experience` sigue cercando solicitudes. Se extendió su selector hasta el paso 8. El paso final renderiza `Step9Moment` con callbacks vacíos y una etiqueta explícita de demostración, con estados `complete`, `pending` y `error`; no crea ni finaliza cuentas. El paso 7 dispara su efecto existente, rechazado por el cerco de la galería y explicado en pantalla.
+
+`/dev/directory-preview` contiene tres consultorios ficticios, sin cuentas ni consultas de base de datos. Devuelve 404 en producción o sin `FOLIO_TEST_ISOLATED=1`. `?state=empty` permite inspeccionar el vacío. `/dev/book-preview` es la ruta de desarrollo preexistente.
+
+- 46 pruebas unitarias existentes aprobadas: mapa de errores de autenticación, fuerza de contraseña, borrador, continuidad del alta, franjas y plantillas. Ejecutor aislado del repositorio.
+- ESLint sobre los 19 TS/TSX del conjunto revisado: aprobado tras el último cambio.
+- `git diff --check` del conjunto: aprobado.
+- Typecheck aprobado en el control intermedio y en la repetición final posterior al directorio y los textos de reserva.
+
+## Hallazgo resuelto en integración
+
+`FolioMark/useId` presentaba una discrepancia de hidratación en `/forgot` incluso después de una recarga limpia (17:56:02 UTC). La integración sustituyó el recorte identificado por ID y la letra dependiente de una fuente por trazados SVG estables. La regresión de navegación y recarga de `/forgot`, con revisión de consola, pasó sin discrepancias de hidratación.
+
+## Límites
+
+Esta evidencia no prueba Auth, captcha, correo, OAuth de Google, subida de logos ni persistencia con servicios reales. No se aceptaron términos ni se crearon cuentas. No se accedió a datos reales ni se desplegó. Los estados finales son ejemplos de presentación, no confirmaciones de guardado. El éxito y error de conexión a Google Calendar, los estados de envío de correo y la reserva completa requieren pruebas aisladas específicas o un entorno de ensayo autorizado.

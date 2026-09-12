@@ -1,0 +1,37 @@
+[
+  {
+    "path": "/",
+    "status": 200,
+    "contentType": "text/html; charset=utf-8"
+  },
+  {
+    "path": "/login",
+    "status": 200,
+    "contentType": "text/html; charset=utf-8"
+  },
+  {
+    "path": "/forgot",
+    "status": 200,
+    "contentType": "text/html; charset=utf-8"
+  },
+  {
+    "path": "/dev/experience",
+    "status": 404,
+    "contentType": "text/html; charset=utf-8"
+  },
+  {
+    "path": "/dev/directory-preview",
+    "status": 404,
+    "contentType": "text/html; charset=utf-8"
+  },
+  {
+    "path": "/dev/design-directions.html",
+    "status": 404,
+    "contentType": "text/plain;charset=UTF-8"
+  },
+  {
+    "path": "/opengraph-image-pwu6ef",
+    "status": 200,
+    "contentType": "image/png"
+  }
+]

@@ -147,10 +147,17 @@ export function Step9Moment({
         {formatArsFromCents(planPriceCents)} / mes — lo activás desde Configuración.
       </p>
 
+      {error ? (
+        <div className="onb-moment-finalize-err">
+          <p className="au-err onb-banner-err" role="alert">{error}</p>
+          <button type="button" className="fi-btn fi-btn-secondary" onClick={onRetryFinish} disabled={retrying}>
+            {retrying ? "Reintentando…" : "Reintentar"}
+          </button>
+        </div>
+      ) : null}
+
       <div className="onb-moment-card onb-anim-card">
-        {/* onCta = mismo handler que "Ver mi página": abre /book/<slug> en
-            nueva tab. Solo handler — el layout del Step 9 tiene baseline
-            visual (tests/snapshots/onboarding-*.png) y no se toca. */}
+        {/* La vista conserva el estilo elegido y comparte el enlace público. */}
         <PublicCard data={cardData} variant="full" appUrl={APP_URL} onCta={onSeePage} />
       </div>
 
@@ -180,22 +187,6 @@ export function Step9Moment({
 
       {copied ? <p className="onb-moment-feedback" role="status">Enlace copiado.</p> : null}
       {copyError ? <p className="onb-moment-feedback" role="alert">No pudimos copiar el enlace. Podés seleccionarlo arriba y copiarlo manualmente.</p> : null}
-
-      {error ? (
-        <div className="onb-moment-finalize-err">
-          <p className="au-err onb-banner-err" role="alert">
-            {error}
-          </p>
-          <button
-            type="button"
-            className="fi-btn fi-btn-secondary"
-            onClick={onRetryFinish}
-            disabled={retrying}
-          >
-            {retrying ? "Reintentando…" : "Reintentar"}
-          </button>
-        </div>
-      ) : null}
 
       <div className="onb-moment-ctas">
         <button
