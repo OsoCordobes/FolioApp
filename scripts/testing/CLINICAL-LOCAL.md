@@ -1,8 +1,9 @@
 # Ensayo clínico con Supabase local real
 
 Estado al 12 de septiembre de 2026: infraestructura de ensayo implementada;
-**recorrido real todavía no ejecutado**. Docker Desktop está detenido. No se
-intentó iniciarlo después del rechazo de la revisión automática. La validación
+**recorrido real todavía no ejecutado**. El usuario abrió Docker Desktop y se
+verificó que el motor responde. La primera instancia clínica real se prepara en
+la copia aislada `folio-clinical-runtime`, desde `e7da69f`. La validación
 de tipos, lint y las pruebas del aislamiento no acreditan Auth, Storage ni el
 recorrido del profesional.
 
@@ -84,7 +85,10 @@ El conteo final de pagos obtiene el consultorio mediante
 `pago.turno_id → turno.organization_id`; `pago` no tiene una columna
 `organization_id`. La revisión estática del resto de las consultas del fixture
 contra las migraciones no encontró otro nombre de tabla, columna o RPC
-incompatible. La consulta corregida todavía no se ejecutó sobre PostgreSQL real.
+incompatible. En PostgreSQL 16 local se reprodujo el error de columna de la
+consulta anterior y el JOIN corregido devolvió cero filas en un consultorio sin
+datos. Esto confirma validez SQL; el caso positivo y el recorrido sobre el perfil
+Supabase/PostgreSQL 17 con Auth/Storage reales siguen pendientes.
 
 Una lectura protegida con AAL1 puede quedar filtrada como lista vacía o devolver
 la denegación explícita `42501`. El ensayo acepta únicamente esas dos formas sin
