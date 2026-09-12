@@ -3,6 +3,9 @@ import {test,expect} from '../fixtures/local-test';
 import {assertPolicies,createClinicalFixture,decryptSynthetic,firstFactorClient,loginClinical,type ClinicalFixture,type ClinicalSpecialty} from '../fixtures/clinical-local';
 import {assertAal1ProtectedRead} from '../../scripts/testing/clinical-config.mjs';
 
+// Cold local development rendering needs a bounded UI wait; data and denial checks keep their limits.
+const uiExpect=expect.configure({timeout:30000});
+
 // This suite is deliberately absent from ordinary no-database test results.
 // The dedicated run-clinical command fails early if its configuration is absent.
 test.skip(process.env.FOLIO_TEST_CLINICAL!=='1','Not verified: requires the dedicated real local Supabase 17/Auth/TOTP/Storage fixture.');
@@ -35,7 +38,7 @@ for(const specialty of ['quiropraxia','cardiologia','psicologia'] as const){
   const marker=`SINTETICO-${fixture.runId}-${specialty}`;
   await loginClinical(page,account);
   await page.getByRole('button',{name:/^walk-in$/i}).click();
-  const modal=page.getByRole('dialog');await expect(modal).toBeVisible();
+  const modal=page.getByRole('dialog');await uiExpect(modal).toBeVisible();
   await modal.getByRole('button',{name:'Nuevo',exact:true}).click();
   await modal.getByPlaceholder('Nombre',{exact:true}).fill(`E2E ${fixture.runId}`);
   await modal.getByPlaceholder('Apellido',{exact:true}).fill(specialty);
@@ -60,10 +63,10 @@ for(const specialty of ['quiropraxia','cardiologia','psicologia'] as const){
   }).toBe('EN_SALA');
   await appointment.getByRole('button',{name:'Abrir ficha',exact:true}).click();
   await page.waitForURL(new RegExp(`/pacientes/${turno.paciente_id}(?:\\?|$)`),{timeout:30000});
-  if(specialty==='quiropraxia')await page.getByLabel('Notas libres',{exact:true}).fill(marker);
+  if(specialty==='quiropraxia')await page.getByRole('textbox',{name:'Notas libres',exact:true}).fill(marker);
   else await page.getByRole('textbox',{name:/^Subjetivo — nota SOAP/}).fill(marker);
   await page.getByRole('button',{name:'Guardar sesión',exact:true}).click();
-  await expect(page.getByText(/Guardado ✓/)).toBeVisible({timeout:20000});
+  await uiExpect(page.getByText(/Guardado ✓/)).toBeVisible();
   const {rows:sessions}=await fixture.db.query('SELECT id,revision,soap_s_cifrado,tool_data_cifrado,locked_at FROM public.sesion WHERE turno_id=$1',[turno.id]);
   expect(sessions).toHaveLength(1);const session=sessions[0];expect(Number(session.revision)).toBeGreaterThanOrEqual(1);expect(session.locked_at).toBeNull();
   const narrative=specialty==='quiropraxia'?JSON.parse(decryptSynthetic(session.tool_data_cifrado)!).notasLibres:decryptSynthetic(session.soap_s_cifrado);
@@ -74,12 +77,12 @@ for(const specialty of ['quiropraxia','cardiologia','psicologia'] as const){
   expect(unchanged.rows[0]).toEqual({soap_s_cifrado:session.soap_s_cifrado,tool_data_cifrado:session.tool_data_cifrado});
   // A new request must hydrate the value from Postgres before adding the file.
   await page.reload();
-  if(specialty==='quiropraxia')await expect(page.getByLabel('Notas libres',{exact:true})).toHaveValue(marker);
-  else await expect(page.getByRole('textbox',{name:/^Subjetivo — nota SOAP/})).toHaveValue(marker);
+  if(specialty==='quiropraxia')await uiExpect(page.getByRole('textbox',{name:'Notas libres',exact:true})).toHaveValue(marker);
+  else await uiExpect(page.getByRole('textbox',{name:/^Subjetivo — nota SOAP/})).toHaveValue(marker);
   await page.getByRole('tab',{name:'Documentos',exact:true}).click();
   const documents=page.getByRole('tabpanel',{name:'Documentos'});
   await documents.locator('input[type=file]').setInputFiles({name:'synthetic-one-pixel.png',mimeType:'image/png',buffer:png});
-  await documents.getByRole('button',{name:'Subir',exact:true}).click();
+  await documents.getByRole('button',{name:'Subir documento',exact:true}).click();
   await expect.poll(async()=>{
    const result=await fixture.db.query('SELECT count(*)::int AS n FROM public.documento_clinico WHERE paciente_id=$1',[turno.paciente_id]);return result.rows[0].n;
   },{timeout:20000}).toBe(1);
@@ -106,12 +109,12 @@ for(const specialty of ['quiropraxia','cardiologia','psicologia'] as const){
   await page.goto(`/pacientes/${turno.paciente_id}`);
   if(specialty==='quiropraxia'){
    await page.getByRole('group',{name:'Visitas previas',exact:true}).getByRole('button').first().click();
-   await expect(page.getByLabel('Notas libres',{exact:true})).toHaveValue(marker);
+   await uiExpect(page.getByRole('textbox',{name:'Notas libres',exact:true})).toHaveValue(marker);
   }
   else {
    await page.getByRole('tab',{name:/^Sesiones \(1\)$/}).click();
    await page.getByRole('button',{name:'Ver detalle',exact:true}).click();
-   await expect(page.getByText(marker,{exact:true})).toBeVisible();
+   await uiExpect(page.getByText(marker,{exact:true})).toBeVisible();
   }
   const restoredDownload=await page.request.get(`/api/documentos/${document.id}/archivo`);
   expect(restoredDownload.status()).toBe(200);expect(await restoredDownload.body()).toEqual(png);
@@ -159,9 +162,9 @@ test('paused subscription redirects ordinary UI to billing but preserves the aut
  await expect(page).toHaveURL(/\/configuracion\/billing(?:\?|$)/);
  await expect(page.getByRole('button',{name:/^walk-in$/i})).toHaveCount(0);
  await page.goto('/archivo-clinico');
- await expect(page.getByRole('heading',{name:'Archivo clínico',exact:true})).toBeVisible();
- await expect(page.getByRole('heading',{name:/^1 paciente disponible/})).toBeVisible();
- await expect(page.getByRole('button',{name:/Descargar PDF de.*quiropraxia/})).toBeVisible();
+ await uiExpect(page.getByRole('heading',{name:'Archivo clínico',exact:true})).toBeVisible();
+ await uiExpect(page.getByRole('heading',{name:/^1 paciente disponible/})).toBeVisible();
+ await uiExpect(page.getByRole('button',{name:/Descargar PDF de.*quiropraxia/})).toBeVisible();
  await expect(page.getByRole('button',{name:/Descargar PDF de.*cardiologia/})).toHaveCount(0);
  const pdfEvent=page.waitForEvent('download');
  await page.getByRole('button',{name:/Descargar PDF de.*quiropraxia/}).click();

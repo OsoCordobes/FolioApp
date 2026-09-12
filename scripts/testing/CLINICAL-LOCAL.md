@@ -1,12 +1,15 @@
 # Ensayo clínico con Supabase local real
 
-Estado al 12 de septiembre de 2026: Supabase PostgreSQL 17.6 arrancó con las
-113 migraciones y cinco catálogos. El recorrido completo **sigue pendiente**.
-La última ejecución pasó AAL1 y avanzó por login/MFA, creación de paciente/turno,
-llegada, guardado y denegación de escritura clínica directa. Falló al esperar
-la nota después de recargar la ficha; el contexto posterior muestra el texto
-guardado. Resultado: **1 aprobado, 1 fallido, 5 no ejecutados** por modo serial.
-No acredita todavía Storage, cobro, archivo ni uso en producción.
+Estado al 12 de septiembre de 2026: **7/7 escenarios aprobados**, cero fallidos
+y cero no ejecutados, en 2,3 minutos (run-10). Supabase PostgreSQL 17.6 ejecutó
+113 migraciones y cinco catálogos. Las tres especialidades completaron creación,
+llegada, guardado cifrado, adjunto real, cobro efectivo y reapertura tras nuevo
+ingreso. Pasaron las denegaciones de acceso, el archivo con suscripción pausada
+y la revocación real de sesión Auth.
+
+Base runtime fija e7da69f más las correcciones autorizadas de fixture, perfil y
+selectores/expectativas. No incluye M120/M121 ni acredita producción, Mercado Pago
+o latencia de producción. Los fixtures y volúmenes locales se conservan.
 
 ## Preparación de la instancia
 
@@ -118,8 +121,7 @@ clínico falla antes de levantar una aplicación cuando no recibe la configuraci
 necesaria. El runner normal mantiene 4410 y omite el spec clínico sin la
 habilitación específica.
 
-Pendiente: medir la recarga de la ficha tras guardar y completar los siete
-escenarios sobre Supabase 17 real, ampliar roles/menores y consentimiento, pruebas de fallos
+Pendiente: ampliar roles/menores y consentimiento, pruebas de fallos
 de guardado y proveedor y restauración completa. El sexto escenario prepara
 una suscripción sintética pausada, confirma la redirección de la interfaz común
 a cobros y descarga PDF/JSON desde el archivo clínico autorizado, manteniendo el
@@ -205,3 +207,55 @@ contexto capturado tras el fallo ya muestra el campo con el marcador correcto.
 No se cambió esa espera: falta medir la presentación después de recargar.
 Se conservan 18 usuarios/TOTP/consultorios sintéticos y una sesión revisión 1
 sin cerrar; no se llegó a Storage, cobro o archivo.
+
+## Expectativas visuales acotadas y diagnóstico del selector
+
+El spec clínico usa uiExpect de 30 segundos sólo para nueve comprobaciones
+positivas de presencia/valor DOM. Las negativas, ausencia, URL de bloqueo,
+comparaciones de datos, polls SQL, bytes/API y todos los límites de servicios
+se conservan. No se modificaron clicks, navegación, reintentos ni MFA del producto.
+Tipos y lint del spec pasaron.
+
+run-7 mantuvo 1 aprobado, 1 fallido y 5 no ejecutados: Notas libres tampoco se
+encontró en 30 segundos. Esa espera no corrige la causa. Un observador separado
+con Auth/UI/DB reales guardó y recargó la nota en 1,773 segundos: getByLabel
+exacto devolvió cero campos; getByRole textbox con nombre exacto Notas libres
+devolvió uno y su valor coincidió con el texto guardado. El label incluía el
+marcador del textarea renderizado por servidor. Es un defecto del selector,
+no una pérdida de persistencia ni evidencia de carga lenta en esa recarga.
+Se sustituyeron exactamente tres selectores de quiropraxia por rol textbox y
+nombre exacto, conservando el llenado y las comprobaciones del valor.
+
+run-8 confirmó la recarga y el valor guardado. Falló después al buscar «Subir»
+exacto: el componente renderiza «Subir documento». Resultado: 1 aprobado,
+1 fallido, 5 no ejecutados, 3,7 minutos; sin documentos ni pagos. Se corrigió
+sólo ese literal y se revisaron los restantes contra los componentes: cobro,
+visitas previas, detalle SOAP y archivo coinciden. No se amplió ningún límite.
+
+
+## Resultado final del baseline real
+
+run-9 pasó AAL1 y quiropraxia completa, pero cardiología quedó Creando… y el
+diálogo siguió visible al límite intacto de 20 segundos. Su paciente/turno
+persistieron; resultado: 2 aprobados, 1 fallido y 4 no ejecutados. Coincidió con
+checks concurrentes y ralentización general del host. Se conservó ese RED.
+
+Tras terminar los procesos paralelos, run-10 repitió exactamente el mismo código
+y los mismos límites: 7/7 aprobados en 2,3 minutos. AAL1 216 ms; quiropraxia
+44,4 s; cardiología 27,5 s; psicología 29,0 s; lecturas cruzadas/AAL1 5,2 s;
+archivo autorizado con suscripción pausada 15,9 s; revocación Auth 135 ms.
+La repetición respalda un factor de entorno en run-9, sin localizar por sí sola
+el cuello de botella ni acreditar tiempos de producción.
+
+Cada especialidad confirmó un paciente/turno/sesión/pago, valor clínico cifrado
+y recuperado, adjunto con hash/bytes iguales en dos descargas autorizadas y
+denegación de lectura directa de Storage. El archivo produjo PDF y JSON reales,
+rechazó el PDF de otro consultorio y conservó cero cargos de proveedor.
+
+Inventario retenido de todas las ejecuciones y observadores: 36 cuentas Auth,
+36 TOTP verificados, 36 consultorios sintéticos, 113 migraciones, 10 pacientes,
+10 turnos, 9 sesiones, 4 pagos, 4 documentos/objetos Storage; una suscripción
+sintética pausada y cero cargos de suscripción. Trazas desactivadas; logs
+sanitizados locales. Tipos y lint final del spec pasaron; autorrevisión confirmó
+que SQL polls, negativas, ausencia, URL de billing y límites de servicios no
+cambiaron. El baseline no aplica las nuevas migraciones de cierre.
