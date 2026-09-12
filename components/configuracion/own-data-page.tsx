@@ -44,6 +44,7 @@ export async function OwnDataPage({ returnPath, standalone = false }: { returnPa
       consentTextVersion={profile.consent_pii_text_version ?? null} />
     <section aria-labelledby="personal-data-clinical"><h2 id="personal-data-clinical">Historias clínicas de pacientes</h2>
       <p>La descarga de tu cuenta no incluye las historias clínicas. Su consulta y entrega requieren verificar los permisos sobre cada paciente.</p>
+      <p><a className="fi-btn" href="/archivo-clinico">Consultar el archivo clínico</a></p>
       <p><a href={supportMailto("Coordinar una entrega de historias clínicas")}>Coordinar una entrega con soporte</a>. En el primer mensaje no adjuntes historias ni datos de pacientes; acordaremos el acceso autorizado.</p>
     </section>
   </main>;

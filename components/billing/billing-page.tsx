@@ -178,6 +178,7 @@ export function BillingPage({
       </header>
 
       <p><Link href="/mis-datos">Acceder a mis datos y solicitudes</Link></p>
+      <p><Link href="/archivo-clinico">Consultar y descargar historias clínicas</Link></p>
 
       {gateBanner ? <GraceBanner reason={gateBanner} /> : null}
       {activationOk && subscription?.estado !== "ACTIVA" ? <ActivationPendingBanner /> : null}
