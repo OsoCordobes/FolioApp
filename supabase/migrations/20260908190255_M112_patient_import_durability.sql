@@ -1,5 +1,5 @@
 -- M112: additive, private import receipts; no CSV storage or external effects.
-BEGIN;
+-- The migration runner owns the transaction and version ledger.
 CREATE SCHEMA folio_import_private;
 REVOKE ALL ON SCHEMA folio_import_private FROM PUBLIC,anon,authenticated,service_role;
 CREATE TABLE folio_import_private.run (
@@ -119,4 +119,3 @@ END $$;
 REVOKE ALL ON FUNCTION folio_import_private.assert_access(uuid) FROM PUBLIC,anon,authenticated,service_role;
 REVOKE ALL ON FUNCTION public.begin_patient_import(uuid,uuid,text,integer),public.patient_import_status(uuid,uuid),public.import_patient_row(uuid,uuid,integer,text,jsonb,text,text[]) FROM PUBLIC,anon,service_role;
 GRANT EXECUTE ON FUNCTION public.begin_patient_import(uuid,uuid,text,integer),public.patient_import_status(uuid,uuid),public.import_patient_row(uuid,uuid,integer,text,jsonb,text,text[]) TO authenticated;
-COMMIT;

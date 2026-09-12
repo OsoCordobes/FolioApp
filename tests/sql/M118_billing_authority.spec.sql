@@ -35,6 +35,9 @@ END $$;
 RESET ROLE;
 -- Defense remains when an accidental grant AND a permissive policy return.
 GRANT INSERT,UPDATE,DELETE ON public.suscripcion TO authenticated;
+-- Allow the dependent tables too, so a foreign-key permission error cannot
+-- masquerade as rejection by the subscription BEFORE TRUNCATE guard.
+GRANT TRUNCATE ON ALL TABLES IN SCHEMA public TO authenticated;
 CREATE POLICY m118_accidental_subscription_writer ON public.suscripcion FOR ALL TO authenticated USING(true) WITH CHECK(true);
 CREATE FUNCTION pg_temp.elevated_trial_rewrite() RETURNS void LANGUAGE sql SECURITY DEFINER SET search_path=pg_catalog AS $$ UPDATE public.organization SET created_at=now() WHERE id='11800000-0000-4000-8000-000000000010' $$;
 CREATE FUNCTION pg_temp.elevated_billing_rewrite() RETURNS void LANGUAGE sql SECURITY DEFINER SET search_path=pg_catalog AS $$ UPDATE public.suscripcion SET estado='ACTIVA' WHERE id='11800000-0000-4000-8000-000000000030' $$;
@@ -43,8 +46,17 @@ CREATE FUNCTION pg_temp.invoker_internal_rewrite() RETURNS void LANGUAGE sql SEC
 GRANT INSERT ON public.organization TO authenticated;
 CREATE POLICY m118_accidental_org_insert ON public.organization FOR INSERT TO authenticated WITH CHECK(true);
 SET LOCAL ROLE authenticated;
-DO $$ BEGIN
+DO $$ DECLARE rejection text; BEGIN
  BEGIN UPDATE public.suscripcion SET estado='ACTIVA' WHERE id='11800000-0000-4000-8000-000000000030';RAISE EXCEPTION 'M118 accidental grant bypassed trigger';EXCEPTION WHEN insufficient_privilege THEN NULL;END;
+ BEGIN
+  TRUNCATE public.suscripcion CASCADE;
+  RAISE EXCEPTION 'M118 accidental grant permitted subscription truncation';
+ EXCEPTION WHEN insufficient_privilege THEN
+  GET STACKED DIAGNOSTICS rejection=MESSAGE_TEXT;
+  IF rejection<>'Subscription changes require platform billing authority' THEN
+   RAISE EXCEPTION 'M118 truncation failed for a different reason: %',rejection;
+  END IF;
+ END;
  BEGIN DELETE FROM public.suscripcion WHERE id='11800000-0000-4000-8000-000000000030';RAISE EXCEPTION 'M118 accidental grant permitted deletion';EXCEPTION WHEN insufficient_privilege THEN NULL;END;
  BEGIN PERFORM pg_temp.elevated_billing_rewrite();RAISE EXCEPTION 'M118 definer inherited platform billing permission';EXCEPTION WHEN insufficient_privilege THEN NULL;END;
  BEGIN PERFORM pg_temp.elevated_trial_rewrite();RAISE EXCEPTION 'M118 definer inherited platform trial permission';EXCEPTION WHEN insufficient_privilege THEN NULL;END;

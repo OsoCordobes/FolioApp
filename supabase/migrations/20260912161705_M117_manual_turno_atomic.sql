@@ -1,6 +1,6 @@
 -- M117: manual/walk-in identity + patient + visit are one durable operation.
 -- Additive: apply after M116 and before deploying the new manual creation UI.
-BEGIN;
+-- The migration runner owns the transaction and version ledger.
 CREATE SCHEMA folio_manual_visit_private;
 REVOKE ALL ON SCHEMA folio_manual_visit_private FROM PUBLIC, anon, authenticated, service_role;
 CREATE TABLE folio_manual_visit_private.receipt (
@@ -137,4 +137,3 @@ CREATE FUNCTION public.create_manual_turno_atomic(
 $$;
 REVOKE ALL ON FUNCTION public.create_manual_turno_atomic(uuid,uuid,text,uuid,jsonb,uuid,uuid,timestamptz,integer,text) FROM PUBLIC,anon,authenticated,service_role;
 GRANT EXECUTE ON FUNCTION public.create_manual_turno_atomic(uuid,uuid,text,uuid,jsonb,uuid,uuid,timestamptz,integer,text) TO authenticated;
-COMMIT;

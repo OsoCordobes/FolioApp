@@ -68,10 +68,10 @@ async function runFile(relative) {
     const { rows: [setting] } = await client.query('SHOW check_function_bodies');
     if (setting.check_function_bodies !== 'on') throw new Error('Server default check_function_bodies must be on.');
   } finally { await client.end(); }
-  // psql preserves each statement's transaction boundary. Sending an entire
-  // file as one pg query silently creates an implicit transaction and breaks
-  // tests of transaction-local GUC reset (notably M91).
-  const psqlArgs = ['-X', '-q', '-v', 'ON_ERROR_STOP=1', '-w',
+  // The migration runner owns the transaction, including its version ledger.
+  // Specs preserve their own boundaries (M91 checks transaction-local GUC reset).
+  const psqlArgs = ['-X', '-q', '-v', 'ON_ERROR_STOP=1', '-f', '-', '-w',
+    ...(relative.startsWith('supabase/migrations/') ? ['--single-transaction'] : []),
     '--host', url.hostname.replace(/^\[|\]$/g, ''),
     '--port', url.port || '5432', '--username', decodeURIComponent(url.username),
     '--dbname', url.pathname.slice(1)];
@@ -79,6 +79,8 @@ async function runFile(relative) {
   const result = spawnSync(distro ? 'wsl.exe' : 'psql',
     distro ? ['--distribution', distro, '--exec', 'psql', ...psqlArgs] : psqlArgs, {
       input: await readFile(path.join(root, relative), 'utf8'), encoding: 'utf8',
+      // Match psql -f's relative include base, also when WSL reads stdin.
+      cwd: path.dirname(path.join(root, relative)),
       timeout: 180000, maxBuffer: 10 * 1024 * 1024,
       env: { ...process.env, PGPASSWORD: decodeURIComponent(url.password),
         PGOPTIONS: '-c statement_timeout=120000',
@@ -92,6 +94,10 @@ await runFile('scripts/testing/supabase-stubs.sql');
 const migrations = (await readdir(path.join(root, 'supabase/migrations'))).filter(f => f.endsWith('.sql')&&withinBound(f)).sort();
 let redVerified = false;
 for (const filename of migrations) {
+  if (filename.includes('_M118_billing_authority.sql')) {
+    await runFile('tests/migrations/M118_ledger_transaction.sql');
+    console.log('PASS M118: migration and ledger share one transaction.');
+  }
   if (redGreen && filename.includes('_M98_')) {
     try { await runFile('tests/sql/M98_security_boundaries.spec.sql'); }
     catch (error) {

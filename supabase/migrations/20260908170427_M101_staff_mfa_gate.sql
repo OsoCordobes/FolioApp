@@ -1,6 +1,6 @@
 -- B2: additive MFA preparation. NULL activation preserves existing first-factor
 -- access until the UI is deployed, enrollment completed and activation reviewed.
-BEGIN;
+-- The migration runner owns the transaction and version ledger.
 CREATE SCHEMA folio_mfa_private;
 REVOKE ALL ON SCHEMA folio_mfa_private FROM PUBLIC, anon, authenticated;
 
@@ -214,4 +214,3 @@ END $$;
 
 COMMENT ON FUNCTION public.mfa_access_status() IS
  'M101 self-only current DB MFA policy. PostgREST supplies verified JWT AAL/session. Never infer staff from metadata or selected organization.';
-COMMIT;

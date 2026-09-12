@@ -1,5 +1,5 @@
 -- C2 expansion: compatible readers/writers deploy before service-only activation.
-BEGIN;
+-- The migration runner owns the transaction and version ledger.
 CREATE SCHEMA folio_session_private;
 REVOKE ALL ON SCHEMA folio_session_private FROM PUBLIC,anon,authenticated;
 CREATE TABLE folio_session_private.policy(singleton boolean PRIMARY KEY CHECK(singleton),enabled_at timestamptz,reason text);
@@ -194,4 +194,3 @@ END $$;
 REVOKE ALL ON FUNCTION public.save_clinical_session(uuid,uuid,uuid,uuid,bigint,text,text,jsonb,jsonb) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.save_clinical_session(uuid,uuid,uuid,uuid,bigint,text,text,jsonb,jsonb) TO authenticated;
 COMMENT ON TABLE folio_session_private.receipt IS 'C2 operation metadata without clinical plaintext. No automatic expiry; preserve idempotency receipts until an approved retention policy exists.';
-COMMIT;

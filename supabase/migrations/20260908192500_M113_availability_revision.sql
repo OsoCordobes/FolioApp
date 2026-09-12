@@ -1,5 +1,5 @@
 -- M113: additive availability revisions. Enforce only after new code and smoke.
-BEGIN;
+-- The migration runner owns the transaction and version ledger.
 CREATE SCHEMA folio_availability_private;
 REVOKE ALL ON SCHEMA folio_availability_private FROM PUBLIC,anon,authenticated;
 CREATE TABLE folio_availability_private.revision (
@@ -138,4 +138,3 @@ REVOKE ALL ON FUNCTION public.read_availability_snapshot(uuid,uuid),public.save_
 GRANT EXECUTE ON FUNCTION public.read_availability_snapshot(uuid,uuid),public.save_availability_revision(uuid,uuid,bigint,uuid,text,jsonb) TO authenticated;
 REVOKE ALL ON FUNCTION public.enable_availability_revision(text) FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.enable_availability_revision(text) TO service_role;
-COMMIT;

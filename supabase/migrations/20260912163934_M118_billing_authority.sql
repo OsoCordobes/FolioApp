@@ -1,6 +1,7 @@
 -- M118: payment-provider state, trial dates and exemptions are platform-owned facts.
 -- No clinical gate or data rewrite. Safe before or after the current app release.
-BEGIN;
+-- The deployment runner owns the transaction, including its migration ledger.
+-- For manual psql execution use --single-transaction; do not commit here.
 SET LOCAL lock_timeout='5s';
 SET LOCAL statement_timeout='30s';
 CREATE SCHEMA folio_billing_authority_private;
@@ -56,4 +57,3 @@ END $$;
 REVOKE ALL ON FUNCTION folio_billing_authority_private.guard_platform_org_settings() FROM PUBLIC,anon,authenticated,service_role;
 CREATE TRIGGER organization_platform_settings_guard BEFORE INSERT OR UPDATE OF created_at,is_internal_account ON public.organization
   FOR EACH ROW EXECUTE FUNCTION folio_billing_authority_private.guard_platform_org_settings();
-COMMIT;

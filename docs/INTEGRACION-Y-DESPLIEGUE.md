@@ -1,5 +1,7 @@
 # Integración y despliegue del corte de preparación
 
+**Nota del 12 de septiembre:** este documento conserva el diseño de integración del 8/09. La reconciliación y los checkpoints publicados ya avanzaron; consultar primero [el estado actual](ESTADO-ACTUAL.md). Los SHA, cantidades y pasos marcados pendientes en el punto de partida siguiente son históricos, no un inventario vigente. Las dependencias y precauciones de despliegue siguen siendo relevantes.
+
 Plan de integración del 8 de septiembre de 2026. Describe el estado local y una secuencia propuesta; **no registra migraciones, activaciones ni despliegues de producción**. Los commits de revisión, las publicaciones de aplicación y las activaciones de controles son pasos diferentes.
 
 ## Punto de partida comprobado
@@ -53,6 +55,12 @@ Los títulos son propuestas de commits convencionales, no commits creados. Cada 
 Migrations dentro de los commits temáticos conservan sus timestamps. **El orden de la tabla de revisión no es el orden de aplicación SQL.** Los cambios de `public/folio.css`, `next.config.ts`, `vercel.json`, `lib/crypto.ts`, `database.types.ts`, sesión, `paciente-detalle.tsx` y herramientas clínicas se reconcilian como dependencias compartidas, sin resucitar UI/handlers retirados.
 
 ## Secuencia DB → código → restricciones
+
+### Transacción y registro de versión (corrección del 12/09)
+
+La herramienta de despliegue debe confirmar en una misma transacción el SQL y su registro en `schema_migrations`. Se quitaron `BEGIN/COMMIT` exteriores de los borradores aún inéditos que terminaban prematuramente la transacción del runner. No se cambió el esquema de migraciones aplicadas. La prueba M118 reproduce un fallo de registro y exige que también reviertan funciones, triggers, política y permisos.
+
+El replay local y el CI de esta rama ejecutan cada migración con `psql --single-transaction` y comprobación de cuerpos de funciones por defecto; los archivos de pruebas conservan sus límites propios. Para aplicar manualmente SQL se requiere una transacción administrada por el ejecutor, incluido el registro canónico. No aplicar el archivo por fragmentos. No reutilizar en producción los scripts de regresión: rechazan destinos que no sean la base sintética PG16 esperada. Véase [M118 y su evidencia](M118-BILLING-AUTHORITY.md).
 
 ### M104: instalación y activación separadas
 

@@ -1,4 +1,4 @@
-BEGIN;
+-- The migration runner owns the transaction and version ledger.
 CREATE SCHEMA folio_operations_private;
 REVOKE ALL ON SCHEMA folio_operations_private FROM PUBLIC,anon,authenticated,service_role;
 CREATE TABLE folio_operations_private.operator_account(user_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,granted_at timestamptz NOT NULL DEFAULT now(),expires_at timestamptz NOT NULL,revoked_at timestamptz,reference text NOT NULL);
@@ -82,4 +82,3 @@ REVOKE ALL ON FUNCTION public.operations_snapshot() FROM PUBLIC,anon,service_rol
 GRANT EXECUTE ON FUNCTION public.operations_snapshot() TO authenticated;
 REVOKE ALL ON FUNCTION public.operations_set_operator(uuid,boolean,timestamptz,text),public.operations_set_quota(text,bigint,timestamptz,text),public.operations_report_backup(uuid,timestamptz,timestamptz,text,bigint,bigint,boolean,text,timestamptz) FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.operations_set_operator(uuid,boolean,timestamptz,text),public.operations_set_quota(text,bigint,timestamptz,text),public.operations_report_backup(uuid,timestamptz,timestamptz,text,bigint,bigint,boolean,text,timestamptz) TO service_role;
-COMMIT;

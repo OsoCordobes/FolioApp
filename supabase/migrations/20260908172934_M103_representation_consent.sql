@@ -1,5 +1,5 @@
 -- D1. Existing records remain unchanged; new evidence is explicit and scoped.
-BEGIN;
+-- The migration runner owns the transaction and version ledger.
 CREATE SCHEMA folio_consent_private;
 REVOKE ALL ON SCHEMA folio_consent_private FROM PUBLIC,anon,authenticated;
 CREATE TABLE folio_consent_private.policy(singleton boolean PRIMARY KEY CHECK(singleton),enforced boolean NOT NULL DEFAULT false,activated_at timestamptz,activation_reason text);
@@ -258,4 +258,3 @@ FOR EACH ROW EXECUTE FUNCTION public.audit_log_trigger();
 -- survive account, membership or MFA revocation. Upload remains RLS-scoped.
 CREATE POLICY consent_evidence_server_read ON storage.objects AS RESTRICTIVE FOR SELECT TO authenticated
  USING(bucket_id<>'consentimientos-firmados' OR (SELECT public.consent_evidence_client_read_allowed()));
-COMMIT;

@@ -1,7 +1,7 @@
 -- M104 draft (never applied in production): install with enforcement OFF.
 -- Deploy and smoke-test the authenticated paths, then activate explicitly with
 -- the release build SHA and review reference. Installation alone is NOT closure.
-BEGIN;
+-- The migration runner owns the transaction and version ledger.
 CREATE SCHEMA folio_attachments_private;
 REVOKE ALL ON SCHEMA folio_attachments_private FROM PUBLIC,anon,authenticated,service_role;
 CREATE TABLE folio_attachments_private.policy (
@@ -78,5 +78,4 @@ CREATE POLICY clinical_attachments_server_only ON storage.objects AS RESTRICTIVE
  FOR ALL TO anon, authenticated
  USING (bucket_id <> 'documentos-clinicos' OR (SELECT folio_attachments_private.client_access_allowed()))
  WITH CHECK (bucket_id <> 'documentos-clinicos' OR (SELECT folio_attachments_private.client_access_allowed()));
-COMMIT;
 

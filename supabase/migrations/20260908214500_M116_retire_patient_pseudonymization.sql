@@ -3,7 +3,7 @@
 -- Preserve the original signature/default for old clients and dependencies,
 -- but discard the destructive body. Owners/superusers also hit this rejection;
 -- restoring EXECUTE alone cannot reactivate the retired implementation.
-BEGIN;
+-- The migration runner owns the transaction and version ledger.
 
 CREATE OR REPLACE FUNCTION public.pseudonimizar_paciente(
   p_paciente_id uuid,
@@ -27,5 +27,3 @@ REVOKE ALL ON FUNCTION public.pseudonimizar_paciente(uuid, text, boolean)
 
 COMMENT ON FUNCTION public.pseudonimizar_paciente(uuid, text, boolean) IS
   'Folio M116; policy=retired.v1; legacy patient pseudonymization is retired. Every invocation rejects with 42501, including dry-run and privileged callers. No identity, clinical, account or Auth mutations; no replacement erasure workflow is enabled.';
-
-COMMIT;

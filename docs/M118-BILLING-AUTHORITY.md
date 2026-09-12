@@ -22,6 +22,10 @@ No se activa un bloqueo clínico, no se cambian precios ni suscripciones y no se
 
 ## Evidencia
 
+La transacción pertenece al ejecutor del despliegue: M118 no contiene `BEGIN` ni `COMMIT` exteriores. `scripts/push-pending-migrations.mjs` abre la transacción, ejecuta la migración, registra su versión canónica y recién entonces confirma. La aplicación por CLI/MCP debe conservar esa misma unidad; una ejecución manual con psql requiere `--single-transaction`, incluyendo la inserción del registro de migración. No ejecutar el archivo manualmente en modo autocommit: sus `SET LOCAL` también requieren transacción.
+
+`tests/migrations/M118_ledger_transaction.sql` reproduce el fallo entre la modificación del esquema y el registro de versión: provoca un error en el ledger y exige que el rollback restaure esquema, disparadores, política y permisos de tabla y columnas. Con el archivo anterior, el `COMMIT` interior dejaba el esquema aplicado sin versión y la prueba fallaba. SQL CI ejecuta esta regresión antes de M118 y aplica cada migración con `psql --single-transaction`. Los specs mantienen sus límites propios; ejecutar migraciones con psql autocommit solo comprueba SQL y no demuestra atomicidad del despliegue.
+
 `tests/sql/M118_billing_authority.spec.sql` comprueba lectura legítima, prohibición de estado pagado forjado y borrado, fecha futura y exención interna rechazadas, cambios ordinarios de configuración permitidos, resistencia a permisos accidentales y funciones privilegiadas, persistencia del proveedor autorizada y alta de consultorio mediante el procedimiento habitual. También reproduce los INSERT/UPSERT/UPDATE de la versión publicada, incluidos activación, cobro, cambio de monto y cancelación, sin consultar ni cobrar a proveedores reales. Las pruebas completas incluyen las operaciones transaccionales de cobro de M99.
 
 La reproducción previa también confirmó que el período de prueba estaba vencido antes de crear un paciente y turno nuevos. No se confundió la entrega histórica deliberadamente habilitada en `/archivo-clinico` con nuevas prestaciones de agenda.
