@@ -61,7 +61,7 @@ La escritura modifica únicamente `pago.estado`, `pago.pagado_ts` y el `updated_
 
 1. Aplicar la migración aditiva y su ledger en una transacción. El guard M121 empieza desactivado y mantiene compatible el UPDATE antiguo durante la preparación.
 2. Integrar y verificar los callers de Finanzas y agenda con `settle_pago_atomic`, conservando sus permisos de página. Retirar el fallback a UPDATE REST.
-3. Con M106/M120 activos y los callers compatibles verificados, administración activa M121 con una razón auditable. No se activa como parte de esta tarea.
+3. Con M106/M120 activos y los callers compatibles verificados, administración activa M121 con una razón auditable. El ensayo local usa un procedimiento separado y revisado; aplicar o activar en producción requiere inventariar el destino y autorización de publicación. Esta goal no realizó cambios productivos.
 
 Una vez activo, los UPDATE autenticados que nombran `estado`/`pagado_ts` requieren autoridad privada, aunque sean redundantes o se mezclen con metadata. Otro trigger tampoco puede cambiar esos campos aprovechando un UPDATE que inicialmente sólo nombró metadata. El guard no adquiere un turno después de bloquear pago. Un UPDATE antiguo ya en espera al activarse la política también se rechaza cuando llega al guard.
 
@@ -76,5 +76,7 @@ El checker privado invocable por el trigger sólo verifica la política y la aut
 - Actualización local desde `28ab28a` hacia `34dc605`: **92 migraciones publicadas primero (M118 incluida), luego 23 faltantes y 63 specs SQL PASS**. Ledger final de 115 versiones exactas, sin modificar archivos compartidos. Este orden distinto del replay cronológico también quedó verificado; informe `.flow/launch-reliability/published-upgrade-report.md`.
 - Concurrencia M121: **6/6 PASS** — corte de versión antigua mientras espera, repetición simultánea/recuperación del mismo pago, reasignación, revocación de miembro, pérdida de alcance de asistente y retención de autorización mientras espera el pago y hasta commit.
 - Evidencia almacenada: 21 pagos existentes, sólo 2 saldados por los casos autorizados, cero autoridades residuales, una activación, originales clínicos y trabajos de recordatorio idénticos al snapshot inicial.
+
+Al 13 de septiembre, los consumidores de servidor y la UI de recuperación están implementados y revisados. El ensayo de doce casos recibió aprobación en `3a9823a`, pero su ejecución real sobre 115 migraciones sigue pendiente. El operador local también fue revisado; el conductor prepara el preflight y todavía no aplicó ni activó M120/M121 en el runtime clínico. El baseline real 7/7 anterior usó 113 migraciones y no verifica esta frontera nueva. Los resultados del corte local se agregarán al [registro de confiabilidad](LAUNCH-RELIABILITY-LOG.md), sin atribuirlos a producción.
 
 Los detalles, comandos, digests e IDs sintéticos permanecen en `.flow/launch-reliability/settlement-authority-report.md` y sus logs locales ignorados. Las pruebas SQL usan stubs de Auth/Storage y roles/RLS de PostgreSQL: no certifican login, MFA servido por Supabase, PostgREST HTTP, Storage, proveedores, producción ni despliegue.

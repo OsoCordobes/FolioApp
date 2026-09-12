@@ -1,6 +1,6 @@
 # Folio: goal de confiabilidad para lanzamiento
 
-Fecha de inicio: 12 de septiembre de 2026. Goal activa en la tarea `01a09720-6c99-71a1-9160-84dc002c19bb`.
+Fecha de inicio: 12 de septiembre de 2026. Seguimiento en la tarea `01a09720-6c99-71a1-9160-84dc002c19bb`.
 
 ## Resultado buscado
 
@@ -13,7 +13,7 @@ La entrega debe incluir correcciones implementadas, pruebas reproducibles, revis
 - Copia propia: `C:/Users/amiun/Documents/Codex/folio-reliability`.
 - Rama: `codex/launch-reliability`; base fija: `11f020685f15cd65be61b030e1f628d2ad6a6941` de `codex/market-ready`.
 - `master` observado al inicio: `2dae580`. La base contiene trabajo previo aún no integrado; revisar esas dependencias antes de publicar. No se presenta como una rama basada únicamente en producción.
-- Checkpoint combinado `34dc605`: incorpora la visual publicada observada en `28ab28a` y los consumidores de servidor revisados. Frente a esa referencia hay **23 migraciones nuevas**, no sólo M120/M121; M98–M117 y M119 son dependencias heredadas. El estado remoto y el inventario productivo no se deducen de estas referencias locales.
+- Checkpoint combinado `34dc605`: incorporó la visual publicada observada en `28ab28a` y los consumidores de servidor revisados. El corte posterior `3a9823a` también contiene la UI y el ensayo revisados. Frente a `28ab28a` hay **23 migraciones nuevas**, no sólo M120/M121; M98–M117 y M119 son dependencias heredadas. El [manifiesto](LAUNCH-RELIABILITY-MIGRATIONS.md) documenta esa comparación. El estado remoto y el inventario productivo no se deducen de estas referencias locales.
 - La tarea visual trabaja en `C:/Users/amiun/Documents/Codex/folio-experience`, rama `codex/folio-experience`, servidor 4410. No modificar su copia ni detener su servidor.
 - Priorizar lógica de servidor, persistencia y pruebas. Registrar cualquier contrato o componente compartido que necesite integración con la rama visual.
 - Datos exclusivamente sintéticos. No leer `.env.local` para ejecutar pruebas. Conservar los bloqueos de red y credenciales del entorno de ensayo.
@@ -39,10 +39,15 @@ Cada vuelta: **reproducir → priorizar → corregir la causa → verificar → 
 
 Estos hallazgos vienen de lectura de código al inicio. La reproducción y la evidencia de cada corrección se registran por separado; no se declaran errores observados en producción.
 
-## Condiciones externas de publicación
+## Avance comprobado al 13 de septiembre
 
-- Completar el recorrido integrado con M120/M121 y su UI revisada. El usuario abrió Docker y el recorrido de referencia de 113 migraciones ya aprobó 7/7 con Auth/MFA/Storage reales locales; ese resultado todavía no cubre las dos migraciones nuevas.
-- Finalizar la UI de cierre/recuperación y verificar el corte combinado. La integración visual ya fue revisada e incorporada en `34dc605`, con tipos, lint y 2172 unitarias aprobadas antes de esa UI.
+- El baseline de 113 migraciones aprobó **7/7** con Auth/MFA/Storage reales locales. Ese resultado no cubre M120/M121. Los **doce casos reales del candidato de 115 migraciones siguen pendientes**.
+- La UI de cierre/recuperación recibió aprobación independiente en `8a802e0`, con **36/36 pruebas de navegador aisladas**. El ensayo integrado recibió aprobación en `3a9823a`; ese corte aprobó tipos, lint focal del ensayo, **2180/2180 unitarias y 18/18 comprobaciones focales de seguridad**. La compilación aislada aprobada es la de `fa5787e`; los cambios posteriores sólo afectan pruebas y documentación. No se atribuye un nuevo build al SHA posterior.
+- El operador local fue aprobado con digest `ab0ee28ebff099e5ebabc09f9795706c1237461e36a19c6f04f4c27edc0feecb` y **7/7 pruebas puras**. el arranque de Docker está en reparación por un socket temporal y el conductor prepara el preflight; **todavía no se ejecutó DDL ni se activaron M120/M121 en el runtime clínico**. Las pruebas del operador no son evidencia del recorrido real.
+
+## Pendientes del candidato y condiciones de publicación
+
+- Preservar y actualizar el runtime local al SHA revisado, aplicar las dos migraciones y activar sus controles auditados con M106 ya activa. Ejecutar los doce escenarios sin carga pesada concurrente y cerrar la revisión del resultado. Registrar cualquier fallo y sus correcciones antes de afirmar que el candidato cumple el recorrido.
 - Revisar migraciones pendientes y controles activables; instalar cambios compatibles antes del código sólo con autorización de publicación.
 - Validar acceso y recuperación de cuenta, reserva pública, comunicaciones y pagos de proveedor en entorno autorizado; el registro de efectivo no cubre la suscripción de Folio.
 - Completar la restauración integral, responsables de soporte y validaciones profesionales/comerciales aplicables. Esta goal no certifica por sí sola estos requisitos.
@@ -51,7 +56,7 @@ Estos hallazgos vienen de lectura de código al inicio. La reproducción y la ev
 
 - Dependencias instaladas desde caché con lockfile fijo, sin archivos de entorno en esta copia.
 - `pnpm test:unit`: **2111 aprobadas, 0 fallidas, 0 omitidas**, sobre la base 11f0206. Log local: `.flow/launch-reliability/baseline-unit.log`.
-- PostgreSQL 16 dedicado está activo en loopback 55439; no es Supabase Auth/Storage real.
+- Se preparó PostgreSQL16 dedicado en loopback 55439 para los ensayos SQL; esa evidencia usa stubs de Auth/Storage.
 - Estado de avance y próximas acciones: [registro de iteraciones](LAUNCH-RELIABILITY-LOG.md).
 
 ## Dependencia de instalación y activación
