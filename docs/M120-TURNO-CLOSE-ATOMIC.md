@@ -18,6 +18,8 @@ Las cuatro primeras entradas son SECURITY INVOKER y se otorgan sólo a `authenti
 
 `p_operation` es un UUID estable por intento, actor y organización. `p_action` es `CLOSE` o `RESOLVE`. El recibo exige el mismo turno, acción, duración y decisión originales; SQL NULL significa que ese intento todavía no tiene recibo. Consultar el recibo no crea registros. Los reintentos de escritura idénticos también devuelven exactamente el recibo original.
 
+Invocar también las consultas de recibo y estado mediante el modo POST predeterminado de RPC. Son lecturas lógicas sin cambios de negocio, pero adquieren bloqueos; no usar GET ni una transacción de base de datos de sólo lectura.
+
 `p_duracion` NULL conserva el valor previo; 0..480 registra minutos reales. RESOLVE nunca acepta duración. CLOSE nuevo exige ATENDIENDO y la política de escritura clínica M106 activa. RESOLVE exige CERRADO y una decisión financiera explícita.
 
 | `p_decision` | Resultado sin pago previo |

@@ -11,18 +11,21 @@ SELECT public.enable_turno_atomic_close('Synthetic callers and recovery reviewed
 SET LOCAL ROLE authenticated;
 DO $$ DECLARE result jsonb; decision jsonb:='{"montoCents":1200,"metodo":"EFECTIVO","pagado":true}'; bad jsonb; BEGIN
  result:=public.close_turno_atomic(pg_temp.m120_id(10),pg_temp.m120_id(200),pg_temp.m120_id(100),15,'{"montoCents":1200,"metodo":"EFECTIVO","pagado":true}');
- IF result->>'clasificacion'<>'REGISTRADO' OR result#>>'{pago,estado}'<>'PAGADO' OR result->>'pagoOrigen'<>'CREADO' OR result#>>'{pago,montoCents}'<>'1200' THEN RAISE EXCEPTION 'M120 explicit payment not confirmed'; END IF;
+ IF NOT(result ?& ARRAY['turnoId','estado','closedAt','origen','clasificacion','pago','puedeRegistrar','operationId','pagoOrigen'])
+ OR NOT((result->'pago') ?& ARRAY['id','montoCents','metodo','estado','pagadoTs','updatedAt'])
+ OR result->>'clasificacion' IS DISTINCT FROM 'REGISTRADO' OR result#>>'{pago,estado}' IS DISTINCT FROM 'PAGADO'
+ OR result->>'pagoOrigen' IS DISTINCT FROM 'CREADO' OR result#>>'{pago,montoCents}' IS DISTINCT FROM '1200' THEN RAISE EXCEPTION 'M120 explicit payment not confirmed'; END IF;
  IF (result#>>'{pago,updatedAt}')::timestamptz IS DISTINCT FROM (SELECT updated_at FROM pago WHERE turno_id=pg_temp.m120_id(100)) THEN RAISE EXCEPTION 'M120 payment freshness timestamp absent or fabricated'; END IF;
  IF pg_temp.m120_close(200,100,decision,15) IS DISTINCT FROM result OR pg_temp.m120_probe(200,100,'CLOSE',decision,15) IS DISTINCT FROM result THEN RAISE EXCEPTION 'M120 retry changed receipt'; END IF;
  PERFORM pg_temp.m120_expect($q$SELECT pg_temp.m120_close(200,100,'{"montoCents":1,"metodo":"EFECTIVO","pagado":true}',15)$q$,'40001');
  PERFORM pg_temp.m120_expect('SELECT pg_temp.m120_close(201,100)','55000');
  IF pg_temp.m120_probe(299,101,'CLOSE') IS NOT NULL THEN RAISE EXCEPTION 'M120 probe wrote an operation'; END IF;
  result:=pg_temp.m120_close(201,101,'{"montoCents":200,"metodo":"EFECTIVO","pagado":false}');
- IF result#>>'{pago,estado}'<>'PENDIENTE' OR result#>>'{pago,pagadoTs}' IS NOT NULL THEN RAISE EXCEPTION 'M120 explicit pending was treated as received'; END IF;
+ IF result#>>'{pago,estado}' IS DISTINCT FROM 'PENDIENTE' OR result#>>'{pago,pagadoTs}' IS NOT NULL THEN RAISE EXCEPTION 'M120 explicit pending was treated as received'; END IF;
  result:=pg_temp.m120_close(202,102,'{"montoCents":0}');
- IF result->>'clasificacion'<>'SIN_CARGO' OR result->'pago'<>'null'::jsonb THEN RAISE EXCEPTION 'M120 explicit zero created payment'; END IF;
+ IF result->>'clasificacion' IS DISTINCT FROM 'SIN_CARGO' OR result->'pago' IS DISTINCT FROM 'null'::jsonb THEN RAISE EXCEPTION 'M120 explicit zero created payment'; END IF;
  result:=pg_temp.m120_close(203,103);
- IF result->>'clasificacion'<>'REQUIERE_REGISTRO' OR result->'pago'<>'null'::jsonb THEN RAISE EXCEPTION 'M120 absence invented financial decision'; END IF;
+ IF result->>'clasificacion' IS DISTINCT FROM 'REQUIERE_REGISTRO' OR result->'pago' IS DISTINCT FROM 'null'::jsonb THEN RAISE EXCEPTION 'M120 absence invented financial decision'; END IF;
  PERFORM pg_temp.m120_expect($q$SELECT pg_temp.m120_close(204,104,'{"montoCents":400,"metodo":"EFECTIVO","pagado":true}')$q$,'40001');
  PERFORM pg_temp.m120_expect($q$SELECT pg_temp.m120_close(204,104,'{"montoCents":0}')$q$,'40001');
  result:=pg_temp.m120_close(204,104,'{"montoCents":400,"metodo":"EFECTIVO","pagado":false}');
