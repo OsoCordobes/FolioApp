@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { createBackup } from '../../scripts/backup/core.mjs';
 import { fileDigest,openArtifact,sealArtifact } from '../../scripts/backup/envelope.mjs';
 import { validateReceipt } from '../../scripts/backup/retention.mjs';
-import { ownedStatus, runOwnedWorkflow, authenticateAndRetain, validateOwnedRoot, ownedFailure } from '../../scripts/backup/owned-workflow.mjs';
+import { ownedStatus, runOwnedWorkflow, authenticateAndRetain, validateOwnedRoot, ownedFailure, ownedFailureReport } from '../../scripts/backup/owned-workflow.mjs';
 
 const keys = generateKeyPairSync('rsa',{modulusLength:3072,publicKeyEncoding:{type:'spki',format:'pem'},privateKeyEncoding:{type:'pkcs8',format:'pem'}});
 const platformConfig = Object.fromEntries(['auth','storage','database','application','custody'].map(key=>[key,{synthetic:true}]));
@@ -95,7 +95,7 @@ test('owner root validation rejects repository, relative and unrelated directori
  await assert.rejects(validateOwnedRoot(root),/owned_path_invalid/);
  await assert.rejects(validateOwnedRoot('relative'),/owned_path_invalid/);
  const repo=path.resolve('.');await assert.rejects(validateOwnedRoot(repo,repo),/in_repository/);
- assert.deepEqual(ownedFailure(Error('provider password and PHI')), {status:'checkpoint_incomplete',exitCode:20});
+ assert.deepEqual(ownedFailure(Error('provider password and PHI')), {status:'checkpoint_incomplete',exitCode:20,stage:null,category:'unspecified',backupStage:null});
 });
 
 test('retention failure keeps the new verified copy and exposes an explicit pending state',async t=>{
@@ -105,11 +105,42 @@ test('retention failure keeps the new verified copy and exposes an explicit pend
  assert.equal(ownedFailure(Error('owned_retention_failed')).exitCode,22);
 });
 
-test('Windows launcher: synthetic child receives DPAPI only for due capture; output and parent environment stay secret-free', {skip:process.platform!=='win32'},async t=>{
+test('failed capture retains the authenticated recovery point and exact stale boundary',async t=>{
+ const {root,destination}=await fixture(t),result=await verified(destination);
+ const receipt=await validateReceipt(path.join(destination,result.id));
+ const error=Object.assign(Error('PRIVATE_PATIENT credential=synthetic'),{stage:'connect',category:'connection_failed',backupStage:'snapshot'});
+ for(const [hours,stale] of [[24,false],[24.001,true],[94,true]]) {
+  const failure=await ownedFailureReport(root,error,{now:new Date(Date.parse(receipt.completedAt)+hours*3600000)});
+  assert.equal(failure.lastBackup.id,result.id);assert.equal(failure.lastBackup.completedAt,receipt.completedAt);
+  assert.equal(failure.stale24h,stale);assert.equal(failure.catchUpDue,true);assert.equal(failure.status,'checkpoint_incomplete');
+  assert.equal(failure.category,'connection_failed');assert.equal(failure.stage,'connect');assert.ok(!JSON.stringify(failure).includes('PRIVATE_PATIENT'));
+ }
+});
+
+test('Windows failed child preserves preflight age and rejects hostile nested diagnostic fields',{skip:process.platform!=='win32'},async t=>{
  const {root}=await fixture(t),launcher=path.join(root,'owned-task.ps1');
  await copyFile(new URL('../../scripts/backup/owned-task.ps1',import.meta.url),launcher);
+ await copyFile(new URL('../../scripts/backup/owned-status.ps1',import.meta.url),path.join(root,'owned-status.ps1'));
+ const backup={id:'backup_20260101T000000000Z_00000000-0000-4000-8000-000000000000',completedAt:new Date(Date.now()-94*3600000).toISOString()};
+ const quote=s=>"'"+s.replaceAll("'","''")+"'";
+ const setup=spawnSync('pwsh',['-NoProfile','-NonInteractive','-Command',`Add-Type -AssemblyName System.Security;[IO.File]::WriteAllBytes(${quote(path.join(root,'passphrase.dpapi'))},[Security.Cryptography.ProtectedData]::Protect([Text.Encoding]::UTF8.GetBytes('synthetic-status-test'),$null,[Security.Cryptography.DataProtectionScope]::CurrentUser))`],{encoding:'utf8',timeout:10000});assert.equal(setup.status,0,setup.stderr);
+ for(const hostile of [false,true]) {
+  const failure={status:'checkpoint_incomplete',lastBackup:hostile?{id:'PRIVATE_PATIENT',completedAt:'credential=synthetic'}:backup,stage:hostile?'PRIVATE_PATIENT':'connect',category:hostile?'credential=synthetic':'connection_failed',action:'PRIVATE_PATIENT'};
+  await writeFile(path.join(root,'owned-task.mjs'),`if(process.argv[2]==='Status')console.log(JSON.stringify(${JSON.stringify({status:'verified_checkpoint_recorded',lastBackup:backup})}));else{console.error('PRIVATE_PATIENT credential=synthetic');console.log(JSON.stringify(${JSON.stringify(failure)}));process.exitCode=20;}`);
+  const result=spawnSync('pwsh',['-NoProfile','-NonInteractive','-File',launcher,'-Mode','CatchUp','-RecoveryRoot',root],{encoding:'utf8',timeout:10000});
+  assert.equal(result.status,20,result.stdout+result.stderr);assert.equal(result.stderr,'');assert.ok(!result.stdout.includes('PRIVATE_PATIENT'));assert.ok(!result.stdout.includes('credential='));
+  const report=JSON.parse(result.stdout.trim().split(/\r?\n/).at(-1));
+  assert.equal(report.status,'checkpoint_incomplete');assert.equal(report.lastBackup.id,backup.id);assert.ok(report.ageHours>=94);assert.equal(report.stale24h,true);assert.equal(report.action,'failed');
+  if(!hostile)assert.equal(report.category,'connection_failed');
+ }
+});
+
+test('Windows launcher: synthetic child receives DPAPI only for due capture; output and parent environment stay secret-free', {skip:process.platform!=='win32'},async t=>{
+ const {root}=await fixture(t),launcher=path.join(root,'owned-task.ps1');
+ await writeFile(path.join(root,'owned-status.ps1'),await readFile(new URL('../../scripts/backup/owned-status.ps1',import.meta.url)));
+ await copyFile(new URL('../../scripts/backup/owned-task.ps1',import.meta.url),launcher);
  // Only the child adapter is replaced. The real launcher, DPAPI and process handling run.
- await writeFile(path.join(root,'owned-task.mjs'),`import fs from 'node:fs';import path from 'node:path';const mode=process.argv[2],root=process.argv[3];const due=fs.existsSync(path.join(root,'due'));if(mode==='Status'&&process.env.FOLIO_RECOVERY_PASSPHRASE)throw Error('preflight secret leak');if(mode==='CatchUp'){if(process.env.FOLIO_RECOVERY_PASSPHRASE!=='synthetic-owner-phrase-only')throw Error('missing phrase');fs.writeFileSync(path.join(root,'captured'),'synthetic');}console.log(JSON.stringify({status:'verified_checkpoint_recorded',lastBackup:null,ageHours:21,catchUpDue:due,action:'captured'}));`);
+ await writeFile(path.join(root,'owned-task.mjs'),`import fs from 'node:fs';import path from 'node:path';const mode=process.argv[2],root=process.argv[3];const due=fs.existsSync(path.join(root,'due'));if(mode==='Status'&&process.env.FOLIO_RECOVERY_PASSPHRASE)throw Error('preflight secret leak');if(mode==='CatchUp'){if(process.env.FOLIO_RECOVERY_PASSPHRASE!=='synthetic-owner-phrase-only')throw Error('missing phrase');fs.writeFileSync(path.join(root,'captured'),'synthetic');}console.log(JSON.stringify({status:'verified_checkpoint_recorded',lastBackup:{id:'backup_20260101T000000000Z_00000000-0000-4000-8000-000000000000',completedAt:new Date(Date.now()-(due?21:1)*3600000).toISOString()},ageHours:21,catchUpDue:due,action:'captured'}));`);
  const invoke=(text)=>spawnSync('pwsh',['-NoProfile','-NonInteractive','-Command',text],{encoding:'utf8',timeout:30000,env:{...process.env,NODE_OPTIONS:'',NODE_PATH:''}});
  const quote=s=>"'"+s.replaceAll("'","''")+"'";
  for(const due of [false,true]) {
@@ -130,6 +161,7 @@ test('Windows launcher: synthetic child receives DPAPI only for due capture; out
 
 test('Windows launcher timeout kills its own child tree and returns only a static category', {skip:process.platform!=='win32'},async t=>{
  const {root}=await fixture(t),launcher=path.join(root,'owned-task.ps1');
+ await writeFile(path.join(root,'owned-status.ps1'),await readFile(new URL('../../scripts/backup/owned-status.ps1',import.meta.url)));
  // Same process/cleanup code, shortening only the deadline for this synthetic test.
  await writeFile(launcher,(await readFile(new URL('../../scripts/backup/owned-task.ps1',import.meta.url),'utf8')).replace('WaitForExit(900000)','WaitForExit(1000)'));
  await writeFile(path.join(root,'owned-task.mjs'),`import{spawn}from'node:child_process';import fs from'node:fs';import path from'node:path';const child=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{windowsHide:true,stdio:'ignore'});fs.writeFileSync(path.join(process.argv[3],'children.json'),JSON.stringify([process.pid,child.pid]));setInterval(()=>{},1000);`);

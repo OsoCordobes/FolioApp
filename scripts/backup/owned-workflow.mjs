@@ -6,6 +6,7 @@ import { resolveOutsideRepository } from './paths.mjs';
 import { rotateBackups, validateReceipt, writeAtomicJson } from './retention.mjs';
 import { verifyBackup } from './restore.mjs';
 import { fileDigest } from './envelope.mjs';
+import { safePostgresDiagnostic } from './postgres.mjs';
 
 export const OWNER_ROOT = 'C:\\Users\\amiun\\folio-recovery\\initial-20260908-182017';
 export const CATCH_UP_HOURS = 20;
@@ -111,6 +112,7 @@ export async function ownedStatus(root, now = new Date()) {
   const clockInvalid = !Number.isFinite(now.getTime()) || (elapsed !== null && elapsed < 0);
   return { status: clockInvalid ? 'clock_invalid' : !last ? 'no_verified_checkpoint' : incomplete ? 'verification_attention' : 'verified_checkpoint_recorded',
     lastBackup: last, ageHours: elapsed === null || clockInvalid ? null : elapsed/3600000,
+    stale24h: clockInvalid ? null : elapsed === null || elapsed > 24*3600000,
     catchUpDue: !clockInvalid && (elapsed === null || elapsed >= CATCH_UP_HOURS*3600000), ...fixedFlags };
 }
 /** The owner-root lease covers the decision, capture and post-AEAD retention.
@@ -152,9 +154,22 @@ export async function authenticateAndRetain({destination,result,privateKey,passp
 }
 
 export function ownedFailure(error) {
-  if (/already_running|legacy_capture_running/.test(error?.message ?? '')) return {status:'already_running',exitCode:10};
-  if (error?.message === 'owned_clock_invalid') return {status:'clock_invalid',exitCode:11};
-  if (error?.message === 'owned_retention_failed') return {status:'retention_failed',exitCode:22};
-  if (/owned_path_|backup_destination_/.test(error?.message ?? '')) return {status:'configuration_invalid',exitCode:12};
-  return {status:'checkpoint_incomplete',exitCode:20};
+  let message='',backupStage;
+  try { if(typeof error?.message==='string')message=error.message; } catch { /* Untrusted accessor. */ }
+  try { if(typeof error?.backupStage==='string')backupStage=error.backupStage; } catch { /* Untrusted accessor. */ }
+  if (/already_running|legacy_capture_running/.test(message)) return {status:'already_running',exitCode:10};
+  if (message === 'owned_clock_invalid') return {status:'clock_invalid',exitCode:11};
+  if (message === 'owned_retention_failed') return {status:'retention_failed',exitCode:22};
+  if (/owned_path_|backup_destination_/.test(message)) return {status:'configuration_invalid',exitCode:12};
+  const diagnostic = safePostgresDiagnostic(error);
+  return {status:'checkpoint_incomplete',exitCode:20, ...diagnostic,
+    backupStage: ['snapshot','configuration','database','roles','storage','consistency','publish'].includes(backupStage) ? backupStage : null};
+}
+
+/** Re-read only authenticated receipt metadata. A failed attempt must not erase
+ * the age of the last verified copy or turn its timestamp into the attempt time. */
+export async function ownedFailureReport(root, error, {now = new Date(),status = ownedStatus} = {}) {
+  let previous = {lastBackup:null,ageHours:null,catchUpDue:true,stale24h:null};
+  if(root)try { previous = await status(root,now); } catch { /* Preserve failure, never print filesystem details. */ }
+  return {...previous,...ownedFailure(error),action:'failed',...fixedFlags};
 }

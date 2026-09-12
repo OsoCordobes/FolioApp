@@ -8,6 +8,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { acquireBackupLock } from "./lock.mjs";
 import { sealArtifact, fileDigest, recipientFingerprint } from "./envelope.mjs";
+import { safePostgresDiagnostic } from "./postgres.mjs";
 import {
   writeAtomicJson,
   rotateBackups,
@@ -141,23 +142,8 @@ export async function createBackup({
   } catch (error) {
     const failure = new Error("backup_failed_no_valid_snapshot_published");
     failure.backupStage = backupStage;
-    failure.category = [
-      "permission_denied",
-      "tls_certificate",
-      "authentication_failed",
-      "snapshot_unavailable",
-      "timeout",
-      "dns_failed",
-      "connection_failed",
-      "tool_failure_or_warning",
-      "circular_foreign_keys",
-      "collation_version_mismatch",
-      "privilege_warning",
-      "tool_unavailable",
-      "diagnostic_capture_failed",
-    ].includes(error?.category)
-      ? error.category
-      : "unspecified";
+    failure.stage = safePostgresDiagnostic(error).stage;
+    failure.category = safePostgresDiagnostic(error).category;
     throw failure;
   } finally {
     await snapshot?.close().catch(() => undefined);

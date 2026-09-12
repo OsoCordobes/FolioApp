@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fileDigest } from './envelope.mjs';
 import { OWNER_ROOT, validateOwnedRoot } from './owned-workflow.mjs';
-const sourceFiles = ['capture-owned.mjs','core.mjs','envelope.mjs','lock.mjs','owned-task.mjs','owned-task.ps1','owned-workflow.mjs','paths.mjs','postgres.mjs','restore-local.mjs','restore.mjs','retention.mjs','run.mjs','source.mjs','storage-restore.mjs','storage.mjs','verify-owned-structure.mjs'].map(name=>`scripts/backup/${name}`).concat('scripts/recovery/envelope.mjs');
+const sourceFiles = ['capture-owned.mjs','core.mjs','envelope.mjs','lock.mjs','owned-task.mjs','owned-task.ps1','owned-status.ps1','owned-notice.ps1','owned-workflow.mjs','paths.mjs','postgres.mjs','restore-local.mjs','restore.mjs','retention.mjs','run.mjs','source.mjs','storage-restore.mjs','storage.mjs','verify-owned-structure.mjs'].map(name=>`scripts/backup/${name}`).concat('scripts/recovery/envelope.mjs');
 const internalFiles = new Set(['runtime-manifest.json','invoke-owned-backup.ps1']);
 /** Extract only pg's already locked dependency closure, including integrity
  * hashes. No registry metadata lookup or fresh version resolution is needed. */

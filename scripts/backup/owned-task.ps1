@@ -9,7 +9,10 @@ $ErrorActionPreference = 'Stop'
 $taskPlain = $null
 $taskPhrase = $null
 $taskExit = 0
+$taskStatus = $null
+$taskFailure = $null
 $env:FOLIO_RECOVERY_PASSPHRASE = $null
+. (Join-Path $PSScriptRoot 'owned-status.ps1')
 
 function Invoke-OwnedNode([string]$Operation, [string]$Phrase) {
     $taskInfo = New-Object System.Diagnostics.ProcessStartInfo
@@ -41,14 +44,23 @@ function Invoke-OwnedNode([string]$Operation, [string]$Phrase) {
         $taskText = $taskOut.GetAwaiter().GetResult()
         [void]$taskErr.GetAwaiter().GetResult() # Never echo provider or exception output.
         if ($taskProcess.ExitCode -ne 0) {
+            # Only a bounded, schema-checked stdout record can carry diagnostics.
+            # Arbitrary stderr, nested fields and provider strings are discarded.
+            try {
+                if ($taskText.Length -gt 65536) { throw 'owned_capture_failed' }
+                $record=ConvertTo-OwnedStatus (($taskText.Trim() -split '\r?\n')[-1] | ConvertFrom-Json)
+                if ($record.status -notin @('already_running','clock_invalid','configuration_invalid','retention_failed','checkpoint_incomplete')) { throw 'owned_capture_failed' }
+                $script:taskFailure=$record
+            } catch { $script:taskFailure=$null }
             if ($taskProcess.ExitCode -eq 10) { throw 'owned_busy' }
             if ($taskProcess.ExitCode -eq 11) { throw 'owned_clock' }
             if ($taskProcess.ExitCode -eq 12) { throw 'owned_configuration' }
             if ($taskProcess.ExitCode -eq 22) { throw 'owned_retention' }
             throw 'owned_capture_failed'
         }
+        if ($taskText.Length -gt 65536) { throw 'owned_capture_failed' }
         $taskLine = ($taskText.Trim() -split '\r?\n')[-1]
-        $taskResult = $taskLine | ConvertFrom-Json
+        $taskResult = ConvertTo-OwnedStatus ($taskLine | ConvertFrom-Json)
         if ($taskResult.status -notin @('clock_invalid','no_verified_checkpoint','verification_attention','verified_checkpoint_recorded')) { throw 'owned_capture_failed' }
         return $taskResult
     } finally {
@@ -60,8 +72,9 @@ function Invoke-OwnedNode([string]$Operation, [string]$Phrase) {
 }
 function Write-OwnedStatus($Status, [string]$Action) {
     # Do not forward arbitrary fields emitted by a child process.
-    [ordered]@{ status=$Status.status; action=$Action; lastBackup=$Status.lastBackup; verifiedBackup=$Status.verifiedBackup; ageHours=$Status.ageHours;
-        catchUpDue=$Status.catchUpDue; platformConfigurationComplete=$false; restorationProven=$false; ownerCustodyPending=$true } | ConvertTo-Json -Compress
+    $safe=ConvertTo-OwnedStatus $Status
+    if ($Action -in @('preflight','not_due','captured','verified_existing','failed')) { $safe.action=$Action }
+    $safe | ConvertTo-Json -Depth 4 -Compress
 }
 try {
     if ($RecoveryRoot -notmatch '^[A-Za-z]:[\\/]' -or $RecoveryRoot.StartsWith('\\') -or $RecoveryRoot.Contains('"')) { throw 'owned_configuration' }
@@ -93,7 +106,13 @@ try {
         'owned_retention' { $script:taskExit=22; 'retention_failed' }
         default { $script:taskExit=20; 'checkpoint_incomplete' }
     }
-    @{status=$taskCategory;ownerCustodyPending=$true;restorationProven=$false;platformConfigurationComplete=$false} | ConvertTo-Json -Compress
+    # Keep the read-only preflight recovery point even when a provider fails.
+    # A child can return a newly verified point after retention failure; its
+    # report has already passed the same nested metadata validation.
+    $failed=if ($null -ne $taskFailure) { $taskFailure } elseif ($null -ne $taskStatus) { $taskStatus } else { @{status=$taskCategory} }
+    if ($null -eq $failed.lastBackup -and $null -ne $taskStatus.lastBackup) { $failed.lastBackup=$taskStatus.lastBackup }
+    $failed.status=$taskCategory
+    Write-OwnedStatus $failed 'failed'
 } finally {
     if ($null -ne $taskPlain) { [Array]::Clear($taskPlain,0,$taskPlain.Length) }
     $taskPlain = $null

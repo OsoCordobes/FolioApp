@@ -51,6 +51,7 @@ test('AEAD authentication cannot adopt modified receipt dates that disagree with
 });
 test('launcher does not abandon a descendant when its immediate child exits',{skip:process.platform!=='win32'},async t=>{
  const{root}=await fixture(t),launcher=path.join(root,'owned-task.ps1');
+ await writeFile(path.join(root,'owned-status.ps1'),await readFile(new URL('../../scripts/backup/owned-status.ps1',import.meta.url)));
  await writeFile(launcher,(await readFile(new URL('../../scripts/backup/owned-task.ps1',import.meta.url),'utf8')).replace('WaitForExit(900000)','WaitForExit(1000)'));
  await writeFile(path.join(root,'owned-task.mjs'),`import{spawn}from'node:child_process';import fs from'node:fs';import path from'node:path';const child=spawn(process.execPath,['-e','setTimeout(()=>process.exit(0),4000)'],{windowsHide:true,stdio:'ignore'});fs.writeFileSync(path.join(process.argv[3],'child.json'),JSON.stringify(child.pid));child.unref();console.log(JSON.stringify({status:'verified_checkpoint_recorded',lastBackup:null,ageHours:1,catchUpDue:false}));process.exit(0);`);
  const quote=value=>"'"+value.replaceAll("'","''")+"'";

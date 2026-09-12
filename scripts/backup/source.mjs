@@ -5,6 +5,7 @@ import {
   pgProcess,
   toolVersion,
   closePgClient,
+  postgresDiagnosticFailure,
 } from "./postgres.mjs";
 import { requireStorageMatch } from "./storage.mjs";
 import { readFileSync } from "node:fs";
@@ -43,7 +44,12 @@ export function createPostgresSource({
   expectedServerMajor = 17,
   allowLocalPg16Rehearsal = false,
   omitVerifiedEmptyPgsodiumKey = false,
-}) {
+}, adapters = {}) {
+  // Programmatic test seams only; the owner executable accepts no overrides.
+  const connect = adapters.pgConnection ?? pgConnection;
+  const versionOf = adapters.toolVersion ?? toolVersion;
+  const inventory = adapters.dbInventory ?? dbInventory;
+  const closeClient = adapters.closePgClient ?? closePgClient;
   const connection = parseConnection(databaseUrl, {
     allowRemoteSource,
     confirmSourceHost,
@@ -54,20 +60,32 @@ export function createPostgresSource({
   return {
     compareStorage: requireStorageMatch,
     async begin() {
-      const client = pgConnection(connection);
-      await client.connect();
+      const client = connect(connection);
       let closed = false;
+      let transaction = false;
+      let stage = "connect";
+      let disconnected;
+      let rejectDisconnect;
+      const disconnect = new Promise((_, reject) => { rejectDisconnect = reject; });
+      disconnect.catch(() => undefined);
+      const onError = (error) => { disconnected = error; rejectDisconnect(error); };
+      client.on("error", onError);
+      const perform = (operation) => Promise.race([Promise.resolve().then(operation), disconnect]);
       const close = async () => {
         if (!closed) {
           closed = true;
-          await closePgClient(client, { rollback: true });
+          try { await closeClient(client, { rollback: transaction }); }
+          catch (error) { throw await postgresDiagnosticFailure(error, { ...tools, stage: "snapshot_close" }); }
         }
       };
       try {
-        const major = await toolVersion("pg_dump", tools);
+        await perform(() => client.connect());
+        stage = "tool_version";
+        const major = await perform(() => versionOf("pg_dump", tools));
+        stage = "server_version";
         const {
           rows: [version],
-        } = await client.query("show server_version_num");
+        } = await perform(() => client.query("show server_version_num"));
         const serverMajor = Math.floor(
           Number(version.server_version_num) / 10000,
         );
@@ -82,19 +100,25 @@ export function createPostgresSource({
           serverMajor !== expectedServerMajor
         )
           throw new Error("postgres_backup_version_incompatible");
-        await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
+        stage = "snapshot_begin";
+        await perform(() => client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY"));
+        transaction = true;
+        stage = "snapshot_export";
         const {
           rows: [snapshot],
-        } = await client.query("select pg_export_snapshot() as id");
+        } = await perform(() => client.query("select pg_export_snapshot() as id"));
+        stage = "inventory";
         const metadata = {
-          ...(await dbInventory(client)),
+          ...(await perform(() => inventory(client))),
           serverMajor,
           pgDumpMajor: major,
           localRehearsal: local16,
-          omittedEmptyExtensionData: omitVerifiedEmptyPgsodiumKey
-            ? [await verifyEmptyPgsodiumKey(client)]
-            : [],
+          omittedEmptyExtensionData: [],
         };
+        if (omitVerifiedEmptyPgsodiumKey) {
+          stage = "extension_review";
+          metadata.omittedEmptyExtensionData = [await perform(() => verifyEmptyPgsodiumKey(client))];
+        }
         const stream = (tool, args) => ({
           async *[Symbol.asyncIterator]() {
             const { child, completion } = pgProcess(
@@ -134,10 +158,19 @@ export function createPostgresSource({
           roles: async () =>
             stream("pg_dumpall", ["--roles-only", "--no-role-passwords"]),
           async verifyUnchanged() {
-            const current = pgConnection(connection);
-            await current.connect();
+            if (disconnected) throw await postgresDiagnosticFailure(disconnected, { ...tools, stage: "connection_idle" });
+            const current = connect(connection);
+            let verificationStage = "verify_connect";
+            let currentError;
+            const onCurrentError = (error) => { currentError = error; };
+            current.on("error", onCurrentError);
             try {
-              const latest = await dbInventory(current);
+              await current.connect();
+              verificationStage = "verify_inventory";
+              const latest = await inventory(current);
+              if (currentError) throw currentError;
+              if (disconnected) { verificationStage = "connection_idle"; throw disconnected; }
+              verificationStage = "verify_configuration";
               requireStorageMatch(metadata.objects, latest.objects);
               if (
                 JSON.stringify(metadata.buckets) !==
@@ -148,15 +181,16 @@ export function createPostgresSource({
                   JSON.stringify(latest.memberships)
               )
                 throw new Error("backup_source_configuration_changed");
-            } finally {
-              await closePgClient(current);
-            }
+            } catch (error) {
+              throw await postgresDiagnosticFailure(error, { ...tools, stage: verificationStage });
+            } finally { await closeClient(current).catch(() => undefined); }
           },
           close,
         };
-      } catch {
+      } catch (error) {
+        const failure = await postgresDiagnosticFailure(error, { ...tools, stage });
         await close().catch(() => undefined);
-        throw new Error("backup_database_snapshot_failed");
+        throw failure;
       }
     },
   };

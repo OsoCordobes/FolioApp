@@ -64,6 +64,7 @@ test('receipt date mismatch or mutation during verification fails before replaci
 });
 test('Windows VerifyExisting sends only the exact checkpoint and in-memory DPAPI phrase to the verification child', {skip:process.platform!=='win32'},async t=>{
  const f=await fixture(t),launcher=path.join(f.root,'owned-task.ps1');
+ await writeFile(path.join(f.root,'owned-status.ps1'),await readFile(new URL('../../scripts/backup/owned-status.ps1',import.meta.url)));
  await copyFile(new URL('../../scripts/backup/owned-task.ps1',import.meta.url),launcher);
  await writeFile(path.join(f.root,'owned-task.mjs'),`import fs from'node:fs';import path from'node:path';const mode=process.argv[2];if(mode==='CatchUp')throw Error('capture forbidden');if(mode==='VerifyExisting'){if(process.argv[4]!==${JSON.stringify(f.result.id)}||process.env.FOLIO_RECOVERY_PASSPHRASE!=='synthetic-verify-only')throw Error('wrong verification arguments');fs.writeFileSync(path.join(process.argv[3],'verified-local-only'),'yes');}else if(process.env.FOLIO_RECOVERY_PASSPHRASE)throw Error('secret in preflight');console.log(JSON.stringify({status:'verified_checkpoint_recorded',lastBackup:{id:${JSON.stringify(f.result.id)},completedAt:${JSON.stringify(f.receipt.completedAt)}},ageHours:21,catchUpDue:true,action:'verified_existing'}));`);
  const quote=s=>"'"+s.replaceAll("'","''")+"'";

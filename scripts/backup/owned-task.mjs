@@ -1,11 +1,13 @@
 import { lstat, readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { validateOwnedRoot, ownedStatus, ownedFailure, verifyExistingOwned, validateOwnedCheckpointId } from './owned-workflow.mjs';
+import { validateOwnedRoot, ownedStatus, ownedFailureReport, verifyExistingOwned, validateOwnedCheckpointId } from './owned-workflow.mjs';
+let validatedRoot;
 try {
   const [mode, requestedRoot, confirmation, ...extra] = process.argv.slice(2);
   if (!['Status','CatchUp','VerifyExisting'].includes(mode) || extra.length ||
       (mode === 'Status' ? confirmation !== undefined : mode === 'CatchUp' ? confirmation !== '--capture-owner-production-read-only' : !confirmation)) throw Error('owned_path_invalid');
   const root = await validateOwnedRoot(requestedRoot);
+  validatedRoot = root;
   if (mode === 'Status') console.log(JSON.stringify(await ownedStatus(root)));
   else if(mode==='VerifyExisting') {
     const checkpointId=validateOwnedCheckpointId(confirmation);
@@ -20,7 +22,7 @@ try {
     console.log(JSON.stringify(await captureOwned(root,{catchUp:true})));
   }
 } catch (error) {
-  const failure = ownedFailure(error);
-  console.error(JSON.stringify({status:failure.status}));
+  const failure = await ownedFailureReport(validatedRoot,error);
+  console.log(JSON.stringify(failure));
   process.exitCode = failure.exitCode;
 } finally { delete process.env.FOLIO_RECOVERY_PASSPHRASE; }

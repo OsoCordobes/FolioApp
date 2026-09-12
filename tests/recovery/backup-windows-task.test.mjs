@@ -9,7 +9,12 @@ import os from 'node:os';
 // Execute the actual scheduled command template, substituting only synthetic
 // paths. Never registers a task, opens DPAPI, reads owner data or contacts a host.
 const source=await readFile(new URL('../../scripts/backup/install-windows-task.ps1',import.meta.url),'utf8');
-const template=source.match(/\$job=@'\r?\n([\s\S]*?)\r?\n'@/)[1];
+const statusFunctions=await readFile(new URL('../../scripts/backup/owned-status.ps1',import.meta.url),'utf8');
+const noticeFunctions=await readFile(new URL('../../scripts/backup/owned-notice.ps1',import.meta.url),'utf8');
+// Never call the native UI in tests. Exercise the real decision and durable
+// deduplication with only the final platform adapter replaced.
+const syntheticNotice=noticeFunctions+'\nfunction Show-OwnedBackupBalloon { Write-Output "UNTRUSTED_NOTICE_OUTPUT" }\n';
+const template=source.match(/\$job=@'\r?\n([\s\S]*?)\r?\n'@/)[1].replace('# SAFE_STATUS_FUNCTIONS',()=>statusFunctions).replace('# SAFE_NOTICE_FUNCTIONS',()=>syntheticNotice);
 const quote=value=>`'${value.replaceAll("'","''")}'`;
 async function fixture(content){
  const root=await mkdtemp(path.join(os.tmpdir(),"folio-task-test-"));
@@ -39,4 +44,19 @@ test('malformed output cannot leave an old success or write arbitrary output to 
  const f=await fixture("'SYNTHETIC_UNTRUSTED_OUTPUT'\nexit 0\n");await writeFile(f.status,JSON.stringify({status:'old_success'}));
  const result=f.invoke();assert.equal(result.status,12);
  const text=await readFile(f.status,'utf8');assert.equal(JSON.parse(text).status,'scheduled_backup_failed');assert.ok(!text.includes('SYNTHETIC_UNTRUSTED_OUTPUT'));
+});
+
+test('scheduler retains last verified age after damaged runtime and rejects hostile child metadata',{skip:process.platform!=='win32'},async()=>{
+ const backup={id:'backup_20260101T000000000Z_00000000-0000-4000-8000-000000000000',completedAt:new Date(Date.now()-94*3600000).toISOString()};
+ for(const hostile of [false,true]) {
+  const f=await fixture(hostile?`@{status='checkpoint_incomplete';action='PRIVATE_PATIENT';category='credential=synthetic';lastBackup=@{id='PRIVATE_PATIENT';completedAt='not-a-date'}} | ConvertTo-Json -Compress\nexit 20\n`:"'{}'\nexit 0\n");
+  await writeFile(f.status,JSON.stringify({status:'verified_checkpoint_recorded',lastBackup:backup,ageHours:0,catchUpDue:false,stale24h:false}));
+  if(!hostile)await writeFile(f.launcher,"throw 'PRIVATE_PATIENT'\n");
+  const result=f.invoke();assert.equal(result.status,12,result.stdout+result.stderr);
+  const text=await readFile(f.status,'utf8'),report=JSON.parse(text);
+  assert.equal(report.status,'scheduled_backup_failed');assert.equal(report.lastBackup.id,backup.id);assert.ok(report.ageHours>=94);
+  assert.equal(report.stale24h,true);assert.equal(report.catchUpDue,true);assert.ok(!text.includes('PRIVATE_PATIENT'));assert.ok(!text.includes('credential='));
+  assert.equal(report.notification.status,'notice_requested');assert.equal(report.notification.reason,'stale_backup');assert.equal(report.notification.userSeen,false);
+  assert.ok(!`${result.stdout}${result.stderr}${text}`.includes('UNTRUSTED_NOTICE_OUTPUT'));
+ }
 });

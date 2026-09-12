@@ -1,6 +1,58 @@
 import pg from "pg";
 import { spawn } from "node:child_process";
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]"]);
+export const POSTGRES_STAGES = Object.freeze([
+  "connect", "tool_version", "server_version", "snapshot_begin", "snapshot_export",
+  "inventory", "extension_review", "database_dump", "roles_dump", "verify_connect",
+  "verify_inventory", "verify_configuration", "snapshot_close", "connection_idle",
+]);
+export const POSTGRES_CATEGORIES = Object.freeze([
+  "permission_denied", "tls_certificate", "authentication_failed", "snapshot_unavailable",
+  "timeout", "dns_failed", "connection_failed", "tool_failure_or_warning", "circular_foreign_keys",
+  "collation_version_mismatch", "privilege_warning", "tool_unavailable", "diagnostic_capture_failed",
+]);
+function safeErrorText(error, key) {
+  try { const value=error?.[key]; return typeof value === "string" ? value : undefined; }
+  catch { return undefined; }
+}
+export function safePostgresDiagnostic(error) {
+  const stage=safeErrorText(error,"stage"),category=safeErrorText(error,"category");
+  return {
+    stage: POSTGRES_STAGES.includes(stage) ? stage : null,
+    category: POSTGRES_CATEGORIES.includes(category) ? category : "unspecified",
+  };
+}
+/** Raw driver text is allowed only into the encrypted sink. Never retain it as
+ * a cause/stack/property on an error that reaches a launcher or status file. */
+export async function postgresDiagnosticFailure(error, { diagnosticSink, stage } = {}) {
+  const safeStage = POSTGRES_STAGES.includes(stage) ? stage : null;
+  const detail = {};
+  for (const key of ["name", "message", "code", "detail", "hint"]) {
+    const value=safeErrorText(error,key);
+    if(value!==undefined)detail[key]=value.slice(0,12000);
+  }
+  const code = detail.code;
+  const claimedCategory=safeErrorText(error,"category");
+  let category = POSTGRES_CATEGORIES.includes(claimedCategory) ? claimedCategory :
+    code === "42501" ? "permission_denied" :
+    ["28P01", "28000"].includes(code) ? "authentication_failed" :
+    ["ETIMEDOUT", "57014"].includes(code) ? "timeout" :
+    ["ENOTFOUND", "EAI_AGAIN"].includes(code) ? "dns_failed" :
+    ["ECONNRESET", "ECONNREFUSED", "EPIPE", "08000", "08001", "08003", "08006", "57P01"].includes(code) ? "connection_failed" :
+    postgresFailureCategory(detail.message ?? "");
+  const complete = Buffer.from(JSON.stringify(detail));
+  const body = complete.subarray(0,65536);
+  try {
+    if (diagnosticSink) await boundedOperation(() => diagnosticSink(body, {
+      stage: safeStage, category, exitCode: null, stderrBytes: complete.length, truncated: complete.length>body.length,
+    }), 5000);
+  } catch { category = "diagnostic_capture_failed"; }
+  finally { complete.fill(0); }
+  const failure = new Error("backup_database_operation_failed");
+  failure.stage = safeStage;
+  failure.category = category;
+  return failure;
+}
 export function parseConnection(
   value,
   {
@@ -121,7 +173,7 @@ export async function closePgClient(
 /** The callback must encrypt diagnostics; raw stderr never enters Error objects. */
 export function monitorPostgresChild(
   child,
-  { timeoutMs = 600000, diagnosticSink } = {},
+  { timeoutMs = 600000, diagnosticSink, stage } = {},
 ) {
   if (!Number.isFinite(timeoutMs) || timeoutMs < 1 || timeoutMs > 1800000)
     throw new Error("postgres_timeout_invalid");
@@ -152,6 +204,7 @@ export function monitorPostgresChild(
           await boundedOperation(
             () =>
               diagnosticSink(diagnostic, {
+                stage: POSTGRES_STAGES.includes(stage) ? stage : null,
                 category,
                 exitCode: Number.isInteger(code) ? code : null,
                 stderrBytes: bytes,
@@ -164,12 +217,14 @@ export function monitorPostgresChild(
         else {
           const failure = new Error("postgres_tool_failed_or_warned");
           failure.category = category;
+          failure.stage = POSTGRES_STAGES.includes(stage) ? stage : null;
           failure.exitCode = Number.isInteger(code) ? code : null;
           reject(failure);
         }
       } catch {
         const failure = new Error("postgres_diagnostic_capture_failed");
         failure.category = "diagnostic_capture_failed";
+        failure.stage = POSTGRES_STAGES.includes(stage) ? stage : null;
         reject(failure);
       } finally {
         diagnostic.fill(0);
@@ -231,10 +286,11 @@ export function pgProcess(
       : [...base, ...args],
     { env, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] },
   );
-  const completion = monitorPostgresChild(child, { timeoutMs, diagnosticSink });
+  const completion = monitorPostgresChild(child, { timeoutMs, diagnosticSink,
+    stage: tool === "pg_dump" ? "database_dump" : tool === "pg_dumpall" ? "roles_dump" : null });
   return { child, completion };
 }
-export async function toolVersion(tool, { wsl, binDirectory } = {}) {
+export async function toolVersion(tool, { wsl, binDirectory, diagnosticSink } = {}) {
   const executable = binDirectory
     ? `${binDirectory}/${tool}${process.platform === "win32" && !wsl ? ".exe" : ""}`
     : tool;
@@ -247,7 +303,7 @@ export async function toolVersion(tool, { wsl, binDirectory } = {}) {
   );
   let out = "";
   child.stdout.on("data", (x) => (out += x));
-  await monitorPostgresChild(child, { timeoutMs: 10000 });
+  await monitorPostgresChild(child, { timeoutMs: 10000, diagnosticSink, stage: "tool_version" });
   const major = Number(out.match(/PostgreSQL\) (\d+)/)?.[1]);
   if (!major) throw new Error("postgres_tool_version_invalid");
   return major;
