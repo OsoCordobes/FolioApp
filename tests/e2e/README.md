@@ -69,7 +69,7 @@ Validar una instalación hospedada requiere un procedimiento manual separado, au
 
 El bloqueo protege contra conexiones accidentales del código probado; no es un aislamiento del sistema operativo frente a código hostil. Los permisos de un proceso local y los servicios accesibles en loopback siguen requiriendo una máquina de pruebas controlada.
 
-Última ejecución clínica local (12 de septiembre de 2026): **7/7 aprobados**,
+Baseline clínico histórico (12 de septiembre de 2026): **7/7 aprobados**,
 cero fallidos y cero no ejecutados, 2,3 minutos. Las tres especialidades completaron
 guardado, adjunto real, cobro efectivo y reapertura; pasaron denegaciones de
 acceso, archivo autorizado con suscripción pausada y revocación Auth. Baseline
@@ -83,6 +83,54 @@ Agrega cierre clínico sin cobro automático, registro explícito en agenda,
 recuperación tras respuestas perdidas con commit SQL comprobado y roles reales
 ASISTENTE/COORDINADOR en contextos limpios. Los POST se ligan a la sesión AAL2 del
 navegador y al intento/pago exacto. La limpieza revoca sesiones y conserva datos.
-17/17 comprobaciones focales pasaron e incluyen discovery de doce casos; el ensayo
-real integrado aún no se ejecutó ni se aplicaron M120/M121 al runtime histórico.
-La evidencia7/7 anterior corresponde únicamente al baseline señalado arriba.
+
+El checkpoint de pruebas `280ef18c2663a85fd9fd54698f68f338623c1362` conserva la
+aplicación de `c57f8f2`: revisión independiente, tipos y lint completos aprobados,
+**2212/2212 unitarias**, **20/20 comprobaciones focales de seguridad**, **5 diagnósticos
+Auth** y **7 de llegada**. La seguridad incluye discovery de doce casos y rechazo
+de escritores durante la consulta real de recuperación. Se corrigieron el selector
+accesible de cobro y la longitud exacta del identificador de acción de Next; la
+observación de llegada/Auth no amplía plazos ni reintenta solicitudes.
+
+La instalación local ya recibió M120/M121 y sus activaciones auditadas: 115
+migraciones y nueve controles activos, con datos y volúmenes anteriores
+conservados. La auditoría original corresponde a `3a9823a`; no se reinstala SQL ni
+se repiten activaciones por los cambios de código. Run-11 terminó con **2 aprobados
+y 10 fallidos** por el desajuste horario entre formulario y agenda. La corrección
+de `c57f8f2` aprobó compilación aislada (exit 0, 16 avisos heredados) y **50/50
+escenarios de formularios**. Run-12 comprobó fecha y hora completas en sus diez
+turnos, pero terminó con **4 aprobados y 8 fallidos, cero omitidos**: seis fallos del
+selector/observador y dos de llegada/Auth cuya causa sigue sin determinar.
+
+Run-13 sobre `280ef18`, 115 migraciones y nueve controles terminó con **6 aprobados
+y 6 fallidos, cero omitidos, en 8 minutos**. Aprobaron AAL1/portal, aislamiento de
+consultorios y archivos, archivo con suscripción pausada, revocación y recuperación
+de respuestas perdidas de CLOSE/RESOLVE con commit SQL comprobado. Quiropraxia y
+cardiología completaron cobro y reapertura con un nuevo login, pero falló la limpieza
+del observador. Psicología y el caso M121 fallaron al comprobar el aviso de cierre
+clínico que desaparecía; el caso M121 no alcanzó el saldo. ASISTENTE/COORDINADOR
+autenticaron sus roles y alcances, pero encontraron la agenda operacional vacía.
+
+Las correcciones posteriores tienen revisión independiente y pruebas focales:
+limpieza única del observador en `57cfd03` (**27/27**), confirmación de cierre propio
+en `dfc4af6` (**12/12 navegador y 13/13 unitarias**) y lectura de Hoy en `6a75cc1`
+(**22/22 unitarias**). M122 proporciona la lectura operacional de recepción sin
+abrir clínica. M123, en `17a3770`, impide que COORDINADOR consulte pagos por SELECT
+directo. Los controles finales de aplicación aprobaron **2231/2231 unitarias,
+tipos, lint y compilación aislada**, con los 16 avisos heredados de instrumentación.
+
+La fuente final contiene **117 migraciones**. La evidencia SQL es **replay completo
+de 116 migraciones / 64 specs**, más **M123 focal y cinco specs afectados aprobados**;
+no es un replay completo de 117. El runtime clínico permanece en `280ef18`, 115
+migraciones y nueve controles, sin M122/M123. Por instrucción expresa del usuario,
+**se cierra la iteración sin repetir el recorrido ni ejecutar run-14**. Las pruebas
+focales no transforman run-13 en 12/12 ni verifican el saldo integrado M121 o los
+roles de recepción del código final. La evidencia 7/7 anterior corresponde sólo
+al baseline señalado arriba.
+
+La entrega se prepara para push y PR en borrador. La lectura del inventario
+productivo confirmó 92 migraciones; las 25 faltantes y las activaciones por etapas
+impiden fusionar directamente a `master`, que despliega automáticamente. No se
+aplicaron cambios en producción. El [registro de iteraciones](../../docs/LAUNCH-RELIABILITY-LOG.md)
+conserva las campañas fallidas y la [entrega de revisión](../../docs/LAUNCH-RELIABILITY-DELIVERY.md)
+distingue las verificaciones del candidato y los requisitos externos.

@@ -1,5 +1,16 @@
 # Ensayo clínico con Supabase local real
 
+Actualización al 13 de septiembre: el corte local conservó los datos y volúmenes,
+instaló M120/M121 con sus registros canónicos y activó sus controles en orden.
+Hay **115 migraciones y nueve controles activos**. Run-11 sobre `3a9823a` terminó
+con **2 aprobados, 10 fallidos y 0 omitidos**: el formulario mostraba hora del
+navegador Auckland, mientras la agenda y SQL usaban Córdoba. Los diez casos
+fallaron antes de guardar/cerrar/cobrar. Se conservaron las evidencias, cuentas,
+pacientes y turnos; las 16 cuentas nuevas quedaron sin sesiones activas.
+La corrección y la siguiente campaña deben verificarse antes de afirmar éxito.
+
+## Baseline histórico anterior a M120/M121
+
 Baseline ejecutado al 12 de septiembre de 2026: **7/7 escenarios aprobados**, cero fallidos
 y cero no ejecutados, en 2,3 minutos (run-10). Supabase PostgreSQL 17.6 ejecutó
 113 migraciones y cinco catálogos. Las tres especialidades completaron creación,
@@ -88,8 +99,9 @@ desde el proxy autenticado antes y después de volver a entrar.
 
 El conteo de pagos obtiene el consultorio mediante
 `pago.turno_id → turno.organization_id`; `pago` no tiene `organization_id`.
-Los contratos nuevos se cotejan con M120/M121, pero el resultado real de los
-doce escenarios integrados sigue pendiente del cambio local revisado.
+Los contratos nuevos se cotejan con M120/M121, instaladas y activadas en la
+instancia local preservada. Los doce escenarios integrados siguen pendientes
+de una campaña completa aprobada; el resultado más reciente es run-12, 4/12.
 Una lectura protegida con AAL1 puede quedar filtrada como lista vacía o devolver
 la denegación explícita `42501`. El ensayo acepta únicamente esas dos formas sin
 filas; sigue fallando ante filas visibles, resultados incompletos y errores de red
@@ -269,14 +281,13 @@ retiran la ruta; no generan confirmaciones. Los reintentos deliberados conservan
 la operación o el pago original y las pruebas comparan originales, revisión,
 duración, transición, recordatorio y recibos sin duplicarlos.
 
-Validación de código: 17/17 pruebas focales de seguridad, sin omisiones, incluyen
-el descubrimiento de doce casos; tipos y lint focal pasaron. Esto **no ejecutó los
-doce casos reales**. Runtime, sus113 migraciones, cuentas y volúmenes no cambiaron.
-M120/M121 y los gates nuevos siguen pendientes de cutover autorizado. Se conservan
-DOM30s, MFA60s, proveedor12s, SQL15s y caso180s; negativas, ausencia, polls y límites
-de acciones no se amplían. Sin trazas ni retries globales. El futuro cambio local
-debe confirmar visibilidad RPC en PostgREST después del commit de DDL, antes de
-atribuir un error de caché de esquema al producto.
+La implementación inicial aprobó 17/17 pruebas focales de seguridad y el
+descubrimiento de doce casos, antes del cambio de instancia. Ese resultado de
+código no ejecutó los doce casos reales. Se conservan DOM30s, MFA60s,
+proveedor12s, SQL15s y caso180s; negativas, ausencia, polls y límites de acciones
+no se amplían. Sin trazas ni retries globales. La actualización local posterior
+confirmó visibilidad RPC en PostgREST después del commit de DDL; no debe
+atribuirse un error de caché de esquema al producto sin comprobar esa frontera.
 
 Corrección de evidencia del caso8: «Comprobar resultado» ahora se observa como
 `getTurnoCloseReceiptAction` real, con identidad compilada, cookie del actor y
@@ -286,3 +297,54 @@ rechaza CLOSE/RESOLVE/SETTLE, incluso con la misma clave idempotente y aunque ya
 haya llegado una respuesta de lectura. El RPC adicional desde Node sólo aporta
 una comprobación complementaria. La prueba focal nueva reprodujo RED antes del
 soporte y pasó con éste:18/18 seguridad, sin skips; discovery conserva12casos.
+
+## Estado integrado actual (13 de septiembre de 2026)
+
+M120/M121 y sus registros canónicos se instalaron en una transacción local.
+La activación separada M120 → M121, con M106 ya activa, conserva una entrada
+por control y la razón auditada del código `3a9823a`. La instancia tiene
+115 migraciones y nueve controles activos. Los cambios posteriores de código
+requieren un inventario de sólo lectura; no justifican reinstalar SQL ni
+reactivar controles. Las huellas de filas anteriores y la identidad/metadatos
+de volúmenes se conservan; esto no prueba una restauración integral.
+
+Run-11: 2 aprobados y 10 fallidos por diferencia entre la hora del navegador y
+la del consultorio. La aplicación `c57f8f2` corrige creación, reagendado y pedidos:
+50/50 escenarios aislados de navegador, revisión independiente, tipos, lint,
+2198/2198 unitarias y compilación aprobados. Run-12 confirmó fecha y hora
+completas de los diez turnos creados, pero terminó 4/12 aprobados.
+
+Los ocho fallos de run-12 fueron cuatro selectores de cobro ambiguos, dos
+rechazos del identificador compilado de la acción y dos errores sin causa
+determinada: llegada sin transición y consulta de identidad Auth rechazada.
+`280ef18` modifica sólo ocho archivos de pruebas: selector accesible más UUID
+y conteo uno, identificador exacto de 42 caracteres emitido por Next 15 y
+diagnósticos sanitizados de Auth/llegada. Conserva llamadas, plazos, ausencia de
+reintentos y comprobaciones de actor, respuesta real y commit. Pasaron tipos,
+lint, 2212/2212 unitarias, revisión independiente y controles focales de
+seguridad20, Auth5 y llegada7. No hay nueva compilación de aplicación después
+de `c57f8f2`, porque las fuentes de aplicación no cambiaron.
+
+Run-13 sobre `280ef18` terminó con **6 aprobados, 6 fallidos y cero omitidos**
+en ocho minutos. Pasaron AAL1, aislamiento/archivos, archivo pausado, revocación
+y recuperaciones reales de CLOSE/RESOLVE. Quiropraxia y cardiología completaron
+pago y reapertura, pero fallaron en limpieza del observador. Psicología y el
+prerrequisito de saldo M121 fallaron en la confirmación visual posterior a un
+cierre SQL confirmado. ASISTENTE/COORDINADOR iniciaron sesión con rol y alcance
+correctos, pero la vista clínica dejó vacía su agenda operacional.
+
+El usuario pidió no repetir el recorrido y cerrar la entrega. No hay run-14.
+La fuente final `17a3770` incluye retirada única de observadores (`57cfd03`),
+confirmación visible del cierre propio (`dfc4af6`), lector operacional de Hoy
+y M122 (`6a75cc1`), y M123 para impedir SELECT directo de pagos a COORDINADOR.
+Verificación focal: observadores27/27, confirmación12/12 navegador y13/13unidades,
+lector22/22; M122 replay116/64 y M123focal más cinco specs afectadas aprobados.
+Tipos, lint,2231/2231unidades y compilación aislada de la aplicación final aprobaron.
+No se afirma replay117/65 ni una campaña integrada final aprobada.
+
+El runtime permanece en `280ef18`,115migraciones,nuevecontroles: M122/M123 no se
+instalaron allí y no se reactivaron controles. La auditoría post-run13 confirma
+cero sesiones propias,23previas preservadas,cero cargos y autoridades temporales.
+Los ensayos y datos ficticios se conservan. Producción fue consultada sólo en
+lectura:92migraciones,25faltantes del candidato. Se entrega rama/PR sin merge;
+el orden de instalación/código/activación sigue en `docs/LAUNCH-RUNBOOK.md`.

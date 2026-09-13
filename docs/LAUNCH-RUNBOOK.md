@@ -1,10 +1,17 @@
 # Folio — controles para publicar y abrir el piloto
 
-Orden de entrega actualizado el 12 de septiembre de 2026. Este documento sustituye las recomendaciones
+Orden de entrega actualizado el 13 de septiembre de 2026. Este documento sustituye las recomendaciones
 anteriores que trataban correo, respaldos y límites de acceso como opcionales.
 La lista de trabajo y la evidencia vigente están en
 [el registro de implementación](plans/2026-09-08-market-readiness.md).
 **Folio todavía no está habilitado por este proceso para atención clínica real.**
+
+**Bloqueo vigente del candidato:** producción conserva 92 migraciones, según
+consulta de sólo lectura del 13 de septiembre; faltan 25 del candidato `17a3770`.
+MFA, M106, M120/M121 y M122 no están presentes. El push y la PR entregan código
+revisable, pero el merge en `master` activaría un despliegue con dependencias
+ausentes. Completar la secuencia siguiente antes de integrar. No se aplicaron
+migraciones ni se desplegó durante este cierre.
 
 ## Evidencia histórica del 8 de septiembre de 2026
 
@@ -57,13 +64,16 @@ No aplicar todo el directorio de migraciones indiscriminadamente sobre producci�
 La etapa de expansión debe mantener funcionando la aplicación anterior.
 
 1. Comparar cada versión canónica con el ledger y los objetos del destino autorizado.
-   El [manifiesto local del candidato](LAUNCH-RELIABILITY-MIGRATIONS.md) contiene 23 altas
+   El [manifiesto del candidato](LAUNCH-RELIABILITY-MIGRATIONS.md) contiene 25 altas
    frente a la referencia publicada observada, con M118 ya presente. No determinar
-   pendientes por el máximo timestamp ni asumir que ese manifiesto inventaría producción.
+   pendientes por el máximo timestamp. Su consulta productiva es fechada: refrescarla
+   inmediatamente antes de un corte autorizado.
 2. Instalar sólo las versiones faltantes revisadas antes de su código dependiente,
    con ledger en la misma transacción y guards diferidos inicialmente apagados.
    **M104 se instala antes del código; se pospone su activación**, después de verificar
    endpoints y escritores compatibles. Aplicarla sola no cierra el acceso directo antiguo.
+   M122 debe preceder el lector de recepción de Hoy; M123 limita la lectura directa
+   de pagos a roles financieros y debe estar presente antes de aprobar ese aislamiento.
 3. Preparar y verificar el escritor clínico compatible, activar M106 y sólo entonces
    exponer los consumidores completos del nuevo cierre. CLOSE M120 exige M106 activa
    aunque el guard M120 esté apagado. La versión intermedia debe estar identificada y

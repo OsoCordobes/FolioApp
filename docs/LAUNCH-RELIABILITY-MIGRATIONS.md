@@ -1,14 +1,16 @@
 # Dependencias de migración del candidato de confiabilidad
 
-Inventario de archivos del 12 de septiembre de 2026. Referencia publicada observada:
+Inventario actualizado el 13 de septiembre de 2026. Referencia publicada observada:
 `28ab28a93798b09c2a4e092e9cceb0f163262f9e`; candidato SQL combinado:
-`34dc605b025a15d53e1bd2bb8d4e637fa5b44fb5`. Es una comparación de Git local,
-no una consulta del estado remoto ni del ledger de producción.
+`17a377039e9f9812d80d23593c851a6fe86bf7de`. La comparación de Git se complementó
+con una consulta de sólo lectura del ledger productivo: 92 versiones, iguales
+al conjunto de la referencia, y las 25 siguientes ausentes. El catálogo confirmó
+también ausencia de MFA, M106, M120, M121 y la RPC de M122. No se modificó producción.
 
-La referencia contiene 92 migraciones; el candidato, 115. Hay **23 altas y cero
+La referencia contiene 92 migraciones; el candidato, 117. Hay **25 altas y cero
 modificaciones o eliminaciones** de archivos existentes. M118, versión `20260912163934`,
 ya está en la referencia y sus bytes coinciden. No aplicarla de nuevo por omisión
-del inventario. La diferencia frente a la base heredada `11f0206` es sólo M120/M121;
+del inventario. La diferencia frente a la base heredada `11f0206` es M120–M123;
 las otras 21 altas son dependencias de ese trabajo previo.
 
 | Versión canónica | Migración |
@@ -36,12 +38,14 @@ las otras 21 altas son dependencias de ese trabajo previo.
 | 20260912170202 | M119 — reprogramación atómica |
 | 20260912200817 | M120 — cierre y registro administrativo atómicos |
 | 20260912204646 | M121 — saldo con autorización vigente |
+| 20260913040500 | M122 — lectura operacional de Hoy para recepción |
+| 20260913043000 | M123 — lectura de pagos limitada a roles financieros |
 
 ## Evidencia local del orden de actualización
 
 En una base nueva PostgreSQL16.15 se instalaron primero los 92 archivos exactos de
 `28ab28a`, incluida M118; luego las 23 altas anteriores del candidato, y finalmente
-las 63 specs SQL. **Todo aprobó, exit 0**: 115 versiones exactas en el ledger,
+las 63 specs SQL. **Todo aprobó, exit 0** sobre el candidato histórico `34dc605`: 115 versiones exactas en el ledger,
 M118 una sola vez y cero autoridades temporales al terminar. Se comprobaron 182 hashes
 de entradas congeladas y se mantuvo la verificación predeterminada de cuerpos de funciones.
 Base e informe se conservan: `.flow/launch-reliability/published-upgrade-report.md`.
@@ -51,11 +55,17 @@ además del replay cronológico completo previamente aprobado. Usa stubs SQL de
 Auth/Storage; no convierte un inventario de datos productivos ni prueba servicios
 Supabase reales, despliegue o activaciones permanentes en el destino.
 
+La evidencia posterior de M122 es replay completo de **116 migraciones / 64 specs**
+aprobado. M123 aprobó su regresión focal y las cinco specs afectadas (M92,
+dos de M120, M121 y M122). No se ejecutó replay completo de 117/65 ni se extendió
+el ensayo histórico de actualización desde 92 hasta 117. El runtime clínico
+permanece con 115 versiones; estas pruebas SQL se hicieron en bases propias con stubs.
+
 ## Preparación necesaria en un destino autorizado
 
 - Comparar todas las versiones y objetos; no usar el máximo timestamp como señal
   de integridad ni marcar archivos como aplicados sin ejecutarlos.
-- Revisar compatibilidad y datos existentes de las 23 dependencias. Varias cambian
+- Revisar compatibilidad y datos existentes de las 25 dependencias. Varias cambian
   funciones, permisos y triggers; no tratarlas todas como expansiones inocuas.
 - Registrar cada migración y su versión canónica en la misma transacción.
   Conservar los archivos aplicados; no reescribir su esquema retroactivamente.
@@ -64,6 +74,10 @@ Supabase reales, despliegue o activaciones permanentes en el destino.
   compatible → M106 activa → consumidores completos → M120 activa → M121 activa.
 - Mantener las condiciones propias de MFA, consentimiento, adjuntos, población y
   disponibilidad. Después de un corte, la versión de retorno debe respetar esos controles.
+- Instalar M122 antes del lector de Hoy dependiente y M123 antes de acreditar
+  el aislamiento financiero de COORDINADOR. M122 concede USAGE del esquema privado
+  existente al rol autenticado; sus tablas y funciones internas anteriores siguen
+  denegadas. M123 agrega una política restrictiva de SELECT, sin cambiar escrituras.
 
 El [runbook](LAUNCH-RUNBOOK.md) y las guías por migración detallan ese orden.
 Este manifiesto no autoriza ejecutarlo ni certifica la preparación integral del lanzamiento.
