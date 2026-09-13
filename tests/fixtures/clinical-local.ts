@@ -8,6 +8,7 @@ import type {Page,Browser,BrowserContext} from '@playwright/test';
 import {expect} from './local-test';
 import {assertClinicalDatabase,clinicalConfig,totp} from '../../scripts/testing/clinical-config.mjs';
 import {assertIntegratedPolicies,authenticateRegistered,CleanupRegistry} from './clinical-safety';
+import {clinicalAuthFailureMessage} from './clinical-auth-diagnostics';
 
 export type ClinicalSpecialty='quiropraxia'|'cardiologia'|'psicologia';
 export type CaseRole='OWNER'|'ASISTENTE'|'COORDINADOR';
@@ -138,7 +139,12 @@ export async function assertBrowserActor(fixture:ClinicalFixture,page:Page,accou
  const cookies=cookieHeader===undefined?await page.context().cookies('http://localhost:4420'):cookieHeader.split(';').map(part=>{const i=part.indexOf('=');return {name:part.slice(0,i).trim(),value:decodeURIComponent(part.slice(i+1).trim())};});
  const token=await browserToken(fixture,cookies);assert.ok(token,'Authenticated browser session required');fixture.rememberToken(token);
  const claims=tokenClaims(token),client=tokenClient(fixture,token);
- const user=await client.auth.getUser(token);requireSuccess(user.error,'browser Auth identity');assert.equal(user.data.user?.id,account.userId);assert.equal(claims.sub,account.userId);assert.equal(claims.aal,'aal2');
+ const identityStarted=performance.now();
+ const identityFailure=(error:unknown)=>new Error(clinicalAuthFailureMessage(error,{expectedRole:account.role,expectedUserId:account.userId,claims,elapsedMs:performance.now()-identityStarted,nowMs:Date.now()}));
+ let user:Awaited<ReturnType<typeof client.auth.getUser>>;
+ try{user=await client.auth.getUser(token);}catch(error){throw identityFailure(error);}
+ if(user.error)throw identityFailure(user.error);
+ assert.equal(user.data.user?.id,account.userId);assert.equal(claims.sub,account.userId);assert.equal(claims.aal,'aal2');
  const gate=await client.rpc('mfa_access_status');requireSuccess(gate.error,'browser AAL2 gate');assert.deepEqual(gate.data,{required:true,allowed:true,isStaff:true,hasVerifiedFactor:true,sessionValid:true});
  const member=await client.from('member').select('id,role,organization_id,profile_id').eq('id',account.memberId).single();requireSuccess(member.error,'browser member');assert.deepEqual(member.data,{id:account.memberId,role:account.role,organization_id:account.organizationId,profile_id:account.userId});
  if(account.role!=='OWNER'){const scope=await client.rpc('user_has_scope_over',{org:account.organizationId,target_member:fixture.owner.memberId});requireSuccess(scope.error,'browser reception scope');assert.equal(scope.data,true);}

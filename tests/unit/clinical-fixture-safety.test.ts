@@ -84,9 +84,27 @@ test('integrated safety: action binding rejects confused operations and external
  const {parseClinicalAction}=await import('../fixtures/clinical-safety');
  const turnoId='12000000-0000-4000-8000-000000000001',operacionId='12000000-0000-4000-8000-000000000002';
  const close={turnoId,operacionId,to:'cerrado',duracionRealMin:20,cobro:{montoCents:1200,metodo:'EFECTIVO',pagado:false}};
- const wire=(input:unknown,url='http://localhost:4420/hoy')=>({url,method:'POST',actionId:'a'.repeat(40),body:JSON.stringify([input]),contentType:'text/plain;charset=UTF-8'});
+ const wire=(input:unknown,url='http://localhost:4420/hoy')=>({url,method:'POST',actionId:'40'+'a'.repeat(40),body:JSON.stringify([input]),contentType:'text/plain;charset=UTF-8'});
  assert.equal(parseClinicalAction(wire(close)).action,'CLOSE');
  for(const bad of [wire(close,'http://127.0.0.1:4420/hoy'),wire(close,'https://example.com/hoy'),wire({...close,action:'RESOLVE'}),wire({...close,cobro:{...close.cobro,pagado:'false'}}),wire({...close,to:'en_sala'}),wire({turnoId,pagoId:operacionId,operacionId}),{...wire(close),body:'["$1"]'}])assert.throws(()=>parseClinicalAction(bad));
+});
+
+test('integrated safety: Next 15 action IDs preserve the full CLOSE, RESOLVE and SETTLE input',async()=>{
+ const {parseClinicalAction}=await import('../fixtures/clinical-safety');
+ const turnoId='12000000-0000-4000-8000-000000000001',operacionId='12000000-0000-4000-8000-000000000002';
+ const cobro={montoCents:1200,metodo:'EFECTIVO',pagado:false};
+ const cases=[
+  {input:{turnoId,operacionId,to:'cerrado',duracionRealMin:20,cobro},expected:{action:'CLOSE',turnoId,operacionId,duracionRealMin:20,cobro}},
+  {input:{turnoId,operacionId,cobro},expected:{action:'RESOLVE',turnoId,operacionId,cobro}},
+  {input:{turnoId,pagoId:operacionId},expected:{action:'SETTLE',turnoId,pagoId:operacionId}},
+ ];
+ for(const {input,expected} of cases)assert.deepEqual(parseClinicalAction({url:'http://localhost:4420/hoy',method:'POST',actionId:'40'+'a'.repeat(40),body:JSON.stringify([input]),contentType:'text/plain;charset=UTF-8'}),expected);
+});
+
+test('integrated safety: wrong-length or non-hex action IDs cannot enter the financial parser',async()=>{
+ const {parseClinicalAction}=await import('../fixtures/clinical-safety');
+ const wire={url:'http://localhost:4420/hoy',method:'POST',body:JSON.stringify([{turnoId:'12000000-0000-4000-8000-000000000001',pagoId:'12000000-0000-4000-8000-000000000002'}]),contentType:'text/plain;charset=UTF-8'};
+ for(const actionId of ['a'.repeat(40),'a'.repeat(43),'40'+'a'.repeat(39)+'g'])assert.throws(()=>parseClinicalAction({...wire,actionId}));
 });
 
 test('integrated safety: failures settle the intercepted route and cannot look committed',async()=>{
@@ -149,7 +167,7 @@ test('integrated safety: an idempotent writer with the same operation cannot sat
  const {bindReceiptProbe}=await import('../fixtures/clinical-safety');
  const turnoId='12000000-0000-4000-8000-000000000001',operacionId='12000000-0000-4000-8000-000000000002';
  const original={action:'CLOSE' as const,turnoId,operacionId,duracionRealMin:20,cobro:{montoCents:1200,metodo:'EFECTIVO' as const,pagado:true}};
- const wire={url:'http://localhost:4420/hoy',method:'POST',actionId:'a'.repeat(40),contentType:'text/plain;charset=UTF-8',body:JSON.stringify([original])};
+ const wire={url:'http://localhost:4420/hoy',method:'POST',actionId:'40'+'a'.repeat(40),contentType:'text/plain;charset=UTF-8',body:JSON.stringify([original])};
  assert.deepEqual(bindReceiptProbe(wire,'getTurnoCloseReceiptAction',original),original);
  const {action:_action,...sameWrite}=original;
  for(const name of ['transitionTurnoAction','resolveTurnoCloseAction','marcarPagoCobradoAgendaAction'])assert.throws(()=>bindReceiptProbe({...wire,body:JSON.stringify([{...sameWrite,to:'cerrado'}])},name,original),/Writer invoked during receipt recovery/);

@@ -29,7 +29,8 @@ const settle=z.object({turnoId:z.string().uuid(),pagoId:z.string().uuid()}).stri
 function parseActionInput(wire:ActionWire):Record<string,unknown> {
  const url=new URL(wire.url);
  assert.ok(url.origin==='http://localhost:4420'&&url.pathname==='/hoy'&&!url.username&&!url.password,'Unexpected clinical action destination');
- assert.equal(wire.method,'POST');assert.match(wire.actionId,/^[a-f0-9]{40}$/);
+ // Next 15 action IDs contain one info byte followed by a 20-byte hash (42 hex characters).
+ assert.equal(wire.method,'POST');assert.match(wire.actionId,/^[a-f0-9]{42}$/);
  assert.match(wire.contentType,/^text\/plain(?:;|$)/);
  // These actions take one plain JSON object; reject React references/multipart instead of guessing.
  const args:unknown=JSON.parse(wire.body,(_key,value)=>{if(value==='$undefined')return undefined;if(typeof value==='string'&&value.startsWith('$'))throw Error('Unsupported action reference');return value;});

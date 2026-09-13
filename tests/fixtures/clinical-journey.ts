@@ -4,6 +4,7 @@ import type {Page} from '@playwright/test';
 import {expect} from './local-test';
 import {assertBrowserActor,decryptSynthetic,requireSuccess,type ClinicalAccount,type ClinicalFixture} from './clinical-local';
 import {observeClinicalAction} from './clinical-response-loss';
+import {observeClinicalArrival} from './clinical-arrival-diagnostics';
 import {closeStatusSchema,type CloseDecision,type CloseReceipt} from '../../lib/turnos/close-contract';
 
 export const uiExpect=expect.configure({timeout:30000});
@@ -23,8 +24,11 @@ export async function prepareSavedVisit(page:Page,fixture:ClinicalFixture,{actor
  expect(turno.estado).toBe('AGENDADO');expect(turno.origen).toBe('WALK_IN');expect(turno.local_datetime).toBe(localDatetime);
  const {rows:[identity]}=await fixture.db.query('SELECT pi.nombre_cifrado,pi.apellido_cifrado,pi.fecha_nacimiento FROM public.paciente p JOIN public.paciente_identidad pi ON pi.id=p.identidad_id WHERE p.id=$1 AND p.organization_id=$2',[turno.paciente_id,actor.organizationId]);
  expect(decryptSynthetic(identity.nombre_cifrado)).toBe(`E2E ${fixture.runId}`);expect(decryptSynthetic(identity.apellido_cifrado)).toBe(actor.specialty);expect(identity.fecha_nacimiento).toBeNull();
- const appointment=page.locator('.fi-turno').filter({hasText:fixture.runId});await appointment.getByRole('button',{name:'Marcar llegada',exact:true}).click();
- await expect.poll(async()=>{const r=await fixture.db.query('SELECT estado FROM public.turno WHERE id=$1',[turno.id]);return r.rows[0].estado;}).toBe('EN_SALA');
+ const appointment=page.locator('.fi-turno').filter({hasText:fixture.runId}),arrival=await observeClinicalArrival(page,fixture.cleanup,turno.id);let arrivalStage='click';
+ try {
+  await appointment.getByRole('button',{name:'Marcar llegada',exact:true}).click();arrivalStage='SQL';
+  await expect.poll(async()=>{const r=await fixture.db.query('SELECT estado FROM public.turno WHERE id=$1',[turno.id]);return r.rows[0].estado;}).toBe('EN_SALA');
+ }catch{throw new Error(`${arrival.failureMessage()} Stage: ${arrivalStage}`);}finally{await arrival.dispose();}
  await appointment.getByRole('button',{name:'Abrir ficha',exact:true}).click();await page.waitForURL(new RegExp(`/pacientes/${turno.paciente_id}(?:\\?|$)`),{timeout:30000});
  if(actor.specialty==='quiropraxia')await page.getByRole('textbox',{name:'Notas libres',exact:true}).fill(marker);
  else await page.getByRole('textbox',{name:/^Subjetivo — nota SOAP/}).fill(marker);
@@ -85,7 +89,8 @@ export async function closeClinically(page:Page,fixture:ClinicalFixture,visit:Vi
 }
 export async function openReview(page:Page,fixture:ClinicalFixture,visit:VisitEvidence,actor=visit.actor):Promise<void> {
  await assertBrowserActor(fixture,page,actor);await page.goto(`/hoy?prof=${visit.actor.memberId}`);
- await page.locator(`[data-cobro-turno="${visit.turnoId}"]`).click();await uiExpect(page.getByRole('dialog')).toBeVisible();
+ const review=page.getByRole('button',{name:'Revisar cobro',exact:true}).and(page.locator(`[data-cobro-turno="${visit.turnoId}"]`));
+ await uiExpect(review).toHaveCount(1);await review.click();await uiExpect(page.getByRole('dialog')).toBeVisible();
 }
 export async function enterDecision(page:Page,decision:CloseDecision):Promise<void> {
  await page.getByLabel('Monto en pesos',{exact:true}).fill(String(decision.montoCents/100));
