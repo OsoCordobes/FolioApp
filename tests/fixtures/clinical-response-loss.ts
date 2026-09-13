@@ -47,8 +47,11 @@ async function committed(fixture:ClinicalFixture,actor:ClinicalAccount,request:C
 /** Observe real role-bearing POSTs, optionally remove one already committed response. */
 export async function observeClinicalAction(fixture:ClinicalFixture,page:Page,actor:ClinicalAccount,expected:ExpectedAction,loseResponse=false):Promise<{observed:Promise<CommittedAction>;dispose:()=>Promise<void>}> {
  let resolve!:(value:CommittedAction)=>void,reject!:(reason:Error)=>void,settled=false,claimed=false;
+ let failure:Error|undefined,removalFailed=false,removal:Promise<void>|undefined,disposal:Promise<void>|undefined;
  const observed=new Promise<CommittedAction>((yes,no)=>{resolve=yes;reject=no;});void observed.catch(()=>{});
  const pattern='http://localhost:4420/hoy**';
+ // Automatic, caller and fixture cleanup share one protocol operation, even after page closure.
+ const remove=()=>removal??=(async()=>{try{await page.unroute(pattern,handler);}catch{removalFailed=true;}})();
  async function handler(route:Route):Promise<void> {
   let stage='request';
   try {
@@ -68,18 +71,22 @@ export async function observeClinicalAction(fixture:ClinicalFixture,page:Page,ac
    if(loseResponse)await forwardThenLose({fetch,commit:confirm,abort:()=>route.abort('failed')});
    else {const response=await fetch();await confirm(response);await route.fulfill({response});} // Unmodified real response only.
    assert.ok(evidence);settled=true;resolve(evidence);
-  }catch{settled=true;reject(new Error(`Clinical action observation failed at ${stage}`));try{await route.abort('failed');}catch{/* Already handled by the single-shot transport. */}}
-  finally {if(claimed||settled)await page.unroute(pattern,handler);}
+  }catch{failure??=new Error(`Clinical action observation failed at ${stage}`);settled=true;reject(failure);try{await route.abort('failed');}catch{/* Already handled by the single-shot transport. */}}
+  finally {if(claimed||settled)await remove();}
  }
  await page.route(pattern,handler);
- const dispose=async()=>{await page.unroute(pattern,handler);if(!settled){settled=true;reject(new Error('Expected clinical action was not observed'));}};
+ const dispose=()=>disposal??=(async()=>{
+  await remove();
+  if(!settled){failure=new Error('Expected clinical action was not observed');settled=true;reject(failure);}
+  if(removalFailed)throw new Error(`${failure?.message??'Clinical action observation'}; interceptor removal failed`);
+ })();
  fixture.cleanup.add('action interceptor',dispose);return {observed,dispose};
 }
 
 /** Keep the writer detector installed through UI acknowledgement and all recovery assertions. */
 export async function observeClinicalReceiptProbe(fixture:ClinicalFixture,page:Page,actor:ClinicalAccount,original:CommittedAction):Promise<{observed:Promise<CommittedAction>;dispose:()=>Promise<void>}> {
  assert.ok(original.request.action!=='SETTLE'&&original.receipt,'A committed close receipt is required');const snapshot=original.request;
- let resolve!:(value:CommittedAction)=>void,reject!:(reason:Error)=>void,settled=false,claimed=false,failure:Error|undefined;
+ let resolve!:(value:CommittedAction)=>void,reject!:(reason:Error)=>void,settled=false,claimed=false,failure:Error|undefined,disposal:Promise<void>|undefined;
  const observed=new Promise<CommittedAction>((yes,no)=>{resolve=yes;reject=no;});void observed.catch(()=>{});
  const pattern='http://localhost:4420/hoy**',inFlight=new Set<Promise<void>>();
  async function handle(route:Route):Promise<void> {
@@ -95,15 +102,17 @@ export async function observeClinicalReceiptProbe(fixture:ClinicalFixture,page:P
    stage='receipt transport';const response=await route.fetch({maxRetries:0,maxRedirects:0,timeout:12000});assert.equal(response.status(),200);assert.ok(!response.headers()['x-action-redirect']);
    stage='returned receipt and committed SQL';const evidence={...await committed(fixture,actor,bound,await response.text(),true),actionId};assert.deepEqual(evidence.receipt,original.receipt);
    await route.fulfill({response});settled=true;resolve(evidence);
-  }catch {failure=new Error(`Clinical receipt probe failed at ${stage}`);settled=true;reject(failure);try{await route.abort('failed');}catch{/* The response may already have been consumed. */}}
+  }catch {failure??=new Error(`Clinical receipt probe failed at ${stage}`);settled=true;reject(failure);try{await route.abort('failed');}catch{/* The response may already have been consumed. */}}
  }
  function handler(route:Route):Promise<void> {const task=handle(route);inFlight.add(task);void task.then(()=>inFlight.delete(task),()=>inFlight.delete(task));return task;}
  await page.route(pattern,handler);
- const dispose=async()=>{
-  await page.unroute(pattern,handler);await Promise.all(inFlight);
+ const dispose=()=>disposal??=(async()=>{
+  let removalFailed=false;try{await page.unroute(pattern,handler);}catch{removalFailed=true;}
+  await Promise.all(inFlight);
   if(!settled){settled=true;reject(new Error('Expected browser receipt probe was not observed'));}
   // A writer after the observed promise resolved must still fail the recovery window.
+  if(removalFailed)throw new Error(`${failure?.message??'Clinical receipt probe'}; interceptor removal failed`);
   if(failure)throw failure;
- };
+ })();
  fixture.cleanup.add('receipt probe and writer detector',dispose);return {observed,dispose};
 }
