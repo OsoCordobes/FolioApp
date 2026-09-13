@@ -8,13 +8,14 @@ import { readCompleteCollection } from "../../lib/db/complete-collection";
 import * as timelineCore from "../../lib/ficha/timeline-core";
 import * as rango from "../../lib/agenda/rango-horario";
 import * as closeContract from "../../lib/turnos/close-contract";
+import { capabilitiesFor, type Role } from "../../lib/auth/capabilities";
 
 const org="synthetic-org",patient="synthetic-patient";
 const row=(i:number)=>({id:`turno-${String(i).padStart(5,"0")}`,organization_id:org,paciente_id:patient,profesional_id:"member",inicio:"2026-09-08T13:00:00Z",duracion_min:30,estado:"CERRADO",origen:"MANUAL",paciente_tipo:"ACTIVO",servicio_nombre:"Consulta",modalidad:"telemedicina"});
 type Call={table:string;service:boolean;from:number;to:number;orders:string[];filters:Array<[string,unknown]>;columns:string};
-function fixture(data:Record<string,any[]>, failure?:(call:Call)=>boolean, denied=false){
- const calls:Call[]=[];let serviceCreated=0;
- const client=(service:boolean)=>({from(table:string){
+function fixture(data:Record<string,any[]>, failure?:(call:Call)=>boolean, denied=false, role:Role="OWNER"){
+ const calls:Call[]=[],rpcCalls:{name:string;args:Record<string,unknown>;count?:string}[]=[];let serviceCreated=0;
+ const client=(service:boolean)=>{const api:any={from(table:string){
   const c:Call={table,service,from:0,to:999,orders:[],filters:[],columns:"*"};let count=false,single=false;
   const q:any={select(columns:string,opts?:{count?:string}){c.columns=columns;count=opts?.count==="exact";return q;},
    eq(key:string,value:unknown){c.filters.push([key,value]);return q;},in(key:string,values:unknown[]){c.filters.push([key,values]);return q;},
@@ -29,11 +30,11 @@ function fixture(data:Record<string,any[]>, failure?:(call:Call)=>boolean, denie
     if(c.columns!=="*"){const keys=c.columns.split(",").map(v=>v.trim());rows=rows.map(r=>Object.fromEntries(Object.entries(r).filter(([key])=>keys.includes(key))));}
     return Promise.resolve({data:single?(rows[0]??null):rows,error:null,count:count?total:null}).then(resolve,reject);
    }};return q;
- }});
+ },rpc(name:string,args:Record<string,unknown>,opts?:{count?:string}){rpcCalls.push({name,args,count:opts?.count});return api.from(name).select("*",opts);}};return api;};
  const imports:Record<string,unknown>={
   "@/lib/turnos/close-contract":closeContract,
   "@/lib/observability/safe-log":{safeLog(){}},"@/lib/crypto":{decryptColumn:()=>null,tryDecrypt:()=>null},
-  "@/lib/auth/capabilities":{capabilitiesFor:()=>({canReadClinical:true})},"./session":{getActiveSession:async()=>denied?{ok:false,error:{code:"forbidden",message:"Denied"}}:{ok:true,data:{role:"OWNER",esColegiado:true}}},
+  "@/lib/auth/capabilities":{capabilitiesFor},"./session":{getActiveSession:async()=>denied?{ok:false,error:{code:"forbidden",message:"Denied"}}:{ok:true,data:{role,esColegiado:role==="OWNER"}}},
   "./active-context":{getActiveContext:async()=>({ok:true,data:{session:{role:denied?"ASISTENTE":"OWNER",memberId:"member"},organization:{id:org}}})},
   "./errors":{ok:(data:unknown)=>({ok:true,data}),err:(code:string,message:string)=>({ok:false,error:{code,message}})},
   "./complete-collection":{readCompleteCollection},"./confirmado-via":{loadConfirmadoViaByTurnoId:async()=>({})},"./cancelado-por-paciente":{loadCanceladoPorPacienteIds:async()=>new Set()},
@@ -41,7 +42,7 @@ function fixture(data:Record<string,any[]>, failure?:(call:Call)=>boolean, denie
   "@/lib/supabase/server":{createSupabaseServerClient:async()=>client(false),createSupabaseServiceClient:()=>{serviceCreated++;return client(true);}},
  };
  const load=(file:string)=>{const exports:Record<string,(...args:any[])=>Promise<any>>={};runInNewContext(ts.transpileModule(readFileSync(file,"utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,Date,Intl,Map,Set,require(name:string){if(name in imports)return imports[name];throw Error(name);}});return exports;};
- return {load,calls,get serviceCreated(){return serviceCreated;}};
+ return {load,calls,rpcCalls,get serviceCreated(){return serviceCreated;}};
 }
 const day={organizationId:org,fechaIso:"2026-09-08",timezone:"America/Argentina/Cordoba"};
 const week={organizationId:org,weekStartIso:"2026-09-07",timezone:day.timezone};
@@ -150,4 +151,32 @@ test("agenda reads payment freshness in batches and replaces the entire older vi
   const broken=fixture({turno_extendido:[turnos[0]],pago:rows});assert.equal((await broken.load("lib/db/hoy.ts").getDashboardHoy(day)).ok,false);
  }
  const denied=fixture({turno_extendido:[turnos[0]],pago},c=>c.table==="pago");assert.equal((await denied.load("lib/db/hoy.ts").getDashboardHoy(day)).ok,false);
+});
+
+for(const role of ["ASISTENTE","COORDINADOR"] as const)test(`Hoy ${role} reads the entire operational agenda without querying the clinical view or sessions`,async()=>{
+ const rows=Array.from({length:1001},(_,i)=>({...row(i),paciente_tipo:null,paciente_tags:null,paciente_alerta_alergia:false,nota_reserva_cifrado:null,precio_cents:null,pago_id:null}));
+ const f=fixture({agenda_recepcion_dia:rows},undefined,false,role);
+ const result=await f.load("lib/db/hoy.ts").getDashboardHoy({...day,profesionalId:"member"});
+ assert.equal(result.ok,true);assert.equal(result.data.turnos.length,1001);
+ assert.ok(result.data.turnos.every((turno:any)=>turno.postVisita.guardada===false&&turno.cobro.montoCents===null&&turno.notaReserva===null));
+ assert.equal(f.rpcCalls.length,3);assert.ok(f.rpcCalls.every(call=>call.name==="agenda_recepcion_dia"&&call.count==="exact"&&call.args.p_org===org&&call.args.p_fecha===day.fechaIso&&call.args.p_profesional==="member"));
+ assert.ok(f.calls.every(call=>call.table==="agenda_recepcion_dia"&&call.orders.join(",")==="inicio,id"&&!call.service));assert.equal(f.serviceCreated,0);
+});
+
+for(const role of ["ASISTENTE","COORDINADOR"] as const)test(`Hoy ${role} refuses a partial or denied operational agenda without falling back to privileged or clinical reads`,async()=>{
+ for(const lateFailure of [false,true]){
+  const f=fixture({agenda_recepcion_dia:Array.from({length:1001},(_,i)=>row(i))},call=>call.table==="agenda_recepcion_dia"&&(!lateFailure||call.from>0),false,role);
+  const result=await f.load("lib/db/hoy.ts").getDashboardHoy(day);
+  assert.equal(result.ok,false);assert.ok(f.calls.every(call=>call.table==="agenda_recepcion_dia"));assert.equal(f.serviceCreated,0);
+ }
+});
+
+test("Hoy ASISTENTE still verifies the complete current payment after its operational agenda read",async()=>{
+ const id="12000000-0000-4000-8000-000000000001",turno={...row(1),pago_id:id,pago_estado:"PENDIENTE",pago_monto_cents:100,pago_pagado_ts:null};
+ const pago={id,turno_id:turno.id,monto_cents:17500,metodo:"TRANSFERENCIA",estado:"PAGADO",pagado_ts:"2026-09-13T04:00:00Z",updated_at:"2026-09-13T04:01:00Z"};
+ const f=fixture({agenda_recepcion_dia:[turno],pago:[pago]},undefined,false,"ASISTENTE");
+ const result=await f.load("lib/db/hoy.ts").getDashboardHoy(day);
+ assert.equal(result.ok,true);assert.equal(result.data.turnos[0].cobro.id,id);assert.equal(result.data.turnos[0].cobro.estado,"pagado");assert.equal(result.data.turnos[0].cobro.updatedAt,pago.updated_at);
+ assert.ok(f.calls.every(call=>["agenda_recepcion_dia","pago"].includes(call.table)));assert.equal(f.serviceCreated,0);
+ const missing=fixture({agenda_recepcion_dia:[turno],pago:[]},undefined,false,"ASISTENTE");assert.equal((await missing.load("lib/db/hoy.ts").getDashboardHoy(day)).ok,false);
 });

@@ -3,7 +3,7 @@ import { safeLog } from "@/lib/observability/safe-log";
 /**
  * Folio · /hoy data fetcher (Sprint S1 T-1.4).
  *
- * Lee `turno_extendido` (vista M14) para la fecha local del consultorio y
+ * Lee la agenda autorizada para la fecha local del consultorio y
  * devuelve el shape que consume el Client Component `<Dashboard />`:
  *   { turnos: Turno[], pacientes: PacientesById }
  *
@@ -13,6 +13,7 @@ import { safeLog } from "@/lib/observability/safe-log";
  *   - Convierte timestamptz `inicio` a "HH:MM" en la timezone de la org.
  *   - Computa `postVisita.guardada` desde existencia de sesion + completion.
  *
+ * Recepción usa la proyección operacional M122, sin consultar sesiones clínicas.
  * El cliente nunca recibe el ciphertext. RLS sobre `turno_extendido`
  * (security_invoker=true) garantiza que solo se devuelven turnos del scope
  * del rol activo.
@@ -40,7 +41,7 @@ interface TurnoExtendidoRow {
   duracion_min: number;
   estado: "AGENDADO" | "CONFIRMADO" | "EN_SALA" | "ATENDIENDO" | "CERRADO" | "NO_ASISTIO" | "CANCELADO" | "REAGENDADO";
   origen: "MANUAL" | "BOOKING" | "WALK_IN" | "GOOGLE" | "WHATSAPP";
-  precio_cents: number;
+  precio_cents: number | null;
   gcal_event_id: string | null;
   atendiendo_desde: string | null;
   duracion_real_min: number | null;
@@ -48,7 +49,7 @@ interface TurnoExtendidoRow {
   paciente_nombre_cifrado: string | null;
   paciente_apellido_cifrado: string | null;
   paciente_telefono_cifrado: string | null;
-  paciente_tipo: "ACTIVO" | "INACTIVO" | "EN_ESPERA";
+  paciente_tipo: "ACTIVO" | "INACTIVO" | "EN_ESPERA" | null;
   paciente_tags: string[] | null;
   paciente_alerta_alergia: boolean;
   servicio_nombre: string;
@@ -143,6 +144,7 @@ export async function getDashboardHoy(input: FetcherInput): Promise<Result<Dashb
   // Fail-closed sin sesión.
   const sessionRes = await getActiveSession();
   if (!sessionRes.ok) return sessionRes;
+  const reception = sessionRes.data.role === "ASISTENTE" || sessionRes.data.role === "COORDINADOR";
   const canReadClinical = sessionRes.ok
     ? capabilitiesFor(sessionRes.data.role, sessionRes.data.esColegiado).canReadClinical
     : false;
@@ -153,6 +155,11 @@ export async function getDashboardHoy(input: FetcherInput): Promise<Result<Dashb
   const { startUtc, endUtc } = computeDayRangeUtc(fechaIso, timezone);
 
   const { data, error } = await readCompleteCollection<TurnoExtendidoRow>(async (from, to) => {
+  if (reception) {
+    return supabase.rpc("agenda_recepcion_dia", {
+      p_org: organizationId, p_fecha: fechaIso, p_profesional: profesionalId ?? null,
+    }, { count: "exact" }).order("inicio", { ascending: true }).order("id", { ascending: true }).range(from, to);
+  }
   let query = supabase
     .from("turno_extendido")
     .select("id, organization_id, inicio, duracion_min, estado, origen, precio_cents, gcal_event_id, atendiendo_desde, duracion_real_min, paciente_id, paciente_nombre_cifrado, paciente_apellido_cifrado, paciente_telefono_cifrado, paciente_tipo, paciente_tags, paciente_alerta_alergia, servicio_nombre, servicio_tipo_canonico, pago_id, pago_monto_cents, pago_estado, pago_pagado_ts, profesional_id, nota_reserva_cifrado, modalidad", { count: "exact" })
@@ -196,7 +203,7 @@ export async function getDashboardHoy(input: FetcherInput): Promise<Result<Dashb
   // M91 · su gemelo para el chip "Canceló el paciente", desde el log de
   // transiciones (ver lib/db/cancelado-por-paciente.ts), solo para CANCELADO.
   const [postVisitaByTurno, confirmadoViaByTurno, canceladoPorPaciente] = await Promise.all([
-    loadPostVisitaFlags(turnoIdsCerrados, organizationId),
+    reception ? Promise.resolve(ok(new Map<string, { guardada: boolean }>())) : loadPostVisitaFlags(turnoIdsCerrados, organizationId),
     loadConfirmadoViaByTurnoId(
       supabase,
       rows.filter((r) => r.estado === "CONFIRMADO").map((r) => r.id),
