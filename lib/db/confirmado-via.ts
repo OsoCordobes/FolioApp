@@ -1,3 +1,5 @@
+
+import { safeLog } from "@/lib/observability/safe-log";
 /**
  * Folio · lectura batch de `turno.confirmado_via` (M90 · F7b).
  *
@@ -37,7 +39,7 @@ export async function loadConfirmadoViaByTurnoId(
     .in("id", turnoIds);
 
   if (error) {
-    console.warn(`[turnos] confirmado_via batch falló: ${error.message}`);
+    safeLog("warn", "lib.db.confirmado.via.L40", { error: error });
     return {};
   }
 

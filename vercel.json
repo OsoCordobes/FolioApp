@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": { "deploymentEnabled": { "codex/market-ready": false, "codex/launch-reliability": false } },
   "regions": ["gru1"],
   "crons": [
     {

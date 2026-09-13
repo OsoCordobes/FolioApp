@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "../fixtures/local-test";
 
 /**
  * Captura baselines del prototipo Claude Design (10 HTML originales en

@@ -278,10 +278,10 @@ function sets(): DedupeSets {
   return { dni: new Set(), telefono: new Set() };
 }
 
-test("decidirDedupe: existente por DNI gana sobre teléfono", () => {
+test("decidirDedupe: DNI identifica duplicado; teléfono compartido no", () => {
   const existentes: DedupeSets = { dni: new Set(["d1"]), telefono: new Set(["t1"]) };
   assert.equal(decidirDedupe({ dni: "d1", telefono: "t1" }, existentes, sets()), "duplicado_dni");
-  assert.equal(decidirDedupe({ dni: "d2", telefono: "t1" }, existentes, sets()), "duplicado_telefono");
+  assert.equal(decidirDedupe({ dni: "d2", telefono: "t1" }, existentes, sets()), "importar");
 });
 
 test("decidirDedupe: duplicado dentro del archivo (segunda aparición)", () => {
@@ -289,7 +289,7 @@ test("decidirDedupe: duplicado dentro del archivo (segunda aparición)", () => {
   const vistos = sets();
   assert.equal(decidirDedupe({ dni: "d1", telefono: "t1" }, existentes, vistos), "importar");
   assert.equal(decidirDedupe({ dni: "d1", telefono: "t9" }, existentes, vistos), "duplicado_en_archivo");
-  assert.equal(decidirDedupe({ dni: null, telefono: "t1" }, existentes, vistos), "duplicado_en_archivo");
+  assert.equal(decidirDedupe({ dni: null, telefono: "t1" }, existentes, vistos), "importar");
 });
 
 test("decidirDedupe: sin claves (DNI y teléfono null) siempre importa", () => {

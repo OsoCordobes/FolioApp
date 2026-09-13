@@ -16,6 +16,7 @@
 import { cookies } from "next/headers";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { verifyMfaSession } from "@/lib/auth/mfa-access";
 
 import { err, ok, type Result } from "./errors";
 
@@ -51,12 +52,9 @@ const ACTIVE_ORG_COOKIE = "folio.active_org";
  */
 export async function getActiveSession(): Promise<Result<ActiveSession>> {
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return err("auth_required", "No estás autenticado.");
-  }
+  const verified = await verifyMfaSession(supabase);
+  if (!verified.ok) return verified;
+  const { user } = verified.data;
 
   // Cookie con org seleccionada manualmente (clinic-switching)
   const cookieStore = await cookies();
@@ -69,9 +67,11 @@ export async function getActiveSession(): Promise<Result<ActiveSession>> {
   // memberships creadas en el mismo instante (seed batch).
   const { data: members, error } = await supabase
     .from("member")
-    .select("id, organization_id, role, es_colegiado, organization:organization_id (is_internal_account)")
+    .select("id, organization_id, role, es_colegiado, organization:organization_id!inner (is_internal_account, deleted_at)")
     .eq("profile_id", user.id)
     .is("deleted_at", null)
+    .is("organization.deleted_at", null)
+    .or("accepted_at.not.is.null,invited_by_id.is.null")
     .order("created_at", { ascending: true })
     .order("id", { ascending: true });
 
@@ -123,12 +123,9 @@ export interface UserMembership {
 
 export async function listUserMemberships(): Promise<Result<UserMembership[]>> {
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return err("auth_required", "No estás autenticado.");
-  }
+  const verified = await verifyMfaSession(supabase);
+  if (!verified.ok) return verified;
+  const { user } = verified.data;
 
   const { data, error } = await supabase
     .from("member")
@@ -136,6 +133,7 @@ export async function listUserMemberships(): Promise<Result<UserMembership[]>> {
       "id, organization_id, role, organization:organization_id (nombre, slug, is_internal_account, deleted_at)",
     )
     .eq("profile_id", user.id)
+    .or("accepted_at.not.is.null,invited_by_id.is.null")
     .is("deleted_at", null);
 
   if (error) {
@@ -188,19 +186,18 @@ export async function setActiveOrg(organizationId: string): Promise<Result<void>
   }
 
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return err("auth_required", "No estás autenticado.");
-  }
+  const verified = await verifyMfaSession(supabase);
+  if (!verified.ok) return verified;
+  const { user } = verified.data;
 
   const { data: membership, error: mErr } = await supabase
     .from("member")
-    .select("id")
+    .select("id, organization:organization_id!inner(deleted_at)")
     .eq("profile_id", user.id)
     .eq("organization_id", organizationId)
     .is("deleted_at", null)
+    .is("organization.deleted_at", null)
+    .or("accepted_at.not.is.null,invited_by_id.is.null")
     .maybeSingle();
 
   if (mErr) {

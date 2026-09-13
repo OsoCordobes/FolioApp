@@ -1,3 +1,5 @@
+
+import { safeLog } from "@/lib/observability/safe-log";
 /**
  * Folio · Mercado Pago REST client (Preapproval / Suscripciones).
  *
@@ -53,7 +55,7 @@ function resolvePlanPriceCents(): number {
   if (!raw) return MP_PLAN_PRICE_CENTS_DEFAULT;
   const parsed = Number(raw);
   if (!Number.isInteger(parsed) || parsed <= 0) {
-    console.warn(
+    safeLog("warn", "lib.mercadopago.client.L56",
       `[mp] MP_PLAN_PRICE_CENTS inválido (${raw}); usando default ${MP_PLAN_PRICE_CENTS_DEFAULT}.`,
     );
     return MP_PLAN_PRICE_CENTS_DEFAULT;
@@ -106,6 +108,7 @@ async function mpRequest<T>(
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
     cache: "no-store",
+    signal: AbortSignal.timeout(10_000),
   });
 
   if (!res.ok) {
@@ -156,6 +159,7 @@ export interface MpPreapproval {
 }
 
 export interface CreatePreapprovalInput {
+  idempotencyKey?: string;
   payerEmail: string;
   externalReference: string;
   backUrl: string;
@@ -190,10 +194,8 @@ export async function createPreapproval(
     back_url: input.backUrl,
     status: "pending" as const,
   };
-  // Idempotency key derivado del external_reference + monto: dos calls con
-  // misma org, mismo monto y mismo timestamp de minuto no duplican preapproval
-  // ante retry de fetch; un monto distinto (cambió el tier/seats) genera key nueva.
-  const idemKey = `preapproval-${input.externalReference}-${input.amountArs}-${Math.floor(Date.now() / 60000)}`;
+  // Activation identity survives retries across minutes and process restarts.
+  const idemKey = input.idempotencyKey ?? `preapproval-${input.externalReference}-${input.amountArs}`;
   return mpRequest<MpPreapproval>("POST", "/preapproval", body, idemKey);
 }
 
@@ -221,9 +223,7 @@ export async function pausePreapproval(preapprovalId: string): Promise<MpPreappr
  * `amountArs` viene en ARS (unidad que espera MP, admite decimales). La
  * conversión centavos→ARS es responsabilidad del caller (PaymentProvider).
  *
- * X-Idempotency-Key derivada de preapproval + monto + ventana de minuto:
- * un retry de fetch con el mismo monto no duplica el PUT; un cambio de monto
- * legítimo (otro valor) genera key distinta.
+ * PUT declara el monto deseado; repetirlo es idempotente sin una ventana de tiempo.
  */
 export async function updatePreapprovalAmount(
   preapprovalId: string,
@@ -235,8 +235,8 @@ export async function updatePreapprovalAmount(
       currency_id: MP_PLAN_CURRENCY,
     },
   };
-  const idemKey = `preapproval-amount-${preapprovalId}-${amountArs}-${Math.floor(Date.now() / 60000)}`;
-  return mpRequest<MpPreapproval>("PUT", `/preapproval/${preapprovalId}`, body, idemKey);
+  // PUT sets the desired value and is safely repeatable, including A -> B -> A.
+  return mpRequest<MpPreapproval>("PUT", `/preapproval/${preapprovalId}`, body);
 }
 
 // ─── Authorized payment (cobro mensual recurrente) ─────────────────────────
@@ -278,3 +278,19 @@ export async function getAuthorizedPayment(
 // El mapeo MP status → dominio Folio vive en lib/payments/mercadopago.ts
 // (mapMpPreapprovalStatus / mapMpPaymentStatus). Este módulo queda como
 // detalle de transporte: solo habla el idioma de la API de MP.
+
+/** Search by documented payer filter, then match our operation reference exactly.
+ * Exhaust pagination before accepting a unique match; never assume page one is complete.
+ */
+export async function findPreapprovalsForOperation(payerEmail: string, externalReference: string): Promise<MpPreapproval[]> {
+  const matches: MpPreapproval[] = [];
+  for (let offset=0; offset<100; offset+=20) {
+    const query = new URLSearchParams({payer_email:payerEmail,offset:String(offset),limit:"20"});
+    const page = await mpRequest<{paging:{total:number};results:MpPreapproval[]}>("GET",`/preapproval/search?${query}`);
+    if (!Array.isArray(page.results) || !Number.isInteger(page.paging?.total)) throw new Error("provider_search_incomplete");
+    matches.push(...page.results.filter(row=>row.external_reference===externalReference));
+    if (matches.length>1 || offset+page.results.length>=page.paging.total) return matches;
+    if (page.results.length===0) throw new Error("provider_search_incomplete");
+  }
+  throw new Error("provider_search_incomplete");
+}

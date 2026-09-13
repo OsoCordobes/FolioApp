@@ -27,6 +27,7 @@ import {
   createTurnoAction,
   loadCreateTurnoMeta,
   searchPacientesAction,
+  type CreateTurnoActionInput,
   type CreateTurnoMeta,
   type PacientePickerRow,
   type ServicioPickerRow,
@@ -34,17 +35,17 @@ import {
 import { useToast } from "@/components/ui/toast";
 import { resolvePickerProfesional } from "@/lib/agenda/profesional";
 import {
-  isoToLocalDatetime,
-  isoToLocalDatetimeExact,
-  localDatetimeToIso,
-  localDatetimeToastLabel,
-} from "@/lib/datetime-local";
+  organizationDatetimeDefault,
+  organizationDatetimeExact,
+  organizationDatetimeToIso,
+  organizationDatetimeToastLabel,
+} from "@/lib/organization-datetime";
 import { normalizarBusqueda } from "@/lib/format/busqueda";
 import { useModalA11y } from "@/lib/use-modal-a11y";
 
 interface TurnoCreateModalProps {
   /**
-   * Inicio default del picker (ISO con offset o "YYYY-MM-DDTHH:mm" local).
+   * Inicio default: ISO con offset o "YYYY-MM-DDTHH:mm" del consultorio.
    * Si viene, se respeta EXACTO — es un horario elegido (p. ej. el slot
    * clickeado en /calendario), no uno por sugerir. Sin él, el default es
    * "ahora" redondeado al próximo múltiplo de 5' (walk-in de /hoy).
@@ -100,15 +101,15 @@ export function TurnoCreateModal({
   const [servicioId, setServicioId] = useState<string | null>(null);
   /** Profesional destino (CLINICA-3). Se setea al cargar la metadata. */
   const [profesionalId, setProfesionalId] = useState<string | null>(null);
-  const [inicioLocal, setInicioLocal] = useState<string>(() =>
-    defaultInicio ? isoToLocalDatetimeExact(defaultInicio) : isoToLocalDatetime(),
-  );
+  const [inicioLocal, setInicioLocal] = useState("");
+  const editorTimezone = useRef<string | null>(null);
   const [duracion, setDuracion] = useState<number>(45);
   const [submitting, startTransition] = useTransition();
   const [submitErr, setSubmitErr] = useState<string | null>(null);
   const [outcomeUnknown, setOutcomeUnknown] = useState(false);
   const creationPhase = useRef<"idle" | "pending" | "uncertain" | "confirmed">("idle");
   const recoveryAgenda = useRef("/calendario");
+  const attempt = useRef<{ input: CreateTurnoActionInput; label: string } | null>(null);
   const toast = useToast();
   const router = useRouter();
   const handleClose = () => {
@@ -135,6 +136,13 @@ export function TurnoCreateModal({
         setLoadErr(result.error.message);
         setLoading(false);
         return;
+      }
+      if (!editorTimezone.current) {
+        const initial = defaultInicio
+          ? organizationDatetimeExact(defaultInicio, result.data.timezone)
+          : organizationDatetimeDefault(result.data.timezone);
+        setInicioLocal(initial);
+        editorTimezone.current = result.data.timezone;
       }
       setMeta(result.data);
       if (result.data.servicios.length > 0) {
@@ -173,7 +181,7 @@ export function TurnoCreateModal({
     // defaultProfesionalId solo afecta el default inicial del picker; ambos
     // props son estables durante la vida del modal (el caller lo desmonta y
     // remonta para "cambiarlos").
-  }, [preselectPacienteId, defaultProfesionalId, loadAttempt]);
+  }, [preselectPacienteId, defaultProfesionalId, defaultInicio, loadAttempt]);
 
   // A11y de modal compartida: focus trap + Escape (deshabilitado en submit) +
   // foco inicial + restore focus al cerrar. Ver lib/use-modal-a11y.ts.
@@ -185,8 +193,13 @@ export function TurnoCreateModal({
   const focusTargetRef = useRef<HTMLInputElement | null>(null);
   useEffect(() => {
     if (loading || !meta || meta.servicios.length === 0) return;
-    // Pequeño microtask para que el input ya esté montado en el DOM.
-    const t = setTimeout(() => focusTargetRef.current?.focus(), 50);
+    // Loading may finish after the user has already chosen a field. Preserve
+    // that focus so a delayed callback cannot redirect input into another field.
+    const t = setTimeout(() => {
+      const active = document.activeElement;
+      if (active && active !== document.body && active !== dialogRef.current) return;
+      focusTargetRef.current?.focus();
+    }, 50);
     return () => clearTimeout(t);
   }, [loading, meta, mode]);
 
@@ -260,6 +273,7 @@ export function TurnoCreateModal({
   const pickerProfesionalVisible = (meta?.profesionales.length ?? 0) > 1;
 
   const canSubmit =
+    !loading && meta != null &&
     !submitting &&
     !outcomeUnknown &&
     servicioId != null &&
@@ -271,60 +285,65 @@ export function TurnoCreateModal({
       ? pacienteId != null
       : nuevo.nombre.length > 0 && nuevo.apellido.length > 0 && nuevo.telefono.length >= 6);
 
-  const handleSubmit = () => {
-    if (!canSubmit || creationPhase.current !== "idle") return;
-    setSubmitErr(null);
-    if (!servicioId || !inicioLocal) return;
-    let isoInicio: string;
-    try { isoInicio = localDatetimeToIso(inicioLocal); }
-    catch { setSubmitErr("Revisá la fecha y hora del turno."); return; }
-    // Bind recovery to the submitted encounter, not later edits or the caller's page.
-    const fechaAgenda = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Cordoba", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(isoInicio));
-    const recoveryParams = new URLSearchParams({ w: fechaAgenda, mes: fechaAgenda.slice(0, 7) });
-    if (profesionalId) recoveryParams.set("prof", profesionalId);
-    recoveryAgenda.current = `/calendario?${recoveryParams}`;
+  const markUncertain = () => {
+    creationPhase.current = "uncertain";
+    setOutcomeUnknown(true);
+    setSubmitErr("No pudimos confirmar si se creó el turno. Comprobá el guardado para recuperar este mismo intento sin duplicar el paciente ni el turno.");
+  };
+  const submitAttempt = () => {
+    const pending = attempt.current;
+    if (!pending || creationPhase.current === "pending" || creationPhase.current === "confirmed") return;
+    const wasUncertain = creationPhase.current === "uncertain";
     creationPhase.current = "pending";
+    setSubmitErr(null);
     startTransition(async () => {
       let result: Awaited<ReturnType<typeof createTurnoAction>>;
-      try {
-        result = await createTurnoAction({
-        servicioId,
-        // Si hay un colegiado resuelto (picker o único), viaja explícito; el
-        // server igual valida y resuelve el fallback (sesión colegiada).
-        profesionalId: profesionalId ?? undefined,
-        inicio: isoInicio,
-        duracionMin: duracion,
-        origen,
-        // Pedido de origen (bandeja): el server lo marca CONFIRMADO al crear.
-        pedidoId: pedidoId ?? undefined,
-        ...(mode === "existente"
-          ? { pacienteId: pacienteId ?? undefined }
-          : { pacienteNuevo: nuevo }),
-        });
-      } catch {
-        // The server may have committed before the response was lost. This
-        // legacy creation is not idempotent: never offer a blind retry.
-        creationPhase.current = "uncertain";
-        setOutcomeUnknown(true);
-        setSubmitErr("No pudimos confirmar si se creó el turno. Revisá la agenda y el paciente antes de volver a crearlo; la respuesta pudo perderse después de guardar.");
-        return;
-      }
+      try { result = await createTurnoAction(pending.input); }
+      catch { markUncertain(); return; }
       if (!result.ok) {
+        // A rejected recovery (for example, revoked access) cannot prove that
+        // the original request failed before committing. Keep its identity.
+        if (wasUncertain) { markUncertain(); return; }
+        if (result.error.code === "network" || result.error.code === "db_error") { markUncertain(); return; }
         creationPhase.current = "idle";
+        attempt.current = null;
+        setOutcomeUnknown(false);
         setSubmitErr(result.error.message);
         return;
       }
       creationPhase.current = "confirmed";
-      // C4 · feedback: hasta acá crear un turno cerraba el modal en silencio.
-      // Nombre según modo: existente → row de la metadata; nuevo → form inline.
-      const pac = mode === "existente" ? meta?.pacientes.find((p) => p.id === pacienteId) : null;
-      const nombre =
-        mode === "existente"
-          ? (pac ? `${pac.nombre} ${pac.apellido}`.trim() : pacienteQuery.trim() || "paciente")
-          : `${nuevo.nombre} ${nuevo.apellido}`.trim();
-      toast.show({ titulo: `Turno creado · ${localDatetimeToastLabel(inicioLocal)} · ${nombre}` });
+      setOutcomeUnknown(false);
+      toast.show({ titulo: `Turno creado · ${pending.label}` });
       onCreated(result.data.turnoId);
     });
+  };
+  const handleSubmit = () => {
+    const timezone = editorTimezone.current;
+    if (!canSubmit || !meta || !timezone || creationPhase.current !== "idle" || !servicioId || !inicioLocal) return;
+    let isoInicio: string;
+    try { isoInicio = organizationDatetimeToIso(inicioLocal, timezone); }
+    catch (error) {
+      setSubmitErr(error instanceof RangeError && error.message.startsWith("Ese horario ")
+        ? error.message : "Revisá la fecha y hora en la zona del consultorio.");
+      return;
+    }
+    const fechaAgenda = organizationDatetimeExact(isoInicio, timezone).slice(0, 10);
+    const recoveryParams = new URLSearchParams({ w: fechaAgenda, mes: fechaAgenda.slice(0, 7) });
+    if (profesionalId) recoveryParams.set("prof", profesionalId);
+    recoveryAgenda.current = `/calendario?${recoveryParams}`;
+    const pac = mode === "existente" ? meta?.pacientes.find((p) => p.id === pacienteId) : null;
+    const nombre = mode === "existente"
+      ? (pac ? `${pac.nombre} ${pac.apellido}`.trim() : pacienteQuery.trim() || "paciente")
+      : `${nuevo.nombre} ${nuevo.apellido}`.trim();
+    attempt.current = {
+      input: {
+        operacionId: crypto.randomUUID(), servicioId, profesionalId: profesionalId ?? undefined,
+        inicio: isoInicio, duracionMin: duracion, origen, pedidoId: pedidoId ?? undefined,
+        ...(mode === "existente" ? { pacienteId: pacienteId ?? undefined } : { pacienteNuevo: { ...nuevo } }),
+      },
+      label: `${organizationDatetimeToastLabel(inicioLocal, timezone)} · ${nombre}`,
+    };
+    submitAttempt();
   };
 
   return (
@@ -571,6 +590,9 @@ export function TurnoCreateModal({
             ) : null}
 
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
+              {outcomeUnknown ? <button type="button" className="fi-btn fi-btn-primary" disabled={submitting} onClick={submitAttempt}>
+                {submitting ? "Comprobando…" : "Comprobar guardado"}
+              </button> : null}
               <button type="button" className="fi-btn fi-btn-ghost" onClick={handleClose} disabled={submitting}>
                 {outcomeUnknown ? "Revisar agenda" : "Cancelar"}
               </button>
@@ -612,4 +634,4 @@ const inputStyle: React.CSSProperties = {
 };
 
 // Datetime helpers (isoToLocalDatetime / localDatetimeToIso) viven en
-// lib/datetime-local.ts — compartidos con TurnoReagendarModal.
+// lib/organization-datetime.ts — horarios explícitos del consultorio.

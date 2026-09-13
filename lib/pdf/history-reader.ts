@@ -3,12 +3,13 @@ import { ESPECIALIDADES_META, getEspecialidadMetaByToolId } from "@/lib/especial
 import { quiropraxiaToolDataSchema } from "@/lib/especialidades/quiropraxia/schema";
 import { cardiologiaToolDataSchema, cardiologiaToolDataV2Schema } from "@/lib/especialidades/cardiologia/schema";
 import { psicologiaToolDataSchema, psicologiaToolDataV2Schema } from "@/lib/especialidades/psicologia/schema";
+import { hasInstrumentPayload, instrumentPopulationEligibility, omitInstrumentFields } from "@/lib/instrumentos/population-policy";
 import type { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { EvolucionPdfEntrada } from "./ficha-format";
 
 type Client = Awaited<ReturnType<typeof createSupabaseServerClient>>;
 type Row = { id: string } & Record<string, unknown>;
-export type AuthorizedPdfHistoryEntry = EvolucionPdfEntrada & { sesionId: string };
+export type AuthorizedPdfHistoryEntry = EvolucionPdfEntrada & { sesionId: string; toolId: string | null };
 export const PDF_MAX_BYTES = 4 * 1024 * 1024;
 /** Exact-count traversal; any interrupted/truncated/changing collection aborts. */
 export async function readPdfCollection<T extends { id: string }>(fetchPage: (from: number, to: number) => PromiseLike<{ data: T[] | null; count: number | null; error: unknown }>): Promise<T[]> {
@@ -34,7 +35,7 @@ export function decodePdfField(value: unknown): string | null {
   if (value != null && text === null) throw new Error("pdf_unreadable");
   return text;
 }
-function sessionSummary(row: Row): string {
+function sessionSummary(row: Row, attendedAt: string, fechaNacimiento: string | null): string {
   const toolId = row.tool_id;
   const meta = toolId == null ? ESPECIALIDADES_META.quiropraxia : typeof toolId === "string" ? getEspecialidadMetaByToolId(toolId) : null;
   if (!meta) throw new Error("pdf_tool_unknown");
@@ -55,9 +56,13 @@ function sessionSummary(row: Row): string {
     : toolId === "psicologia.escalas.v2" ? psicologiaToolDataV2Schema : meta.schema;
   const parsed = schema.safeParse(data);
   if (!parsed.success) throw new Error("pdf_tool_invalid");
+  // Preserve the ficha population safeguard; a missing DOB cannot imply adulthood.
+  if (!instrumentPopulationEligibility({ fechaNacimiento, fechaAtencion: attendedAt }).allowed && hasInstrumentPayload(meta.slug, parsed.data)) {
+    return `${meta.resumenSesion(omitInstrumentFields(meta.slug, parsed.data))} · Escalas históricas: respuestas originales, sin nueva interpretación.`;
+  }
   return meta.resumenSesion(parsed.data);
 }
-export async function readPdfHistory(client: Client, org: string, patient: string, sessionId: string | null): Promise<AuthorizedPdfHistoryEntry[]> {
+export async function readPdfHistory(client: Client, org: string, patient: string, sessionId: string | null, fechaNacimiento: string | null = null): Promise<AuthorizedPdfHistoryEntry[]> {
   const sessions = await readPdfCollection<Row>((from, to) => {
     let query = client.from("sesion").select("id,organization_id,paciente_id,turno_id,created_at,locked_at,tool_id,tool_data_cifrado,vertebras_json,soap_s_cifrado,soap_o_cifrado,soap_a_cifrado,soap_p_cifrado,notas_cifrado", { count: "exact" })
       .eq("organization_id", org).eq("paciente_id", patient);
@@ -80,11 +85,11 @@ export async function readPdfHistory(client: Client, org: string, patient: strin
       const text = decodePdfField(r.texto_correccion_cifrado);
       if (text === null) throw new Error("pdf_correction_missing");
       const list = corrections.get(String(r.sesion_id)) ?? [];
-      list.push({ id: r.id, autor: String(r.autor_id), fecha: String(r.created_at), motivo: String(r.motivo), texto: text });
+      list.push({ id: r.id, autorId: String(r.autor_id), createdAt: String(r.created_at), motivo: String(r.motivo), texto: text });
       corrections.set(String(r.sesion_id), list);
     }
     const turns = await readPdfCollection<Row>((from, to) => client.from("turno")
-      .select("id,inicio,servicio:servicio(nombre)", { count: "exact" }).eq("organization_id", org).eq("paciente_id", patient)
+      .select("id,inicio,profesional_id,servicio:servicio(nombre)", { count: "exact" }).eq("organization_id", org).eq("paciente_id", patient)
       .in("id", batch.map(s => String(s.turno_id))).order("id", { ascending: true }).range(from, to));
     account(turns);
     for (const turn of turns) visits.set(turn.id, turn);
@@ -98,7 +103,9 @@ export async function readPdfHistory(client: Client, org: string, patient: strin
     const embedded = Array.isArray(visit.servicio) ? visit.servicio[0] : visit.servicio;
     const servicio = embedded && typeof embedded === "object" && "nombre" in embedded ? String(embedded.nombre) : "Servicio sin nombre disponible";
     return { attendedAt, entry: { sesionId: r.id, fecha: new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Cordoba", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(attendedAt)),
-      servicio, resumen: sessionSummary(r), notas: decodePdfField(r.notas_cifrado),
+      toolId: r.tool_id == null ? null : String(r.tool_id),
+      profesionalId: visit.profesional_id == null ? null : String(visit.profesional_id), lockedAt: r.locked_at == null ? null : String(r.locked_at),
+      servicio, resumen: sessionSummary(r, String(visit.inicio), fechaNacimiento), notas: decodePdfField(r.notas_cifrado),
       soap: { s: decodePdfField(r.soap_s_cifrado) ?? "", o: decodePdfField(r.soap_o_cifrado) ?? "", a: decodePdfField(r.soap_a_cifrado) ?? "", p: decodePdfField(r.soap_p_cifrado) ?? "" },
       enmiendas: corrections.get(r.id) ?? [] } };
   });

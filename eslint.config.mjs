@@ -19,7 +19,7 @@ const eslintConfig = [
     ignores: [
       "node_modules/**",
       ".next/**",
-      ".flow/**",
+      ".next-test/**",
       "out/**",
       "build/**",
       "next-env.d.ts",
@@ -27,6 +27,8 @@ const eslintConfig = [
       "tests/visual/**-snapshots/**",
       "playwright-report/**",
       "test-results/**",
+      // Local generated browser bundles and verification scratch, gitignored.
+      ".flow/**",
       // Worktrees de agentes (cada uno con su .next compilado adentro):
       // sin esta línea, lintear el checkout principal revienta con OOM.
       ".claude/**",

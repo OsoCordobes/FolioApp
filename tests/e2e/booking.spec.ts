@@ -13,19 +13,19 @@
  * org de prueba sin dejar residuo.
  *
  * Gated por E2E_BOOKING_SLUG (mismo env que booking-submit) para apuntar a una
- * org con servicios + disponibilidad reales (ej. `lautaro-folio`). Sin la env
+ * org con servicios + disponibilidad reales (ej. `folio-test-booking`). Sin la env
  * se skipea — no asumimos que un slug arbitrario exista. Ver tests/e2e/README.md.
  *
  * Pre-requisitos:
- *   1. Dev server en E2E_BASE_URL (default localhost:3010, `pnpm dev`).
+ *   1. Dev server en E2E_BASE_URL (default 127.0.0.1:4410, `pnpm test:e2e`).
  *   2. La org del slug publica servicios activos y tiene disponibilidad cargada.
  *
  * Run (PowerShell):
- *   $env:E2E_BOOKING_SLUG="lautaro-folio"
- *   pnpm exec playwright test tests/e2e/booking.spec.ts --project=e2e
+ *   $env:FOLIO_TEST_BOOKING_SLUG="folio-test-booking"
+ *   pnpm test:e2e -- tests/e2e/booking.spec.ts --project=e2e
  */
 
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "../fixtures/local-test";
 
 const SLUG = process.env.E2E_BOOKING_SLUG ?? "";
 

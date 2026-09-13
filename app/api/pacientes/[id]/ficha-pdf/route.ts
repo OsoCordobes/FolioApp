@@ -1,3 +1,9 @@
+import { capabilitiesFor } from "@/lib/auth/capabilities";
+import { canExportCompleteClinicalHistory, COMPLETE_HISTORY_PERMISSION_MESSAGE } from "@/lib/auth/clinical-export-scope";
+import { readExportInstruments } from "@/lib/patient/export-instruments";
+import { CLINICAL_EXPORT_MAX_BYTES } from "@/lib/patient/verified-collection";
+import { revalidateClinicalDelivery } from "@/lib/patient/export-authorization";
+import { ok, type Result } from "@/lib/db/errors";
 /**
  * Folio · /api/pacientes/[id]/ficha-pdf · export PDF de ficha/sesión (C10).
  *
@@ -6,22 +12,21 @@
  * `application/pdf`. Server-side, Node runtime — @react-pdf/renderer usa APIs de
  * Node y necesita margen de cold-start.
  *
- * ── Entrega clínica autorizada ──────────────────────────────────────────────
- * Toda la PII/PHI se desencripta SERVER-SIDE (getPacienteFicha / getSesionCompleta
- * → lib/crypto) y los bytes del PDF contienen información clínica legible. En
- * ningún momento se serializa una columna `*_cifrado` cruda ni el plaintext en un
- * JSON de respuesta.
+ * ── Entrega autorizada de contenido clínico ────────────────────────────────
+ * La PII/PHI se descifra en servidor y se entrega dentro del PDF autorizado.
+ * El PDF contiene datos legibles: no es un sobre cifrado para archivo. No se
+ * registran textos clínicos ni se devuelven columnas cifradas crudas.
  *
- * ── Auth + rol idéntico a /pacientes/[id]/page.tsx ────────────────────────────
- * Mismo gate que la ficha visual: getActiveContext + ROLES_PUEDEN_VER_PHI
- * (OWNER/DIRECTOR/PROFESIONAL). ASISTENTE/COORDINADOR reciben 403. El scoping de
+ * ── Auth y alcance de entrega ──────────────────────────────────────────────
+ * Historia completa: OWNER o DIRECTOR colegiado; sesión puntual: rol clínico.
+ * PROFESIONAL conserva acceso a sus propias sesiones bajo RLS. El scoping de
  * tenant + caja-fuerte lo aplica RLS dentro de getPacienteFicha (devuelve
  * not_found si el paciente no pertenece a la org / el rol no puede leerlo).
  *
  * ── Audit del export (Ley 26.529 art. 18 · 25.326 art. 14) ────────────────────
- * La preparación deja `paciente_ficha.export_pdf_prepared` en audit_log con
- * actor, rol e id de sesión. No confirma recepción por el cliente: un cambio
- * de permisos posterior puede impedir la entrega.
+ * La preparación deja `paciente_ficha.export_pdf_prepared` con actor, rol e id
+ * de sesión. No confirma recepción: un cambio de permisos posterior puede
+ * impedir la entrega y una respuesta HTTP no prueba que el cliente la recibió.
  */
 
 import { headers } from "next/headers";
@@ -30,12 +35,13 @@ import { NextResponse } from "next/server";
 import { writeAuditEntry } from "@/lib/db/audit";
 import { getActiveContext } from "@/lib/db/active-context";
 import { getPacienteFicha } from "@/lib/db/paciente-ficha";
-import { readPdfHistory, readPdfCollection, PDF_MAX_BYTES } from "@/lib/pdf/history-reader";
+import { readPdfHistory, readPdfCollection } from "@/lib/pdf/history-reader";
 import {
   ESPECIALIDADES_META,
   getEspecialidadMetaByToolId,
 } from "@/lib/especialidades/meta";
 import { getInstrumento } from "@/lib/instrumentos";
+import { evolucionValidada } from "@/lib/pdf/ficha-format";
 import { buildFichaPdf, type FichaPdfData } from "@/lib/pdf/ficha-pdf";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -44,12 +50,6 @@ export const dynamic = "force-dynamic";
 // Descifra PII/PHI app-side + arma el binario PDF: margen sobre el default por
 // el cold-start de @react-pdf/renderer (bundle grande de fuentes core).
 export const maxDuration = 60;
-
-// Mismo gate de rol que /pacientes/[id]/page.tsx: la ficha contiene PHI
-// sensible. COORDINADOR/ASISTENTE no tienen acceso clínico (RLS también lo
-// niega en getPacienteFicha; el check app-side da un 403 limpio antes de tocar
-// la DB).
-const ROLES_PUEDEN_VER_PHI = new Set(["OWNER", "DIRECTOR", "PROFESIONAL"]);
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -61,6 +61,14 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
+  try { return await handleExport(_request, { params }); }
+  catch { return jsonError("network", "No se pudo preparar el PDF clínico. Intentá nuevamente.", 503); }
+}
+
+async function handleExport(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> },
+): Promise<NextResponse> {
   const { id: pacienteId } = await params;
   if (!UUID_RE.test(pacienteId)) {
     return jsonError("validation", "ID de paciente inválido.", 400);
@@ -69,18 +77,22 @@ export async function GET(
   const ctx = await getActiveContext();
   if (!ctx.ok) {
     const status =
-      ctx.error.code === "auth_required" ? 401 : ctx.error.code === "no_org" ? 403 : 500;
+      ctx.error.code === "auth_required" ? 401 : ["no_org", "forbidden", "mfa_required"].includes(ctx.error.code) ? 403 : 500;
     return jsonError(ctx.error.code, ctx.error.message, status);
   }
 
-  if (!ROLES_PUEDEN_VER_PHI.has(ctx.data.session.role) || (ctx.data.session.role === "DIRECTOR" && ctx.data.session.esColegiado !== true)) {
+  if (!capabilitiesFor(ctx.data.session.role, ctx.data.session.esColegiado).canReadClinical) {
     return jsonError("forbidden", "No tenés permiso para exportar esta ficha.", 403);
   }
 
   const url = new URL(_request.url);
-  const sesionId = url.searchParams.get("sesion");
-  if (sesionId !== null && !UUID_RE.test(sesionId)) return jsonError("validation", "ID de sesión inválido.", 400);
-  const pidioSesionPuntual = sesionId !== null;
+  const sesionIdRaw = url.searchParams.get("sesion");
+  const sesionId = sesionIdRaw != null && UUID_RE.test(sesionIdRaw) ? sesionIdRaw : null;
+  if (sesionIdRaw !== null && sesionId === null) return jsonError("validation", "ID de sesión inválido.", 400);
+  const pidioSesionPuntual = sesionId != null;
+  if (!pidioSesionPuntual && !canExportCompleteClinicalHistory(ctx.data.session.role, ctx.data.session.esColegiado)) {
+    return jsonError("forbidden", COMPLETE_HISTORY_PERMISSION_MESSAGE, 403);
+  }
 
   // Ficha completa (PII/PHI desencriptada server-side). El scoping org+paciente
   // + caja-fuerte lo aplica RLS acá dentro: si el paciente no es de la org o el
@@ -91,8 +103,8 @@ export async function GET(
     ctx.data.organization.especialidad,
     null,
     ctx.data.organization.timezone,
-    // The PDF reads its own complete, authorized session collection below.
-    false,
+    // La sesión puntual se recupera por separado bajo su propia RLS.
+    !pidioSesionPuntual,
   );
   if (!fichaRes.ok) {
     if (fichaRes.error.code === "not_found") {
@@ -102,36 +114,22 @@ export async function GET(
   }
   const ficha = fichaRes.data;
 
-  // Resumen humano de la herramienta de la especialidad ACTIVA del slot (no PHI
-  // cruda: resumenSesion produce una frase de estado). Refleja el estado clínico
-  // ACTUAL del paciente (turnoActivo.toolDraft si existe, o el último entry del
-  // historial de esa especialidad) — no varía con ?sesion (esa query trae el
-  // SOAP de una sesión puntual, pero el resumen de herramienta se mantiene como
-  // "estado vigente"; la vista sesion_con_enmiendas no expone el tool_data
-  // descifrado por sesión, y decodificarlo por-sesión queda para C2/C3).
-  const especialidadActiva = ficha.plan.turnoActivo?.especialidad ?? ctx.data.organization.especialidad;
-  const metaActiva = ESPECIALIDADES_META[especialidadActiva];
-  const ultimaToolData =
-    ficha.plan.turnoActivo?.toolDraft ??
-    ficha.plan.toolHistorial.find((h) => {
-      const meta = getEspecialidadMetaByToolId(h.toolId) ?? metaActiva;
-      return meta.slug === especialidadActiva;
-    })?.toolData ??
-    null;
-  const resumenHerramienta =
-    ultimaToolData != null ? metaActiva.resumenSesion(ultimaToolData) : null;
-
   const supabase = await createSupabaseServerClient();
   let history: Awaited<ReturnType<typeof readPdfHistory>>;
-  let instrumentos: FichaPdfData["instrumentos"];
+  let evolucion: FichaPdfData["evolucion"];
   try {
-    history = await readPdfHistory(supabase, ctx.data.organization.id, pacienteId, sesionId);
-    instrumentos = await loadInstrumentos(pacienteId, ctx.data.organization.id, sesionId);
+    // Validate persisted tool versions and preserve original SOAP/enmiendas.
+    // The full ficha also includes notes and closed visits without a session.
+    history = await readPdfHistory(supabase, ctx.data.organization.id, pacienteId, sesionId, ficha.paciente.fechaNacimiento ?? null);
+    evolucion = pidioSesionPuntual ? [] : evolucionValidada(ficha.plan.sesiones, history);
   } catch {
     return jsonError("db_error", "No se pudo leer toda la historia autorizada. No se generó un PDF incompleto. Reintentá.", 500);
   }
-  const soap = history[0]?.soap ?? { s: "", o: "", a: "", p: "" };
-  const fechaSesion = pidioSesionPuntual ? history[0]?.fecha ?? null : null;
+  // The reader sorts by actual encounter time, even for retroactive notes.
+  const latest = history[0];
+  const soap = latest?.soap ?? { s: "", o: "", a: "", p: "" };
+  const fechaSesion = pidioSesionPuntual ? latest?.fecha ?? null : null;
+  const metaActiva = getEspecialidadMetaByToolId(latest?.toolId) ?? ESPECIALIDADES_META[ctx.data.organization.especialidad];
 
   const profesionalNombre =
     [ctx.data.profile.nombre, ctx.data.profile.apellido].filter(Boolean).join(" ").trim() || null;
@@ -144,8 +142,13 @@ export async function GET(
     ctx.data.profile.matricula,
   );
 
+  const instrumentosRes = await loadInstrumentos(pacienteId, ctx.data.organization.id, sesionId);
+  if (!instrumentosRes.ok) return jsonError("db_error", instrumentosRes.error.message, 500);
   const pdfData: FichaPdfData = {
-    alcance: "Historial autorizado para el rol actual: puede excluir registros restringidos a otros profesionales. Incluye sesiones originales y enmiendas accesibles, sin adjuntos ni firmas. No es un archivo completo restaurable ni un snapshot transaccional único.",
+    alcanceEntrega: "Documento de lectura clínica. Incluye respuestas y resultados de instrumentos tal como se registraron, sin nueva interpretación. No incluye bytes de adjuntos, firmas ni un archivo restaurable. Las lecturas no constituyen un snapshot transaccional global.",
+    enmiendas: pidioSesionPuntual ? latest?.enmiendas ?? [] : [],
+    notasSesion: pidioSesionPuntual ? latest?.notas ?? null : null,
+    notasFicha: pidioSesionPuntual ? [] : ficha.notas,
     organizacion: ctx.data.organization.nombre,
     profesional: profesionalNombre,
     matricula,
@@ -160,20 +163,19 @@ export async function GET(
       a: soap.a,
       p: soap.p,
     },
-    resumenHerramienta: pidioSesionPuntual ? null : resumenHerramienta,
+    resumenHerramienta: latest?.resumen ?? null,
     especialidad: metaActiva.nombre,
-    instrumentos,
-    // A punctual delivery contains only that session, including its amendments.
-    evolucion: history,
+    instrumentos: instrumentosRes.data,
+    // La historia completa conserva todas las sesiones; la entrega puntual sólo esa visita.
+    evolucion,
     generadoTs: new Date().toISOString(),
   };
 
   const pdf = await buildFichaPdf(pdfData);
-  if (pdf.length > PDF_MAX_BYTES) return jsonError("validation", "El PDF supera 4 MB. Solicitá una entrega por sesión; no se generó un archivo incompleto.", 413);
+  if (pdf.length > CLINICAL_EXPORT_MAX_BYTES) return jsonError("validation", "El PDF supera 4 MB. No se generó una entrega incompleta; solicitá el circuito de archivo clínico.", 413);
 
-  // Record preparation, not successful delivery: authorization can still change
-  // during this audit write and the final guard must then deny the response.
-  // Receiving bytes at the client cannot be proven by preparing an HTTP response.
+  // Record preparation only: the final guard may still refuse these bytes.
+  // Never include clinical text or claim confirmed delivery in the audit.
   const h = await headers();
   await writeAuditEntry({
     organizationId: ctx.data.organization.id,
@@ -192,25 +194,20 @@ export async function GET(
     },
   });
 
-  // Reauthorize after rendering/audit: a revoked member cannot receive bytes
-  // merely because they were allowed when generation started.
+  const deliveryClient = await createSupabaseServerClient();
   try {
-    const current = await getActiveContext();
-    if (!current.ok || current.data.session.memberId !== ctx.data.session.memberId || current.data.session.userId !== ctx.data.session.userId ||
-      current.data.session.esColegiado !== ctx.data.session.esColegiado ||
-      current.data.organization.id !== ctx.data.organization.id || current.data.session.role !== ctx.data.session.role || !ROLES_PUEDEN_VER_PHI.has(current.data.session.role) ||
-      (current.data.session.role === "DIRECTOR" && current.data.session.esColegiado !== true)) {
-      return jsonError("forbidden", "No se pudo confirmar el acceso al finalizar la entrega.", 403);
-    }
-    const scope = await supabase.from("paciente").select("id").eq("id", pacienteId).eq("organization_id", ctx.data.organization.id).is("deleted_at", null).maybeSingle();
-    if (scope.error || scope.data?.id !== pacienteId) return jsonError("forbidden", "No se pudo confirmar el acceso al paciente.", 403);
     for (let index = 0; index < history.length; index += 100) {
       const ids = history.slice(index, index + 100).map(row => row.sesionId);
-      const allowed = await readPdfCollection<{ id: string }>((from, to) => supabase.from("sesion").select("id", { count: "exact" })
+      const allowed = await readPdfCollection<{ id: string }>((from, to) => deliveryClient.from("sesion").select("id", { count: "exact" })
         .eq("organization_id", ctx.data.organization.id).eq("paciente_id", pacienteId).in("id", ids).order("id", { ascending: true }).range(from, to));
       if (allowed.length !== ids.length || allowed.some(row => !ids.includes(row.id))) return jsonError("forbidden", "Cambió el acceso a una sesión durante la entrega.", 403);
     }
-  } catch { return jsonError("forbidden", "No se pudo confirmar el acceso al finalizar la entrega.", 403); }
+  } catch { return jsonError("forbidden", "No se pudo confirmar el acceso a las sesiones al finalizar la entrega.", 403); }
+  // Fresh patient/vault RLS, Auth, current member and M101 MFA are the final
+  // authority, immediately before delivery. No intervening audit or rendering.
+  const authorized = await revalidateClinicalDelivery(deliveryClient, ctx.data.session, pacienteId, sesionId);
+  if (!authorized.ok) return jsonError(authorized.error.code, authorized.error.message,
+    authorized.error.code === "auth_required" ? 401 : ["no_org", "forbidden", "mfa_required"].includes(authorized.error.code) ? 403 : 503);
 
   const filename = `folio-ficha-${pacienteId.slice(0, 8)}-${new Date().toISOString().slice(0, 10)}.pdf`;
   // Content-Length ancla el stream para clientes que lo esperan; Buffer.length
@@ -251,20 +248,21 @@ async function resolveMatriculaVisible(
   }
 }
 
-/** Paginated M73 records; no best-effort omission and no cross-session rows. */
-async function loadInstrumentos(pacienteId: string, organizationId: string, sesionId: string | null): Promise<FichaPdfData["instrumentos"]> {
-  const client = await createSupabaseServerClient();
-  const rows = await readPdfCollection<InstrumentoRespuestaRow>((from, to) => {
-    let query = client.from("instrumento_respuesta").select("id,instrumento_id,score_total,banda,created_at", { count: "exact" })
-      .eq("paciente_id", pacienteId).eq("organization_id", organizationId);
-    if (sesionId) query = query.eq("sesion_id", sesionId);
-    return query.order("created_at", { ascending: false }).order("id", { ascending: false }).range(from, to);
-  });
-  return rows.map(r => ({ nombre: getInstrumentoNombre(r.instrumento_id), total: r.score_total == null ? "—" : String(r.score_total), banda: r.banda,
-    fecha: new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Cordoba", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(r.created_at)) }));
-}
-interface InstrumentoRespuestaRow {
-  id: string; instrumento_id: string; score_total: number | null; banda: string | null; created_at: string;
+/** Lectura completa bajo RLS; una entrega puntual filtra por sesión. */
+async function loadInstrumentos(
+  pacienteId: string,
+  organizationId: string,
+  sesionId: string | null,
+): Promise<Result<FichaPdfData["instrumentos"]>> {
+  const supabase = await createSupabaseServerClient();
+  const result = await readExportInstruments(supabase, organizationId, pacienteId, sesionId);
+  if (!result.ok) return result;
+  return ok(result.data.map((r) => ({
+    nombre: getInstrumentoNombre(r.instrumento_id), instrumentoId: r.instrumento_id,
+    version: r.instrumento_version, respuestas: r.respuestas, respuestasEstado: r.respuestas_estado,
+    total: r.score_total != null ? String(r.score_total) : "—", banda: r.banda,
+    fecha: new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Cordoba", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(r.created_at)),
+  })));
 }
 
 /**

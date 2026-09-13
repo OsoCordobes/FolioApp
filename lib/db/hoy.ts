@@ -1,7 +1,9 @@
+
+import { safeLog } from "@/lib/observability/safe-log";
 /**
  * Folio · /hoy data fetcher (Sprint S1 T-1.4).
  *
- * Lee `turno_extendido` (vista M14) para la fecha local del consultorio y
+ * Lee la agenda autorizada para la fecha local del consultorio y
  * devuelve el shape que consume el Client Component `<Dashboard />`:
  *   { turnos: Turno[], pacientes: PacientesById }
  *
@@ -11,6 +13,7 @@
  *   - Convierte timestamptz `inicio` a "HH:MM" en la timezone de la org.
  *   - Computa `postVisita.guardada` desde existencia de sesion + completion.
  *
+ * Recepción usa la proyección operacional M122, sin consultar sesiones clínicas.
  * El cliente nunca recibe el ciphertext. RLS sobre `turno_extendido`
  * (security_invoker=true) garantiza que solo se devuelven turnos del scope
  * del rol activo.
@@ -24,7 +27,9 @@ import { loadCanceladoPorPacienteIds } from "./cancelado-por-paciente";
 import { loadConfirmadoViaByTurnoId } from "./confirmado-via";
 import { err, ok, type Result } from "./errors";
 import { getActiveSession } from "./session";
+import { readCompleteCollection } from "./complete-collection";
 import { normalizeModalidad } from "@/lib/types";
+import { persistedPaymentSchema } from "@/lib/turnos/close-contract";
 import type { ConfirmadoVia, Paciente, PacientesById, EstadoTurno, OrigenTurno, PostVisita, Turno } from "@/lib/types";
 
 // ─── Tipo de fila de turno_extendido ───────────────────────────────────────
@@ -36,7 +41,7 @@ interface TurnoExtendidoRow {
   duracion_min: number;
   estado: "AGENDADO" | "CONFIRMADO" | "EN_SALA" | "ATENDIENDO" | "CERRADO" | "NO_ASISTIO" | "CANCELADO" | "REAGENDADO";
   origen: "MANUAL" | "BOOKING" | "WALK_IN" | "GOOGLE" | "WHATSAPP";
-  precio_cents: number;
+  precio_cents: number | null;
   gcal_event_id: string | null;
   atendiendo_desde: string | null;
   duracion_real_min: number | null;
@@ -44,7 +49,7 @@ interface TurnoExtendidoRow {
   paciente_nombre_cifrado: string | null;
   paciente_apellido_cifrado: string | null;
   paciente_telefono_cifrado: string | null;
-  paciente_tipo: "ACTIVO" | "INACTIVO" | "EN_ESPERA";
+  paciente_tipo: "ACTIVO" | "INACTIVO" | "EN_ESPERA" | null;
   paciente_tags: string[] | null;
   paciente_alerta_alergia: boolean;
   servicio_nombre: string;
@@ -54,6 +59,8 @@ interface TurnoExtendidoRow {
   pago_monto_cents: number | null;
   pago_estado: "PENDIENTE" | "PAGADO" | "PARCIAL" | null;
   pago_pagado_ts: string | null;
+  pago_updated_at?: string;
+  pago_metodo?: string;
   profesional_id: string;
   /** M56 · motivo del booking público (PHI). Solo se descifra para roles clínicos. */
   nota_reserva_cifrado: string | null;
@@ -128,6 +135,7 @@ interface FetcherInput {
 }
 
 export async function getDashboardHoy(input: FetcherInput): Promise<Result<DashboardHoyData>> {
+  try {
   const { organizationId, fechaIso, timezone, profesionalId, profesionalesNombreById } = input;
   const supabase = await createSupabaseServerClient();
 
@@ -135,6 +143,8 @@ export async function getDashboardHoy(input: FetcherInput): Promise<Result<Dashb
   // descifra para roles con acceso clínico (espejo de can_read_clinical en RLS).
   // Fail-closed sin sesión.
   const sessionRes = await getActiveSession();
+  if (!sessionRes.ok) return sessionRes;
+  const reception = sessionRes.data.role === "ASISTENTE" || sessionRes.data.role === "COORDINADOR";
   const canReadClinical = sessionRes.ok
     ? capabilitiesFor(sessionRes.data.role, sessionRes.data.esColegiado).canReadClinical
     : false;
@@ -144,33 +154,45 @@ export async function getDashboardHoy(input: FetcherInput): Promise<Result<Dashb
   // calculado en JS pasando la fecha pivot a Intl.
   const { startUtc, endUtc } = computeDayRangeUtc(fechaIso, timezone);
 
+  const { data, error } = await readCompleteCollection<TurnoExtendidoRow>(async (from, to) => {
+  if (reception) {
+    return supabase.rpc("agenda_recepcion_dia", {
+      p_org: organizationId, p_fecha: fechaIso, p_profesional: profesionalId ?? null,
+    }, { count: "exact" }).order("inicio", { ascending: true }).order("id", { ascending: true }).range(from, to);
+  }
   let query = supabase
     .from("turno_extendido")
-    .select(
-      "id, organization_id, inicio, duracion_min, estado, origen, precio_cents, " +
-        "gcal_event_id, atendiendo_desde, duracion_real_min, " +
-        "paciente_id, paciente_nombre_cifrado, paciente_apellido_cifrado, paciente_telefono_cifrado, " +
-        "paciente_tipo, paciente_tags, paciente_alerta_alergia, " +
-        "servicio_nombre, servicio_tipo_canonico, " +
-        // El cobro REAL del turno (no el precio de lista): el KPI "Recaudado"
-        // de /hoy tiene que dar lo mismo que /finanzas, que lee `pago`.
-        "pago_id, pago_monto_cents, pago_estado, pago_pagado_ts, " +
-        "profesional_id, nota_reserva_cifrado, " +
-        "modalidad",
-    )
+    .select("id, organization_id, inicio, duracion_min, estado, origen, precio_cents, gcal_event_id, atendiendo_desde, duracion_real_min, paciente_id, paciente_nombre_cifrado, paciente_apellido_cifrado, paciente_telefono_cifrado, paciente_tipo, paciente_tags, paciente_alerta_alergia, servicio_nombre, servicio_tipo_canonico, pago_id, pago_monto_cents, pago_estado, pago_pagado_ts, profesional_id, nota_reserva_cifrado, modalidad", { count: "exact" })
     .eq("organization_id", organizationId)
     .gte("inicio", startUtc)
     .lt("inicio", endUtc)
-    .order("inicio", { ascending: true });
+    .order("inicio", { ascending: true }).order("id", { ascending: true }).range(from, to);
 
   if (profesionalId) {
     query = query.eq("profesional_id", profesionalId);
   }
 
-  const { data, error } = await query;
-  if (error) return err("db_error", "Error leyendo agenda del día.", error.message);
+  return query;
+  });
+  if (error) return err("db_error", "No se pudo leer la agenda del día completa. Intentá nuevamente.");
 
   const rows = (data ?? []) as unknown as TurnoExtendidoRow[];
+  // The view lacks updated_at. Read complete payment snapshots in bounded batches,
+  // replacing all money fields together instead of mixing two observation times.
+  const paymentIds = [...new Set(rows.flatMap(row => row.pago_id ? [row.pago_id] : []))];
+  for (let offset = 0; offset < paymentIds.length; offset += 200) {
+    const ids = paymentIds.slice(offset, offset + 200);
+    const payments = await readCompleteCollection<{ id: string; turno_id: string; monto_cents: number; metodo: string; estado: string; pagado_ts: string | null; updated_at: string }>((from, to) => supabase.from("pago")
+      .select("id, turno_id, monto_cents, metodo, estado, pagado_ts, updated_at", { count: "exact" }).in("id", ids).order("id", { ascending: true }).range(from, to));
+    if (payments.error || payments.data.length !== ids.length) return err("db_error", "No pudimos confirmar los cobros de la agenda. Actualizá para revisarlos.");
+    for (const payment of payments.data) {
+      const parsed = persistedPaymentSchema.safeParse({ id: payment.id, montoCents: payment.monto_cents, metodo: payment.metodo, estado: payment.estado, pagadoTs: payment.pagado_ts, updatedAt: payment.updated_at });
+      const row = rows.find(item => item.id === payment.turno_id && item.pago_id === payment.id);
+      if (!parsed.success || !row) return err("db_error", "No pudimos confirmar los cobros de la agenda. Actualizá para revisarlos.");
+      row.pago_monto_cents = parsed.data.montoCents; row.pago_estado = parsed.data.estado;
+      row.pago_pagado_ts = parsed.data.pagadoTs; row.pago_updated_at = parsed.data.updatedAt; row.pago_metodo = parsed.data.metodo;
+    }
+  }
 
   // Si hay turnos cerrados, levantamos las sesiones existentes para saber si
   // ya tienen post-visita registrada (M10: sesion.turno_id 1:1 con turno).
@@ -181,7 +203,7 @@ export async function getDashboardHoy(input: FetcherInput): Promise<Result<Dashb
   // M91 · su gemelo para el chip "Canceló el paciente", desde el log de
   // transiciones (ver lib/db/cancelado-por-paciente.ts), solo para CANCELADO.
   const [postVisitaByTurno, confirmadoViaByTurno, canceladoPorPaciente] = await Promise.all([
-    loadPostVisitaFlags(turnoIdsCerrados, organizationId),
+    reception ? Promise.resolve(ok(new Map<string, { guardada: boolean }>())) : loadPostVisitaFlags(turnoIdsCerrados, organizationId),
     loadConfirmadoViaByTurnoId(
       supabase,
       rows.filter((r) => r.estado === "CONFIRMADO").map((r) => r.id),
@@ -192,6 +214,8 @@ export async function getDashboardHoy(input: FetcherInput): Promise<Result<Dashb
     ),
   ]);
 
+  if (!postVisitaByTurno.ok) return postVisitaByTurno;
+
   // Agrupar pacientes únicos (set + desencripción una sola vez por paciente).
   const pacientesAcum = new Map<string, Paciente>();
 
@@ -201,7 +225,7 @@ export async function getDashboardHoy(input: FetcherInput): Promise<Result<Dashb
     }
     return rowToTurno(
       row,
-      postVisitaByTurno.get(row.id) ?? null,
+      postVisitaByTurno.data.get(row.id) ?? null,
       timezone,
       profesionalesNombreById,
       canReadClinical,
@@ -216,35 +240,30 @@ export async function getDashboardHoy(input: FetcherInput): Promise<Result<Dashb
   const { fechaLarga, fechaAnio } = formatFechaLarga(fechaIso, timezone);
 
   return ok({ turnos, pacientes, fechaIso, fechaLarga, fechaAnio });
+  } catch {
+    return err("db_error", "No se pudo leer la agenda del día completa. Intentá nuevamente.");
+  }
 }
 
 // ─── Helpers internos ──────────────────────────────────────────────────────
 
 async function loadPostVisitaFlags(
-  turnoIds: string[],
-  organizationId: string,
-): Promise<Map<string, { guardada: boolean }>> {
+  turnoIds: string[], organizationId: string,
+): Promise<Result<Map<string, { guardada: boolean }>>> {
   const out = new Map<string, { guardada: boolean }>();
-  if (turnoIds.length === 0) return out;
-
+  if (turnoIds.length === 0) return ok(out);
   const supabase = await createSupabaseServerClient();
-  const { data } = await supabase
-    .from("sesion")
-    .select("turno_id, soap_s_cifrado, soap_o_cifrado, soap_a_cifrado, soap_p_cifrado")
-    .eq("organization_id", organizationId)
-    .in("turno_id", turnoIds);
-
-  for (const r of (data ?? []) as unknown as Array<{
-    turno_id: string;
-    soap_s_cifrado: string | null;
-    soap_o_cifrado: string | null;
-    soap_a_cifrado: string | null;
-    soap_p_cifrado: string | null;
-  }>) {
-    const guardada = !!(r.soap_s_cifrado || r.soap_o_cifrado || r.soap_a_cifrado || r.soap_p_cifrado);
-    out.set(r.turno_id, { guardada });
+  type SavedRow = { id: string; turno_id: string; soap_s_cifrado: string | null; soap_o_cifrado: string | null; soap_a_cifrado: string | null; soap_p_cifrado: string | null };
+  // Bound IN lists as well as response pages: a large day must not exceed URL limits.
+  for (let i = 0; i < turnoIds.length; i += 200) {
+    const result = await readCompleteCollection<SavedRow>((from, to) => supabase.from("sesion")
+      .select("id, turno_id, soap_s_cifrado, soap_o_cifrado, soap_a_cifrado, soap_p_cifrado", { count: "exact" })
+      .eq("organization_id", organizationId).in("turno_id", turnoIds.slice(i, i + 200))
+      .order("id", { ascending: true }).range(from, to));
+    if (result.error) return err("db_error", "No se pudo comprobar si las notas de las visitas están guardadas. Intentá nuevamente.");
+    for (const r of result.data) out.set(r.turno_id, { guardada: !!(r.soap_s_cifrado || r.soap_o_cifrado || r.soap_a_cifrado || r.soap_p_cifrado) });
   }
-  return out;
+  return ok(out);
 }
 
 function rowToPaciente(row: TurnoExtendidoRow): Paciente {
@@ -307,9 +326,12 @@ function rowToTurno(
     // cobro registrado", que es distinto de una deuda de $0.
     cobro: row.pago_id
       ? {
+          id: row.pago_id,
+          updatedAt: row.pago_updated_at,
+          metodo: row.pago_metodo,
           estado: row.pago_estado === "PAGADO" ? "pagado" : "pendiente",
           ts: row.pago_pagado_ts ?? null,
-          montoCents: row.pago_monto_cents ?? 0,
+          montoCents: row.pago_monto_cents,
         }
       : { estado: "pendiente", ts: null, montoCents: null },
     profesionalId: row.profesional_id ?? null,
@@ -328,7 +350,7 @@ function tryDecrypt(value: string | null | undefined, label: string): string | n
     return decryptColumn(value);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    console.warn(`[hoy] decrypt falló (${label}): ${msg}. len=${value.length}`);
+    safeLog("warn", "lib.db.hoy.L331", `[hoy] decrypt falló (${label}): ${msg}. len=${value.length}`);
     return null;
   }
 }

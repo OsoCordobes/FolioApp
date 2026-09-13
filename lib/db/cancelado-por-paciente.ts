@@ -1,3 +1,5 @@
+
+import { safeLog } from "@/lib/observability/safe-log";
 /**
  * Folio · lectura batch de "esta cancelación la hizo el paciente" (M91).
  *
@@ -37,7 +39,7 @@ export async function loadCanceladoPorPacienteIds(
     .eq("trigger_origin", "paciente");
 
   if (error) {
-    console.warn(`[turnos] cancelado_por_paciente batch falló: ${error.message}`);
+    safeLog("warn", "lib.db.cancelado.por.paciente.L40", { error: error });
     return new Set();
   }
 

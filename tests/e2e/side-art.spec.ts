@@ -1,5 +1,6 @@
-/** Public access experience. No account creation, credentials, or server mutations. */
-import { expect, test } from "@playwright/test";
+/** Public access experience. No account creation, credentials, or server mutations.
+ * Run through the isolated local runner; never read .env.local. */
+import { expect, test } from "../fixtures/local-test";
 
 test.beforeEach(async ({ context, baseURL }) => {
   const origin = new URL(baseURL!).origin;

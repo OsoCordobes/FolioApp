@@ -5,8 +5,8 @@
  *
  * Wrapper delgado sobre el orchestrator del linkage (`lib/portal/link-actions`).
  * Existe para que el Client Component del portal invoque el matcher AUDITADO por
- * un límite server-action explícito (el orchestrator ya es "use server", pero
- * exponerlo desde el segment del portal mantiene el import graph claro).
+ * un único límite server-action: el orchestrator es server-only y no expone
+ * una segunda action invocable directamente.
  *
  * El matcher toma la cuenta de la SESIÓN del caller (auth.uid()), nunca de un
  * arg — un cliente no puede correrlo "como" otra cuenta. Los identificadores

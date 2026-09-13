@@ -1,5 +1,7 @@
 "use server";
 
+import { safeLog } from "@/lib/observability/safe-log";
+
 /**
  * Folio · Server Actions del login del PORTAL DEL PACIENTE (Fase 3 · P3).
  *
@@ -88,9 +90,9 @@ export async function sendPortalMagicLink(
 
   const supabase = await createSupabaseServerClient();
   const appUrl = getAppUrl();
-  // No inspeccionamos el error de Supabase: uniforme para anti-enumeración. El
-  // magic-link vuelve al callback SSR y de ahí el middleware rutea a /portal.
-  await supabase.auth.signInWithOtp({
+  // Respuesta uniforme contra enumeración; diagnóstico sólo con códigos seguros.
+  // Recuperado del stash de auditoría sin incluir email ni mensaje del proveedor.
+  const { error: otpError } = await supabase.auth.signInWithOtp({
     email,
     options: {
       shouldCreateUser: false,
@@ -98,5 +100,6 @@ export async function sendPortalMagicLink(
     },
   });
 
+  if (otpError) safeLog("warn", "auth.portal.otp", otpError);
   return { ok: true };
 }

@@ -1,3 +1,5 @@
+
+import { safeLog } from "@/lib/observability/safe-log";
 /**
  * Folio · pricing puro por tier (Fase C · tiers Solo/Clinic).
  *
@@ -36,7 +38,7 @@ function resolveCentsEnv(name: string, fallback: number): number {
   if (!raw) return fallback;
   const parsed = Number(raw);
   if (!Number.isInteger(parsed) || parsed <= 0) {
-    console.warn(`[pricing] ${name} inválido (${raw}); usando default ${fallback}.`);
+    safeLog("warn", "lib.billing.pricing.L39", `[pricing] ${name} inválido (${raw}); usando default ${fallback}.`);
     return fallback;
   }
   return parsed;

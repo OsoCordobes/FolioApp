@@ -15,6 +15,7 @@
 
 import {
   cancelPreapproval,
+  findPreapprovalsForOperation,
   createPreapproval,
   getAuthorizedPayment,
   getPreapproval,
@@ -116,6 +117,7 @@ export function toSubscriptionInfo(preapproval: MpPreapproval): SubscriptionInfo
 export function toChargeAttemptInfo(ap: MpAuthorizedPayment): ChargeAttemptInfo {
   return {
     providerChargeId: String(ap.id),
+    lastModified: ap.last_modified ?? null,
     providerSubscriptionId: ap.preapproval_id,
     amountCents: arsToCents(ap.transaction_amount),
     currency: ap.currency_id,
@@ -139,6 +141,10 @@ export function createMercadoPagoProvider(): PaymentProvider {
   return {
     name: "mercadopago",
 
+    async findSubscriptionsForOperation(payerEmail: string, externalReference: string) {
+      return (await findPreapprovalsForOperation(payerEmail, externalReference)).map(toSubscriptionInfo);
+    },
+
     async createSubscription(input: CreateSubscriptionInput): Promise<CreateSubscriptionOutput> {
       if (!Number.isInteger(input.amountCents) || input.amountCents <= 0) {
         throw new Error(
@@ -147,6 +153,7 @@ export function createMercadoPagoProvider(): PaymentProvider {
       }
       const preapproval = await createPreapproval({
         payerEmail: input.payerEmail,
+        idempotencyKey: input.idempotencyKey,
         externalReference: input.externalReference,
         backUrl: input.backUrl,
         amountArs: centsToArs(input.amountCents),

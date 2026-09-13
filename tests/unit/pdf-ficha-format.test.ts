@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   buildMembreteMeta,
   evolucionDesdeSesiones,
+  evolucionValidada,
   EVOLUCION_PDF_MAX,
   formatGeneradoTs,
   orDash,
@@ -115,18 +116,38 @@ test("evolucionDesdeSesiones: SOAP vacío o null se omite (no imprime cuatro '�
   assert.equal(out[1].soap, null);
 });
 
-test("evolucionDesdeSesiones: conserva todo el historial autorizado sin el antiguo límite de diez", () => {
+test("evolucionDesdeSesiones: un resumen con límite explícito preserva el orden DESC", () => {
   const muchas = Array.from({ length: EVOLUCION_PDF_MAX + 5 }, (_, i) =>
     sesion({ fecha: `2026-06-${String(i + 1).padStart(2, "0")}` }),
   );
-  const out = evolucionDesdeSesiones(muchas);
-  assert.equal(out.length, muchas.length);
+  const out = evolucionDesdeSesiones(muchas, EVOLUCION_PDF_MAX);
+  assert.equal(out.length, EVOLUCION_PDF_MAX);
   // Toma las PRIMERAS N (el historial ya viene DESC: las más recientes).
   assert.equal(out[0].fecha, "2026-06-01");
 });
 
 test("evolucionDesdeSesiones: lista vacía → [] (la sección se omite)", () => {
   assert.deepEqual(evolucionDesdeSesiones([]), []);
+});
+
+test("evolucionDesdeSesiones preserves the full history by default and original amendment provenance", () => {
+  const enmiendas = [{ id: "e1", autorId: "author", createdAt: "2026-09-08T12:00:00Z", motivo: "Correction", texto: "Original amendment" }];
+  const rows = Array.from({ length: 62 }, (_, i) => sesion({ sesionId: `s${i}`, enmiendas, profesionalId: "professional", lockedAt: null }));
+  const out = evolucionDesdeSesiones(rows);
+  assert.equal(out.length, 62); assert.equal(out[61].sesionId, "s61");
+  assert.deepEqual(out[0].enmiendas, enmiendas); assert.equal(out[0].profesionalId, "professional");
+});
+
+test("validated evolution keeps visits without a session and uses dated original clinical data", () => {
+  const recorded = sesion({ sesionId: "s1" });
+  const empty = sesion({ sesionId: null, soap: null, cambio: "No clinical record" });
+  const clinical = { ...evolucionDesdeSesiones([recorded])[0], sesionId: "s1", fecha: "2026-06-30", resumen: "Validated original" };
+  const out = evolucionValidada([recorded, empty], [clinical]);
+  assert.equal(out.length, 2); assert.equal(out[0].fecha, "2026-06-30"); assert.equal(out[0].resumen, "Validated original");
+  assert.equal(out[1].soap, null); assert.equal(out[1].resumen, "No clinical record");
+  assert.throws(() => evolucionValidada([recorded], []), /pdf_history_changed/);
+  assert.throws(() => evolucionValidada([], [clinical]), /pdf_history_changed/);
+  assert.throws(() => evolucionValidada([recorded, recorded], [clinical]), /pdf_history_changed/);
 });
 
 // ─── theme (tokens estables) ─────────────────────────────────────────────────

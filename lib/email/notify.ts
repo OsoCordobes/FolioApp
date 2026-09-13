@@ -13,7 +13,7 @@
 import type { TrialUmbralDias } from "@/lib/billing/lifecycle";
 import { addMinutesIso, buildGoogleCalendarUrl } from "@/lib/booking/calendar-links";
 import { getAppUrl } from "@/lib/config/app-url";
-import { recordEmailOnce } from "@/lib/db/email-notificacion";
+
 import { BILLING_RECOVERY_PATH } from "@/lib/db/suscripcion";
 import {
   createSupabaseServiceClient,
@@ -21,7 +21,9 @@ import {
 } from "@/lib/supabase/server";
 import { SUPPORT_EMAIL } from "@/lib/support";
 
-import { sendEmail } from "./client";
+import type { SendEmailResult } from "./client";
+import { deliverDurableEmail } from "./durable";
+import { esc } from "./templates/billing-common";
 import { buildBookingConfirmadaEmail } from "./templates/booking-confirmada";
 import { tryDecrypt } from "@/lib/crypto";
 import { buildBookingRecibidaEmail } from "./templates/booking-recibida";
@@ -100,9 +102,9 @@ export async function notifyBookingConfirmada(input: {
   organizationId: string;
   pacienteEmail: string | null;
   pacienteNombre: string;
-}): Promise<void> {
+}): Promise<SendEmailResult> {
   const { client, turnoId, organizationId, pacienteEmail, pacienteNombre } = input;
-  if (!pacienteEmail) return;
+  if (!pacienteEmail) return { status: "blocked", detail: "notification_context_unavailable" };
 
   try {
     const { data: org } = await client
@@ -117,18 +119,11 @@ export async function notifyBookingConfirmada(input: {
       .eq("id", turnoId)
       .eq("organization_id", organizationId)
       .maybeSingle();
-    if (!turno) return;
-
-    const { data: servicio } = await client
-      .from("servicio")
-      .select("nombre")
-      .eq("id", turno.servicio_id)
-      .eq("organization_id", organizationId)
-      .maybeSingle();
+    if (!turno) return { status: "blocked", detail: "notification_context_unavailable" };
 
     const fechaHoraLabel = formatFechaHora(turno.inicio, org?.timezone ?? null);
     const organizationNombre = org?.nombre ?? "Folio";
-    const servicioNombre = servicio?.nombre ?? "Turno";
+    const servicioNombre = "Turno";
 
     // Link "agregar a Google Calendar": turno confirmado → evento real.
     // DTEND = inicio + duración (fallback 30 min si la fila viniera rota).
@@ -142,7 +137,7 @@ export async function notifyBookingConfirmada(input: {
     const { subject, html } = buildBookingConfirmadaEmail({
       pacienteNombre,
       organizationNombre,
-      servicioNombre,
+      servicioNombre: "Turno",
       fechaHoraLabel,
       direccion: org?.direccion_completa ?? null,
       telefonoPublico: org?.telefono_publico ?? null,
@@ -153,13 +148,9 @@ export async function notifyBookingConfirmada(input: {
     // Reply-To consultorio: el interlocutor del paciente es el consultorio
     // (el from es un noreply). Sin contacto resoluble, sale sin Reply-To.
     const replyTo = await resolveOrgContactEmail(organizationId);
-    await sendEmail({ to: pacienteEmail, subject, html, replyTo });
-  } catch (e) {
-    const { captureException } = await import("@sentry/nextjs");
-    captureException(e, {
-      tags: { component: "email", op: "notifyBookingConfirmada" },
-      extra: { turnoId, organizationId },
-    });
+    return deliverDurableEmail({ organizationId, kind: "booking", dedupeKey: `booking-confirmed:${turnoId}:${turno.inicio}`, turnoId, expiresAt: turno.inicio, to: pacienteEmail, subject, html, replyTo });
+  } catch {
+    return { status: "failed", detail: "email_notification_preparation_failed", retryable: true };
   }
 }
 
@@ -173,6 +164,7 @@ export async function notifyBookingConfirmada(input: {
  * crudo: jamás loguearlo (acá solo viaja al proveedor de email).
  */
 export async function notifyMemberInvitation(input: {
+  organizationId?: string;
   to: string;
   organizationNombre: string;
   rolLabel: string;
@@ -180,7 +172,7 @@ export async function notifyMemberInvitation(input: {
   acceptUrl: string;
   expiresAtIso: string;
   timezone: string | null;
-}): Promise<void> {
+}): Promise<SendEmailResult> {
   try {
     const expiraLabel = new Intl.DateTimeFormat("es-AR", {
       timeZone: input.timezone || DEFAULT_TZ,
@@ -197,14 +189,10 @@ export async function notifyMemberInvitation(input: {
 
     // Reply-To soporte: el email lo recibe un profesional; si responde con
     // dudas, debe llegar a Folio (los emails a pacientes no llevan replyTo).
-    await sendEmail({ to: input.to, subject, html, replyTo: SUPPORT_EMAIL });
-  } catch (e) {
-    const { captureException } = await import("@sentry/nextjs");
-    captureException(e, {
-      tags: { component: "email", op: "notifyMemberInvitation" },
-      // NO incluir acceptUrl en extra: contiene el token crudo.
-      extra: { to: input.to },
-    });
+    if (!input.organizationId) return { status: "blocked", detail: "organization_context_required" };
+    return deliverDurableEmail({ organizationId: input.organizationId, kind: "invitation", dedupeKey: `invitation:${input.acceptUrl}`, expiresAt: input.expiresAtIso, to: input.to, subject, html, replyTo: SUPPORT_EMAIL });
+  } catch {
+    return { status: "failed", detail: "email_notification_preparation_failed", retryable: true };
   }
 }
 
@@ -212,15 +200,16 @@ export async function notifyMemberInvitation(input: {
 
 export async function notifyBookingRecibida(input: {
   client: ServerClient;
+  pedidoId?: string;
   organizationId: string;
   pacienteEmail: string | null;
   pacienteNombre: string;
   servicioNombre: string;
   inicioIso: string;
-}): Promise<void> {
+}): Promise<SendEmailResult> {
   const { client, organizationId, pacienteEmail, pacienteNombre, servicioNombre, inicioIso } =
     input;
-  if (!pacienteEmail) return;
+  if (!pacienteEmail) return { status: "blocked", detail: "notification_context_unavailable" };
 
   try {
     const { data: org } = await client
@@ -234,7 +223,7 @@ export async function notifyBookingRecibida(input: {
     const { subject, html } = buildBookingRecibidaEmail({
       pacienteNombre,
       organizationNombre: org?.nombre ?? "Folio",
-      servicioNombre,
+      servicioNombre: "Turno",
       fechaHoraLabel,
       direccion: org?.direccion_completa ?? null,
       telefonoPublico: org?.telefono_publico ?? null,
@@ -243,13 +232,9 @@ export async function notifyBookingRecibida(input: {
 
     // Reply-To consultorio (mismo criterio que notifyBookingConfirmada).
     const replyTo = await resolveOrgContactEmail(organizationId);
-    await sendEmail({ to: pacienteEmail, subject, html, replyTo });
-  } catch (e) {
-    const { captureException } = await import("@sentry/nextjs");
-    captureException(e, {
-      tags: { component: "email", op: "notifyBookingRecibida" },
-      extra: { organizationId },
-    });
+    return deliverDurableEmail({ organizationId, kind: "booking", dedupeKey: input.pedidoId ? `booking-received:${input.pedidoId}` : `booking-received:${pacienteEmail}:${inicioIso}:${servicioNombre}`, expiresAt: inicioIso, to: pacienteEmail, subject, html, replyTo });
+  } catch {
+    return { status: "failed", detail: "email_notification_preparation_failed", retryable: true };
   }
 }
 
@@ -269,12 +254,12 @@ export async function notifyTurnoCanceladoPorPaciente(input: {
   organizationId: string;
   /** Reservado: hoy el aviso va al contacto de la org. */
   profesionalId?: string | null;
-}): Promise<void> {
+}): Promise<SendEmailResult> {
   const { client, turnoId, organizationId } = input;
 
   try {
     const destino = await resolveOrgContactEmail(organizationId);
-    if (!destino) return;
+    if (!destino) return { status: "blocked", detail: "notification_context_unavailable" };
 
     // El caller (cancelarTurnoPortal) no descifra nada: los datos del turno se
     // resuelven acá, que es donde se decide qué entra en el email.
@@ -283,7 +268,7 @@ export async function notifyTurnoCanceladoPorPaciente(input: {
       .select("inicio, servicio_nombre, paciente_nombre_cifrado")
       .eq("id", turnoId)
       .maybeSingle();
-    if (!turno) return;
+    if (!turno) return { status: "blocked", detail: "notification_context_unavailable" };
 
     const { data: org } = await client
       .from("organization")
@@ -297,23 +282,19 @@ export async function notifyTurnoCanceladoPorPaciente(input: {
     const pacienteNombre =
       tryDecrypt(turno.paciente_nombre_cifrado as string | null, "turno.paciente_nombre") ??
       "Un paciente";
-    const servicioNombre = (turno.servicio_nombre as string | null) ?? null;
     const fechaHoraLabel = formatFechaHora(turno.inicio as string, org?.timezone ?? null);
-    const servicio = servicioNombre ? ` (${servicioNombre})` : "";
+    const servicio = "";
 
-    await sendEmail({
+    return deliverDurableEmail({
+      organizationId, kind: "booking_cancelled", dedupeKey: `booking-cancelled:${turnoId}`,
       to: destino,
       subject: `Turno cancelado: ${pacienteNombre} — ${fechaHoraLabel}`,
-      html: `<p><b>${pacienteNombre}</b> canceló su turno del <b>${fechaHoraLabel}</b>${servicio} desde el portal.</p>
+      html: `<p><b>${esc(pacienteNombre)}</b> canceló su turno del <b>${esc(fechaHoraLabel)}</b>${servicio} desde el portal.</p>
 <p>El horario quedó libre en tu agenda.</p>
-<p style="color:#666;font-size:13px">${org?.nombre ?? "Folio"}</p>`,
+<p style="color:#666;font-size:13px">${esc(org?.nombre ?? "Folio")}</p>`,
     });
-  } catch (e) {
-    const { captureException } = await import("@sentry/nextjs");
-    captureException(e, {
-      tags: { component: "email", op: "notifyTurnoCanceladoPorPaciente" },
-      extra: { organizationId },
-    });
+  } catch {
+    return { status: "failed", detail: "email_notification_preparation_failed", retryable: true };
   }
 }
 
@@ -325,20 +306,8 @@ export async function notifyTurnoCanceladoPorPaciente(input: {
 // wiring (webhook MP / crones, PR posterior) las llama fire-and-forget y un
 // email jamás rompe un cobro.
 //
-// Dos reglas duras, ambas implementadas EN UN ÚNICO LUGAR
-// (`sendBillingLifecycleEmail`), no en los callers:
-//
-//   1. INTERNAS NUNCA: si `organization.is_internal_account` es true
-//      (lorenzomj925, folioasistencia, demos), se retorna sin enviar. El check
-//      vive acá para que ningún caller futuro pueda olvidarlo.
-//   2. CLAIM-BEFORE-SEND: se llama `recordEmailOnce` ANTES de enviar. Si la
-//      dedupe_key ya existía (inserted:false) o el claim falló, NO se envía.
-//      Un cron re-entrante / webhook reenviado nunca duplica. Trade-off
-//      at-most-once documentado en lib/db/email-notificacion.ts.
-//
-// Usa el service client (no el server client de sesión): estos emails salen
-// de webhooks/crones sin usuario autenticado, y la tabla email_notificacion
-// es service-only (RLS deny-by-default, M65).
+// Persistent encrypted envelopes replace the old reservation-before-send log.
+// Legacy reservations stay unverified and are never blindly resent.
 
 type BillingEmailTipo =
   | "trial_por_vencer"
@@ -367,7 +336,7 @@ async function sendBillingLifecycleEmail(input: {
     subject: string;
     html: string;
   };
-}): Promise<void> {
+}): Promise<SendEmailResult> {
   try {
     const service = createSupabaseServiceClient();
 
@@ -379,34 +348,13 @@ async function sendBillingLifecycleEmail(input: {
       .maybeSingle();
     if (orgErr) {
       const { captureException } = await import("@sentry/nextjs");
-      captureException(new Error(orgErr.message), {
+      captureException(new Error("email_organization_lookup_failed"), {
         tags: { component: "email", op: input.op, step: "load_org" },
         extra: { organizationId: input.organizationId },
       });
-      return;
+      return { status: "blocked", detail: "notification_context_unavailable" };
     }
-    if (!org || org.is_internal_account) return;
-
-    // Regla 2: claim-before-send. Sin claim confirmado no se envía.
-    const claim = await recordEmailOnce(
-      {
-        dedupeKey: input.dedupeKey,
-        tipo: input.tipo,
-        organizationId: input.organizationId,
-        destinatario: input.destinatario,
-        meta: input.meta ?? null,
-      },
-      service,
-    );
-    if (!claim.ok) {
-      const { captureException } = await import("@sentry/nextjs");
-      captureException(new Error(claim.error.detail ?? claim.error.message), {
-        tags: { component: "email", op: input.op, step: "claim" },
-        extra: { organizationId: input.organizationId, dedupeKey: input.dedupeKey },
-      });
-      return;
-    }
-    if (!claim.data.inserted) return; // ya enviado — skip silencioso
+    if (!org || org.is_internal_account) return { status: "blocked", detail: "notification_context_unavailable" };
 
     const { subject, html } = input.build({
       organizationNombre: (org.nombre as string | null) ?? "tu consultorio",
@@ -415,13 +363,9 @@ async function sendBillingLifecycleEmail(input: {
 
     // Reply-To soporte: el destinatario es el OWNER (profesional); si responde
     // con dudas de facturación, debe llegar a Folio.
-    await sendEmail({ to: input.destinatario, subject, html, replyTo: SUPPORT_EMAIL });
-  } catch (e) {
-    const { captureException } = await import("@sentry/nextjs");
-    captureException(e, {
-      tags: { component: "email", op: input.op },
-      extra: { organizationId: input.organizationId, dedupeKey: input.dedupeKey },
-    });
+    return deliverDurableEmail({ organizationId: input.organizationId, kind: `billing_${input.tipo}`, dedupeKey: input.dedupeKey, legacyKey: input.dedupeKey, to: input.destinatario, subject, html, replyTo: SUPPORT_EMAIL });
+  } catch {
+    return { status: "failed", detail: "email_notification_preparation_failed", retryable: true };
   }
 }
 
@@ -435,8 +379,8 @@ export async function notifyTrialPorVencer(input: {
   diasRestantes: TrialUmbralDias;
   /** Precio mensual del plan de la org en centavos ARS. */
   montoMensualCents: number;
-}): Promise<void> {
-  await sendBillingLifecycleEmail({
+}): Promise<SendEmailResult> {
+  return sendBillingLifecycleEmail({
     organizationId: input.organizationId,
     destinatario: input.destinatario,
     tipo: "trial_por_vencer",
@@ -465,8 +409,8 @@ export async function notifyPagoFallido(input: {
   /** status_detail crudo de MP / suscripcion.ultimo_error. Se humaniza en el template. */
   ultimoError: string | null;
   montoCents: number;
-}): Promise<void> {
-  await sendBillingLifecycleEmail({
+}): Promise<SendEmailResult> {
+  return sendBillingLifecycleEmail({
     organizationId: input.organizationId,
     destinatario: input.destinatario,
     tipo: "pago_fallido",
@@ -494,8 +438,8 @@ export async function notifySuscripcionSuspendida(input: {
   /** ISO de suscripcion.morosa_desde del episodio vigente. */
   episodioIso: string;
   montoMensualCents: number;
-}): Promise<void> {
-  await sendBillingLifecycleEmail({
+}): Promise<SendEmailResult> {
+  return sendBillingLifecycleEmail({
     organizationId: input.organizationId,
     destinatario: input.destinatario,
     tipo: "suscripcion_suspendida",
@@ -521,8 +465,8 @@ export async function notifySuscripcionReactivada(input: {
   /** ISO de suscripcion.morosa_desde del episodio que se cierra. */
   episodioIso: string;
   montoMensualCents: number;
-}): Promise<void> {
-  await sendBillingLifecycleEmail({
+}): Promise<SendEmailResult> {
+  return sendBillingLifecycleEmail({
     organizationId: input.organizationId,
     destinatario: input.destinatario,
     tipo: "suscripcion_reactivada",
@@ -548,8 +492,8 @@ export async function notifySuscripcionCanceladaMorosidad(input: {
   /** ISO de suscripcion.morosa_desde del episodio que terminó en cancelación. */
   episodioIso: string;
   montoMensualCents: number;
-}): Promise<void> {
-  await sendBillingLifecycleEmail({
+}): Promise<SendEmailResult> {
+  return sendBillingLifecycleEmail({
     organizationId: input.organizationId,
     destinatario: input.destinatario,
     tipo: "suscripcion_cancelada_morosidad",
@@ -576,8 +520,8 @@ export async function notifySuscripcionActivada(input: {
   /** suscripcion.mp_preapproval_id recién activado. */
   mpPreapprovalId: string;
   montoMensualCents: number;
-}): Promise<void> {
-  await sendBillingLifecycleEmail({
+}): Promise<SendEmailResult> {
+  return sendBillingLifecycleEmail({
     organizationId: input.organizationId,
     destinatario: input.destinatario,
     tipo: "suscripcion_activada",
@@ -623,7 +567,7 @@ export async function notifyPedidoNuevo(input: {
   fechaPropuestaIso: string | null;
   /** member.id destino si el pedido lo trae; null → owner de la org. */
   profesionalId?: string | null;
-}): Promise<void> {
+}): Promise<SendEmailResult> {
   const { client, organizationId, pedidoId, pacienteNombre, canal, fechaPropuestaIso } = input;
 
   try {
@@ -651,7 +595,7 @@ export async function notifyPedidoNuevo(input: {
         .maybeSingle();
       profileId = (owner?.profile_id as string | undefined) ?? null;
     }
-    if (!profileId) return;
+    if (!profileId) return { status: "blocked", detail: "notification_context_unavailable" };
 
     // 2. Email del profile — lectura angosta vía service client (ver doc).
     const service = createSupabaseServiceClient();
@@ -661,7 +605,7 @@ export async function notifyPedidoNuevo(input: {
       .eq("id", profileId)
       .maybeSingle();
     const to = (profile?.email as string | undefined) ?? null;
-    if (!to) return;
+    if (!to) return { status: "blocked", detail: "notification_context_unavailable" };
 
     // 3. Datos de display + template puro.
     const { data: org } = await client
@@ -682,12 +626,8 @@ export async function notifyPedidoNuevo(input: {
 
     // Reply-To soporte: el destinatario es un profesional (mismo criterio que
     // notifyMemberInvitation — los emails a pacientes no llevan replyTo).
-    await sendEmail({ to, subject, html, replyTo: SUPPORT_EMAIL });
-  } catch (e) {
-    const { captureException } = await import("@sentry/nextjs");
-    captureException(e, {
-      tags: { component: "email", op: "notifyPedidoNuevo" },
-      extra: { pedidoId, organizationId },
-    });
+    return deliverDurableEmail({ organizationId, kind: "booking_request", dedupeKey: `pedido:${pedidoId}`, to, subject, html, replyTo: SUPPORT_EMAIL });
+  } catch {
+    return { status: "failed", detail: "email_notification_preparation_failed", retryable: true };
   }
 }

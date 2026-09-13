@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../fixtures/local-test";
 
 test.beforeEach(async ({ context, baseURL }) => {
   const origin = new URL(baseURL!).origin;

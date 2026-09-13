@@ -8,7 +8,7 @@
  * primer estado llega apenas se (re)crea el watch channel.
  *
  * Estrategia: ventana completa idempotente (hoy → +30 días) en vez de
- * syncToken incremental. Una llamada a events.list por notificación; el
+ * syncToken incremental. Listado paginado completo por notificación; el
  * resultado se reconcilia contra los bloqueos google existentes (upsert por
  * gcal_event_id vía índice único M52 + delete de los que ya no están).
  *
@@ -144,8 +144,12 @@ export function planInboundSync(input: {
     const titulo = ev.summary ? ev.summary.slice(0, MAX_TITULO_LEN) : null;
     // Un tramo por día local: nunca truncamos en 1440' (eso dejaba los días
     // 2..n de unas vacaciones abiertos a reserva).
-    const segmentos = partirRangoEnBloqueos({ ...rango, timeZone: tz });
-    const multiDia = segmentos.length > 1;
+    // Clip first: a long absence may have started years before this window.
+    // Segmenting from its original start would exhaust the helper's safety cap.
+    const desdeMs=Math.max(rango.desdeMs,input.windowStartMs),hastaMs=Math.min(rango.hastaMs,input.windowEndMs);
+    if(hastaMs<=desdeMs)continue;
+    const segmentos = partirRangoEnBloqueos({ desdeMs,hastaMs,timeZone:tz });
+    const multiDia = fechaLocalEnTz(rango.desdeMs,tz)!==fechaLocalEnTz(rango.hastaMs-1,tz);
 
     for (const seg of segmentos) {
       // Solo tramos que arrancan dentro de la ventana: la disponibilidad y la
@@ -197,19 +201,20 @@ export interface IntegrationRow {
 
 export interface InboundSyncResult {
   ok: boolean;
-  skipped?: "no_token";
+  skipped?: "no_token" | "busy";
   upserted: number;
   deleted: number;
 }
 
-/** Timezone de la org (fallback al default de M02 si la lectura falla). */
+/** Timezone de la organización; los errores de lectura impiden aplicar el snapshot. */
 async function orgTimezone(service: ServiceClient, organizationId: string): Promise<string> {
   const { data, error } = await service
     .from("organization")
     .select("timezone")
     .eq("id", organizationId)
     .maybeSingle();
-  if (error || !data?.timezone) return TZ_FALLBACK;
+  if (error || !data) throw new Error("google_organization_unavailable");
+  if (!data.timezone) return TZ_FALLBACK;
   return data.timezone as string;
 }
 
@@ -224,87 +229,36 @@ async function orgTimezone(service: ServiceClient, organizationId: string): Prom
  * para reservar. Y una ausencia de varios días que arrancó el lunes se
  * perdía entera el martes.
  */
-export async function syncGoogleInbound(
-  service: ServiceClient,
-  integration: IntegrationRow,
-): Promise<InboundSyncResult> {
-  const refreshToken = integration.refresh_token_cifrado
-    ? decryptColumn(integration.refresh_token_cifrado)
-    : null;
-  if (!refreshToken) return { ok: true, skipped: "no_token", upserted: 0, deleted: 0 };
-
-  const timeZone = await orgTimezone(service, integration.organization_id);
-  const ahora = new Date();
-  const windowStart = new Date(
-    medianocheLocalUtcMs(fechaLocalEnTz(ahora.getTime(), timeZone), timeZone),
-  );
-  const windowEnd = new Date(ahora.getTime() + INBOUND_WINDOW_DAYS * 24 * 60 * 60_000);
-  const calendarId =
-    (integration.meta_json?.calendar_id as string | undefined) || "primary";
-
-  const events = await listEvents(
-    refreshToken,
-    windowStart.toISOString(),
-    windowEnd.toISOString(),
-    calendarId,
-  );
-
-  // Eventos creados por Folio (push outbound): se restan como turnos, no
-  // duplicarlos como bloqueo.
-  const { data: turnoRows, error: turnoErr } = await service
-    .from("turno")
-    .select("gcal_event_id")
-    .eq("organization_id", integration.organization_id)
-    .eq("profesional_id", integration.profesional_id)
-    .not("gcal_event_id", "is", null)
-    .gte("inicio", new Date(windowStart.getTime() - 24 * 60 * 60_000).toISOString());
-  if (turnoErr) throw new Error(`turno query: ${turnoErr.message}`);
-  const folioEventIds = new Set(
-    ((turnoRows ?? []) as Array<{ gcal_event_id: string | null }>)
-      .map((t) => t.gcal_event_id)
-      .filter((id): id is string => Boolean(id)),
-  );
-
-  const { data: existingRows, error: existingErr } = await service
-    .from("bloqueo")
-    .select("id, gcal_event_id, inicio, duracion_min, titulo")
-    .eq("organization_id", integration.organization_id)
-    .eq("profesional_id", integration.profesional_id)
-    .eq("origen", "google")
-    .not("gcal_event_id", "is", null)
-    .gte("inicio", windowStart.toISOString())
-    .lt("inicio", windowEnd.toISOString());
-  if (existingErr) throw new Error(`bloqueo query: ${existingErr.message}`);
-
-  const plan = planInboundSync({
-    events,
-    existing: (existingRows ?? []) as BloqueoGoogleRow[],
-    folioEventIds,
-    windowStartMs: windowStart.getTime(),
-    windowEndMs: windowEnd.getTime(),
-    timeZone,
-  });
-
-  if (plan.upserts.length > 0) {
-    const { error: upsertErr } = await service.from("bloqueo").upsert(
-      plan.upserts.map((u) => ({
-        organization_id: integration.organization_id,
-        profesional_id: integration.profesional_id,
-        origen: "google",
-        ...u,
-      })),
-      { onConflict: "organization_id,profesional_id,gcal_event_id" },
-    );
-    if (upsertErr) throw new Error(`bloqueo upsert: ${upsertErr.message}`);
+export async function syncGoogleInbound(service: ServiceClient, integration: IntegrationRow, signal?: AbortSignal): Promise<InboundSyncResult> {
+  const claim = await service.rpc("google_claim_inbound", { p_id: integration.id, p_notify: true });
+  if (claim.error) throw new Error("google_claim_failed");
+  if (!claim.data) return {ok:true,skipped:"busy",upserted:0,deleted:0};
+  const lease = String(claim.data.lease);
+  try {
+    // Rehydrate credentials and scope after the durable claim; never trust webhook input.
+    const current = await service.from("integration").select("id,organization_id,profesional_id,refresh_token_cifrado,meta_json")
+      .eq("id",integration.id).eq("organization_id",claim.data.organization_id).eq("profesional_id",claim.data.profesional_id).eq("proveedor","GOOGLE_CALENDAR").maybeSingle();
+    if(current.error||!current.data)throw new Error("google_integration_unavailable");
+    const row = current.data as IntegrationRow;
+    const refreshToken = row.refresh_token_cifrado ? decryptColumn(row.refresh_token_cifrado) : null;
+    if(!refreshToken)throw new Error("google_token_unavailable");
+    const timeZone=await orgTimezone(service,row.organization_id);
+    const today=fechaLocalEnTz(Date.now(),timeZone);
+    const start=medianocheLocalUtcMs(today,timeZone);
+    const end=medianocheLocalUtcMs(sumarDiasIso(today,INBOUND_WINDOW_DAYS),timeZone);
+    const calendarId=String(claim.data.calendar_id);
+    const authorized=await service.rpc("google_integration_access",{p_id:row.id});
+    if(authorized.error||authorized.data!==true)throw new Error("google_scope_revoked");
+    const events=await listEvents(refreshToken,new Date(start).toISOString(),new Date(end).toISOString(),calendarId,signal);
+    const plan=planInboundSync({events,existing:[],folioEventIds:new Set(),windowStartMs:start,windowEndMs:end,timeZone});
+    // The transaction reads all existing/owned rows itself; no PostgREST row cap or
+    // earlier SELECT snapshot can authorize a destructive partial reconciliation.
+    const result=await service.rpc("google_apply_snapshot",{p_id:row.id,p_lease:lease,p_calendar:calendarId,p_timezone:timeZone,p_start:new Date(start).toISOString(),p_end:new Date(end).toISOString(),p_rows:plan.upserts.map(({gcal_event_id,inicio,duracion_min})=>({gcal_event_id,inicio,duracion_min}))});
+    if(result.error||!result.data)throw new Error("google_apply_failed");
+    return{ok:true,upserted:Number(result.data.upserted),deleted:Number(result.data.deleted)};
+  } catch(error) {
+    const {isInvalidGrantError}=await import("./health");
+    await service.rpc("google_fail_inbound",{p_id:integration.id,p_lease:lease,p_error:isInvalidGrantError(error)?"invalid_grant":"sync_failed"});
+    throw error;
   }
-
-  if (plan.deleteIds.length > 0) {
-    const { error: deleteErr } = await service
-      .from("bloqueo")
-      .delete()
-      .in("id", plan.deleteIds);
-    if (deleteErr) throw new Error(`bloqueo delete: ${deleteErr.message}`);
-  }
-
-  return { ok: true, upserted: plan.upserts.length, deleted: plan.deleteIds.length };
 }

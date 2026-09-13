@@ -1,3 +1,9 @@
+# Shared branch port
+
+Runtime hunks from the reviewed hotfix preserve M111 agendaRevision, notice and hook.
+The shared harness uses central installIsolation/safeEnvironment and mocked M111.
+Counts below describe the isolated hotfix; shared focused checks are run separately.
+
 # Walk-in arrival regression checks
 
 This isolated hotfix starts at `2bfbe54137603e373a0fa2ab439d367dedf93415`.

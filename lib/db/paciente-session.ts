@@ -27,6 +27,7 @@
  */
 
 import { bookingSlugDeOrg } from "@/lib/portal/portal-booking";
+import { verifyMfaSession } from "@/lib/auth/mfa-access";
 import {
   createSupabaseServerClient,
   createSupabaseServiceClient,
@@ -77,12 +78,9 @@ interface PacienteRow {
  */
 export async function getPacienteSession(): Promise<Result<PacienteSession>> {
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return err("auth_required", "No estás autenticado.");
-  }
+  const verified = await verifyMfaSession(supabase);
+  if (!verified.ok) return verified;
+  const { user } = verified.data;
 
   // La `paciente_cuenta` del usuario logueado. Se lee vía el helper DEFINER
   // paciente_cuenta_actual() (M70) para no depender de una policy de SELECT

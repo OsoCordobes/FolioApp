@@ -1,70 +1,67 @@
 "use client";
 
-/**
- * Folio · hook `useAgendaAutoRefresh(organizationId)`.
- *
- * Live update de la agenda (/hoy y /calendario): si entra un booking público
- * (u otro cambio de turno hecho desde otra pestaña/dispositivo) mientras el
- * médico tiene la agenda abierta, la vista se refresca sola via
- * `router.refresh()` (re-fetch del Server Component, preserva client state).
- *
- * Estrategia en dos niveles:
- *
- *  1. POLLING (siempre activo — camino seguro): cada 25s, refresh SOLO si la
- *     pestaña está visible (`document.visibilityState === "visible"`). No
- *     requiere config server-side y no gasta requests con la pestaña en
- *     background.
- *
- *  2. REALTIME (detrás de flag): el wiring a Supabase Realtime
- *     (`useRealtimeTable` de lib/db/realtime.ts, postgres_changes sobre
- *     `turno` org-scoped, RLS server-side) queda preparado pero apagado por
- *     default. La publication `supabase_realtime` de Postgres NO está
- *     garantizada para la tabla `turno` en prod (no es verificable desde el
- *     repo), y un canal que se suscribe a una publication inexistente falla
- *     en silencio — el polling es la fuente de verdad. Para activarlo:
- *     setear `NEXT_PUBLIC_AGENDA_REALTIME=1` DESPUÉS de agregar `turno` a la
- *     publication (`alter publication supabase_realtime add table turno;`).
- *     Los eventos llegan con debounce de 2.5s para colapsar ráfagas.
- */
-
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef } from "react";
-
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createAgendaRevisionMonitor, type AgendaSyncState } from "@/lib/agenda/revision-monitor";
 import { useRealtimeTable } from "@/lib/db/realtime";
 
-const POLL_MS = 25_000;
-const REALTIME_DEBOUNCE_MS = 2_500;
 const REALTIME_ENABLED = process.env.NEXT_PUBLIC_AGENDA_REALTIME === "1";
+export interface AgendaSync { status: AgendaSyncState; retry: () => void }
 
-export function useAgendaAutoRefresh(organizationId: string | null) {
+/** Check a small, scoped marker. Fetch the complete view only after a change.
+ * Hidden tabs cancel requests; reconnecting checks immediately. Realtime is an
+ * optional nudge, never the only way to notice changes. */
+export function useAgendaAutoRefresh(organizationId: string | null, agendaRevision: string | null = null): AgendaSync {
   const router = useRouter();
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // ── Nivel 1: polling con guard de visibilidad ──
-  useEffect(() => {
-    const id = setInterval(() => {
-      if (typeof document === "undefined") return;
-      if (document.visibilityState !== "visible") return;
-      router.refresh();
-    }, POLL_MS);
-    return () => clearInterval(id);
-  }, [router]);
-
-  // ── Nivel 2: realtime (flag) — INSERT/UPDATE de turno → refresh debounced ──
-  const onRealtimeChange = useCallback(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      router.refresh();
-    }, REALTIME_DEBOUNCE_MS);
-  }, [router]);
+  const [status, setStatus] = useState<AgendaSyncState>("checking");
+  const [visible, setVisible] = useState(false);
+  const monitorRef = useRef<ReturnType<typeof createAgendaRevisionMonitor> | null>(null);
+  const renderedRevision = useRef(agendaRevision);
+  renderedRevision.current = agendaRevision;
+  const retry = useCallback(() => monitorRef.current?.check(), []);
 
   useEffect(() => {
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!organizationId) return;
+    setStatus("checking");
+    const monitor = createAgendaRevisionMonitor({
+      organizationId,
+      renderedRevision: renderedRevision.current,
+      status: setStatus,
+      refresh: () => router.refresh(),
+      async read(signal) {
+        const response = await fetch("/api/agenda/revision", {
+          credentials: "same-origin", cache: "no-store",
+          signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
+        });
+        if (signal.aborted) throw new Error("agenda_revision_cancelled");
+        if (!response.ok) {
+          // Re-evaluate session/MFA without presenting a failed permission
+          // check as an unchanged agenda.
+          if (response.status === 401 || response.status === 403) router.refresh();
+          throw new Error("agenda_revision_unavailable");
+        }
+        return await response.json();
+      },
+    });
+    monitorRef.current = monitor;
+    const onVisibility = () => {
+      const next = document.visibilityState === "visible";
+      setVisible(next);
+      monitor.setVisible(next);
     };
-  }, []);
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("online", retry);
+    onVisibility();
+    return () => {
+      monitor.stop();
+      if (monitorRef.current === monitor) monitorRef.current = null;
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("online", retry);
+    };
+  }, [organizationId, router, retry]);
 
-  // useRealtimeTable ya no-opea con organizationId null; con el flag apagado
-  // pasamos null para que ni siquiera abra el canal.
-  useRealtimeTable("turno", REALTIME_ENABLED ? organizationId : null, onRealtimeChange);
+  useEffect(() => { monitorRef.current?.acknowledge(agendaRevision); }, [agendaRevision]);
+
+  useRealtimeTable("turno", REALTIME_ENABLED && visible ? organizationId : null, retry);
+  return { status, retry };
 }

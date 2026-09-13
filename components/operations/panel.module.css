@@ -1,0 +1,19 @@
+.panel { max-width: 1180px; margin: 0 auto; padding: var(--space-8) var(--space-5); color: var(--ink); }
+.panel h1 { font-size: 30px; margin: 0 0 var(--space-3); }
+.panel h2 { font-size: 21px; margin: 0 0 var(--space-3); }
+.panel h3 { font-size: 16px; margin: 0 0 var(--space-3); }
+.panel p { line-height: 1.6; margin: 0 0 var(--space-3); }
+.panel section { margin-top: var(--space-8); }
+.header { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-5); }
+.eyebrow { color: var(--accent); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+.tableScroll { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r-md); }
+.tableScroll table { width: 100%; border-collapse: collapse; text-align: left; }
+.tableScroll th, .tableScroll td { padding: var(--space-3); border-bottom: 1px solid var(--line); font-size: 13px; }
+.tableScroll thead { background: var(--surface-2); }
+.cards { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: var(--space-4); }
+.card { padding: var(--space-5); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); }
+.value { font-size: 25px; font-variant-numeric: tabular-nums; }
+.note, .unknown { color: var(--ink-3); font-size: 13px; }
+.attention { color: var(--red); font-weight: 600; }
+.warning { color: var(--amber); font-weight: 600; }
+@media (max-width: 640px) { .cards { grid-template-columns: 1fr; } .header { flex-direction: column; } .panel { padding: var(--space-5) var(--space-3); } }

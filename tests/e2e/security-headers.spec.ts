@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../fixtures/local-test";
 
 /**
  * Folio · security headers acceptance — Phase 1 of pre-audit sprint.

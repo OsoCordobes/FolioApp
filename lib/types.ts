@@ -64,6 +64,9 @@ export interface PostVisita {
 }
 
 export interface Cobro {
+  id?: string;
+  updatedAt?: string;
+  metodo?: string;
   /**
    * Espejo de `pago.estado` (M09): "pagado" = PAGADO; "pendiente" = PENDIENTE /
    * PARCIAL ("quedó debiendo") o directamente sin fila en `pago`. Mismo criterio
@@ -120,6 +123,9 @@ export interface Turno {
   canceladoPorPaciente?: boolean;
   transiciones?: TransicionTurno[];
   cobro?: Cobro;
+  cierreClasificacion?: "REQUIERE_REGISTRO" | "SIN_CARGO" | "REGISTRADO";
+  /** Conflicting observations retain the last confirmed amount pending review. */
+  cobroPorRevisar?: boolean;
   /** member.id del profesional asignado (turno.profesional_id, vista M14). */
   profesionalId?: string | null;
   /**

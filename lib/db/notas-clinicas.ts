@@ -15,6 +15,7 @@
  * clínico se loguea acá.
  */
 
+import { readCompleteCollection } from "./complete-collection";
 import { encryptColumn, tryDecrypt } from "@/lib/crypto";
 import { validarTextoNota, type NotaClinicaFicha } from "@/lib/ficha/nota-clinica";
 
@@ -86,15 +87,15 @@ export async function addNotaClinica(input: {
  */
 export async function listNotasClinicas(
   pacienteId: string,
-  limite = 100,
+  limite: number | null = 100,
 ): Promise<Result<NotaClinicaFicha[]>> {
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
-    .from("nota_clinica")
-    .select("id, created_at, texto_cifrado, autor_id")
-    .eq("paciente_id", pacienteId)
-    .order("created_at", { ascending: false })
-    .limit(limite);
+  const query = () => supabase.from("nota_clinica")
+    .select("id, created_at, texto_cifrado, autor_id", { count: "exact" })
+    .eq("paciente_id", pacienteId).order("created_at", { ascending: false }).order("id", { ascending: false });
+  const { data, error } = limite === null
+    ? await readCompleteCollection<{ id: string; created_at: string; texto_cifrado: string | null; autor_id: string }>((from, to) => query().range(from, to))
+    : await query().limit(limite);
 
   if (error) {
     const mapped = mapSupabaseError(error);

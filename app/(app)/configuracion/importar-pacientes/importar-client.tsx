@@ -21,9 +21,8 @@ import {
   CAMPO_LABELS,
   CAMPOS_IMPORT,
   CAMPOS_OBLIGATORIOS,
-  claveDni,
-  claveTelefono,
-  decidirDedupe,
+  previewFilas,
+  IMPORT_ROW_LABELS,
   MAX_CSV_CHARS,
   MAX_FILAS_IMPORT,
   normalizarFilas,
@@ -39,9 +38,10 @@ import { importarPacientesAction, type ImportPacientesInput } from "./actions";
 
 type Paso = "archivo" | "mapeo" | "resultado";
 
-const PREVIEW_FILAS = 8;
+const PREVIEW_FILAS = 20;
 
-export function ImportarPacientesClient() {
+export function ImportarPacientesClient({organizationId,memberId}:{organizationId:string;memberId:string}) {
+  const contextRef=useRef({organizationId,memberId});
   const [paso, setPaso] = useState<Paso>("archivo");
   const [fileName, setFileName] = useState<string | null>(null);
   const [csvText, setCsvText] = useState<string>("");
@@ -52,8 +52,16 @@ export function ImportarPacientesClient() {
   const [resultado, setResultado] = useState<ImportResumen | null>(null);
   const [importando, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
+  const inFlightRef=useRef(false);
+  const operationRef=useRef<string|null>(null);
+  const fileReadRef=useRef(0);
+  const [previewPage,setPreviewPage]=useState(0);
+  const [resultPage,setResultPage]=useState(0);
 
   const reset = () => {
+    if(inFlightRef.current)return;
+    operationRef.current=null;fileReadRef.current++;
+    setPreviewPage(0);setResultPage(0);
     setPaso("archivo");
     setFileName(null);
     setCsvText("");
@@ -68,6 +76,8 @@ export function ImportarPacientesClient() {
   // ── Paso 1: archivo ────────────────────────────────────────────────────────
 
   const onFile = async (file: File) => {
+    if(inFlightRef.current)return;
+    const fileRead=++fileReadRef.current;
     setArchivoError(null);
     const nombre = file.name.toLowerCase();
     if (nombre.endsWith(".xlsx") || nombre.endsWith(".xls")) {
@@ -81,7 +91,9 @@ export function ImportarPacientesClient() {
       return;
     }
 
+    if(file.size>MAX_CSV_CHARS*4){setArchivoError("El archivo es demasiado grande.");return;}
     const buffer = await file.arrayBuffer();
+    if(fileRead!==fileReadRef.current)return;
     let text: string;
     try {
       text = new TextDecoder("utf-8", { fatal: true }).decode(buffer);
@@ -96,6 +108,7 @@ export function ImportarPacientesClient() {
     }
 
     const parseado = parseCsv(text);
+    if(parseado.error){setArchivoError(parseado.error);return;}
     if (parseado.headers.length < 2 || parseado.filas.length === 0) {
       setArchivoError(
         "No pude leer columnas y filas del archivo. Verificá que la primera fila tenga los encabezados (Nombre, Apellido, Teléfono…) y que haya al menos una fila de datos.",
@@ -103,6 +116,7 @@ export function ImportarPacientesClient() {
       return;
     }
 
+    operationRef.current=null;setPreviewPage(0);setResultPage(0);setResultado(null);
     setFileName(file.name);
     setCsvText(text);
     setCsv(parseado);
@@ -113,33 +127,15 @@ export function ImportarPacientesClient() {
   // ── Paso 2: mapeo + preview ────────────────────────────────────────────────
 
   const filasNormalizadas = useMemo(
-    () => (csv ? normalizarFilas(csv.filas, mapeo) : []),
+    () => (csv ? previewFilas(normalizarFilas(csv.filas, mapeo)) : []),
     [csv, mapeo],
   );
 
-  const previewStats = useMemo(() => {
-    let listas = 0;
-    let conError = 0;
-    let dupEnArchivo = 0;
-    const vistos = { dni: new Set<string>(), telefono: new Set<string>() };
-    const existentes = { dni: new Set<string>(), telefono: new Set<string>() };
-    for (const f of filasNormalizadas) {
-      if (!f.ok) {
-        conError++;
-        continue;
-      }
-      // Dedupe interno estimado con claves normalizadas (el server decide el
-      // real contra la DB con blind indexes — misma normalización).
-      const decision = decidirDedupe(
-        { dni: claveDni(f.data.dni), telefono: claveTelefono(f.data.telefono) },
-        existentes,
-        vistos,
-      );
-      if (decision === "duplicado_en_archivo") dupEnArchivo++;
-      else listas++;
-    }
-    return { listas, conError, dupEnArchivo };
-  }, [filasNormalizadas]);
+  const previewStats = useMemo(() => ({
+    listas:filasNormalizadas.filter(f=>f.preview==="ready").length,
+    conError:filasNormalizadas.filter(f=>f.preview==="invalid").length,
+    dupEnArchivo:filasNormalizadas.filter(f=>f.preview==="duplicate_file").length,
+  }),[filasNormalizadas]);
 
   const faltanObligatorios = CAMPOS_OBLIGATORIOS.filter((c) => mapeo[c] === undefined);
   const indicesUsados = Object.values(mapeo).filter((v): v is number => v !== undefined);
@@ -153,6 +149,8 @@ export function ImportarPacientesClient() {
     previewStats.listas > 0;
 
   const setCampo = (campo: CampoImport, valor: string) => {
+    if(inFlightRef.current)return;
+    operationRef.current=null;setPreviewPage(0);
     setMapeo((prev) => {
       const next = { ...prev };
       if (valor === "") delete next[campo];
@@ -162,10 +160,14 @@ export function ImportarPacientesClient() {
   };
 
   const confirmar = () => {
+    if(inFlightRef.current)return;
     if (mapeo.nombre === undefined || mapeo.apellido === undefined || mapeo.telefono === undefined) {
       return;
     }
+    operationRef.current ??= crypto.randomUUID();
     const input: ImportPacientesInput = {
+      operacionId:operationRef.current,
+      organizationId:contextRef.current.organizationId,memberId:contextRef.current.memberId,
       csvText,
       mapeo: {
         nombre: mapeo.nombre,
@@ -179,15 +181,17 @@ export function ImportarPacientesClient() {
         nroAfiliado: mapeo.nroAfiliado,
       },
     };
-    setServerError(null);
+    inFlightRef.current=true;setServerError(null);
     startTransition(async () => {
-      const r = await importarPacientesAction(input);
-      if (!r.ok) {
-        setServerError(r.error.message);
-        return;
-      }
-      setResultado(r.data);
-      setPaso("resultado");
+      try{
+        for(;;){
+          const response=await importarPacientesAction(input);
+          if(!response.ok){setServerError(response.error.message);return;}
+          setResultado(response.data);setPaso("resultado");
+          if(response.data.completo)break;
+        }
+      }catch{setServerError("La respuesta se interrumpió. Reintentá esta importación para recuperar las filas guardadas.");}
+      finally{inFlightRef.current=false;}
     });
   };
 
@@ -252,7 +256,7 @@ export function ImportarPacientesClient() {
               {csv.filas.length} {csv.filas.length === 1 ? "fila" : "filas"} · separador
               &nbsp;<code className="fm-mono">{csv.separador === ";" ? "punto y coma" : "coma"}</code>
             </span>
-            <button type="button" className="fi-btn fi-btn-ghost" onClick={reset}>
+            <button type="button" className="fi-btn fi-btn-ghost" onClick={reset} disabled={importando}>
               Cambiar archivo
             </button>
           </div>
@@ -273,6 +277,7 @@ export function ImportarPacientesClient() {
                     {obligatorio ? <span className="imp-req" aria-hidden="true"> *</span> : null}
                   </span>
                   <select
+                    disabled={importando}
                     className="cfg-input"
                     value={mapeo[campo] ?? ""}
                     onChange={(e) => setCampo(campo, e.target.value)}
@@ -304,7 +309,7 @@ export function ImportarPacientesClient() {
           <h2 className="imp-h2">Vista previa</h2>
           <div className="imp-preview-stats" aria-live="polite">
             <span className="imp-stat imp-stat--ok">
-              <I.Check size={12} /> {previewStats.listas} listas para importar
+              <I.Check size={12} /> {previewStats.listas} filas para verificar en Folio
             </span>
             {previewStats.dupEnArchivo > 0 ? (
               <span className="imp-stat imp-stat--warn">
@@ -333,7 +338,7 @@ export function ImportarPacientesClient() {
                 </tr>
               </thead>
               <tbody>
-                {filasNormalizadas.slice(0, PREVIEW_FILAS).map((f) => (
+                {filasNormalizadas.slice(previewPage*PREVIEW_FILAS,(previewPage+1)*PREVIEW_FILAS).map((f) => (
                   <tr key={f.fila} className={f.ok ? "" : "is-err"}>
                     <td className="fm-mono">{f.fila}</td>
                     {f.ok ? (
@@ -345,7 +350,7 @@ export function ImportarPacientesClient() {
                         <td>{f.data.email ?? "—"}</td>
                         <td className="fm-mono">{f.data.fechaNacimiento ?? "—"}</td>
                         <td>
-                          <span className="imp-badge imp-badge--ok">Lista</span>
+                          <span className="imp-badge imp-badge--ok">{f.preview==="duplicate_file"?"Revisar DNI repetido":"Por verificar"}</span>
                         </td>
                       </>
                     ) : (
@@ -362,12 +367,11 @@ export function ImportarPacientesClient() {
                 ))}
               </tbody>
             </table>
-            {filasNormalizadas.length > PREVIEW_FILAS ? (
-              <p className="imp-preview-more muted">
-                …y {filasNormalizadas.length - PREVIEW_FILAS} filas más. Las filas con error se
-                saltean y se listan en el resultado.
-              </p>
-            ) : null}
+            <div className="imp-actions" aria-label="Páginas de vista previa">
+              <button type="button" className="fi-btn fi-btn-ghost" aria-label="Anterior página de vista previa" disabled={previewPage===0} onClick={()=>setPreviewPage(p=>p-1)}>Anterior</button>
+              <span>Página {previewPage+1} de {Math.max(1,Math.ceil(filasNormalizadas.length/PREVIEW_FILAS))}</span>
+              <button type="button" className="fi-btn fi-btn-ghost" aria-label="Siguiente página de vista previa" disabled={(previewPage+1)*PREVIEW_FILAS>=filasNormalizadas.length} onClick={()=>setPreviewPage(p=>p+1)}>Siguiente</button>
+            </div>
           </div>
 
           {serverError ? (
@@ -401,6 +405,9 @@ export function ImportarPacientesClient() {
 
       {paso === "resultado" && resultado ? (
         <section className="imp-card">
+          <h2 className="imp-h2">{resultado.completo?"Importación procesada":"Importación en curso"}</h2>
+          <p className="imp-sub" role="status">{resultado.total-resultado.pendientes} de {resultado.total} filas con resultado guardado. {resultado.pendientes>0?`${resultado.pendientes} pendientes.`:"Revisá el resultado de cada fila."}</p>
+          {serverError?<p className="imp-alert imp-alert--err" role="alert">{serverError}</p>:null}
           <div className="imp-result-grid">
             <div className="imp-result-card imp-result-card--ok">
               <span className="imp-result-num">{resultado.importados}</span>
@@ -410,9 +417,9 @@ export function ImportarPacientesClient() {
             </div>
             <div className="imp-result-card imp-result-card--warn">
               <span className="imp-result-num">
-                {resultado.duplicadosDni + resultado.duplicadosTelefono + resultado.duplicadosEnArchivo}
+                {resultado.duplicadosDni + resultado.coincidenciasPrevias + resultado.duplicadosEnArchivo}
               </span>
-              <span className="imp-result-lbl">salteados por duplicado</span>
+              <span className="imp-result-lbl">filas para revisar</span>
             </div>
             <div className="imp-result-card imp-result-card--err">
               <span className="imp-result-num">{resultado.errores.length}</span>
@@ -420,33 +427,28 @@ export function ImportarPacientesClient() {
             </div>
           </div>
 
-          {resultado.duplicadosDni + resultado.duplicadosTelefono + resultado.duplicadosEnArchivo > 0 ? (
+          {resultado.duplicadosDni + resultado.coincidenciasPrevias + resultado.duplicadosEnArchivo > 0 ? (
             <p className="imp-hint">
-              Duplicados: {resultado.duplicadosDni} por DNI ya existente, {resultado.duplicadosTelefono}{" "}
-              por teléfono ya existente y {resultado.duplicadosEnArchivo} repetidos dentro del archivo.
-              Esos pacientes ya estaban en Folio y no se tocaron.
+              Coincidencias: {resultado.duplicadosDni} por DNI existente, {resultado.coincidenciasPrevias} con datos de una importación anterior y {resultado.duplicadosEnArchivo} por DNI repetido en el archivo.
+              Revisalas antes de crear otra ficha. No se fusionó ni modificó ningún paciente existente.
             </p>
           ) : null}
 
-          {resultado.errores.length > 0 ? (
-            <div className="imp-err-list">
-              <h2 className="imp-h2">Filas con errores</h2>
-              <ul>
-                {resultado.errores.map((e) => (
-                  <li key={e.fila}>
-                    <span className="fm-mono">Fila {e.fila}</span> — {e.motivo}
-                  </li>
-                ))}
-              </ul>
-              <p className="imp-hint">
-                Corregí esas filas en tu planilla y volvé a importar solo esas — los ya
-                importados se saltean como duplicados.
-              </p>
+          <div className="imp-preview">
+            <table><thead><tr><th>Fila</th><th>Resultado</th></tr></thead><tbody>
+              {resultado.filas.slice(resultPage*PREVIEW_FILAS,(resultPage+1)*PREVIEW_FILAS).map(fila=><tr key={fila.fila}><td className="fm-mono">{fila.fila}</td><td>{IMPORT_ROW_LABELS[fila.status]}</td></tr>)}
+            </tbody></table>
+            <div className="imp-actions" aria-label="Páginas de resultados">
+              <button type="button" className="fi-btn fi-btn-ghost" aria-label="Anterior página de resultados" disabled={resultPage===0} onClick={()=>setResultPage(p=>p-1)}>Anterior</button>
+              <span>Página {resultPage+1} de {Math.max(1,Math.ceil(resultado.total/PREVIEW_FILAS))}</span>
+              <button type="button" className="fi-btn fi-btn-ghost" aria-label="Siguiente página de resultados" disabled={(resultPage+1)*PREVIEW_FILAS>=resultado.total} onClick={()=>setResultPage(p=>p+1)}>Siguiente</button>
             </div>
-          ) : null}
+          </div>
+          {resultado.errores.length>0?<p className="imp-hint">Corregí las filas indicadas y volvé a cargar el archivo. Las filas idénticas a las ya importadas quedarán para revisión; no se crean otra vez.</p>:null}
+          {!resultado.completo?<button type="button" className="fi-btn fi-btn-primary" disabled={importando} onClick={confirmar}>{importando?"Guardando filas…":"Continuar importación"}</button>:null}
 
           <div className="imp-actions">
-            <button type="button" className="fi-btn fi-btn-ghost" onClick={reset}>
+            <button type="button" className="fi-btn fi-btn-ghost" onClick={reset} disabled={importando}>
               Importar otro archivo
             </button>
             <Link href="/pacientes" className="fi-btn fi-btn-primary">

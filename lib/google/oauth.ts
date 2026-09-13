@@ -36,9 +36,9 @@ function getOAuthCreds() {
   return { clientId, clientSecret, redirectUri };
 }
 
-export function makeOAuth2Client(refreshToken?: string) {
+export function makeOAuth2Client(refreshToken?: string, signal?: AbortSignal) {
   const { clientId, clientSecret, redirectUri } = getOAuthCreds();
-  const client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+  const client = new google.auth.OAuth2({ clientId, clientSecret, redirectUri, transporterOptions: { timeout: 15_000, retry: false, signal: signal ?? AbortSignal.timeout(15_000) } });
   if (refreshToken) client.setCredentials({ refresh_token: refreshToken });
   return client;
 }
@@ -59,15 +59,15 @@ export function getAuthUrl(state: string): string {
 }
 
 /** Exchange code → tokens al final del flow. */
-export async function exchangeCodeForTokens(code: string) {
-  const client = makeOAuth2Client();
+export async function exchangeCodeForTokens(code: string, signal?: AbortSignal) {
+  const client = makeOAuth2Client(undefined, signal);
   const { tokens } = await client.getToken(code);
   return tokens;
 }
 
 /** Refresh manual (cron F9 cuando expira_ts < now() + 5min). */
-export async function refreshAccessToken(refreshToken: string) {
-  const client = makeOAuth2Client(refreshToken);
+export async function refreshAccessToken(refreshToken: string, signal?: AbortSignal) {
+  const client = makeOAuth2Client(refreshToken, signal);
   const { credentials } = await client.refreshAccessToken();
   return credentials;
 }

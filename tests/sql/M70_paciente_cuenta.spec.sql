@@ -13,7 +13,7 @@
 --   4. same-org guard de paciente_claim: paciente de otra org → el trigger
 --      rechaza.
 --   5. RLS FORCE + estado FINAL de policies del stack (post-M71..M87):
---      paciente_cuenta sigue CERRADA (CERO policies — el acceso sancionado es
+--      paciente_cuenta sigue CERRADA (CERO policies PERMISSIVE — el acceso sancionado es
 --      SOLO vía funciones DEFINER: paciente_cuenta_actual M70,
 --      listar_paciente_claims_pendientes M87); paciente_claim tiene EXACTAMENTE
 --      las 4 policies de M71 (self-select/self-insert del paciente +
@@ -222,7 +222,8 @@ BEGIN
 
   -- paciente_cuenta: CERRADA también en el estado final (M71..M87 no le agregan
   -- policies a propósito).
-  IF EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'paciente_cuenta') THEN
+  -- M101 adds only a RESTRICTIVE gate, which grants no access by itself.
+  IF EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'paciente_cuenta' AND permissive='PERMISSIVE') THEN
     RAISE EXCEPTION 'M70 spec FAIL: paciente_cuenta tiene policies (debe seguir cerrada; el acceso sancionado es sólo vía funciones DEFINER)';
   END IF;
 
@@ -267,9 +268,9 @@ BEGIN
     RAISE EXCEPTION 'M70 spec FAIL: falta paciente_claim_update_clinical (UPDATE, gate can_read_clinical en USING y WITH CHECK) — M71';
   END IF;
 
-  -- Ni una policy más que esas 4 (una quinta = superficie no revisada).
+  -- Exactly four granting policies; M101's restrictive MFA gate grants nothing.
   SELECT count(*) INTO v_cnt FROM pg_policies
-   WHERE schemaname = 'public' AND tablename = 'paciente_claim';
+   WHERE schemaname = 'public' AND tablename = 'paciente_claim' AND permissive='PERMISSIVE';
   IF v_cnt <> 4 THEN
     RAISE EXCEPTION 'M70 spec FAIL: paciente_claim tiene % policies (esperadas EXACTAMENTE las 4 de M71)', v_cnt;
   END IF;
@@ -277,7 +278,7 @@ BEGIN
   -- Y NUNCA DELETE/ALL: la cola de claims es append-only (se resuelve por estado).
   IF EXISTS (
     SELECT 1 FROM pg_policies
-    WHERE schemaname = 'public' AND tablename = 'paciente_claim' AND cmd IN ('DELETE','ALL')
+    WHERE schemaname = 'public' AND tablename = 'paciente_claim' AND cmd IN ('DELETE','ALL') AND permissive='PERMISSIVE'
   ) THEN
     RAISE EXCEPTION 'M70 spec FAIL: paciente_claim tiene una policy DELETE/ALL (cola append-only: prohibido)';
   END IF;
@@ -346,6 +347,28 @@ BEGIN
   RAISE NOTICE 'M70 spec OK (6b): paciente_cuenta sin audit trigger (ciclo de vida no aborta); paciente_claim conserva el suyo';
 END $$;
 
+-- M116 replaces the old erasure contract. Keep the legacy assertions when
+-- explicitly replaying an earlier migration boundary.
+SELECT coalesce(obj_description(to_regprocedure('public.pseudonimizar_paciente(uuid,text,boolean)'), 'pg_proc'), '')
+  LIKE '%policy=retired.v1%' AS m116_patient_erasure_retired \gset
+\if :m116_patient_erasure_retired
+DO $$
+DECLARE dry boolean;
+BEGIN
+  FOREACH dry IN ARRAY ARRAY[false, true] LOOP
+    BEGIN
+      PERFORM public.pseudonimizar_paciente(gen_random_uuid(), 'Synthetic retired legacy request', dry);
+      RAISE EXCEPTION 'M116: retired patient-erasure RPC unexpectedly succeeded';
+    EXCEPTION WHEN insufficient_privilege THEN
+      IF SQLERRM <> 'patient_pseudonymization_retired' THEN RAISE; END IF;
+    END;
+  END LOOP;
+  IF has_function_privilege('authenticated', 'public.pseudonimizar_paciente(uuid,text,boolean)', 'EXECUTE')
+    OR has_function_privilege('service_role', 'public.pseudonimizar_paciente(uuid,text,boolean)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'M116: legacy erasure remains exposed to an application role';
+  END IF;
+END $$;
+\else
 -- ─── 7. erasure: pseudonimizar_paciente DESVINCULA cuenta_id ──────────────────
 DO $$
 DECLARE
@@ -397,3 +420,5 @@ BEGIN
 
   RAISE NOTICE 'M70 spec OK (7/7): erasure desvincula cuenta_id sin borrar la cuenta';
 END $$;
+
+\endif

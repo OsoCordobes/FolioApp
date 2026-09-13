@@ -33,7 +33,8 @@ interface EvaluacionInicialProps {
     id: string;
     fecha: string;
     descripcion: string | null;
-    signedUrl: string;
+    downloadUrl: string;
+  mimeType?: string;
     sesionId: string | null;
   }>;
 }

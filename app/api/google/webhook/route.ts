@@ -1,31 +1,10 @@
-/**
- * Folio · /api/google/webhook
- *
- * Endpoint para push notifications de Google Calendar Watch API.
- * Google envía POST con headers indicando qué cambió; acá resolvemos la
- * integración dueña del channel y corremos el sync inbound (Google → bloqueo)
- * inline — es una sola llamada a events.list por notificación, idempotente.
- *
- * Headers que Google envía:
- *   - X-Goog-Channel-ID:         our channel.id (folio-<integration_id>-<rand>)
- *   - X-Goog-Resource-ID:        resource id del calendar
- *   - X-Goog-Resource-State:     'sync' (handshake inicial) | 'exists' (cambio)
- *   - X-Goog-Message-Number:     monotonic counter
- *
- * Autenticación: Google no firma estas notificaciones. El channel id es
- * inguessable (lo generamos con randomUUID en google-watch-renew) y además
- * exigimos que el resource id coincida con el registrado en meta_json.
- * Un channel desconocido responde 200 (channels viejos que ya rotamos —
- * devolver error solo haría que Google reintente para siempre).
- *
- * El handshake 'sync' también sincroniza: como el cron de renovación rota
- * el channel a diario, eso nos da una reconciliación diaria gratis aunque
- * se pierda alguna notificación.
- */
+/** Provider notifications are authenticated by the persisted channel secret and
+ * resource pair. A durable dirty marker + lease preserves concurrent notifications;
+ * only a fully validated window snapshot can replace local Google blocks. */
 
 import { NextResponse, type NextRequest } from "next/server";
 
-import { INVALID_GRANT_MARKER, isInvalidGrantError } from "@/lib/google/health";
+import { verifyBearer } from "@/lib/security/verify-bearer";
 import { syncGoogleInbound, type IntegrationRow } from "@/lib/google/inbound";
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
 
@@ -38,7 +17,7 @@ export async function POST(request: NextRequest) {
   const resourceId = request.headers.get("x-goog-resource-id");
   const resourceState = request.headers.get("x-goog-resource-state");
 
-  if (!channelId || !resourceId) {
+  if (!channelId || !resourceId || channelId.length>200 || resourceId.length>300 || !["sync","exists","not_exists"].includes(resourceState??"")) {
     return new NextResponse("missing headers", { status: 400 });
   }
 
@@ -61,37 +40,19 @@ export async function POST(request: NextRequest) {
   }
 
   const meta = (integration.meta_json ?? {}) as Record<string, unknown>;
-  if (meta.watch_resource_id !== resourceId) {
+  const token=request.headers.get("x-goog-channel-token");
+  if (meta.watch_resource_id !== resourceId || typeof meta.watch_token!=="string" || !verifyBearer(token?`Bearer ${token}`:null,meta.watch_token) || typeof meta.watch_expires_at!=="string" || !Number.isFinite(Date.parse(meta.watch_expires_at)) || Date.parse(meta.watch_expires_at)<=Date.now()) {
     return NextResponse.json({ ok: true, type: "resource_mismatch" });
   }
 
   try {
-    const result = await syncGoogleInbound(service, integration as IntegrationRow);
-    await service
-      .from("integration")
-      .update({
-        ultimo_uso_ts: new Date().toISOString(),
-        ultimo_error: null,
-        ultimo_error_ts: null,
-      })
-      .eq("id", integration.id);
+    const result = await syncGoogleInbound(service, integration as IntegrationRow, AbortSignal.any([request.signal,AbortSignal.timeout(45_000)]));
     return NextResponse.json({ state: resourceState, ...result });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
     const { captureException } = await import("@sentry/nextjs");
     captureException(e, {
       tags: { component: "gcal-sync", op: "inboundWebhook" },
-      extra: { integrationId: integration.id, resourceState },
     });
-    // invalid_grant = token revocado → integración MUERTA hasta re-OAuth.
-    // Prefijo canónico para que la UI (nudge de /hoy, "Reconectar" en
-    // /configuracion) lo distinga de errores transitorios sin depender del
-    // texto exacto que devuelva googleapis.
-    const marca = isInvalidGrantError(e) ? `${INVALID_GRANT_MARKER}: ${msg}` : msg;
-    await service
-      .from("integration")
-      .update({ ultimo_error: marca.slice(0, 500), ultimo_error_ts: new Date().toISOString() })
-      .eq("id", integration.id);
     // 503: Google reintenta con backoff exponencial y desiste solo.
     return NextResponse.json({ ok: false, error: "sync_failed" }, { status: 503 });
   }

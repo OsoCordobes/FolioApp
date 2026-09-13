@@ -10,17 +10,18 @@
 import { z } from "zod";
 
 import { runAfterResponse } from "@/lib/after-response";
-import { MONTO_MAX_CENTS, MONTO_MAX_PESOS } from "@/lib/format/currency";
+import { MONTO_MAX_PESOS } from "@/lib/format/currency";
 import { cancelTurnoEnGoogle, pushTurnoToGoogle } from "@/lib/google/sync";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import { err, mapSupabaseError, ok, type Result } from "./errors";
 import {
   cancelRecordatoriosForTurno,
-  schedulePostVisitaForTurno,
   scheduleRecordatoriosForTurno,
 } from "./recordatorios";
 import { getActiveSession } from "./session";
+import { closeTurnoAtomic } from "./turno-close";
+import { closeDecisionSchema, type CloseReceipt } from "@/lib/turnos/close-contract";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -40,26 +41,13 @@ const turnoSchema = z.object({
   modalidad: z.enum(["presencial", "telemedicina"]).default("presencial"),
 });
 
-/**
- * Cobro explícito del cierre (E1 · finanzas): lo que la recepción/el médico
- * eligió en el mini-diálogo de cobro al cerrar el turno. Opcional: los
- * callers que no lo mandan (Guardar y cerrar de la ficha, flujos legacy)
- * conservan el comportamiento histórico — efectivo PAGADO por el precio del
- * turno. `pagado=false` ("quedó debiendo") crea el pago en estado PENDIENTE,
- * que /finanzas lista como deuda por cobrar.
- */
-const cobroCierreSchema = z.object({
-  // Techo = int4 de pago.monto_cents (review PR #118: el techo anterior de
-  // $1M rechazaba el cierre ENTERO de un turno caro — configuración admite
-  // precios de hasta $10M — con el genérico "Datos de transición inválidos").
-  montoCents: z.number().int().min(0).max(MONTO_MAX_CENTS),
-  metodo: z.enum(["EFECTIVO", "TRANSFERENCIA", "MERCADOPAGO", "TARJETA", "OBRA_SOCIAL", "OTRO"]),
-  pagado: z.boolean(),
-});
+/** Explicit payment intent only; an absent decision never infers a payment. */
+const cobroCierreSchema = closeDecisionSchema;
 
-export type CobroCierre = z.infer<typeof cobroCierreSchema>;
+export type CobroCierre = z.input<typeof cobroCierreSchema>;
 
 const transitionSchema = z.object({
+  operacionId: z.string().uuid().optional(),
   turnoId: z.string().uuid(),
   to: z.enum([
     "AGENDADO", "CONFIRMADO", "EN_SALA", "ATENDIENDO",
@@ -423,26 +411,21 @@ export async function createTurno(
  */
 export const ESTADOS_CANCELAN_SIDE_EFFECTS = ["CANCELADO", "REAGENDADO", "NO_ASISTIO"] as const;
 
-/**
- * Resultado de transitionTurno (review PR #118): el cierre del turno y el
- * registro del cobro NO son atómicos — el UPDATE puede persistir y el upsert
- * de `pago` fallar igual (ej.: COORDINADOR puede cerrar turnos pero
- * `pago_write_admin` de M09 lo excluye de escribir pagos). Antes ese fallo se
- * tragaba en silencio (captureException + ok(void)) y la UI mostraba "deuda
- * registrada" según la INTENCIÓN del cliente. Ahora el caller sabe la verdad:
- *
- *   - `pagoRegistrado: true`  → el pago quedó registrado (o ya existía).
- *   - `pagoRegistrado: false` → el turno CERRÓ pero el pago NO se registró
- *                                (RLS u otro error) — la UI debe avisar.
- *   - `pagoRegistrado: null`  → no aplicaba (no era cierre, o monto 0).
- */
-export interface TransitionTurnoResult {
-  pagoRegistrado: boolean | null;
-}
+/** Ordinary transitions retain compatibility; a close carries its persisted receipt. */
+export type TransitionTurnoResult =
+  | { pagoRegistrado: null; cierre?: never }
+  | { pagoRegistrado: boolean | null; cierre: CloseReceipt };
 
 export async function transitionTurno(
-  input: z.infer<typeof transitionSchema>,
+  input: z.input<typeof transitionSchema>,
 ): Promise<Result<TransitionTurnoResult>> {
+  if (input?.to === "CERRADO") {
+    const result = await closeTurnoAtomic({ turnoId: input.turnoId, operacionId: input.operacionId as string,
+      duracionRealMin: input.duracionRealMin, cobro: input.cobro });
+    if (!result.ok) return result;
+    return ok({ cierre: result.data, pagoRegistrado: result.data.clasificacion === "REGISTRADO" ? true
+      : result.data.clasificacion === "SIN_CARGO" ? null : false });
+  }
   const parsed = transitionSchema.safeParse(input);
   if (!parsed.success) {
     // Mensaje específico para monto fuera de rango (review PR #118): el
@@ -475,9 +458,6 @@ export async function transitionTurno(
     // turno en atención viola el CHECK y la transición se rechaza siempre.
     patch.atendiendo_desde = null;
   }
-  if (parsed.data.to === "CERRADO" && parsed.data.duracionRealMin != null) {
-    patch.duracion_real_min = parsed.data.duracionRealMin;
-  }
   // M90 · registrar quién confirmó. Solo al ENTRAR a CONFIRMADO; una
   // cancelación posterior no lo borra (queda como constancia — ver M90).
   if (parsed.data.to === "CONFIRMADO") {
@@ -504,68 +484,6 @@ export async function transitionTurno(
   }
 
   const profesionalMemberId = (updatedRows?.[0]?.profesional_id as string | undefined) ?? null;
-  const precioCents = (updatedRows?.[0]?.precio_cents as number | undefined) ?? 0;
-
-  // Registrar el cobro al cerrar. El dashboard de /hoy ya cuenta los turnos
-  // CERRADOS como recaudado; sin esta fila /finanzas (que lee `pago`) mostraba
-  // $0 para el mismo día. Idempotente vía UNIQUE(turno_id); no-fatal: si la
-  // RLS lo rechaza (rol sin permiso de pagos) el cierre del turno sigue
-  // valiendo y el pago se puede registrar después desde finanzas — pero el
-  // fallo YA NO es silencioso: viaja como `pagoRegistrado: false` en el
-  // Result para que la UI no afirme un cobro que se descartó (PR #118).
-  //
-  // E1 · con `cobro` explícito (mini-diálogo de /hoy) se respeta monto, método
-  // y estado elegidos: "quedó debiendo" crea el pago PENDIENTE (pagado_ts NULL,
-  // CHECK pago_consistency de M09). Sin `cobro`, comportamiento histórico:
-  // efectivo PAGADO por el precio del turno.
-  let pagoRegistrado: boolean | null = null;
-  if (parsed.data.to === "CERRADO") {
-    const cobro = parsed.data.cobro;
-    const montoCents = cobro ? cobro.montoCents : precioCents;
-    const pagado = cobro ? cobro.pagado : true;
-    if (montoCents > 0) {
-      const { error: pagoErr } = await supabase.from("pago").upsert(
-        {
-          turno_id: parsed.data.turnoId,
-          monto_cents: montoCents,
-          metodo: cobro?.metodo ?? "EFECTIVO",
-          estado: pagado ? "PAGADO" : "PENDIENTE",
-          pagado_ts: pagado ? new Date().toISOString() : null,
-          notas: cobro
-            ? "Registrado en el cierre del turno."
-            : "Registrado automáticamente al cerrar el turno.",
-        },
-        { onConflict: "turno_id", ignoreDuplicates: true },
-      );
-      pagoRegistrado = !pagoErr;
-      if (pagoErr) {
-        const { captureException } = await import("@sentry/nextjs");
-        captureException(new Error(`pago auto-registro falló: ${pagoErr.message}`), {
-          tags: { component: "turno-transition", op: "autoPago" },
-          extra: { turnoId: parsed.data.turnoId },
-        });
-      }
-    }
-  }
-
-  // Hooks de transición de estado para la cola de recordatorios.
-  // Post-respuesta vía after() con captura Sentry DENTRO del callback
-  // (mismo razonamiento que createTurno).
-  if (parsed.data.to === "CERRADO") {
-    runAfterResponse(() =>
-      schedulePostVisitaForTurno({
-        organizationId: session.data.organizationId,
-        turnoId: parsed.data.turnoId,
-        closedAt: new Date(),
-      }).catch(async (err) => {
-        const { captureException } = await import("@sentry/nextjs");
-        captureException(err, {
-          tags: { component: "turno-transition", op: "schedulePostVisita" },
-          extra: { turnoId: parsed.data.turnoId },
-        });
-      }),
-    );
-  }
   if ((ESTADOS_CANCELAN_SIDE_EFFECTS as readonly string[]).includes(parsed.data.to)) {
     runAfterResponse(() =>
       cancelRecordatoriosForTurno(parsed.data.turnoId).catch(async (err) => {
@@ -596,7 +514,7 @@ export async function transitionTurno(
     }
   }
 
-  return ok({ pagoRegistrado });
+  return ok({ pagoRegistrado: null });
 }
 
 // ─── Reagendar turno ────────────────────────────────────────────────────
@@ -627,6 +545,7 @@ export function puedeReagendarEstado(estado: string): boolean {
 }
 
 const reagendarSchema = z.object({
+  operacionId: z.string().uuid(),
   turnoId: z.string().uuid(),
   nuevoInicio: z.string().datetime({ offset: true }),
   nuevaDuracionMin: z.number().int().min(5).max(480).optional(),
@@ -638,134 +557,42 @@ export type ReagendarTurnoInput = z.infer<typeof reagendarSchema>;
  * Reagenda un turno: marca el original como REAGENDADO y crea uno nuevo con
  * el mismo paciente/servicio/profesional/precio en el horario nuevo.
  *
- * Orden deliberado:
- *   1. SELECT org-scoped + validación de estado (puedeReagendarEstado).
- *   2. checkSlotOcupado del horario nuevo con excludeTurnoId → err("conflict")
- *      temprano, sin tocar nada. Desde M54 este pre-check va por el MISMO RPC
- *      per-profesional que usa createTurno en (4) — semánticas idénticas, la
- *      divergencia B1 del review de PR #44 (pre-check manual pasaba, create
- *      org-wide fallaba post-transición) ya no puede ocurrir.
- *   3. transitionTurno(→REAGENDADO) PRIMERO — sus hooks existentes cancelan
- *      recordatorios + evento de Google Calendar del turno viejo. Acá se
- *      dispara `hooks.onTransitioned` (si vino): hubo mutación real, el
- *      caller debe revalidar SUS rutas aunque (4) falle después (I2).
- *   4. createTurno — programa recordatorios + push a Google Calendar nuevos.
- *
- * Riesgo residual (documentado, follow-up RPC transaccional):
- *   - TOCTOU entre (2) y (4): otro turno puede ganar el slot en el medio. El
- *     EXCLUDE de M40 es el backstop — createTurno devuelve conflict (23P01)
- *     y NO se inserta nada solapado.
- *   - Si (4) falla por cualquier causa, el viejo ya quedó REAGENDADO (estado
- *     terminal, no hay vuelta atrás sin RPC transaccional). Devolvemos un
- *     err explícito pidiendo crear el turno a mano; no se pierde información
- *     clínica (el turno viejo sigue visible como Reagendado).
+ * M119 confirma original, reemplazo, recordatorios y trabajos de Google en
+ * una transacción. Una respuesta perdida sólo se reintenta con operacionId
+ * y datos originales; el recibo se consulta con la autorización vigente.
  */
 export async function reagendarTurno(
   input: ReagendarTurnoInput,
-  hooks?: {
-    /**
-     * Se invoca apenas el turno original queda REAGENDADO (mutación
-     * irreversible) — ANTES del createTurno. El caller (server action) lo usa
-     * para revalidatePath: si el create falla después, la UI igual tiene que
-     * dejar de mostrar el turno viejo como agendado (review PR #44, I2).
-     */
-    onTransitioned?: () => void;
-  },
 ): Promise<Result<{ nuevoTurnoId: string }>> {
   const parsed = reagendarSchema.safeParse(input);
   if (!parsed.success) {
     return err("validation", "Datos del reagendado inválidos.", parsed.error.message);
   }
-  const session = await getActiveSession();
-  if (!session.ok) return session;
-
-  const supabase = await createSupabaseServerClient();
-
-  // 1. Turno original, org-scoped (RLS además filtra por scope del rol).
-  //    M56: traemos nota_reserva_cifrado para arrastrarla al reemplazo — el
-  //    reagendado no debe perder el motivo del booking original.
-  const { data: turno, error: selErr } = await supabase
-    .from("turno")
-    .select("id, estado, paciente_id, servicio_id, profesional_id, precio_cents, duracion_min, nota_reserva_cifrado, modalidad")
-    .eq("id", parsed.data.turnoId)
-    .eq("organization_id", session.data.organizationId)
-    .is("deleted_at", null)
-    .maybeSingle();
-
-  if (selErr) {
-    const mapped = mapSupabaseError(selErr);
-    return err(mapped.code, mapped.message, selErr.message);
+  const uncertain = () => err("network", "No pudimos confirmar el cambio. Comprobá este mismo intento antes de reagendar otra vez.");
+  try {
+    const session = await getActiveSession();
+    if (!session.ok) return session;
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = await supabase.rpc("reschedule_turno_atomic", {
+      p_org: session.data.organizationId, p_operation: parsed.data.operacionId,
+      p_turno: parsed.data.turnoId, p_inicio: parsed.data.nuevoInicio,
+      p_duracion: parsed.data.nuevaDuracionMin ?? null,
+    });
+    if (error) {
+      if (error.code === "40001") return err("conflict", "El turno o este intento cambió. Revisá la agenda antes de volver a reagendar.");
+      if (error.code === "55000") return err("transition_invalid", "El turno ya no se puede reagendar. Revisá su estado actual en la agenda.");
+      if (error.code === "22023") return err("validation", "Revisá la fecha y la duración del nuevo horario.");
+      if (/^(22|23|40|42)/.test(error.code ?? "")) {
+        const mapped = mapSupabaseError(error);
+        return err(mapped.code, mapped.message);
+      }
+      return uncertain();
+    }
+    if (!z.string().uuid().safeParse(data?.nuevoTurnoId).success) return uncertain();
+    return ok({ nuevoTurnoId: data.nuevoTurnoId });
+  } catch {
+    return uncertain();
   }
-  if (!turno) {
-    return err("not_found", "El turno no existe o no es de tu organización.");
-  }
-  if (!puedeReagendarEstado(turno.estado as string)) {
-    return err(
-      "transition_invalid",
-      "Solo se pueden reagendar turnos agendados, confirmados o con ausencia registrada.",
-    );
-  }
-
-  const duracionNueva = parsed.data.nuevaDuracionMin ?? (turno.duracion_min as number);
-
-  // 2. Chequeo del horario nuevo excluyendo el turno que estamos moviendo
-  //    (sin exclusión, mover un turno solapando su propio rango viejo se
-  //    auto-conflictuaría siempre).
-  const ocupado = await checkSlotOcupado(
-    supabase,
-    session.data.organizationId,
-    parsed.data.nuevoInicio,
-    duracionNueva,
-    turno.profesional_id as string,
-    null,
-    parsed.data.turnoId,
-  );
-  if (ocupado) {
-    return err("conflict", "Ese horario ya está ocupado.");
-  }
-
-  // 3. Marcar el original como REAGENDADO. transitionTurno ya se encarga de
-  //    cancelar recordatorios + evento gcal del viejo (hooks post-respuesta).
-  const transitioned = await transitionTurno({
-    turnoId: parsed.data.turnoId,
-    to: "REAGENDADO",
-  });
-  if (!transitioned.ok) return transitioned;
-
-  // Mutación irreversible consumada: avisar al caller (revalidatePath) ANTES
-  // de intentar el create — si falla, la UI igual debe refrescarse (I2).
-  hooks?.onTransitioned?.();
-
-  // 4. Crear el turno nuevo (programa recordatorios + push gcal nuevos).
-  //    M56: arrastra la nota de reserva del original (ya viene como wire bytea
-  //    `\\x…`; se re-inserta tal cual sin descifrar — no es PHI legible acá).
-  const created = await createTurno(
-    {
-      paciente_id: turno.paciente_id as string,
-      servicio_id: turno.servicio_id as string,
-      profesional_id: turno.profesional_id as string,
-      inicio: parsed.data.nuevoInicio,
-      duracion_min: duracionNueva,
-      precio_cents: turno.precio_cents as number,
-      origen: "MANUAL",
-      // M72 · el reagendado conserva la modalidad del turno original (un turno
-      // de telemedicina reagendado sigue siendo de telemedicina). La sala (T2)
-      // se re-provisiona para el turno nuevo — NO se arrastra la del viejo.
-      modalidad: (turno.modalidad as "presencial" | "telemedicina" | null) ?? "presencial",
-    },
-    { notaReservaCifrado: (turno.nota_reserva_cifrado as string | null) ?? null },
-  );
-  if (!created.ok) {
-    // El viejo ya quedó REAGENDADO (terminal) — sin RPC transaccional no se
-    // puede revertir. Mensaje accionable para que el turno no se pierda.
-    return err(
-      created.error.code,
-      `El turno original quedó marcado como reagendado, pero no se pudo crear el nuevo: ${created.error.message} Creá el turno a mano desde «Agendar».`,
-      created.error.detail,
-    );
-  }
-
-  return ok({ nuevoTurnoId: created.data.id });
 }
 
 // ─── Walk-in: crea paciente (si nuevo) + turno EN_SALA ─────────────────

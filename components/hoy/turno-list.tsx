@@ -33,6 +33,8 @@ interface TurnoListProps {
   /** PR #118 · gate del mini-diálogo de cobro al cerrar (ver TurnoRow). */
   canRegistrarCobro?: boolean;
   pendingIds?: ReadonlySet<string>;
+  onCloseTurno?: (id: string) => void;
+  onReviewCobro?: (id: string) => void;
   onTransition: (id: string, to: EstadoTurno, extra?: Partial<Turno>, cobro?: CobroCierreActionInput) => boolean | void;
   onOpenFicha: (id: string, transitionStarted?: boolean) => void;
   /** Abre el modal de reagendar para un turno (sube hasta Dashboard). */
@@ -66,7 +68,7 @@ function rangoHorasGrupo(turnos: Turno[]): string | null {
   return primera === ultima ? `${pad(primera)} hs` : `${pad(primera)} – ${pad(ultima)} hs`;
 }
 
-export function TurnoList({ turnos, pacientes, nextId, now, timezone, canRegistrarCobro = true, pendingIds, onTransition, onOpenFicha, onReagendar, dense }: TurnoListProps) {
+export function TurnoList({ turnos, pacientes, nextId, now, timezone, canRegistrarCobro = true, pendingIds, onCloseTurno, onReviewCobro, onTransition, onOpenFicha, onReagendar, dense }: TurnoListProps) {
   const [showCerrados, setShowCerrados] = useState(true);
   const [showCancelados, setShowCancelados] = useState(false);
 
@@ -124,6 +126,7 @@ export function TurnoList({ turnos, pacientes, nextId, now, timezone, canRegistr
                   timezone={timezone}
                   canRegistrarCobro={canRegistrarCobro}
                   pending={pendingIds?.has(t.id) ?? false}
+                  onCloseTurno={onCloseTurno}
                   onTransition={onTransition}
                   onOpenFicha={onOpenFicha}
                   onReagendar={onReagendar}
@@ -166,6 +169,8 @@ export function TurnoList({ turnos, pacientes, nextId, now, timezone, canRegistr
                   turno={t}
                   paciente={pacientes[t.pacienteId]}
                   onOpenFicha={onOpenFicha}
+                  onReviewCobro={canRegistrarCobro ? onReviewCobro : undefined}
+                  pending={pendingIds?.has(t.id)}
                 />
               ))}
             </div>

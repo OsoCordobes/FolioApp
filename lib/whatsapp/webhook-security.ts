@@ -1,3 +1,5 @@
+
+import { safeLog } from "@/lib/observability/safe-log";
 /**
  * Folio · WhatsApp webhook · validación de firma X-Hub-Signature-256.
  *
@@ -24,10 +26,10 @@ export function verifyMetaSignature(headerValue: string | null, rawBody: string 
   // siempre tener META_APP_SECRET seteado.
   if (!appSecret) {
     if (process.env.VERCEL_ENV === "production") {
-      console.error("[whatsapp] META_APP_SECRET no seteado en producción. Bloqueando webhook.");
+      safeLog("error", "lib.whatsapp.webhook.security.L27", "[whatsapp] META_APP_SECRET no seteado en producción. Bloqueando webhook.");
       return { ok: false, reason: "server-misconfigured" };
     }
-    console.warn("[whatsapp] META_APP_SECRET no seteado (dev mode); webhook aceptado sin verificar firma.");
+    safeLog("warn", "lib.whatsapp.webhook.security.L30", "[whatsapp] META_APP_SECRET no seteado (dev mode); webhook aceptado sin verificar firma.");
     return { ok: true, mode: "skipped-dev" };
   }
 

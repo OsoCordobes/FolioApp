@@ -57,7 +57,7 @@ SELECT ok(
 -- ─── Function signature unchanged after extension ──────────────────────
 
 SELECT has_function('public', 'pseudonimizar_paciente', ARRAY['uuid','text','boolean'],
-  'M25 · pseudonimizar_paciente(uuid, text, boolean) still callable');
+  'M25 · pseudonimizar_paciente(uuid, text, boolean) signature remains present (retired by M116)');
 
 SELECT * FROM finish();
 

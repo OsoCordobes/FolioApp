@@ -1,3 +1,18 @@
+-- M116 retires this RPC; earlier migration snapshots retain the legacy checks.
+SELECT coalesce(obj_description(to_regprocedure('public.pseudonimizar_paciente(uuid,text,boolean)'), 'pg_proc'), '')
+  LIKE '%policy=retired.v1%' AS m116_patient_erasure_retired \gset
+\if :m116_patient_erasure_retired
+BEGIN;
+CREATE EXTENSION IF NOT EXISTS pgtap;
+SELECT plan(4);
+SELECT has_function('public', 'pseudonimizar_paciente', ARRAY['uuid','text','boolean'], 'Legacy signature is retained');
+SELECT throws_ok($$SELECT public.pseudonimizar_paciente(gen_random_uuid(), 'Synthetic retired request', false)$$,
+  '42501', 'patient_pseudonymization_retired', 'Even the function owner cannot invoke the retired erasure');
+SELECT ok(NOT has_function_privilege('authenticated','public.pseudonimizar_paciente(uuid,text,boolean)','EXECUTE'), 'Authenticated EXECUTE is revoked');
+SELECT ok(NOT has_function_privilege('service_role','public.pseudonimizar_paciente(uuid,text,boolean)','EXECUTE'), 'Service-role EXECUTE is revoked');
+SELECT * FROM finish();
+ROLLBACK;
+\else
 -- pgTAP · Folio · pseudonimizacion_paciente (Habeas Data art. 16)
 -- Verifica que:
 --   - dry_run muestra impacto sin ejecutar
@@ -104,3 +119,5 @@ SELECT throws_like(
 
 SELECT * FROM finish();
 ROLLBACK;
+
+\endif

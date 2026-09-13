@@ -3,7 +3,7 @@
  *
  * Cubre lib/especialidades/cardiologia/schema.ts:
  *   - schema zod versionado (parse válido / parcial / inválido)
- *   - scoreRiesgoCV (bordes del conteo + edad, orientativo)
+ *   - conteo descriptivo de factores, sin clasificación clínica automática
  *   - deriveCardioSeries (orden ASC, sesiones sin panel, shapes ajenos)
  *   - extractEstudios (items inválidos descartados)
  *   - resumenSesionCardiologia (variantes panel / estudios / vacío)
@@ -22,7 +22,7 @@ import {
   extractMedicacion,
   parseCardiologiaToolData,
   resumenSesionCardiologia,
-  scoreRiesgoCV,
+  contarFactoresCV,
 } from "../../lib/especialidades/cardiologia/schema";
 
 // ─── Schema ─────────────────────────────────────────────────────────────────
@@ -311,57 +311,32 @@ test("resumenSesion v2: lee el panel v2 con el mismo copy que v1", () => {
         factores: { tabaquismo: true, sedentarismo: true },
       },
     }),
-    "TA 130/85 · FC 72 · riesgo moderado",
+    "TA 130/85 · FC 72 · 2 factores registrados",
   );
   // v2 solo con vitales extra (sin TA/FC/factores/estudios) → copy genérico.
   assert.equal(resumenSesionCardiologia({ v: 2, panel: { peso: 78, talla: 172 } }), "Sesión registrada");
 });
 
-// ─── scoreRiesgoCV ──────────────────────────────────────────────────────────
-
-test("scoreRiesgoCV: bordes del conteo (0-1 bajo, 2-3 moderado, >=4 alto)", () => {
-  assert.equal(scoreRiesgoCV(undefined).nivel, "bajo");
-  assert.equal(scoreRiesgoCV(null).nivel, "bajo");
-  assert.equal(scoreRiesgoCV({}).nivel, "bajo");
-  assert.equal(scoreRiesgoCV({ tabaquismo: true }).nivel, "bajo");
-  assert.equal(scoreRiesgoCV({ tabaquismo: true, diabetes: true }).nivel, "moderado");
-  assert.equal(
-    scoreRiesgoCV({ tabaquismo: true, diabetes: true, hta: true }).nivel,
-    "moderado",
-  );
-  assert.equal(
-    scoreRiesgoCV({ tabaquismo: true, diabetes: true, hta: true, dislipemia: true }).nivel,
-    "alto",
-  );
-  assert.equal(
-    scoreRiesgoCV({
-      tabaquismo: true,
-      diabetes: true,
-      hta: true,
-      dislipemia: true,
-      antecedentesFamiliares: true,
-      sedentarismo: true,
-    }).nivel,
-    "alto",
-  );
-  // false NO cuenta como factor presente.
-  assert.equal(scoreRiesgoCV({ tabaquismo: false, diabetes: false }).nivel, "bajo");
+test("factores CV: el conteo no inventa factores ni convierte ausencias en bajo riesgo", () => {
+  assert.equal(contarFactoresCV(undefined), 0);
+  assert.equal(contarFactoresCV(null), 0);
+  assert.equal(contarFactoresCV({}), 0);
+  assert.equal(contarFactoresCV({ tabaquismo: false, diabetes: false }), 0);
+  assert.equal(contarFactoresCV({ tabaquismo: true, diabetes: false }), 1);
+  assert.equal(contarFactoresCV({ tabaquismo: true, diabetes: true, hta: true, dislipemia: true }), 4);
+  assert.equal(contarFactoresCV({ edad: true } as never), 0);
 });
 
-test("scoreRiesgoCV: edad >= 60 suma un factor; etiqueta siempre orientativa", () => {
-  // 1 factor + edad 59 → sigue bajo; + edad 60 → cruza a moderado.
-  assert.equal(scoreRiesgoCV({ tabaquismo: true }, 59).nivel, "bajo");
-  assert.equal(scoreRiesgoCV({ tabaquismo: true }, 60).nivel, "moderado");
-  // 3 factores + edad 70 → cruza a alto.
-  assert.equal(
-    scoreRiesgoCV({ tabaquismo: true, diabetes: true, hta: true }, 70).nivel,
-    "alto",
-  );
-  // Edad sola no clasifica más que bajo (0 factores + edad = conteo 1).
-  assert.equal(scoreRiesgoCV({}, 80).nivel, "bajo");
-  // Etiqueta es-AR con la marca de orientativo.
-  assert.equal(scoreRiesgoCV({ tabaquismo: true, hta: true }).etiqueta, "Riesgo moderado (orientativo)");
-  assert.match(scoreRiesgoCV(undefined).etiqueta, /orientativo/);
+test("resumen de todas las versiones: conserva factores sin inferir riesgo clínico", () => {
+  for (const v of [1, 2, 3]) {
+    const factores = { tabaquismo: true, diabetes: true, hta: true, dislipemia: true };
+    const payload = { v, panel: { factores } };
+    const original = structuredClone(payload);
+    assert.equal(resumenSesionCardiologia(payload), "4 factores registrados");
+    assert.equal(resumenSesionCardiologia({ v, panel: { factores: { hta: true } } }), "1 factor registrado");
+    assert.equal(resumenSesionCardiologia({ v, panel: { factores: {} } }), "Sesión registrada");
+    assert.deepEqual(payload, original);
+  }
 });
 
 // ─── deriveCardioSeries ─────────────────────────────────────────────────────
@@ -425,7 +400,7 @@ test("extractEstudios: items inválidos se descartan sin romper", () => {
 
 // ─── resumenSesionCardiologia ───────────────────────────────────────────────
 
-test("resumenSesion: TA + FC + factores → 'TA 130/85 · FC 72 · riesgo moderado'", () => {
+test("resumenSesion: TA + FC + conteo descriptivo de factores", () => {
   assert.equal(
     resumenSesionCardiologia({
       v: 1,
@@ -436,7 +411,7 @@ test("resumenSesion: TA + FC + factores → 'TA 130/85 · FC 72 · riesgo modera
         factores: { tabaquismo: true, sedentarismo: true },
       },
     }),
-    "TA 130/85 · FC 72 · riesgo moderado",
+    "TA 130/85 · FC 72 · 2 factores registrados",
   );
 });
 
@@ -448,7 +423,7 @@ test("resumenSesion: variantes parciales del panel", () => {
   assert.equal(resumenSesionCardiologia({ v: 1, panel: { fc: 72 } }), "FC 72");
   assert.equal(resumenSesionCardiologia({ v: 1, panel: { taSistolica: 130 } }), "TA sist. 130");
   assert.equal(resumenSesionCardiologia({ v: 1, panel: { taDiastolica: 85 } }), "TA diast. 85");
-  // Factores todos false → sin segmento de riesgo.
+  // Factores todos false → sin conteo positivo ni clasificación de riesgo.
   assert.equal(
     resumenSesionCardiologia({ v: 1, panel: { fc: 60, factores: { tabaquismo: false } } }),
     "FC 60",
