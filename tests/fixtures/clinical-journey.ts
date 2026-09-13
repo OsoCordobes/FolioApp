@@ -16,11 +16,11 @@ export async function prepareSavedVisit(page:Page,fixture:ClinicalFixture,{actor
  await page.getByRole('button',{name:'Sin turno',exact:true}).click();const modal=page.getByRole('dialog');await uiExpect(modal).toBeVisible();
  await modal.getByRole('button',{name:'Nuevo',exact:true}).click();await modal.getByPlaceholder('Nombre',{exact:true}).fill(`E2E ${fixture.runId}`);
  await modal.getByPlaceholder('Apellido',{exact:true}).fill(actor.specialty);await modal.getByPlaceholder('Teléfono',{exact:true}).fill('+54 351 555 0100');
- const localDate=(await modal.getByLabel('Fecha y hora',{exact:true}).inputValue()).slice(0,10);
+ const localDatetime=await modal.getByLabel('Fecha y hora',{exact:true}).inputValue();
  await modal.getByRole('button',{name:'Crear turno',exact:true}).click();await expect(modal).toBeHidden({timeout:20000});
  await expect.poll(async()=>{const r=await fixture.db.query('SELECT count(*)::int AS n FROM public.turno WHERE organization_id=$1',[actor.organizationId]);return r.rows[0].n;}).toBe(1);
- const {rows:[turno]}=await fixture.db.query(`SELECT id,paciente_id,estado,origen,to_char(inicio AT TIME ZONE 'America/Argentina/Cordoba','YYYY-MM-DD') AS local_date FROM public.turno WHERE organization_id=$1`,[actor.organizationId]);
- expect(turno.estado).toBe('AGENDADO');expect(turno.origen).toBe('WALK_IN');expect(turno.local_date).toBe(localDate);
+ const {rows:[turno]}=await fixture.db.query(`SELECT id,paciente_id,estado,origen,to_char(inicio AT TIME ZONE 'America/Argentina/Cordoba','YYYY-MM-DD"T"HH24:MI') AS local_datetime FROM public.turno WHERE organization_id=$1`,[actor.organizationId]);
+ expect(turno.estado).toBe('AGENDADO');expect(turno.origen).toBe('WALK_IN');expect(turno.local_datetime).toBe(localDatetime);
  const {rows:[identity]}=await fixture.db.query('SELECT pi.nombre_cifrado,pi.apellido_cifrado,pi.fecha_nacimiento FROM public.paciente p JOIN public.paciente_identidad pi ON pi.id=p.identidad_id WHERE p.id=$1 AND p.organization_id=$2',[turno.paciente_id,actor.organizationId]);
  expect(decryptSynthetic(identity.nombre_cifrado)).toBe(`E2E ${fixture.runId}`);expect(decryptSynthetic(identity.apellido_cifrado)).toBe(actor.specialty);expect(identity.fecha_nacimiento).toBeNull();
  const appointment=page.locator('.fi-turno').filter({hasText:fixture.runId});await appointment.getByRole('button',{name:'Marcar llegada',exact:true}).click();

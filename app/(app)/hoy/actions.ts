@@ -162,6 +162,8 @@ export interface PacientePickerRow {
 }
 
 export interface CreateTurnoMeta {
+  /** Zona de la organización autenticada: el picker coincide con su agenda. */
+  timezone: string;
   servicios: ServicioPickerRow[];
   pacientes: PacientePickerRow[];
   /** Colegiados activos de la org — alimenta el picker de profesional. */
@@ -187,6 +189,16 @@ export async function loadCreateTurnoMeta(): Promise<Result<CreateTurnoMeta>> {
   if (!session.ok) return session;
 
   const supabase = await createSupabaseServerClient();
+  const { data: organization, error: organizationError } = await supabase
+    .from("organization")
+    .select("timezone")
+    .eq("id", session.data.organizationId)
+    .is("deleted_at", null)
+    .single();
+  if (organizationError || !organization) return err("db_error", "No pudimos cargar la zona horaria del consultorio.");
+  const timezone = organization.timezone || "America/Argentina/Cordoba";
+  try { new Intl.DateTimeFormat("en-CA", { timeZone: timezone }).format(); }
+  catch { return err("validation", "Revisá la zona horaria configurada del consultorio."); }
 
   const { data: servicios, error: servErr } = await supabase
     .from("servicio")
@@ -209,6 +221,7 @@ export async function loadCreateTurnoMeta(): Promise<Result<CreateTurnoMeta>> {
   }
 
   return ok({
+    timezone,
     servicios: (servicios ?? []).map((s) => ({
       id: s.id as string,
       nombre: s.nombre as string,

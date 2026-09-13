@@ -18,10 +18,10 @@ import { useRouter } from "next/navigation";
 import { reagendarTurnoAction, type ReagendarTurnoActionInput } from "@/app/(app)/hoy/actions";
 import { useToast } from "@/components/ui/toast";
 import {
-  isoToLocalDatetimeExact,
-  localDatetimeToIso,
-  localDatetimeToastLabel,
-} from "@/lib/datetime-local";
+  organizationDatetimeExact,
+  organizationDatetimeToIso,
+  organizationDatetimeToastLabel,
+} from "@/lib/organization-datetime";
 import { useModalA11y } from "@/lib/use-modal-a11y";
 
 interface TurnoReagendarModalProps {
@@ -30,7 +30,9 @@ interface TurnoReagendarModalProps {
   profesionalId?: string | null;
   pacienteNombre: string;
   servicioNombre: string;
-  /** Inicio actual del turno — default del picker de horario nuevo. */
+  /** Zona IANA de la organización autenticada, nunca la del navegador. */
+  timezone: string;
+  /** Instante con offset o fecha/hora de pared del consultorio, sin redondear. */
   inicioIso: string;
   duracionMin: number;
   onClose: () => void;
@@ -43,6 +45,7 @@ export function TurnoReagendarModal({
   profesionalId,
   pacienteNombre,
   servicioNombre,
+  timezone,
   inicioIso,
   duracionMin,
   onClose,
@@ -50,10 +53,15 @@ export function TurnoReagendarModal({
 }: TurnoReagendarModalProps) {
   // Default EXACTO: el picker abre en la hora actual del turno (review PR #44,
   // M1) — sin el "+5' redondeado" del create modal, que acá corría el horario.
-  const [inicioLocal, setInicioLocal] = useState<string>(() => isoToLocalDatetimeExact(inicioIso));
+  const editorTimezone = useRef(timezone).current;
+  const [initialDatetime] = useState(() => {
+    try { return { value: organizationDatetimeExact(inicioIso, editorTimezone), error: null }; }
+    catch { return { value: "", error: "Revisá la fecha y la zona horaria del consultorio." }; }
+  });
+  const [inicioLocal, setInicioLocal] = useState(initialDatetime.value);
   const [duracion, setDuracion] = useState<number>(duracionMin);
   const [submitting, startTransition] = useTransition();
-  const [submitErr, setSubmitErr] = useState<string | null>(null);
+  const [submitErr, setSubmitErr] = useState<string | null>(initialDatetime.error);
   const [outcomeUnknown, setOutcomeUnknown] = useState(false);
   const phase = useRef<"idle" | "pending" | "uncertain" | "confirmed">("idle");
   const attempt = useRef<{ input: ReagendarTurnoActionInput; label: string; agenda: string } | null>(null);
@@ -118,14 +126,18 @@ export function TurnoReagendarModal({
   const handleSubmit = () => {
     if (!canSubmit || phase.current !== "idle") return;
     let isoInicio: string;
-    try { isoInicio = localDatetimeToIso(inicioLocal); }
-    catch { setSubmitErr("Revisá la fecha y hora del turno."); return; }
-    const day = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Cordoba", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(isoInicio));
+    try { isoInicio = organizationDatetimeToIso(inicioLocal, editorTimezone); }
+    catch (error) {
+      setSubmitErr(error instanceof RangeError && error.message.startsWith("Ese horario ")
+        ? error.message : "Revisá la fecha y hora en la zona del consultorio.");
+      return;
+    }
+    const day = organizationDatetimeExact(isoInicio, editorTimezone).slice(0, 10);
     const agenda = new URLSearchParams({ w: day, mes: day.slice(0, 7) });
     if (profesionalId) agenda.set("prof", profesionalId);
     attempt.current = {
       input: { operacionId: crypto.randomUUID(), turnoId, nuevoInicio: isoInicio, nuevaDuracionMin: duracion },
-      label: `${localDatetimeToastLabel(inicioLocal)} · ${pacienteNombre}`,
+      label: `${organizationDatetimeToastLabel(inicioLocal, editorTimezone)} · ${pacienteNombre}`,
       agenda: `/calendario?${agenda}`,
     };
     submitAttempt();
@@ -215,7 +227,7 @@ export function TurnoReagendarModal({
         </div>
 
         <p style={{ fontSize: 13, color: "var(--ink-3)", margin: "0 0 8px" }}>
-          El turno actual queda marcado como «Reagendado» y se crea uno nuevo en este horario,
+          La fecha y hora corresponden al consultorio. El turno actual queda marcado como «Reagendado» y se crea uno nuevo en este horario,
           con sus recordatorios.
         </p>
 

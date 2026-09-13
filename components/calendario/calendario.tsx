@@ -976,6 +976,8 @@ function VistaMes({
 // ─── Root ──────────────────────────────────────────────────────────────────
 
 interface CalendarioProps {
+  /** Zona IANA de la organización autenticada para los editores de horarios. */
+  timezone: string;
   turnos: TurnoSemana[];
   bloqueos: Bloqueo[];
   pedidos: Pedido[];
@@ -1031,6 +1033,7 @@ interface CalendarioProps {
 }
 
 export function Calendario({
+  timezone,
   turnos,
   bloqueos,
   pedidos,
@@ -1181,6 +1184,7 @@ export function Calendario({
 
       {selectedPedido ? (
         <PedidoModal
+          timezone={timezone}
           pedido={selectedPedido}
           colegiados={colegiados}
           sessionMemberId={sessionMemberId}
@@ -1240,8 +1244,8 @@ export function Calendario({
 
       {/* Click-to-create: mismo modal, con el datetime del slot clickeado como
           default EXACTO (estándar Jane/Cliniko — sin tipear fecha ni hora).
-          "YYYY-MM-DDTHH:MM" se interpreta en la TZ del browser, igual que el
-          inicioIso del TurnoReagendarModal en /hoy. */}
+          "YYYY-MM-DDTHH:MM" es la hora de pared de la organización autenticada,
+          independientemente de la zona horaria del navegador. */}
       {agendarSlot ? (
         <TurnoCreateModal
           origen="MANUAL"

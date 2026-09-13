@@ -394,6 +394,7 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
           día puntual) + hora local del turno — solo es el default del picker. */}
       {reagendarFor ? (
         <TurnoReagendarModal
+          timezone={timezone}
           turnoId={reagendarFor.id}
           profesionalId={reagendarFor.profesionalId}
           pacienteNombre={pacientes[reagendarFor.pacienteId]?.nombre ?? "Paciente"}

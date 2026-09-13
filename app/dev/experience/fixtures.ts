@@ -98,6 +98,7 @@ export const monthGrid = Array.from({ length: 35 }, (_, index) => {
 });
 
 export const calendar: ComponentProps<typeof Calendario> = {
+  timezone: "America/Argentina/Cordoba",
   turnos: weekAppointments,
   bloqueos: [{ fecha: PREVIEW_DATE, hora: "13:00", dur: 60, titulo: "Pausa", origen: "manual" }],
   pedidos: [], pacientes: patients, weekDates,

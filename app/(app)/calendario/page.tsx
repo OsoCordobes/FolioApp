@@ -117,6 +117,7 @@ export default async function CalendarioPage({ searchParams }: PageProps) {
 
   return (
     <Calendario
+      timezone={tz}
       turnos={data.data.turnos}
       bloqueos={data.data.bloqueos}
       pedidos={data.data.pedidos}

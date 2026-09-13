@@ -35,17 +35,17 @@ import {
 import { useToast } from "@/components/ui/toast";
 import { resolvePickerProfesional } from "@/lib/agenda/profesional";
 import {
-  isoToLocalDatetime,
-  isoToLocalDatetimeExact,
-  localDatetimeToIso,
-  localDatetimeToastLabel,
-} from "@/lib/datetime-local";
+  organizationDatetimeDefault,
+  organizationDatetimeExact,
+  organizationDatetimeToIso,
+  organizationDatetimeToastLabel,
+} from "@/lib/organization-datetime";
 import { normalizarBusqueda } from "@/lib/format/busqueda";
 import { useModalA11y } from "@/lib/use-modal-a11y";
 
 interface TurnoCreateModalProps {
   /**
-   * Inicio default del picker (ISO con offset o "YYYY-MM-DDTHH:mm" local).
+   * Inicio default: ISO con offset o "YYYY-MM-DDTHH:mm" del consultorio.
    * Si viene, se respeta EXACTO — es un horario elegido (p. ej. el slot
    * clickeado en /calendario), no uno por sugerir. Sin él, el default es
    * "ahora" redondeado al próximo múltiplo de 5' (walk-in de /hoy).
@@ -101,9 +101,8 @@ export function TurnoCreateModal({
   const [servicioId, setServicioId] = useState<string | null>(null);
   /** Profesional destino (CLINICA-3). Se setea al cargar la metadata. */
   const [profesionalId, setProfesionalId] = useState<string | null>(null);
-  const [inicioLocal, setInicioLocal] = useState<string>(() =>
-    defaultInicio ? isoToLocalDatetimeExact(defaultInicio) : isoToLocalDatetime(),
-  );
+  const [inicioLocal, setInicioLocal] = useState("");
+  const editorTimezone = useRef<string | null>(null);
   const [duracion, setDuracion] = useState<number>(45);
   const [submitting, startTransition] = useTransition();
   const [submitErr, setSubmitErr] = useState<string | null>(null);
@@ -137,6 +136,13 @@ export function TurnoCreateModal({
         setLoadErr(result.error.message);
         setLoading(false);
         return;
+      }
+      if (!editorTimezone.current) {
+        const initial = defaultInicio
+          ? organizationDatetimeExact(defaultInicio, result.data.timezone)
+          : organizationDatetimeDefault(result.data.timezone);
+        setInicioLocal(initial);
+        editorTimezone.current = result.data.timezone;
       }
       setMeta(result.data);
       if (result.data.servicios.length > 0) {
@@ -175,7 +181,7 @@ export function TurnoCreateModal({
     // defaultProfesionalId solo afecta el default inicial del picker; ambos
     // props son estables durante la vida del modal (el caller lo desmonta y
     // remonta para "cambiarlos").
-  }, [preselectPacienteId, defaultProfesionalId, loadAttempt]);
+  }, [preselectPacienteId, defaultProfesionalId, defaultInicio, loadAttempt]);
 
   // A11y de modal compartida: focus trap + Escape (deshabilitado en submit) +
   // foco inicial + restore focus al cerrar. Ver lib/use-modal-a11y.ts.
@@ -267,6 +273,7 @@ export function TurnoCreateModal({
   const pickerProfesionalVisible = (meta?.profesionales.length ?? 0) > 1;
 
   const canSubmit =
+    !loading && meta != null &&
     !submitting &&
     !outcomeUnknown &&
     servicioId != null &&
@@ -311,11 +318,16 @@ export function TurnoCreateModal({
     });
   };
   const handleSubmit = () => {
-    if (!canSubmit || creationPhase.current !== "idle" || !servicioId || !inicioLocal) return;
+    const timezone = editorTimezone.current;
+    if (!canSubmit || !meta || !timezone || creationPhase.current !== "idle" || !servicioId || !inicioLocal) return;
     let isoInicio: string;
-    try { isoInicio = localDatetimeToIso(inicioLocal); }
-    catch { setSubmitErr("Revisá la fecha y hora del turno."); return; }
-    const fechaAgenda = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Cordoba", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(isoInicio));
+    try { isoInicio = organizationDatetimeToIso(inicioLocal, timezone); }
+    catch (error) {
+      setSubmitErr(error instanceof RangeError && error.message.startsWith("Ese horario ")
+        ? error.message : "Revisá la fecha y hora en la zona del consultorio.");
+      return;
+    }
+    const fechaAgenda = organizationDatetimeExact(isoInicio, timezone).slice(0, 10);
     const recoveryParams = new URLSearchParams({ w: fechaAgenda, mes: fechaAgenda.slice(0, 7) });
     if (profesionalId) recoveryParams.set("prof", profesionalId);
     recoveryAgenda.current = `/calendario?${recoveryParams}`;
@@ -329,7 +341,7 @@ export function TurnoCreateModal({
         inicio: isoInicio, duracionMin: duracion, origen, pedidoId: pedidoId ?? undefined,
         ...(mode === "existente" ? { pacienteId: pacienteId ?? undefined } : { pacienteNuevo: { ...nuevo } }),
       },
-      label: `${localDatetimeToastLabel(inicioLocal)} · ${nombre}`,
+      label: `${organizationDatetimeToastLabel(inicioLocal, timezone)} · ${nombre}`,
     };
     submitAttempt();
   };
@@ -622,4 +634,4 @@ const inputStyle: React.CSSProperties = {
 };
 
 // Datetime helpers (isoToLocalDatetime / localDatetimeToIso) viven en
-// lib/datetime-local.ts — compartidos con TurnoReagendarModal.
+// lib/organization-datetime.ts — horarios explícitos del consultorio.
