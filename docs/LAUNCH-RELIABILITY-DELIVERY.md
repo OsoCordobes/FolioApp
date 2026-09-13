@@ -29,7 +29,7 @@ La rama incluye la preparación heredada de `11f020685f15cd65be61b030e1f628d2ad6
 | Confirmación de cierre propio | RED 6 fallos → GREEN 12/12 de navegador y 13/13 unidades en `dfc4af6` | Navegador desarrollo/producción con respuestas controladas |
 | Recepción y lectura de pagos | 22/22 unidades del lector; SQL M122 y M123 con roles, alcance, MFA y revocación | No certifica la pantalla de Calendario ni una nueva sesión integrada del candidato final |
 | Compilación aislada | Exit 0 sobre la aplicación final `6a75cc1` | 16 avisos heredados de instrumentación; no acredita observabilidad desplegada |
-| SQL cronológico | 116 migraciones y 64 archivos de pruebas aprobados; después M123 focal y cinco specs afectadas aprobadas | PostgreSQL 16 con stubs; no se afirma replay completo de 117/65 |
+| SQL cronológico | Local:116/64 y después M123 focal más cinco specs afectadas. GitHub en `19c08d0`: **117 migraciones / 65 specs aprobadas** | PostgreSQL16 con stubs y checks predeterminados; no acredita servicios ni datos productivos |
 | Orden de actualización | 92 migraciones de `28ab28a`, luego las 23 faltantes de `34dc605` y 63 archivos de pruebas aprobados | Base sintética propia; no datos productivos |
 | Concurrencia | M120 8/8, M121 6/6, conexiones reales de PostgreSQL | No prueba latencia ni carga de producción |
 | Recorrido clínico anterior | 7/7 con Auth/TOTP/Storage reales locales, run-10 | Baseline de 113 migraciones, anterior a M120/M121 |
@@ -44,3 +44,18 @@ La instancia sintética permanece en `280ef18`, 115 migraciones y nueve controle
 Para publicar después, hace falta resolver las 25 migraciones ausentes en producción, revisar sus datos y compatibilidad e identificar la revisión intermedia del escritor M106 y la versión de retorno. Fusionar ahora en `master` desplegaría código que necesita funciones todavía inexistentes. El corte debe seguir el runbook; queda pendiente la verificación integrada del candidato corregido. Calendario también comparte la vista clínica que excluye recepción y queda fuera del arreglo de Hoy: no ofrecerlo a esos roles sin verificar/corregir su acceso. Las pruebas de efectivo no certifican Mercado Pago, correo ni otros proveedores. Restauración integral, validaciones profesionales, soporte y campaña alojada de acceso/carga conservan su propia evidencia pendiente.
 
 Esta tarea no aplicó migraciones en producción, no desplegó ni realizó cargos reales. El despliegue automático por Git de esta rama está desactivado para conservar una entrega revisable; integrar en `master` requiere completar el procedimiento de publicación.
+
+## Recepción de la PR
+
+La [PR #165](https://github.com/OsoCordobes/FolioApp/pull/165) se abrió en borrador
+con el commit documental `19c08d08111d8ef77515e54df2582e95d1e20e7a`, sin auto-merge.
+El [control SQL de GitHub](https://github.com/OsoCordobes/FolioApp/actions/runs/34766930893/job/103749446911)
+aprobó las117migraciones y65specs a las15:55UTC del13/09. Supabase Preview también
+aprobó su control automático; eso no actualiza el ledger productivo.
+El primer control de aplicación falló en el inspector de PDF sintético después
+de aprobar tipos, lint, unidades y los cuatro navegadores aislados. Su error
+`Z_BUF_ERROR` procede de la lectura del stream comprimido; el registro de
+iteraciones conserva la corrección y su verificación posterior.
+El inspector ahora lee la longitud declarada, preservando los bytes comprimidos.
+La regresión reprodujo el error anterior; después aprobaron cuatro documentos
+sintéticos reales, incluida una sesión de ocho páginas con540marcadores.

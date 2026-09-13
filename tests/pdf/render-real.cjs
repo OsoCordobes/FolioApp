@@ -4,7 +4,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { inflateSync } = require('node:zlib');
+const { deflateSync, inflateSync } = require('node:zlib');
 const { buildSync } = require('esbuild');
 
 for (const key of Object.keys(process.env)) {
@@ -41,14 +41,52 @@ function inspect(pdf) {
   const raw = pdf.toString('latin1');
   assert.match(raw, /%%EOF\s*$/);
   let text = '';
-  for (const stream of raw.matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)) {
-    const operators = inflateSync(Buffer.from(stream[1], 'latin1')).toString('latin1');
+  const streamHeaders = /\bstream\r?\n/g;
+  let stream;
+  while ((stream = streamHeaders.exec(raw)) !== null) {
+    // PDFKit writes a direct byte Length, followed by FlateDecode. Read that
+    // many bytes: compressed data may end in CR or contain endstream itself.
+    const dictionary = raw.slice(raw.lastIndexOf('<<', stream.index), stream.index);
+    const declaration = dictionary.match(/^<<\s*\/Length\s+(\d+)\s*\/Filter\s*\/FlateDecode\s*>>\s*$/);
+    assert.ok(declaration, 'Expected a PDFKit stream with a direct Length and FlateDecode');
+    const length = Number(declaration[1]);
+    const start = streamHeaders.lastIndex;
+    const end = start + length;
+    assert.ok(Number.isSafeInteger(length) && end <= pdf.length, 'PDF stream Length exceeds its buffer');
+    const trailer = raw.slice(end).match(/^\r?\nendstream\r?\nendobj\b/);
+    assert.ok(trailer, 'PDF stream Length must end exactly before its delimiter');
+    streamHeaders.lastIndex = end + trailer[0].length;
+    const operators = inflateSync(pdf.subarray(start, end)).toString('latin1');
     for (const array of operators.matchAll(/\[([^\]]*)\]\s*TJ/g)) {
       text += [...array[1].matchAll(/<([a-f\d]+)>/gi)]
         .map(hex => Buffer.from(hex[1], 'hex').toString('latin1')).join('');
     }
   }
   return { text, pages: [...raw.matchAll(/\/Type\s*\/Page\b/g)].length };
+}
+
+function verifyStreamBoundaries() {
+  const marker = 'BOUNDARY_MARKER';
+  const operators = `[<${Buffer.from(marker).toString('hex')}>] TJ`;
+  const synthetic = (stream, length = stream.length, eol = '\n') => Buffer.concat([
+    Buffer.from(`%PDF-1.3\n1 0 obj\n<<\n/Length ${length}\n/Filter /FlateDecode\n>>\nstream\n`),
+    stream,
+    Buffer.from(`${eol}endstream\nendobj\n%%EOF\n`),
+  ]);
+  // Valid zlib bytes whose Adler-32 checksum ends in CR. The old delimiter
+  // regex consumed this data byte together with PDFKit's following LF.
+  const endingInCr = Buffer.from('789c8bb6313132493335354935313131343532b5344d334901b14c924c4c4d8dec621542bcb8542d2c2d2d01e3930a0d', 'hex');
+  assert.equal(endingInCr.at(-1), 0x0d);
+  assert.ok(inflateSync(endingInCr).toString().includes('TJ'));
+  for (const eol of ['\n', '\r\n']) {
+    assert.equal(inspect(synthetic(endingInCr, endingInCr.length, eol)).text, marker);
+  }
+  // An uncompressed DEFLATE block can contain a literal endstream delimiter.
+  const embeddedDelimiter = deflateSync(Buffer.from(`%\nendstream\n${operators}`), { level: 0 });
+  assert.ok(embeddedDelimiter.includes(Buffer.from('\nendstream\n')));
+  assert.equal(inspect(synthetic(embeddedDelimiter)).text, marker);
+  assert.throws(() => inspect(synthetic(endingInCr, endingInCr.length + 1)));
+  assert.throws(() => inspect(synthetic(endingInCr.subarray(0, -1))), { code: 'Z_BUF_ERROR' });
 }
 
 function fixture(count) {
@@ -72,6 +110,7 @@ function fixture(count) {
 }
 
 (async () => {
+  verifyStreamBoundaries();
   const bundled = path.join(output, 'renderer.cjs');
   buildSync({ entryPoints: [path.join(root, 'lib/pdf/ficha-pdf.tsx')], outfile: bundled,
     bundle: true, platform: 'node', format: 'cjs', packages: 'external', jsx: 'automatic' });
