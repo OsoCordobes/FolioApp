@@ -34,10 +34,11 @@ function fixture(){
   return {};
  }});
  const render=()=>{cursor=0;return exports.editor!();};
- const button=(label:string)=>tree(render()).find(e=>e.type==="button"&&text(e).trim()===label)!;
+ const button=(label:string)=>tree(render()).find(e=>e.type==="button"&&text(e).replace(/\s+/g," ").trim()===label)!;
  const edit=(value:string)=>{const editor=tree(render()).find(e=>typeof e.props.setSoap==="function")!;editor.props.setSoap({...editor.props.soap,subjetivo:value});render();};
- const ack=(i:number)=>{const r=requests[i];r.resolve({ok:true,data:{sesionId:randomUUID(),revision:r.input.revisionEsperada+1,updatedAt:"2026-09-08T15:00:00Z",operationId:r.input.operacionId,cerrado:r.closed}});};
- return {context,requests,navigation,render,button,edit,ack};
+ const ack=(i:number,overrides:Record<string,unknown>={})=>{const r=requests[i];r.resolve({ok:true,data:{sesionId:randomUUID(),revision:r.input.revisionEsperada+1,updatedAt:"2026-09-08T15:00:00Z",operationId:r.input.operacionId,cerrado:r.closed,...overrides}});};
+ const refreshAnchor=(value:typeof context.plan.turnoActivo|null)=>{Object.assign(context.plan,{turnoActivo:value});render();};
+ return {context,requests,navigation,render,button,edit,ack,refreshAnchor};
 }
 test("actual editor serializes double click and pending close, retaining late edits after save",async()=>{
  const f=fixture();f.edit("first");const save=f.button("Guardar sesión"),close=f.button("Guardar y cerrar");save.props.onClick();save.props.onClick();close.props.onClick();assert.equal(f.requests.length,1);
@@ -62,4 +63,28 @@ test("pending operation can be confirmed against its original anchor after a ser
  f.button("Confirmar operación pendiente").props.onClick();assert.equal(f.requests.length,2);
  assert.equal(f.requests[1].input.turnoId,original.turnoId);assert.equal(f.requests[1].input.pacienteId,original.pacienteId);assert.equal(f.requests[1].input.operacionId,original.operacionId);
  f.ack(1);await settle();assert.equal(f.button("Guardar sesión").props.disabled,true);
+});
+
+const closeNotice="La atención quedó guardada y cerrada. Falta completar el registro del cobro en la agenda.";
+for(const refreshBeforeAck of [false,true])test(`own confirmed close retains its notice when the refreshed anchor disappears (refresh before ACK=${refreshBeforeAck})`,async()=>{
+ const f=fixture();f.edit("completed visit");f.button("Guardar y cerrar").props.onClick();
+ if(refreshBeforeAck)f.refreshAnchor(null);
+ f.ack(0,{aviso:closeNotice});await settle();if(!refreshBeforeAck)f.refreshAnchor(null);
+ const visible=text(f.render());assert.ok(visible.includes(closeNotice));assert.doesNotMatch(visible,/La ficha actual cambió de atención|todavía no tiene visitas/);
+ assert.equal(f.requests.length,1);assert.equal(f.navigation.length,0);assert.equal(tree(f.render()).find(e=>typeof e.props.setSoap==="function")!.props.readOnly,true);
+});
+test("late edits after a confirmed close remain available for an amendment when the anchor disappears",async()=>{
+ const f=fixture();f.edit("submitted");f.button("Guardar y cerrar").props.onClick();f.edit("late amendment draft");f.refreshAnchor(null);f.ack(0,{aviso:closeNotice});await settle();
+ const visible=text(f.render());assert.match(visible,/Hay cambios posteriores en este borrador/);assert.doesNotMatch(visible,/La ficha actual cambió de atención/);
+ assert.equal(tree(f.render()).find(e=>typeof e.props.setSoap==="function")!.props.soap.subjetivo,"late amendment draft");assert.equal(f.requests.length,1);assert.equal(f.navigation.length,0);
+});
+for(const change of ["another appointment","another patient"] as const)test(`a confirmed close does not excuse ${change}`,async()=>{
+ const f=fixture();f.edit("original visit");f.button("Guardar y cerrar").props.onClick();f.ack(0,{aviso:closeNotice});await settle();
+ if(change==="another appointment")f.context.plan.turnoActivo.id=randomUUID();else{f.context.paciente.id=randomUUID();f.refreshAnchor(null);}
+ assert.match(text(f.render()),/La ficha actual cambió de atención/);assert.equal(f.requests.length,1);
+});
+for(const invalidAck of [false,true])test(`a missing anchor cannot confirm an uncertain or mismatched close (invalid ACK=${invalidAck})`,async()=>{
+ const f=fixture();f.edit("original visit");f.button("Guardar y cerrar").props.onClick();f.refreshAnchor(null);
+ if(invalidAck)f.ack(0,{operationId:randomUUID(),aviso:closeNotice});else f.requests[0].reject(Error("lost response"));await settle();
+ assert.match(text(f.render()),/La ficha actual cambió de atención/);assert.ok(f.button("Confirmar operación pendiente de guardado y cierre"));assert.ok(!text(f.render()).includes(closeNotice));assert.equal(f.requests.length,1);
 });

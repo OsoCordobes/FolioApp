@@ -375,10 +375,13 @@ function TabPlan() {
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const editorAnchorRef=useRef({turnoId:turnoActivo?.id??null,pacienteId:paciente.id});
-  const anchorChanged=editorAnchorRef.current.turnoId!==(turnoActivo?.id??null)||editorAnchorRef.current.pacienteId!==paciente.id;
   const saveCoordinatorRef=useRef<ClinicalSaveCoordinator|null>(null);
   if(!saveCoordinatorRef.current)saveCoordinatorRef.current=new ClinicalSaveCoordinator(turnoActivo?.sesionRevision??0,{soap:soapInicial,toolValue:turnoActivo?.toolDraft??null});
   const coordinator=saveCoordinatorRef.current;
+  // A confirmed CLOSE removes its now-locked visit from the editable server anchor.
+  // Only that disappearance is expected; another patient/visit still protects the draft.
+  const ownClosedWithoutAnchor=coordinator.closed&&editorAnchorRef.current.turnoId!==null&&editorAnchorRef.current.pacienteId===paciente.id&&turnoActivo===null;
+  const anchorChanged=editorAnchorRef.current.pacienteId!==paciente.id||(editorAnchorRef.current.turnoId!==(turnoActivo?.id??null)&&!ownClosedWithoutAnchor);
   const latestDraftRef=useRef<BorradorFicha>({soap,toolValue});
   latestDraftRef.current={soap,toolValue};
   const [recoveryCopied,setRecoveryCopied]=useState(false);
@@ -600,7 +603,7 @@ function TabPlan() {
           por iniciar ?? última cerrada editable). Solo sin NINGÚN ancla queda
           read-only, con CTA honesto. En por_iniciar/retroactivo un aviso dice
           contra qué visita se guarda — transparencia clínica, no bloqueo. */}
-      {!turnoActivo ? (
+      {!turnoActivo && !ownClosedWithoutAnchor ? (
         <div className="pc-sin-turno" role="note">
           <I.Lock size={14} aria-hidden />
           <p>
@@ -610,7 +613,7 @@ function TabPlan() {
             para escribir y guardar la ficha.
           </p>
         </div>
-      ) : turnoActivo.modo === "por_iniciar" ? (
+      ) : turnoActivo?.modo === "por_iniciar" ? (
         <div className="pc-sin-turno pc-sin-turno--info" role="note">
           <I.Calendar size={14} aria-hidden />
           <p>
@@ -620,7 +623,7 @@ function TabPlan() {
             pasa a «Atendiendo» automáticamente.
           </p>
         </div>
-      ) : turnoActivo.modo === "retroactivo" ? (
+      ) : turnoActivo?.modo === "retroactivo" ? (
         <div className="pc-sin-turno pc-sin-turno--info" role="note">
           <I.History size={14} aria-hidden />
           <p>
@@ -739,13 +742,13 @@ function TabPlan() {
         }}
       />
 
+      {saveError ? (
+        <span role="alert" style={{ color: "var(--red)", fontSize: 12.5 }}>
+          {saveError}
+        </span>
+      ) : null}
       {turnoActivo ? (
         <div className="pc-session-actions">
-          {saveError ? (
-            <span role="alert" style={{ color: "var(--red)", fontSize: 12.5 }}>
-              {saveError}
-            </span>
-          ) : null}
           <button
             type="button"
             className="fi-btn fi-btn-secondary"
