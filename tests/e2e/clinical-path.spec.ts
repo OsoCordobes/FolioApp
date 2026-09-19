@@ -146,7 +146,8 @@ test.describe('coordinator',()=>{
  test('real COORDINADOR AAL2 cannot see or invoke financial operations',async({clinical:f,browser},testInfo)=>{
   const ownerPage=await authenticated(f,browser),visit=await prepareSavedVisit(ownerPage,f,{attachment:false});await closeClinically(ownerPage,f,visit);const receipt=await registerFromAgenda(ownerPage,f,visit,cash);assert.ok(receipt.pago);await f.closeContext(ownerPage.context());assert.ok(f.reception);
   const page=await authenticated(f,browser,f.reception),identity=await assertBrowserActor(f,page,f.reception);await page.goto(`/hoy?prof=${f.owner.memberId}`);await assertBrowserActor(f,page,f.reception);
-  await uiExpect(page.locator('.fi-cerrado-row').filter({hasText:f.runId})).toBeVisible();
+  const closedVisit=page.getByRole('button',{name:new RegExp(`^Abrir ficha de E2E ${f.runId} .*turno cerrado de las `)});
+  await uiExpect(closedVisit).toHaveCount(1);await uiExpect(closedVisit).toBeVisible();
   for(const name of ['Revisar cobro','Registrar decisión','Marcar cobrado'])await expect(page.getByRole('button',{name,exact:true})).toHaveCount(0);
   await expect(page.getByLabel('Monto en pesos',{exact:true})).toHaveCount(0);await expect(page.locator('.fi-cerrado-amount .fi-mono')).toHaveCount(0);
   const before=await clinicalInvariant(f,visit),payment=await currentPayment(f,visit),count=await receipts(f,visit);
