@@ -5,7 +5,11 @@
   "crons": [
     {
       "path": "/api/cron/dispatch-recordatorios",
-      "schedule": "0 5 * * *"
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/dispatch-email",
+      "schedule": "* * * * *"
     },
     {
       "path": "/api/cron/google-watch-renew",
@@ -21,7 +25,7 @@
     },
     {
       "path": "/api/cron/reconcile-suscripciones",
-      "schedule": "30 8 * * *"
+      "schedule": "*/15 * * * *"
     }
   ]
 }
