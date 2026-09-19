@@ -45,6 +45,7 @@ El par Upstash nuevo prevalece sobre el del sobre antiguo. Su referencia privada
 - Revisiones: D revisa B/C; B revisa D; A integra después de revisión y checks. Un autor no aprueba su propio cambio.
 - Puertos de aplicación reservados: B 4430, C 4432, D 4434. Usar runners aislados del repositorio y comprobar ocupación antes de iniciar. Un puerto ocupado no autoriza matar procesos ajenos.
 - Runtime clínico previo `C:/Users/amiun/Documents/Codex/folio-clinical-runtime`: evidencia preservada, no reutilizar su base para escrituras ni resetearla. C prepara destino nuevo y dedicado para restauración; B/D usan respuestas controladas mientras no reciban un entorno asignado.
+- Destino sintético C01 reservado: `C:/Users/amiun/Documents/Codex/folio-c01-recovery-synthetic`, project_id `folio-c01-recovery`; API 55421, DB 55422, Studio 55423, Inbucket 55424, app 4432. C debe verificar todos los puertos adicionales y volúmenes antes del arranque. La reserva no acredita que el runtime esté funcionando.
 - No copiar `.env.local` productivo a worktrees. Antes de CLIs que puedan escribir configuración, preservar copia protegida fuera del repo. Nunca imprimir secretos ni activar proveedores en pruebas automatizadas.
 - Leer `C:/Users/amiun/.codex/RTK.md`; usar salida acotada y conservar logs completos. `AGENTS.md` no está versionado: leer también el del Escritorio y `CLAUDE.md` de cada checkout.
 
@@ -78,7 +79,7 @@ Estados: `pendiente`, `asignado`, `en curso`, `en revisión`, `aprobado local`, 
 | A00 | Alta / coordinación | A | aprobado local | Tablero y referencias históricas en commit `50e87b7`; B/C/D creados con Sol/High y worktrees propios; master local/remoto conserva el checkpoint |
 | B01 | Bloqueante / defecto observado, causa pendiente | B / D | en curso | Landing → Probar Folio → registro usable; diagnóstico reproducible y corrección focal; casos negativos y reintentos; comprobación humana en dispositivo original. Depende de configuración externa si la causa lo exige |
 | B02 | Alta / evidencia pendiente | B / D | pendiente, después de B01 | Registro, confirmación, ingreso, contraseña, MFA y onboarding reanudable; sin cuentas/organizaciones duplicadas ni arreglos manuales de base |
-| C01 | Bloqueante / evidencia pendiente | C / D | asignado | Restauración aislada completa de base/Auth/Storage/configuración; login y descifrado reales, inventario/hashes, tiempo medido; distinguir local de alojada y custodia independiente |
+| C01 | Bloqueante / evidencia pendiente | C / D | en curso; Docker por diagnosticar | Restauración aislada completa de base/Auth/Storage/configuración; login y descifrado reales, inventario/hashes, tiempo medido; distinguir local de alojada y custodia independiente |
 | C02 | Alta / decisión humana + evidencia pendiente | C / A | pendiente | Copia externa y material portable probado fuera del perfil Windows; par Upstash actualizado; custodio y destino autorizados |
 | B03 | Alta / brecha de implementación identificada | B / D | pendiente | Calendario semana/mes para ASISTENTE y COORDINADOR, sin ampliar acceso clínico/financiero; pruebas directas y de interfaz |
 | B04 | Alta / mejora acordada + evidencia pendiente | B / D | pendiente | Política de nuevas atenciones adultas efectiva en servidor/base, DOB desconocida bloquea atención; límites de 18 años y concurrencia; históricos/borradores/recibos preservados |
@@ -146,6 +147,7 @@ En paralelo preparar aceptación independiente de B01 usando claves de prueba, n
 | 19/09, inicio ejecución | HEAD local y remoto coinciden con checkpoint; escritorio sin cambios tracked; cuota 67% |
 | 19/09, aclaración | Falla en landing → Probar Folio → registro, probablemente PC; no se conoce aún navegador exacto |
 | 19/09, primer hito B | B confirma checkout limpio en base autorizada, rama `codex/launch-access` y CTA hacia `/onboarding`; investiga causa sin formularios productivos ni cambios de CSP |
+| 19/09, primer hito C | C confirma checkout/rama `codex/launch-recovery`, pipeline y programación existentes. `docker version` no respondió en 20 s; interrumpió sólo su comando. Destino sintético nuevo reservado; no se abrió ninguna copia real ni se alteró el servicio |
 
 ## Próxima decisión del manager
 
