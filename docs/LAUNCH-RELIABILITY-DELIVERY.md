@@ -1,5 +1,19 @@
 # Candidato de confiabilidad — entrega de revisión
 
+## Cierre final y continuidad — checkpoint del 19 de septiembre
+
+El titular entregó el cierre de PR165: squash `c5c5fed53f5b72dbebb604c1812b25c54a5d23b7`
+a las 17:55:05 UTC, árbol idéntico al candidato `58f534bb9bb735965b2b6c177fd849c3eec5d775`,
+producción READY, 117 migraciones y M106/M120/M121 activas. El ensayo final-on
+aprobó a las 17:53:48 UTC y CI del squash terminó aprobado a las 18:00:24 UTC.
+Las referencias y límites de esa evidencia están en [LAUNCH-BOARD.md](LAUNCH-BOARD.md).
+El manager confirmó HEAD local y master remoto; no volvió a ejecutar el ensayo.
+
+El trabajo de confiabilidad de esta entrega está cerrado. Las secciones siguientes
+preservan el estado de cada corte, incluidos fallos e intentos parciales; no se
+reinterpretan retrospectivamente como aprobados ni se usan para repetir el corte.
+Los pendientes independientes de lanzamiento se coordinan únicamente en el tablero.
+
 ## Corte productivo del 19 de septiembre, 17:43 UTC
 
 Producción ya tiene las **117 migraciones canónicas**: expansión 92→113 y cierre 113→117 confirmados en transacciones separadas, con verificación posterior y conservación de las columnas y registros anteriores auditados. M106 está activa desde las 17:33:53 UTC. El puente aprobó ingreso, guardado, recuperación de respuesta perdida, cierre y reapertura tanto antes como después de esa activación.
