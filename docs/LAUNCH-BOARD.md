@@ -41,6 +41,7 @@ El par Upstash nuevo prevalece sobre el del sobre antiguo. Su referencia privada
 - El Escritorio, sus archivos no seguidos, otros proyectos, respaldos, fixtures y worktrees anteriores se preservan. Cada tarea usa su worktree; no escribe en el de otra.
 - Dos permisos de escritura de implementación: B y C inicialmente. D sólo inspecciona y verifica hasta recibir relevo explícito. La edición administrativa del tablero pertenece a A.
 - B y C no editan migraciones sin reserva explícita del manager. No hay migración nueva reservada en esta primera ola.
+- Reserva adicional B01: `scripts/testing/app-config.mjs`, `app-bootstrap.mjs`, `isolation-policy.mjs` y tipos/pruebas asociados, sólo para sitekey oficial de prueba constante bajo opt-in estricto. Mantener red externa y credenciales heredadas bloqueadas. C no edita esa frontera; coordinar necesidades de `recovery-bootstrap.mjs`.
 - Ningún trabajador hace merge, despliegue, mutación productiva, envío real, cargo, rotación de claves ni eliminación de evidencia. Preparar paquete concreto para autorización del titular cuando corresponda.
 - Revisiones: D revisa B/C; B revisa D; A integra después de revisión y checks. Un autor no aprueba su propio cambio.
 - Puertos de aplicación reservados: B 4430, C 4432, D 4434. Usar runners aislados del repositorio y comprobar ocupación antes de iniciar. Un puerto ocupado no autoriza matar procesos ajenos.
@@ -88,7 +89,7 @@ Estados: `pendiente`, `asignado`, `en curso`, `en revisión`, `aprobado local`, 
 | C03 | Alta / evidencia pendiente | C / D | pendiente | Auth/SMTP y correo Folio entregados a buzones controlados; cola retenida revisada; fallos/cuotas visibles; no activar WhatsApp incidentalmente |
 | C04 | Alta / evidencia pendiente | C / D | pendiente | Mercado Pago Solo/Clínica/asientos/cancelación/mora/conciliación; duplicados, desorden y respuesta perdida; distinguir sandbox de cargo real |
 | C05 | Alta / brecha de programación + evidencia pendiente | C / D | pendiente | Google conecta, sincroniza entrada/salida, bloquea horarios y se recupera de revocación/webhook ausente; programar sync periódico después del ensayo autorizado |
-| D00 | Alta / mejora acordada | D / A | asignado, sólo lectura | Revisión acotada del perfil público y propuesta concreta sobre datos existentes, móvil/escritorio/Solo/Clínica; plan de aceptación de auth. Sin implementar todavía |
+| D00 | Alta / mejora acordada | D / A | aprobado local, revisión de código | Propuesta concreta de identidad/foto/bio/OG, Solo/Clínica y matriz de pruebas recibida; sin render ni prueba visual todavía. D disponible para revisar B01 |
 | D01 | Alta / mejora acordada | D / B | pendiente de permiso de escritura | Página pública profesional con foto/identidad, presentación, servicios, reserva móvil y vista previa social; perfiles incompletos, contraste, teclado y zoom; aprobación visual |
 | C06 | Alta / evidencia pendiente | C / D | pendiente | Alerta externa de caída/copia vencida comprobada; responsable/suplente, cuotas y soporte; capacidad medida para hasta 10 profesionales inicialmente |
 | H01 | Alta / decisión humana | Titular y profesionales / A | pendiente | Tres profesionales piloto; revisión adicional de kinesio/nutrición; identidad/habilitación, instrumentos adultos, responsabilidades, privacidad/contratos/facturación revisados |
@@ -148,6 +149,9 @@ En paralelo preparar aceptación independiente de B01 usando claves de prueba, n
 | 19/09, aclaración | Falla en landing → Probar Folio → registro, probablemente PC; no se conoce aún navegador exacto |
 | 19/09, primer hito B | B confirma checkout limpio en base autorizada, rama `codex/launch-access` y CTA hacia `/onboarding`; investiga causa sin formularios productivos ni cambios de CSP |
 | 19/09, primer hito C | C confirma checkout/rama `codex/launch-recovery`, pipeline y programación existentes. `docker version` no respondió en 20 s; interrumpió sólo su comando. Destino sintético nuevo reservado; no se abrió ninguna copia real ni se alteró el servicio |
+| 19/09, D00 | D entregó revisión de código y matriz de aceptación de página pública/B01. Sin escrituras, instalación ni render; no acredita aprobación visual. Revisó commit documental `50e87b7` sin contradicciones materiales |
+| 19/09, B01 diagnóstico | Captura corresponde a Step1Registro de `/onboarding`; lectura pública devuelve 200 y CSP permite scripts/frames Cloudflare. Manejo de error/polling incompleto identificado. Causa original del fallo externo aún no probada; UI recuperable no equivale a bloqueo resuelto |
+| 19/09, seguimiento cuota | 64% restante, frente a 67% al iniciar. Pool compartido; no atribuir todo el consumo a esta ola. Reserva de integración se mantiene |
 
 ## Próxima decisión del manager
 
