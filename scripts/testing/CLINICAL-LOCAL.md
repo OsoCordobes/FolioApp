@@ -1,13 +1,13 @@
 # Ensayo clínico con Supabase local real
 
-Actualización al 13 de septiembre: el corte local conservó los datos y volúmenes,
-instaló M120/M121 con sus registros canónicos y activó sus controles en orden.
-Hay **115 migraciones y nueve controles activos**. Run-11 sobre `3a9823a` terminó
-con **2 aprobados, 10 fallidos y 0 omitidos**: el formulario mostraba hora del
-navegador Auckland, mientras la agenda y SQL usaban Córdoba. Los diez casos
-fallaron antes de guardar/cerrar/cobrar. Se conservaron las evidencias, cuentas,
-pacientes y turnos; las 16 cuentas nuevas quedaron sin sesiones activas.
-La corrección y la siguiente campaña deben verificarse antes de afirmar éxito.
+Actualización al 19 de septiembre: el runtime tiene **117 migraciones y nueve
+controles activos**, con M122/M123 instaladas y auditoría original `3a9823a`
+conservada. Run-14 sobre `cae1a3d` terminó con **11 aprobados y 1 fallido**.
+Run-15 enfocado, sobre la corrección de prueba `8f9014c`, falló en la preparación
+OWNER antes de verificar COORDINADOR; la causa de su demora sigue sin establecerse.
+Run-16 instrumentado aprobó el caso COORDINADOR sobre la misma aplicación y SQL.
+Hay evidencia combinada de los doce escenarios, sin una campaña única 12/12
+aprobada. Se conservan datos, volúmenes y resultados previos.
 
 ## Baseline histórico anterior a M120/M121
 
@@ -100,8 +100,9 @@ desde el proxy autenticado antes y después de volver a entrar.
 El conteo de pagos obtiene el consultorio mediante
 `pago.turno_id → turno.organization_id`; `pago` no tiene `organization_id`.
 Los contratos nuevos se cotejan con M120/M121, instaladas y activadas en la
-instancia local preservada. Los doce escenarios integrados siguen pendientes
-de una campaña completa aprobada; el resultado más reciente es run-12, 4/12.
+instancia local preservada. La última campaña completa es run-14, con once
+aprobados y un fallo de selector. Run-16 aprobó el caso enfocado de COORDINADOR:
+hay evidencia combinada de los doce escenarios, sin una campaña única 12/12.
 Una lectura protegida con AAL1 puede quedar filtrada como lista vacía o devolver
 la denegación explícita `42501`. El ensayo acepta únicamente esas dos formas sin
 filas; sigue fallando ante filas visibles, resultados incompletos y errores de red
@@ -128,10 +129,11 @@ clínico falla antes de levantar una aplicación cuando no recibe la configuraci
 necesaria. El runner normal mantiene 4410 y omite el spec clínico sin la
 habilitación específica.
 
-Pendiente: ejecutar los doce casos integrados con las migraciones nuevas y UI
-revisada; menores/consentimiento, fallos de guardado/proveedor y restauración
-completa siguen fuera de esta campaña. El archivo autorizado sí pasó en el
-baseline histórico; esa evidencia no acredita un bloqueo de escrituras directas.
+Run-14 y run-16 aportan evidencia combinada de los doce casos con las migraciones
+nuevas y UI revisada. La demora de run-15 sigue sin causa establecida; su resultado
+fallido se conserva. Menores/consentimiento, fallos de guardado/proveedor y
+restauración completa siguen fuera de esta campaña. El archivo autorizado sí pasó
+en el baseline histórico; esa evidencia no acredita un bloqueo de escrituras directas.
 Referencias: [desarrollo local](https://supabase.com/docs/guides/local-development),
 [TOTP y APIs de enrolamiento/desafío/verificación](https://supabase.com/docs/guides/auth/auth-mfa/totp).
 
@@ -298,7 +300,7 @@ haya llegado una respuesta de lectura. El RPC adicional desde Node sólo aporta
 una comprobación complementaria. La prueba focal nueva reprodujo RED antes del
 soporte y pasó con éste:18/18 seguridad, sin skips; discovery conserva12casos.
 
-## Estado integrado actual (13 de septiembre de 2026)
+## Corte histórico M120/M121 (13 de septiembre de 2026)
 
 M120/M121 y sus registros canónicos se instalaron en una transacción local.
 La activación separada M120 → M121, con M106 ya activa, conserva una entrada
@@ -333,18 +335,73 @@ prerrequisito de saldo M121 fallaron en la confirmación visual posterior a un
 cierre SQL confirmado. ASISTENTE/COORDINADOR iniciaron sesión con rol y alcance
 correctos, pero la vista clínica dejó vacía su agenda operacional.
 
-El usuario pidió no repetir el recorrido y cerrar la entrega. No hay run-14.
+En ese cierre, el usuario pidió no repetir el recorrido y no se lanzó run-14.
 La fuente final `17a3770` incluye retirada única de observadores (`57cfd03`),
 confirmación visible del cierre propio (`dfc4af6`), lector operacional de Hoy
 y M122 (`6a75cc1`), y M123 para impedir SELECT directo de pagos a COORDINADOR.
 Verificación focal: observadores27/27, confirmación12/12 navegador y13/13unidades,
 lector22/22; M122 replay116/64 y M123focal más cinco specs afectadas aprobados.
 Tipos, lint,2231/2231unidades y compilación aislada de la aplicación final aprobaron.
-No se afirma replay117/65 ni una campaña integrada final aprobada.
+En ese momento aún no había replay117/65 ni una campaña integrada final aprobada.
 
-El runtime permanece en `280ef18`,115migraciones,nuevecontroles: M122/M123 no se
-instalaron allí y no se reactivaron controles. La auditoría post-run13 confirma
+El runtime quedó en `280ef18`,115migraciones,nuevecontroles: M122/M123 no se
+instalaron en ese cierre y no se reactivaron controles. La auditoría post-run13 confirma
 cero sesiones propias,23previas preservadas,cero cargos y autoridades temporales.
 Los ensayos y datos ficticios se conservan. Producción fue consultada sólo en
 lectura:92migraciones,25faltantes del candidato. Se entrega rama/PR sin merge;
 el orden de instalación/código/activación sigue en `docs/LAUNCH-RUNBOOK.md`.
+
+## Reanudación y estado local (19 de septiembre de 2026)
+
+La autorización renovada permitió continuar la comprobación. El candidato
+`cae1a3da3d2586ce1d5a2ee7283723796481694c` conserva la aplicación `6a75cc1` y SQL
+`17a3770`; GitHub aprobó sus 117 migraciones y 65 specs SQL el 13/09. El 19/09,
+tras preflight, M122/M123 y sus registros canónicos se instalaron juntos a las
+15:18:18 UTC. El preflight por conexión nueva de las 15:18:41 UTC confirmó 117
+versiones y preservación de 21 tablas, dos volúmenes, nueve controles y auditoría
+original `3a9823a`. El operador pasó 14/14 pruebas puras. No hubo reset ni reactivación.
+
+Run-14 terminó con **11 aprobados y 1 fallido**. El selector CSS de la fila de
+COORDINADOR encontró dos nodos; el snapshot contenía una sola fila accesible.
+Eso no prueba por qué existía el otro nodo. `8f9014cc2ae0d69ffce766555912337cce610669`
+cambia sólo la prueba a rol/nombre accesibles y exige una coincidencia exacta.
+Conserva negativas financieras, RPC/REST e invariantes; revisión, tipos y lint
+aprobaron. Producto, SQL, esperas y política de reintentos no cambiaron.
+
+La auditoría post-run-14 conservó 16 cuentas y 16 factores TOTP nuevos, cero
+sesiones Auth propias y 23 anteriores; totales de 40 sesiones clínicas, 17 pagos,
+21 documentos/objetos Storage, 27 cierres y 13 recibos. Cero cargos y autoridades.
+
+Run-15 enfocado falló antes de llegar a las comprobaciones de COORDINADOR: el
+cierre clínico OWNER se confirmó en SQL a las 15:30:21 UTC, pero la interfaz
+continuó en «Guardando» sin el aviso esperado durante 30 segundos y seguía pendiente
+en la captura a los 42 segundos. La causa sigue sin establecerse; no se identifica
+automáticamente con un defecto anterior ni se repitió esa escritura a ciegas.
+El turno quedó CERRADO, requiere registro
+administrativo y no creó un pago nuevo. Post-run-15: dos cuentas/TOTP nuevos,
+cero sesiones Auth propias y 23 anteriores; 41 sesiones clínicas, 17 pagos,
+21 documentos/objetos, 28 cierres y 13 recibos, sin cargos ni autoridades temporales.
+
+Run-16 instrumentado sobre `8f9014c` aprobó **1/1, COORDINADOR**, en **50,1 segundos
+de prueba y 1,1 minutos total**, sin cambiar producto `6a75cc1` ni SQL `17a3770`.
+La promesa de CLOSE se resolvió en 2.476 ms desde el inicio de la espera. No se
+capturaron tiempos internos del servidor ni se reprodujo la demora de run-15;
+no se establece su causa. La auditoría verificó huellas idénticas de los datos
+anteriores y activaciones conservadas, 117 migraciones y nueve controles. Post-run-16:
+dos cuentas/TOTP nuevos, cero sesiones Auth propias y 23 anteriores; 42 sesiones
+clínicas, 18 pagos, 21 documentos/objetos, 29 cierres y 14 recibos; cero cargos y
+autoridades temporales. Se restauraron exactamente siete archivos y se retiraron
+dos auxiliares de instrumentación, con diff tracked vacío en el runtime.
+Evidencia conservada en `.flow/runtime-evidence/run-16-post-audit.json`,
+`run-16-retained-post.json`, `run-16-gates-audit.json` y
+`run-16-instrumentation/restored.json` de la copia clínica.
+
+Los once escenarios aprobados en run-14 y el caso enfocado aprobado en run-16
+completan evidencia combinada de los doce escenarios; no son 12/12 en una sola
+campaña ni convierten run-15 en aprobado. El inventario productivo del 19/09
+permanece en 92 versiones, 25 ausentes; no hubo DDL ni activaciones productivas
+ni merge. El puente `efe19c68c849696d7d66bc8a43014ac494eb3310`, despliegue
+`dpl_J7Pk9fWqzTF1aCyucVWmjMgz9YN6`, está READY sin promoción al dominio publicado.
+Su comprobación anónima dio health 200, login 200 y Hoy 307 hacia login; el dominio
+publicado mantuvo health 200. Las escrituras autenticadas y el corte productivo
+conservan su verificación propia.

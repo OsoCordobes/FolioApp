@@ -1,11 +1,12 @@
 # Dependencias de migración del candidato de confiabilidad
 
-Inventario actualizado el 13 de septiembre de 2026. Referencia publicada observada:
+Inventario actualizado el 19 de septiembre de 2026. Referencia publicada observada:
 `28ab28a93798b09c2a4e092e9cceb0f163262f9e`; candidato SQL combinado:
 `17a377039e9f9812d80d23593c851a6fe86bf7de`. La comparación de Git se complementó
-con una consulta de sólo lectura del ledger productivo: 92 versiones, iguales
+con consultas de sólo lectura del ledger productivo del 13/09 y del 19/09 entre
+15:14 y 15:18 UTC: 92 versiones, iguales
 al conjunto de la referencia, y las 25 siguientes ausentes. El catálogo confirmó
-también ausencia de MFA, M106, M120, M121 y la RPC de M122. No se modificó producción.
+también ausencia de MFA, M106, M120, M121 y la RPC de M122. No hubo DDL ni activaciones productivas.
 
 La referencia contiene 92 migraciones; el candidato, 117. Hay **25 altas y cero
 modificaciones o eliminaciones** de archivos existentes. M118, versión `20260912163934`,
@@ -55,11 +56,17 @@ además del replay cronológico completo previamente aprobado. Usa stubs SQL de
 Auth/Storage; no convierte un inventario de datos productivos ni prueba servicios
 Supabase reales, despliegue o activaciones permanentes en el destino.
 
-La evidencia posterior de M122 es replay completo de **116 migraciones / 64 specs**
-aprobado. M123 aprobó su regresión focal y las cinco specs afectadas (M92,
-dos de M120, M121 y M122). No se ejecutó replay completo de 117/65 ni se extendió
-el ensayo histórico de actualización desde 92 hasta 117. El runtime clínico
-permanece con 115 versiones; estas pruebas SQL se hicieron en bases propias con stubs.
+Después del replay local de M122 (**116 migraciones / 64 specs**) y de la regresión
+focal de M123 con cinco specs afectadas, GitHub aprobó el **replay completo de
+117 migraciones / 65 specs** sobre `cae1a3d` el 13/09. Esa evidencia usa PostgreSQL16
+con stubs y no extiende el ensayo histórico de actualización desde 92 hasta 117.
+
+El 19/09 se instalaron M122 y M123 con ambos registros canónicos en **una transacción**
+del runtime clínico PG17, de 115 a 117 versiones. El preflight posterior por conexión
+nueva aprobó; se conservaron 21 tablas, ambos volúmenes, los nueve controles y la
+auditoría original de activación `3a9823a`. No se reinstalaron M120/M121 ni se repitieron
+activaciones. Los digests SQL y las entradas canónicas se comprobaron antes y después
+del corte. Esta instalación local no aplica las 25 migraciones pendientes de producción.
 
 ## Preparación necesaria en un destino autorizado
 
@@ -79,5 +86,10 @@ permanece con 115 versiones; estas pruebas SQL se hicieron en bases propias con 
   existente al rol autenticado; sus tablas y funciones internas anteriores siguen
   denegadas. M123 agrega una política restrictiva de SELECT, sin cambiar escrituras.
 
-El [runbook](LAUNCH-RUNBOOK.md) y las guías por migración detallan ese orden.
+El puente del escritor M106, `efe19c68c849696d7d66bc8a43014ac494eb3310`, tiene despliegue
+`dpl_J7Pk9fWqzTF1aCyucVWmjMgz9YN6` READY en gru1, sin promoción al dominio publicado.
+Su comprobación anónima dio health 200, login 200 y Hoy 307 hacia login; el dominio
+publicado mantuvo health 200. Esto no acredita escrituras autenticadas, instalación
+de las 25 migraciones, activaciones ni merge. El
+[runbook](LAUNCH-RUNBOOK.md) y las guías por migración detallan el orden restante.
 Este manifiesto no autoriza ejecutarlo ni certifica la preparación integral del lanzamiento.
