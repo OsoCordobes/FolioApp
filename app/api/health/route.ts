@@ -32,6 +32,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { isUpstashConfigured } from "@/lib/security/rate-limit";
 import { verifyBearer } from "@/lib/security/verify-bearer";
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
+import { encryptionConfigurationStatus } from "@/lib/security/encryption-configuration";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -73,9 +74,14 @@ export async function GET(request: NextRequest) {
     "NEXT_PUBLIC_SUPABASE_ANON_KEY",
     "SUPABASE_SERVICE_ROLE_KEY",
     "FOLIO_ENC_KEY",
+    "FOLIO_ENC_HMAC_KEY",
   ];
   const missing = requiredEnv.filter((k) => !process.env[k]);
-  checks.env = { ok: missing.length === 0, error: missing.length > 0 ? `falta: ${missing.join(",")}` : undefined };
+  const encryption = encryptionConfigurationStatus(process.env);
+  checks.env = {
+    ok: missing.length === 0 && encryption.ok,
+    error: missing.length > 0 ? `falta: ${missing.join(",")}` : encryption.invalid.length > 0 ? `configuración inválida: ${encryption.invalid.join(",")}` : undefined,
+  };
 
   // 3. Rate limiting provisionado (Upstash). En PRODUCCIÓN es un check duro: sin
   // Upstash el rate limiting queda fail-open (booking/signup/captcha sin

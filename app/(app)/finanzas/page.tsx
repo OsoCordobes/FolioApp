@@ -1,3 +1,5 @@
+
+import { safeLog } from "@/lib/observability/safe-log";
 /**
  * Folio · /finanzas (Server Component).
  *
@@ -20,7 +22,6 @@ import { notFound } from "next/navigation";
 
 import { Finanzas } from "@/components/finanzas/finanzas";
 import { InsightsCard } from "@/components/finanzas/insights-card";
-import { finanzasScopeMemberId } from "@/lib/auth/finanzas-scope";
 import { capabilitiesForSession } from "@/lib/auth/guard";
 import { getActiveContext } from "@/lib/db/active-context";
 import { computeRangeOverride, getFinanzasDelMes, type FinanzasPeriodo } from "@/lib/db/finanzas";
@@ -59,8 +60,7 @@ export default async function FinanzasPage({
   const periodo = parsePeriodo(sp?.periodo);
   const rangeOverride = computeRangeOverride(periodo, tz);
 
-  // E1 · scoping: cada médico/a ve lo suyo; Director/dueño ve todo.
-  const profesionalMemberId = finanzasScopeMemberId(caps, ctx.data.session.memberId);
+  // SQL derives the active role/member again, including direct REST access.
 
   // E2 · desglose por profesional: solo para quien ve toda la org y solo si
   // hay más de un colegiado activo (en un consultorio Solo no aporta nada).
@@ -70,7 +70,7 @@ export default async function FinanzasPage({
     if (profsRes.ok && profsRes.data.length > 1) {
       profesionales = profsRes.data;
     } else if (!profsRes.ok) {
-      console.warn(`[finanzas] listProfesionalesLite falló: ${profsRes.error.message}`);
+      safeLog("warn", "app.app.finanzas.page.L73", { error: profsRes.error });
     }
   }
 
@@ -80,7 +80,6 @@ export default async function FinanzasPage({
       organizationId: ctx.data.organization.id,
       timezone: tz,
       rangeOverride,
-      profesionalMemberId,
       profesionales,
     }),
   ]);

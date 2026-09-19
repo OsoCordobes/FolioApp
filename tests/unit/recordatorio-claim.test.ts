@@ -3,7 +3,7 @@ import test from "node:test";
 
 import {
   decideClaimRecordatorio,
-  decideSkipRecordatorioOrgInterna,
+  decideSkipRecordatorioOrgSintetica,
 } from "../../lib/db/recordatorios";
 
 // Claim CAS del dispatcher de recordatorios (espejo de decidePedidoCas).
@@ -39,12 +39,12 @@ test("decideClaimRecordatorio: error gana sobre filas (no procede aunque haya fi
 // estricto skipea — null/undefined (select viejo sin la columna) no deben
 // suprimir envíos de orgs reales.
 
-test("decideSkipRecordatorioOrgInterna: true → skip", () => {
-  assert.equal(decideSkipRecordatorioOrgInterna(true), true);
+test("decideSkipRecordatorioOrgSintetica: true → skip", () => {
+  assert.equal(decideSkipRecordatorioOrgSintetica(true), true);
 });
 
-test("decideSkipRecordatorioOrgInterna: false/null/undefined → NO skip (org real envía)", () => {
-  assert.equal(decideSkipRecordatorioOrgInterna(false), false);
-  assert.equal(decideSkipRecordatorioOrgInterna(null), false);
-  assert.equal(decideSkipRecordatorioOrgInterna(undefined), false);
+test("decideSkipRecordatorioOrgSintetica: false/null/undefined → NO skip (org real envía)", () => {
+  assert.equal(decideSkipRecordatorioOrgSintetica(false), false);
+  assert.equal(decideSkipRecordatorioOrgSintetica(null), false);
+  assert.equal(decideSkipRecordatorioOrgSintetica(undefined), false);
 });

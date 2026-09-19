@@ -194,22 +194,22 @@ const tutor = (over: Partial<TutorOption>): TutorOption => ({
   ...over,
 });
 
-test("defaultTutorId: TRATAMIENTO_MENOR preselecciona el tutor principal", () => {
+test("defaultTutorId: el tipo de plantilla no preselecciona un representante", () => {
   const t1 = tutor({});
   const principal = tutor({ esPrincipal: true });
-  assert.equal(defaultTutorId("TRATAMIENTO_MENOR", [t1, principal]), principal.id);
+  assert.equal(defaultTutorId("TRATAMIENTO_MENOR", [t1, principal]), null);
 });
 
-test("defaultTutorId: sin principal cae al primero; sin tutores o tipo común → null", () => {
+test("defaultTutorId: ningún contacto o tipo de plantilla atribuye una firma automáticamente", () => {
   const t1 = tutor({});
   const t2 = tutor({});
-  assert.equal(defaultTutorId("TRATAMIENTO_MENOR", [t1, t2]), t1.id);
+  assert.equal(defaultTutorId("TRATAMIENTO_MENOR", [t1, t2]), null);
   assert.equal(defaultTutorId("TRATAMIENTO_MENOR", []), null);
   assert.equal(defaultTutorId("GENERAL", [t1]), null);
 });
 
-test("tutorRequerido: solo TRATAMIENTO_MENOR y solo si hay tutores cargados", () => {
-  assert.equal(tutorRequerido("TRATAMIENTO_MENOR", 1), true);
+test("tutorRequerido: la plantilla no decide si hace falta representación", () => {
+  assert.equal(tutorRequerido("TRATAMIENTO_MENOR", 1), false);
   assert.equal(tutorRequerido("TRATAMIENTO_MENOR", 0), false);
   assert.equal(tutorRequerido("GENERAL", 3), false);
 });

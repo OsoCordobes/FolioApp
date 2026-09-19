@@ -96,6 +96,7 @@ export function detectarSeparador(text: string): SeparadorCsv {
 }
 
 export interface CsvParseado {
+  error?: string;
   headers: string[];
   filas: string[][];
   separador: SeparadorCsv;
@@ -149,6 +150,7 @@ export function parseCsv(text: string): CsvParseado {
       campo += ch;
     }
   }
+  if(enComillas)return {headers:[],filas:[],separador,error:"El archivo tiene comillas sin cerrar. Corregilo antes de importar."};
   if (campo !== "" || fila.length > 0) cerrarFila();
 
   const headers = (registros[0] ?? []).map((h) => h.trim());
@@ -442,8 +444,9 @@ export interface DedupeSets {
  * el archivo. Las claves son opacas (el server pasa blind-index hashes; el
  * cliente, claves normalizadas) — la decisión es idéntica en ambos lados.
  *
- * Prioridad: existente por DNI > existente por teléfono > duplicado dentro del
- * archivo. Cuando decide "importar", registra las claves en `vistos` (mutación
+ * Prioridad: existente por DNI > DNI repetido dentro del archivo.
+ * El teléfono puede pertenecer a una familia y nunca identifica al paciente.
+ * Cuando decide "importar", registra las claves en `vistos` (mutación
  * intencional: el caller itera en orden y la primera aparición gana).
  */
 export function decidirDedupe(
@@ -452,11 +455,7 @@ export function decidirDedupe(
   vistos: DedupeSets,
 ): DedupeDecision {
   if (claves.dni && existentes.dni.has(claves.dni)) return "duplicado_dni";
-  if (claves.telefono && existentes.telefono.has(claves.telefono)) return "duplicado_telefono";
-  if (
-    (claves.dni && vistos.dni.has(claves.dni)) ||
-    (claves.telefono && vistos.telefono.has(claves.telefono))
-  ) {
+  if (claves.dni && vistos.dni.has(claves.dni)) {
     return "duplicado_en_archivo";
   }
   if (claves.dni) vistos.dni.add(claves.dni);
@@ -466,7 +465,41 @@ export function decidirDedupe(
 
 // ─── Resultado del import (shape compartido server → cliente) ───────────────
 
+export type ImportRowStatus = "imported" | "review_dni" | "review_file" | "review_previous" | "invalid" | "failed" | "pending";
+export interface ImportRowResult { fila: number; status: ImportRowStatus; code: string }
+export const IMPORT_ROW_LABELS: Record<ImportRowStatus,string> = {
+ imported:"Importada",review_dni:"Revisar: DNI existente",review_file:"Revisar: DNI repetido en el archivo",
+ review_previous:"Revisar: mismos datos importados antes",invalid:"Revisar datos de la fila",failed:"No se guardó esta fila",pending:"Pendiente",
+};
+/** Content equality is a review signal; contacts alone never establish identity. */
+export function normalizarHuellaImportacion(data:FilaNormalizada) {
+ const name=(value:string)=>value.trim().normalize("NFC").replace(/\s+/g," ").toLowerCase();
+ return {...data,nombre:name(data.nombre),apellido:name(data.apellido),dni:claveDni(data.dni),telefono:claveTelefono(data.telefono),email:data.email?.trim().toLowerCase()??null};
+}
+export function previewFilas(filas: FilaResultado[]) {
+ const vistos=new Set<string>();
+ return filas.map(fila=>{
+  if(!fila.ok)return {...fila,preview:"invalid" as const};
+  const dni=claveDni(fila.data.dni),duplicate=!!dni&&vistos.has(dni);
+  if(dni)vistos.add(dni);
+  return {...fila,preview:duplicate?"duplicate_file" as const:"ready" as const};
+ });
+}
+export function resumirImportacion(runId:string,total:number,receipts:ImportRowResult[]):ImportResumen {
+ const index=new Map(receipts.map(row=>[row.fila,row]));
+ const filas=Array.from({length:total},(_,i)=>index.get(i+2)??{fila:i+2,status:"pending" as const,code:"pending"});
+ return {runId,total,filas,importados:filas.filter(r=>r.status==="imported").length,
+  duplicadosDni:filas.filter(r=>r.status==="review_dni").length,duplicadosTelefono:0,
+  duplicadosEnArchivo:filas.filter(r=>r.status==="review_file").length,coincidenciasPrevias:filas.filter(r=>r.status==="review_previous").length,
+  pendientes:filas.filter(r=>r.status==="pending").length,completo:filas.every(r=>r.status!=="pending"),
+  errores:filas.filter(r=>r.status==="invalid"||r.status==="failed").map(r=>({fila:r.fila,motivo:IMPORT_ROW_LABELS[r.status]}))};
+}
 export interface ImportResumen {
+  runId: string;
+  completo: boolean;
+  pendientes: number;
+  coincidenciasPrevias: number;
+  filas: ImportRowResult[];
   total: number;
   importados: number;
   duplicadosDni: number;

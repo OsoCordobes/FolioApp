@@ -8,6 +8,8 @@
  * Sin POSTHOG_KEY configurada, los calls son no-op para no romper el dev loop.
  */
 
+import { sanitizeAnalyticsEvent } from "./privacy";
+
 import { PostHog } from "posthog-node";
 
 let client: PostHog | null = null;
@@ -33,14 +35,9 @@ export interface CaptureInput {
 }
 
 export async function captureServerEvent(input: CaptureInput): Promise<void> {
+  const event = sanitizeAnalyticsEvent(input);
+  if (!event) return;
   const ph = getClient();
   if (!ph) return;
-  ph.capture({
-    distinctId: input.distinctId,
-    event: input.event,
-    properties: {
-      ...input.properties,
-      $process_person_profile: false,                   // server-side, no crear perfil de usuario
-    },
-  });
+  ph.capture(event);
 }

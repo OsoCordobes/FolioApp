@@ -1,43 +1,14 @@
 /**
- * Folio · E2E · flujo premium de onboarding (signup → especialidad → ficha).
- *
- * Cubre el camino que convierte un visitante en un consultorio operativo:
- *
- *   /login → "Crear cuenta" → signup inline (signUpAndInitOrganization crea
- *   auth.user + organization + member OWNER) → /onboarding en Step 2 →
- *   Step 3 elige ESPECIALIDAD (la fuente de verdad que define la herramienta
- *   clínica de la ficha y los servicios sugeridos) → (env-gated) finalizar y
- *   crear la primera ficha de paciente.
- *
- * Dos niveles, igual que auth.spec.ts / demo-path.spec.ts:
- *
- *   1. SMOKE (siempre corre): signup real hasta /onboarding Step 2, y el
- *      selector de especialidad de Step 3 (radiogroup) refleja la elección.
- *      El signup crea UNA fila real en auth.users namespaced
- *      `e2e-onb-<ts>@folio.app` (patrón de cleanup mecánico de auth.spec.ts).
- *      NO finaliza el onboarding ni crea datos clínicos.
- *
- *   2. FICHA (gated por E2E_ONBOARDING_FICHA=1): tras el smoke, avanza el
- *      wizard hasta el final, finaliza, entra a /pacientes y crea una ficha
- *      real ("E2E Onb Ficha <ts>"). Escribe PHI cifrada → solo contra la DB
- *      de prueba designada. Ver tests/e2e/README.md.
- *
- * Pre-requisitos (ambos niveles):
- *   1. Dev server en E2E_BASE_URL (default localhost:3010, `pnpm dev`).
- *   2. Envs reales de Supabase + FOLIO_ENC_KEY/FOLIO_ENC_HMAC_KEY (el dev
- *      server no arranca sin ellas).
- *   3. Sin NEXT_PUBLIC_TURNSTILE_SITE_KEY en el server (dev): el signup no
- *      monta captcha y verifyTurnstile es fail-open sin secret.
- *
- * Run (PowerShell):
- *   # smoke:
- *   pnpm exec playwright test tests/e2e/onboarding.spec.ts --project=e2e
- *   # + creación de ficha real (org de prueba):
- *   $env:E2E_ONBOARDING_FICHA="1"
- *   pnpm exec playwright test tests/e2e/onboarding.spec.ts --project=e2e
+ * Onboarding contra Supabase local dedicado con cuentas @example.test.
+ * El runner omite este spec sin FOLIO_TEST_SUPABASE_* y nunca carga .env.
+ * El escenario histórico de crear ficha sigue deshabilitado hasta tener
+ * fixtures locales completos de MFA y controles de signup. Ver README.md.
+ * Ejecutar: pnpm test:e2e -- tests/e2e/onboarding.spec.ts
  */
 
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "../fixtures/local-test";
+
+test.skip(process.env.FOLIO_TEST_REAL_SUPABASE!=="1","Requires an explicitly configured dedicated local Supabase instance.");
 
 const NS = "e2e-onb";
 const PASSWORD = "TestPassword123!";
@@ -45,7 +16,7 @@ const CREAR_FICHA = process.env.E2E_ONBOARDING_FICHA === "1";
 
 /** Email namespaced por timestamp — cleanup mecánico por patrón, igual que auth.spec.ts. */
 function nuevoEmail(): string {
-  return `${NS}-${Date.now()}@folio.app`;
+  return `${NS}-${Date.now()}@example.test`;
 }
 
 /** "E2E Onb Ficha 2026-07-06 18:32:05" — legible y greppable para cleanup. */

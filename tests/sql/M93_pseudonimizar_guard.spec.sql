@@ -1,3 +1,25 @@
+-- M116 replaces the old erasure contract. Keep the legacy assertions when
+-- explicitly replaying an earlier migration boundary.
+SELECT coalesce(obj_description(to_regprocedure('public.pseudonimizar_paciente(uuid,text,boolean)'), 'pg_proc'), '')
+  LIKE '%policy=retired.v1%' AS m116_patient_erasure_retired \gset
+\if :m116_patient_erasure_retired
+DO $$
+DECLARE dry boolean;
+BEGIN
+  FOREACH dry IN ARRAY ARRAY[false, true] LOOP
+    BEGIN
+      PERFORM public.pseudonimizar_paciente(gen_random_uuid(), 'Synthetic retired legacy request', dry);
+      RAISE EXCEPTION 'M116: retired patient-erasure RPC unexpectedly succeeded';
+    EXCEPTION WHEN insufficient_privilege THEN
+      IF SQLERRM <> 'patient_pseudonymization_retired' THEN RAISE; END IF;
+    END;
+  END LOOP;
+  IF has_function_privilege('authenticated', 'public.pseudonimizar_paciente(uuid,text,boolean)', 'EXECUTE')
+    OR has_function_privilege('service_role', 'public.pseudonimizar_paciente(uuid,text,boolean)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'M116: legacy erasure remains exposed to an application role';
+  END IF;
+END $$;
+\else
 -- ════════════════════════════════════════════════════════════════════════════
 -- Folio · M93 spec · pseudonimizar_paciente exige actor member de la org 🔒
 -- ════════════════════════════════════════════════════════════════════════════
@@ -406,3 +428,5 @@ END $$;
 CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT NULL::uuid $$;
 
 DO $$ BEGIN RAISE NOTICE 'M93 spec PASS · pseudonimizar_paciente exige member activo de la org (ex-empleados, orgs ajenas y usuarios sin membership quedan afuera)'; END $$;
+
+\endif

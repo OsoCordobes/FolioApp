@@ -1,88 +1,59 @@
-/**
- * Folio · cliente de email (Resend) — FAIL-SAFE y HONESTO.
- *
- * Principio de diseño idéntico a lib/google/sync.ts: enviar un email JAMÁS
- * debe romper una reserva. `sendEmail` NUNCA lanza — pero tampoco miente:
- * devuelve un resultado discriminado para que el caller sepa si el email
- * salió de verdad:
- *
- *   - 'sent'      → Resend aceptó el envío.
- *   - 'simulated' → sin RESEND_API_KEY: se logueó y NO se envió nada. Cuando
- *                   se configure la key, el envío real se activa solo.
- *   - 'failed'    → Resend devolvió error (API) o lanzó (red). Se captura en
- *                   Sentry y el detalle viaja en `detail`.
- *
- * Los callers fire-and-forget (lib/email/notify.ts) pueden ignorar el
- * resultado sin cambios; los que persisten estado de entrega (el dispatcher
- * de recordatorios) DEBEN mirarlo antes de marcar nada como enviado.
- *
- * `resend` se importa dinámicamente para no cargar el SDK ni fallar en build
- * cuando no hay key.
- */
+import "server-only";
 
-interface SendEmailInput {
+export interface SendEmailInput {
   to: string;
   subject: string;
   html: string;
-  /**
-   * Reply-To opcional. El from es un noreply, así que el Reply-To es el
-   * interlocutor REAL de cada email: soporte de Folio en los emails a
-   * profesionales (invitaciones, billing, pedidos), y el email de contacto
-   * del consultorio en los emails de BOOKING a pacientes (resuelto por
-   * lib/email/notify.ts; si no hay, sale sin Reply-To). Los RECORDATORIOS
-   * del dispatcher hoy salen sin Reply-To — pasarlo desde el dispatcher es
-   * un follow-up (resolveOrgContactEmail está en notify.ts).
-   */
   replyTo?: string;
+  idempotencyKey?: string;
+}
+/** `sent` means provider acceptance only, never confirmed delivery. */
+export type SendEmailResult =
+  | { status: "sent"; providerId?: string }
+  | { status: "simulated"; detail: string }
+  | { status: "blocked" | "uncertain" | "queued"; detail: string }
+  | { status: "failed"; detail: string; retryable?: boolean };
+export interface EmailTransportConfig { enabled: boolean; apiKey?: string; from: string }
+export type EmailTransport = (body: Record<string, unknown>, key?: string) => Promise<{ status: number; body: { id?: string; [key: string]: unknown } }>;
+
+export function emailDeliveryConfiguration() {
+  return {
+    enabled: process.env.FOLIO_EMAIL_DELIVERY_ENABLED === "true",
+    providerConfigured: Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM),
+    quota: "pending_provider_and_auth_budget_verification" as const,
+  };
 }
 
-/** Resultado discriminado de un intento de envío. Nunca se lanza más allá. */
-export type SendEmailResult =
-  | { status: "sent" }
-  | { status: "simulated"; detail: string }
-  | { status: "failed"; detail: string };
-
-export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult> {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM || "Folio <noreply@folio.app>";
-
-  if (!apiKey) {
-    console.info("[email] RESEND_API_KEY ausente — simulando envío", {
-      to: input.to,
-      subject: input.subject,
+/** Bounded server-side transport. Provider bodies, addresses and subjects never enter logs. */
+export async function sendEmail(input: SendEmailInput, dependencies?: {
+  config: EmailTransportConfig;
+  transport: EmailTransport;
+}): Promise<SendEmailResult> {
+  const config = dependencies?.config ?? {
+    enabled: process.env.FOLIO_EMAIL_DELIVERY_ENABLED === "true",
+    apiKey: process.env.RESEND_API_KEY,
+    from: process.env.EMAIL_FROM ?? "",
+  };
+  if (!config.enabled) return { status: "blocked", detail: "delivery_disabled" };
+  if (!config.apiKey || !config.from) return { status: "blocked", detail: "provider_not_configured" };
+  if (!input.idempotencyKey) return { status: "blocked", detail: "idempotency_key_required" };
+  const transport: EmailTransport = dependencies?.transport ?? (async (body, key) => {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST", signal: AbortSignal.timeout(10_000),
+      headers: { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json", "Idempotency-Key": key! },
+      body: JSON.stringify(body),
     });
-    return { status: "simulated", detail: "RESEND_API_KEY ausente" };
-  }
-
+    return { status: response.status, body: await response.json().catch(() => ({})) };
+  });
   try {
-    const { Resend } = await import("resend");
-    const resend = new Resend(apiKey);
-    // El SDK NO lanza ante errores de API (key inválida, dominio sin
-    // verificar): los devuelve en `error`. Solo lanza ante fallas de red.
-    const { error } = await resend.emails.send({
-      from,
-      to: input.to,
-      subject: input.subject,
-      html: input.html,
-      ...(input.replyTo ? { replyTo: input.replyTo } : {}),
-    });
-    if (error) {
-      const detail = `${error.name}: ${error.message}`;
-      const { captureException } = await import("@sentry/nextjs");
-      captureException(new Error(`Resend API error — ${detail}`), {
-        tags: { component: "email" },
-        extra: { to: input.to, subject: input.subject },
-      });
-      return { status: "failed", detail };
+    const response = await transport({ from: config.from, to: input.to, subject: input.subject, html: input.html,
+      ...(input.replyTo ? { reply_to: input.replyTo } : {}) }, input.idempotencyKey);
+    if (response.status < 200 || response.status >= 300) {
+      return { status: "failed", detail: `provider_http_${response.status}`, retryable: response.status === 429 || response.status >= 500 };
     }
-    return { status: "sent" };
-  } catch (e) {
-    const detail = e instanceof Error ? e.message : String(e);
-    const { captureException } = await import("@sentry/nextjs");
-    captureException(e, {
-      tags: { component: "email" },
-      extra: { to: input.to, subject: input.subject },
-    });
-    return { status: "failed", detail };
+    if (!response.body.id) return { status: "uncertain", detail: "provider_receipt_missing" };
+    return { status: "sent", providerId: response.body.id };
+  } catch {
+    return { status: "uncertain", detail: "provider_response_unknown" };
   }
 }

@@ -1,3 +1,5 @@
+
+import { safeLog } from "@/lib/observability/safe-log";
 /**
  * Folio · bloqueos manuales de agenda (vacaciones, congreso, licencia).
  *
@@ -177,7 +179,7 @@ export async function crearBloqueo(input: CrearBloqueoInput): Promise<Result<Cre
     .lt("inicio", new Date(rango.data.hastaMs).toISOString());
   if (countErr) {
     // El bloqueo YA se creó: un conteo fallido no lo invalida.
-    console.warn(`[bloqueos] conteo de turnos en rango falló: ${countErr.message}`);
+    safeLog("warn", "lib.db.bloqueos.L180", { error: countErr });
   }
 
   return ok({ ids, dias: ids.length, turnosEnRango: count ?? 0 });

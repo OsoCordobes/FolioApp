@@ -20,6 +20,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { ProfFilterChips } from "@/components/agenda/prof-filter-chips";
+import { AgendaSyncNotice } from "@/components/agenda/agenda-sync-notice";
 import * as I from "@/components/icons";
 import { BloqueoModal } from "@/components/calendario/bloqueo-modal";
 import { PedidoModal } from "@/components/calendario/pedido-modal";
@@ -975,6 +976,8 @@ function VistaMes({
 // ─── Root ──────────────────────────────────────────────────────────────────
 
 interface CalendarioProps {
+  /** Zona IANA de la organización autenticada para los editores de horarios. */
+  timezone: string;
   turnos: TurnoSemana[];
   bloqueos: Bloqueo[];
   pedidos: Pedido[];
@@ -999,6 +1002,7 @@ interface CalendarioProps {
   initialVista?: Vista;
   /** Org activa — habilita el live update (polling / realtime tras flag). */
   organizationId?: string;
+  agendaRevision?: string | null;
   // Vista mensual (PR E)
   mesGrid: MonthGridCell[];
   mesTurnos: TurnoSemana[];
@@ -1029,6 +1033,7 @@ interface CalendarioProps {
 }
 
 export function Calendario({
+  timezone,
   turnos,
   bloqueos,
   pedidos,
@@ -1046,6 +1051,7 @@ export function Calendario({
   hoyWeekStartIso,
   initialVista = "semana",
   organizationId,
+  agendaRevision = null,
   mesGrid,
   mesTurnos,
   mesPacientes,
@@ -1086,7 +1092,7 @@ export function Calendario({
 
   // Live update: los turnos llegan por props (sin useState espejo), así que
   // un router.refresh() alcanza para que la vista se actualice sola.
-  useAgendaAutoRefresh(organizationId ?? null);
+  const agendaSync = useAgendaAutoRefresh(organizationId ?? null, agendaRevision);
 
   // Fallback defensivo si el SC todavía no manda la prop (mismo hardcode previo).
   const cerradosSemana = diasCerrados ?? weekDates.map((_, i) => i === 5 || i === 6);
@@ -1143,6 +1149,7 @@ export function Calendario({
         profHrefFor={profHrefFor}
       />
 
+      <AgendaSyncNotice sync={agendaSync} />
       {vista === "semana" ? (
         <VistaSemana
           turnos={turnosFiltrados}
@@ -1177,6 +1184,7 @@ export function Calendario({
 
       {selectedPedido ? (
         <PedidoModal
+          timezone={timezone}
           pedido={selectedPedido}
           colegiados={colegiados}
           sessionMemberId={sessionMemberId}
@@ -1236,8 +1244,8 @@ export function Calendario({
 
       {/* Click-to-create: mismo modal, con el datetime del slot clickeado como
           default EXACTO (estándar Jane/Cliniko — sin tipear fecha ni hora).
-          "YYYY-MM-DDTHH:MM" se interpreta en la TZ del browser, igual que el
-          inicioIso del TurnoReagendarModal en /hoy. */}
+          "YYYY-MM-DDTHH:MM" es la hora de pared de la organización autenticada,
+          independientemente de la zona horaria del navegador. */}
       {agendarSlot ? (
         <TurnoCreateModal
           origen="MANUAL"

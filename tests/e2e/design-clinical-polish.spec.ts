@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "../fixtures/local-test";
 
 declare global { interface Window { __clinicalScrolls: ScrollIntoViewOptions[]; } }
 

@@ -66,3 +66,6 @@ next-env.d.ts
 # Launch video production scratch (not deployed)
 video-build/
 .env*.local
+
+# Isolated automated-test Next output
+/.next-test/

@@ -17,7 +17,7 @@ import { __resetRateLimitLogState, rateLimit } from "../../lib/security/rate-lim
  *   keys present + error, dev     | other     | (any)               | fail-open
  *
  * "error" = fetch a Upstash rechaza (red), HTTP !ok, o AbortError del
- * timeout de 2s. El happy path (INCR/EXPIRE/TTL mockeados) también se pinea.
+ * timeout de 2s. El happy path (EVAL atómico mockeado) también se pinea.
  */
 
 function withEnv<T>(
@@ -142,6 +142,7 @@ test("missing upstash keys, dev, UPSTASH_FAIL_CLOSED='true': still fail-open (on
 const KEYS_PRESENT = {
   UPSTASH_REDIS_REST_URL: "https://fake.upstash.io",
   UPSTASH_REDIS_REST_TOKEN: "fake",
+  FOLIO_ENC_HMAC_KEY: Buffer.alloc(32, 9).toString("base64"),
 };
 
 /** Respuesta 200 de Upstash con `{ result }`. */
@@ -268,10 +269,9 @@ test("keys present, dev, fetch error: fail-open (fuera de prod no cambia)", asyn
   }
 });
 
-test("keys present, prod, happy path (INCR=1 → EXPIRE → TTL): limita normal", async () => {
+test("keys present, prod, happy path (atomic count=1 and TTL): limita normal", async () => {
   const originalFetch = globalThis.fetch;
-  // Secuencia: INCR devuelve 1 (primera request de la ventana) → EXPIRE → TTL.
-  const queue = [upstashOkResponse(1), upstashOkResponse(1), upstashOkResponse(60)];
+  const queue = [upstashOkResponse([1, 60])];
   let calls = 0;
   globalThis.fetch = (async () => {
     calls += 1;
@@ -290,7 +290,7 @@ test("keys present, prod, happy path (INCR=1 → EXPIRE → TTL): limita normal"
         assert.equal(result.ok, true);
         assert.equal(result.remaining, 9);
         assert.equal(result.resetIn, 60);
-        assert.equal(calls, 3);
+        assert.equal(calls, 1);
       },
     );
   } finally {
@@ -300,8 +300,7 @@ test("keys present, prod, happy path (INCR=1 → EXPIRE → TTL): limita normal"
 
 test("keys present, prod, over limit (INCR=11 sobre max 10): ok:false real", async () => {
   const originalFetch = globalThis.fetch;
-  // OJO: cuando count !== 1 el código NO llama EXPIRE — solo 2 fetch (INCR, TTL).
-  const queue = [upstashOkResponse(11), upstashOkResponse(60)];
+  const queue = [upstashOkResponse([11, 60])];
   let calls = 0;
   globalThis.fetch = (async () => {
     calls += 1;
@@ -320,7 +319,7 @@ test("keys present, prod, over limit (INCR=11 sobre max 10): ok:false real", asy
         assert.equal(result.ok, false);
         assert.equal(result.remaining, 0);
         assert.equal(result.resetIn, 60);
-        assert.equal(calls, 2);
+        assert.equal(calls, 1);
       },
     );
   } finally {
@@ -347,7 +346,7 @@ test("missing keys, prod: el error de envs ausentes se loguea UNA vez por proces
       },
     );
     const missingEnvLogs = errorMock.mock.calls.filter((call) =>
-      String(call.arguments[0]).includes("UPSTASH_REDIS_REST_URL/TOKEN ausentes"),
+      (call.arguments[1] as { operation?: string })?.operation === "security.rate_limit.missing_config",
     );
     assert.equal(missingEnvLogs.length, 1);
   } finally {

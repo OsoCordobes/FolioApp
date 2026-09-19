@@ -4,6 +4,7 @@ import type { Calendario } from "@/components/calendario/calendario";
 import type { Configuracion } from "@/components/configuracion/configuracion";
 import type { OnboardingApp } from "@/components/onboarding/onboarding-app";
 import type { PacienteDetalle } from "@/components/paciente/paciente-detalle";
+import type { PacientesDir } from "@/components/pacientes/pacientes-dir";
 import type { FinanzasData } from "@/lib/db/finanzas";
 import type { PacienteDirRow } from "@/lib/db/pacientes-dir";
 import type { PortalPerfilView } from "@/lib/db/portal-perfil";
@@ -38,6 +39,18 @@ export const patientRows: PacienteDirRow[] = names.map((nombre, index) => ({
   cobertura: index % 2 === 0 ? null : "Cobertura de ejemplo",
   coberturaPlan: null,
 }));
+
+export function directoryPage(empty: boolean): ComponentProps<typeof PacientesDir>["initialPage"] {
+  const rows = empty ? [] : patientRows;
+  return {
+    rows, total: rows.length,
+    counts: { todos: rows.length, activos: rows.filter(p => p.estado === "activo").length,
+      nuevos: rows.filter(p => p.tipo === "nuevo").length, alta: rows.filter(p => p.estado === "alta").length,
+      reactivar: 0, inactivos: rows.filter(p => p.estado === "inactivo").length },
+    coberturas: empty ? [] : ["Cobertura de ejemplo"], nextCursor: null,
+    revision: "folio-test-directory-revision", cutoff: PREVIEW_NOW,
+  };
+}
 
 export const patients: PacientesById = Object.fromEntries(patientRows.map((p, index) => [p.id, {
   nombre: p.nombre,
@@ -85,6 +98,7 @@ export const monthGrid = Array.from({ length: 35 }, (_, index) => {
 });
 
 export const calendar: ComponentProps<typeof Calendario> = {
+  timezone: "America/Argentina/Cordoba",
   turnos: weekAppointments,
   bloqueos: [{ fecha: PREVIEW_DATE, hora: "13:00", dur: 60, titulo: "Pausa", origen: "manual" }],
   pedidos: [], pacientes: patients, weekDates,
@@ -98,7 +112,17 @@ export const calendar: ComponentProps<typeof Calendario> = {
   monthIso: "2026-09-01", prevMonthIso: "2026-08-01", nextMonthIso: "2026-10-01", hoyMonthIso: "2026-09-01",
 };
 
+const financeTransactions: FinanzasData["transacciones"] = patientRows.map((p, index) => ({
+  id: `folio-test-payment-${index}`, fecha: `2026-09-10T${String(9 + index).padStart(2, "0")}:00:00-03:00`,
+  paciente: p.nombre, servicio: "Seguimiento", monto: 25000, montoCents: "2500000",
+  metodo: index % 2 === 0 ? "transferencia" : "efectivo", estado: index > 3 ? "pendiente" : "cobrado",
+}));
+
 export const finance: FinanzasData = {
+  window: { startUtc: "2026-09-01T03:00:00Z", endUtc: "2026-10-01T03:00:00Z" },
+  movements: { rows: financeTransactions, totalCount: 37, revision: "folio-test-finance-revision",
+    nextCursor: { id: financeTransactions[5].id, createdAt: financeTransactions[5].fecha } },
+  exact: { ingresos: "87500000", pendientes: "5000000", ticket: "2500000", proyeccion: "262500000" },
   mesLabel: "septiembre 2026", mesNumero: 9, anio: 2026, diaActual: 10, diasDelMes: 30,
   hoyFecha: PREVIEW_DATE, totalIngresos: 875000, totalSesiones: 35, ticketPromedio: 25000,
   proyeccionFinDeMes: 2625000, deltaIngresosVsMesPasadoPct: 12,
@@ -109,11 +133,7 @@ export const finance: FinanzasData = {
   ingresosPorMes: [], esRangoLargo: false, porCobrar: 50000, porCobrarCount: 2,
   serviciosBreakdown: [{ id: "folio-test-service-1", nombre: "Seguimiento", count: 35, monto: 875000, color: "var(--accent)" }],
   profesionalesBreakdown: null,
-  transacciones: patientRows.map((p, index) => ({
-    id: `folio-test-payment-${index}`, fecha: `2026-09-10T${String(9 + index).padStart(2, "0")}:00:00-03:00`,
-    paciente: p.nombre, servicio: "Seguimiento", monto: 25000,
-    metodo: index % 2 === 0 ? "transferencia" : "efectivo", estado: index > 3 ? "pendiente" : "cobrado",
-  })),
+  transacciones: financeTransactions,
   cobradosNoListados: 31, datosParciales: false,
 };
 
@@ -162,7 +182,7 @@ export function specialtyChart(especialidad: EspecialidadSlug, editable: boolean
       turnoActivo: editable ? {
         id: `folio-test-edit-${especialidad}-${selectedPatient.id}`, estado: "ATENDIENDO", modo: "en_curso", inicio: PREVIEW_NOW,
         especialidad, atendiendoDesde: null, toolDraft: toolData, soapDraft: chart.plan.soap,
-        soapPrevio: null, sesionUpdatedAt: null, tieneSesionGuardada: false,
+        soapPrevio: null, sesionUpdatedAt: null, sesionRevision: 0, tieneSesionGuardada: false,
       } : null,
     },
   };
@@ -170,6 +190,7 @@ export function specialtyChart(especialidad: EspecialidadSlug, editable: boolean
 
 export const configuration: ComponentProps<typeof Configuracion> = {
   orgSlug: organization.slug,
+  initialHorariosContext: { organizationId: PREVIEW_ORG, memberId: "folio-test-member", revision: 0, protectedDates: false },
   initialConsultorio: {
     nombre: organization.nombre, profesional: "Valentina Costa", matricula: "Ejemplo 1234",
     email: "profesional@example.test", tel: "", direccion: "Dirección de ejemplo", ciudad: "Córdoba",

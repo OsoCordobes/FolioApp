@@ -1,3 +1,5 @@
+
+import { safeLog } from "@/lib/observability/safe-log";
 /**
  * Folio · Supabase client para Server Components, Server Actions y Route Handlers.
  *
@@ -55,7 +57,7 @@ export async function createSupabaseServerClient() {
               msg.includes("Cookies can only be modified") ||
               msg.includes("Server Components");
             if (!isExpectedRSC) {
-              console.error("[supabase] fallo inesperado al setear cookie de sesión:", msg);
+              safeLog("error", "lib.supabase.server.L58", "[supabase] fallo inesperado al setear cookie de sesión:", msg);
             }
           }
         },

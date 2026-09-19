@@ -1,3 +1,5 @@
+
+import { safeLog } from "@/lib/observability/safe-log";
 /**
  * Folio · turno state machine — single source of truth.
  *
@@ -97,7 +99,7 @@ export function applyTransition(
   const { actor = "lorenzo", trigger = "manual", extra = {} } = opts;
   if (!canTransition(turno.estado, to)) {
     if (typeof console !== "undefined") {
-      console.warn(`[turnoStates] Invalid transition: ${turno.estado} → ${to}`);
+      safeLog("warn", "lib.turno.states.L100", `[turnoStates] Invalid transition: ${turno.estado} → ${to}`);
     }
     return turno;
   }

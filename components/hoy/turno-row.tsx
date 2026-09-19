@@ -19,7 +19,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import * as I from "@/components/icons";
-import { CobroCierreDialog } from "@/components/hoy/cobro-cierre-dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { activable } from "@/lib/a11y/activable";
 import { nombreCortoProfesional } from "@/lib/agenda/profesional";
@@ -47,13 +46,9 @@ interface TurnoRowProps {
   now?: Date;
   /** IANA timezone de la org. */
   timezone?: string;
-  /**
-   * PR #118 · capability `canRegistrarCobro` (lib/auth/capabilities). false =
-   * el rol no puede escribir `pago` (COORDINADOR — `pago_write_admin` de M09
-   * lo excluye): "Cerrar turno" cierra DIRECTO como antes del mini-diálogo,
-   * sin ofrecer un cobro que la RLS descartaría. Default true (legacy).
-   */
+  /** Financial capability is used by the Dashboard-owned recovery dialog. */
   canRegistrarCobro?: boolean;
+  onCloseTurno?: (id: string) => void;
   pending?: boolean;
   onTransition: (id: string, to: EstadoTurno, extra?: Partial<Turno>, cobro?: CobroCierreActionInput) => boolean | void;
   onOpenFicha: (id: string, transitionStarted?: boolean) => void;
@@ -61,30 +56,12 @@ interface TurnoRowProps {
   onReagendar?: (id: string) => void;
 }
 
-export function TurnoRow({ turno, paciente, isNext, now, timezone, canRegistrarCobro = true, pending = false, onTransition, onOpenFicha, onReagendar }: TurnoRowProps) {
+export function TurnoRow({ turno, paciente, isNext, now, timezone, onCloseTurno, pending = false, onTransition, onOpenFicha, onReagendar }: TurnoRowProps) {
   const conf = STATE_CONF[turno.estado as keyof typeof STATE_CONF] ?? STATE_CONF.agendado;
   const isAtendiendo = turno.estado === "atendiendo";
   const isEnSala = turno.estado === "en_sala";
   const isConfirmado = turno.estado === "confirmado";
   const isAgendado = turno.estado === "agendado";
-  /** E1 · mini-diálogo de cobro abierto (intercepta "Cerrar turno"). */
-  const [cobroOpen, setCobroOpen] = useState(false);
-
-  /**
-   * Cierra el turno, con el cobro elegido en el diálogo o sin cobro explícito
-   * (roles sin canRegistrarCobro — camino legacy). duracionReal: minutos
-   * transcurridos desde atendiendoDesde hasta ahora; sin timestamp (no debería
-   * pasar en estado atendiendo), default a la duración planificada.
-   */
-  const cerrarTurno = (cobro?: CobroCierreActionInput) => {
-    if (pending) return;
-    const fromIso = turno.atendiendoDesde;
-    const duracionMin = fromIso
-      ? Math.max(1, Math.round((Date.now() - new Date(fromIso).getTime()) / 60000))
-      : (turno.duracionMin ?? 45);
-    onTransition(turno.id, "cerrado", { duracionMin }, cobro);
-  };
-
   let cta: CtaSpec | null = null;
   if (isAgendado || isConfirmado) {
     // M57 · flujo de llegada unificado: tanto AGENDADO como CONFIRMADO ofrecen
@@ -111,11 +88,8 @@ export function TurnoRow({ turno, paciente, isNext, now, timezone, canRegistrarC
       kind: "primary",
       label: "Cerrar turno",
       icon: <I.Check size={12} />,
-      // E1 · el cierre pasa por el mini-diálogo de cobro (monto/método/deuda).
-      // La transición real se dispara en onConfirm del diálogo.
-      // PR #118 · sin canRegistrarCobro (COORDINADOR) NO se ofrece el diálogo:
-      // cierra directo (comportamiento legacy, sin cobro explícito).
-      onClick: () => (canRegistrarCobro ? setCobroOpen(true) : cerrarTurno()),
+      // Dashboard owns the close dialog across active/closed row replacement.
+      onClick: () => onCloseTurno?.(turno.id),
     };
   }
 
@@ -250,14 +224,7 @@ export function TurnoRow({ turno, paciente, isNext, now, timezone, canRegistrarC
         ) : null}
       </div>
 
-      {!pending && cobroOpen ? (
-        <CobroCierreDialog
-          pacienteNombre={paciente.nombre}
-          precioPesos={turno.precio ?? 0}
-          onConfirm={cerrarTurno}
-          onClose={() => setCobroOpen(false)}
-        />
-      ) : null}
+
     </div>
   );
 }

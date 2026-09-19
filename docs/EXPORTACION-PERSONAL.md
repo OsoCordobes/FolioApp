@@ -1,0 +1,23 @@
+# Exportación de datos personales del profesional
+
+Implementación local del 8 de septiembre de 2026. Sin consultas ni cambios en producción.
+
+`lib/me/personal-export.ts` es el único ensamblador, con contrato `Result`, usado por `/api/me/export` y `exportMyDataAction`. El formato **2** conserva `profile`, `memberships`, `members`, `suscripciones`, `integraciones` e `invitaciones`; añade categorías y exclusiones explícitas. La acción conserva su envoltorio `ok/filename/data/error`, y la ruta devuelve JSON descargable o error HTTP sin caché.
+
+- Todas las membresías propias, incluso históricas, se recorren por ID con páginas de 500 y conteo exacto. Los filtros por identificadores se dividen en bloques de 200. No se usa la primera membresía como sustituto de todas.
+- Sólo una membresía aceptada y no revocada habilita configuración actual. Esa lectura además usa el cliente del usuario y RLS, sin reemplazo privilegiado si una organización no es accesible. La facturación requiere OWNER vigente, de acuerdo con M19. Una membresía histórica no recupera permisos actuales.
+- Las integraciones deben pertenecer a un ID de membresía propio y a su misma organización. Ser copropietario del consultorio no permite exportar las integraciones de otro profesional. Sólo salen metadatos permitidos, también para integraciones históricas propias; no OAuth, certificados ni metadata opaca del proveedor.
+- Las invitaciones creadas o aceptadas por el titular se paginan y deduplican. No se exportan hashes de aceptación.
+- No se consultan pacientes, historias, agenda ni otros datos clínicos. Las categorías no implementadas se declaran excluidas; este archivo no sustituye una entrega clínica ni certifica un inventario exhaustivo de todos los datos personales existentes en Folio.
+
+Un error de lectura, transporte, conteo, descifrado o auditoría necesaria aborta la descarga con mensaje estático. Un cifrado no nulo ilegible no se convierte en un nombre nulo. La verificación Auth/MFA se hace antes de leer y antes de entregar; una segunda lectura completa contrasta los datos y la propiedad actual. Un cambio observado de usuario, rol, revocación o propietario de una integración aborta con conflicto. La auditoría sólo registra metadatos de la operación, sin contenido exportado.
+
+**Límite técnico:** las lecturas HTTP sucesivas no son una instantánea MVCC de toda la base. Se detecta el cambio observado entre ambas lecturas, pero no se promete impedir un cambio posterior a la última comprobación. La validación integral contra Supabase Auth/Storage real sigue pendiente; las pruebas de este corte son aisladas y no usan configuración ni proveedores reales.
+
+La revisión independiente añadió una comprobación de configuración accesible y membresías después de la auditoría y la última verificación Auth/MFA. Una revocación o pérdida del rol OWNER observada en ese tramo aborta antes de entregar configuración o cobros; no queda otra espera después de comparar el alcance final. Esto reduce la ventana, sin convertir las consultas sucesivas en una transacción atómica.
+
+Ambas descargas comparten un límite de **4 MiB sobre el JSON final con formato**. Si lo supera, no se entrega un fragmento: la respuesta indica coordinar una entrega completa con soporte (HTTP 413). La preparación sigue siendo en memoria; el límite de salida no constituye una cuota de consultas. La pantalla maneja errores de transporte al descargar, solicitar la baja y cancelar, con mensajes estáticos para reintentar.
+
+Pruebas independientes: dos negativas de revocación tardía, una de tamaño y tres de transporte pasaron de RED a GREEN. `own-data-transport.test.ts` ejecuta los handlers reales con fronteras de red y React controladas; no es una certificación del navegador ni de Supabase hospedado. Evidencia en `.flow/personal-export-independent-red.log`, `.flow/own-data-transport-red.log` y `.flow/personal-export-independent-green.log`. `/mis-datos` se revisó fuera del layout de cobro, con MFA y lectura del perfil propio; los enlaces para OWNER y personal bloqueados están cubiertos por `own-data-access.test.ts`.
+
+Evidencia: `tests/unit/personal-export.test.ts` tiene 24 casos nuevos; con las regresiones de invitaciones, MFA y solicitudes, **38 PASS**, más lint focal. Incluye 1.001 membresías/integraciones/invitaciones, fallo en segunda página, transporte, filas ajenas, revocación/reasignación, copropietarios, MFA, cifrado AEAD real sintético y corrupción, conteo ausente y los dos wrappers. Registro inicial RED en `.flow/personal-export-red.log`, negativo adicional de conteo en `.flow/personal-export-count-red.log`, final en `.flow/personal-export-green.log`. El typecheck global se integra con el resto del worktree.

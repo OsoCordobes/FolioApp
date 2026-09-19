@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "../fixtures/local-test";
 import { build } from "esbuild";
 import path from "node:path";
 

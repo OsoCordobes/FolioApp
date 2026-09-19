@@ -1,3 +1,5 @@
+
+import { safeLog } from "@/lib/observability/safe-log";
 /**
  * Folio · /onboarding (Server Component)
  *
@@ -14,6 +16,7 @@
  */
 
 import { redirect } from "next/navigation";
+import { readMfaStatus } from "@/lib/auth/mfa-access";
 import { Suspense } from "react";
 
 import { OnboardingApp } from "@/components/onboarding/onboarding-app";
@@ -45,6 +48,8 @@ export default async function OnboardingPage() {
   let googleConnected = false;
 
   if (user) {
+    const mfa = await readMfaStatus(supabase);
+    if (!mfa.ok || !mfa.data.allowed) redirect("/seguridad/mfa?next=/onboarding");
     authedEmail = user.email ?? undefined;
     const result = await getOnboardingResumeState(user.id, user.email ?? "");
     if (result.ok) {
@@ -64,8 +69,8 @@ export default async function OnboardingPage() {
         // redirige después, fuera de cualquier captura.
         const ctx = await getActiveContext();
         if (!ctx.ok) {
-          console.error(
-            `[onboarding] resume dice completo pero getActiveContext falló para user ${user.id}: ${ctx.error.code} ${ctx.error.message}`,
+          safeLog("error", "app.public.onboarding.page.L70",
+            { error: ctx.error },
           );
           redirect("/cuenta-error");
         }
@@ -81,8 +86,8 @@ export default async function OnboardingPage() {
       // mandamos al user a /hoy con su sesión activa. El layout (app) tiene
       // su propio getActiveContext que decidirá si redirigir de vuelta a
       // onboarding o tirar error boundary. Loguear para investigar.
-      console.error(
-        `[onboarding] getOnboardingResumeState falló para user ${user.id}: ${result.error.message}`,
+      safeLog("error", "app.public.onboarding.page.L87",
+        { error: result.error },
       );
       redirect("/hoy");
     }

@@ -1,4 +1,6 @@
 "use server";
+import { safeLog } from "@/lib/observability/safe-log";
+
 
 /**
  * Folio · Server Actions de /configuracion/billing (M19).
@@ -105,7 +107,7 @@ export async function refreshSubscriptionAction(): Promise<Result<void>> {
     // refresh "no encontró novedades", que es exactamente la verdad.
     const liveModeCheck = checkMpLiveMode(remote.liveMode);
     if (liveModeCheck.discard) {
-      console.error(
+      safeLog("error", "app.app.configuracion.billing.actions.L108",
         `[billing-refresh] preapproval sandbox (live_mode=false) descartado en producción preapproval=${local.data.mpPreapprovalId}. Revisar credenciales: ¿MP_ACCESS_TOKEN de test en prod?`,
       );
       captureMessage("[billing-refresh] preapproval sandbox (live_mode=false) descartado en producción", {

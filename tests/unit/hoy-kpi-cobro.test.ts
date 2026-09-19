@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  cobroOptimistaAlCerrar,
   computeCobroKpi,
   montoRegistradoCents,
   type TurnoCobroLike,
@@ -122,66 +121,9 @@ test("montoRegistradoCents: sin cobro → null (no hay fila en `pago`)", () => {
   assert.equal(montoRegistradoCents({ estado: "cerrado", precio: 5000 }), null);
 });
 
-test("montoRegistradoCents: pagado sin monto (mock/legacy) cae al precio del turno", () => {
+test("pagado sin monto registrado no fabrica el precio del turno", () => {
   assert.equal(
     montoRegistradoCents({ estado: "cerrado", precio: 5000, cobro: { estado: "pagado", ts: null } }),
-    500_000,
+    null,
   );
-});
-
-// ─── cobroOptimistaAlCerrar (espejo de transitionTurno) ─────────────────────
-
-test("cierre con cobro explícito: respeta monto y 'quedó debiendo'", () => {
-  const turno: TurnoCobroLike = { estado: "atendiendo", precio: 20000 };
-  assert.deepEqual(cobroOptimistaAlCerrar(turno, { montoCents: 1_200_000, pagado: true }, NOW_ISO), {
-    estado: "pagado",
-    ts: NOW_ISO,
-    montoCents: 1_200_000,
-  });
-  assert.deepEqual(cobroOptimistaAlCerrar(turno, { montoCents: 1_200_000, pagado: false }, NOW_ISO), {
-    estado: "pendiente",
-    ts: null,
-    montoCents: 1_200_000,
-  });
-});
-
-test("cierre SIN diálogo (rol sin canRegistrarCobro): efectivo PAGADO por el precio", () => {
-  assert.deepEqual(cobroOptimistaAlCerrar({ estado: "atendiendo", precio: 20000 }, undefined, NOW_ISO), {
-    estado: "pagado",
-    ts: NOW_ISO,
-    montoCents: 2_000_000,
-  });
-});
-
-test("monto 0: el server no inserta `pago` ⇒ no hay cobro que mostrar", () => {
-  assert.deepEqual(cobroOptimistaAlCerrar({ estado: "atendiendo", precio: 0 }, undefined, NOW_ISO), {
-    estado: "pendiente",
-    ts: null,
-    montoCents: null,
-  });
-  assert.deepEqual(
-    cobroOptimistaAlCerrar({ estado: "atendiendo", precio: 20000 }, { montoCents: 0, pagado: true }, NOW_ISO),
-    { estado: "pendiente", ts: null, montoCents: null },
-  );
-});
-
-test("turno que YA tenía pago: gana el existente (upsert ignoreDuplicates)", () => {
-  const yaPago: TurnoCobroLike = {
-    estado: "atendiendo",
-    precio: 20000,
-    cobro: { estado: "pagado", ts: "2026-07-25T10:00:00.000Z", montoCents: 700_000 },
-  };
-  assert.deepEqual(cobroOptimistaAlCerrar(yaPago, { montoCents: 2_000_000, pagado: true }, NOW_ISO), yaPago.cobro);
-});
-
-test("el cobro optimista es consistente con el KPI (cerrar con deuda no mueve 'Recaudado')", () => {
-  const turno: TurnoCobroLike = { estado: "atendiendo", precio: 20000 };
-  const cerrado: TurnoCobroLike = {
-    ...turno,
-    estado: "cerrado",
-    cobro: cobroOptimistaAlCerrar(turno, { montoCents: 2_000_000, pagado: false }, NOW_ISO),
-  };
-  const kpi = computeCobroKpi([cerrado]);
-  assert.equal(kpi.cobradoPesos, 0);
-  assert.equal(kpi.deudaPesos, 20000);
 });

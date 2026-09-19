@@ -1,3 +1,5 @@
+
+import { safeLog } from "@/lib/observability/safe-log";
 /**
  * Folio · /api/google/callback
  *
@@ -42,6 +44,7 @@ import {
   GOOGLE_OAUTH_STATE_COOKIE,
 } from "@/lib/google/oauth-state";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { verifyMfaSession } from "@/lib/auth/mfa-access";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -82,14 +85,14 @@ export async function GET(request: NextRequest) {
     );
 
   if (error) {
-    return failRedirect(error);
+    return failRedirect(error === "access_denied" ? "access_denied" : "oauth_failed");
   }
 
   // Anti-CSRF ANTES del exchange: sin cookie válida no se toca Google.
   if (!verified.ok) {
     // El reason no viaja crudo al usuario (no da nada accionable y sí un
     // oráculo); queda en logs para soporte. Sin PII: solo el motivo.
-    console.warn(`[google oauth callback] state rechazado: ${verified.reason}`);
+    safeLog("warn", "app.api.google.callback.route.L93", `[google oauth callback] state rechazado: ${verified.reason}`);
     return failRedirect(
       verified.reason === "expirado" ? "state_expirado" : "state_invalido",
     );
@@ -101,31 +104,33 @@ export async function GET(request: NextRequest) {
   }
 
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
+  const session = await verifyMfaSession(supabase);
+  if (!session.ok) {
     return clearStateCookie(
-      NextResponse.redirect(`${origin}/login?error=oauth_no_session`),
+      NextResponse.redirect(session.error.code === "mfa_required" ? `${origin}/seguridad/mfa` : `${origin}/login?error=oauth_no_session`),
     );
   }
+  const { user } = session.data;
 
   // Defensa en profundidad: el memberId de la cookie tiene que ser un member
   // del usuario logueado igual. (El state ya garantiza que este browser inició
   // el flow; esto cubre el caso de la sesión cambiada a mitad de camino.)
-  const { data: member } = await supabase
+  const { data: member, error: memberError } = await supabase
     .from("member")
-    .select("id, organization_id")
+    .select("id, organization_id, accepted_at, invited_by_id")
     .eq("id", memberId)
     .eq("profile_id", user.id)
+    .is("deleted_at", null)
     .maybeSingle();
 
-  if (!member) {
+  if (memberError || !member || (!member.accepted_at && member.invited_by_id)) {
     return failRedirect("invalid_state");
   }
+  const scope=await supabase.from("organization").select("id,is_synthetic").eq("id",member.organization_id).is("deleted_at",null).maybeSingle();
+  if(scope.error||!scope.data||scope.data.is_synthetic!==false)return failRedirect("integration_scope_unavailable");
 
   try {
-    const tokens = await exchangeCodeForTokens(code);
+    const tokens = await exchangeCodeForTokens(code, AbortSignal.any([request.signal, AbortSignal.timeout(15_000)]));
     if (!tokens.access_token || !tokens.refresh_token) {
       return failRedirect("no_tokens");
     }
@@ -136,7 +141,7 @@ export async function GET(request: NextRequest) {
       return failRedirect("encrypt_failed");
     }
 
-    await supabase
+    const persisted = await supabase
       .from("integration")
       .upsert(
         {
@@ -147,7 +152,6 @@ export async function GET(request: NextRequest) {
           refresh_token_cifrado: refreshCifrado,
           expira_ts: tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : null,
           scopes: ["https://www.googleapis.com/auth/calendar.events"],
-          meta_json: { calendar_id: "primary" },
           // Reconectar limpia la marca de integración muerta (invalid_grant):
           // sin esto, el nudge de /hoy y el "Reconectar" de /configuracion
           // seguirían encendidos hasta el próximo sync exitoso.
@@ -157,6 +161,7 @@ export async function GET(request: NextRequest) {
         { onConflict: "organization_id,profesional_id,proveedor" },
       );
 
+    if (persisted.error) return failRedirect("integration_save_failed");
     return clearStateCookie(
       NextResponse.redirect(
         fromOnboarding
@@ -166,7 +171,7 @@ export async function GET(request: NextRequest) {
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : "unknown";
-    console.error("[google oauth callback]", msg);
+    safeLog("error", "app.api.google.callback.route.L169", "[google oauth callback]", msg);
     return failRedirect("oauth_failed");
   }
 }

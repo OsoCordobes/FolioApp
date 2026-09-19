@@ -15,6 +15,7 @@
  */
 
 import type { DominioInstrumento, InstrumentoDef } from "./types";
+import { INSTRUMENT_POPULATION_POLICY } from "./population-policy";
 
 import { borg } from "./scoring/borg";
 import { cssrs } from "./scoring/cssrs";
@@ -59,6 +60,11 @@ const POR_ID: ReadonlyMap<string, InstrumentoDef> = new Map(
  */
 export function getInstrumento(id: string): InstrumentoDef | undefined {
   return POR_ID.get(id);
+}
+
+/** All current versions share a provisional restriction, not a validation claim. */
+export function getInstrumentoPopulationPolicy(id: string) {
+  return POR_ID.has(id) ? INSTRUMENT_POPULATION_POLICY : undefined;
 }
 
 /** Instrumentos de un dominio dado, preservando el orden del catálogo. */

@@ -61,9 +61,9 @@ function esTrue(v: unknown): boolean {
   return v === true;
 }
 
-/** Entero finito no negativo, o `null` (edad, presión, etc.). */
+/** Provisional adult-only operational guard; not proof of adult validation. */
 function edadValida(v: unknown): number | null {
-  if (typeof v !== "number" || !Number.isFinite(v) || v < 0 || v > 130) return null;
+  if (typeof v !== "number" || !Number.isFinite(v) || v < 18 || v > 130) return null;
   return Math.floor(v);
 }
 

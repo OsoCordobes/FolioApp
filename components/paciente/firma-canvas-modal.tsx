@@ -1,38 +1,20 @@
 "use client";
 
 /**
- * Folio · FirmaCanvasModal · consentimiento informado con firma en canvas
- * (Ley 26.529 art. 5-11).
- *
- * Flujo en dos pasos dentro de un único dialog (focus trap compartido):
- *   1. Elegir plantilla (tipo + versión) y leer el texto legal completo
- *      (markdown → bloques vía parseConsentMarkdown, render React puro — nunca
- *      dangerouslySetInnerHTML). Si el paciente tiene tutores legales
- *      vigentes, se elige el firmante (Ley 26.061: TRATAMIENTO_MENOR exige
- *      tutor cuando hay tutores cargados).
- *   2. Firmar en canvas (pointer events: mouse + touch + stylus) con
- *      deshacer/limpiar por trazo. Confirmar → toBlob PNG → FormData →
- *      uploadFirmaConsentimientoAction (upload server-side; el browser nunca
- *      toca Storage).
- *
- * A11y: useModalA11y (focus trap + Escape + restore focus) desde el día 1,
- * role="dialog" + aria-modal + aria-labelledby. El área legal es scrolleable
- * y enfocable (teclado). Cero hex propios: el trazo y el fondo del canvas se
- * leen de los tokens computados (--ink / --surface) con fallback a keywords.
- *
- * Los datos (plantillas + tutores) llegan por props — los busca la card antes
- * de abrir el modal. Eso mantiene este componente presentacional salvo por la
- * action final de submit.
+ * Evaluación profesional por acto, seguida de evidencia individual por participante.
+ * La edad o el nombre de la plantilla no deciden el firmante. Un registro pendiente
+ * conserva el razonamiento sin atribuir una firma. El servidor vuelve a validar
+ * evaluación, representación, vigencia y permisos al registrar cada consentimiento.
  */
 
 import { useCallback, useMemo, useRef, useState } from "react";
 
+import { createConsentAssessmentAction } from "@/app/(app)/pacientes/consentimiento-evaluacion-actions";
+import { validateDecision, type DecisionMode } from "@/lib/consentimientos/decision";
 import { uploadFirmaConsentimientoAction } from "@/app/(app)/pacientes/actions";
 import {
-  defaultTutorId,
   parseConsentMarkdown,
   tipoConsentimientoLabel,
-  tutorRequerido,
   type ConsentBlock,
   type ConsentInline,
   type PlantillaVigente,
@@ -65,9 +47,14 @@ export function FirmaCanvasModal({
 }: FirmaCanvasModalProps) {
   const [paso, setPaso] = useState<1 | 2>(1);
   const [plantillaId, setPlantillaId] = useState<string>(plantillas[0]?.id ?? "");
-  const [tutorId, setTutorId] = useState<string>(
-    defaultTutorId(plantillas[0]?.tipo ?? "", tutores) ?? "",
-  );
+  const [tutorId, setTutorId] = useState("");
+  const [modo,setModo]=useState<DecisionMode>("PENDIENTE");
+  const [fundamento,setFundamento]=useState("");
+  const [participacion,setParticipacion]=useState("");
+  const [riesgo,setRiesgo]=useState<"EVALUADO"|"REQUIERE_REVISION">("REQUIERE_REVISION");
+  const [vigenteHasta,setVigenteHasta]=useState("");
+  const [evaluacionId,setEvaluacionId]=useState("");
+  const [firmaPaciente,setFirmaPaciente]=useState<Blob|null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Cantidad de trazos en state para habilitar/deshabilitar botones; los
@@ -86,7 +73,7 @@ export function FirmaCanvasModal({
     () => (plantilla ? parseConsentMarkdown(plantilla.textoMarkdown) : []),
     [plantilla],
   );
-  const requiereTutor = plantilla ? tutorRequerido(plantilla.tipo, tutores.length) : false;
+  const requiereTutor = modo === "ASISTIDO" || modo === "REPRESENTADO";
   const tutorSeleccionado = tutores.find((t) => t.id === tutorId) ?? null;
 
   // ─── Canvas: tokens computados + redraw ────────────────────────────────────
@@ -201,31 +188,30 @@ export function FirmaCanvasModal({
 
   // ─── Navegación entre pasos ────────────────────────────────────────────────
 
-  const continuarAFirma = () => {
-    setError(null);
-    if (!plantilla) {
-      setError("Elegí una plantilla para continuar.");
-      return;
-    }
-    if (requiereTutor && tutorId === "") {
-      setError("Seleccioná el tutor legal que firma (tratamiento de menor).");
-      return;
-    }
-    setPaso(2);
+  const continuarAFirma = async () => {
+    if(pending||!plantilla)return;
+    const decision=validateDecision({modo,fundamento,participacion,riesgo,tutorId:requiereTutor?tutorId||null:null});
+    if(!decision.ok){setError(decision.message);return;}
+    if(!vigenteHasta){setError("Indicá hasta cuándo corresponde esta evaluación, según el acto y su revisión.");return;}
+    setPending(true);setError(null);
+    try {
+      const result=await createConsentAssessmentAction({pacienteId,plantillaId:plantilla.id,version:plantilla.version,textoConfirmado:plantilla.textoMarkdown,
+        vigenteHasta:new Date(vigenteHasta+"T23:59:59-03:00").toISOString(),decision:decision.data});
+      if(!result.ok){setError(result.error.message);return;}
+      setEvaluacionId(result.data.id);setFirmaPaciente(null);limpiarFirma();
+      if(modo==="PENDIENTE"){onCreated();return;}
+      setPaso(2);
+    }catch{setError("No pudimos registrar la evaluación. Reintentá.");}finally{setPending(false);}
   };
 
   const volverAPlantilla = () => {
     if (pending) return;
     setError(null);
+    setFirmaPaciente(null);limpiarFirma();
     setPaso(1);
   };
 
-  const elegirPlantilla = (id: string) => {
-    setPlantillaId(id);
-    const tipo = plantillas.find((p) => p.id === id)?.tipo ?? "";
-    // Recalcular firmante default al cambiar de tipo (menor → tutor principal).
-    setTutorId(defaultTutorId(tipo, tutores) ?? "");
-  };
+  const elegirPlantilla = (id: string) => { setPlantillaId(id); setFirmaPaciente(null); setEvaluacionId(""); };
 
   // ─── Confirmar: canvas → PNG → Server Action ──────────────────────────────
 
@@ -246,8 +232,11 @@ export function FirmaCanvasModal({
         setError("No pudimos generar la imagen de la firma. Probá de nuevo.");
         return;
       }
+      if(modo==="ASISTIDO"&&!firmaPaciente){setFirmaPaciente(blob);limpiarFirma();return;}
       const formData = new FormData();
-      formData.set("file", blob, "firma.png");
+      formData.set("file", firmaPaciente??blob, "firma.png");
+      if(firmaPaciente)formData.set("fileRepresentante",blob,"firma-representante.png");
+      formData.set("evaluacionId",evaluacionId);
       formData.set("pacienteId", pacienteId);
       formData.set("plantillaId", plantilla.id);
       formData.set("tutorId", tutorId);
@@ -257,6 +246,8 @@ export function FirmaCanvasModal({
         return;
       }
       onCreated();
+    } catch {
+      setError("No pudimos confirmar el registro. Recargá la lista antes de reintentar; la evidencia puede haberse guardado.");
     } finally {
       setPending(false);
     }
@@ -271,7 +262,8 @@ export function FirmaCanvasModal({
       aria-modal="true"
       aria-labelledby="pc-consent-modal-title"
       tabIndex={-1}
-      className="a11y-modal-root pc-consent-overlay"
+      className="a11y-modal-root pc-consent-overlay ph-no-capture ph-no-capture-recording"
+      data-sensitive
       onClick={pending ? undefined : onClose}
     >
       <div className="pc-consent-modal" onClick={(e) => e.stopPropagation()}>
@@ -283,11 +275,9 @@ export function FirmaCanvasModal({
             {paso === 1 ? "Elegir consentimiento" : `Firmar · ${plantilla.titulo}`}
           </h2>
           <p className="pc-consent-modal-sub">
-            {paso === 1
-              ? `El paciente (o su tutor legal) lee el texto y firma en el paso siguiente. Registro según Ley 26.529.`
-              : tutorSeleccionado
-                ? `Firma ${tutorSeleccionado.nombre} (tutor legal · ${vinculoLabel(tutorSeleccionado.vinculo)}) en nombre de ${pacienteNombre}.`
-                : `Firma ${pacienteNombre}. La firma se guarda cifrada en el archivo del paciente.`}
+            {paso===1 ? "La participación se decide para este acto; la edad o el tipo de plantilla no eligen al firmante." :
+              modo==="REPRESENTADO"||(modo==="ASISTIDO"&&firmaPaciente) ? `Firma ${tutorSeleccionado?.nombre??"el representante verificado"}. Se conserva su rol separado del paciente.` :
+              `Firma ${pacienteNombre}${modo==="ASISTIDO"?"; a continuación firmará el representante":""}.` }
           </p>
         </header>
 
@@ -329,34 +319,18 @@ export function FirmaCanvasModal({
               ))}
             </div>
 
-            {tutores.length > 0 ? (
-              <label className="pc-consent-firmante">
-                <span className="pc-consent-label">
-                  Quién firma{requiereTutor ? " (requerido: tutor legal)" : ""}
-                </span>
-                <select
-                  value={tutorId}
-                  onChange={(e) => setTutorId(e.target.value)}
-                  className="pc-consent-select"
-                >
-                  {/* TRATAMIENTO_MENOR con tutores cargados: firma el tutor sí
-                      o sí (Ley 26.061). Para un adolescente que consiente por
-                      sí (CCyC art. 26) se usa la plantilla General. */}
-                  {!requiereTutor ? <option value="">El paciente</option> : null}
-                  {tutores.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.nombre} · tutor legal ({vinculoLabel(t.vinculo)})
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : plantilla.tipo === "TRATAMIENTO_MENOR" ? (
-              <p className="pc-consent-aviso" role="note">
-                Este paciente no tiene tutores legales cargados: la firma queda
-                registrada a nombre del paciente. Para menores, cargá el tutor
-                en la ficha cuando esté disponible.
-              </p>
-            ) : null}
+            <div className="au-form" data-sensitive>
+              <label className="au-field"><span>Decisión profesional para este acto</span><select value={modo} onChange={e=>setModo(e.target.value as DecisionMode)}>
+                <option value="PENDIENTE">Pendiente de revisión (sin atribuir firma)</option><option value="AUTONOMO">Decisión autónoma del paciente</option><option value="ASISTIDO">Paciente con asistencia del representante (dos firmas)</option><option value="REPRESENTADO">Representación con participación documentada del paciente</option>
+              </select></label>
+              <label className="au-field"><span>Comprensión, autonomía, acto y fundamento de la decisión</span><textarea value={fundamento} onChange={e=>setFundamento(e.target.value)} maxLength={2000}/></label>
+              <label className="au-field"><span>Participación del paciente, o razón documentada de su imposibilidad</span><textarea value={participacion} onChange={e=>setParticipacion(e.target.value)} maxLength={2000}/></label>
+              <label className="au-field"><span>Evaluación del acto y sus riesgos</span><select value={riesgo} onChange={e=>setRiesgo(e.target.value as typeof riesgo)}><option value="REQUIERE_REVISION">Requiere revisión</option><option value="EVALUADO">Evaluado por el profesional responsable</option></select></label>
+              <label className="au-field"><span>Revisar nuevamente a más tardar el</span><input type="date" value={vigenteHasta} onChange={e=>setVigenteHasta(e.target.value)}/></label>
+              {requiereTutor&&<label className="au-field"><span>Representación verificada para este consentimiento</span><select value={tutorId} onChange={e=>setTutorId(e.target.value)}><option value="">Elegir representante</option>{tutores.map(t=><option key={t.id} value={t.id}>{t.nombre} · {vinculoLabel(t.vinculo)}</option>)}</select></label>}
+              {requiereTutor&&tutores.length===0&&<p role="alert">No hay una representación verificada y vigente. Podés guardar una evaluación pendiente y continuar registrando la atención, sin atribuir una firma.</p>}
+              <p>La evaluación pendiente no es un consentimiento firmado ni impide registrar la atención. No acredita por sí sola capacidad legal ni cumplimiento normativo.</p>
+            </div>
           </>
         ) : (
           <>
@@ -413,9 +387,10 @@ export function FirmaCanvasModal({
               <button
                 type="button"
                 className="fi-btn fi-btn-primary"
-                onClick={continuarAFirma}
+                onClick={()=>void continuarAFirma()}
+                disabled={pending}
               >
-                Continuar a la firma
+                {pending?"Guardando…":modo==="PENDIENTE"?"Guardar evaluación pendiente":"Guardar evaluación y continuar a la firma"}
               </button>
             </>
           ) : (
@@ -437,7 +412,7 @@ export function FirmaCanvasModal({
                 disabled={pending || trazosCount === 0}
                 aria-busy={pending}
               >
-                {pending ? "Registrando…" : "Confirmar y registrar firma"}
+                {pending ? "Registrando…" : modo==="ASISTIDO"&&!firmaPaciente ? "Conservar firma del paciente y continuar con representante" : "Confirmar y registrar evidencia"}
               </button>
             </>
           )}

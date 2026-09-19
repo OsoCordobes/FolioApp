@@ -1,3 +1,5 @@
+
+import { safeLog } from "@/lib/observability/safe-log";
 /**
  * Folio · /hoy — Dashboard del día (Server Component).
  *
@@ -15,6 +17,8 @@ import { resolveAgendaProfesional, type ProfesionalLite } from "@/lib/agenda/pro
 import { capabilitiesFor } from "@/lib/auth/capabilities";
 import { getAppUrl } from "@/lib/config/app-url";
 import { getActiveContext } from "@/lib/db/active-context";
+import { readAgendaRevision } from "@/lib/db/agenda-revision";
+import { getActiveSession } from "@/lib/db/session";
 import { fechaHoyEnTz, getDashboardHoy } from "@/lib/db/hoy";
 import { listProfesionalesLite } from "@/lib/db/members";
 import { loadPrimerosPasosHoy } from "@/lib/db/primeros-pasos";
@@ -32,12 +36,17 @@ interface PageProps {
 }
 
 export default async function HoyPage({ searchParams }: PageProps) {
+  const identity = await getActiveSession();
+  if (!identity.ok) throw new Error("No se pudo comprobar el acceso a la agenda.");
+  const preRevision = await readAgendaRevision(identity.data);
   const ctx = await getActiveContext();
   if (!ctx.ok) {
     // El layout padre ya gating; si llegamos acá, es db_error.
     throw new Error(`No se pudo cargar /hoy: ${ctx.error.message}`);
   }
 
+  // Pre-read: a mutation during the following queries must remain detectable.
+  const agendaRevision = identity.data.organizationId === ctx.data.session.organizationId && identity.data.memberId === ctx.data.session.memberId ? preRevision : null;
   const timezone = ctx.data.organization.timezone || "America/Argentina/Buenos_Aires";
   const fechaIso = fechaHoyEnTz(timezone);
   const params = await searchParams;
@@ -47,7 +56,7 @@ export default async function HoyPage({ searchParams }: PageProps) {
   // warn — nunca tiramos la agenda abajo por el filtro.
   const profsRes = await listProfesionalesLite(ctx.data.organization.id);
   if (!profsRes.ok) {
-    console.warn(`[hoy] listProfesionalesLite falló: ${profsRes.error.message}`);
+    safeLog("warn", "app.app.hoy.page.L50", { error: profsRes.error });
   }
   const profesionales: ProfesionalLite[] = profsRes.ok ? profsRes.data : [];
   const caps = capabilitiesFor(ctx.data.session.role, ctx.data.session.esColegiado);
@@ -104,7 +113,7 @@ export default async function HoyPage({ searchParams }: PageProps) {
   }
 
   if (!primerosPasosRes.ok) {
-    console.warn(`[hoy] loadPrimerosPasosHoy falló: ${primerosPasosRes.error.message}`);
+    safeLog("warn", "app.app.hoy.page.L107", { error: primerosPasosRes.error });
   }
   const primerosPasos = primerosPasosRes.ok ? primerosPasosRes.data : null;
   const appUrl = getAppUrl();
@@ -124,6 +133,7 @@ export default async function HoyPage({ searchParams }: PageProps) {
         nowIso={new Date().toISOString()}
         timezone={timezone}
         organizationId={ctx.data.organization.id}
+        agendaRevision={agendaRevision}
         profesionales={selectorVisible ? profesionales : []}
         profActivo={selectorVisible ? profesionalIdEfectivo : null}
         // PR #118: sin canRegistrarCobro (COORDINADOR — pago_write_admin de

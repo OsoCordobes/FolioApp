@@ -1,3 +1,4 @@
+import { safeLog } from "@/lib/observability/safe-log";
 /**
  * Folio · helper de middleware para el refresh de sesión de Supabase.
  *
@@ -116,11 +117,13 @@ export async function updateSupabaseSession(request: NextRequest): Promise<{
     },
   });
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  return { response, user, supabase };
+  try {
+    const { data: { user }, error } = await supabase.auth.getUser();
+    return { response, user: error ? null : user, supabase };
+  } catch {
+    // Never log provider messages, cookies or tokens on a failed refresh.
+    return { response, user: null, supabase };
+  }
 }
 
 /**
@@ -141,20 +144,25 @@ export async function resolveAudience(
   if (!supabase) return { isMember: false, isPortalAccount: false };
 
   try {
-    const [{ data: cuentaId }, memberRes] = await Promise.all([
+    const [cuentaRes, memberRes] = await Promise.all([
       supabase.rpc("paciente_cuenta_actual"),
       supabase
         .from("member")
-        .select("id")
+        .select("id, organization!inner(deleted_at)")
         .is("deleted_at", null)
+        .is("organization.deleted_at", null)
+        .or("accepted_at.not.is.null,invited_by_id.is.null")
         .limit(1)
         .maybeSingle(),
     ]);
+    if (cuentaRes.error) safeLog("warn", "auth.audience.portal", cuentaRes.error);
+    if (memberRes.error) safeLog("warn", "auth.audience.member", memberRes.error);
     return {
       isMember: Boolean(memberRes.data),
-      isPortalAccount: Boolean(cuentaId),
+      isPortalAccount: Boolean(cuentaRes.data),
     };
-  } catch {
+  } catch (error) {
+    safeLog("warn", "auth.audience.network", error);
     return { isMember: false, isPortalAccount: false };
   }
 }

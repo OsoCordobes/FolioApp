@@ -105,6 +105,8 @@ export interface PlantillaConsentimientoRow {
 }
 
 export interface PlantillaVigente {
+  evaluacionId?: string;
+  pacienteId?: string;
   id: string;
   tipo: string;
   version: number;
@@ -166,6 +168,10 @@ export interface ConsentimientoRowInput {
   firmado_por_tutor_id: string | null;
   revocado_en: string | null;
   revocado_motivo: string | null;
+  evidencia_estado?: string;
+  version_snapshot?: number | null;
+  texto_snapshot?: string | null;
+  participantes?: Array<{rol:string}> | null;
   plantilla?: { titulo: string | null; tipo: string; version: number | string } | null;
 }
 
@@ -180,13 +186,16 @@ export interface ConsentimientoListItem {
   version: number | null;
   firmadoEn: string;
   firmadoPorTutor: boolean;
+  evidenciaRegistrada: boolean;
+  textoSnapshot: string | null;
+  participantes: string[];
   revocadoEn: string | null;
   revocadoMotivo: string | null;
   vigente: boolean;
 }
 
 export function mapConsentimientoRow(row: ConsentimientoRowInput): ConsentimientoListItem {
-  const versionCruda = row.plantilla?.version;
+  const versionCruda = row.version_snapshot ?? row.plantilla?.version;
   const version =
     typeof versionCruda === "number"
       ? versionCruda
@@ -200,6 +209,9 @@ export function mapConsentimientoRow(row: ConsentimientoRowInput): Consentimient
     version: version != null && Number.isFinite(version) ? version : null,
     firmadoEn: row.firmado_en,
     firmadoPorTutor: row.firmado_por_tutor_id !== null,
+    evidenciaRegistrada: row.evidencia_estado === "REGISTRADA",
+    textoSnapshot: row.texto_snapshot??null,
+    participantes: row.participantes?.map(p=>p.rol)??[],
     revocadoEn: row.revocado_en,
     revocadoMotivo: row.revocado_motivo,
     vigente: row.revocado_en === null,
@@ -230,25 +242,11 @@ export function tutorVigente(
   return true;
 }
 
-/**
- * Preselección del firmante: para TRATAMIENTO_MENOR el firmante natural es el
- * tutor principal (o el primero disponible). Para el resto de los tipos el
- * default es que firme el paciente (null) aunque haya tutores cargados.
- */
-export function defaultTutorId(tipo: string, tutores: TutorOption[]): string | null {
-  if (tipo !== "TRATAMIENTO_MENOR" || tutores.length === 0) return null;
-  return (tutores.find((t) => t.esPrincipal) ?? tutores[0]).id;
-}
+/** Compatibility helper: no automatic attribution by template or contact. */
+export function defaultTutorId(_tipo: string, _tutores: TutorOption[]): string | null { return null; }
 
-/**
- * true si el tipo exige seleccionar tutor y hay tutores para elegir
- * (TRATAMIENTO_MENOR firma el representante legal — Ley 26.061 art. 24).
- * Sin tutores cargados NO se bloquea la firma (el schema M07 permite
- * firmado_por_tutor_id NULL); la UI muestra la advertencia.
- */
-export function tutorRequerido(tipo: string, cantidadTutores: number): boolean {
-  return tipo === "TRATAMIENTO_MENOR" && cantidadTutores > 0;
-}
+/** The act-specific assessment determines participants; the template does not. */
+export function tutorRequerido(_tipo: string, _cantidadTutores: number): boolean { return false; }
 
 // ─── Markdown legal → bloques renderizables ─────────────────────────────────
 //

@@ -7,7 +7,7 @@
  * Regresión histórica: estuvieron 307 hasta el commit 6cbd905.
  */
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../fixtures/local-test";
 
 // El cookie banner sale en cada navegación y matchea texto "Ley 25.326" —
 // lo pre-dismisseamos para que las queries de página no choquen con su DOM.

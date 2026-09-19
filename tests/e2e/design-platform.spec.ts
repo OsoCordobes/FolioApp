@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../fixtures/local-test";
 
 declare global { interface Window { __calendarScrolls: ScrollToOptions[]; } }
 

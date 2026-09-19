@@ -1,4 +1,6 @@
 "use server";
+import { safeLog } from "@/lib/observability/safe-log";
+
 
 /**
  * Folio · /hoy · Server Actions.
@@ -18,16 +20,20 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { getTurnoCloseStatus, getTurnoCloseReceipt, resolveTurnoClose } from "@/lib/db/turno-close";
+import { settlePayment } from "@/lib/db/payment-settlement";
+import type { CloseDecision, CloseReceiptRequest, ResolveCloseRequest } from "@/lib/turnos/close-contract";
+import { mutationFailure } from "@/lib/db/mutation-result";
 
 import type { ProfesionalLite } from "@/lib/agenda/profesional";
-import { blindIndex, blindIndexPhone, encryptColumn } from "@/lib/crypto";
+import { createManualTurno } from "@/lib/db/manual-turno";
 import { normalizarBusqueda } from "@/lib/format/busqueda";
-import { err, mapSupabaseError, ok, type Result } from "@/lib/db/errors";
+import { err, ok, type Result } from "@/lib/db/errors";
+import { aceptarPedidoConHorario } from "@/lib/db/pedidos";
 import { listProfesionalesLite } from "@/lib/db/members";
 import { getActiveSession } from "@/lib/db/session";
 import { listPacientesDirectorio } from "@/lib/db/pacientes";
-import { resolveProfesionalDestino } from "@/lib/db/profesional-destino";
-import { createTurno, reagendarTurno, transitionTurno, type TransitionTurnoResult } from "@/lib/db/turnos";
+import { reagendarTurno, transitionTurno, type TransitionTurnoResult } from "@/lib/db/turnos";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { EstadoTurno } from "@/lib/types";
 
@@ -57,37 +63,54 @@ export interface CobroCierreActionInput {
 }
 
 export interface TransitionTurnoActionInput {
+  operacionId?: string;
   turnoId: string;
   to: EstadoTurno;
   duracionRealMin?: number;
   /** Solo con to === "cerrado": método/monto/estado del cobro registrado. */
-  cobro?: CobroCierreActionInput;
+  cobro?: CobroCierreActionInput | CloseDecision;
 }
 
-/**
- * PR #118: el Result propaga `pagoRegistrado` de transitionTurno para que el
- * cliente pueda avisar cuando el turno cerró pero el cobro NO se registró
- * (cierre y pago no son atómicos — ver TransitionTurnoResult en lib/db/turnos).
- */
+/** Close confirmation includes the validated M120 receipt. */
 export async function transitionTurnoAction(
   input: TransitionTurnoActionInput,
 ): Promise<Result<TransitionTurnoResult>> {
+  if (!input || typeof input !== "object") return mutationFailure("validation", "Datos de transición inválidos.", "rejected");
   const result = await transitionTurno({
     turnoId: input.turnoId,
     to: ESTADO_UI_TO_DB[input.to],
+    operacionId: input.operacionId,
     duracionRealMin: input.duracionRealMin,
     cobro: input.to === "cerrado" ? input.cobro : undefined,
   });
 
-  if (result.ok) {
-    revalidatePath("/hoy");
+  if (result.ok) refreshCloseViews();
+  return result;
+}
+
+function refreshCloseViews() {
+  for (const path of ["/hoy", "/calendario", "/finanzas"]) {
+    try { revalidatePath(path); } catch { /* Confirmed writes survive cache failures. */ }
   }
+  try { revalidatePath("/pacientes/[id]", "page"); } catch { /* Best effort. */ }
+}
+export async function resolveTurnoCloseAction(input: ResolveCloseRequest) {
+  const result = await resolveTurnoClose(input);
+  if (result.ok) refreshCloseViews();
+  return result;
+}
+export async function getTurnoCloseStatusAction(turnoId: string) { return getTurnoCloseStatus(turnoId); }
+export async function getTurnoCloseReceiptAction(input: CloseReceiptRequest) { return getTurnoCloseReceipt(input); }
+export async function marcarPagoCobradoAgendaAction(input: { turnoId: string; pagoId: string }) {
+  const result = await settlePayment(input, "agenda");
+  if (result.ok) refreshCloseViews();
   return result;
 }
 
 // ─── Reagendar turno ─────────────────────────────────────────────────────────
 
 const reagendarTurnoActionSchema = z.object({
+  operacionId: z.string().uuid(),
   turnoId: z.string().uuid(),
   nuevoInicio: z.string().datetime({ offset: true }),
   nuevaDuracionMin: z.number().int().min(5).max(480).optional(),
@@ -101,12 +124,8 @@ export type ReagendarTurnoActionInput = z.infer<typeof reagendarTurnoActionSchem
  * horario elegido. La sesión activa la valida `reagendarTurno` (lib/db) como
  * primer paso — igual que transitionTurnoAction delega en transitionTurno.
  *
- * Revalidación (review PR #44, I2): va atada a la MUTACIÓN, no al éxito.
- * `onTransitioned` dispara apenas el original queda REAGENDADO — si el create
- * posterior falla (orphan path), /hoy y /calendario igual se refrescan para
- * no seguir mostrando el turno viejo como agendado hasta el polling. Si el
- * flujo corta antes (validación, conflicto del pre-check), no hubo mutación
- * y no se revalida nada.
+ * M119: ambas escrituras y sus trabajos se confirman juntas. La revalidación
+ * posterior no convierte una operación confirmada en un resultado incierto.
  */
 export async function reagendarTurnoAction(
   input: ReagendarTurnoActionInput,
@@ -116,12 +135,14 @@ export async function reagendarTurnoAction(
     return err("validation", "Datos del reagendado inválidos.", parsed.error.message);
   }
 
-  return reagendarTurno(parsed.data, {
-    onTransitioned: () => {
+  const result = await reagendarTurno(parsed.data);
+  if (result.ok) {
+    try {
       revalidatePath("/hoy");
       revalidatePath("/calendario");
-    },
-  });
+    } catch { /* El recibo confirmado conserva su resultado. */ }
+  }
+  return result;
 }
 
 // ─── Create turno (modal walk-in / agendar manual) ──────────────────────────
@@ -141,6 +162,8 @@ export interface PacientePickerRow {
 }
 
 export interface CreateTurnoMeta {
+  /** Zona de la organización autenticada: el picker coincide con su agenda. */
+  timezone: string;
   servicios: ServicioPickerRow[];
   pacientes: PacientePickerRow[];
   /** Colegiados activos de la org — alimenta el picker de profesional. */
@@ -166,6 +189,16 @@ export async function loadCreateTurnoMeta(): Promise<Result<CreateTurnoMeta>> {
   if (!session.ok) return session;
 
   const supabase = await createSupabaseServerClient();
+  const { data: organization, error: organizationError } = await supabase
+    .from("organization")
+    .select("timezone")
+    .eq("id", session.data.organizationId)
+    .is("deleted_at", null)
+    .single();
+  if (organizationError || !organization) return err("db_error", "No pudimos cargar la zona horaria del consultorio.");
+  const timezone = organization.timezone || "America/Argentina/Cordoba";
+  try { new Intl.DateTimeFormat("en-CA", { timeZone: timezone }).format(); }
+  catch { return err("validation", "Revisá la zona horaria configurada del consultorio."); }
 
   const { data: servicios, error: servErr } = await supabase
     .from("servicio")
@@ -184,10 +217,11 @@ export async function loadCreateTurnoMeta(): Promise<Result<CreateTurnoMeta>> {
   // la validación server-side de createTurnoAction es el gate real.
   const profsRes = await listProfesionalesLite(session.data.organizationId);
   if (!profsRes.ok) {
-    console.warn(`[hoy] loadCreateTurnoMeta: listProfesionalesLite falló: ${profsRes.error.message}`);
+    safeLog("warn", "app.app.hoy.actions.L187", { error: profsRes.error });
   }
 
   return ok({
+    timezone,
     servicios: (servicios ?? []).map((s) => ({
       id: s.id as string,
       nombre: s.nombre as string,
@@ -250,6 +284,7 @@ export async function searchPacientesAction(q: string): Promise<Result<PacienteP
 
 const createTurnoActionSchema = z
   .object({
+    operacionId: z.string().uuid(),
     pacienteId: z.string().uuid().optional(),
     pacienteNuevo: z
       .object({
@@ -278,17 +313,13 @@ const createTurnoActionSchema = z
      */
     pedidoId: z.string().uuid().optional(),
   })
-  .refine((d) => d.pacienteId != null || d.pacienteNuevo != null, {
+  .refine((d) => (d.pacienteId != null) !== (d.pacienteNuevo != null), {
     message: "Hay que elegir un paciente existente o crear uno nuevo.",
   });
 
 export type CreateTurnoActionInput = z.infer<typeof createTurnoActionSchema>;
 
-/**
- * Crea un turno desde el modal. Si `pacienteNuevo` viene set, primero crea
- * la identidad + paciente (rollback manual de identidad si paciente falla),
- * después crea el turno usando createTurno (que también agenda recordatorios).
- */
+/** El paciente y el turno se confirman juntos mediante un intento durable. */
 export async function createTurnoAction(
   input: CreateTurnoActionInput,
 ): Promise<Result<{ turnoId: string; pacienteId: string }>> {
@@ -297,128 +328,19 @@ export async function createTurnoAction(
     return err("validation", "Datos del turno inválidos.", parsed.error.message);
   }
   const d = parsed.data;
-
-  const session = await getActiveSession();
-  if (!session.ok) return session;
-
-  const supabase = await createSupabaseServerClient();
-
-  // 0. Resolver el profesional destino ANTES de crear nada (CLINICA-3,
-  //    hallazgo A): un err de validación acá no deja paciente huérfano. La
-  //    validación server-side (colegiado activo de la org, vía RLS) es el
-  //    gate real — el picker de la UI es solo UX.
-  const profRes = await resolveProfesionalDestino(supabase, {
-    organizationId: session.data.organizationId,
-    profesionalId: d.profesionalId ?? null,
-    sessionMemberId: session.data.memberId,
-    sessionEsColegiado: session.data.esColegiado,
-  });
-  if (!profRes.ok) return profRes;
-  const profesionalId = profRes.data;
-
-  // 1. Resolver paciente
-  let pacienteId: string;
-  if (d.pacienteId) {
-    pacienteId = d.pacienteId;
-  } else if (d.pacienteNuevo) {
-    const np = d.pacienteNuevo;
-    const nombreFull = `${np.nombre} ${np.apellido}`.trim();
-    const { data: identidad, error: idErr } = await supabase
-      .from("paciente_identidad")
-      .insert({
-        organization_id: session.data.organizationId,
-        nombre_cifrado: encryptColumn(np.nombre)!,
-        apellido_cifrado: encryptColumn(np.apellido)!,
-        tipo_doc: "DNI",
-        telefono_cifrado: encryptColumn(np.telefono)!,
-        email_cifrado: encryptColumn(np.email && np.email.length > 0 ? np.email : null),
-        // Per-tenant salt (Sprint 1 T1.5.3 / audit A2)
-        nombre_hash: blindIndex(nombreFull, session.data.organizationId),
-        telefono_hash: blindIndexPhone(np.telefono, session.data.organizationId),
-      })
-      .select("id")
-      .single();
-    if (idErr || !identidad) {
-      const mapped = idErr ? mapSupabaseError(idErr) : { code: "db_error" as const, message: "No se creó la identidad." };
-      return err(mapped.code, mapped.message, idErr?.message);
-    }
-    const { data: paciente, error: pacErr } = await supabase
-      .from("paciente")
-      .insert({
-        organization_id: session.data.organizationId,
-        identidad_id: identidad.id,
-        tags: [],
-        // El paciente nuevo hereda el profesional ELEGIDO, no la sesión: si
-        // la secretaria agenda para la Dra. Gómez, el paciente es de Gómez.
-        profesional_principal_id: profesionalId,
-      })
-      .select("id")
-      .single();
-    if (pacErr || !paciente) {
-      await supabase.from("paciente_identidad").delete().eq("id", identidad.id);
-      const mapped = pacErr ? mapSupabaseError(pacErr) : { code: "db_error" as const, message: "No se creó el paciente." };
-      return err(mapped.code, mapped.message, pacErr?.message);
-    }
-    pacienteId = paciente.id;
-  } else {
-    return err("validation", "Falta paciente.");
-  }
-
-  // 2. Servicio: leer precio_cents para pasar al insert
-  const { data: servicio } = await supabase
-    .from("servicio")
-    .select("precio_cents")
-    .eq("id", d.servicioId)
-    .eq("organization_id", session.data.organizationId)
-    .maybeSingle();
-
-  // 3. Crear turno via createTurno (incluye scheduleRecordatorios + chequeo
-  //    de solapamiento CR-6). Si el horario está ocupado, createTurno devuelve
-  //    err("conflict", "Ese horario ya está ocupado.") que propagamos tal cual.
-  const result = await createTurno({
-    paciente_id: pacienteId,
-    servicio_id: d.servicioId,
-    profesional_id: profesionalId,
-    inicio: d.inicio,
-    duracion_min: d.duracionMin,
-    precio_cents: (servicio?.precio_cents as number | undefined) ?? 0,
-    origen: d.origen,
-  });
-
-  if (!result.ok) return result;
-
-  // 4. Vincular el pedido de origen (si vino): CAS PENDIENTE→CONFIRMADO con
-  //    confirmado_ts + paciente_id, org-scoped. NO-fatal deliberado: el turno
-  //    ya existe y es válido — si el pedido fue resuelto por otro en el medio
-  //    (0 filas) o el update falla, warn + Sentry y el action devuelve ok.
   if (d.pedidoId) {
-    const { data: casRows, error: casErr } = await supabase
-      .from("pedido")
-      .update({
-        estado: "CONFIRMADO",
-        confirmado_ts: new Date().toISOString(),
-        paciente_id: pacienteId,
-      })
-      .eq("id", d.pedidoId)
-      .eq("organization_id", session.data.organizationId)
-      .eq("estado", "PENDIENTE")
-      .select("id");
-    if (casErr || !casRows || casRows.length === 0) {
-      console.warn(
-        `[hoy] createTurnoAction: no se pudo confirmar el pedido ${d.pedidoId} vinculado al turno ${result.data.id}: ${casErr?.message ?? "0 filas (ya resuelto?)"}`,
-      );
-      const { captureException } = await import("@sentry/nextjs");
-      captureException(
-        new Error(`pedido vinculado no confirmado: ${casErr?.message ?? "0 filas"}`),
-        {
-          tags: { component: "turno-create", op: "confirmarPedidoVinculado" },
-          extra: { pedidoId: d.pedidoId, turnoId: result.data.id },
-        },
-      );
-    }
+    // A request owns its identity; the manual picker cannot adopt another patient.
+    const converted = await aceptarPedidoConHorario(d.pedidoId, {
+      fechaHora: d.inicio, servicioId: d.servicioId, profesionalId: d.profesionalId,
+      expectedPacienteId: d.pacienteId, pacienteNuevo: d.pacienteNuevo,
+    });
+    if (converted.ok) { revalidatePath("/hoy"); revalidatePath("/calendario"); }
+    return converted;
   }
 
-  revalidatePath("/hoy");
-  revalidatePath("/calendario");
-  return ok({ turnoId: result.data.id, pacienteId });
+  const result = await createManualTurno(d);
+  if (!result.ok) return result;
+  // The visit is committed. A cache invalidation failure cannot change that fact.
+  try { revalidatePath("/hoy"); revalidatePath("/calendario"); revalidatePath("/pacientes"); } catch { /* The next navigation reloads persisted data. */ }
+  return result;
 }

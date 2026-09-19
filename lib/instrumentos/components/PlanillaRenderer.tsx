@@ -40,6 +40,7 @@ import { useDisclosureFocus } from "@/lib/especialidades/use-disclosure-focus";
 
 import * as I from "@/components/icons";
 import type { InstrumentoDef } from "../types";
+import { instrumentPopulationEligibility, POPULATION_BLOCK_MESSAGE, type InstrumentPopulationContext } from "../population-policy";
 import { ResultadoBadge } from "./ResultadoBadge";
 import {
   modoDeInstrumento,
@@ -55,6 +56,7 @@ export type RespuestasItems = Array<number | null>;
 export type RespuestaNumerica = number | null;
 
 export interface PlanillaRendererProps {
+  population?: InstrumentPopulationContext;
   /** Definición del instrumento a renderizar (del registry). */
   def: InstrumentoDef;
   /**
@@ -109,18 +111,30 @@ export function PlanillaRenderer({
   readOnly,
   mostrarConsigna = true,
   colapsable = false,
+  population,
 }: PlanillaRendererProps) {
   const uid = useId();
   // Abierta si ya hay respuestas; el profesional puede abrirla vacía (espejo de
   // EscalaBlock de psicología). Solo aplica con `colapsable`.
   const [abiertaLocal, setAbiertaLocal] = useState(false);
   const modo = modoDeInstrumento(def);
+  const eligibility=instrumentPopulationEligibility(population);
   const tieneRespuestas =
     modo === "numerico"
       ? normalizarNumerico(respuestas) !== null
       : normalizarItems(respuestas, def.items.length).some((r) => r !== null);
   const abierta = !colapsable || abiertaLocal || tieneRespuestas;
+  // Keep hook order stable even when population eligibility changes.
   const planillaRef = useDisclosureFocus(abierta);
+  if(!eligibility.allowed){
+    return <section className="pc-card">
+      <header className="pc-card-head"><span className="fi-eyebrow">{def.nombre}</span></header>
+      <p role="status" className="pc-card-text">{POPULATION_BLOCK_MESSAGE}</p>
+      {respuestas!=null && <details><summary>Respuestas registradas · sin interpretación nueva</summary>
+        <p className="fm-mono">{JSON.stringify(respuestas)}</p>
+      </details>}
+    </section>;
+  }
 
   if (modo === "estructurado") {
     return (
@@ -245,7 +259,7 @@ export function PlanillaRenderer({
       />
 
       {respondidas > 0 && !completa ? (
-        <p role="alert" style={{ margin: 0, fontSize: 11.5, color: "var(--red)" }}>
+        <p role="status" style={{ margin: 0, fontSize: 11.5, color: "var(--red)" }}>
           {def.nombre} incompleto ({respondidas}/{items.length}) — respondé los{" "}
           {items.length - respondidas} ítems restantes; incompleta no se puede
           guardar con puntaje.

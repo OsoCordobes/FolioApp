@@ -1,88 +1,62 @@
-# Folio · Data Rights (Habeas Data §15 + §16)
+# Folio · Personal data access and account closure requests
 
-How users exercise their portability + erasure rights, and how the system enforces them.
+This document describes the repository's personal account data flow and the M116 retirement contract for the legacy patient pseudonymization RPC. It does not establish that a migration has been applied in production or that legal compliance has been verified.
 
-## §15 · Right of access + portability
+## Personal data access
 
-**Entry point**: `/configuracion/datos` → "Descargar mis datos" button.
+**Entry points**: `/mis-datos` and `/configuracion/datos` → "Descargar JSON". Both render `OwnDataPage` from `components/configuracion/own-data-page.tsx`. The standalone `/mis-datos` route remains accessible outside the clinic billing gate, including when a subscription is suspended. It still requires authenticated access and the applicable MFA verification through `verifyMfaSession`; it is not a public download.
 
-**Server action**: `exportMyDataAction()` in `app/(app)/configuracion/datos/actions.ts`.
+**Shared implementation**: `exportPersonalData()` in `lib/me/personal-export.ts` serves both `GET /api/me/export` and `exportMyDataAction()` in `app/(app)/configuracion/datos/actions.ts`.
 
-**Flow**:
-1. Authenticated user clicks the button.
-2. Server action calls `auth.getUser()` to confirm session.
-3. Service-role fetches:
-   - **Profile** (own row, decrypted nombre + apellido via `decryptColumn`)
-   - **Members** rows + linked organizations
-   - For each org **the user OWNS**:
-     - All `paciente_identidad` rows (decrypted: nombre, apellido, numero_doc, email, telefono, domicilio_calle, domicilio_numero)
-     - All `turno` rows
-     - All `sesion` rows (decrypted: soap_s, soap_o, soap_a, soap_p, notas)
-4. Server action returns the assembled JSON.
-5. Client wraps it in a `Blob` + triggers download as `folio-export-<user-id>-<YYYY-MM-DD>.json`.
+**Included categories**:
 
-**What's NOT in the export**:
-- Other users' data
-- Data from orgs the user does NOT own
-- Encrypted-only fields where decryption would expose other users' info (none currently)
-- Audit log entries (separately readable via `/admin/audit` for OWNER)
+- The user's own profile, with their name and surname decrypted for the download.
+- Their membership history, including revoked or unaccepted memberships.
+- Current organization settings only for organizations the user can currently access through RLS. Historical memberships do not grant access to current settings.
+- Their own integration metadata, without credentials.
+- Subscriptions only for accessible organizations where the user is a current OWNER.
+- Sanitized invitations they sent or accepted, with ownership checks.
 
-**Format**: pretty-printed JSON. Auditors can re-read it via any JSON viewer.
+**Excluded categories**: patient identities and clinical records (including appointments and session notes), OAuth tokens and other secrets, certificates, other professionals' integrations, inaccessible organization settings, and personal records outside the explicitly listed categories. This is a personal account export, not a delivery of patient clinical records. The UI links to support to coordinate a separately authorized clinical delivery; this account flow and the RPC retirement introduce no replacement clinical export or deletion workflow.
 
-## §16 · Right of erasure (account deletion)
+**Delivery checks**:
 
-**Entry point**: `/configuracion/datos` → "Quiero eliminar mi cuenta".
+1. Verify the authenticated user and MFA before reading data.
+2. Read complete, paginated collections using explicit column projections and validate row ownership. Organization settings and subscription reads additionally use the user's RLS permissions.
+3. Repeat the reads and identity checks to reject observed changes in data or permissions. Recheck memberships and accessible organization settings before returning the result.
+4. Reject failed reads, decryption failures, changed scope, or an export larger than 4 MB instead of delivering a partial success. A failed applicable export audit write also prevents delivery.
+5. Return pretty-printed JSON with `format_version: 2`, included/excluded categories and warnings, downloaded as `folio-export-<user-id>-<YYYY-MM-DD>.json`. The HTTP wrapper sends `Cache-Control: no-store`.
 
-**Flow**:
-1. User clicks "Quiero eliminar mi cuenta" → form expands with optional "Motivo" textarea.
-2. User clicks "Programar eliminación en 30 días" → `window.confirm()` confirms intent.
-3. Server action `requestAccountDeletionAction(reason?)`:
-   - Auth check via `auth.getUser()`
-   - Sets `profile.deletion_requested_at = now()`, `profile.deletion_reason = reason ?? null`
-4. UI updates: shows "Eliminación programada · solicitada el X · se ejecuta el X+30d". A "Cancelar solicitud" button lets the user withdraw at any time within the 30-day grace window.
+The repeated reads detect observed changes; they are not a transactional snapshot of the entire database. The payload identifies its stated access basis as Ley 25.326 art. 14. That metadata does not itself verify fulfillment of every legal access or portability obligation.
 
-**Cron-driven hard-delete**:
-- Route: `/api/cron/account-purge` (bearer-token CRON_SECRET).
-- Schedule: daily at 03:00 UTC.
-- **Default mode**: DRY-RUN. Lists due profiles, performs no deletions. Enable hard-delete with `ACCOUNT_PURGE_ENABLED=1` in production env.
+## Account closure requests and withdrawal
 
-**Hard-delete cascade** (per profile whose `deletion_requested_at < now() - 30 days`):
-1. List orgs the profile OWNS.
-2. For each org: list all pacientes; call `pseudonimizar_paciente(p.id, 'account_purge cron after 30-day deletion grace')` for each.
-3. Soft-delete `member` rows for the profile (`deleted_at = now()`).
-4. Soft-delete owned `organization` rows.
-5. Hard-delete the `profile` row (ON DELETE CASCADE handles FK children).
-6. Hard-delete the `auth.users` row via service-role `admin.deleteUser(profileId)`.
+**Entry points**: the same pages → "Quiero solicitar la baja" → optional reason → "Registrar solicitud de baja". The confirmation explains that retention and authorized delivery need human review, and that neither the account nor clinical records will be deleted automatically.
 
-**Idempotent**: each profile is wrapped in a try/catch; one failing profile does not block others.
+**Request**: `requestAccountDeletionAction(reason?)` verifies the current session and MFA, then updates only that user's `profile.deletion_requested_at` and `profile.deletion_reason`. Success requires a returned row whose ID matches the verified user; an error, missing row or mismatched ID is a failure. The result is `status: "manual_review_required"`, not a scheduled deletion date.
 
-**Reversibility**: within the 30-day grace window the user can call `cancelAccountDeletionAction()`, which resets `deletion_requested_at = null`. After the cron purges, the deletion is irreversible.
+**Pending state**: the UI shows "Solicitud pendiente de revisión" and its registration date. It makes no promise of automatic execution after 30 days or any other elapsed period. If the profile cannot be read, the page shows a retryable error rather than an empty successful state.
 
-## Pseudonymization (per-patient §16 erasure)
+**Withdrawal**: "Cancelar solicitud (mantengo la cuenta)" calls `cancelAccountDeletionAction()`. It performs the same session/MFA and matching-row checks, clearing both request fields only on the verified user's profile. Successful requests and withdrawals revalidate both pages. Withdrawal clears the request marker; it does not reverse a deletion, since these actions perform none.
 
-Separate flow at the **paciente** level. Triggered manually (no UI yet — `pseudonimizar_paciente()` SQL function only). OWNER/DIRECTOR can call:
+These markers record a request for human review. They do not assign a reviewer, implement a case-management queue, determine lawful retention, or execute account closure. The responsible clinical custodian and support process must resolve retention, continuity of access and authorized delivery before any separately approved closure process.
 
-```sql
-SELECT pseudonimizar_paciente(
-  p_paciente_id := '<paciente-uuid>',
-  p_motivo      := 'patient requested erasure per Ley 25.326 art. 16',
-  p_dry_run     := false
-);
-```
+## Legacy account-purge endpoint
 
-**What happens**:
-1. Function checks `auth.uid()` + verifies the actor is OWNER/DIRECTOR of the paciente's org.
-2. Reads the existing `nombre_hash` + `dni_hash` HMAC blind indexes.
-3. INSERTs into `pseudonimizacion_event` (M25 append-only):
-   - `organization_id`, `paciente_id`, `dni_sha256`, `nombre_sha256`, `performed_at`, `performed_by`, `motivo`
-4. DELETEs the `paciente_identidad` row (PII removed forever).
-5. UPDATEs `paciente.identidad_id = NULL`, `paciente.pseudonimizado_en = now()`.
+`GET /api/cron/account-purge` remains a bearer-token-protected compatibility endpoint using `CRON_SECRET`. It only counts profiles with a non-null `deletion_requested_at` and returns `mode: "review-only"`, `status: "manual_review_required"`, `automatic_purge: false`, and `pending_count`.
 
-**What's preserved**: all `sesion`, `documento_clinico`, `turno`, `pago` rows linked to `paciente.id` remain — Ley 26.529 art. 18 demands 10-year retention. The records are now orphaned in identity-space.
+There is no account-purge schedule in `vercel.json`. The endpoint performs no profile, Auth, membership, organization or patient mutation and invokes no pseudonymization RPC. The legacy `ACCOUNT_PURGE_ENABLED` flag cannot enable deletion; even an old request or a value of `1` leaves this endpoint read-only. Query failures return an error, not a successful zero count. The repository configuration is not proof of the current production deployment or external scheduler settings.
 
-**What's destroyed**: nombre, apellido, numero_doc, email, telefono, domicilio_* — all of `paciente_identidad`.
+## Legacy patient pseudonymization RPC retirement (M116)
 
-**Auditor verification**:
+The legacy signature is `public.pseudonimizar_paciente(uuid, text, boolean)`. Earlier migrations defined destructive behavior, including removing patient identity and related information. Keeping clinical rows after destroying their identity link is not treated here as proof of adequate retention or lawful erasure.
+
+M116 is the additive retirement migration for that signature. Its contract is to preserve the function signature, replace its body with an unconditional SQLSTATE `42501` rejection before any mutation, and revoke execution from application roles and `PUBLIC`. This applies to both execution and dry-run arguments; no flag or role bypass re-enables the old body. Historical migrations remain append-only.
+
+**Deployment requirement**: confirm M116 is applied in each target database before relying on this rejection. This document does not assert production application. It supplies no manual destructive SQL recipe and introduces no replacement patient deletion or clinical export workflow.
+
+Historical `pseudonimizacion_event` records remain available subject to their existing permissions. A read-only inspection of past events is:
+
 ```sql
 SELECT performed_at, performed_by, motivo
   FROM pseudonimizacion_event
@@ -90,24 +64,23 @@ SELECT performed_at, performed_by, motivo
  ORDER BY performed_at DESC;
 ```
 
-If a dispute arises (e.g. "did Folio pseudonimize the patient with DNI 12345678 on date X?"):
-```sql
-SELECT pe.* FROM pseudonimizacion_event pe
- WHERE pe.dni_sha256 = encode(hmac('12345678', '<HMAC-key>', 'sha256'), 'hex');
-```
-Only the org's HMAC key can verify membership.
+Past events are historical evidence, not authorization to repeat the retired operation.
 
-## E2E coverage
+## Verification scope
 
-- `tests/e2e/security-headers.spec.ts` (covers /api/health + /login)
-- `tests/e2e/signup-consent-ratelimit.spec.ts` (covers /reset-password)
-- `tests/unit/crypto-roundtrip.test.ts` (covers HMAC blind-index determinism)
+Relevant repository checks include:
 
-The `/configuracion/datos` page itself does NOT have an E2E spec yet because the route is auth-gated. Manual smoke procedure for the auditor:
+- `tests/unit/personal-export.test.ts`: shared v2 transport contract, complete collections, scope checks, exclusions and permission changes.
+- `tests/unit/own-data-access.test.ts`: standalone access outside billing, authentication/MFA and scoped profile reads.
+- `tests/unit/account-deletion-review-ui.test.ts`: human-review wording and successful matching-row updates for request/withdrawal.
+- `tests/unit/own-data-transport.test.ts`: safe handling of transport failures and successful downloads.
+- `tests/unit/account-purge-review-only.test.ts`: no mutation regardless of flag or request age, failed-count handling and no deployment cron entry.
+- SQL retirement checks must verify M116's rejection, revoked grants and unchanged patient data, rather than expecting the former destructive outcome.
 
-1. Create test account via `/login` signup with consent.
-2. Navigate to `/configuracion/datos`.
-3. Click "Descargar JSON" — file downloads with the expected shape.
-4. Click "Quiero eliminar mi cuenta" → "Programar eliminación" → confirm. UI shows the pending state.
-5. Click "Cancelar solicitud". UI reverts to non-pending.
-6. (Optional) Re-request deletion, set `ACCOUNT_PURGE_ENABLED=1`, manually trigger `/api/cron/account-purge` with curl. Observe the profile + auth.users disappear.
+These checks do not substitute for a live smoke test or proof of production migration state. A smoke test with synthetic data should verify:
+
+1. Sign in and complete applicable MFA; open `/mis-datos`, including with a suspended test subscription.
+2. Download JSON from the page and `/api/me/export`; verify v2 personal categories and absence of patient clinical data and credentials.
+3. Register a closure request; verify the pending-review state and absence of an execution date.
+4. Withdraw it; confirm the marker clears on both pages after reload.
+5. In an isolated test environment, confirm the legacy endpoint remains read-only with the old flag set and an old request date. Do not activate or simulate a production purge.

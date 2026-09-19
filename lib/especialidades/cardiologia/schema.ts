@@ -10,14 +10,14 @@
  *     quiropraxia — acá TRES ids). Todos cifrados app-side en
  *     sesion.tool_data_cifrado. El trend de TA/FC no suma campos: se deriva por
  *     nombre de campo del panel (deriveCardioSeries), común a v1/v2/v3.
- *   - `scoreRiesgoCV(factores, edad?)` — clasificación ORIENTATIVA de riesgo
- *     cardiovascular por conteo de factores (simplificación de las tablas
- *     OMS/OPS). No es diagnóstico ni reemplaza el criterio clínico. Los scores
- *     validados (CHA₂DS₂-VASc, HAS-BLED, SCORE2) viven en ./scores.ts.
+ *   - `contarFactoresCV(factores)` — conteo descriptivo. No calcula riesgo:
+ *     la clasificación simplificada anterior fue retirada por falta de
+ *     validación. Las implementaciones en ./scores.ts requieren su propia
+ *     validación profesional de población, entradas e interpretación.
  *   - `deriveCardioSeries(historial)` — serie cronológica de TA/FC para la
  *     curva de evolución del Tool (lee v1 y v2 por nombre de campo).
  *   - `resumenSesionCardiologia(toolData)` — string de resumen para
- *     HistorialReciente / TabSesiones ("TA 130/85 · FC 72 · riesgo moderado").
+ *     HistorialReciente / TabSesiones ("TA 130/85 · FC 72 · 2 factores registrados").
  *
  * Opcional-friendly: una sesión puede cargar solo TA, solo factores o solo un
  * estudio — todos los campos del payload son opcionales salvo `v`. Aditivo: v2
@@ -298,42 +298,18 @@ export function parseCardiologiaToolData(
   return { kind: "empty" };
 }
 
-// ─── Score de riesgo CV (orientativo) ───────────────────────────────────────
+// ─── Conteo descriptivo, sin interpretación clínica ─────────────────────────
 
-export type NivelRiesgoCV = "bajo" | "moderado" | "alto";
-
-export interface RiesgoCV {
-  nivel: NivelRiesgoCV;
-  /** Etiqueta es-AR lista para UI — siempre marca "(orientativo)". */
-  etiqueta: string;
-}
-
-/**
- * Clasificación ORIENTATIVA de riesgo cardiovascular por conteo de factores —
- * simplificación de la estratificación OMS/OPS (que además usa tablas por TA,
- * colesterol, sexo y edad exacta). Reglas:
- *
- *   conteo = factores presentes (true) + 1 si edad >= 60
- *   0–1 → bajo · 2–3 → moderado · >=4 → alto
- *
- * NO es una herramienta diagnóstica ni reemplaza el criterio clínico — la UI
- * la presenta siempre como "orientativo". Función pura, sin side effects.
- */
-export function scoreRiesgoCV(
+export function contarFactoresCV(
   factores: Partial<Record<FactorRiesgo, boolean>> | null | undefined,
-  edad?: number,
-): RiesgoCV {
+): number {
   let conteo = 0;
   if (factores) {
     for (const f of FACTORES_RIESGO) {
       if (factores[f] === true) conteo += 1;
     }
   }
-  if (typeof edad === "number" && Number.isFinite(edad) && edad >= 60) conteo += 1;
-
-  const nivel: NivelRiesgoCV = conteo <= 1 ? "bajo" : conteo <= 3 ? "moderado" : "alto";
-  const nombre = nivel === "bajo" ? "bajo" : nivel === "moderado" ? "moderado" : "alto";
-  return { nivel, etiqueta: `Riesgo ${nombre} (orientativo)` };
+  return conteo;
 }
 
 // ─── Extracciones laxas (historial puede traer shapes viejos/ajenos) ────────
@@ -437,7 +413,7 @@ export function deriveCardioSeries(historial: ToolHistorialEntry[]): CardioSerie
 
 /**
  * Resumen es-AR de una sesión cardiológica para el historial:
- *   "TA 130/85 · FC 72 · riesgo moderado"
+ *   "TA 130/85 · FC 72 · 2 factores registrados"
  *   "Ergometría: requiere seguimiento"
  *   "TA 130/85 · 3 estudios · 2 fármacos · derivación"
  * Lee v1, v2 y v3 (parseCardiologiaToolData): TA/FC, factores y estudios son
@@ -462,8 +438,8 @@ export function resumenSesionCardiologia(toolData: unknown): string {
       partes.push(`TA diast. ${taDiastolica}`);
     }
     if (fc != null) partes.push(`FC ${fc}`);
-    const hayFactores = factores && FACTORES_RIESGO.some((f) => factores[f] === true);
-    if (hayFactores) partes.push(`riesgo ${scoreRiesgoCV(factores).nivel}`);
+    const cantidad = contarFactoresCV(factores);
+    if (cantidad > 0) partes.push(`${cantidad} ${cantidad === 1 ? "factor registrado" : "factores registrados"}`);
   }
 
   if (estudios && estudios.length === 1) {

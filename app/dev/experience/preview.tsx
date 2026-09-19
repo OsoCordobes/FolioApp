@@ -24,7 +24,7 @@ import { Sidebar } from "@/components/sidebar";
 import { ToastProvider } from "@/components/ui/toast";
 import { ESPECIALIDAD_SLUGS, ESPECIALIDADES_META, isEspecialidadSlug, type EspecialidadSlug } from "@/lib/especialidades/meta";
 
-import { appointments, calendar, configuration, finance, onboarding, organization, patientRows, patients, portalAppointments, portalProfiles, portalSummary, PREVIEW_DATE, PREVIEW_NOW, specialtyChart } from "./fixtures";
+import { appointments, calendar, configuration, directoryPage, finance, onboarding, organization, patientRows, patients, portalAppointments, portalProfiles, portalSummary, PREVIEW_DATE, PREVIEW_NOW, specialtyChart } from "./fixtures";
 import styles from "./preview.module.css";
 
 const PANELS = [
@@ -205,7 +205,7 @@ function PanelContent({ panel, empty, step, specialty, editable, patientId }: { 
   switch (panel) {
     case "hoy": return <Dashboard initialTurnos={empty ? [] : appointments} pacientes={empty ? {} : patients} fechaIso={PREVIEW_DATE} fechaLarga="jueves 10 de septiembre" fechaAnio={2026} nowIso={PREVIEW_NOW} timezone="America/Argentina/Cordoba" canRegistrarCobro={false} />;
     case "calendario": return <Calendario {...calendar} />;
-    case "pacientes": return <PacientesDir pacientes={empty ? [] : patientRows} especialidad="kinesiologia" />;
+    case "pacientes": return <PacientesDir initialPage={directoryPage(empty)} especialidad="kinesiologia" />;
     case "ficha": return chartData ? <PacienteDetalle {...chartData} /> : null;
     case "finanzas": return <Finanzas data={finance} periodo="mes" canMarcarCobrado={false} />;
     case "configuracion": return <Configuracion {...configuration} />;

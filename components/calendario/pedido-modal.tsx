@@ -36,12 +36,14 @@ import {
   type ServicioPedidoPickerRow,
 } from "@/app/(app)/calendario/actions";
 import { resolvePickerProfesional, type ProfesionalLite } from "@/lib/agenda/profesional";
-import { isoToLocalDatetime, localDatetimeToIso } from "@/lib/datetime-local";
+import { organizationDatetimeDefault, organizationDatetimeToIso } from "@/lib/organization-datetime";
 import type { Pedido } from "@/lib/types";
 import { useModalA11y } from "@/lib/use-modal-a11y";
 
 interface PedidoModalProps {
   pedido: Pedido;
+  /** Zona IANA de la organización autenticada para el horario elegido. */
+  timezone: string;
   /**
    * Colegiados activos de la org (lista COMPLETA, independiente del selector
    * de agenda) — alimenta el picker cuando el pedido no trae profesional.
@@ -63,6 +65,7 @@ interface PedidoModalProps {
 
 export function PedidoModal({
   pedido,
+  timezone,
   colegiados = [],
   sessionMemberId = null,
   profActivo = null,
@@ -71,7 +74,12 @@ export function PedidoModal({
   onResolved,
 }: PedidoModalProps) {
   const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
+  const editorTimezone = useRef(timezone).current;
+  const [initialDatetime] = useState(() => {
+    try { return { value: organizationDatetimeDefault(editorTimezone), error: null }; }
+    catch { return { value: "", error: "Revisá la zona horaria del consultorio antes de elegir un horario." }; }
+  });
+  const [error, setError] = useState<string | null>(initialDatetime.error);
   const [mode, setMode] = useState<"view" | "reject" | "horario">("view");
   const [motivo, setMotivo] = useState("");
 
@@ -80,7 +88,7 @@ export function PedidoModal({
   // (pedidos de WhatsApp llegan con servicio_id null). Los servicios se
   // cargan lazy al entrar al modo.
   const necesitaServicio = pedido.servicioId == null;
-  const [inicioLocal, setInicioLocal] = useState<string>(() => isoToLocalDatetime());
+  const [inicioLocal, setInicioLocal] = useState(initialDatetime.value);
   const [servicios, setServicios] = useState<ServicioPedidoPickerRow[] | null>(null);
   const [servicioSel, setServicioSel] = useState<string | null>(null);
 
@@ -169,9 +177,16 @@ export function PedidoModal({
   const handleAcceptConHorario = () => {
     setError(null);
     if (!canSubmitHorario) return;
+    let fechaHora: string;
+    try { fechaHora = organizationDatetimeToIso(inicioLocal, editorTimezone); }
+    catch (error) {
+      setError(error instanceof RangeError && error.message.startsWith("Ese horario ")
+        ? error.message : "Revisá la fecha y hora en la zona del consultorio.");
+      return;
+    }
     startTransition(async () => {
       const result = await aceptarPedidoConHorarioAction(pedido.id, {
-        fechaHora: localDatetimeToIso(inicioLocal),
+        fechaHora,
         // El servicio solo viaja cuando el pedido no trae uno propio.
         servicioId: necesitaServicio ? servicioSel ?? undefined : undefined,
         // Ídem profesional: solo cuando el pedido no trae destino.
@@ -417,6 +432,9 @@ export function PedidoModal({
           </div>
         ) : mode === "horario" ? (
           <div>
+            <p style={{ margin: "0 0 10px", fontSize: 13, color: "var(--ink-3)" }}>
+              La fecha y hora corresponden al consultorio.
+            </p>
             <div
               style={{
                 display: "grid",

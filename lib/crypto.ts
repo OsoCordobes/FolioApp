@@ -1,3 +1,5 @@
+
+import { safeLog } from "@/lib/observability/safe-log";
 /**
  * Folio · encriptación columnar de PII/PHI · app-side AES-256-GCM.
  *
@@ -28,11 +30,12 @@
  *
  * Por qué la key NUEVA va en `_NEXT` y no al revés. Lo natural sería poner la
  * nueva en `FOLIO_ENC_KEY` y la vieja en un `_PREV`, pero eso exige ESCRIBIR
- * el valor viejo en una variable nueva — y en este deploy la key vieja está
- * cargada en Vercel como `sensitive`, que es write-only: nadie puede leerla
- * para copiarla a ningún lado. Invertir el orden evita el problema: la vieja
- * se queda donde ya está y la nueva —la única que un humano conoce— entra por
- * `_NEXT`. Al terminar la rotación se escribe esa misma key nueva sobre
+ * el valor viejo en una variable nueva. El esquema `_NEXT` se introdujo cuando
+ * faltaba la copia local y Vercel no permitía leer las variables sensitive por
+ * dashboard/API. El 2026-09-08 se recuperaron mediante una tarea autorizada
+ * que cifró los valores inyectados durante la compilación. Se mantiene el
+ * contrato de doble clave: la actual se conserva y la nueva entra por
+ * `_NEXT`. Al terminar una rotación verificada se escribe la nueva sobre
  * `FOLIO_ENC_KEY` y se borra `_NEXT`.
  *
  * Procedimiento completo en docs/ROTACION-CLAVES.md.
@@ -47,6 +50,7 @@
 // (node:test) corren con `--conditions react-server` para resolver el stub
 // vacío del package (ver package.json `test:unit`).
 import "server-only";
+import { isValidEncryptionKey } from "@/lib/security/encryption-configuration";
 
 import {
   createCipheriv,
@@ -79,14 +83,14 @@ function loadKey(envVar: string): Buffer | null {
     keyCache.set(envVar, null);
     return null;
   }
-  const key = Buffer.from(raw.trim(), "base64");
-  if (key.length !== 32) {
+  if (!isValidEncryptionKey(raw)) {
     // No se cachea el error: una env mal seteada se corrige y el proceso
     // siguiente tiene que verla bien.
     throw new Error(
-      `${envVar} debe ser 32 bytes (256 bits) en base64. Recibida: ${key.length} bytes.`,
+      `${envVar} debe ser 32 bytes (256 bits) en base64 válido.`,
     );
   }
+  const key = Buffer.from(raw.trim(), "base64");
   keyCache.set(envVar, key);
   return key;
 }
@@ -422,7 +426,7 @@ export function tryDecrypt(
     // razón categórica. `err.message` de decryptColumn/node:crypto no contiene
     // plaintext, pero lo omitimos del payload de Sentry por precaución.
     const reason = decryptFailureReason(err);
-    console.warn(`[crypto] decrypt failed on ${label} (${reason})`);
+    safeLog("warn", "lib.crypto.L426", `[crypto] decrypt failed on ${label} (${reason})`);
     reportDecryptFailure(label, reason);
     return null;
   }

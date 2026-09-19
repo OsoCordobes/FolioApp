@@ -1,3 +1,5 @@
+import { readEnmiendas } from "./enmiendas";
+import type { EnmiendaClinica } from "@/lib/ficha/enmienda";
 /**
  * Folio · queries y mutations de Sesion (SOAP + tool de especialidad + lock).
  *
@@ -19,11 +21,11 @@
  */
 
 import { z } from "zod";
+import { createHash } from "node:crypto";
 
 import { encryptColumn, tryDecrypt } from "@/lib/crypto";
 import {
   ESPECIALIDADES_META,
-  resolveEspecialidadEfectiva,
   toolPerteneceAEspecialidad,
   type EspecialidadMeta,
   type EspecialidadSlug,
@@ -38,6 +40,9 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import { err, mapSupabaseError, ok, type Result } from "./errors";
 import { getActiveSession } from "./session";
+import { readClinicalWriteContext } from "./clinical-write-context";
+import { POPULATION_BLOCK_MESSAGE } from "./instrument-population";
+import { hasInstrumentPayload, instrumentFieldsUnchanged, omitInstrumentFields, retainInstrumentFields, sameInstrumentPayload } from "@/lib/instrumentos/population-policy";
 
 const vertebraEstadoSchema = z.enum(["normal", "leve", "moderado", "severo", "ajustada"]);
 
@@ -65,21 +70,15 @@ const upsertSesionSchema = z.object({
   evaAntes: z.number().int().min(0).max(10).nullable().optional(),
   evaDespues: z.number().int().min(0).max(10).nullable().optional(),
   notas: z.string().max(10000).optional(),
-  /**
-   * `sesion.updated_at` que el borrador tenía cuando se hidrató.
-   *
-   * Control de concurrencia optimista. Sin esto el guardado era last-write-wins
-   * ciego: el profesional escribe en la tablet durante la consulta y después,
-   * desde la PC con la ficha abierta desde antes, agrega una palabra — y el
-   * autosave pisa con NULL el hallazgo de la tablet, mostrando "Guardado ✓".
-   *
-   * `undefined` = el caller no sabe contra qué versión escribe (callers legacy
-   * y creación de sesión nueva): se comporta como antes.
-   */
+  /** Legacy transport field only. It never authorizes a write: revisionEsperada
+   * and operacionId are mandatory at the writer boundary, including creation. */
   updatedAtEsperado: z.string().optional(),
+  revisionEsperada: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER-1).optional(),
+  operacionId: z.string().uuid().optional(),
+  intencion: z.enum(["SAVE","AUTOSAVE","CLOSE"]).default("SAVE"),
 });
 
-export type UpsertSesionInput = z.infer<typeof upsertSesionSchema>;
+export type UpsertSesionInput = z.input<typeof upsertSesionSchema>;
 
 // ─── IDOR guard (puro, testeable) ──────────────────────────────────────
 //
@@ -226,52 +225,11 @@ export function esToolDataRehidratable(
   return toolId === ESPECIALIDADES_META[especialidadEfectiva].toolId;
 }
 
-// ─── Especialidad efectiva del turno (M55) ─────────────────────────────
-
-/**
- * Deriva SERVER-SIDE la especialidad efectiva del PROFESIONAL del turno
- * (member.especialidad ?? organization.especialidad; fallback a la org si el
- * turno no tuviera profesional — imposible post-CLINICA-3, defensivo).
- *
- * El lookup del member NO filtra `deleted_at` a propósito: el turno sigue
- * siendo de ese profesional aunque después lo hayan dado de baja — su
- * especialidad sigue decidiendo la herramienta de la sesión. Filtrar la baja
- * degradaría la sesión a la especialidad de la org y cambiaría de herramienta
- * en silencio.
- */
-async function especialidadEfectivaDelTurno(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
-  profesionalId: string | null,
-  organizationId: string,
-): Promise<Result<EspecialidadSlug>> {
-  const [memberRes, orgRes] = await Promise.all([
-    profesionalId
-      ? supabase.from("member").select("especialidad").eq("id", profesionalId).maybeSingle()
-      : Promise.resolve({ data: null, error: null }),
-    supabase
-      .from("organization")
-      .select("especialidad")
-      .eq("id", organizationId)
-      .maybeSingle(),
-  ]);
-  if (memberRes.error || orgRes.error) {
-    return err(
-      "db_error",
-      "No pudimos resolver la especialidad del profesional del turno.",
-      memberRes.error?.message ?? orgRes.error?.message,
-    );
-  }
-  return ok(
-    resolveEspecialidadEfectiva(
-      (memberRes.data as { especialidad: string | null } | null)?.especialidad ?? null,
-      (orgRes.data as { especialidad: string | null } | null)?.especialidad ?? null,
-    ),
-  );
-}
-
 // ─── Upsert (crear o actualizar pre-lock) ──────────────────────────────
 
-export async function upsertSesion(input: UpsertSesionInput): Promise<Result<{ id: string }>> {
+export interface SavedClinicalSession {id:string;revision:number;updatedAt:string;closed:boolean;operationId:string}
+const savedClinicalSchema=z.object({id:z.string().uuid(),revision:z.number().int().positive().max(Number.MAX_SAFE_INTEGER),updatedAt:z.string(),closed:z.boolean(),operationId:z.string().uuid()});
+export async function upsertSesion(input: UpsertSesionInput): Promise<Result<SavedClinicalSession>> {
   const parsed = upsertSesionSchema.safeParse(input);
   if (!parsed.success) {
     return err("validation", "Datos de sesión inválidos.", parsed.error.message);
@@ -281,6 +239,16 @@ export async function upsertSesion(input: UpsertSesionInput): Promise<Result<{ i
 
   const supabase = await createSupabaseServerClient();
   const d = parsed.data;
+  if(d.revisionEsperada===undefined||!d.operacionId)return err("validation","Recargá el editor antes de guardar: falta la revisión y operación del borrador.");
+  const requestHash=createHash("sha256").update(JSON.stringify({turno:d.turnoId,paciente:d.pacienteId,revision:d.revisionEsperada,intent:d.intencion,
+    soap:d.soap,tool:d.toolData??null,vertebras:d.vertebras,notas:d.notas,evaAntes:d.evaAntes,evaDespues:d.evaDespues})).digest("hex");
+  const rpcArgs={p_organization:session.data.organizationId,p_turno:d.turnoId,p_paciente:d.pacienteId,p_operation:d.operacionId,p_expected_revision:d.revisionEsperada,p_intent:d.intencion,p_request_hash:requestHash};
+  const rpcError=(error:{code?:string;message:string})=>error.code==="40001"?err("conflict","Otra operación guardó esta sesión. Conservá tu borrador y revisá la versión actual."):
+    error.code==="55000"?err("locked","La atención ya está cerrada. Conservá el borrador para una enmienda."):err(mapSupabaseError(error).code,mapSupabaseError(error).message);
+  const probe=await supabase.rpc("save_clinical_session",{...rpcArgs,p_data:null});
+  if(probe.error)return rpcError(probe.error);
+  if(probe.data){const receipt=savedClinicalSchema.safeParse(probe.data);return receipt.success&&receipt.data.operationId===d.operacionId&&receipt.data.closed===(d.intencion==="CLOSE")&&receipt.data.revision>d.revisionEsperada?ok(receipt.data):err("db_error","No pudimos confirmar el recibo del guardado. Conservá el borrador.");}
+
 
   // F-AUTH (IDOR / defensa en profundidad): turnoId y pacienteId vienen del
   // caller (cliente). El INSERT/UPDATE estampa session.organizationId y la RLS
@@ -291,7 +259,7 @@ export async function upsertSesion(input: UpsertSesionInput): Promise<Result<{ i
   // pacienteId (el trigger M09 garantiza turno.paciente_id en la misma org).
   const { data: turnoRow, error: turnoErr } = await supabase
     .from("turno")
-    .select("organization_id, paciente_id, profesional_id")
+    .select("organization_id, paciente_id, profesional_id, inicio")
     .eq("id", d.turnoId)
     .maybeSingle();
   if (turnoErr) {
@@ -307,20 +275,26 @@ export async function upsertSesion(input: UpsertSesionInput): Promise<Result<{ i
     return err(ownership.code, ownership.message);
   }
 
+  const writeContext=await readClinicalWriteContext(supabase,session.data.organizationId,d.pacienteId,turnoRow as {profesional_id:string|null;inicio:string});
+  if(!writeContext.ok)return writeContext;
+
   // ¿Ya existe sesion para este turno? (las columnas tool se leen solo para
   // decidir preservación — tool_data_cifrado viaja opaco, nunca se descifra acá)
-  const { data: existingRow } = await supabase
+  const { data: existingRow, error: existingError } = await supabase
     .from("sesion")
-    .select("id, locked_at, updated_at, tool_id, tool_data_cifrado, vertebras_json")
+    .select("id, locked_at, updated_at, revision, tool_id, tool_data_cifrado, vertebras_json")
     .eq("turno_id", d.turnoId)
     .maybeSingle();
+  if(existingError)return err("db_error","No pudimos verificar la sesión existente.");
   const existing = existingRow as
-    | ({ id: string; locked_at: string | null; updated_at: string } & SesionToolColumnsRow)
+    | ({ id: string; locked_at: string | null; updated_at: string; revision:number } & SesionToolColumnsRow)
     | null;
 
   if (existing && existing.locked_at) {
     return err("locked", "La sesión está bloqueada. Creá una enmienda en su lugar.");
   }
+
+  if((existing?.revision??0)!==d.revisionEsperada)return err("conflict","Otra operación guardó esta sesión. Conservá tu borrador antes de revisar la versión actual.");
 
   // ── Tool de especialidad (M50/M55) ────────────────────────────────────
   let toolData: unknown = d.toolData ?? null;
@@ -353,11 +327,7 @@ export async function upsertSesion(input: UpsertSesionInput): Promise<Result<{ i
     // error de validación visible — las claves desconocidas no se stripean,
     // así que un payload ajeno no puede degradar a `{ v: 1 }` y persistirse
     // con el tool_id equivocado.
-    const efectivaRes = await especialidadEfectivaDelTurno(
-      supabase,
-      turno?.profesional_id ?? null,
-      session.data.organizationId,
-    );
+    const efectivaRes = ok(writeContext.data.specialty);
     if (!efectivaRes.ok) return efectivaRes;
     toolMeta = ESPECIALIDADES_META[efectivaRes.data];
   } else if (existing && sesionTieneToolData(existing)) {
@@ -365,13 +335,20 @@ export async function upsertSesion(input: UpsertSesionInput): Promise<Result<{ i
     // decidir si el null es un vaciado deliberado (la ficha re-hidrató el
     // borrador y el usuario lo dejó vacío) o datos que la UI nunca mostró
     // (cambio de especialidad entre medio) — en ese caso se preservan.
-    const efectivaRes = await especialidadEfectivaDelTurno(
-      supabase,
-      turno?.profesional_id ?? null,
-      session.data.organizationId,
-    );
+    const efectivaRes = ok(writeContext.data.specialty);
     if (!efectivaRes.ok) return efectivaRes;
     preservarToolColumns = debePreservarToolData(existing, efectivaRes.data);
+    if(!preservarToolColumns && existing.tool_data_cifrado != null){
+      const plain=tryDecrypt(existing.tool_data_cifrado as Parameters<typeof tryDecrypt>[0],"sesion.tool_data");
+      let previous:unknown=null;
+      try{previous=plain==null?null:JSON.parse(plain);}catch{/* Keep unreadable history intact. */}
+      if(previous==null)preservarToolColumns=true;
+      else if(hasInstrumentPayload(efectivaRes.data,previous)){
+        const population=ok(writeContext.data.population);
+        if(!population.ok)return population;
+        if(!population.data.allowed)preservarToolColumns=true;
+      }
+    }
   }
 
   // Espejo legacy de quiropraxia (vista M14 + índice gin; se retira en Fase F).
@@ -386,15 +363,35 @@ export async function upsertSesion(input: UpsertSesionInput): Promise<Result<{ i
     toolId = "quiropraxia.spine.v1";
     vertebrasEspejo = legacyV1.vertebras;
   } else if (toolMeta) {
-    const parsedTool = toolMeta.schema.safeParse(toolData);
-    if (!parsedTool.success) {
+    const specialty=toolMeta.slug;
+    let historical:unknown=null;
+    let preserveScaleFields=false;
+    const sameTool=existing?.tool_id && toolPerteneceAEspecialidad(existing.tool_id,specialty);
+    if(sameTool && existing?.tool_data_cifrado!=null){
+      const plain=tryDecrypt(existing.tool_data_cifrado as Parameters<typeof tryDecrypt>[0],"sesion.tool_data");
+      if(plain!=null){try{historical=JSON.parse(plain);}catch{/* A failed read cannot authorize new scale data. */}}
+    }
+    if(sameTool && historical!=null && sameInstrumentPayload(toolData,historical)){
+      // Exact historical tool data is retained byte-for-byte, including legacy
+      // answers/flags. It must not block an unrelated narrative-only save.
+      preservarToolColumns=true;
+    } else if(hasInstrumentPayload(specialty,toolData)||hasInstrumentPayload(specialty,historical)){
+      const population=ok(writeContext.data.population);
+      if(!population.ok)return population;
+      if(!population.data.allowed){
+        if(!sameTool||!instrumentFieldsUnchanged(specialty,toolData,historical))return err("validation",POPULATION_BLOCK_MESSAGE);
+        preserveScaleFields=true;
+      }
+    }
+    const parsedTool = toolMeta.schema.safeParse(preserveScaleFields?omitInstrumentFields(specialty,toolData):toolData);
+    if (!parsedTool.success && !preservarToolColumns) {
       return err(
         "validation",
         `toolData inválido para ${toolMeta.nombre}.`,
         parsedTool.error.message,
       );
     }
-    toolData = parsedTool.data;
+    if(parsedTool.success)toolData=preserveScaleFields?retainInstrumentFields(specialty,parsedTool.data,historical):parsedTool.data;
     toolId = toolMeta.toolId;
     if (toolMeta.slug === "quiropraxia") {
       // Workstream 6 · el toolData quiro del registry es v2: el espejo
@@ -433,40 +430,17 @@ export async function upsertSesion(input: UpsertSesionInput): Promise<Result<{ i
     tool_data_cifrado: toolData == null ? null : encryptColumn(JSON.stringify(toolData)),
   };
 
-  if (existing) {
-    const payload = {
-      ...basePayload,
-      ...(preservarSoap ? {} : soapColumns),
-      ...(preservarToolColumns ? {} : toolColumns),
-    };
-
-    // Concurrencia optimista: si el caller dijo contra qué versión escribe, el
-    // UPDATE sólo entra si esa versión sigue siendo la vigente. Otra pestaña que
-    // guardó en el medio movió `updated_at` (trigger sesion_set_updated_at), así
-    // que este UPDATE afecta 0 filas y devolvemos `conflict` en vez de pisar
-    // trabajo ajeno con un "Guardado ✓" mentiroso.
-    let q = supabase.from("sesion").update(payload).eq("id", existing.id);
-    if (d.updatedAtEsperado) q = q.eq("updated_at", d.updatedAtEsperado);
-    const { data: filas, error } = await q.select("id");
-    if (error) return err(mapSupabaseError(error).code, mapSupabaseError(error).message, error.message);
-    if (d.updatedAtEsperado && (filas?.length ?? 0) === 0) {
-      return err(
-        "conflict",
-        "Alguien más guardó esta ficha mientras la editabas. Recargá para ver lo último antes de escribir encima.",
-      );
-    }
-    return ok({ id: existing.id });
-  }
-
-  const { data, error } = await supabase
-    .from("sesion")
-    .insert({ ...basePayload, ...soapColumns, ...toolColumns })
-    .select("id")
-    .single();
-
-  if (error) return err(mapSupabaseError(error).code, mapSupabaseError(error).message, error.message);
-  if (!data) return err("db_error", "No se creó la sesión.");
-  return ok({ id: data.id });
+  const payload={
+    ...(!existing||d.notas!==undefined?{notas_cifrado:basePayload.notas_cifrado}:{}),
+    ...(!existing||d.evaAntes!==undefined?{eva_antes:basePayload.eva_antes}:{}),
+    ...(!existing||d.evaDespues!==undefined?{eva_despues:basePayload.eva_despues}:{}),
+    ...(existing&&preservarSoap?{}:soapColumns),...(existing&&preservarToolColumns?{}:toolColumns),
+  };
+  const saved=await supabase.rpc("save_clinical_session",{...rpcArgs,p_data:payload,p_context:writeContext.data.context});
+  if(saved.error)return rpcError(saved.error);
+  const receipt=savedClinicalSchema.safeParse(saved.data);
+  if(!receipt.success||receipt.data.operationId!==d.operacionId||receipt.data.closed!==(d.intencion==="CLOSE")||receipt.data.revision<=d.revisionEsperada)return err("db_error","No pudimos confirmar el guardado. Conservá el borrador y reintentá la misma operación.");
+  return ok(receipt.data);
 }
 
 // ─── Lock (al cerrar turno) ────────────────────────────────────────────
@@ -525,33 +499,63 @@ export async function addEnmienda(
 
 // ─── Leer sesion + enmiendas (vista sesion_con_enmiendas) ─────────────
 
-export async function getSesionCompleta(sesionId: string): Promise<Result<Record<string, unknown>>> {
+export interface SesionCompleta {
+  id: string;
+  paciente_id: string;
+  turno_id: string;
+  created_at: string;
+  locked_at: string | null;
+  locked_by_id: string | null;
+  soap: { s: string | null; o: string | null; a: string | null; p: string | null };
+  notas: string | null;
+  toolId: string | null;
+  toolData: unknown;
+  enmiendas: EnmiendaClinica[];
+}
+
+export async function getSesionCompleta(sesionId: string): Promise<Result<SesionCompleta>> {
   const session = await getActiveSession();
   if (!session.ok) return session;
-
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
-    .from("sesion_con_enmiendas")
-    .select("*")
-    .eq("id", sesionId)
-    .eq("organization_id", session.data.organizationId)
-    .maybeSingle();
-
-  if (error) return err(mapSupabaseError(error).code, mapSupabaseError(error).message, error.message);
+  const { data, error } = await supabase.from("sesion").select("*")
+    .eq("id", sesionId).eq("organization_id", session.data.organizationId).maybeSingle();
+  if (error) return err(mapSupabaseError(error).code, mapSupabaseError(error).message);
   if (!data) return err("not_found", "Sesión no encontrada.");
-
   const row = data as Record<string, unknown>;
-  // tryDecrypt (no decryptColumn crudo): un campo corrupto no debe tirar una
-  // excepción que escape el contrato Result y tumbe la vista de la sesión —
-  // degrada ese campo a null y reporta a Sentry.
+  const decoded: Record<string, string | null> = {};
+  for (const field of ["soap_s_cifrado", "soap_o_cifrado", "soap_a_cifrado", "soap_p_cifrado", "notas_cifrado", "tool_data_cifrado"]) {
+    decoded[field] = tryDecrypt(row[field] as string | null, `sesion.${field}`);
+    if (row[field] != null && decoded[field] === null) return err("db_error", "No se pudo descifrar la sesión completa.");
+  }
+  let toolData: unknown = row.vertebras_json ? { v: 1, vertebras: row.vertebras_json } : null;
+  if (decoded.tool_data_cifrado !== null) {
+    try { toolData = JSON.parse(decoded.tool_data_cifrado); }
+    catch { return err("db_error", "No se pudo interpretar la herramienta clínica de esta sesión."); }
+  }
+  const corrections = await readEnmiendas(supabase, session.data.organizationId, [sesionId]);
+  if (!corrections.ok) return corrections;
   return ok({
-    ...row,
-    soap: {
-      s: tryDecrypt(row.soap_s_cifrado as Buffer | null, "sesion.soap_s"),
-      o: tryDecrypt(row.soap_o_cifrado as Buffer | null, "sesion.soap_o"),
-      a: tryDecrypt(row.soap_a_cifrado as Buffer | null, "sesion.soap_a"),
-      p: tryDecrypt(row.soap_p_cifrado as Buffer | null, "sesion.soap_p"),
-    },
-    notas: tryDecrypt(row.notas_cifrado as Buffer | null, "sesion.notas"),
+    id: String(row.id), paciente_id: String(row.paciente_id), turno_id: String(row.turno_id),
+    created_at: String(row.created_at), locked_at: row.locked_at as string | null, locked_by_id: row.locked_by_id as string | null,
+    soap: { s: decoded.soap_s_cifrado, o: decoded.soap_o_cifrado, a: decoded.soap_a_cifrado, p: decoded.soap_p_cifrado },
+    notas: decoded.notas_cifrado, toolId: row.tool_id as string | null, toolData,
+    enmiendas: corrections.data.get(sesionId) ?? [],
   });
+}
+
+
+export interface ClinicalRevisionPreview {revision:number;locked:boolean;soap:{subjetivo:string;objetivo:string;analisis:string;plan:string};toolValue:unknown}
+/** A single RLS-scoped snapshot for human comparison. Never adopts its revision
+ * into a local draft or merges clinical text automatically. */
+export async function readClinicalSessionRevision(turnoId:string,pacienteId:string):Promise<Result<ClinicalRevisionPreview>>{
+  if(!z.string().uuid().safeParse(turnoId).success||!z.string().uuid().safeParse(pacienteId).success)return err("validation","Referencia inválida.");
+  const session=await getActiveSession();if(!session.ok)return session;
+  const client=await createSupabaseServerClient();
+  const {data,error}=await client.from("sesion").select("revision,locked_at,soap_s_cifrado,soap_o_cifrado,soap_a_cifrado,soap_p_cifrado,tool_data_cifrado")
+    .eq("turno_id",turnoId).eq("paciente_id",pacienteId).eq("organization_id",session.data.organizationId).maybeSingle();
+  if(error)return err("db_error","No pudimos consultar la revisión guardada.");if(!data)return err("not_found","No hay una sesión guardada disponible con tus permisos actuales.");
+  const fields=["soap_s_cifrado","soap_o_cifrado","soap_a_cifrado","soap_p_cifrado","tool_data_cifrado"] as const;
+  const values:Record<string,string|null>={};for(const field of fields){values[field]=tryDecrypt(data[field],`session.review.${field}`);if(data[field]!=null&&values[field]===null)return err("db_error","La revisión no pudo leerse completa. Conservá tu borrador y pedí revisión.");}
+  let toolValue:unknown=null;try{if(values.tool_data_cifrado)toolValue=JSON.parse(values.tool_data_cifrado);}catch{return err("db_error","No pudimos interpretar la herramienta de la revisión guardada.");}
+  return ok({revision:Number(data.revision),locked:data.locked_at!==null,soap:{subjetivo:values.soap_s_cifrado??"",objetivo:values.soap_o_cifrado??"",analisis:values.soap_a_cifrado??"",plan:values.soap_p_cifrado??""},toolValue});
 }

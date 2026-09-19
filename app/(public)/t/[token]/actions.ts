@@ -1,4 +1,6 @@
 "use server";
+import { safeLog } from "@/lib/observability/safe-log";
+
 
 /**
  * Folio · Server Action de la confirmación 1-click (F7b · M90).
@@ -91,7 +93,7 @@ export async function ejecutarConfirmacion1Click(
     .maybeSingle();
 
   if (error) {
-    console.error(`[confirm-1click] turno fetch falló: ${error.message}`);
+    safeLog("error", "app.public.t.token.actions.L94", { error: error });
     return { resultado: "error" };
   }
   if (!data) return { resultado: "link_invalido" };
@@ -126,7 +128,7 @@ export async function ejecutarConfirmacion1Click(
   if (casErr || !Array.isArray(casRows) || casRows.length === 0) {
     // Carrera (otro click / staff movió el estado) o rechazo del trigger:
     // re-leer y re-decidir para responder la verdad actual.
-    if (casErr) console.warn(`[confirm-1click] CAS rechazado: ${casErr.message}`);
+    if (casErr) safeLog("warn", "app.public.t.token.actions.L129", { error: casErr });
     const { data: fresh } = await service
       .from("turno")
       .select("estado, inicio")

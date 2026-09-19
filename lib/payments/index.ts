@@ -1,3 +1,5 @@
+
+import { safeLog } from "@/lib/observability/safe-log";
 /**
  * Folio · PaymentProvider — factory (Fase E · E1).
  *
@@ -42,7 +44,7 @@ export function getPaymentProvider(): PaymentProvider {
     default:
       // Mismo patrón warn-and-fallback que resolvePlanPriceCents: un typo en la
       // env no debe tirar el billing abajo — degradamos al default con warning.
-      console.warn(
+      safeLog("warn", "lib.payments.index.L45",
         `[payments] PAYMENT_PROVIDER desconocido ("${name}"); usando ${DEFAULT_PROVIDER}.`,
       );
       cached = createMercadoPagoProvider();

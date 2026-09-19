@@ -1,3 +1,5 @@
+
+import { safeLog } from "@/lib/observability/safe-log";
 /**
  * Folio · /t/[token] — confirmación 1-click de turno desde el email (F7b · M90).
  *
@@ -103,7 +105,7 @@ export default async function ConfirmacionTurnoPage({
     .maybeSingle();
 
   if (error) {
-    console.error(`[confirm-1click] GET turno fetch falló: ${error.message}`);
+    safeLog("error", "app.public.t.token.page.L106", { error: error });
     return (
       <Shell>
         <ConfirmacionResultadoView resultado="error" />

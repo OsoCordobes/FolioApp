@@ -1,3 +1,5 @@
+
+import { safeLog } from "@/lib/observability/safe-log";
 /**
  * Folio · Mercado Pago webhook · validación de firma x-signature.
  *
@@ -106,10 +108,10 @@ export function verifyMpSignature(input: MpSignatureInput): MpSignatureCheckResu
 
   if (!secret) {
     if (isProductionEnv()) {
-      console.error("[mp] MP_WEBHOOK_SECRET no seteado en producción. Bloqueando webhook.");
+      safeLog("error", "lib.mercadopago.webhook.security.L109", "[mp] MP_WEBHOOK_SECRET no seteado en producción. Bloqueando webhook.");
       return { ok: false, reason: "server-misconfigured" };
     }
-    console.warn("[mp] MP_WEBHOOK_SECRET no seteado (dev mode); webhook aceptado sin verificar firma.");
+    safeLog("warn", "lib.mercadopago.webhook.security.L112", "[mp] MP_WEBHOOK_SECRET no seteado (dev mode); webhook aceptado sin verificar firma.");
     return { ok: true, mode: "skipped-dev" };
   }
 

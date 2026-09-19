@@ -1,18 +1,4 @@
-/**
- * Folio · /pacientes (Server Component).
- *
- * Lista todos los pacientes de la org logueada usando la vista
- * `paciente_directorio_lite` (M14). Desencripta PII server-side y construye
- * el shape view-friendly para la tabla del directorio.
- *
- * El filtrado y la búsqueda libre son client-side sobre la lista cargada.
- * Para org con muchos pacientes (>500) habrá que paginar y filtrar en server;
- * por ahora el MVP no lo necesita.
- *
- * Query params:
- *   ?q=<texto> — preescribe la búsqueda inicial (viene del search del sidebar).
- */
-
+/** Bounded, exact-search directory; authorization and aggregation stay server-side. */
 import { PacientesDir } from "@/components/pacientes/pacientes-dir";
 import { getActiveContext } from "@/lib/db/active-context";
 import { getPacientesDirectorio } from "@/lib/db/pacientes-dir";
@@ -26,9 +12,11 @@ interface PageProps {
 }
 
 export default async function PacientesPage({ searchParams }: PageProps) {
-  const result = await getPacientesDirectorio();
+  const params = await searchParams;
+  const initialQuery = (params.q ?? "").trim();
+  const result = await getPacientesDirectorio({ query: initialQuery });
   if (!result.ok) {
-    throw new Error(`No se pudo cargar el directorio: ${result.error.message}`);
+    throw new Error("No se pudo cargar el directorio.");
   }
 
   // Workstream 5 · especialidad EFECTIVA del usuario (member.especialidad ??
@@ -53,11 +41,9 @@ export default async function PacientesPage({ searchParams }: PageProps) {
     permiteElegirEspecialidad = ctx.data.organization.tipo === "CLINICA";
   }
 
-  const params = await searchParams;
-  const initialQuery = (params.q ?? "").trim();
   return (
     <PacientesDir
-      pacientes={result.data}
+      initialPage={result.data}
       initialQuery={initialQuery}
       especialidad={especialidad}
       permiteElegirEspecialidad={permiteElegirEspecialidad}

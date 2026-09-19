@@ -27,9 +27,10 @@ export function BillingLockedMember() {
           persona que puede gestionar la suscripción.
         </p>
         <p className="fi-billing-locked-note">
-          Los pacientes, turnos e historias clínicas están guardados — no se
-          pierde nada mientras tanto.
+          La suspensión por pago no elimina los pacientes, turnos ni historias clínicas.
         </p>
+        <p><a href="/mis-datos">Acceder a mis datos y solicitudes</a></p>
+        <p><a href="/archivo-clinico">Entrega de historias clínicas</a></p>
       </section>
     </div>
   );
