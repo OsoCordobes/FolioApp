@@ -1,6 +1,16 @@
 # Candidato de confiabilidad — entrega de revisión
 
-Entrega actualizada al 19 de septiembre de 2026. El usuario reanudó el trabajo y autorizó continuar hasta dejar listo el merge. El corte local tiene **117 migraciones y nueve controles activos**. Run-14 aprobó once escenarios y run-16 aprobó el caso enfocado de COORDINADOR: hay **evidencia combinada de los doce escenarios**, sin una campaña única 12/12 aprobada. Run-15 falló en la preparación OWNER y la causa de su demora sigue sin establecerse. El corte productivo y el merge permanecen pendientes.
+## Corte productivo del 19 de septiembre, 17:43 UTC
+
+Producción ya tiene las **117 migraciones canónicas**: expansión 92→113 y cierre 113→117 confirmados en transacciones separadas, con verificación posterior y conservación de las columnas y registros anteriores auditados. M106 está activa desde las 17:33:53 UTC. El puente aprobó ingreso, guardado, recuperación de respuesta perdida, cierre y reapertura tanto antes como después de esa activación.
+
+La conexión Upstash quedó reparada reemplazando solamente sus dos variables productivas; las otras 93 entradas se conservaron y el par nuevo tiene respaldo cifrado separado. Vercel Pro está activo; el candidato programa recordatorios y correo cada minuto y conciliación cada 15 minutos. La entrega global de correo sigue desactivada.
+
+El candidato `0e38ce8` quedó publicado en `foliosalud.com` a las 17:42 UTC. Su ensayo confirmó cierre y registro de un único pago ficticio pendiente, pero se detuvo antes de marcarlo cobrado: el botón «Listo» podía aparecer mientras la actualización del estado seguía ocupada e ignorar un clic temprano. La corrección conserva el estado pendiente hasta terminar esa lectura. M120/M121 y la comprobación final de cobro seguían pendientes al redactar este corte; no se presenta ese ensayo parcial como aprobado.
+
+El **resultado definitivo del merge, activaciones y despliegue** se registra en la [PR #165](https://github.com/OsoCordobes/FolioApp/pull/165). Las secciones siguientes conservan la evidencia de preparación anterior al corte; sus bloqueos históricos no sustituyen ese registro final.
+
+Preparación local documentada el 19 de septiembre de 2026, antes del corte productivo anterior. El usuario reanudó el trabajo y autorizó continuar hasta dejar listo el merge. El corte local tiene **117 migraciones y nueve controles activos**. Run-14 aprobó once escenarios y run-16 aprobó el caso enfocado de COORDINADOR: hay **evidencia combinada de los doce escenarios**, sin una campaña única 12/12 aprobada. Run-15 falló en la preparación OWNER y la causa de su demora sigue sin establecerse. En ese momento el corte productivo y el merge estaban pendientes.
 
 ## Qué cambia para quien usa Folio
 
@@ -53,7 +63,7 @@ Después de run-16 quedaron dos cuentas/TOTP nuevos, cero sesiones propias y las
 
 Para publicar, hace falta resolver las 25 migraciones ausentes en producción y verificar compatibilidad, activaciones y retorno. El puente del escritor M106, `efe19c68c849696d7d66bc8a43014ac494eb3310`, tiene despliegue `dpl_J7Pk9fWqzTF1aCyucVWmjMgz9YN6` **READY en gru1, sin promoción al dominio publicado**. La comprobación anónima dio health 200, login 200 y Hoy 307 hacia login; el health del dominio publicado también respondió 200. No hubo comprobación autenticada de escritura ni corte productivo. Evidencia: `.flow/launch-reliability/bridge-anonymous-smoke-20260919.json`. Fusionar con las dependencias ausentes desplegaría código que necesita funciones inexistentes; el corte debe seguir el runbook. Calendario también comparte la vista clínica que excluye recepción y queda fuera del arreglo de Hoy: no ofrecerlo a esos roles sin verificar/corregir su acceso. Las pruebas de efectivo no certifican Mercado Pago, correo ni otros proveedores. Restauración integral, validaciones profesionales, soporte y campaña alojada de acceso/carga conservan su propia evidencia pendiente.
 
-Al corte de esta entrega no se aplicaron DDL ni activaciones productivas, no hubo merge ni cargos reales. El despliegue automático por Git de esta rama está desactivado; integrar en `master` requiere completar el procedimiento de publicación.
+Al corte de preparación de esta sección todavía no se habían aplicado DDL ni activaciones productivas. Esa situación fue superada por los hitos documentados arriba. El despliegue automático por Git de esta rama está desactivado; los cargos reales y la habilitación de proveedores no forman parte de los ensayos sintéticos.
 
 ## Recepción de la PR
 

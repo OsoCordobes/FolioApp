@@ -147,6 +147,17 @@ const stubs={
    await page.getByRole('button',{name:'Actualizar estado',exact:true}).click();await page.waitForFunction(()=>qa.state[0].cobro.estado==='pagado'&&!qa.state[0].cobroPorRevisar);
    assert.equal(await page.evaluate(()=>qa.statusReads),2);assert.equal(await page.evaluate(()=>qa.calls.length),0);
   });
+  await run('confirmed payment waits for its status read before Listo closes on the first click',async page=>{
+   await page.evaluate(()=>{qa.status={...qa.status,estado:'CERRADO',origen:'HISTORICO',clasificacion:'REQUIERE_REGISTRO'};qa.refresh({estado:'cerrado'})});
+   await page.getByRole('button',{name:'Revisar cobro',exact:true}).click();await page.getByLabel('Monto en pesos').fill('1');await page.getByLabel('Quedó debiendo').check();await page.getByRole('button',{name:'Registrar decisión',exact:true}).click();
+   await page.evaluate(()=>{const receipt=qa.receipt({origen:'HISTORICO',closedAt:null});qa.status=Object.fromEntries(Object.entries(receipt).filter(([key])=>!['operationId','pagoOrigen'].includes(key)));qa.holdStatus=true;qa.finish({ok:true,data:receipt})});
+   await page.waitForFunction(()=>qa.readJobs?.length===1);
+   assert.equal(await page.getByRole('button',{name:'Listo',exact:true}).count(),0);assert.equal(await page.getByRole('dialog').getAttribute('aria-busy'),'true');assert.equal(await page.getByRole('button',{name:'Volver',exact:true}).isDisabled(),true);
+   assert.equal(await page.evaluate(()=>qa.calls.length),1);assert.equal(await page.evaluate(()=>qa.state[0].cobro.estado),'pendiente');
+   await page.evaluate(()=>{qa.holdStatus=false;qa.readJobs.shift()({ok:true,data:qa.status})});
+   await page.getByRole('button',{name:'Listo',exact:true}).click();await page.getByRole('dialog').waitFor({state:'hidden'});
+   assert.equal(await page.evaluate(()=>qa.calls.length),1);assert.equal(await page.evaluate(()=>qa.calls[0].name),'RESOLVE');assert.equal(await page.evaluate(()=>qa.state[0].cobro.montoCents),100);
+  });
   await run('malformed success keeps the request uncertain without projecting money',async page=>{
    await page.getByRole('button',{name:'Cerrar turno',exact:true}).click();await page.getByRole('button',{name:'Cobrar y cerrar',exact:true}).click();await page.evaluate(()=>qa.finish({ok:true,data:{pagoRegistrado:true}}));
    await page.getByRole('button',{name:'Comprobar resultado',exact:true}).waitFor();assert.equal(await page.evaluate(()=>qa.state[0].estado),'atendiendo');assert.equal(await page.evaluate(()=>qa.state[0].cobro?.montoCents??null),null);

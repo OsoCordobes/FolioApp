@@ -77,10 +77,9 @@ export function CobroCierreDialog(props: CobroCierreDialogProps) {
   async function confirm(receipt: CloseStatus) {
     live.current.onConfirmed(receipt);
     attempt.current = null;
-    setPhase("confirmed");
-    setMessage("El cambio quedó confirmado.");
     const current = await readStatus();
-    if (!current) setMessage("El cambio quedó confirmado. No pudimos actualizar el cobro; revisalo antes de otra operación.");
+    setPhase("confirmed");
+    setMessage(current ? "El cambio quedó confirmado." : "El cambio quedó confirmado. No pudimos actualizar el cobro; revisalo antes de otra operación.");
   }
   async function execute(snapshot: Attempt, probe = false) {
     if (busy.current) return;
