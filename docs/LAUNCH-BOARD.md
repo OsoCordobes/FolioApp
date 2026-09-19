@@ -57,6 +57,14 @@ El par Upstash nuevo prevalece sobre el del sobre antiguo. Su referencia privada
 | C — Continuidad y proveedores | GPT-5.6 Sol / High | C01 | Escritura en ámbito asignado |
 | D — Experiencia y verificación | GPT-5.6 Sol / High | D00, después revisión B01 | Sólo lectura/verificación al inicio |
 
+Tareas creadas mediante Codex con `gpt-5.6-sol` y `thinking: high`:
+
+| Sesión | Task ID | Worktree |
+|---|---|---|
+| B | `01a0bb34-d7b9-7841-b45c-1889b0b987dd` | `C:/Users/amiun/.codex/worktrees/3edf/folio-app` |
+| C | `01a0bb34-d802-7852-82c5-126c0af7e654` | `C:/Users/amiun/.codex/worktrees/ede1/folio-app` |
+| D | `01a0bb34-d7b9-7841-b45c-189d01589d14` | `C:/Users/amiun/.codex/worktrees/f12d/folio-app` |
+
 Cuota observada al iniciar ejecución: **67% restante**, reinicio **26/09/2026 14:59:03 UTC**. Es compartida con otras tareas; cambios de saldo no se atribuyen automáticamente a un trabajador. Presupuesto: saldo actual + dos ciclos. Reservar aproximadamente 15 puntos por ciclo para integración/incidentes. Velocidad estándar; no convertir porcentajes a horas/tokens prometidos.
 
 Medir antes/después de cada paquete. Tras tres intentos sin nueva evidencia, detener ese enfoque, describir el bloqueo y cambiar de estrategia. No lanzar auditorías amplias ni subagentes sin una subtarea acotada, ahorro probable y cupo disponible.
@@ -67,8 +75,8 @@ Estados: `pendiente`, `asignado`, `en curso`, `en revisión`, `aprobado local`, 
 
 | ID | Prioridad / naturaleza | Responsable / revisor | Estado | Aceptación y dependencia |
 |---|---|---|---|---|
-| A00 | Alta / coordinación | A | en curso | Tablero persistido; referencias históricas corregidas; B/C/D creados con modelo, SHA, ámbito y aislamiento comprobados |
-| B01 | Bloqueante / defecto observado, causa pendiente | B / D | asignado | Landing → Probar Folio → registro usable; diagnóstico reproducible y corrección focal; casos negativos y reintentos; comprobación humana en dispositivo original. Depende de configuración externa si la causa lo exige |
+| A00 | Alta / coordinación | A | aprobado local | Tablero y referencias históricas en commit `50e87b7`; B/C/D creados con Sol/High y worktrees propios; master local/remoto conserva el checkpoint |
+| B01 | Bloqueante / defecto observado, causa pendiente | B / D | en curso | Landing → Probar Folio → registro usable; diagnóstico reproducible y corrección focal; casos negativos y reintentos; comprobación humana en dispositivo original. Depende de configuración externa si la causa lo exige |
 | B02 | Alta / evidencia pendiente | B / D | pendiente, después de B01 | Registro, confirmación, ingreso, contraseña, MFA y onboarding reanudable; sin cuentas/organizaciones duplicadas ni arreglos manuales de base |
 | C01 | Bloqueante / evidencia pendiente | C / D | asignado | Restauración aislada completa de base/Auth/Storage/configuración; login y descifrado reales, inventario/hashes, tiempo medido; distinguir local de alojada y custodia independiente |
 | C02 | Alta / decisión humana + evidencia pendiente | C / A | pendiente | Copia externa y material portable probado fuera del perfil Windows; par Upstash actualizado; custodio y destino autorizados |
@@ -137,6 +145,7 @@ En paralelo preparar aceptación independiente de B01 usando claves de prueba, n
 | 19/09, planificación | Acceso de psicóloga y mejora importante del perfil público pasan a prioridad explícita |
 | 19/09, inicio ejecución | HEAD local y remoto coinciden con checkpoint; escritorio sin cambios tracked; cuota 67% |
 | 19/09, aclaración | Falla en landing → Probar Folio → registro, probablemente PC; no se conoce aún navegador exacto |
+| 19/09, primer hito B | B confirma checkout limpio en base autorizada, rama `codex/launch-access` y CTA hacia `/onboarding`; investiga causa sin formularios productivos ni cambios de CSP |
 
 ## Próxima decisión del manager
 
