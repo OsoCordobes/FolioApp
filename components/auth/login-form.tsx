@@ -593,6 +593,7 @@ function Forgot({ setVista, prefilledEmail = "" }: SubViewProps & { prefilledEma
   const [err, setErr] = useState("");
   const [sent, setSent] = useState(false);
   const [pending, startTransition] = useTransition();
+  const resetInFlightRef = useRef(false);
   const emailRef = useRef<HTMLInputElement | null>(null);
   const sentHeadingRef = useRef<HTMLHeadingElement | null>(null);
 
@@ -602,17 +603,28 @@ function Forgot({ setVista, prefilledEmail = "" }: SubViewProps & { prefilledEma
 
   const submit = (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (pending) return;
+    if (resetInFlightRef.current) return;
     if (!email.match(/^[^@\s]+@[^@\s]+\.[^@\s]+$/)) {
       setErr("Ingresá un email válido para recuperar tu acceso.");
       emailRef.current?.focus();
       return;
     }
+    resetInFlightRef.current = true;
     setErr("");
     startTransition(async () => {
-      await requestPasswordReset(email);
-      // Siempre marcamos como "enviado" (no confirmar si el email existe).
-      setSent(true);
+      try {
+        const result = await requestPasswordReset(email);
+        if (!result.ok) {
+          setErr(result.error ?? "No pudimos pedir el enlace. Probá más tarde.");
+          return;
+        }
+        // El servidor da el mismo resultado para emails existentes e inexistentes.
+        setSent(true);
+      } catch {
+        setErr("No pudimos confirmar el envío. Revisá tu email antes de volver a intentar.");
+      } finally {
+        resetInFlightRef.current = false;
+      }
     });
   };
 
