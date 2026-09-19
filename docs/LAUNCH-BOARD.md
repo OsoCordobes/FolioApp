@@ -71,6 +71,16 @@ Cuota observada al iniciar ejecución: **67% restante**, reinicio **26/09/2026 1
 
 Medir antes/después de cada paquete. Tras tres intentos sin nueva evidencia, detener ese enfoque, describir el bloqueo y cambiar de estrategia. No lanzar auditorías amplias ni subagentes sin una subtarea acotada, ahorro probable y cupo disponible.
 
+### Política de cierre semanal solicitada por el titular
+
+Continuar trabajo útil mientras haya margen y entregar un checkpoint con mejoras visibles para probar hasta el siguiente reinicio. No consumir cuota para alcanzar un umbral artificialmente.
+
+- Con **20% restante**, no abrir paquetes nuevos: cerrar los ya avanzados, revisar, integrar y preparar la entrega.
+- Con **10% restante**, conservar la reserva para fallos de integración, informe, recuperación y respuestas al titular; no iniciar investigación extensa.
+- Primera mejora visible priorizada: registro/onboarding recuperable. Segunda: página pública profesional, si supera revisión y pruebas.
+- Liberar el cupo de un frente bloqueado por una dependencia externa después de dejar preparación/evidencia suficiente, para avanzar el siguiente entregable visible.
+- Cada checkpoint debe incluir SHA, estado local/preview/producción explícito, cambios comprobados, limitaciones y un recorrido corto de prueba para el titular. No llamar desplegado a una tarea lanzada ni declarar resuelto el CAPTCHA externo sin comprobación real.
+
 ## Estado de tareas
 
 Estados: `pendiente`, `asignado`, `en curso`, `en revisión`, `aprobado local`, `pendiente de autorización`, `comprobado en destino`, `bloqueado por dependencia`. Naturaleza: `defecto observado`, `defecto reproducido`, `evidencia pendiente`, `decisión humana`, `mejora acordada`.
@@ -152,7 +162,8 @@ En paralelo preparar aceptación independiente de B01 usando claves de prueba, n
 | 19/09, D00 | D entregó revisión de código y matriz de aceptación de página pública/B01. Sin escrituras, instalación ni render; no acredita aprobación visual. Revisó commit documental `50e87b7` sin contradicciones materiales |
 | 19/09, B01 diagnóstico | Captura corresponde a Step1Registro de `/onboarding`; lectura pública devuelve 200 y CSP permite scripts/frames Cloudflare. Manejo de error/polling incompleto identificado. Causa original del fallo externo aún no probada; UI recuperable no equivale a bloqueo resuelto |
 | 19/09, seguimiento cuota | 64% restante, frente a 67% al iniciar. Pool compartido; no atribuir todo el consumo a esta ola. Reserva de integración se mantiene |
+| 19/09, nueva prioridad semanal | Titular pide continuar hasta cerca del límite y cerrar mejoras visibles testeables entre ciclos. Manager fija cierre de nuevos frentes al 20% y reserva operativa del 10% |
 
 ## Próxima decisión del manager
 
-Confirmar creación/modelo/rutas de B/C/D, recibir sus primeros hitos, persistir identificadores y evidencias en este tablero. Priorizar B01 y C01. No iniciar otros paquetes ni pedir al titular que repita el recorrido clínico cerrado.
+Completar B01 y revisión independiente. C deja preparación verificable si Docker impide el ensayo y libera cupo para D01. Continuar por paquetes según la política de cuota, sin repetir el smoke clínico cerrado; preparar un checkpoint visible con revisión, pruebas y acceso de prueba concreto.
