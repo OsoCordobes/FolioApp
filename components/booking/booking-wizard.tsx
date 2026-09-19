@@ -44,8 +44,9 @@ declare global {
         opts: {
           sitekey: string;
           callback?: (token: string) => void;
-          "error-callback"?: () => void;
+          "error-callback"?: (errorCode?: string) => boolean | void;
           "expired-callback"?: () => void;
+          "timeout-callback"?: () => void;
           theme?: "light" | "dark" | "auto";
           size?: "normal" | "compact" | "flexible";
         },

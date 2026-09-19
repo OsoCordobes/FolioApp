@@ -161,6 +161,8 @@ export function OnboardingApp({
   const [orgSlug, setOrgSlug] = useState<string | undefined>(initialSlug);
   const [finishing, startTransition] = useTransition();
   const [signingUp, startSignupTransition] = useTransition();
+  const signupInFlightRef = useRef(false);
+  const [captchaResetKey, setCaptchaResetKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>({ status: "idle" });
   const [direction, setDirection] = useState<"forward" | "back">("forward");
@@ -464,30 +466,37 @@ export function OnboardingApp({
     turnstileToken: string | null;
     consent: boolean;
   }) => {
+    if (signupInFlightRef.current) return;
+    signupInFlightRef.current = true;
     startSignupTransition(async () => {
-      const result = authedEmail
-        ? await bootstrapOrgForAuthenticatedUser({ turnstileToken, consent })
-        : await signUpAndInitOrganization(data.email, data.password, {
-            turnstileToken,
-            consent,
-          });
-      if (!result.ok) {
-        setError(result.error ?? "Error en signup");
-        return;
-      }
-      if (result.needsConfirmation) {
-        // Confirm email ON: la cuenta quedó creada pero sin sesión. El user
-        // confirma por email → /api/auth/callback → /onboarding (Step1Consent)
-        // y el bootstrap ocurre ahí. Mostramos el panel "Revisá tu email".
+      try {
+        const result = authedEmail
+          ? await bootstrapOrgForAuthenticatedUser({ turnstileToken, consent })
+          : await signUpAndInitOrganization(data.email, data.password, {
+              turnstileToken,
+              consent,
+            });
+        if (!result.ok) {
+          setError(result.error ?? "No pude confirmar el registro. Verificá tu cuenta antes de reintentar.");
+          setCaptchaResetKey((value) => value + 1);
+          return;
+        }
+        if (result.needsConfirmation) {
+          setError(null);
+          setAwaitingEmail(data.email);
+          return;
+        }
         setError(null);
-        setAwaitingEmail(data.email);
-        return;
+        if (result.organizationId) setOrgId(result.organizationId);
+        if (result.slug) setOrgSlug(result.slug);
+        setDirection("forward");
+        setStepIdx(2);
+      } catch {
+        setError("No pudimos confirmar si la cuenta se creó. Si ya tenés cuenta, entrá; si no, reintentá la verificación.");
+        setCaptchaResetKey((value) => value + 1);
+      } finally {
+        signupInFlightRef.current = false;
       }
-      setError(null);
-      if (result.organizationId) setOrgId(result.organizationId);
-      if (result.slug) setOrgSlug(result.slug);
-      setDirection("forward");
-      setStepIdx(2);
     });
   };
 
@@ -563,6 +572,7 @@ export function OnboardingApp({
                   onSubmit={handleStep1Submit}
                   loading={signingUp}
                   error={error}
+                  captchaResetKey={captchaResetKey}
                 />
               ) : awaitingEmail ? (
                 <CheckEmailPanel
@@ -577,6 +587,7 @@ export function OnboardingApp({
                   loading={signingUp}
                   error={error}
                   planPriceCents={planPriceCents}
+                  captchaResetKey={captchaResetKey}
                 />
               )}
             </div>

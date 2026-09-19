@@ -14,9 +14,9 @@
  * con consent + member OWNER, sin tocar nada de auth/password.
  */
 
-import Script from "next/script";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 
+import { TurnstileChallenge } from "@/components/auth/turnstile-challenge";
 import { StepShell } from "@/components/onboarding/step-shell";
 
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
@@ -26,49 +26,13 @@ interface Step1ConsentProps {
   onSubmit: (options: { turnstileToken: string | null; consent: boolean }) => void;
   loading?: boolean;
   error?: string | null;
+  captchaResetKey?: number;
 }
 
-export function Step1Consent({ email, onSubmit, loading, error }: Step1ConsentProps) {
+export function Step1Consent({ email, onSubmit, loading, error, captchaResetKey }: Step1ConsentProps) {
   const [consent, setConsent] = useState(false);
   const [consentErr, setConsentErr] = useState("");
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
-  const captchaContainerRef = useRef<HTMLDivElement | null>(null);
-  const captchaWidgetIdRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (!TURNSTILE_SITE_KEY) return;
-    if (!captchaContainerRef.current) return;
-    const tryRender = () => {
-      if (!window.turnstile) return false;
-      if (captchaWidgetIdRef.current) return true;
-      captchaWidgetIdRef.current = window.turnstile.render(captchaContainerRef.current!, {
-        sitekey: TURNSTILE_SITE_KEY,
-        theme: "auto",
-        size: "flexible",
-        callback: (token) => setCaptchaToken(token),
-        "expired-callback": () => setCaptchaToken(null),
-        "error-callback": () => setCaptchaToken(null),
-      });
-      return true;
-    };
-    if (!tryRender()) {
-      const id = setInterval(() => { if (tryRender()) clearInterval(id); }, 200);
-      return () => {
-        clearInterval(id);
-        if (captchaWidgetIdRef.current && window.turnstile) {
-          window.turnstile.remove(captchaWidgetIdRef.current);
-          captchaWidgetIdRef.current = null;
-        }
-      };
-    }
-    return () => {
-      if (captchaWidgetIdRef.current && window.turnstile) {
-        window.turnstile.remove(captchaWidgetIdRef.current);
-        captchaWidgetIdRef.current = null;
-      }
-    };
-  }, []);
-
   const validateAndNext = () => {
     if (!consent) {
       setConsentErr("Tenés que aceptar el aviso de privacidad para continuar.");
@@ -132,12 +96,7 @@ export function Step1Consent({ email, onSubmit, loading, error }: Step1ConsentPr
         </label>
         {consentErr ? <span className="onb-err">{consentErr}</span> : null}
 
-        {TURNSTILE_SITE_KEY ? (
-          <>
-            <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer />
-            <div ref={captchaContainerRef} style={{ marginTop: 4 }} />
-          </>
-        ) : null}
+        {TURNSTILE_SITE_KEY ? <TurnstileChallenge onTokenChange={setCaptchaToken} resetKey={captchaResetKey} /> : null}
 
         {error ? <p className="au-err onb-banner-err" role="alert">{error}</p> : null}
       </div>

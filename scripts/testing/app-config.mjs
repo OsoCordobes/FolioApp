@@ -1,5 +1,7 @@
 import {assertLocalUrl,assertLocalDatabase,isolationError} from './isolation-policy.mjs';
 export function testAppConfig(env){
+ const turnstileSitekey=env.FOLIO_TEST_TURNSTILE_SITEKEY;
+ if(turnstileSitekey && !['1x00000000000000000000AA','2x00000000000000000000AB'].includes(turnstileSitekey))throw isolationError('Only official Turnstile public test sitekeys are allowed.');
  const appUrl=env.E2E_BASE_URL??'http://127.0.0.1:4410';
  const app=assertLocalUrl(appUrl);
  if(app.protocol!=='http:'||!app.port||Number(app.port)<1024||app.pathname!=='/'||app.search||app.hash)throw isolationError('Use a dedicated loopback HTTP test server port.');
@@ -20,5 +22,5 @@ export function testAppConfig(env){
  if(env.FOLIO_TEST_CLINICAL && !['0','1'].includes(env.FOLIO_TEST_CLINICAL))throw isolationError('The clinical suite flag must be 0 or 1.');
  const clinical=env.FOLIO_TEST_CLINICAL==='1';
  if(clinical&&(!realSupabase||!databaseUrl))throw isolationError('Clinical integration requires explicit local Supabase URL, both local JWT keys and its local database URL.');
- return {mode:'app',appUrl:app.origin,supabaseUrl,anonKey,serviceKey,databaseUrl,realSupabase,clinical,email,password,bookingSlug,prototypeRoot:env.FOLIO_TEST_PROTOTYPE_ROOT};
+ return {mode:'app',appUrl:app.origin,supabaseUrl,anonKey,serviceKey,databaseUrl,realSupabase,clinical,email,password,bookingSlug,prototypeRoot:env.FOLIO_TEST_PROTOTYPE_ROOT,turnstileSitekey};
 }

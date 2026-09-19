@@ -24,6 +24,7 @@ export function safeEnvironment(source,config={mode:'unit'}){
  const app=config.appUrl??'http://127.0.0.1:4410';assertLocalUrl(app);
  if(config.databaseUrl)assertLocalDatabase(config.databaseUrl);
  Object.assign(env,{NODE_ENV:config.mode==='unit'?'test':config.mode==='build'?'production':'development',FOLIO_TEST_ISOLATED:'1',FOLIO_ENC_KEY:Buffer.alloc(32,37).toString('base64'),FOLIO_ENC_HMAC_KEY:Buffer.alloc(32,71).toString('base64'),NEXT_PUBLIC_SUPABASE_URL:supabase,NEXT_PUBLIC_SUPABASE_ANON_KEY:config.anonKey??'synthetic-local-anon-key',SUPABASE_SERVICE_ROLE_KEY:config.serviceKey??'synthetic-local-service-key',NEXT_PUBLIC_APP_URL:app,NEXT_TELEMETRY_DISABLED:'1'});
+ if(config.turnstileSitekey){if(!['1x00000000000000000000AA','2x00000000000000000000AB'].includes(config.turnstileSitekey))throw isolationError('Only official Turnstile public test sitekeys are allowed.');env.NEXT_PUBLIC_TURNSTILE_SITE_KEY=config.turnstileSitekey;}
  if(config.databaseUrl)env.DATABASE_URL=config.databaseUrl;
  return env;
 }

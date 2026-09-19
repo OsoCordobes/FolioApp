@@ -9,6 +9,20 @@ pnpm test:app
 pnpm test:isolation:browser
 ```
 
+Para comprobar el manejo del widget de registro con respuestas sintéticas, usá un
+puerto libre dedicado. El spec intercepta el script de Turnstile: no contacta a
+Cloudflare ni envía un registro real.
+
+```powershell
+$env:E2E_BASE_URL = "http://127.0.0.1:4430"
+$env:FOLIO_TEST_TURNSTILE_SITEKEY = "2x00000000000000000000AB"
+pnpm test:e2e -- tests/e2e/turnstile-recovery.spec.ts
+```
+
+El runner sólo acepta claves públicas oficiales de prueba en esta opción. La
+validación humana del desafío real y la configuración de dominios del widget
+siguen siendo comprobaciones separadas.
+
 Sin Supabase local, las pantallas públicas y los ejemplos que usan mocks pueden comprobarse; los flujos que necesitan Auth, datos clínicos o reservas no quedan verificados. Los escenarios de signup/onboarding y los que requieren login o un consultorio se omiten hasta configurar una instancia local dedicada. Un resultado omitido no es un resultado aprobado.
 
 ## Recorrido clínico con servicios reales locales
