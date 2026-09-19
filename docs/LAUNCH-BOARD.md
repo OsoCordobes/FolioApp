@@ -1,6 +1,6 @@
 # Folio — tablero único de lanzamiento
 
-Actualizado: 19 de septiembre de 2026. Responsable: A, manager.
+Actualizado: 20 de septiembre de 2026. Responsable: A, manager.
 Este tablero gobierna el trabajo nuevo. Los informes anteriores se conservan como evidencia fechada; sus bloqueos superados no se convierten nuevamente en tareas.
 
 ## Objetivo y alcance acordados
@@ -39,7 +39,7 @@ El par Upstash nuevo prevalece sobre el del sobre antiguo. Su referencia privada
 - A mantiene este tablero, reserva cambios compartidos y decide el orden de integración. Cada trabajador entrega un reporte breve con SHA y referencias sanitizadas; no crea otro backlog general.
 - Copia canónica de coordinación: `C:/Users/amiun/.codex/worktrees/folio-launch-manager/folio-app/docs/LAUNCH-BOARD.md`, rama `codex/launch-manager`.
 - El Escritorio, sus archivos no seguidos, otros proyectos, respaldos, fixtures y worktrees anteriores se preservan. Cada tarea usa su worktree; no escribe en el de otra.
-- Dos permisos de escritura de implementación: **C y D actualmente**. B cerró `82591bf` y pasa a revisión; C retoma sólo las correcciones del preparador señaladas por D. La edición administrativa del tablero pertenece a A.
+- Dos permisos de escritura de implementación: **A (integración) y D actualmente**. B revisa D; C terminó las correcciones del preparador y espera revisión/ventana operativa. La edición administrativa del tablero pertenece a A.
 - B y C no editan migraciones sin reserva explícita del manager. No hay migración nueva reservada en esta primera ola.
 - Reserva adicional B01: `scripts/testing/app-config.mjs`, `app-bootstrap.mjs`, `isolation-policy.mjs` y tipos/pruebas asociados, sólo para sitekey oficial de prueba constante bajo opt-in estricto. Mantener red externa y credenciales heredadas bloqueadas. C no edita esa frontera; coordinar necesidades de `recovery-bootstrap.mjs`.
 - Reserva D01: componentes y estilos `.bl` de la página pública, página/OG `/book/[slug]`, contenido, fixtures y pruebas focales. Incluye `app/(app)/configuracion/perfil-publico-actions.ts` para invalidar página/OG al editar o retirar datos públicos, sin ampliar su exposición. B no edita esos archivos.
@@ -89,9 +89,9 @@ Estados: `pendiente`, `asignado`, `en curso`, `en revisión`, `aprobado local`, 
 | ID | Prioridad / naturaleza | Responsable / revisor | Estado | Aceptación y dependencia |
 |---|---|---|---|---|
 | A00 | Alta / coordinación | A | aprobado local | Tablero y referencias históricas en commit `50e87b7`; B/C/D creados con Sol/High y worktrees propios; master local/remoto conserva el checkpoint |
-| B01 | Bloqueante / defecto observado, causa pendiente | B / D | implementación local `82591bf`, revisión final pendiente | Typecheck/lint/build PASS; unidades 2234/2234; navegador 5/5 + registro alternativo 1/1. CI exacto y comprobación humana pendientes. Recuperación del formulario mejorada; causa externa original aún no demostrada |
+| B01 | Bloqueante / defecto de configuración comprobado + mejora de recuperación | B / D | aprobado local `82591bf`, integrado como `feb8d60`; corrección Cloudflare autorizada, no confirmada | Typecheck/lint/build PASS; unidades 2234/2234; navegador 5/5 + registro alternativo 1/1; D aprueba SHA exacto. Widget publicado coincide con Cloudflare, cuyo único hostname permitido era el antiguo de Vercel. Falta readback de agregar foliosalud.com, CI integrado y prueba humana |
 | B02 | Alta / evidencia pendiente | B / D | pendiente, después de B01 | Registro, confirmación, ingreso, contraseña, MFA y onboarding reanudable; sin cuentas/organizaciones duplicadas ni arreglos manuales de base |
-| C01 | Bloqueante / evidencia pendiente | C / D | preparación requiere corrección; ensayo bloqueado por dependencia | Preparador `3fd54f7`, 2 pruebas focales PASS, revisión detecta validación de proveedores incompleta y carrera de creación. No volver a ejecutarlo hasta corregir/revisar. Docker sin motor disponible; restauración completa/Auth/Storage/login/descifrado todavía no acreditados |
+| C01 | Bloqueante / evidencia pendiente | C / D | preparador corregido `6f2dc4e`, revisión pendiente; ensayo bloqueado | TOML local fijo sin proveedores y creación exclusiva del destino; 3 pruebas PASS, parse TOML y lint focal PASS. Preservar destino anterior sin ejecutar. Docker sin motor disponible; restauración completa/Auth/Storage/login/descifrado todavía no acreditados |
 | C02 | Alta / decisión humana + evidencia pendiente | C / A | pendiente | Copia externa y material portable probado fuera del perfil Windows; par Upstash actualizado; custodio y destino autorizados |
 | B03 | Alta / brecha de implementación identificada | B / D | pendiente | Calendario semana/mes para ASISTENTE y COORDINADOR, sin ampliar acceso clínico/financiero; pruebas directas y de interfaz |
 | B04 | Alta / mejora acordada + evidencia pendiente | B / D | pendiente | Política de nuevas atenciones adultas efectiva en servidor/base, DOB desconocida bloquea atención; límites de 18 años y concurrencia; históricos/borradores/recibos preservados |
@@ -101,7 +101,7 @@ Estados: `pendiente`, `asignado`, `en curso`, `en revisión`, `aprobado local`, 
 | C04 | Alta / evidencia pendiente | C / D | pendiente | Mercado Pago Solo/Clínica/asientos/cancelación/mora/conciliación; duplicados, desorden y respuesta perdida; distinguir sandbox de cargo real |
 | C05 | Alta / brecha de programación + evidencia pendiente | C / D | pendiente | Google conecta, sincroniza entrada/salida, bloquea horarios y se recupera de revocación/webhook ausente; programar sync periódico después del ensayo autorizado |
 | D00 | Alta / mejora acordada | D / A | aprobado local, revisión de código | Propuesta concreta de identidad/foto/bio/OG, Solo/Clínica y matriz de pruebas recibida; sin render ni prueba visual todavía. D disponible para revisar B01 |
-| D01 | Alta / mejora acordada | D / B | asignado, permiso de escritura recibido de C | Página pública profesional con foto/identidad, presentación, servicios, reserva móvil y vista previa social; perfiles incompletos, contraste, teclado y zoom; aprobación visual |
+| D01 | Alta / mejora acordada | D / B | implementación y pruebas conservadas tras interrupción; cierre en curso | Página pública Solo/Clínica, cinco OG renderizados y matriz 360/390/1280/zoom comprobados. Revisión detectó atribución/retirada de consentimiento y contraste; correcciones aplicadas, SHA y gates finales pendientes. No desplegado |
 | C06 | Alta / evidencia pendiente | C / D | pendiente | Alerta externa de caída/copia vencida comprobada; responsable/suplente, cuotas y soporte; capacidad medida para hasta 10 profesionales inicialmente |
 | H01 | Alta / decisión humana | Titular y profesionales / A | pendiente | Tres profesionales piloto; revisión adicional de kinesio/nutrición; identidad/habilitación, instrumentos adultos, responsabilidades, privacidad/contratos/facturación revisados |
 | L01 | Bloqueante / evidencia pendiente | A + profesionales / D | pendiente | Puertas previas aprobadas, piloto 14 días y al menos 5 jornadas por cada uno de los 3 profesionales; cero bloqueos críticos/altos del alcance ofrecido |
@@ -177,7 +177,11 @@ En paralelo preparar aceptación independiente de B01 usando claves de prueba, n
 | 19/09, cuota intermedia | 61% restante; continúa trabajo por paquetes y reserva 20%/10%. Cuota compartida con otras tareas |
 | 19/09, entrega B01 | `82591bf777b77d2a746b0af5f18ca245a984f360`, árbol limpio. Seis escenarios de navegador comprobados en 5+1, paso CI nuevo y entorno sintético estricto. Logs privados completos en `C:/Users/amiun/AppData/Local/Temp/folio-b01-evidence-3edf/`; D revisa SHA exacto, B revisa D01. Cuota observada 59% |
 | 19/09, reparación Docker detenida | `docker desktop stop --timeout 30` falló; POST `/app/quit` venció y Desktop/backend siguieron vivos. C interrumpió sólo su CLI, conservó `run` y no creó `run.hold-*`, no movió datos ni reinició. D recibe slot pesado; C corrige preparador. Cualquier recuperación posterior requiere preflight actual y decisión nueva, sin convertir timeout en permiso de bypass de política |
+| 19/09, Cloudflare causa comprobada | Dashboard: widget folio-app, Managed, sin pre-clearance, único hostname folio-app-ten.vercel.app. El asset público desplegado usa exactamente su sitekey pública; foliosalud.com falta. El titular autoriza agregar sólo ese dominio conservando lo demás. Un primer envío de formulario confirmó actualización pero mantuvo un hostname: no acredita la corrección. Se reabrió edición; la conexión se perdió antes de terminar. Sin claves reveladas ni rotadas |
+| 19/09, B01 integrado local | D aprueba `82591bf` sin bloqueantes; A incorpora como `feb8d60`. No push ni despliegue al registrar este hito |
+| 20/09, recuperación de sesiones | B/C terminaron sus paquetes; D fue interrumpido. A verifica commits y cambios locales conservados y reactiva D y revisión B. Chrome no disponible en el conector; se solicita reconexión, sin repetir autorización. Master remoto sigue c5c5fed y no hay PR abiertas. Saldo semanal 52%, compartido |
+| 20/09, aislamiento de candidato | Se desactiva únicamente el despliegue Git automático de codex/launch-manager en vercel.json mientras no esté verificada la separación del entorno Preview. Master, otras ramas, gru1 y los seis crones conservan configuración. GitHub CI y revisión continúan; publicación requiere paquete concreto |
 
 ## Próxima decisión del manager
 
-Completar B01 y revisión independiente. C deja preparación verificable si Docker impide el ensayo y libera cupo para D01. Continuar por paquetes según la política de cuota, sin repetir el smoke clínico cerrado; preparar un checkpoint visible con revisión, pruebas y acceso de prueba concreto.
+Completar la corrección Cloudflare ya autorizada cuando vuelva Chrome; integrar D01 después de SHA/revisión y checks finales. Preparar una PR de acceso + perfil y un checkpoint visible con CI exacto y autorización concreta de publicación. Recuperación C01 conserva su bloqueo y revisión pendiente; no sustituirla por pruebas parciales ni repetir el smoke clínico cerrado.
