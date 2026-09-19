@@ -5,49 +5,67 @@ import os from 'node:os';
 import path from 'node:path';
 import {stageSyntheticTarget, syntheticTargetConfig, C01_PORTS} from '../../scripts/recovery/prepare-c01-synthetic.mjs';
 
-const source = await readFile(new URL('../../supabase/config.toml', import.meta.url), 'utf8');
-function setting(config, section, key) {
+function settings(config) {
   let active = '';
+  const values = new Map();
   for (const line of config.split('\n')) {
     const header = line.match(/^\[([^\]]+)\]$/);
-    if (header) active = header[1];
-    if (active === section && line.startsWith(`${key} = `)) return line.slice(key.length + 3);
+    if (header) { active = header[1]; continue; }
+    const entry = line.match(/^([a-z_]+) = (.+)$/);
+    if (entry) values.set(`${active}.${entry[1]}`, entry[2]);
   }
-  return undefined;
+  return values;
 }
 
-test('C01 target has exclusive ports, Auth/MFA/Storage and no source project identity or outgoing jobs', () => {
-  const config = syntheticTargetConfig(source);
-  assert.match(config, /^project_id = "folio-c01-recovery"$/m);
-  assert.match(config, /^major_version = 17$/m);
+test('C01 config is a fixed local Supabase 17 allowlist with Auth/MFA/Storage', () => {
+  const config = syntheticTargetConfig();
+  const values = settings(config);
+  assert.equal(values.get('.project_id'), '"folio-c01-recovery"');
+  assert.equal(values.get('db.major_version'), '17');
   for (const [section, key, port] of [
     ['api','port',C01_PORTS.api], ['db','port',C01_PORTS.db],
     ['studio','port',C01_PORTS.studio], ['inbucket','port',C01_PORTS.inbucket],
     ['analytics','port',C01_PORTS.analytics], ['db.pooler','port',C01_PORTS.pooler],
     ['edge_runtime','inspector_port',C01_PORTS.inspector],
-  ]) assert.equal(setting(config, section, key), String(port));
-  assert.equal(setting(config, 'auth', 'site_url'), `"http://127.0.0.1:${C01_PORTS.app}"`);
-  assert.equal(setting(config, 'auth.mfa.totp', 'enroll_enabled'), 'true');
-  assert.equal(setting(config, 'auth.mfa.totp', 'verify_enabled'), 'true');
-  assert.equal(setting(config, 'storage', 'enabled'), 'true');
+  ]) assert.equal(values.get(`${section}.${key}`), String(port));
+  assert.equal(values.get('auth.site_url'), `"http://127.0.0.1:${C01_PORTS.app}"`);
+  assert.equal(values.get('auth.mfa.totp.enroll_enabled'), 'true');
+  assert.equal(values.get('auth.mfa.totp.verify_enabled'), 'true');
+  assert.equal(values.get('storage.enabled'), 'true');
   for (const section of ['db.migrations','db.seed','realtime','edge_runtime','analytics'])
-    assert.equal(setting(config, section, 'enabled'), 'false');
-  assert.doesNotMatch(config, /folio-local-clinical|localhost:4420/);
-  assert.throws(() => syntheticTargetConfig(`${source}\n[auth.external.google]\nenabled = true\n`), /c01_external_configuration_present/);
-  assert.throws(() => syntheticTargetConfig(`${source}\n[auth.email.smtp]\npass = "env(SECRET)"\n`), /c01_external_configuration_present/);
+    assert.equal(values.get(`${section}.enabled`), 'false');
+  const allowed = new Set(['','api','db','db.pooler','db.migrations','db.seed','realtime','studio','inbucket','storage','auth','auth.email','auth.sms','auth.mfa','auth.mfa.totp','auth.mfa.phone','edge_runtime','analytics']);
+  for (const key of values.keys()) assert.ok(allowed.has(key.slice(0,key.lastIndexOf('.'))));
+  assert.doesNotMatch(config, /\benv\s*\(|smtp|auth\.external|auth\.hook|auth\.third_party|folio-local-clinical|localhost:4420/i);
 });
 
 test('C01 staging creates a new target once and never overwrites an existing target', async () => {
   const parent = await mkdtemp(path.join(os.tmpdir(), 'folio-c01-stage-'));
   const destination = path.join(parent, 'folio-c01-recovery-synthetic');
   try {
-    const result = await stageSyntheticTarget(destination, source);
+    const result = await stageSyntheticTarget(destination);
     assert.equal(result.started, false);
+    assert.equal(await readFile(path.join(destination,'supabase','config.toml'),'utf8'), syntheticTargetConfig());
     const plan = JSON.parse(await readFile(path.join(destination,'c01-target-plan.json'),'utf8'));
     assert.equal(plan.dataRestored, false);
     assert.equal(plan.externalProviders, false);
-    await assert.rejects(stageSyntheticTarget(destination, source), /c01_target_already_exists/);
-    await assert.rejects(stageSyntheticTarget(path.join(parent, 'other'), source), /c01_target_path_invalid/);
+    await assert.rejects(stageSyntheticTarget(destination), /c01_target_already_exists/);
+    await assert.rejects(stageSyntheticTarget(path.join(parent, 'other')), /c01_target_path_invalid/);
+  } finally {
+    assert.ok(path.basename(parent).startsWith('folio-c01-stage-'));
+    await rm(parent, {recursive:true, force:true});
+  }
+});
+
+test('C01 target directory creation is exclusive under concurrent calls', async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), 'folio-c01-stage-'));
+  const destination = path.join(parent, 'folio-c01-recovery-synthetic');
+  try {
+    const outcomes = await Promise.allSettled([stageSyntheticTarget(destination), stageSyntheticTarget(destination)]);
+    assert.equal(outcomes.filter(result => result.status === 'fulfilled').length, 1);
+    const rejected = outcomes.find(result => result.status === 'rejected');
+    assert.match(rejected.reason.message, /c01_target_already_exists/);
+    assert.equal(await readFile(path.join(destination,'supabase','config.toml'),'utf8'), syntheticTargetConfig());
   } finally {
     assert.ok(path.basename(parent).startsWith('folio-c01-stage-'));
     await rm(parent, {recursive:true, force:true});
