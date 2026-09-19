@@ -18,6 +18,36 @@ import { expect, test } from "../fixtures/local-test";
  */
 
 test.describe("/dev/book-preview · BookLanding + booking flow", () => {
+  test("Solo prioritizes the professional and keeps the practice secondary", async ({ page }) => {
+    await page.goto("/dev/book-preview?variant=solo");
+    await expect(page.locator(".bl-hero h1")).toHaveText("Lic. Lorenzo Martínez");
+    await expect(page.locator(".bl-hero-practice")).toContainText("Consultorio Martínez");
+    await expect(page.locator(".bl-portrait-image")).toHaveAttribute("alt", /Lorenzo Martínez/);
+    await expect(page.locator(".bl-team")).toHaveCount(0);
+    await expect(page.locator("#reservar #bk-flow")).toBeVisible();
+  });
+
+  test("an incomplete Solo profile falls back without an empty section", async ({ page }) => {
+    await page.goto("/dev/book-preview?variant=solo-empty");
+    await expect(page.locator(".bl-hero h1")).toHaveText("Lic. Lorenzo Martínez");
+    await expect(page.locator(".bl-portrait-initials")).toBeVisible();
+    await expect(page.locator(".bl-portrait-image")).toHaveCount(0);
+    await expect(page.locator(".bl-about")).toHaveCount(0);
+  });
+
+  test("an unnamed Solo profile does not attribute a portrait or license to the practice", async ({ page }) => {
+    await page.goto("/dev/book-preview?variant=solo-unnamed");
+    await expect(page.locator(".bl-hero h1")).toHaveText("Consultorio Martínez");
+    await expect(page.locator(".bl-portrait-image, .bl-hero-matricula, .bl-hero-practice")).toHaveCount(0);
+    await expect(page.locator(".bl-hero-figure")).toBeVisible();
+  });
+
+  test("a clinic with one professional keeps the clinic identity and team", async ({ page }) => {
+    await page.goto("/dev/book-preview?variant=clinic-one");
+    await expect(page.locator(".bl-hero h1")).toHaveText("Atelier Kinesiología");
+    await expect(page.locator(".bl-team-card")).toHaveCount(1);
+  });
+
   test("hero renders the org name + a Reservar CTA above the flow", async ({ page }) => {
     await page.goto("/dev/book-preview");
     const hero = page.locator(".bl-hero");
@@ -76,5 +106,62 @@ test.describe("/dev/book-preview · BookLanding + booking flow", () => {
     await expect(btn).toHaveAttribute("href", "#reservar");
     await expect(page.locator("#reservar")).toBeAttached();
     await expect(page.locator("#bk-flow")).toBeAttached();
+  });
+
+  test("Solo stays readable at narrow, desktop and enlarged layouts", async ({ page }) => {
+    await page.addInitScript(() => {
+      try { localStorage.setItem("folio.cookieConsent", "denied"); } catch { /* private browsing */ }
+    });
+    for (const width of [360, 390, 1280]) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto("/dev/book-preview?variant=solo");
+      await expect(page.locator(".bl-hero h1")).toBeVisible();
+      await page.locator(".bl-hero-text").evaluate((element) => Promise.all(element.getAnimations().map((animation) => animation.finished)));
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    }
+
+    const colors = await page.evaluate(() => {
+      const selectors = [".bl-eyebrow", ".bl-hero-value", ".bl-hero-sub", ".bl-hero-matricula", ".bl-confirm-note", ".bl-trust-micro", ".bl-service-dur", ".bl-trust-lead", ".bl-trust-item-text", ".bl-location-row", ".bl-powered-text"];
+      const rgba = (value: string) => {
+        const channels = [...value.matchAll(/[\d.]+/g)].map((match) => Number(match[0]));
+        return { rgb: channels.slice(0, 3), alpha: channels[3] ?? 1 };
+      };
+      return selectors.map((selector) => {
+        const element = document.querySelector<HTMLElement>(selector)!;
+        const foreground = rgba(getComputedStyle(element).color);
+        let opacity = 1;
+        const ancestors: HTMLElement[] = [];
+        for (let current: HTMLElement | null = element; current; current = current.parentElement) {
+          ancestors.unshift(current);
+          opacity *= Number(getComputedStyle(current).opacity);
+        }
+        const background = ancestors.reduce((base, ancestor) => {
+          const layer = rgba(getComputedStyle(ancestor).backgroundColor);
+          return base.map((channel, index) => layer.rgb[index] * layer.alpha + channel * (1 - layer.alpha));
+        }, [255, 255, 255]);
+        return { selector, foreground, background, opacity };
+      });
+    });
+    const luminance = (channels: number[]) => {
+      const [r, g, b] = channels.map((value) => {
+        const channel = value / 255;
+        return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+      });
+      return r * 0.2126 + g * 0.7152 + b * 0.0722;
+    };
+    for (const { selector, foreground, background, opacity } of colors) {
+      const effectiveOpacity = foreground.alpha * opacity;
+      const fg = foreground.rgb.map((channel, index) => channel * effectiveOpacity + background[index] * (1 - effectiveOpacity));
+      const light = Math.max(luminance(fg), luminance(background));
+      const dark = Math.min(luminance(fg), luminance(background));
+      const ratio = (light + 0.05) / (dark + 0.05);
+      expect(ratio, `${selector}: ${foreground.rgb} on ${background} at opacity ${effectiveOpacity}`).toBeGreaterThanOrEqual(4.5);
+    }
+
+    await page.setViewportSize({ width: 640, height: 800 });
+    await page.goto("/dev/book-preview?variant=solo");
+    await page.evaluate(() => { document.documentElement.style.zoom = "200%"; });
+    await expect(page.locator(".bl-hero h1")).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(640);
   });
 });

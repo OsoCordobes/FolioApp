@@ -48,6 +48,7 @@ export async function generateStaticParams(): Promise<Array<{ slug: string }>> {
 interface OrgPublicRow {
   id: string;
   slug: string;
+  tipo: "INDEPENDIENTE" | "CLINICA";
   nombre: string;
   ciudad: string | null;
   provincia: string | null;
@@ -74,7 +75,7 @@ const getOrgPublica = cache(async (slug: string): Promise<OrgPublicRow | null> =
   const { data: org } = await service
     .from("organization")
     .select(
-      "id, slug, nombre, ciudad, provincia, acento_hex, rubro, opt_out_public_listing, logo_url, card_mood, bio, telefono_publico, direccion_completa, instagram_handle, especialidad, auto_confirmar_reservas",
+      "id, slug, tipo, nombre, ciudad, provincia, acento_hex, rubro, opt_out_public_listing, logo_url, card_mood, bio, telefono_publico, direccion_completa, instagram_handle, especialidad, auto_confirmar_reservas",
     )
     .eq("slug", slug)
     .is("deleted_at", null)
@@ -90,6 +91,7 @@ const getOrgPublica = cache(async (slug: string): Promise<OrgPublicRow | null> =
  * mismo request. GUARDED en lib/db/directorio → false si M64 no está aplicada.
  */
 const getOrgListado = cache((slug: string) => isOrgListedInDirectory(slug));
+const getProfesionalesPublicos = cache((orgId: string) => listProfesionalesPublico(orgId));
 
 const APP_URL = getAppUrl();
 
@@ -136,12 +138,18 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     };
   }
 
-  const title = `Reservá tu turno · ${org.nombre}`;
+  const perfiles = org.tipo === "INDEPENDIENTE" ? await getProfesionalesPublicos(org.id) : null;
+  const profesionalSolo = perfiles?.ok && perfiles.data.length === 1 ? perfiles.data[0] : null;
+  const identidad = profesionalSolo?.displayName?.trim() && profesionalSolo.displayName !== "Profesional"
+    ? profesionalSolo.displayName.trim()
+    : null;
+  const title = `Reservá tu turno · ${identidad ?? org.nombre}`;
   const rubro = formatRubro(org.rubro);
   const lugar = [org.ciudad, org.provincia].filter(Boolean).join(", ");
   const description =
+    (identidad ? profesionalSolo?.bioPublica?.trim() : null) ||
     org.bio?.trim() ||
-    `Turnos online con ${org.nombre}${rubro ? ` · ${rubro}` : ""}${lugar ? ` · ${lugar}` : ""}. Elegí servicio y horario en menos de un minuto.`;
+    `Turnos online con ${identidad ?? org.nombre}${rubro ? ` · ${rubro}` : ""}${lugar ? ` · ${lugar}` : ""}. Elegí servicio y horario.`;
 
   // Indexabilidad gateada al opt-in del directorio (M64): un link de reserva
   // compartido por el médico sigue siendo accesible (200), pero NO se indexa en
@@ -195,7 +203,7 @@ export default async function BookPage({ params }: PageProps) {
       .eq("activo", true)
       .is("deleted_at", null)
       .order("tipo_canonico"),
-    listProfesionalesPublico(org.id),
+    getProfesionalesPublicos(org.id),
   ]);
 
   // JSON-LD solo si la org optó por el directorio (mismo límite de
@@ -214,6 +222,7 @@ export default async function BookPage({ params }: PageProps) {
       <BookLanding
         org={{
           slug: org.slug,
+          tipo: org.tipo,
           nombre: org.nombre,
           ciudad: org.ciudad,
           provincia: org.provincia,

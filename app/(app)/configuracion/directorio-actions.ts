@@ -8,8 +8,8 @@
  * superior al link de reserva: al activar se sella listar_en_directorio_at.
  *
  * Permisos: OWNER o DIRECTOR (la RLS de organization ya lo enforce en DB; este
- * check es defensa en profundidad con mensaje claro). revalida /configuracion y
- * /profesionales para que el alta/baja se refleje sin esperar al ISR.
+ * check es defensa en profundidad con mensaje claro). Revalida configuración,
+ * directorio y la página pública concreta, cuya metadata depende del opt-in.
  */
 
 import { revalidatePath } from "next/cache";
@@ -34,13 +34,15 @@ export async function setListarEnDirectorioAction(
   }
 
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase
+  const { data: organization, error } = await supabase
     .from("organization")
     .update({
       listar_en_directorio: parsed.data.listar,
       listar_en_directorio_at: parsed.data.listar ? new Date().toISOString() : null,
     })
-    .eq("id", session.data.organizationId);
+    .eq("id", session.data.organizationId)
+    .select("slug")
+    .single();
 
   if (error) {
     const mapped = mapSupabaseError(error);
@@ -49,5 +51,6 @@ export async function setListarEnDirectorioAction(
 
   revalidatePath("/configuracion");
   revalidatePath("/profesionales");
+  revalidatePath(`/book/${organization.slug}`);
   return ok({ listar: parsed.data.listar });
 }

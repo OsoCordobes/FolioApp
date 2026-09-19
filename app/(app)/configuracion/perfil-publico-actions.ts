@@ -1,5 +1,7 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
+
 /**
  * Folio · /configuracion → Perfil público (M62) · server actions.
  *
@@ -34,6 +36,13 @@ export interface PerfilPublicoActionResult {
 
 export interface UploadPhotoResult extends PerfilPublicoActionResult {
   fotoUrl?: string;
+}
+
+/** Refresh only this organization's public page after a consented profile edit. */
+function revalidatePublicProfile(slug: string): void {
+  revalidatePath(`/book/${slug}`);
+  // The OG image is force-dynamic, so a removed photo is never served from
+  // Folio's image cache. Third-party social previews have their own caches.
 }
 
 /** Sube/reemplaza la foto pública del profesional (member de la sesión). */
@@ -85,6 +94,8 @@ export async function uploadProfessionalPhoto(formData: FormData): Promise<Uploa
     payload: { tiene_foto: true },
   });
 
+  revalidatePublicProfile(ctx.data.organization.slug);
+
   return { ok: true, fotoUrl };
 }
 
@@ -103,11 +114,12 @@ export async function removeProfessionalPhoto(): Promise<PerfilPublicoActionResu
     return { ok: false, error: rmErr.message };
   }
 
-  await service
+  const { error: dbErr } = await service
     .from("member")
     .update({ foto_publica_url: null })
     .eq("id", memberId)
     .eq("organization_id", orgId);
+  if (dbErr) return { ok: false, error: "No pude actualizar el perfil público. Reintentá." };
 
   await writeAuditEntry({
     organizationId: orgId,
@@ -118,6 +130,8 @@ export async function removeProfessionalPhoto(): Promise<PerfilPublicoActionResu
     resourceId: memberId,
     payload: { tiene_foto: false },
   });
+
+  revalidatePublicProfile(ctx.data.organization.slug);
 
   return { ok: true };
 }
@@ -150,6 +164,8 @@ export async function saveBioPublica(bioRaw: string): Promise<PerfilPublicoActio
     payload: { tiene_bio: bio.length > 0 },
   });
 
+  revalidatePublicProfile(ctx.data.organization.slug);
+
   return { ok: true };
 }
 
@@ -177,6 +193,8 @@ export async function setMostrarMatricula(mostrar: boolean): Promise<PerfilPubli
     resourceId: memberId,
     payload: { mostrar_matricula: mostrar },
   });
+
+  revalidatePublicProfile(ctx.data.organization.slug);
 
   return { ok: true };
 }

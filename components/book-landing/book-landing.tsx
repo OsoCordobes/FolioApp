@@ -27,12 +27,13 @@ import { FolioMark } from "@/components/folio-mark";
 import type { ProfesionalPerfilPublico } from "@/lib/db/members";
 import { resolveBookLandingContent } from "@/lib/book-landing/content";
 import { formatArs } from "@/lib/format/currency";
-import { adjustHexLightness } from "@/lib/format/initials";
+import { adjustHexLightness, contrastingTextColor } from "@/lib/format/initials";
 
 const DEFAULT_ACENTO = "#8A6722";
 
 export interface BookLandingOrg {
   slug: string;
+  tipo: "INDEPENDIENTE" | "CLINICA";
   nombre: string;
   ciudad: string | null;
   provincia: string | null;
@@ -78,17 +79,23 @@ export function BookLanding({
 
   const content = resolveBookLandingContent(org.especialidad, org.rubro);
   const lugar = [org.ciudad, org.provincia].filter(Boolean).join(", ");
-  const multiProf = profesionales.length > 1;
+  const esClinica = org.tipo === "CLINICA";
   const tieneContacto =
     !!org.direccionCompleta || !!org.telefonoPublico || !!org.instagramHandle;
-  const sobreTitulo = multiProf ? "Sobre el consultorio" : "Sobre mí";
-
-  // Solo (1 colegiado): su foto/matrícula enriquecen el hero. La figura del
-  // hero prioriza el logo del consultorio si lo subió; si no, la foto del
-  // profesional solo; si no, iniciales.
-  const profesionalSolo = !multiProf && profesionales.length === 1 ? profesionales[0] : null;
-  const heroMatricula = profesionalSolo?.matricula ?? null;
-  const heroFotoProfesional = !org.logoUrl ? (profesionalSolo?.fotoUrl ?? null) : null;
+  // El plan, no la cantidad de profesionales cargados, decide quién firma la
+  // página. Una Clínica con un solo integrante conserva su identidad de equipo.
+  const profesionalSolo = !esClinica && profesionales.length === 1 ? profesionales[0] : null;
+  const nombreProfesional = profesionalSolo?.displayName?.trim() && profesionalSolo.displayName !== "Profesional"
+    ? profesionalSolo.displayName.trim()
+    : null;
+  const profesionalIdentificado = nombreProfesional ? profesionalSolo : null;
+  const heroNombre = nombreProfesional ?? org.nombre;
+  const heroMatricula = profesionalIdentificado?.matricula ?? null;
+  const heroFotoProfesional = profesionalIdentificado?.fotoUrl ?? null;
+  const heroBio = profesionalIdentificado?.bioPublica?.trim() || (!esClinica ? org.bio?.trim() : null);
+  const sobreBio = org.bio?.trim() && (esClinica || org.bio.trim() !== heroBio)
+    ? org.bio.trim()
+    : null;
   // Reduce el perfil rico a {id, displayName} para el selector del wizard
   // (su contrato no cambia: foto/bio/matrícula son solo para la landing).
   const profesionalesLite = profesionales.map((p) => ({
@@ -103,9 +110,10 @@ export function BookLanding({
         ["--accent" as string]: acento,
         ["--accent-2" as string]: acento2,
         ["--accent-soft" as string]: acentoSoft,
+        ["--bl-on-accent" as string]: contrastingTextColor(acento),
       }}
     >
-      {/* Header glass — marca del consultorio. Folio NO aparece acá. */}
+      {/* La marca del consultorio acompaña al profesional sin competir con su retrato. */}
       <header className="bl-header">
         <div className="bl-header-brand">
           {org.logoUrl ? (
@@ -135,12 +143,15 @@ export function BookLanding({
               <Motif motif={content.motif} size={18} className="bl-eyebrow-motif" />
               <span>{content.heroEyebrow}</span>
             </div>
-            <h1 className="bl-hero-title">{org.nombre}</h1>
+            <h1 className="bl-hero-title">{heroNombre}</h1>
+            {nombreProfesional && org.nombre !== nombreProfesional ? (
+              <p className="bl-hero-practice">En {org.nombre}</p>
+            ) : null}
             {lugar ? <p className="bl-hero-sub">{lugar}</p> : null}
             {heroMatricula ? (
               <p className="bl-hero-matricula fm-mono">M.P. {heroMatricula}</p>
             ) : null}
-            <p className="bl-hero-value">{content.heroValueLine}</p>
+            <p className="bl-hero-value">{heroBio || content.heroValueLine}</p>
             <div className="bl-hero-actions">
               <a href="#reservar" className="fi-btn fi-btn-primary bl-btn-lg">
                 {content.reservarCtaLabel}
@@ -153,8 +164,29 @@ export function BookLanding({
             </div>
             <p className="bl-trust-micro">Elegí un servicio y un horario para empezar.</p>
           </div>
-          <div className="bl-hero-figure">
-            {org.logoUrl ? (
+          <div className={`bl-hero-figure${profesionalIdentificado ? " bl-hero-figure-person" : ""}`}>
+            {profesionalIdentificado ? (
+              <div className="bl-portrait">
+                {heroFotoProfesional ? (
+                  <Image
+                    src={heroFotoProfesional}
+                    alt={`Retrato de ${heroNombre}`}
+                    className="bl-portrait-image"
+                    width={340}
+                    height={400}
+                    sizes="(max-width: 760px) 240px, 340px"
+                    priority
+                  />
+                ) : (
+                  <AvatarIniciales
+                    fullName={heroNombre}
+                    acentoHex={acento}
+                    size="xl"
+                    className="bl-portrait-initials"
+                  />
+                )}
+              </div>
+            ) : org.logoUrl ? (
               <Image
                 src={org.logoUrl}
                 alt={`Logo de ${org.nombre}`}
@@ -162,14 +194,6 @@ export function BookLanding({
                 width={160}
                 height={160}
                 priority
-              />
-            ) : heroFotoProfesional && profesionalSolo ? (
-              // Solo sin logo: foto del profesional como avatar redondo grande.
-              <AvatarIniciales
-                fullName={profesionalSolo.displayName}
-                avatarUrl={heroFotoProfesional}
-                acentoHex={acento}
-                size="xl"
               />
             ) : (
               <AvatarIniciales fullName={org.nombre} acentoHex={acento} size="xl" />
@@ -180,17 +204,17 @@ export function BookLanding({
         {/* Barra sticky de reserva (solo mobile, aparece al pasar el hero). */}
         <StickyBookCta label={content.reservarCtaLabel} />
 
-        {/* Sobre el consultorio / Sobre mí */}
-        {org.bio ? (
-          <section className="bl-about" aria-label={sobreTitulo}>
-            <h2 className="bl-section-title">{sobreTitulo}</h2>
-            <p className="bl-about-text">{org.bio}</p>
+        {/* La bio personal vive en el hero; la de la organización se distingue. */}
+        {sobreBio ? (
+          <section className="bl-about" aria-label="Sobre el consultorio">
+            <h2 className="bl-section-title">Sobre el consultorio</h2>
+            <p className="bl-about-text">{sobreBio}</p>
           </section>
         ) : null}
 
         {/* Nuestro equipo (multi-prof): foto + matrícula + bio por profesional
             (M62). Degrada con gracia — sin foto → iniciales; sin bio → se omite. */}
-        {multiProf ? (
+        {esClinica && profesionales.length > 0 ? (
           <section
             className="bl-team"
             aria-label="Profesionales que atienden en este consultorio"
