@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { restoreDatabase } from "./restore.mjs";
 import { restoreStorageLocal } from "./storage-restore.mjs";
 import { safeRestoreDiagnostic, classifyPgRestoreStderr } from "./restore-diagnostics.mjs";
+import { captureC01PgRestoreFailure } from "./c01-sealed-diagnostic.mjs";
 let phase = "unknown";
 let pgRestoreCategory = null;
 try {
@@ -16,8 +17,11 @@ try {
     ...c,
     privateKey: await readFile(c.recipientPrivateKeyFile, "utf8"),
     passphrase: process.env.FOLIO_BACKUP_RESTORE_PASSPHRASE,
-    ...(c01Diagnostics && c.phase !== "storage" ? {tools:{...c.tools,diagnosticSink:(stderr,metadata)=>{
-      if(metadata.stage===null)pgRestoreCategory=classifyPgRestoreStderr(stderr);
+    ...(c01Diagnostics && c.phase !== "storage" ? {tools:{...c.tools,diagnosticSink:async(stderr,metadata)=>{
+      if(metadata.stage===null){
+        pgRestoreCategory=classifyPgRestoreStderr(stderr);
+        await captureC01PgRestoreFailure(stderr,metadata);
+      }
     }}} : {}),
   };
   const result =

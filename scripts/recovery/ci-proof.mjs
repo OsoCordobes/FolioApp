@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // C01 runs only on a fresh GitHub-hosted runner. All clinical values and keys
-// are generated here and kept in RUNNER_TEMP; nothing is uploaded as an artifact.
+// are generated here and kept in RUNNER_TEMP. Only bounded, encrypted tool
+// diagnostics can be uploaded after a pg_restore failure.
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
 import {createHmac, createHash, generateKeyPairSync, randomBytes, randomUUID} from 'node:crypto';
@@ -277,10 +278,14 @@ async function main(){
  assert.equal(process.env.GITHUB_ACTIONS,'true');
  assert.equal(process.env.RUNNER_ENVIRONMENT,'github-hosted');
  assert.equal(process.platform,'linux');
+ assert.equal(process.env.RUNNER_OS,'Linux');
+ assert.equal(process.env.FOLIO_C01_SEAL_PG_RESTORE_ERROR,'1');
  assert.ok(process.env.RUNNER_TEMP&&path.isAbsolute(process.env.RUNNER_TEMP));
  const official=path.resolve(process.env.C01_OFFICIAL_DOCKER??'');
  assert.ok(official.startsWith(path.resolve(process.env.RUNNER_TEMP)+path.sep));
  assert.equal((await child('git',['-C',path.dirname(official),'rev-parse','HEAD'])).output.trim(),upstreamCommit);
+ const checkedOutSha=(await child('git',['-C',repo,'rev-parse','HEAD'])).output.trim();
+ assert.match(checkedOutSha,/^[a-f0-9]{40}$/);
  assert.equal((await child('pg_dump',['--version'])).output.match(/\b(\d+)\./)?.[1],'17');
  const root=path.join(process.env.RUNNER_TEMP,`folio-c01-${randomUUID()}`);
  await mkdir(root,{mode:0o700});
@@ -290,7 +295,7 @@ async function main(){
  await writeJson(path.join(root,'platform.json'),{auth:{provider:'local-synthetic',mfa:'totp'},storage:{provider:'local-file',private:true},database:{engine:'postgres',major:17},application:{name:'Folio C01 synthetic'},custody:{runner:'github-hosted',realData:false}});
  const secret=b64(48),dbPassword=b64(32);
  const state={passphrase,privateKey:keys.privateKey,dbPassword,anonKey:jwt(secret,'anon'),serviceKey:jwt(secret,'service_role')};
- const env={...process.env,C01_OFFICIAL_DOCKER:official,C01_DB_PASSWORD:dbPassword,C01_JWT_SECRET:secret,C01_ANON_KEY:state.anonKey,C01_SERVICE_KEY:state.serviceKey,C01_DASHBOARD_PASSWORD:b64(18),C01_APP_DATABASE:'postgres',FOLIO_ENC_KEY:randomBytes(32).toString('base64'),FOLIO_ENC_HMAC_KEY:randomBytes(32).toString('base64')};
+ const env={...process.env,C01_CHECKED_OUT_SHA:checkedOutSha,C01_OFFICIAL_DOCKER:official,C01_DB_PASSWORD:dbPassword,C01_JWT_SECRET:secret,C01_ANON_KEY:state.anonKey,C01_SERVICE_KEY:state.serviceKey,C01_DASHBOARD_PASSWORD:b64(18),C01_APP_DATABASE:'postgres',FOLIO_ENC_KEY:randomBytes(32).toString('base64'),FOLIO_ENC_HMAC_KEY:randomBytes(32).toString('base64')};
  // The encryption key is process-local too, for the direct Folio decrypt check.
  process.env.FOLIO_ENC_KEY=env.FOLIO_ENC_KEY;
  process.env.FOLIO_ENC_HMAC_KEY=env.FOLIO_ENC_HMAC_KEY;

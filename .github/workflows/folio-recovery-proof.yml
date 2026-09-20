@@ -22,6 +22,7 @@ jobs:
     timeout-minutes: 60
     env:
       CI: 'true'
+      FOLIO_C01_SEAL_PG_RESTORE_ERROR: '1'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -59,3 +60,11 @@ jobs:
           echo "C01_OFFICIAL_DOCKER=$upstream/docker" >> "$GITHUB_ENV"
       - name: Verify and restore only synthetic local services
         run: node --conditions=react-server --import tsx scripts/recovery/ci-proof.mjs
+      - name: Preserve encrypted pg_restore diagnostic on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c01-pg-restore-error-sealed
+          path: ${{ runner.temp }}/c01-pg-restore-error.sealed
+          if-no-files-found: ignore
+          retention-days: 1
