@@ -116,7 +116,7 @@ export function Step9Moment({
 
       <h1 className="onb-moment-head onb-anim-head">{finalizeOk ? "Tu espacio quedó creado." : error ? "Falta confirmar la configuración." : "Terminando la configuración…"}</h1>
       <p className="onb-moment-sub onb-anim-head">
-        {finalizeOk ? publicReady ? "Revisá tu página y agenda antes de compartir el enlace." : data.tipo === "CLINICA" ? "Tu clínica todavía necesita profesionales aceptados y agenda configurada para recibir reservas. Podés continuar desde el panel." : "Revisá los datos, servicios y horarios desde el panel antes de compartir tu página." : error ? "Revisá el mensaje y reintentá para terminar de preparar tu espacio." : "Esperá la confirmación antes de entrar al panel. Tus datos siguen en pantalla."}
+        {finalizeOk ? publicReady ? "Revisá tu página y agenda antes de compartir el enlace." : data.tipo === "CLINICA" && data.ownerTratante === false ? "Tu clínica todavía necesita profesionales aceptados y agenda configurada para recibir reservas. Podés continuar desde el panel." : "Revisá los datos, servicios y horarios desde el panel antes de compartir tu página." : error ? "Revisá el mensaje y reintentá para terminar de preparar tu espacio." : "Esperá la confirmación antes de entrar al panel. Tus datos siguen en pantalla."}
       </p>
       {/* Fusión del viejo Step 8: trial + precio (canónico MP_PLAN_PRICE_CENTS,
           mismo valor que el cobro real — nunca un hardcode que driftee). */}

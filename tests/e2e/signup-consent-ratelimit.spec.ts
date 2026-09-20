@@ -33,9 +33,7 @@ test.beforeEach(async ({ context }) => {
 test.describe("/login signup · entrada al alta", () => {
   test("la creación de cuenta dirige a elegir modalidad", async ({ page }) => {
     await page.goto("/login");
-    await page.getByRole("button", { name: /crear cuenta/i }).first().click();
-    await expect(page.getByRole("link", { name: /Elegir modalidad/ })).toBeVisible();
-    await page.getByRole("link", { name: /Elegir modalidad/ }).click();
+    await page.getByRole("link", { name: /crear cuenta/i }).first().click();
     await expect(page.getByRole("heading", { name: "¿Cómo vas a usar Folio?" })).toBeVisible();
   });
 

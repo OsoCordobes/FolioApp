@@ -140,6 +140,8 @@ interface OnboardingAppProps {
    * botón de conectar.
    */
   googleConnected?: boolean;
+  /** Only the isolated, development-only flow fixture may simulate persistence. */
+  syntheticFixture?: boolean;
 }
 
 interface SaveState {
@@ -158,7 +160,9 @@ export function OnboardingApp({
   clinicPriceCents,
   clinicSeatPriceCents,
   googleConnected,
+  syntheticFixture = false,
 }: OnboardingAppProps) {
+  const synthetic = syntheticFixture && process.env.NODE_ENV !== "production";
   const router = useRouter();
   const searchParams = useSearchParams();
   // Clamp: datos legacy (wizard de 9 pasos) pueden traer initialStep=9.
@@ -180,6 +184,7 @@ export function OnboardingApp({
   // Every return from email verification/OAuth reconfirms an unpersisted intent.
   const [choiceConfirmed, setChoiceConfirmed] = useState(Boolean(organizationId));
   const [recoverableDraft, setRecoverableDraft] = useState<Partial<OnboardingDataState> | null>(null);
+  const [recoveryChecked, setRecoveryChecked] = useState(false);
   const recoveryPendingRef = useRef(false);
 
   // ─── Auto-save refs declarados antes del useEffect de hidratación porque
@@ -260,6 +265,7 @@ export function OnboardingApp({
       hydratedRef.current = true;
       return next;
     });
+    setRecoveryChecked(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -293,6 +299,14 @@ export function OnboardingApp({
     if (!orgId) return;
     let cancelled = false;
     hoursRef.current = null; hoursSavedRef.current = false;
+    if (synthetic) {
+      hoursRef.current = new AvailabilityDraft({
+        context: { organizationId: orgId, memberId: "folio-test-owner", revision: 0, protectedDates: false },
+        dias: setupHoursWeek(ONBOARDING_INITIAL.diasActivos, ONBOARDING_INITIAL.franjas),
+      });
+      redrawHours((n) => n + 1);
+      return () => { cancelled = true; };
+    }
     void readOnboardingHorarios(orgId).then((result) => {
       if (cancelled) return;
       if (!result.ok) { setHoursError(result.error.message); return; }
@@ -303,9 +317,13 @@ export function OnboardingApp({
       setHoursError(null); redrawHours((n) => n + 1);
     }).catch(() => { if (!cancelled) setHoursError("No pudimos leer los horarios. Volvé a cargar para intentarlo."); });
     return () => { cancelled = true; };
-  }, [orgId]);
+  }, [orgId, synthetic]);
 
   const persistInitialHours = useCallback((snapshot: OnboardingDataState): Promise<boolean> => {
+    if (synthetic) {
+      setSaveState({ status: "saved", lastSavedAt: Date.now() });
+      return Promise.resolve(true);
+    }
     if (hoursFlightRef.current) return hoursFlightRef.current;
     const hours = hoursRef.current;
     if (!hours || hours.context.organizationId !== orgId) { setHoursError("No pudimos leer la agenda actual. Volvé a cargar los horarios."); return Promise.resolve(false); }
@@ -336,13 +354,18 @@ export function OnboardingApp({
     })();
     hoursFlightRef.current = pending;
     return pending;
-  }, [orgId]);
+  }, [orgId, synthetic]);
 
   // ─── Auto-save por step (debounce 800ms) ─────────────────────────────────
 
   const persistStep = useCallback(
     async (step: number, snapshot: OnboardingDataState): Promise<boolean> => {
       if (!orgId) return false;
+      if (synthetic) {
+        try { sessionStorage.setItem("folio:onboarding:synthetic-save", JSON.stringify({ step, data: snapshot })); } catch { /* isolated fixture */ }
+        setSaveState({ status: "saved", lastSavedAt: Date.now() });
+        return true;
+      }
       if (step === 5) return persistInitialHours(snapshot);
       try {
         setSaveState({ status: "saving" });
@@ -418,7 +441,7 @@ export function OnboardingApp({
         return false;
       }
     },
-    [orgId, orgSlug, persistInitialHours],
+    [orgId, orgSlug, persistInitialHours, synthetic],
   );
 
   const runPersistStep = useCallback((step: number, snapshot: OnboardingDataState): Promise<boolean> => {
@@ -435,6 +458,7 @@ export function OnboardingApp({
 
   // Trigger auto-save cuando cambian datos relevantes
   useEffect(() => {
+    if (recoveryPendingRef.current || recoverableDraft) return;
     if (!orgId) return;
     // Steps sin auto-save: 1 (signup), 7 (Google — persiste step_max al montar
     // y su OAuth escribe en `integration`), 8 (moment — finaliza, no edita).
@@ -454,7 +478,7 @@ export function OnboardingApp({
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
-  }, [data, stepIdx, orgId, runPersistStep]);
+  }, [data, stepIdx, orgId, runPersistStep, recoverableDraft]);
 
   const set = (patch: Partial<OnboardingDataState>) => {
     if (stepIdx === 5 && (!hoursRef.current || hoursRef.current.locked || hoursError)) return;
@@ -570,7 +594,9 @@ export function OnboardingApp({
       setError("No pudimos confirmar el último guardado. Revisá los datos y reintentá antes de terminar.");
       return;
     }
-    const result = await finalizeOnboarding();
+    const result = synthetic
+      ? { ok: true, slug: orgSlug, publicReady: data.ownerTratante === true && !!data.consultorioNombre && !!data.ciudad && !!data.rubro && data.servicios.length > 0 && data.diasActivos.length > 0 }
+      : await finalizeOnboarding();
     if (!result.ok) {
       setError(result.error ?? "Error al finalizar onboarding");
       return;
@@ -690,21 +716,23 @@ export function OnboardingApp({
 
       <main className="onb-app-main">
         {recoverableDraft ? <div className="onb-recovery" role="status">
-          <p>Hay cambios locales de esta organización sin confirmar. Los datos guardados siguen intactos.</p>
+          <p>Hay cambios locales de esta organización sin confirmar. Elegí cuál versión usar antes de continuar.</p>
           <button type="button" onClick={() => {
             const { tipo: _tipo, ownerTratante: _owner, email: _email, password: _password, ...editable } = recoverableDraft;
             void _tipo; void _owner; void _email; void _password;
             setData((current) => ({ ...current, ...editable }));
+            setDirection("back");
+            setStepIdx(2);
             recoveryPendingRef.current = false;
             setRecoverableDraft(null);
-          }}>Revisar mis cambios</button>
-          <button type="button" onClick={() => { recoveryPendingRef.current = false; setRecoverableDraft(null); }}>Usar lo guardado</button>
+          }}>Restaurar y revisar mis cambios</button>
+          <button type="button" onClick={() => { recoveryPendingRef.current = false; setRecoverableDraft(null); }}>Usar la versión guardada</button>
         </div> : null}
         {error && stepIdx !== ONB_TOTAL ? (
           <p className="au-err onb-banner-err" role="alert">{error}</p>
         ) : null}
 
-        <div key={stepKey} className={`onb-anim onb-anim-${direction}`}>
+        {!recoveryChecked ? <p role="status">Preparando tus datos guardados…</p> : recoverableDraft ? <p role="status">Resolvé los cambios pendientes para continuar el alta.</p> : <div key={stepKey} className={`onb-anim onb-anim-${direction}`}>
           {stepIdx === 2 ? <Step2Profesional {...commonStepProps} back={undefined} /> : null}
           {stepIdx === 3 ? <Step3Consultorio {...commonStepProps} /> : null}
           {stepIdx === 4 ? <Step4Personalizacion {...commonStepProps} /> : null}
@@ -719,6 +747,7 @@ export function OnboardingApp({
               {...commonStepProps}
               connected={gcalConnected}
               connectError={gcalError}
+              syntheticFixture={synthetic}
             />
           ) : null}
           {stepIdx === 8 ? (
@@ -736,7 +765,7 @@ export function OnboardingApp({
               clinicSeatPriceCents={clinicSeatPriceCents}
             />
           ) : null}
-        </div>
+        </div>}
       </main>
     </div>
   );

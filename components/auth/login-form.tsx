@@ -189,9 +189,9 @@ function Login({ setVista, prefilledEmail, notice, clearNotice }: LoginProps) {
       vistaSwitch={
         <p>
           ¿No tenés cuenta?{" "}
-          <button type="button" className="au-link" onClick={() => setVista("signup")}>
+          <Link className="au-link" href="/onboarding">
             Crear cuenta
-          </button>
+          </Link>
         </p>
       }
     >

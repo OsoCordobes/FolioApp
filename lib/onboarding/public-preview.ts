@@ -27,9 +27,11 @@ export function toOnboardingLandingPreview(
       instagramHandle: data.instagram || null,
     },
     profesional: data.tipo === "INDEPENDIENTE" && data.ownerTratante === true && fullName
-      ? { id: "draft-owner", displayName: fullName, matricula: data.matricula || null }
+      ? { id: "draft-owner", displayName: fullName, matricula: null }
       : null,
-    profesionales: [],
+    profesionales: data.tipo === "CLINICA" && data.ownerTratante === true && fullName
+      ? [{ id: "draft-owner", displayName: fullName, matricula: null }]
+      : [],
     servicios: data.servicios.filter((s) => s.nombre.trim() && s.dur > 0).map((s) => ({
       id: String(s.id), nombre: s.nombre, duracion_min: s.dur,
       precio_cents: Math.round(s.precio * 100), tipo_canonico: s.tipoCanonico || null,

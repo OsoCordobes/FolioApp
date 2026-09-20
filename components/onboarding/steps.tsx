@@ -21,7 +21,6 @@ import { updateOnboardingStep } from "@/app/(public)/onboarding/actions";
 import { StepShell } from "@/components/onboarding/step-shell";
 import { SlugEditor } from "@/components/onboarding/slug-editor";
 import { LogoUpload } from "@/components/public-card/logo-upload";
-import { MoodPicker } from "@/components/public-card/mood-picker";
 import { type CardMood } from "@/components/public-card/public-card";
 import { ESPECIALIDADES_META, ESPECIALIDAD_SLUGS } from "@/lib/especialidades/meta";
 import { validateFranjas } from "@/lib/onboarding/franjas";
@@ -519,17 +518,6 @@ export function Step4Personalizacion({ data, set, next, back, skip, orgSlug }: S
           </div>
         </section>
 
-        <section className="onb-identity-section">
-          <h2 className="onb-identity-h">Estilo de tu perfil</h2>
-          <p className="onb-identity-hint">
-            Define la tipografía, el contraste y la decoración. Elegí el que más
-            se parezca a tu práctica.
-          </p>
-          <MoodPicker
-            value={data.cardMood}
-            onChange={(mood) => set({ cardMood: mood })}
-          />
-        </section>
       </div>
     </StepShell>
   );
@@ -710,9 +698,10 @@ interface Step7GoogleProps extends StepProps {
   connected?: boolean;
   /** El callback OAuth volvió con error (gcal=error). */
   connectError?: boolean;
+  syntheticFixture?: boolean;
 }
 
-export function Step7Google({ data, next, back, skip, orgSlug, connected, connectError }: Step7GoogleProps) {
+export function Step7Google({ data, next, back, skip, orgSlug, connected, connectError, syntheticFixture }: Step7GoogleProps) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -722,10 +711,11 @@ export function Step7Google({ data, next, back, skip, orgSlug, connected, connec
   // invoke de StrictMode en dev no debe duplicar la llamada.
   const stepMaxPersistedRef = useRef(false);
   useEffect(() => {
+    if (syntheticFixture) return;
     if (stepMaxPersistedRef.current) return;
     stepMaxPersistedRef.current = true;
     void updateOnboardingStep(7, {});
-  }, []);
+  }, [syntheticFixture]);
 
   const handleConnect = () => {
     setError(null);

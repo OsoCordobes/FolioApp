@@ -42,9 +42,7 @@ test("un profesional elige, sale al inicio y retoma sin guardar contraseña", as
 
 test("el ingreso antiguo conduce a elegir modalidad", async ({ page }) => {
   await page.goto("/login");
-  await page.getByRole("button", { name: /crear cuenta/i }).first().click();
-  await expect(page.getByRole("heading", { name: "Primero, elegí tu modalidad." })).toBeVisible();
-  await page.getByRole("link", { name: /Elegir modalidad/ }).click();
+  await page.getByRole("link", { name: /crear cuenta/i }).first().click();
   await expect(page).toHaveURL(/\/onboarding$/);
   await expect(page.getByRole("radio", { name: /Profesional independiente/ })).not.toBeChecked();
 });

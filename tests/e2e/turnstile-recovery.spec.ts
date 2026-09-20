@@ -69,10 +69,8 @@ test("challenge error and expiry require a fresh token and support manual retry"
 test("el ingreso antiguo monta el widget sólo después de elegir modalidad", async ({ page }) => {
   await page.route(scriptUrl, (route) => route.fulfill({ status: 200, contentType: "application/javascript", body: syntheticApi }));
   await page.goto("/login");
-  await page.getByRole("button", { name: /crear cuenta/i }).first().click();
-  await expect(page.getByRole("link", { name: /Elegir modalidad/ })).toBeVisible();
+  await page.getByRole("link", { name: /crear cuenta/i }).first().click();
   expect(await page.evaluate(() => (window as Window & { __turnstileStats?: unknown }).__turnstileStats)).toBeUndefined();
-  await page.getByRole("link", { name: /Elegir modalidad/ }).click();
   await page.getByRole("radio", { name: /Profesional independiente/ }).check();
   await page.getByRole("button", { name: "Seguir con esta opción" }).click();
   await expect.poll(() => page.evaluate(() => (window as unknown as Window & { __turnstileStats?: { renders: number } }).__turnstileStats?.renders)).toBe(1);

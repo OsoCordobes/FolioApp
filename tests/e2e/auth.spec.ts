@@ -52,8 +52,7 @@ test.describe("Auth · signup → onboarding", () => {
     });
 
     // 2. Switch to signup view.
-    await page.getByRole("button", { name: /crear cuenta/i }).first().click();
-    await page.getByRole("link", { name: /Elegir modalidad/ }).click();
+    await page.getByRole("link", { name: /crear cuenta/i }).first().click();
     await page.getByRole("radio", { name: /Profesional independiente/ }).check();
     await page.getByRole("button", { name: "Seguir con esta opción" }).click();
 
@@ -95,8 +94,7 @@ test.describe("Auth · signup → onboarding", () => {
 
     // First signup — creates the account.
     await page.goto("/login");
-    await page.getByRole("button", { name: /crear cuenta/i }).first().click();
-    await page.getByRole("link", { name: /Elegir modalidad/ }).click();
+    await page.getByRole("link", { name: /crear cuenta/i }).first().click();
     await page.getByRole("radio", { name: /Profesional independiente/ }).check();
     await page.getByRole("button", { name: "Seguir con esta opción" }).click();
     await page.locator('input[type="email"]').fill(email);
@@ -111,8 +109,7 @@ test.describe("Auth · signup → onboarding", () => {
     await page.goto("/login");
 
     // Attempt signup with the same email but a different password.
-    await page.getByRole("button", { name: /crear cuenta/i }).first().click();
-    await page.getByRole("link", { name: /Elegir modalidad/ }).click();
+    await page.getByRole("link", { name: /crear cuenta/i }).first().click();
     await page.getByRole("radio", { name: /Profesional independiente/ }).check();
     await page.getByRole("button", { name: "Seguir con esta opción" }).click();
     await page.locator('input[type="email"]').fill(email);

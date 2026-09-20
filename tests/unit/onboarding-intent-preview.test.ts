@@ -36,11 +36,20 @@ test("borrador de clínica no atribuye identidad profesional al titular administ
   assert.equal(JSON.stringify(preview).includes("Ana Costa"), false);
 });
 
-test("independiente usa el nombre y matrícula que completó en su perfil", () => {
+test("independiente muestra el nombre sin publicar la matrícula que no autorizó", () => {
   assert.equal(toOnboardingLandingPreview(base), undefined);
   const preview = toOnboardingLandingPreview({ ...base,
     tipo: "INDEPENDIENTE", ownerTratante: true, nombre: "Ana", apellido: "Costa", matricula: "123",
   });
   assert.equal(preview?.profesional?.displayName, "Ana Costa");
-  assert.equal(preview?.profesional?.matricula, "123");
+  assert.equal(preview?.profesional?.matricula, null);
+});
+
+test("clínica con titular tratante muestra al titular como profesional del equipo", () => {
+  const preview = toOnboardingLandingPreview({ ...base,
+    tipo: "CLINICA", ownerTratante: true, nombre: "Ana", apellido: "Costa", matricula: "MP123",
+  });
+  assert.equal(preview?.profesional, null);
+  assert.deepEqual(preview?.profesionales, [{ id: "draft-owner", displayName: "Ana Costa", matricula: null }]);
+  assert.equal(JSON.stringify(preview).includes("MP123"), false);
 });

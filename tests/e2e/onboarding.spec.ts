@@ -53,8 +53,7 @@ async function signupHastaOnboarding(page: Page, email: string): Promise<void> {
     timeout: 15_000,
   });
 
-  await page.getByRole("button", { name: /crear cuenta/i }).first().click();
-  await page.getByRole("link", { name: /Elegir modalidad/ }).click();
+  await page.getByRole("link", { name: /crear cuenta/i }).first().click();
   await page.getByRole("radio", { name: /Profesional independiente/ }).check();
   await page.getByRole("button", { name: "Seguir con esta opción" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Empezá creando tu cuenta." })).toBeVisible();
