@@ -8,6 +8,8 @@
  * Así la marca mantiene su geometría en servidor, navegador e impresión.
  */
 
+import React from "react";
+
 interface FolioMarkProps {
   size?: number;
   color?: string;

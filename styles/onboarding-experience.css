@@ -2,12 +2,12 @@
 .fx-onboarding .onb-app-head { display: flex; align-items: center; justify-content: space-between; }
 .fx-onboarding .onb-home-link { color: var(--ink-2); font-size: .82rem; font-weight: 600; text-decoration: underline; text-underline-offset: 4px; white-space: nowrap; }
 .fx-onboarding .onb-home-link:hover { color: var(--ink); }
-.fx-onboarding .onb-home-link:focus-visible { outline: 2px solid var(--accent, #8A6722); outline-offset: 4px; border-radius: 2px; }
+.fx-onboarding .onb-home-link:focus-visible { outline: 2px solid var(--accent, #6255C5); outline-offset: 4px; border-radius: 2px; }
 .onb-choice-group { border: 0; padding: 0; margin: 0 0 22px; display: grid; gap: 12px; min-width: 0; }
 .onb-choice-label { font-size: .82rem; font-weight: 700; margin-bottom: 8px; color: var(--ink); }
 .onb-choice { display: flex; gap: 14px; align-items: flex-start; cursor: pointer; border: 1px solid var(--line); border-radius: 16px; padding: 19px; background: var(--surface); transition: border-color .18s ease, background-color .18s ease; }
-.onb-choice:hover, .onb-choice.is-selected { border-color: var(--accent, #8A6722); background: var(--surface-soft, #faf8f4); }
-.onb-choice input, .onb-choice-compact input { accent-color: var(--accent, #8A6722); margin-top: 4px; flex-shrink: 0; }
+.onb-choice:hover, .onb-choice.is-selected { border-color: var(--accent, #6255C5); background: var(--surface-soft, #F0EFF8); }
+.onb-choice input, .onb-choice-compact input { accent-color: var(--accent, #6255C5); margin-top: 4px; flex-shrink: 0; }
 .onb-choice span { display: grid; gap: 6px; line-height: 1.45; }
 .onb-choice strong { font-size: 1.05rem; color: var(--ink); }
 .onb-choice small { color: var(--ink-2); font-size: .85rem; }
@@ -21,8 +21,40 @@
 .fx-onboarding .onb-preview-drawer .onb-landing-preview .bl-root { width: 100%; zoom: 1; }
 .fx-onboarding .onb-moment-card.onb-landing-preview { max-width: 620px; }
 @media (min-width: 1024px) { .fx-onboarding .onb-app-main > .onb-anim { max-width: 1160px; } .fx-onboarding .fx-onb-shell.onb-shell-split { max-width: 1160px; grid-template-columns: minmax(0, 1fr) minmax(340px, 440px); gap: 32px; } }
-.fx-onboarding .onb-recovery { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; padding: 14px 16px; border: 1px solid var(--accent, #8A6722); border-radius: 12px; background: var(--surface-soft, #faf8f4); font-size: .84rem; }
+.fx-onboarding .onb-recovery { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; padding: 14px 16px; border: 1px solid var(--accent, #6255C5); border-radius: 12px; background: var(--surface-soft, #F0EFF8); font-size: .84rem; }
 .fx-onboarding .onb-recovery p { flex: 1 1 100%; margin: 0; }
 .fx-onboarding .onb-recovery button { background: none; border: 0; padding: 3px 0; font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; color: var(--ink); }
 @media (max-width: 600px) { .fx-onboarding .onb-home-link { font-size: .75rem; } .onb-choice { padding: 16px; } .fx-onboarding .onb-moment-card.onb-landing-preview { max-height: none; overflow: visible; } .fx-onboarding .onb-moment-card.onb-landing-preview .bl-root { width: 100%; zoom: 1; } }
 @media (prefers-reduced-motion: reduce) { .onb-choice { transition: none; } }
+
+/* El editor muestra la página real a escala legible; la composición preview
+   ya adapta su contenido al ancho del contenedor. */
+.fx-onboarding .onb-shell-preview .onb-landing-preview .bl-root { zoom: 1; }
+.fx-onboarding .onb-step4 .onb-landing-preview { max-height: min(70vh, 760px); }
+.fx-onboarding .onb-step4 .onb-shell-form { padding: 26px 28px 22px; }
+.fx-onboarding .onb-step4 .onb-step { gap: 18px; }
+.fx-onboarding .onb-step4 .onb-step-head { gap: 8px; }
+.fx-onboarding .onb-step4 .onb-step-head h1 { margin-top: 4px; font-size: 29px; }
+.fx-onboarding .onb-step4 .onb-identity-editor { gap: 22px; }
+.fx-onboarding .onb-step4 .onb-identity-intro { display: grid; gap: 8px; padding: 13px 15px; border-radius: 10px; background: var(--surface-2); color: var(--ink-2); font-size: 13px; line-height: 1.55; }
+.fx-onboarding .onb-step4 .onb-identity-intro p { margin: 0; }
+.fx-onboarding .onb-step4 .onb-identity-later { justify-self: start; padding: 6px 0; border: 0; background: transparent; color: var(--accent); font: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.fx-onboarding .onb-step4 .onb-identity-optional { color: var(--ink-3); font-size: 12px; font-weight: 400; }
+.fx-onboarding .onb-step4 .onb-identity-section + .onb-identity-section { margin-top: 0; padding-top: 20px; }
+.fx-onboarding .onb-preview-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.fx-onboarding .onb-preview-expand { min-height: 40px; padding: 5px 8px; border: 0; background: transparent; color: var(--accent); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.fx-onboarding .onb-preview-expand:hover, .fx-onboarding .onb-identity-later:hover { color: var(--ink); }
+.fx-onboarding .onb-mobile-preview-trigger { display: none; }
+@media (min-width: 1024px) {
+  .fx-onboarding .fx-onb-shell.onb-step4.onb-shell-split { display: flex; flex-direction: column; max-width: 1160px; gap: 28px; }
+  .fx-onboarding .onb-step4.onb-shell-split .onb-shell-form { max-width: none; }
+  .fx-onboarding .onb-step4 .onb-shell-preview { position: static; width: 100%; }
+  .fx-onboarding .onb-step4 .onb-landing-preview { max-height: none; overflow: visible; }
+  .fx-onboarding .onb-step4 .onb-preview-drawer-inner { width: min(900px, calc(100vw - 64px)); max-width: 900px; max-height: calc(100vh - 64px); margin: auto; border-radius: 14px; }
+}
+@media (max-width: 1023px) { .fx-onboarding .onb-preview-expand { display: none; } }
+@media (max-width: 1023px) {
+  .fx-onboarding .onb-step4 .onb-mobile-preview-trigger { display: inline-flex; align-items: center; justify-content: space-between; align-self: flex-start; gap: 12px; min-height: 44px; padding: 8px 13px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--accent); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .fx-onboarding .onb-step4 .onb-preview-fab { display: none; }
+}
+@media (max-width: 600px) { .fx-onboarding .onb-step4 .onb-shell-form { padding: 24px 18px 20px; } }

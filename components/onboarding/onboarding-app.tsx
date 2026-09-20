@@ -36,6 +36,7 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 
 import {
   bootstrapOrgForAuthenticatedUser,
+  deferOnboardingPersonalization,
   finalizeOnboarding,
   signUpAndInitOrganization,
   updateOnboardingStep,
@@ -143,10 +144,11 @@ interface OnboardingAppProps {
   /** Only the isolated, development-only flow fixture may simulate persistence. */
   syntheticFixture?: boolean;
   syntheticHoursDelayMs?: number;
+  syntheticStep4Failure?: boolean;
 }
 
 interface SaveState {
-  status: "idle" | "saving" | "saved" | "error";
+  status: "idle" | "unsaved" | "saving" | "saved" | "error";
   lastSavedAt?: number;
   message?: string;
 }
@@ -163,6 +165,7 @@ export function OnboardingApp({
   googleConnected,
   syntheticFixture = false,
   syntheticHoursDelayMs = 0,
+  syntheticStep4Failure = false,
 }: OnboardingAppProps) {
   const synthetic = syntheticFixture && process.env.NODE_ENV !== "production";
   const router = useRouter();
@@ -199,6 +202,7 @@ export function OnboardingApp({
   const pendingStepRef = useRef<number | null>(null);
   const activeSaveRef = useRef<Promise<boolean> | null>(null);
   const nextFlightRef = useRef(false);
+  const savedAccentRef = useRef(typeof initialData?.acento === "string" ? initialData.acento : ONBOARDING_INITIAL.acento);
 
   // Hidratación: prioriza initialData (DB) > localStorage > URL params.
   // Importante: NUNCA restauramos `password` del localStorage. Es secret + no
@@ -368,6 +372,10 @@ export function OnboardingApp({
     async (step: number, snapshot: OnboardingDataState): Promise<boolean> => {
       if (!orgId) return false;
       if (synthetic) {
+        if (step === 4 && syntheticStep4Failure) {
+          setSaveState({ status: "error", message: "Ejemplo: no pudimos guardar el avance. Reintentá." });
+          return false;
+        }
         try { sessionStorage.setItem("folio:onboarding:synthetic-save", JSON.stringify({ step, data: snapshot })); } catch { /* isolated fixture */ }
         setSaveState({ status: "saved", lastSavedAt: Date.now() });
         return true;
@@ -403,8 +411,6 @@ export function OnboardingApp({
           case 4:
             result = await updateOnboardingStep(4, {
               acento: snapshot.acento,
-              logoUrl: snapshot.logoUrl,
-              cardMood: snapshot.cardMood,
             });
             break;
           case 6:
@@ -447,7 +453,7 @@ export function OnboardingApp({
         return false;
       }
     },
-    [orgId, orgSlug, persistInitialHours, synthetic],
+    [orgId, orgSlug, persistInitialHours, synthetic, syntheticStep4Failure],
   );
 
   const runPersistStep = useCallback((step: number, snapshot: OnboardingDataState): Promise<boolean> => {
@@ -468,7 +474,7 @@ export function OnboardingApp({
     if (!orgId) return;
     // Steps sin auto-save: 1 (signup), 7 (Google — persiste step_max al montar
     // y su OAuth escribe en `integration`), 8 (moment — finaliza, no edita).
-    if (stepIdx === 1 || stepIdx >= 7) return;
+    if (stepIdx === 1 || stepIdx === 4 || stepIdx >= 7) return;
 
     const snapshot = JSON.stringify({ step: stepIdx, data });
     if (snapshot === lastSavedSnapshotRef.current) return;
@@ -488,6 +494,7 @@ export function OnboardingApp({
 
   const set = (patch: Partial<OnboardingDataState>) => {
     if (stepIdx === 5 && (!hoursRef.current || hoursRef.current.locked || hoursError)) return;
+    if (stepIdx === 4 && patch.acento !== undefined) setSaveState({ status: patch.acento === savedAccentRef.current ? "idle" : "unsaved" });
     setData((prev) => ({ ...prev, ...patch }));
   };
 
@@ -504,6 +511,17 @@ export function OnboardingApp({
   const next = useCallback(() => {
     if (nextFlightRef.current) return;
     nextFlightRef.current = true;
+    if (stepIdx === 4) {
+      void (async () => {
+        if (!await flushSaveIfPending()) return;
+        if (!await runPersistStep(4, data)) return;
+        savedAccentRef.current = data.acento;
+        setError(null);
+        setDirection("forward");
+        setStepIdx(data.ownerTratante === false ? 6 : 5);
+      })().finally(() => { nextFlightRef.current = false; });
+      return;
+    }
     if (stepIdx === 5) {
       if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
       void persistInitialHours(data).then((saved) => { if (saved) { setDirection("forward"); setStepIdx(6); } }).finally(() => { nextFlightRef.current = false; }); return;
@@ -514,7 +532,7 @@ export function OnboardingApp({
         setStepIdx((n) => Math.min(ONB_TOTAL, n === 4 && data.ownerTratante === false ? 6 : n === 6 && data.ownerTratante === false ? 8 : n + 1));
       }
     }).finally(() => { nextFlightRef.current = false; });
-  }, [flushSaveIfPending, stepIdx, persistInitialHours, data]);
+  }, [flushSaveIfPending, stepIdx, persistInitialHours, runPersistStep, data]);
 
   const back = useCallback(() => {
     if (stepIdx === 5) {
@@ -526,7 +544,31 @@ export function OnboardingApp({
     setStepIdx((n) => Math.max(1, n === 6 && data.ownerTratante === false ? 4 : n === 8 && data.ownerTratante === false ? 6 : n - 1));
   }, [flushSaveIfPending, stepIdx, persistInitialHours, data]);
 
-  const skip = next;
+  const skip = useCallback(() => {
+    if (stepIdx !== 4) { next(); return; }
+    if (nextFlightRef.current) return;
+    nextFlightRef.current = true;
+    void (async () => {
+      if (!await flushSaveIfPending()) return;
+      const result = synthetic
+        ? { ok: true as const }
+        : orgId ? await deferOnboardingPersonalization(orgId) : { ok: false as const, error: "No encontramos el consultorio. Volvé a cargar la página." };
+      if (!result.ok) {
+        setError(result.error ?? "No pudimos guardar el avance. Reintentá.");
+        return;
+      }
+      if (synthetic) {
+        try { sessionStorage.setItem("folio:onboarding:synthetic-deferred", "true"); } catch { /* isolated fixture */ }
+      }
+      // El texto del botón avisa si se descarta un color pendiente. No escribe
+      // color, logo ni mood; el logo sólo cambia por su propio botón de subida.
+      setData((current) => ({ ...current, acento: savedAccentRef.current }));
+      setSaveState({ status: "idle" });
+      setError(null);
+      setDirection("forward");
+      setStepIdx(data.ownerTratante === false ? 6 : 5);
+    })().finally(() => { nextFlightRef.current = false; });
+  }, [stepIdx, next, flushSaveIfPending, data.ownerTratante, synthetic, orgId]);
 
   // Keyboard (Enter/Esc) vive en StepShell: Enter tiene que invocar el next
   // EFECTIVO del paso (p.ej. handleNext del Step 3 que persiste el slug) y
@@ -628,7 +670,9 @@ export function OnboardingApp({
   // Reintento manual del autosave (indicador "Reintentar guardar" clickeable).
   const retrySave = useCallback(() => {
     const step = pendingStepRef.current ?? stepIdx;
-    void runPersistStep(step, data);
+    void runPersistStep(step, data).then((saved) => {
+      if (saved && step === 4) savedAccentRef.current = data.acento;
+    });
   }, [stepIdx, data, runPersistStep]);
 
   // Estado real de la integración Google (server) + retorno del OAuth.
@@ -643,6 +687,7 @@ export function OnboardingApp({
     next,
     back,
     skip,
+    savedAccent: savedAccentRef.current,
     orgId,
     orgSlug,
     direction,
@@ -715,7 +760,7 @@ export function OnboardingApp({
         </Link>
         <Link className="onb-home-link" href="/">← Volver al inicio</Link>
         {stepIdx < ONB_TOTAL ? (
-          <SaveIndicator state={saveState} onRetry={retrySave} />
+          <SaveIndicator state={stepIdx === 4 && data.acento !== savedAccentRef.current && saveState.status !== "saving" && saveState.status !== "error" ? { status: "unsaved" } : saveState} onRetry={retrySave} />
         ) : (
           <span />
         )}
@@ -800,6 +845,7 @@ function SaveIndicator({ state, onRetry }: { state: SaveState; onRetry: () => vo
   // estado idle garantiza que la región exista ANTES de que llegue contenido
   // (un live-region creado junto con su texto no se anuncia).
   if (state.status === "idle") return <span aria-live="polite" role="status" />;
+  if (state.status === "unsaved") return <span aria-live="polite" role="status" style={{ color: "var(--ink-2)", fontSize: 12 }}>Color sin guardar</span>;
   const base: React.CSSProperties = {
     fontSize: 12,
     color: "var(--ink-3)",

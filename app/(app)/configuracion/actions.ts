@@ -16,6 +16,7 @@ import {
   countSesionesOtraEspecialidad,
   saveBookingPrefs,
   saveConsultorio,
+  savePublicAccent,
   saveHorarios,
   readHorarios,
   type HorariosSnapshot,
@@ -23,6 +24,7 @@ import {
   saveServicios,
   type SaveBookingPrefsInput,
   type SaveConsultorioInput,
+  type SaveConsultorioReceipt,
   type SaveHorariosInput,
   type SaveServiciosInput,
 } from "@/lib/db/configuracion";
@@ -79,13 +81,22 @@ async function revalidateBookPublico(): Promise<void> {
   }
 }
 
-export async function saveConsultorioAction(input: SaveConsultorioInput): Promise<Result<void>> {
+export async function saveConsultorioAction(input: SaveConsultorioInput): Promise<Result<SaveConsultorioReceipt>> {
   const result = await saveConsultorio(input);
   if (result.ok) {
     revalidatePath("/configuracion");
     revalidatePath("/", "layout");
-    // Campos públicos (nombre, ciudad, tel, dirección, Instagram) viven en la
+    // Campos públicos (nombre, bio, ciudad, tel, dirección, Instagram) viven en la
     // página estática /book/<slug> — refrescarla on-demand.
+    await revalidateBookPublico();
+  }
+  return result;
+}
+
+export async function savePublicAccentAction(input: { accent: string; expectedAccent: string; organizationId: string; memberId: string }): Promise<Result<void>> {
+  const result = await savePublicAccent(input);
+  if (result.ok) {
+    revalidatePath("/configuracion");
     await revalidateBookPublico();
   }
   return result;

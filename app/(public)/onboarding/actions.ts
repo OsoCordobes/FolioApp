@@ -456,6 +456,25 @@ export interface Step4Data {
   cardMood?: "calido" | "clinico" | "editorial" | "boutique";
 }
 
+/** Avanza a la siguiente etapa sin escribir la identidad visual. Sirve para
+ * «Personalizar después»: al recargar no se vuelve al paso 4 por accidente. */
+export async function deferOnboardingPersonalization(organizationId: string): Promise<StepUpdateResult> {
+  if (!z.string().uuid().safeParse(organizationId).success) return { ok: false, error: "Consultorio inválido." };
+  const access = await resolveOrganizationEditor("wizard");
+  if (!access.ok) return access;
+  if (access.orgId !== organizationId) return { ok: false, error: "Cambió el consultorio activo. Volvé a cargar la página." };
+  try {
+    const { error } = await access.service.from("organization")
+      .update({ onboarding_step_max: 5 })
+      .eq("id", organizationId)
+      .lt("onboarding_step_max", 5);
+    if (error) return { ok: false, error: "No pudimos guardar el avance. Reintentá." };
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "No pudimos confirmar el avance. Reintentá." };
+  }
+}
+
 export interface Step5Data {
   organizationId: string;
   memberId: string;

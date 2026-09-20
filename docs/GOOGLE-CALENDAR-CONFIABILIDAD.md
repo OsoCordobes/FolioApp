@@ -1,10 +1,14 @@
 # Google Calendar: recuperación y alcance
 
-Estado: implementación y pruebas locales sintéticas; no aplicada ni verificada contra una cuenta Google real.
+Estado actualizado el 20/09/2026: M107 instalada en producción y código publicado; pruebas sintéticas aprobadas. La sincronización completa contra una cuenta Google controlada sigue sin acreditarse y el cron periódico `sync-google` todavía no está programado. El checkpoint vigente está en `docs/LAUNCH-BOARD.md`. Los apartados históricos de implementación se conservan abajo.
 
 ## Despliegue
 
-Aplicar `20260908175852_M107_google_calendar_durability.sql` antes del código. Es aditiva: registra intenciones por referencia y no realiza llamadas al proveedor. No cambia el consentimiento de conexión. Desplegar, probar con una organización y calendario sintéticos autorizados y sólo entonces programar `/api/cron/sync-google` con `CRON_SECRET`. La programación no se activó en este cambio. Mantener también el trabajo de renovación de canales.
+M107 `20260908175852_M107_google_calendar_durability.sql` ya está instalada; no reaplicarla. Es aditiva: registra intenciones por referencia y no realiza llamadas al proveedor. No cambia el consentimiento de conexión. Antes de programar `/api/cron/sync-google`, completar un ensayo autorizado con datos de prueba y una cuenta/calendario controlados, revisar la cola existente y confirmar credenciales y monitoreo. No se puede usar una organización marcada `is_synthetic=true` para ese ensayo externo: el bloqueo intencional del proveedor debe conservarse. Mantener también el trabajo de renovación de canales.
+
+Lectura productiva agregada del 20/09 a las 13:45:23 UTC: cuatro integraciones Google con token almacenado y un trabajo saliente pendiente; cero leased, terminal u ownership_review. No se leyeron valores de tokens, datos de pacientes, IDs de calendarios ni contenido de eventos. Un token almacenado no demuestra autorización todavía vigente. No se reclamó ni despachó ningún trabajo. La programación global podría ejecutar esa cola y requiere un paquete de activación revisado, no sólo añadir una línea a Vercel.
+
+La reserva confirmada se guarda primero en Folio y crea una intención de salida a Google. Los eventos externos de Google se importan como bloqueos genéricos; editar o borrar en Google un evento creado por Folio no modifica hoy el turno Folio. La decisión de admitir gestión de turnos desde Google sigue pendiente; este estado no debe describirse como sincronización completa bidireccional.
 
 La conexión humana mantiene nonce firmado, cookie de un uso, usuario/miembro vigente y MFA. El callback comprueba la persistencia antes de informar éxito y conserva el calendario seleccionado. Las organizaciones marcadas `is_synthetic=true` no pueden iniciar OAuth, intercambiar tokens, reclamar trabajos, renovar canales ni aplicar snapshots. Los trabajos de servicio sólo seleccionan organizaciones y miembros vigentes, con invitación aceptada o miembro histórico creado directamente. Revalidan ese permiso persistido inmediatamente antes de consultar al proveedor y, en salida, otra vez antes de modificar eventos; no heredan indefinidamente el permiso de un claim anterior. No exigen una sesión MFA humana a los trabajos automáticos sin actor. Los RPC de trabajo carecen de EXECUTE para `anon` y `authenticated`.
 

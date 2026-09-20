@@ -1,0 +1,29 @@
+.perfil-accent-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.perfil-accent-option { display: flex; align-items: center; gap: 9px; min-height: 46px; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); text-align: left; font: inherit; font-size: 12px; font-weight: 550; cursor: pointer; }
+.perfil-accent-option:hover { border-color: var(--ink-3); background: var(--surface-2); }
+.perfil-accent-option.is-selected { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.perfil-accent-option:disabled { cursor: not-allowed; opacity: .6; }
+.perfil-accent-option:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.perfil-accent-swatch { width: 20px; height: 20px; flex: none; border-radius: 50%; border: 1px solid rgba(0,0,0,.12); }
+.perfil-accent-check { margin-left: auto; font-size: 16px; line-height: 1; }
+.perfil-editor { display: grid; gap: 15px; padding: 20px 24px 24px; }
+.perfil-editor-controls { display: grid; gap: 16px; }
+.perfil-editor-label { color: var(--ink); font-size: 13px; font-weight: 600; }
+.perfil-editor-controls p { margin: 0; color: var(--ink-2); font-size: 12px; line-height: 1.55; }
+.perfil-editor-links { display: flex; flex-wrap: wrap; gap: 8px; }
+.perfil-editor-links :is(a, button) { display: inline-flex; align-items: center; min-height: 40px; padding: 8px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; font-size: 12px; font-weight: 600; text-decoration: none; cursor: pointer; }
+.perfil-editor-links :is(a, button):hover { border-color: var(--ink-3); }
+.perfil-editor-links :is(a, button):focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.perfil-editor-logo { padding-top: 8px; border-top: 1px solid var(--line-soft); }
+.perfil-editor-logo summary { min-height: 44px; display: flex; align-items: center; color: var(--accent); font-size: 13px; font-weight: 600; cursor: pointer; }
+.perfil-editor-logo summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.perfil-editor-logo p { margin-bottom: 10px; }
+.perfil-editor-preview-disclosure summary { display: inline-flex; align-items: center; min-height: 44px; color: var(--accent); font-size: 13px; font-weight: 700; cursor: pointer; }
+.perfil-editor-preview-disclosure summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.perfil-editor-preview-disclosure[open] summary { margin-bottom: 12px; }
+.perfil-editor-preview { overflow: visible; border: 1px solid var(--line); border-radius: 12px; }
+.perfil-editor-preview .bl-root { min-height: 0; width: 100%; }
+.perfil-editor-unavailable { margin: 0; padding: 16px; border: 1px solid var(--line); border-radius: 10px; color: var(--ink-2); font-size: 13px; line-height: 1.5; }
+.perfil-editor-published { justify-self: start; font-size: 12px; }
+@media (max-width: 600px) { .perfil-editor { padding: 16px; } .perfil-accent-options { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (prefers-reduced-motion: reduce) { .perfil-editor-preview { scroll-behavior: auto; } }
