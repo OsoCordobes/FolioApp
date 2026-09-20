@@ -251,6 +251,23 @@ Dirección confirmada por el titular: base visual Folio con identidad del profes
 
 | 20/09, continuidad y cuota | Nuevo corte de herramientas: B figura interrupted y A lo reactiva desde cambios conservados; D retoma gates. Cuota compartida37%. No nuevas sesiones duplicadas ni repetición del SQL M126 ya comprobado. C sólo inventaría imágenes: Node22 coincide, stack PG17/Auth/Storage fijado requiere descarga; runtime continúa pendiente y se prevén fuente/destino secuenciales para reducir carga |
 
+| 20/09, D02 candidato visual revisado | Commit4fdc5f0795cba2e15f2ac48a8888b39fcdbda983 preservado; tipos/lint/unidades/build aprobados, 16 E2E y OG2/2. Nueva regresión de horario poblado GREEN, guard quitado temporalmente RED por horario desaparecido y restaurado GREEN; build exacto del fixture PASS. A vio escritorio1270 y móvil390: pide quitar duplicación de catálogos, hover amarillo saturado y compactar fallback Solo sin foto. D hace commit focal adicional; todavía no aprobación estética final |
+
+| 20/09, contrato M126 revisado | Revisión independiente de SQL/actions/resume sin blockers por lectura; hash A5D69BF73898356FF2C07430323292546278B61114C56B9029163F96884FD6D6 verificado. Ambos bootstraps comparten core privado y exclusión; membresía aceptada/directa, identidad/MFA/OWNER/contexto conservados. No repite SQL B ni equivale a revisión final de todo B02b |
+
+| 20/09, integración B02b y cuota | B incorpora renderer4fdc5f como cb7d1e8; 2246 unidades PASS y pruebas de navegador/build integrados en curso. Saldo compartido33%. El ajuste visual siguiente permanece focal; no se abren campañas ajenas mientras cierran estos paquetes |
+
+| 20/09, D02 cierre visual | A aprueba dirección del checkpoint tras ver 1270/390: elección única de servicio, CTA hacia servicios, reserva posterior, colores sobrios y fallback Solo compacto. Commit final308155822ee225d56ba5fc4a760b3a7631361feb, parent4fdc5f0; árbol limpio. Build serial PASS después de fallo ENOENT cuando dev/build compartían .next; fallo preservado, colisión inferida y corroborada por ejecución serial. Revisión independiente de código B pendiente; preview4434 restablecida |
+
+| 20/09, C01 preflight de imágenes | Sin descarga ni start: docker system df/info fallan por pipe LinuxEngine inexistente. C:21.95GB libres y RAM física libre1.99GB de16.34GB durante gates. Las seis imágenes nuevas quedan not_attempted; caché Node no reverificada. A detiene ventana sin retry/limpieza/reparación y espera liberar pruebas propias antes de nuevo preflight. Reporte privado folio-c01-image-preflight-20260920T021606691Z.json, SHA2560C73F484629F6DADDC4899838BB136307D5713656A76B1BA9973BD28670E643C. Motor recuperado previamente no implica operativo ahora |
+
+## Preparación de publicación del checkpoint (sin ejecutar)
+
+- Master remoto sigue c5c5fed; PR166 sigue borrador con cabeza remota f769944. Nuevas entregas se incorporan sólo después de revisión de código. SHA integrado y CI final todavía pendientes.
+- M125 requerida: 20260920002500, SHA25664CD33767AF4A2533E788C547CBDF700BF70931A3BA0CE40C107A6BAD03796A8. M126 requerida: 20260920004929, SHA256A5D69BF73898356FF2C07430323292546278B61114C56B9029163F96884FD6D6. Comprobar contra archivos del candidato antes de solicitar aplicación; ledger y readback de definiciones/permisos después. No incluye M124 ni nuevas activaciones de controles.
+- Migraciones compatibles con RPC legado antes de desplegar el código nuevo; aprobación concreta del titular para destino productivo y merge/despliegue del candidato revisado. No aplicar down migrations ni borrar nuevas organizaciones para retroceder. Si hay que volver a código anterior, revisar primero las altas de clínica no tratante creadas con el nuevo recorrido; preferir corrección compatible si el anterior no puede reanudarlas.
+- Entrega de cuenta/correo, proveedores reales y restauración completa siguen siendo evidencias separadas. No presentar el checkpoint visual como lanzamiento global aprobado.
+
 ## Próxima decisión del manager
 
 Cloudflare guardado, verificado y titular confirma desaparición del error. PR166 incluye B01, B02a, D01, lock Linux y M125 revisados. CI de f769944 aprobada; completar B02b/D02, revisión independiente y vista previa visible antes de preparar publicación con las migraciones necesarias. B03/M124 sigue separado y deberá desactivar su auto-Preview Vercel antes de cualquier push. Motor Docker operativo; C01 aún requiere ensayo completo. La decisión sobre gestionar turnos también desde Google continúa pendiente; no prometer importación de pacientes ni activar sincronización productiva por suposición.
