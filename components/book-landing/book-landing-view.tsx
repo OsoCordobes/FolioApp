@@ -79,7 +79,7 @@ export function BookLandingView({
   const { org, servicios, profesionales } = data;
   const acento = isValidHex(org.acentoHex) ? org.acentoHex : DEFAULT_ACENTO;
   const acento2 = adjustHexLightness(acento, -12);
-  const acentoSoft = adjustHexLightness(acento, 60);
+  const acentoSoft = `color-mix(in srgb, ${acento} 9%, #ffffff)`;
 
   const content = resolveBookLandingContent(org.especialidad, org.rubro);
   const lugar = [org.ciudad, org.provincia].filter(Boolean).join(", ");
@@ -138,7 +138,7 @@ export function BookLandingView({
           <span className="bl-header-name">{org.nombre}</span>
         </div>
         {mode === "published" && puedeReservar ? (
-          <a href="#reservar" className="fi-btn fi-btn-primary bl-header-cta">Reservar</a>
+          <a href="#servicios" className="fi-btn fi-btn-primary bl-header-cta">Reservar</a>
         ) : mode === "preview" ? (
           <span className="bl-preview-label">Vista previa</span>
         ) : null}
@@ -165,7 +165,7 @@ export function BookLandingView({
             <p className="bl-hero-value">{heroDescription}</p>
             <div className="bl-hero-actions">
               {mode === "published" && puedeReservar ? (
-                <a href="#reservar" className="fi-btn fi-btn-primary bl-btn-lg">
+                <a href="#servicios" className="fi-btn fi-btn-primary bl-btn-lg">
                   {content.reservarCtaLabel}
                 </a>
               ) : mode === "preview" && puedeReservar ? (
@@ -180,9 +180,9 @@ export function BookLandingView({
               </p>
             ) : null}
           </div>
-          <div className={`bl-hero-figure${profesionalIdentificado ? " bl-hero-figure-person" : ""}`}>
+          <div className={`bl-hero-figure${profesionalIdentificado ? " bl-hero-figure-person" : ""}${profesionalIdentificado && !heroFotoProfesional ? " bl-hero-figure-no-photo" : ""}`}>
             {profesionalIdentificado ? (
-              <div className="bl-portrait">
+              <div className={`bl-portrait${heroFotoProfesional ? "" : " bl-portrait-no-photo"}`}>
                 {heroFotoProfesional ? (
                   <PublicImage
                     src={heroFotoProfesional}
@@ -198,7 +198,7 @@ export function BookLandingView({
                   <AvatarIniciales
                     fullName={heroNombre}
                     acentoHex={acento}
-                    size="xl"
+                    size="lg"
                     className="bl-portrait-initials"
                   />
                 )}
@@ -242,7 +242,7 @@ export function BookLandingView({
         </section>
 
         {/* Barra sticky de reserva (solo mobile, aparece al pasar el hero). */}
-        {mode === "published" && puedeReservar ? <StickyBookCta label={content.reservarCtaLabel} /> : null}
+        {mode === "published" && puedeReservar ? <StickyBookCta label={content.reservarCtaLabel} targetId="servicios" /> : null}
 
         <section className="bl-reservation" aria-label="Servicios y reserva">
           <div className="bl-reservation-heading">
@@ -251,8 +251,8 @@ export function BookLandingView({
             <p>{puedeReservar ? "Elegí un servicio para ver los horarios disponibles." : "La reserva online estará disponible cuando el consultorio habilite turnos."}</p>
           </div>
           <div className="bl-reservation-grid">
-            <section className="bl-services" aria-label="Servicios">
-              <h3 className="bl-section-title">Servicios</h3>
+            <section id="servicios" className="bl-services" aria-label="Servicios">
+              <h3 className="bl-section-title" tabIndex={-1}>Servicios</h3>
               {servicios.length > 0 ? (
                 <div className="bl-services-grid">
                   {servicios.map((s) => (

@@ -75,6 +75,7 @@ export function BookLanding({
           servicios={servicios}
           profesionales={profesionalesLite}
           fetchSlotsAction={fetchSlotsAction}
+          serviceCatalogOutside
           />
         )}
       />

@@ -101,6 +101,7 @@ export function BookingWizard({
   servicios,
   profesionales = [],
   fetchSlotsAction = fetchSlotsPublico,
+  serviceCatalogOutside = false,
 }: {
   org: OrgPublic;
   servicios: ServicioPublic[];
@@ -108,6 +109,8 @@ export function BookingWizard({
   profesionales?: ProfesionalPublico[];
   /** Injectable Server Action for the isolated development preview. */
   fetchSlotsAction?: typeof fetchSlotsPublico;
+  /** The published landing owns the only visible service list. */
+  serviceCatalogOutside?: boolean;
 }) {
   const [vista, setVista] = useState<Vista>("servicio");
   const [servicioId, setServicioId] = useState<string>(servicios[0]?.id ?? "");
@@ -262,7 +265,7 @@ export function BookingWizard({
               tabIndex={-1}
               className="a11y-focus-heading bk-step-title"
             >
-              Elegí el servicio
+              {serviceCatalogOutside ? "Elegí un servicio de la lista" : "Elegí el servicio"}
             </h2>
             {servicios.length === 0 ? (
               <div className="bk-empty">
@@ -274,7 +277,12 @@ export function BookingWizard({
                 </p>
               </div>
             ) : null}
-            <div className="bk-lista">
+            {serviceCatalogOutside && servicios.length > 0 ? (
+              <p className="bk-outside-service">
+                Seleccioná un servicio para ver los horarios.
+                <a href="#servicios">Ver servicios</a>
+              </p>
+            ) : <div className="bk-lista">
               {servicios.map((s) => (
                 <button
                   key={s.id}
@@ -296,7 +304,7 @@ export function BookingWizard({
                   </svg>
                 </button>
               ))}
-            </div>
+            </div>}
           </section>
         ) : null}
 
@@ -306,13 +314,11 @@ export function BookingWizard({
             recibe el foco al entrar al paso. */}
         {vista === "profesional" ? (
           <section>
-            <button
-              type="button"
-              className="bk-back"
-              onClick={() => setVista("servicio")}
-            >
-              ← Cambiar servicio
-            </button>
+            {serviceCatalogOutside ? (
+              <a href="#servicios" className="bk-back" onClick={() => setVista("servicio")}>← Cambiar servicio</a>
+            ) : (
+              <button type="button" className="bk-back" onClick={() => setVista("servicio")}>← Cambiar servicio</button>
+            )}
             <h2
               ref={stepHeadingRef}
               tabIndex={-1}
@@ -345,13 +351,13 @@ export function BookingWizard({
 
         {vista === "slot" ? (
           <section>
-            <button
-              type="button"
-              className="bk-back"
-              onClick={() => setVista(pasoPrevioASlot(multiProf))}
-            >
-              {multiProf ? "← Cambiar profesional" : "← Cambiar servicio"}
-            </button>
+            {serviceCatalogOutside && !multiProf ? (
+              <a href="#servicios" className="bk-back" onClick={() => setVista("servicio")}>← Cambiar servicio</a>
+            ) : (
+              <button type="button" className="bk-back" onClick={() => setVista(pasoPrevioASlot(multiProf))}>
+                {multiProf ? "← Cambiar profesional" : "← Cambiar servicio"}
+              </button>
+            )}
             <h2
               ref={stepHeadingRef}
               tabIndex={-1}
@@ -404,13 +410,11 @@ export function BookingWizard({
                     );
                   })()}
                 </p>
-                <button
-                  type="button"
-                  className="fi-btn fi-btn-ghost bk-empty-cta"
-                  onClick={() => setVista("servicio")}
-                >
-                  Elegir otro servicio
-                </button>
+                {serviceCatalogOutside ? (
+                  <a href="#servicios" className="fi-btn fi-btn-ghost bk-empty-cta" onClick={() => setVista("servicio")}>Elegir otro servicio</a>
+                ) : (
+                  <button type="button" className="fi-btn fi-btn-ghost bk-empty-cta" onClick={() => setVista("servicio")}>Elegir otro servicio</button>
+                )}
               </div>
             ) : null}
             <div className="bk-dias">

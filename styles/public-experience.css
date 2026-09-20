@@ -33,7 +33,11 @@
 .bl-confirm-note::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
 .bl-hero-figure { position: relative; width: 100%; min-width: 0; align-self: center; animation: none; }
 .bl-hero-figure-person { width: 100%; }
+.bl-hero-figure-no-photo { max-width: 290px; justify-self: center; }
 .bl-portrait { width: 100%; max-width: 390px; margin-inline: auto; aspect-ratio: 4 / 4.2; border: 0; border-radius: 22px; background: color-mix(in srgb, var(--accent) 15%, var(--surface)); box-shadow: none; }
+.bl-portrait-no-photo { height: 250px; aspect-ratio: auto; background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
+.bl-portrait-no-photo .bl-portrait-initials { transform: translateY(-15px); box-shadow: none; }
+.bl-portrait-no-photo .bl-portrait-caption { padding-top: 12px; border-top: 1px solid color-mix(in srgb, var(--accent) 20%, var(--line)); background: transparent; text-align: center; }
 .bl-portrait::after { inset: 12px; border-color: color-mix(in srgb, var(--surface) 70%, transparent); }
 .bl-portrait-caption { position: absolute; z-index: 1; right: 14px; bottom: 14px; left: 14px; padding: 11px 14px; border-radius: 10px; background: color-mix(in srgb, var(--surface) 91%, transparent); color: var(--ink); font-size: 12px; font-weight: 700; overflow-wrap: anywhere; }
 .bl-clinic-art { position: relative; display: flex; flex-direction: column; justify-content: space-between; min-height: 340px; padding: clamp(22px, 3vw, 36px); overflow: hidden; border-radius: 22px; background: color-mix(in srgb, var(--accent) 16%, var(--surface)); }
@@ -56,6 +60,7 @@
 .bl-reservation-heading p { margin: 0; color: var(--ink-2); font-size: 15px; line-height: 1.6; }
 .bl-reservation-grid { display: grid; grid-template-columns: minmax(0, .82fr) minmax(0, 1.18fr); align-items: start; gap: clamp(18px, 3vw, 34px); }
 .bl-services, .bl-book { min-width: 0; padding: 0; }
+.bl-services { scroll-margin-top: 92px; }
 .bl-services-grid { display: flex; flex-direction: column; gap: 11px; }
 .bl-section-title { margin: 0 0 18px; font-family: var(--font-sans); font-size: 22px; font-weight: 720; line-height: 1.25; letter-spacing: -.04em; }
 .bl-service-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 14px; padding: 18px 20px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: none; }
@@ -76,6 +81,10 @@
 .bk-step-title { margin-bottom: 17px; font-size: 20px; }
 .bk-current-service { display: inline-flex; max-width: 100%; margin: 0 0 18px; padding: 7px 10px; border-radius: 8px; background: var(--accent-soft); color: var(--ink); font-size: 12px; font-weight: 650; line-height: 1.4; overflow-wrap: anywhere; }
 .bk-servicio { min-height: 62px; }
+.bl-root .bk-servicio:hover, .bl-root .bk-servicio:focus-visible { background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
+.bk-outside-service { margin: 0; color: var(--ink-2); font-size: 14px; line-height: 1.65; }
+.bk-outside-service a { display: inline-flex; align-items: center; min-height: 44px; margin-top: 14px; padding: 8px 13px; border: 1px solid var(--line); border-radius: 9px; color: var(--ink); font-weight: 700; text-decoration: none; }
+.bk-outside-service a:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
 
 .bl-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; padding: 0 0 62px; }
 .bl-details > section { min-width: 0; padding: clamp(24px, 3vw, 36px); border: 1px solid var(--line); border-radius: 18px; background: var(--surface); }
@@ -94,6 +103,7 @@
 .bl-root[data-mode="preview"] .bl-hero-figure { width: 100%; }
 .bl-root[data-mode="preview"] .bl-clinic-art { min-height: 190px; }
 .bl-root[data-mode="preview"] .bl-portrait { max-width: none; height: 190px; aspect-ratio: auto; }
+.bl-root[data-mode="preview"] .bl-hero-figure-no-photo { max-width: 290px; }
 .bl-root[data-mode="preview"] .bl-reservation { padding-block: 28px; }
 .bl-root[data-mode="preview"] .bl-reservation-grid, .bl-root[data-mode="preview"] .bl-details { grid-template-columns: minmax(0, 1fr); }
 .bl-root[data-mode="preview"] .bl-details .bl-team { grid-column: auto; }
@@ -113,6 +123,8 @@
   .bl-hero-value { margin-bottom: 18px; font-size: 15px; }
   .bl-hero-figure { width: 100%; }
   .bl-portrait { max-width: none; height: 210px; aspect-ratio: auto; }
+  .bl-hero-figure-no-photo { max-width: 280px; }
+  .bl-portrait-no-photo { height: 200px; }
   .bl-clinic-art { min-height: 190px; padding: 20px; }
   .bl-clinic-art-mark { width: 72px; height: 72px; border-radius: 16px; }
   .bl-clinic-art-mark .bl-clinic-avatar { width: 64px !important; height: 64px !important; font-size: 25px !important; }

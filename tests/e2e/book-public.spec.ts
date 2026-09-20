@@ -6,12 +6,12 @@ import { expect, test } from "../fixtures/local-test";
  * Drives /dev/book-preview (mock data shape identical to /book/[slug]).
  * Verifies the doctor-first landing integration:
  *   - The hero renders the org name + a "Reservar" CTA that anchors to the
- *     focused booking section (#reservar).
+ *     sole service catalog (#servicios).
  *   - The booking flow itself is unchanged ("Elegí el servicio", id="bk-flow").
  *   - The landing surfaces the services vitrine + the "Hecho con Folio"
  *     powered-by footer.
- *   - On desktop the sticky mobile CTA is hidden; on mobile it is mounted
- *     with #reservar/#bk-flow as its smooth-scroll target.
+ *   - On desktop the sticky mobile CTA is hidden; on mobile it points to
+ *     the service catalog while the booking flow stays in #reservar.
  *
  * The real /book/[slug] route fetches the same data shape from Supabase;
  * this test isolates the UI integration without touching the DB.
@@ -23,8 +23,10 @@ test.describe("/dev/book-preview · BookLanding + booking flow", () => {
     await page.locator(".bl-service-card").filter({ hasText: "Seguimiento" }).getByRole("link", { name: /elegir seguimiento/i }).click();
     await expect(page.locator("#bk-flow").getByRole("heading", { name: /elegí un horario/i })).toBeVisible();
     await expect(page.locator("#bk-flow .bk-current-service")).toContainText("Seguimiento");
-    await page.locator("#bk-flow").getByRole("button", { name: /cambiar servicio/i }).click();
-    await expect(page.locator("#bk-flow").getByRole("heading", { name: /elegí el servicio/i })).toBeVisible();
+    await page.locator("#bk-flow").getByRole("link", { name: /cambiar servicio/i }).click();
+    await expect(page.locator("#bk-flow").getByRole("heading", { name: /elegí un servicio de la lista/i })).toBeVisible();
+    await expect(page.locator(".bl-service-card")).toHaveCount(3);
+    await expect(page.locator("#bk-flow .bk-servicio")).toHaveCount(0);
   });
 
   test("reselecting the active service keeps a loaded slot selectable", async ({ page }) => {
@@ -102,15 +104,16 @@ test.describe("/dev/book-preview · BookLanding + booking flow", () => {
     await expect(hero.locator(".bl-hero-title")).toContainText("Atelier Kinesiología");
     const cta = hero.locator("a.bl-btn-lg");
     await expect(cta).toContainText(/reservar/i);
-    await expect(cta).toHaveAttribute("href", "#reservar");
+    await expect(cta).toHaveAttribute("href", "#servicios");
   });
 
   test("booking flow renders inside #reservar with id='bk-flow'", async ({ page }) => {
     await page.goto("/dev/book-preview");
     await expect(page.locator("#reservar #bk-flow")).toBeVisible();
     await expect(
-      page.locator("#bk-flow").getByRole("heading", { name: /elegí el servicio/i }),
+      page.locator("#bk-flow").getByRole("heading", { name: /elegí un servicio de la lista/i }),
     ).toBeVisible();
+    await expect(page.locator("#bk-flow .bk-servicio")).toHaveCount(0);
   });
 
   test("landing surfaces the services vitrine + 'Hecho con Folio' footer", async ({ page }) => {
@@ -136,21 +139,22 @@ test.describe("/dev/book-preview · BookLanding + booking flow", () => {
     await expect(sticky).not.toBeVisible();
   });
 
-  test("mobile: sticky CTA is mounted with #reservar/#bk-flow scroll target", async ({ page }) => {
+  test("mobile: sticky CTA points to the sole service catalog", async ({ page }) => {
     // The IntersectionObserver-driven `is-shown` toggle is verified manually at
     // the visual gate against a real /book/<slug> page — recreating that scroll
     // interaction reliably headless proved brittle across viewports, so we
     // assert the deterministic parts:
     //   - the sticky bar exists in the DOM on mobile
-    //   - it carries the reserve CTA anchored to #reservar
-    //   - the booking flow target (#reservar / #bk-flow) resolves
+    //   - it carries the reserve CTA anchored to #servicios
+    //   - the booking flow target (#reservar / #bk-flow) still resolves
     await page.setViewportSize({ width: 375, height: 720 });
     await page.goto("/dev/book-preview");
     const sticky = page.locator(".bl-sticky-cta");
     await expect(sticky).toBeAttached();
     const btn = sticky.locator(".bl-sticky-btn");
     await expect(btn).toContainText(/reservar/i);
-    await expect(btn).toHaveAttribute("href", "#reservar");
+    await expect(btn).toHaveAttribute("href", "#servicios");
+    await expect(page.locator("#servicios")).toBeAttached();
     await expect(page.locator("#reservar")).toBeAttached();
     await expect(page.locator("#bk-flow")).toBeAttached();
   });
