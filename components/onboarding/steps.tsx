@@ -20,12 +20,11 @@ import { connectGoogleCalendar } from "@/app/(app)/configuracion/actions";
 import { updateOnboardingStep } from "@/app/(public)/onboarding/actions";
 import { StepShell } from "@/components/onboarding/step-shell";
 import { SlugEditor } from "@/components/onboarding/slug-editor";
-import { type PublicCardData } from "@/components/public-card/public-card";
 import { LogoUpload } from "@/components/public-card/logo-upload";
-import { MoodPicker } from "@/components/public-card/mood-picker";
 import { type CardMood } from "@/components/public-card/public-card";
 import { ESPECIALIDADES_META, ESPECIALIDAD_SLUGS } from "@/lib/especialidades/meta";
 import { validateFranjas } from "@/lib/onboarding/franjas";
+import { toOnboardingLandingPreview as previewDataFor } from "@/lib/onboarding/public-preview";
 import {
   getEspecialidadServicios,
   getKnownTemplateServiceSignatures,
@@ -47,7 +46,9 @@ export interface OnboardingDataState {
   /** M50 · especialidad arquitectural (quiropraxia | cardiologia | psicologia). Decide la herramienta clínica de la ficha. */
   especialidad: string;
   /** M49 · INDEPENDIENTE = consultorio de un profesional; CLINICA = org con equipo (invita después). */
-  tipo: "INDEPENDIENTE" | "CLINICA";
+  tipo: "INDEPENDIENTE" | "CLINICA" | null;
+  /** Elección explícita: el titular de una clínica puede no atender. */
+  ownerTratante: boolean | null;
   direccion: string;
   ciudad: string;
   provincia: string;
@@ -89,7 +90,8 @@ export const ONBOARDING_INITIAL: OnboardingDataState = {
   // de quiropraxia. El Step 3 exige elegirla para continuar.
   rubro: "",
   especialidad: "",
-  tipo: "INDEPENDIENTE",
+  tipo: null,
+  ownerTratante: null,
   direccion: "",
   ciudad: "",
   provincia: "",
@@ -102,11 +104,7 @@ export const ONBOARDING_INITIAL: OnboardingDataState = {
   diasActivos: ["lun", "mar", "mie", "jue", "vie"],
   franjas: [["09:00", "12:00"], ["15:00", "18:00"]],
   slotMin: 45,
-  servicios: [
-    { id: 1, nombre: "Consulta inicial", dur: 60, precio: 35000, soloNuevos: true },
-    { id: 2, nombre: "Seguimiento",      dur: 45, precio: 22000 },
-    { id: 3, nombre: "Pack 5 sesiones",  dur: 45, precio: 95000, paquete: true },
-  ],
+  servicios: [],
 };
 
 interface StepProps {
@@ -129,36 +127,6 @@ interface StepProps {
 // ─── Helpers de validación ──────────────────────────────────────────────────
 
 const TEL_RE = /^[\d\s\-+()]{6,}$/;
-
-function previewDataFor(data: OnboardingDataState): PublicCardData {
-  const fullName = [data.nombre, data.apellido].filter(Boolean).join(" ").trim();
-  return {
-    nombre: fullName || data.consultorioNombre || undefined,
-    consultorioNombre: data.consultorioNombre || undefined,
-    rubro: rubroLabel(data.rubro),
-    ciudad: data.ciudad || undefined,
-    provincia: data.provincia || undefined,
-    bio: data.bio || undefined,
-    telefonoPublico: data.telefonoPublico || data.tel || undefined,
-    instagramHandle: data.instagram || undefined,
-    direccionCompleta: data.direccion || undefined,
-    acentoHex: data.acento,
-    logoUrl: data.logoUrl ?? undefined,
-    cardMood: data.cardMood,
-    servicios: data.servicios
-      .filter((s) => s.nombre.trim())
-      .map((s) => ({
-        nombre: s.nombre,
-        dur: s.dur,
-        precioCents: Math.round(s.precio * 100),
-      })),
-  };
-}
-
-function rubroLabel(id: string | undefined): string | undefined {
-  if (!id) return undefined;
-  return getRubroTemplate(id).label;
-}
 
 // ─── Helpers de templates de servicios (rubro + especialidad) ──────────────
 
@@ -222,11 +190,11 @@ export function Step2Profesional({ data, set, next, back, orgSlug }: StepProps) 
   return (
     // canSkip=false: paso obligatorio — saltearlo publicaba una card pública
     // vacía (contradicción: Continuar deshabilitado pero Saltar habilitado).
-    <StepShell stepIdx={2} back={back} next={next} canSkip={false}
+    <StepShell stepIdx={2} compactFlow={data.ownerTratante === false} back={back} next={next} canSkip={false}
       headline="¿Cómo te llamás?"
-      sub="Tu nombre aparece en Folio y en tu perfil público. Podés cambiarlo después."
+      sub={data.ownerTratante === false ? "Tus datos identifican al responsable de la cuenta. No crean un perfil profesional público." : "Tu nombre aparece en Folio y en tu perfil público. Podés cambiarlo después."}
       nextDisabled={!canContinue}
-      previewData={previewDataFor(data)}
+      previewData={data.ownerTratante === false ? undefined : previewDataFor(data)}
       slug={orgSlug}
     >
       <div className="onb-form">
@@ -244,10 +212,10 @@ export function Step2Profesional({ data, set, next, back, orgSlug }: StepProps) 
               onBlur={() => onBlur("apellido")} />
           </Field>
         </div>
-        <Field label="Matrícula" hint="Formato libre. Si tu consejo usa otro, escribilo igual.">
+        {data.ownerTratante !== false ? <Field label="Matrícula" hint="Formato libre. Si tu consejo usa otro, escribilo igual.">
           <input type="text" placeholder="M.N. ACA 8942"
             value={data.matricula} onChange={(e) => set({ matricula: e.target.value })}/>
-        </Field>
+        </Field> : null}
         <Field label="Teléfono personal" error={errors.tel}
           hint="Para alertas internas. No se muestra a pacientes.">
           <div className="onb-input-prefix">
@@ -294,10 +262,10 @@ export function Step3Consultorio({ data, set, next, back, orgId, orgSlug }: Step
     const tpl = getRubroTemplate(slug); // rubro === especialidad (1:1)
     const patch: Partial<OnboardingDataState> = { especialidad: slug, rubro: slug };
 
-    if (!data.bio.trim() && data.ciudad.trim()) {
+    if (data.tipo !== "CLINICA" && !data.bio.trim() && data.ciudad.trim()) {
       patch.bio = tpl.bioTemplate(data.ciudad);
     }
-    if (serviciosUntouched(data.servicios)) {
+    if (data.ownerTratante !== false && serviciosUntouched(data.servicios)) {
       patch.servicios = templateToStateServicios(getEspecialidadServicios(slug));
     }
     const isDefaultHorarios =
@@ -327,7 +295,6 @@ export function Step3Consultorio({ data, set, next, back, orgId, orgSlug }: Step
           // "" (sin elegir) no pasa el z.enum del server — omitir hasta que elija.
           rubro: data.rubro || undefined,
           especialidad: data.especialidad || undefined,
-          tipo: data.tipo,
           ciudad: data.ciudad,
           provincia: data.provincia,
           direccion: data.direccion,
@@ -341,7 +308,8 @@ export function Step3Consultorio({ data, set, next, back, orgId, orgSlug }: Step
           return;
         }
       } catch {
-        // ignore — auto-save lo va a reintentar
+        setErrors((p) => ({ ...p, consultorioNombre: "No pudimos confirmar el link. Revisá tu conexión e intentá de nuevo." }));
+        return;
       }
     }
     next();
@@ -360,17 +328,17 @@ export function Step3Consultorio({ data, set, next, back, orgId, orgSlug }: Step
 
   return (
     // canSkip=false: igual que el Step 2 — este paso define la card pública.
-    <StepShell stepIdx={3} back={back} next={handleNext} canSkip={false}
-      headline="¿Dónde está tu consultorio?"
-      sub="Estos datos aparecen en tu perfil público de reservas."
+    <StepShell stepIdx={3} compactFlow={data.ownerTratante === false} back={back} next={handleNext} canSkip={false}
+      headline={data.tipo === "CLINICA" ? "¿Dónde está tu clínica?" : "¿Dónde está tu consultorio?"}
+      sub={data.ownerTratante === false ? "Estos datos identifican la clínica. La página podrá ofrecer turnos cuando incorpores profesionales y horarios." : "Estos datos aparecen en tu perfil público de reservas."}
       nextDisabled={!canContinue}
       previewData={previewDataFor(data)}
       slug={draftSlug || orgSlug}
     >
       <div className="onb-form">
-        <Field label="Nombre del consultorio" error={errors.consultorioNombre}
-          hint="Puede ser tu nombre o uno comercial.">
-          <input type="text" placeholder="Consultorio Lorenzo Martínez"
+        <Field label={data.tipo === "CLINICA" ? "Nombre de la clínica" : "Nombre del consultorio"} error={errors.consultorioNombre}
+          hint={data.tipo === "CLINICA" ? "Identifica a tu organización, no al titular." : "Puede ser tu nombre o uno comercial."}>
+          <input type="text" placeholder={data.tipo === "CLINICA" ? "Clínica del Centro" : "Consultorio Lorenzo Martínez"}
             value={data.consultorioNombre}
             onChange={(e) => { set({ consultorioNombre: e.target.value }); if (errors.consultorioNombre) setErrors((p) => ({ ...p, consultorioNombre: undefined })); }}
             onBlur={() => onBlur("consultorioNombre")} />
@@ -401,35 +369,7 @@ export function Step3Consultorio({ data, set, next, back, orgId, orgSlug }: Step
           </span>
         </div>
 
-        <div className="onb-field">
-          <span>Tipo de organización</span>
-          <div className="onb-dias" role="radiogroup" aria-label="Tipo de organización">
-            {([
-              { id: "INDEPENDIENTE", label: "Consultorio independiente" },
-              { id: "CLINICA", label: "Clínica" },
-            ] as const).map((opt) => {
-              const isOn = data.tipo === opt.id;
-              return (
-                <button
-                  key={opt.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={isOn}
-                  className={"onb-dia " + (isOn ? "is-on" : "")}
-                  style={{ width: "auto", padding: "0 14px" }}
-                  onClick={() => set({ tipo: opt.id })}
-                >
-                  {opt.label}
-                </button>
-              );
-            })}
-          </div>
-          <span className="onb-hint">
-            {data.tipo === "CLINICA"
-              ? "Al terminar, podés invitar profesionales y personal de secretaría desde Configuración."
-              : "Atendés y gestionás la agenda vos. Si más adelante sumás equipo, pasás a Clínica."}
-          </span>
-        </div>
+        <p className="onb-hint">{data.tipo === "CLINICA" ? "La clínica puede invitar profesionales desde Configuración. Las invitaciones pendientes aún no habilitan turnos." : "Configurás tu consultorio y tu agenda."}</p>
 
         <div className="onb-field">
           <SlugEditor
@@ -519,9 +459,9 @@ const ACENTOS_CURADOS = [
 
 export function Step4Personalizacion({ data, set, next, back, skip, orgSlug }: StepProps) {
   return (
-    <StepShell stepIdx={4} back={back} next={next} skip={skip}
+    <StepShell stepIdx={4} compactFlow={data.ownerTratante === false} back={back} next={next} skip={skip}
       headline="Tu identidad visual"
-      sub="Elegí cómo se presenta tu consultorio: logo, color y estilo. Podés cambiarlo después."
+      sub={`Elegí cómo se presenta ${data.tipo === "CLINICA" ? "tu clínica" : "tu consultorio"}: logo y color. Podés cambiarlos después.`}
       previewData={previewDataFor(data)}
       slug={orgSlug}
     >
@@ -578,17 +518,6 @@ export function Step4Personalizacion({ data, set, next, back, skip, orgSlug }: S
           </div>
         </section>
 
-        <section className="onb-identity-section">
-          <h2 className="onb-identity-h">Estilo de tu perfil</h2>
-          <p className="onb-identity-hint">
-            Define la tipografía, el contraste y la decoración. Elegí el que más
-            se parezca a tu práctica.
-          </p>
-          <MoodPicker
-            value={data.cardMood}
-            onChange={(mood) => set({ cardMood: mood })}
-          />
-        </section>
       </div>
     </StepShell>
   );
@@ -705,7 +634,7 @@ export function Step6Servicios({ data, set, next, back, skip, orgSlug }: StepPro
     const tplServicios = getEspecialidadServicios(data.especialidad);
     const tplSig = tplServicios.map((s) => s.nombre).join("|");
     const curSig = data.servicios.map((s) => s.nombre).join("|");
-    if (curSig === tplSig) return; // ya está el template correcto — no re-disparar autosave
+    if (data.ownerTratante === false || curSig === tplSig) return; // sin profesional no inventar servicios
     if (!serviciosUntouched(data.servicios)) return;
     set({ servicios: templateToStateServicios(tplServicios) });
     // Solo al montar: las ediciones posteriores del user no deben pisarse.
@@ -720,13 +649,13 @@ export function Step6Servicios({ data, set, next, back, skip, orgSlug }: StepPro
     set({ servicios: data.servicios.filter((_, k) => k !== i) });
 
   const canContinue =
-    data.servicios.length > 0 &&
+    (data.ownerTratante === false || data.servicios.length > 0) &&
     data.servicios.every((s) => s.nombre.trim() && s.dur > 0 && s.precio >= 0);
 
   return (
-    <StepShell stepIdx={6} back={back} next={next} skip={skip}
+    <StepShell stepIdx={6} compactFlow={data.ownerTratante === false} back={back} next={next} skip={skip}
       headline="¿Qué servicios ofrecés?"
-      sub="Los pacientes ven esta lista al reservar. Editable después en Configuración."
+      sub={data.ownerTratante === false ? "Podés preparar servicios de la clínica ahora o más tarde. Para ofrecer turnos necesitás profesionales aceptados y horarios configurados." : "Los pacientes ven esta lista al reservar. Editable después en Configuración."}
       nextDisabled={!canContinue}
       previewData={previewDataFor(data)}
       slug={orgSlug}
@@ -769,9 +698,10 @@ interface Step7GoogleProps extends StepProps {
   connected?: boolean;
   /** El callback OAuth volvió con error (gcal=error). */
   connectError?: boolean;
+  syntheticFixture?: boolean;
 }
 
-export function Step7Google({ data, next, back, skip, orgSlug, connected, connectError }: Step7GoogleProps) {
+export function Step7Google({ data, next, back, skip, orgSlug, connected, connectError, syntheticFixture }: Step7GoogleProps) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -781,10 +711,11 @@ export function Step7Google({ data, next, back, skip, orgSlug, connected, connec
   // invoke de StrictMode en dev no debe duplicar la llamada.
   const stepMaxPersistedRef = useRef(false);
   useEffect(() => {
+    if (syntheticFixture) return;
     if (stepMaxPersistedRef.current) return;
     stepMaxPersistedRef.current = true;
     void updateOnboardingStep(7, {});
-  }, []);
+  }, [syntheticFixture]);
 
   const handleConnect = () => {
     setError(null);
@@ -803,7 +734,7 @@ export function Step7Google({ data, next, back, skip, orgSlug, connected, connec
   return (
     <StepShell stepIdx={7} back={back} next={next} skip={skip} canSkip={!connected}
       headline="¿Conectamos tu Google Calendar?"
-      sub="Tus eventos de Google ocupan esos horarios en Folio. Las reservas confirmadas se sincronizan con tu calendario."
+      sub="Tus eventos de Google bloquean horarios en Folio. Las reservas de Folio crean eventos; cambios hechos sólo en Google no modifican los turnos de Folio."
       previewData={previewDataFor(data)}
       slug={orgSlug}
     >
@@ -815,7 +746,7 @@ export function Step7Google({ data, next, back, skip, orgSlug, connected, connec
             </div>
             <div className="onb-oauth-body">
               <b>Google Calendar conectado ✓</b>
-              <p>Tus eventos ocupan esos horarios y las reservas confirmadas se sincronizan con tu calendario.</p>
+              <p>Tus eventos bloquean horarios y las reservas de Folio crean eventos en Google.</p>
             </div>
           </div>
         ) : (

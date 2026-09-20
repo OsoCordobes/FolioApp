@@ -11,11 +11,11 @@
  * el captcha token (Turnstile) y el consent (Ley 25.326 art. 14).
  */
 
-import Script from "next/script";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 
 import { signInWithGoogle } from "@/app/(public)/login/actions";
 import { PasswordStrengthMeter } from "@/components/auth/password-strength-meter";
+import { TurnstileChallenge } from "@/components/auth/turnstile-challenge";
 import { StepShell } from "@/components/onboarding/step-shell";
 import { formatArsFromCents } from "@/lib/format/currency";
 
@@ -30,27 +30,33 @@ interface Step1RegistroProps {
   data: OnboardingData;
   set: (patch: Partial<OnboardingData>) => void;
   onSubmit: (options: { turnstileToken: string | null; consent: boolean }) => void;
+  onBack?: () => void;
   loading?: boolean;
   error?: string | null;
   /** Precio del plan en centavos ARS — derivado server-side de MP_PLAN_PRICE_CENTS. */
   planPriceCents: number;
+  clinicSeatPriceCents?: number;
+  compactFlow?: boolean;
+  captchaResetKey?: number;
 }
 
 export function Step1Registro({
   data,
   set,
   onSubmit,
+  onBack,
   loading,
   error,
   planPriceCents,
+  clinicSeatPriceCents,
+  compactFlow,
+  captchaResetKey,
 }: Step1RegistroProps) {
   const [emailErr, setEmailErr] = useState("");
   const [pwErr, setPwErr] = useState("");
   const [consent, setConsent] = useState(false);
   const [consentErr, setConsentErr] = useState("");
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
-  const captchaContainerRef = useRef<HTMLDivElement | null>(null);
-  const captchaWidgetIdRef = useRef<string | null>(null);
   const [googlePending, startGoogleTransition] = useTransition();
 
   // Google OAuth: el callback deja sesión abierta y /onboarding cae en
@@ -61,41 +67,6 @@ export function Step1Registro({
       await signInWithGoogle();
     });
   };
-
-  useEffect(() => {
-    if (!TURNSTILE_SITE_KEY) return;
-    if (!captchaContainerRef.current) return;
-    const tryRender = () => {
-      if (!window.turnstile) return false;
-      if (captchaWidgetIdRef.current) return true;
-      captchaWidgetIdRef.current = window.turnstile.render(captchaContainerRef.current!, {
-        sitekey: TURNSTILE_SITE_KEY,
-        theme: "auto",
-        size: "flexible",
-        callback: (token) => setCaptchaToken(token),
-        "expired-callback": () => setCaptchaToken(null),
-        "error-callback": () => setCaptchaToken(null),
-      });
-      return true;
-    };
-    if (!tryRender()) {
-      // Script may still be loading; poll briefly.
-      const id = setInterval(() => { if (tryRender()) clearInterval(id); }, 200);
-      return () => {
-        clearInterval(id);
-        if (captchaWidgetIdRef.current && window.turnstile) {
-          window.turnstile.remove(captchaWidgetIdRef.current);
-          captchaWidgetIdRef.current = null;
-        }
-      };
-    }
-    return () => {
-      if (captchaWidgetIdRef.current && window.turnstile) {
-        window.turnstile.remove(captchaWidgetIdRef.current);
-        captchaWidgetIdRef.current = null;
-      }
-    };
-  }, []);
 
   const validateAndNext = () => {
     let ok = true;
@@ -127,12 +98,14 @@ export function Step1Registro({
   return (
     <StepShell
       stepIdx={1}
+      compactFlow={compactFlow}
       headline="Empezá creando tu cuenta."
       // Precio: fuente canónica MP_PLAN_PRICE_CENTS (lib/mercadopago/client.ts).
       // Llega como prop desde el server component de /onboarding — mismo valor
       // que el cobro real, sin hardcode que pueda driftear del env.
-      sub={`30 días de prueba sin tarjeta. Después, ${formatArsFromCents(planPriceCents)} / mes.`}
+      sub={`30 días de prueba sin tarjeta. Después, ${formatArsFromCents(planPriceCents)} / mes${clinicSeatPriceCents ? ` de base + ${formatArsFromCents(clinicSeatPriceCents)} por miembro adicional` : ""}.`}
       next={validateAndNext}
+      back={onBack}
       canSkip={false}
       nextLabel={loading ? "Creando cuenta…" : "Continuar"}
       nextDisabled={loading}
@@ -209,16 +182,7 @@ export function Step1Registro({
         </label>
         {consentErr ? <span className="onb-err">{consentErr}</span> : null}
 
-        {TURNSTILE_SITE_KEY ? (
-          <>
-            <Script
-              src="https://challenges.cloudflare.com/turnstile/v0/api.js"
-              async
-              defer
-            />
-            <div ref={captchaContainerRef} style={{ marginTop: 4 }} />
-          </>
-        ) : null}
+        {TURNSTILE_SITE_KEY ? <TurnstileChallenge onTokenChange={setCaptchaToken} resetKey={captchaResetKey} /> : null}
 
         {error ? <p className="au-err onb-banner-err" role="alert">{error}</p> : null}
 

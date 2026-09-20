@@ -1,12 +1,29 @@
 # Folio — controles para publicar y abrir el piloto
 
+## Estado de coordinación desde el 19 de septiembre de 2026
+
+La fuente de trabajo vigente es [LAUNCH-BOARD.md](LAUNCH-BOARD.md). El checkpoint
+aportado por el titular cierra PR165, el despliegue de master `c5c5fed`, las 117
+migraciones y las activaciones M106/M120/M121. El manager confirmó que HEAD local
+y master remoto coinciden con ese SHA; no repitió el ensayo productivo. No
+reaplicar migraciones ni controles para resolver las advertencias históricas
+que se conservan abajo.
+
+El alcance siguiente es Solo y Clínica, cinco especialidades, Google y portal
+para adultos; menores y agentes automáticos pasan a una etapa posterior.
+El acceso desde «Probar Folio», recuperación integral y página pública profesional
+son prioridades explícitas. Las puertas todavía pendientes siguen requiriendo
+su propia evidencia; el checkpoint no habilita por sí solo el piloto clínico.
+
+## Procedimiento y estado histórico del 13 de septiembre
+
 Orden de entrega actualizado el 13 de septiembre de 2026. Este documento sustituye las recomendaciones
 anteriores que trataban correo, respaldos y límites de acceso como opcionales.
 La lista de trabajo y la evidencia vigente están en
 [el registro de implementación](plans/2026-09-08-market-readiness.md).
 **Folio todavía no está habilitado por este proceso para atención clínica real.**
 
-**Bloqueo vigente del candidato:** producción conserva 92 migraciones, según
+**Bloqueo histórico, superado por el checkpoint del 19/09:** producción conservaba 92 migraciones, según
 consulta de sólo lectura del 13 de septiembre; faltan 25 del candidato `17a3770`.
 MFA, M106, M120/M121 y M122 no están presentes. El push y la PR entregan código
 revisable, pero el merge en `master` activaría un despliegue con dependencias
@@ -101,6 +118,11 @@ Guías por frente: [MFA](MFA-ROLLOUT.md), [adjuntos](ADJUNTOS-CLINICOS.md),
 [saldo autorizado](M121-PAYMENT-SETTLEMENT.md).
 
 ## Puertas del piloto: todas deben quedar aprobadas
+
+Aplicar estas puertas al alcance adulto actual definido en el tablero. La fila
+de menores documenta el requisito de la futura ampliación y no habilita nuevas
+atenciones de menores en el lanzamiento adulto. Las otras puertas conservan su
+exigencia; estados históricos no equivalen a verificación actual.
 
 | Control | Evidencia que permite aprobarlo |
 |---|---|

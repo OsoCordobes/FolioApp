@@ -15,12 +15,17 @@ export async function acquireBackupLock(destination, {targetScope} = {}) {
   // Restore exclusivity belongs to the target origin even if another process
   // chooses another journal directory. Capture keeps its canonical-root scope.
   const hash = createHash('sha256').update(targetScope??canonical).digest('hex');
-  // Windows named pipes have no stale filesystem socket after process death.
-  // Elsewhere a loopback-only port gives the same property. A port collision
-  // refuses a capture, never starts two writers or falls back to another lock.
+  // Windows named pipes and Linux abstract sockets disappear with their owner.
+  // The full hash keeps distinct Linux destinations out of the same 14-bit TCP
+  // port. Other Unix systems retain the loopback-only port and fail closed.
+  // Old Linux TCP leases and new abstract leases do not exclude each other:
+  // stop old operators before rollout. All operators for a destination must
+  // share a network namespace, not a volume mounted across isolated ones.
   const address = process.platform === 'win32'
     ? { path: `\\\\.\\pipe\\folio-backup-${hash}` }
-    : { host: '127.0.0.1', port: 49152 + (parseInt(hash.slice(0,8),16) % 16384), exclusive: true };
+    : process.platform === 'linux'
+      ? { path: `\0folio-backup-${hash}` }
+      : { host: '127.0.0.1', port: 49152 + (parseInt(hash.slice(0,8),16) % 16384), exclusive: true };
   const server = createServer(socket => socket.destroy());
   try {
     await new Promise((resolve,reject) => {

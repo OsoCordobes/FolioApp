@@ -8,7 +8,7 @@ const source=process.env.FOLIO_TEST_APP_CONFIG?JSON.parse(process.env.FOLIO_TEST
 // child exit before reporting readiness. Never preserve arbitrary NEXT_* envs.
 const workerEnv={};
 if(source&&typeof process.send==='function')for(const key of ['NEXT_PRIVATE_WORKER','TURBOPACK'])if(process.env[key]==='1')workerEnv[key]='1';
-const config=source?{...testAppConfig({E2E_BASE_URL:source.appUrl,FOLIO_TEST_SUPABASE_URL:source.realSupabase?source.supabaseUrl:undefined,FOLIO_TEST_SUPABASE_ANON_KEY:source.anonKey,FOLIO_TEST_SUPABASE_SERVICE_KEY:source.serviceKey,FOLIO_TEST_DATABASE_URL:source.databaseUrl,FOLIO_TEST_LOGIN_EMAIL:source.email,FOLIO_TEST_LOGIN_PASSWORD:source.password,FOLIO_TEST_BOOKING_SLUG:source.bookingSlug,FOLIO_TEST_PROTOTYPE_ROOT:source.prototypeRoot,FOLIO_TEST_CLINICAL:source.clinical===true?'1':'0'}),mode:source.mode==='build'?'build':'app'}:testAppConfig(process.env);
+const config=source?{...testAppConfig({E2E_BASE_URL:source.appUrl,FOLIO_TEST_SUPABASE_URL:source.realSupabase?source.supabaseUrl:undefined,FOLIO_TEST_SUPABASE_ANON_KEY:source.anonKey,FOLIO_TEST_SUPABASE_SERVICE_KEY:source.serviceKey,FOLIO_TEST_DATABASE_URL:source.databaseUrl,FOLIO_TEST_LOGIN_EMAIL:source.email,FOLIO_TEST_LOGIN_PASSWORD:source.password,FOLIO_TEST_BOOKING_SLUG:source.bookingSlug,FOLIO_TEST_PROTOTYPE_ROOT:source.prototypeRoot,FOLIO_TEST_CLINICAL:source.clinical===true?'1':'0',FOLIO_TEST_TURNSTILE_SITEKEY:source.turnstileSitekey}),mode:source.mode==='build'?'build':'app'}:testAppConfig(process.env);
 // Revalidate encoded child configuration rather than trusting an inherited flag.
 const clean=safeEnvironment(process.env,config);
 for(const key of Object.keys(process.env))delete process.env[key];

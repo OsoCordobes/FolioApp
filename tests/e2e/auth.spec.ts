@@ -41,7 +41,7 @@ function nuevoEmail(): string {
 }
 
 test.describe("Auth · signup → onboarding", () => {
-  test("happy path · /login signup creates account inline", async ({ page }) => {
+  test("happy path · /login dirige al alta con modalidad explícita", async ({ page }) => {
     const email = nuevoEmail();
     const password = "TestPassword123!";
 
@@ -52,8 +52,9 @@ test.describe("Auth · signup → onboarding", () => {
     });
 
     // 2. Switch to signup view.
-    await page.getByRole("button", { name: /crear cuenta/i }).first().click();
-    await expect(page.getByRole("heading", { level: 1, name: "Tu práctica empieza acá." })).toBeVisible();
+    await page.getByRole("link", { name: /crear cuenta/i }).first().click();
+    await page.getByRole("radio", { name: /Profesional independiente/ }).check();
+    await page.getByRole("button", { name: "Seguir con esta opción" }).click();
 
     // 3. Fill signup form and submit. The button label changes to "Creando
     //    cuenta…" while pending, then we get redirected.
@@ -61,7 +62,7 @@ test.describe("Auth · signup → onboarding", () => {
     await page.locator('input[type="password"]').fill(password);
     // Ley 25.326 art. 14 consent (Phase 4): must be ticked before signup.
     await page.locator('input[type="checkbox"]').first().check();
-    await page.getByRole("button", { name: "Crear cuenta", exact: true }).click();
+    await page.getByRole("button", { name: "Continuar", exact: true }).click();
 
     // 4. The signup action creates auth.user + org + member, then sets a
     //    session cookie. The Signup component redirects to /onboarding.
@@ -85,7 +86,7 @@ test.describe("Auth · signup → onboarding", () => {
     ).toBeVisible({ timeout: 10_000 });
   });
 
-  test("existing-email signup → switches to login view with banner", async ({ page }) => {
+  test("existing-email signup → ofrece entrar sin enumerar la cuenta", async ({ page }) => {
     // Re-use the email from the happy-path test by signing up once, then
     // attempting to sign up again with the same email + a different password.
     const email = nuevoEmail();
@@ -93,12 +94,14 @@ test.describe("Auth · signup → onboarding", () => {
 
     // First signup — creates the account.
     await page.goto("/login");
-    await page.getByRole("button", { name: /crear cuenta/i }).first().click();
+    await page.getByRole("link", { name: /crear cuenta/i }).first().click();
+    await page.getByRole("radio", { name: /Profesional independiente/ }).check();
+    await page.getByRole("button", { name: "Seguir con esta opción" }).click();
     await page.locator('input[type="email"]').fill(email);
     await page.locator('input[type="password"]').fill(password);
     // Ley 25.326 art. 14 consent (Phase 4): must be ticked before signup.
     await page.locator('input[type="checkbox"]').first().check();
-    await page.getByRole("button", { name: "Crear cuenta", exact: true }).click();
+    await page.getByRole("button", { name: "Continuar", exact: true }).click();
     await page.waitForURL(/\/onboarding/, { timeout: 30_000 });
 
     // Sign out by clearing cookies and going back to /login.
@@ -106,16 +109,15 @@ test.describe("Auth · signup → onboarding", () => {
     await page.goto("/login");
 
     // Attempt signup with the same email but a different password.
-    await page.getByRole("button", { name: /crear cuenta/i }).first().click();
+    await page.getByRole("link", { name: /crear cuenta/i }).first().click();
+    await page.getByRole("radio", { name: /Profesional independiente/ }).check();
+    await page.getByRole("button", { name: "Seguir con esta opción" }).click();
     await page.locator('input[type="email"]').fill(email);
     await page.locator('input[type="password"]').fill("CompletelyDifferent9!");
     await page.locator('input[type="checkbox"]').first().check();
-    await page.getByRole("button", { name: "Crear cuenta", exact: true }).click();
+    await page.getByRole("button", { name: "Continuar", exact: true }).click();
 
-    // The flow should detect "already exists" and switch to login view with
-    // the notice banner + the email prefilled.
-    await expect(page.getByRole("heading", { level: 1, name: "Volvé a tu consultorio." })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText(/ya existe/i)).toBeVisible();
-    await expect(page.locator('input[type="email"]')).toHaveValue(email);
+    await expect(page.getByText(/Si ya tenés una cuenta, iniciá sesión/i)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("textbox", { name: "Email" })).toHaveValue(email);
   });
 });

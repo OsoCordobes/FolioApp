@@ -13,7 +13,6 @@
  * "Entrando..." mientras la Server Action resuelve.
  */
 
-import Script from "next/script";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
@@ -28,9 +27,7 @@ import {
   signInWithGoogle,
   signInWithPassword,
 } from "@/app/(public)/login/actions";
-import { signUpAndInitOrganization } from "@/app/(public)/onboarding/actions";
-import { CheckEmailPanel } from "@/components/auth/check-email-panel";
-import { PasswordStrengthMeter } from "@/components/auth/password-strength-meter";
+import { TurnstileChallenge } from "@/components/auth/turnstile-challenge";
 import { FolioMark } from "@/components/folio-mark";
 import { MENSAJE_OAUTH_GENERICO, mensajeOauth } from "@/lib/auth/oauth-messages";
 import { safeRedirect } from "@/lib/security/safe-redirect";
@@ -111,13 +108,13 @@ function Login({ setVista, prefilledEmail, notice, clearNotice }: LoginProps) {
   // "email_not_confirmed" mostramos el botón "Reenviar link" bajo el error.
   const [errCode, setErrCode] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const loginInFlightRef = useRef(false);
   // Captcha PROGRESIVO (F-AUTH): el server no lo pide en los primeros intentos
   // de la hora — un profesional que entra a su consultorio no ve nada. Recién
   // cuando responde `captcha_required` montamos el widget y reintentamos con
   // el token. Ver LOGIN_CAPTCHA_AFTER en app/(public)/login/actions.ts.
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
-  const captchaContainerRef = useRef<HTMLDivElement | null>(null);
-  const captchaWidgetIdRef = useRef<string | null>(null);
+  const [captchaResetKey, setCaptchaResetKey] = useState(0);
   const captchaVisible = errCode === "captcha_required";
 
   // Si la URL trae ?error=<code> (típicamente desde el OAuth callback),
@@ -129,30 +126,9 @@ function Login({ setVista, prefilledEmail, notice, clearNotice }: LoginProps) {
     }
   }, [searchParams]);
 
-  useEffect(() => {
-    if (!captchaVisible) return;
-    if (!TURNSTILE_SITE_KEY) return;
-    if (!captchaContainerRef.current) return;
-    const tryRender = () => {
-      if (!window.turnstile) return false;
-      if (captchaWidgetIdRef.current) return true;
-      captchaWidgetIdRef.current = window.turnstile.render(captchaContainerRef.current!, {
-        sitekey: TURNSTILE_SITE_KEY,
-        theme: "auto",
-        size: "flexible",
-        callback: (token) => setCaptchaToken(token),
-        "expired-callback": () => setCaptchaToken(null),
-        "error-callback": () => setCaptchaToken(null),
-      });
-      return true;
-    };
-    if (tryRender()) return;
-    const id = setInterval(() => { if (tryRender()) clearInterval(id); }, 200);
-    return () => clearInterval(id);
-  }, [captchaVisible]);
-
   const submit = (e?: React.FormEvent) => {
     e?.preventDefault();
+    if (loginInFlightRef.current) return;
     if (!email.match(/^[^@\s]+@[^@\s]+\.[^@\s]+$/)) {
       setErr("Ingresá un email válido");
       return;
@@ -164,29 +140,33 @@ function Login({ setVista, prefilledEmail, notice, clearNotice }: LoginProps) {
       setErr("Ingresá tu contraseña");
       return;
     }
+    if (captchaVisible && TURNSTILE_SITE_KEY && !captchaToken) {
+      setErr("Esperá a que termine la verificación de seguridad.");
+      return;
+    }
+    loginInFlightRef.current = true;
     setErr("");
-    setErrCode(null);
     startTransition(async () => {
-      const result = await signInWithPassword(email, password, {
-        turnstileToken: captchaToken,
-      });
-      if (!result.ok) {
-        setErr(result.error ?? "Error al entrar");
-        setErrCode(result.code ?? null);
-        // Los tokens de Turnstile son de un solo uso: tras un fallo hay que
-        // pedir uno fresco o el reintento siguiente falla por token consumido.
-        if (captchaWidgetIdRef.current && window.turnstile) {
-          window.turnstile.reset(captchaWidgetIdRef.current);
-          setCaptchaToken(null);
+      try {
+        const result = await signInWithPassword(email, password, {
+          turnstileToken: captchaToken,
+        });
+        if (!result.ok) {
+          setErr(result.error ?? "Error al entrar");
+          setErrCode(result.code ?? (captchaVisible ? "captcha_required" : null));
+          // A submitted token may already be consumed, even when login fails.
+          if (captchaVisible) setCaptchaResetKey((value) => value + 1);
+          return;
         }
-        return;
+        const redirect = safeRedirect(searchParams.get("redirect"), "/hoy");
+        router.push(redirect);
+        router.refresh();
+      } catch {
+        setErr("No pudimos confirmar el ingreso. Comprobá tu sesión antes de volver a intentar.");
+        if (captchaVisible) setCaptchaResetKey((value) => value + 1);
+      } finally {
+        loginInFlightRef.current = false;
       }
-      // Mitigate open-redirect (Ley 25.326 + OWASP A01). Only same-origin
-      // paths are honored; anything else (//evil.com, https://, javascript:,
-      // etc.) falls back to /hoy.
-      const redirect = safeRedirect(searchParams.get("redirect"), "/hoy");
-      router.push(redirect);
-      router.refresh();
     });
   };
 
@@ -209,9 +189,9 @@ function Login({ setVista, prefilledEmail, notice, clearNotice }: LoginProps) {
       vistaSwitch={
         <p>
           ¿No tenés cuenta?{" "}
-          <button type="button" className="au-link" onClick={() => setVista("signup")}>
+          <Link className="au-link" href="/onboarding">
             Crear cuenta
-          </button>
+          </Link>
         </p>
       }
     >
@@ -295,9 +275,7 @@ function Login({ setVista, prefilledEmail, notice, clearNotice }: LoginProps) {
         {errCode === "email_not_confirmed" ? (
           <ResendConfirmationInline email={email} />
         ) : null}
-        {captchaVisible && TURNSTILE_SITE_KEY ? (
-          <div ref={captchaContainerRef} style={{ marginTop: 4 }} />
-        ) : null}
+        {captchaVisible && TURNSTILE_SITE_KEY ? <TurnstileChallenge onTokenChange={setCaptchaToken} resetKey={captchaResetKey} /> : null}
 
         <button
           type="submit"
@@ -373,286 +351,11 @@ interface SignupProps extends SubViewProps {
   switchToLoginWith: (email: string, notice: string) => void;
 }
 
-function Signup({ setVista, switchToLoginWith }: SignupProps) {
-  void setVista;
-  const router = useRouter();
-  const [nombre, setNombre] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPw, setShowPw] = useState(false);
-  const [err, setErr] = useState("");
-  const [consent, setConsent] = useState(false);
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
-  // Ítem 1.5: email esperando confirmación (Confirm email ON). Mientras esté
-  // set, reemplazamos el form por el CheckEmailPanel.
-  const [awaitingEmail, setAwaitingEmail] = useState<string | null>(null);
-  const captchaContainerRef = useRef<HTMLDivElement | null>(null);
-  const captchaWidgetIdRef = useRef<string | null>(null);
-  const [pending, startTransition] = useTransition();
-
-  // Render Turnstile when the Signup view mounts. Site-key absence
-  // (dev / visual regression) skips the widget; verifyTurnstile()
-  // server-side returns true under the same env condition.
-  //
-  // Deps [awaitingEmail]: mientras el CheckEmailPanel está visible el
-  // container del captcha no existe (cleanup remueve el widget); al volver
-  // con "Usar otro email" el effect re-corre y renderiza un widget fresco
-  // (los tokens de Turnstile son de un solo uso — el anterior ya se consumió
-  // en el intento de signup).
-  useEffect(() => {
-    if (awaitingEmail) return;
-    if (!TURNSTILE_SITE_KEY) return;
-    if (!captchaContainerRef.current) return;
-    // El Script de Cloudflare puede no haber cargado aún cuando este effect
-    // corre. Polleamos cada 200ms hasta que window.turnstile exista.
-    const tryRender = () => {
-      if (!window.turnstile) return false;
-      if (captchaWidgetIdRef.current) return true;
-      captchaWidgetIdRef.current = window.turnstile.render(captchaContainerRef.current!, {
-        sitekey: TURNSTILE_SITE_KEY,
-        theme: "auto",
-        size: "flexible",
-        callback: (token) => setCaptchaToken(token),
-        "expired-callback": () => setCaptchaToken(null),
-        "error-callback": () => setCaptchaToken(null),
-      });
-      return true;
-    };
-    if (!tryRender()) {
-      const id = setInterval(() => { if (tryRender()) clearInterval(id); }, 200);
-      return () => {
-        clearInterval(id);
-        if (captchaWidgetIdRef.current && window.turnstile) {
-          window.turnstile.remove(captchaWidgetIdRef.current);
-          captchaWidgetIdRef.current = null;
-        }
-      };
-    }
-    return () => {
-      if (captchaWidgetIdRef.current && window.turnstile) {
-        window.turnstile.remove(captchaWidgetIdRef.current);
-        captchaWidgetIdRef.current = null;
-      }
-    };
-  }, [awaitingEmail]);
-
-  // Signup desde /login crea la auth.user + organization placeholder + member
-  // OWNER en una sola server-action atomica. El password se consume server-side;
-  // si la action devuelve ok, hay cookie de sesión y el redirect a /onboarding
-  // resume en Step 2 (sin volver a pedir password).
-  //
-  // Si el email ya tiene cuenta:
-  //   - signUpAndInitOrganization detecta "already" en el error de admin.createUser
-  //     y intenta sign-in con el password recibido. Si el password coincide,
-  //     devuelve ok (la flow se retoma como un login normal).
-  //   - Si el password NO coincide, la action devuelve error y nosotros saltamos
-  //     a la vista login con el email prefillado + banner explicando.
-  const handleSignup = (e?: React.FormEvent) => {
-    e?.preventDefault();
-    if (!email.match(/^[^@\s]+@[^@\s]+\.[^@\s]+$/)) {
-      setErr("Ingresá un email válido");
-      return;
-    }
-    if (password.length < 8) {
-      setErr("Mínimo 8 caracteres");
-      return;
-    }
-    if (!consent) {
-      setErr("Tenés que aceptar el aviso de privacidad para continuar.");
-      return;
-    }
-    if (TURNSTILE_SITE_KEY && !captchaToken) {
-      setErr("Esperá unos segundos a que el captcha verifique.");
-      return;
-    }
-    setErr("");
-    startTransition(async () => {
-      const result = await signUpAndInitOrganization(email, password, {
-        turnstileToken: captchaToken,
-        consent: true,
-      });
-      if (!result.ok) {
-        const msg = result.error ?? "";
-        // Heuristic: existing-account paths surface error messages mentioning
-        // "already", "registered", "Invalid login credentials", "no pude entrar".
-        const looksLikeExistingAccount =
-          /already|registered|invalid login|no pude entrar|sesión|sesion/i.test(msg);
-        if (looksLikeExistingAccount) {
-          switchToLoginWith(
-            email,
-            "Esa cuenta ya existe. Entrá con tu contraseña — si la olvidaste, usá el link de abajo.",
-          );
-          return;
-        }
-        setErr(msg || "No pude crear la cuenta. Probá de nuevo.");
-        return;
-      }
-      if (result.needsConfirmation) {
-        // Confirm email ON: cuenta creada sin sesión. Mostramos "Revisá tu
-        // email"; el user sigue por el link → /api/auth/callback → /onboarding.
-        setErr("");
-        setAwaitingEmail(email);
-        return;
-      }
-      // Account created + cookie set. Pass nombre via URL so Step 2 can prefill.
-      const params = new URLSearchParams(nombre ? { nombre } : {});
-      const qs = params.toString();
-      startTransition(() => {
-        router.push(qs ? `/onboarding?${qs}` : "/onboarding");
-        router.refresh();
-      });
-    });
-  };
-  const handleGoogle = () => {
-    setErr("");
-    startTransition(async () => {
-      // Mismo motivo que en el login: el Result se descartaba y el botón
-      // parecía muerto cuando el OAuth no estaba bien configurado.
-      const result = await signInWithGoogle();
-      if (result && !result.ok) setErr(result.error ?? MENSAJE_OAUTH_GENERICO);
-    });
-  };
-
-  // Ítem 1.5: post-signup con Confirm email ON — panel "Revisá tu email".
-  // (Después de TODOS los hooks para no romper las reglas de hooks.)
-  if (awaitingEmail) {
-    return (
-      <CheckEmailPanel
-        email={awaitingEmail}
-        onBack={() => {
-          // Token de Turnstile ya consumido en el intento de signup; el
-          // effect (deps [awaitingEmail]) renderiza un widget fresco.
-          setCaptchaToken(null);
-          setAwaitingEmail(null);
-        }}
-      />
-    );
-  }
-
-  return (
-    <AuthShell
-      vistaSwitch={
-        <p>
-          ¿Ya tenés cuenta?{" "}
-          <button type="button" className="au-link" onClick={() => setVista("login")}>
-            Entrar
-          </button>
-        </p>
-      }
-    >
-      <header className="au-form-head">
-        <h1>Tu práctica empieza acá.</h1>
-        <p>Creá tu cuenta y configurá tu consultorio paso a paso.</p>
-      </header>
-
-      <button type="button" className="au-btn-google" onClick={handleGoogle} disabled={pending}>
-        <GoogleLogo />
-        Continuar con Google
-      </button>
-
-      <div className="au-divider">
-        <span>o con tu email</span>
-      </div>
-
-      <form
-        className="au-form"
-        aria-busy={pending}
-        onSubmit={(e) => {
-          e.preventDefault();
-          handleSignup();
-        }}
-      >
-        <label className="au-field">
-          <span>Nombre y apellido</span>
-          <input
-            type="text"
-            autoComplete="name"
-            placeholder="Lorenzo Martínez"
-            value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
-          />
-        </label>
-        <label className="au-field">
-          <span>Email</span>
-          <input
-            type="email"
-            autoComplete="email"
-            placeholder="vos@consultorio.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-        </label>
-        <label className="au-field">
-          <span>Contraseña</span>
-          <div className="au-pw">
-            <input
-              type={showPw ? "text" : "password"}
-              autoComplete="new-password"
-              placeholder="Mínimo 8 caracteres"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-            <button
-              type="button"
-              className="au-pw-toggle"
-              onClick={() => setShowPw((s) => !s)}
-              aria-label={showPw ? "Ocultar contraseña" : "Mostrar contraseña"}
-            >
-              {showPw ? <EyeClosed /> : <EyeOpen />}
-            </button>
-          </div>
-          <PasswordStrengthMeter password={password} />
-        </label>
-
-        {/* Ley 25.326 art. 14: explicit informed consent before processing PII */}
-        <label className="au-consent" style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: 13, lineHeight: 1.5 }}>
-          <input
-            type="checkbox"
-            checked={consent}
-            onChange={(e) => {
-              setConsent(e.target.checked);
-              setErr("");
-            }}
-            style={{ marginTop: 2, flexShrink: 0 }}
-          />
-          <span>
-            Acepto el{" "}
-            <a href="/privacidad" target="_blank" rel="noreferrer" className="au-link">
-              Aviso de Privacidad
-            </a>{" "}
-            (Ley 25.326) y los{" "}
-            <a href="/terminos" target="_blank" rel="noreferrer" className="au-link">
-              Términos
-            </a>
-            . Mis datos se procesan según el aviso.
-          </span>
-        </label>
-
-        {/* Cloudflare Turnstile — invisible captcha. Only rendered if a site key is set. */}
-        {TURNSTILE_SITE_KEY ? (
-          <>
-            <Script
-              src="https://challenges.cloudflare.com/turnstile/v0/api.js"
-              async
-              defer
-            />
-            <div ref={captchaContainerRef} style={{ marginTop: 4 }} />
-          </>
-        ) : null}
-
-        {err ? <p className="au-err" role="alert">{err}</p> : null}
-
-        <button
-          type="submit"
-          className="fi-btn fi-btn-primary au-submit"
-          disabled={pending || !consent || (Boolean(TURNSTILE_SITE_KEY) && !captchaToken)}
-        >
-          {pending ? "Creando cuenta…" : "Crear cuenta"}
-          <ArrowRightTiny />
-        </button>
-      </form>
-    </AuthShell>
-  );
+function Signup({ setVista }: SignupProps) {
+  return <AuthShell vistaSwitch={<p>¿Ya tenés cuenta?{" "}<button type="button" className="au-link" onClick={() => setVista("login")}>Entrar</button></p>}>
+    <header className="au-form-head"><h1>Primero, elegí tu modalidad.</h1><p>El registro empieza con Profesional independiente o Clínica. Así configuramos el recorrido y el precio adecuados.</p></header>
+    <a href="/onboarding" className="fi-btn fi-btn-primary au-submit">Elegir modalidad <ArrowRightTiny /></a>
+  </AuthShell>;
 }
 
 // ─── Forgot password ───────────────────────────────────────────────────────
@@ -662,6 +365,7 @@ function Forgot({ setVista, prefilledEmail = "" }: SubViewProps & { prefilledEma
   const [err, setErr] = useState("");
   const [sent, setSent] = useState(false);
   const [pending, startTransition] = useTransition();
+  const resetInFlightRef = useRef(false);
   const emailRef = useRef<HTMLInputElement | null>(null);
   const sentHeadingRef = useRef<HTMLHeadingElement | null>(null);
 
@@ -671,17 +375,28 @@ function Forgot({ setVista, prefilledEmail = "" }: SubViewProps & { prefilledEma
 
   const submit = (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (pending) return;
+    if (resetInFlightRef.current) return;
     if (!email.match(/^[^@\s]+@[^@\s]+\.[^@\s]+$/)) {
       setErr("Ingresá un email válido para recuperar tu acceso.");
       emailRef.current?.focus();
       return;
     }
+    resetInFlightRef.current = true;
     setErr("");
     startTransition(async () => {
-      await requestPasswordReset(email);
-      // Siempre marcamos como "enviado" (no confirmar si el email existe).
-      setSent(true);
+      try {
+        const result = await requestPasswordReset(email);
+        if (!result.ok) {
+          setErr(result.error ?? "No pudimos pedir el enlace. Probá más tarde.");
+          return;
+        }
+        // El servidor da el mismo resultado para emails existentes e inexistentes.
+        setSent(true);
+      } catch {
+        setErr("No pudimos confirmar el envío. Revisá tu email antes de volver a intentar.");
+      } finally {
+        resetInFlightRef.current = false;
+      }
     });
   };
 

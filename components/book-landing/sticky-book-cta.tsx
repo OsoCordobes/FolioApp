@@ -5,13 +5,13 @@
  *
  * Aparece después del hero y se retira mientras el formulario está visible.
  * Es solo navegación:
- * ancla a #reservar, sin tocar el estado del wizard. En desktop nunca se ve
+ * ancla al catálogo o a #reservar, sin tocar el estado del wizard. En desktop nunca se ve
  * (CSS). Respeta reduce-motion (la transición la gatea folio.css).
  */
 
 import { useEffect, useRef, useState } from "react";
 
-export function StickyBookCta({ label }: { label: string }) {
+export function StickyBookCta({ label, targetId = "reservar" }: { label: string; targetId?: "reservar" | "servicios" }) {
   const [pastHero, setPastHero] = useState(false);
   const [bookingVisible, setBookingVisible] = useState(false);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -28,31 +28,31 @@ export function StickyBookCta({ label }: { label: string }) {
       { rootMargin: "-80px 0px 0px 0px" },
     );
     io.observe(hero);
-    const booking = document.getElementById("reservar");
+    const booking = document.getElementById(targetId);
     const bookingObserver = new IntersectionObserver(
       ([entry]) => setBookingVisible(entry.isIntersecting),
       { rootMargin: "-64px 0px -80px 0px" },
     );
     if (booking) bookingObserver.observe(booking);
     return () => { io.disconnect(); bookingObserver.disconnect(); };
-  }, []);
+  }, [targetId]);
 
   return (
     <>
       <div ref={sentinelRef} aria-hidden className="bl-sticky-sentinel" />
       <div className={`bl-sticky-cta${shown ? " is-shown" : ""}`}>
         <a
-          href="#reservar"
+          href={`#${targetId}`}
           className="fi-btn fi-btn-primary bl-sticky-btn"
           tabIndex={shown ? 0 : -1}
           aria-hidden={!shown}
           onClick={(event) => {
             if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
-            const heading = document.querySelector<HTMLElement>("#bk-flow h2");
+            const heading = document.querySelector<HTMLElement>(targetId === "servicios" ? "#servicios h3" : "#bk-flow h2");
             if (!heading) return;
             event.preventDefault();
             heading.focus({ preventScroll: true });
-            document.getElementById("reservar")?.scrollIntoView({
+            document.getElementById(targetId)?.scrollIntoView({
               behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
               block: "start",
             });

@@ -44,6 +44,17 @@ jobs:
       - name: Install Chromium for isolated walk-in smoke
         run: pnpm exec playwright install --with-deps chromium
 
+      - name: Verify onboarding paths and public booking with synthetic browser responses
+        env:
+          E2E_BASE_URL: http://127.0.0.1:4430
+        run: pnpm test:e2e -- tests/e2e/onboarding-choice.spec.ts tests/e2e/onboarding-flow-synthetic.spec.ts tests/e2e/signup-consent-ratelimit.spec.ts tests/e2e/book-public.spec.ts
+
+      - name: Verify signup challenge and password recovery with synthetic browser responses
+        env:
+          E2E_BASE_URL: http://127.0.0.1:4430
+          FOLIO_TEST_TURNSTILE_SITEKEY: 2x00000000000000000000AB
+        run: pnpm test:e2e -- tests/e2e/turnstile-recovery.spec.ts tests/e2e/forgot-recovery.spec.ts
+
       - name: Verify walk-in creation with synthetic server responses
         run: node tests/hoy/run-isolated.mjs browser-create
 

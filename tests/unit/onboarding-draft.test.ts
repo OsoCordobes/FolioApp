@@ -23,9 +23,9 @@ test("identidad distinta → draft descartado (máquina compartida)", () => {
   assert.equal(unpackDraft(raw, ""), null);
 });
 
-test("draft anónimo (sin email) solo se restaura en sesión anónima", () => {
-  const raw = packDraft("", { consultorioNombre: "Mi consultorio" });
-  assert.deepEqual(unpackDraft(raw, ""), { consultorioNombre: "Mi consultorio" });
+test("draft anónimo recupera sólo la modalidad, sin datos personales", () => {
+  const raw = packDraft("", { tipo: "CLINICA", ownerTratante: false, consultorioNombre: "Clínica previa", nombre: "Ana" });
+  assert.deepEqual(unpackDraft(raw, ""), { tipo: "CLINICA", ownerTratante: false });
   assert.equal(unpackDraft(raw, "otra@persona.com"), null);
 });
 
@@ -71,4 +71,16 @@ test("normalizeDraftIdentity: trim + lowercase, null-safe", () => {
   assert.equal(normalizeDraftIdentity("  Vos@X.Com "), "vos@x.com");
   assert.equal(normalizeDraftIdentity(null), "");
   assert.equal(normalizeDraftIdentity(undefined), "");
+});
+
+test("el borrador de una organización no se restaura en otra ni acepta el sobre anónimo", () => {
+  const orgA = "12600000-0000-4000-8000-000000000001";
+  const orgB = "12600000-0000-4000-8000-000000000002";
+  const raw = packDraft("owner@example.test", { bio: "Texto sin confirmar", password: "never-store" }, orgA);
+  assert.deepEqual(unpackDraft(raw, "owner@example.test", orgA), { bio: "Texto sin confirmar" });
+  assert.equal(unpackDraft(raw, "owner@example.test", orgB), null);
+  assert.equal(unpackDraft(raw, "other@example.test", orgA), null);
+  assert.equal(unpackDraft(raw, "owner@example.test"), null);
+  assert.equal(unpackDraft(packDraft("owner@example.test", { bio: "viejo" }), "owner@example.test", orgA), null);
+  assert.equal(raw.includes("never-store"), false);
 });

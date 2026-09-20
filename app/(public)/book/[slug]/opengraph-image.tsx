@@ -1,106 +1,75 @@
-import { ImageResponse } from "next/og";
-import { loadFolioOgFonts } from "@/lib/opengraph-fonts";
-
+import { renderBookOg } from "@/lib/book-landing/og-image";
+import { listProfesionalesPublico } from "@/lib/db/members";
+import { getEspecialidadMeta, isEspecialidadSlug } from "@/lib/especialidades/meta";
 import { formatRubro } from "@/lib/format/identity";
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
-
-/** Booking link image: the practice keeps its name and chosen accent. Fonts are bundled locally. */
 
 export const alt = "Reservá tu turno online · Folio";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
-export const revalidate = 300;
+// Public photos can be withdrawn. Folio should never cache an older OG image.
+export const dynamic = "force-dynamic";
 
-const ESP_NOMBRE: Record<string, string> = {
-  quiropraxia: "Quiropraxia",
-  cardiologia: "Cardiología",
-  psicologia: "Psicología",
-};
-
-function isValidHex(s: string | null | undefined): s is string {
-  return !!s && /^#[0-9a-fA-F]{6}$/.test(s);
+/** Only fetch this organization's consented photo from its public Storage bucket. */
+async function publicPortraitData(source: string | null, orgId: string): Promise<string | null> {
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!source || !base) return null;
+  try {
+    const url = new URL(source);
+    const project = new URL(base);
+    if (url.origin !== project.origin || !["https:", "http:"].includes(url.protocol)) return null;
+    if (!url.pathname.startsWith(`/storage/v1/object/public/professional-photos/${orgId}/`)) return null;
+    if (!/\.(?:png|jpg|webp)$/.test(url.pathname)) return null;
+    const response = await fetch(url, { cache: "no-store", redirect: "error", signal: AbortSignal.timeout(2500) });
+    const mime = response.headers.get("content-type")?.split(";")[0] ?? "";
+    if (!response.ok || !["image/png", "image/jpeg", "image/webp"].includes(mime)) return null;
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (bytes.length === 0 || bytes.length > 512 * 1024) return null;
+    return `data:${mime};base64,${bytes.toString("base64")}`;
+  } catch {
+    return null;
+  }
 }
 
 export default async function Image({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const fonts = await loadFolioOgFonts();
-  const displayFamily = "Plus Jakarta Sans";
-
   let nombre = "Reservá tu turno";
-  let sub = "Turnos online con profesionales de la salud";
-  let acento = "#6255C5";
+  let consultorio = "Folio";
+  let especialidad = "Turnos online";
+  let lugar = "";
+  let acento = "#8A6722";
+  let solo = false;
+  let foto: string | null = null;
 
   try {
     const service = createSupabaseServiceClient();
     const { data: org } = await service
       .from("organization")
-      .select("nombre, ciudad, provincia, especialidad, rubro, acento_hex, opt_out_public_listing")
+      .select("id, nombre, ciudad, provincia, especialidad, rubro, acento_hex, tipo, opt_out_public_listing")
       .eq("slug", slug)
       .is("deleted_at", null)
       .maybeSingle();
     if (org && !org.opt_out_public_listing) {
-      nombre = (org.nombre as string) || nombre;
-      acento = isValidHex(org.acento_hex) ? org.acento_hex : acento;
-      const esp =
-        org.especialidad && ESP_NOMBRE[org.especialidad as string]
-          ? ESP_NOMBRE[org.especialidad as string]
-          : formatRubro(org.rubro as string | null);
-      const lugar = [org.ciudad, org.provincia].filter(Boolean).join(", ");
-      sub = [esp, lugar].filter(Boolean).join(" · ") || "Turnos online";
+      consultorio = org.nombre || consultorio;
+      nombre = consultorio;
+      acento = /^#[0-9a-fA-F]{6}$/.test(org.acento_hex) ? org.acento_hex : acento;
+      especialidad = org.especialidad && isEspecialidadSlug(org.especialidad)
+        ? getEspecialidadMeta(org.especialidad).nombre
+        : formatRubro(org.rubro) || especialidad;
+      lugar = [org.ciudad, org.provincia].filter(Boolean).join(", ");
+      if (org.tipo === "INDEPENDIENTE") {
+        const perfiles = await listProfesionalesPublico(org.id);
+        const profesional = perfiles.ok && perfiles.data.length === 1 ? perfiles.data[0] : null;
+        if (profesional?.displayName?.trim() && profesional.displayName !== "Profesional") {
+          nombre = profesional.displayName.trim();
+          solo = true;
+          foto = await publicPortraitData(profesional.fotoUrl, org.id);
+        }
+      }
     }
   } catch {
-    // Org inaccesible → OG genérica de Folio (no rompemos la imagen).
+    // Unavailable organization: render a generic reservation preview.
   }
 
-  return new ImageResponse(
-    (
-      <div
-        style={{
-          width: "100%",
-          height: "100%",
-          fontFamily: displayFamily,
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "space-between",
-          backgroundColor: "#F5F5FA",
-          color: "#292641",
-          padding: "72px 80px",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <div style={{ width: 14, height: 14, borderRadius: 9999, backgroundColor: acento }} />
-          <div style={{ fontSize: 30, letterSpacing: "0.04em", color: acento }}>
-            Reservá tu turno online
-          </div>
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-          <div
-            style={{
-              fontFamily: displayFamily,
-              fontSize: 80,
-              fontWeight: 600,
-              lineHeight: 1.06,
-              letterSpacing: "-0.02em",
-              maxWidth: 1000,
-            }}
-          >
-            {nombre}
-          </div>
-          <div style={{ fontSize: 34, lineHeight: 1.3, color: acento, maxWidth: 940 }}>
-            {sub}
-          </div>
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", width: 120, height: 6, borderRadius: 9999, backgroundColor: acento }} />
-          <div style={{ fontSize: 26, color: "#69657D" }}>Hecho con Folio</div>
-        </div>
-      </div>
-    ),
-    {
-      ...size,
-      fonts,
-    },
-  );
+  return renderBookOg({ nombre, consultorio, especialidad, lugar, acento, solo, foto });
 }

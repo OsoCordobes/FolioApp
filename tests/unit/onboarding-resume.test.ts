@@ -107,6 +107,9 @@ function makeService(fixture: Fixture): {
       is() {
         return builder;
       },
+      or() {
+        return builder;
+      },
       update(patch: Record<string, unknown>) {
         mode = "update";
         currentPatch = patch;

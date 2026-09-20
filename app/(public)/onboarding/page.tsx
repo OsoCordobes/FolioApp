@@ -26,7 +26,7 @@ import { getOnboardingResumeState } from "@/lib/db/onboarding-resume";
 // Server-only (resuelve MP_PLAN_PRICE_CENTS de env). Se baja como prop para
 // que el wizard (client) muestre el MISMO precio que el cobro real — antes
 // estaba hardcodeado en Step 1/8 y podía driftear del env de prod.
-import { MP_PLAN_PRICE_CENTS } from "@/lib/mercadopago/client";
+import { computeMonthlyPriceCents, resolveClinicSeatPriceCents } from "@/lib/billing/pricing";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -81,6 +81,14 @@ export default async function OnboardingPage() {
       organizationId = result.data.organizationId ?? undefined;
       initialSlug = result.data.slug ?? undefined;
       googleConnected = result.data.googleConnected;
+      if (organizationId) {
+        const current = await getActiveContext();
+        if (!current.ok || current.data.organization.id !== organizationId || current.data.session.role !== "OWNER") {
+          safeLog("error", "app.public.onboarding.page.context_mismatch",
+            { error: current.ok ? "active_organization_mismatch" : current.error });
+          redirect("/cuenta-error");
+        }
+      }
     } else {
       // No silenciar errores de DB: si no podemos leer el estado del wizard,
       // mandamos al user a /hoy con su sesión activa. El layout (app) tiene
@@ -89,7 +97,7 @@ export default async function OnboardingPage() {
       safeLog("error", "app.public.onboarding.page.L87",
         { error: result.error },
       );
-      redirect("/hoy");
+      redirect("/cuenta-error");
     }
   }
 
@@ -102,7 +110,9 @@ export default async function OnboardingPage() {
           organizationId={organizationId}
           initialSlug={initialSlug}
           authedEmail={authedEmail}
-          planPriceCents={MP_PLAN_PRICE_CENTS}
+          soloPriceCents={computeMonthlyPriceCents("INDEPENDIENTE", 1)}
+          clinicPriceCents={computeMonthlyPriceCents("CLINICA", 1)}
+          clinicSeatPriceCents={resolveClinicSeatPriceCents()}
           googleConnected={googleConnected}
         />
       </Suspense>

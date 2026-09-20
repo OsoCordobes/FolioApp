@@ -43,6 +43,7 @@ export interface OnboardingResumeState {
     especialidad?: string;
     /** M49 · tipo de organización. */
     tipo?: "INDEPENDIENTE" | "CLINICA";
+    ownerTratante?: boolean;
     ciudad?: string;
     provincia?: string;
     direccion?: string;
@@ -87,9 +88,11 @@ export async function getOnboardingResumeState(
   // app/api/auth/callback/route.ts.
   const { data: member, error: memErr } = await service
     .from("member")
-    .select("id, organization_id")
+    .select("id, organization_id, role, es_colegiado")
     .eq("profile_id", userId)
+    .eq("role", "OWNER")
     .is("deleted_at", null)
+    .or("accepted_at.not.is.null,invited_by_id.is.null")
     .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
@@ -99,6 +102,12 @@ export async function getOnboardingResumeState(
   // Caso A: no tiene member → todavía no pasó por signUpAndInitOrganization.
   // Devolver estado "step 1, nada pre-llenado".
   if (!member) {
+    const { data: other, error: otherError } = await service.from("member")
+      .select("id").eq("profile_id", userId).is("deleted_at", null)
+      .or("accepted_at.not.is.null,invited_by_id.is.null")
+      .limit(1).maybeSingle();
+    if (otherError) return err("db_error", "Error leyendo membresía.", otherError.message);
+    if (other) return err("forbidden", "Esta cuenta tiene acceso a un equipo, pero no es titular de un alta nueva.");
     return ok({
       shouldShowOnboarding: true,
       initialStep: 1,
@@ -205,7 +214,10 @@ export async function getOnboardingResumeState(
   // Caso C: onboarding incompleto → resumir donde quedó.
   // Resume al MAYOR de: step_max guardado, o step 2 si recién pasó signup.
   // Clamp a 8: filas legacy del wizard de 9 pasos pueden traer step_max=9.
-  const resumeStep = Math.min(Math.max(org.onboarding_step_max, 2), 8);
+  const savedStep = Math.min(Math.max(org.onboarding_step_max, 2), 8);
+  const adminOnlyClinic = org.tipo === "CLINICA" && member.es_colegiado === false;
+  const resumeStep = adminOnlyClinic && savedStep === 5 ? 6
+    : adminOnlyClinic && savedStep === 7 ? 8 : savedStep;
 
   // Desencriptar PII del profile (con fallback null si falla).
   const tryDecrypt = (v: string | null | undefined): string | undefined => {
@@ -224,7 +236,7 @@ export async function getOnboardingResumeState(
   let slotMin: number | undefined;
   let servicios: OnboardingResumeState["initialData"]["servicios"];
 
-  if (resumeStep >= 5) {
+  if (resumeStep >= 5 && !adminOnlyClinic) {
     const { data: disp } = await service
       .from("disponibilidad_profesional")
       .select("dia_semana, hora_inicio, hora_fin")
@@ -264,7 +276,7 @@ export async function getOnboardingResumeState(
 
   // Estado real de la integración Google Calendar del member (Step 7 muestra
   // "Conectado ✓" en vez del botón de conectar).
-  const { data: gcalRow } = await service
+  const { data: gcalRow } = adminOnlyClinic ? { data: null } : await service
     .from("integration")
     .select("id")
     .eq("organization_id", org.id)
@@ -291,6 +303,7 @@ export async function getOnboardingResumeState(
       // y anulaba el "sin preselección" del wizard.
       especialidad: org.rubro ? (org.especialidad ?? undefined) : undefined,
       tipo: org.tipo ?? undefined,
+      ownerTratante: member.es_colegiado as boolean,
       ciudad: org.ciudad ?? undefined,
       provincia: org.provincia ?? undefined,
       direccion: org.direccion_completa ?? undefined,

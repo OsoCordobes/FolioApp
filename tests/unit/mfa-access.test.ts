@@ -40,6 +40,8 @@ test("MFA gate covers portal, direct APIs, app and authenticated public actions"
   }
 });
 test("recovery and enrollment stay reachable without creating prefix bypasses", () => {
+  assert.equal(mfaRouteDecision("/", false), "pass", "la landing es una salida aun si falta MFA");
+  assert.equal(mfaRouteDecision("/onboarding", false), "redirect", "el alta sigue protegida");
   for (const path of ["/seguridad/mfa", "/seguridad/mfa/recuperar", "/login", "/portal/login", "/forgot", "/reset-password", "/api/auth/callback", "/api/auth/signout", "/api/auth/reset"]) {
     assert.equal(mfaRouteDecision(path, false), "pass");
   }

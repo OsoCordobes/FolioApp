@@ -30,41 +30,23 @@ test.beforeEach(async ({ context }) => {
  * (lib/security/rate-limit.ts formatResetMessage suite).
  */
 
-test.describe("/login signup · consent + Turnstile gates", () => {
-  test("submit button disabled until consent checkbox ticked", async ({ page }) => {
+test.describe("/login signup · entrada al alta", () => {
+  test("la creación de cuenta dirige a elegir modalidad", async ({ page }) => {
     await page.goto("/login");
-    await page.getByRole("button", { name: /crear cuenta/i }).first().click();
-    const submit = page.getByRole("button", { name: "Crear cuenta", exact: true });
-
-    // Fill valid email + password first so disable can only be due to consent.
-    await page.locator('input[type="email"]').fill("e2e-consent-test@example.test");
-    await page.locator('input[type="password"]').fill("TestPassword123!");
-
-    // Consent not ticked yet → submit must be disabled.
-    await expect(submit).toBeDisabled();
-
-    // Tick consent → submit enables.
-    await page.locator('input[type="checkbox"]').first().check();
-    await expect(submit).toBeEnabled();
+    await page.getByRole("link", { name: /crear cuenta/i }).first().click();
+    await expect(page.getByRole("heading", { name: "¿Cómo vas a usar Folio?" })).toBeVisible();
   });
 
-  test("explicit consent text references Ley 25.326", async ({ page }) => {
-    await page.goto("/login");
-    await page.getByRole("button", { name: /crear cuenta/i }).first().click();
-    // Scope to the signup form (not the cookie banner which also references
-    // the Aviso de Privacidad).
-    const form = page.locator("form.au-form");
-    await expect(form.getByText(/Aviso de Privacidad/i)).toBeVisible();
-    await expect(form.getByText(/Ley 25\.326/)).toBeVisible();
-  });
 });
 
 test.describe("/onboarding step 1 · consent gate", () => {
-  test("user landing directly on /onboarding sees the consent checkbox", async ({ page }) => {
+  test("el consentimiento aparece después de elegir modalidad", async ({ page }) => {
     await page.goto("/onboarding");
-    // Without a session, /onboarding shows Step 1 signup form.
+    await page.getByRole("radio", { name: /Profesional independiente/ }).check();
+    await page.getByRole("button", { name: "Seguir con esta opción" }).click();
     await expect(page.getByText(/Aviso de Privacidad/i).first()).toBeVisible();
     await expect(page.getByRole("checkbox").first()).toBeVisible();
+    await expect(page.getByText(/Ley 25\.326/)).toBeVisible();
   });
 });
 

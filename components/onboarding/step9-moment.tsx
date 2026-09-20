@@ -28,14 +28,11 @@
 
 import { useEffect, useState } from "react";
 
-import {
-  PublicCard,
-  type PublicCardData,
-} from "@/components/public-card/public-card";
+import { BookLandingPreview } from "@/components/book-landing/book-landing-preview";
 import { FolioMark } from "@/components/folio-mark";
 import { getAppUrl } from "@/lib/config/app-url";
 import { formatArsFromCents } from "@/lib/format/currency";
-import { listRubros } from "@/lib/onboarding/templates";
+import { toOnboardingLandingPreview } from "@/lib/onboarding/public-preview";
 import type { OnboardingDataState } from "@/components/onboarding/steps";
 
 interface Step9MomentProps {
@@ -51,8 +48,10 @@ interface Step9MomentProps {
   error?: string | null;
   /** true cuando finalizeOnboarding resolvió ok — habilita "Ir al panel". */
   finalizeOk?: boolean;
+  publicReady?: boolean;
   /** Precio del plan en centavos ARS (fuente canónica MP_PLAN_PRICE_CENTS). */
   planPriceCents: number;
+  clinicSeatPriceCents?: number;
 }
 
 const APP_URL = getAppUrl();
@@ -66,7 +65,9 @@ export function Step9Moment({
   finishing,
   error,
   finalizeOk,
+  publicReady,
   planPriceCents,
+  clinicSeatPriceCents,
 }: Step9MomentProps) {
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
@@ -86,32 +87,9 @@ export function Step9Moment({
     void Promise.resolve(onFinish()).finally(() => setRetrying(false));
   };
 
-  const fullName = [data.nombre, data.apellido].filter(Boolean).join(" ").trim() || "Tu consultorio";
-  const publicUrl = slug ? `${APP_URL}/book/${slug}` : null;
+  const publicUrl = slug && publicReady ? `${APP_URL}/book/${slug}` : null;
   const linkText = slug ? `${stripScheme(APP_URL)}/book/${slug}` : "tu link público";
-
-  const cardData: PublicCardData = {
-    nombre: fullName,
-    consultorioNombre: data.consultorioNombre,
-    rubro: rubroLabel(data.rubro),
-    ciudad: data.ciudad,
-    provincia: data.provincia,
-    bio: data.bio,
-    telefonoPublico: data.telefonoPublico || data.tel,
-    instagramHandle: data.instagram,
-    direccionCompleta: data.direccion,
-    acentoHex: accent,
-    logoUrl: data.logoUrl ?? undefined,
-    cardMood: data.cardMood,
-    slug: slug ?? undefined,
-    servicios: data.servicios
-      .filter((s) => s.nombre.trim())
-      .map((s) => ({
-        nombre: s.nombre,
-        dur: s.dur,
-        precioCents: Math.round(s.precio * 100),
-      })),
-  };
+  const previewData = toOnboardingLandingPreview(data, slug);
 
   const onCopy = async () => {
     if (!publicUrl) return;
@@ -136,15 +114,15 @@ export function Step9Moment({
         <FolioMark size={56} color={accent} fg="#FBF9F4" />
       </div>
 
-      <h1 className="onb-moment-head onb-anim-head">{finalizeOk ? "Tu consultorio está listo." : error ? "Falta confirmar la configuración." : "Terminando la configuración…"}</h1>
+      <h1 className="onb-moment-head onb-anim-head">{finalizeOk ? "Tu espacio quedó creado." : error ? "Falta confirmar la configuración." : "Terminando la configuración…"}</h1>
       <p className="onb-moment-sub onb-anim-head">
-        {finalizeOk ? "Compartí tu enlace para que tus pacientes puedan reservar." : error ? "Revisá el mensaje y reintentá para terminar de preparar tu consultorio." : "Esperá la confirmación antes de entrar al panel. Tus datos siguen en pantalla."}
+        {finalizeOk ? publicReady ? "Revisá tu página y agenda antes de compartir el enlace." : data.tipo === "CLINICA" && data.ownerTratante === false ? "Tu clínica todavía necesita profesionales aceptados y agenda configurada para recibir reservas. Podés continuar desde el panel." : "Revisá los datos, servicios y horarios desde el panel antes de compartir tu página." : error ? "Revisá el mensaje y reintentá para terminar de preparar tu espacio." : "Esperá la confirmación antes de entrar al panel. Tus datos siguen en pantalla."}
       </p>
       {/* Fusión del viejo Step 8: trial + precio (canónico MP_PLAN_PRICE_CENTS,
           mismo valor que el cobro real — nunca un hardcode que driftee). */}
       <p className="onb-moment-trial onb-anim-head">
         Tenés 30 días de prueba gratis, sin tarjeta. Después,{" "}
-        {formatArsFromCents(planPriceCents)} / mes — lo activás desde Configuración.
+        {formatArsFromCents(planPriceCents)} / mes {data.tipo === "CLINICA" && clinicSeatPriceCents ? `de base + ${formatArsFromCents(clinicSeatPriceCents)} por miembro adicional` : ""} — lo activás desde Configuración.
       </p>
 
       {error ? (
@@ -156,10 +134,9 @@ export function Step9Moment({
         </div>
       ) : null}
 
-      <div className="onb-moment-card onb-anim-card">
-        {/* La vista conserva el estilo elegido y comparte el enlace público. */}
-        <PublicCard data={cardData} variant="full" appUrl={APP_URL} onCta={onSeePage} />
-      </div>
+      {previewData ? <div className="onb-moment-card onb-anim-card onb-landing-preview">
+        <BookLandingPreview data={previewData} />
+      </div> : null}
 
       {publicUrl ? (
         <div className="onb-moment-link onb-anim-link" aria-label="Tu link público">
@@ -189,7 +166,7 @@ export function Step9Moment({
       {copyError ? <p className="onb-moment-feedback" role="alert">No pudimos copiar el enlace. Podés seleccionarlo arriba y copiarlo manualmente.</p> : null}
 
       <div className="onb-moment-ctas">
-        <button
+        {publicUrl ? <button
           type="button"
           className="fi-btn fi-btn-primary onb-moment-cta onb-anim-cta-1"
           onClick={onSeePage}
@@ -197,18 +174,18 @@ export function Step9Moment({
         >
           Ver mi página
           <ExternalIcon />
-        </button>
-        <button
+        </button> : null}
+        {publicUrl ? <button
           type="button"
           className="fi-btn fi-btn-secondary onb-moment-cta onb-anim-cta-2"
           onClick={onCopy}
           disabled={!publicUrl}
         >
           Copiar link
-        </button>
+        </button> : null}
         <button
           type="button"
-          className="fi-btn fi-btn-ghost onb-moment-cta onb-anim-cta-3"
+          className={`fi-btn ${publicUrl ? "fi-btn-ghost" : "fi-btn-primary"} onb-moment-cta onb-anim-cta-3`}
           onClick={onGoToPanel}
           // Sin finalize ok, /hoy redirige de vuelta a /onboarding → loop.
           // El botón queda deshabilitado hasta que finalizeOnboarding resuelva.
@@ -258,12 +235,6 @@ function ArrowRightIcon() {
       <path d="M5 12h14M12 5l7 7-7 7" />
     </svg>
   );
-}
-
-function rubroLabel(id: string | undefined): string | undefined {
-  if (!id) return undefined;
-  const found = listRubros().find((r) => r.id === id);
-  return found?.label;
 }
 
 function stripScheme(url: string): string {

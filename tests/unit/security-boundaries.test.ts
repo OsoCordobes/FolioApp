@@ -24,10 +24,12 @@ function scenario(role = "OWNER", completed = false, deleted: string | null = nu
   const writes: string[] = [];
   const events: string[] = [];
   const additionalCandidates: unknown[] = [];
+  const readiness = { services: [] as unknown[], hours: [] as unknown[] };
   const rpcCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
   const user = { id: "user", email: "owner@example.test", email_confirmed_at: "2026-01-01" as string | null };
   const organization = { id: "org", slug: "consultorio", onboarding_completed: completed, deleted_at: deleted };
-  const member = { id: "member", organization_id: "org", role, deleted_at: null };
+  const member = { id: "member", organization_id: "org", role, deleted_at: null,
+    es_colegiado: false, accepted_at: null as string | null, invited_by_id: null as string | null };
   const session = { ok: true, data: { userId: user.id, organizationId: "org", memberId: "member", role } };
   const client = {
     storage: { from: () => ({ remove: async () => { writes.push("storage"); return { error: null }; } }) },
@@ -41,12 +43,12 @@ function scenario(role = "OWNER", completed = false, deleted: string | null = nu
       let single = false;
       let update: Record<string, unknown> | undefined;
       const query: Record<string, unknown> = {};
-      for (const method of ["select", "eq", "is", "lt", "order", "or", "neq"]) query[method] = () => query;
+      for (const method of ["select", "eq", "is", "lt", "lte", "limit", "order", "or", "neq"]) query[method] = () => query;
       for (const method of ["insert", "update", "delete"]) query[method] = (values?: Record<string, unknown>) => { writes.push(table); if (method === "update") update = values; return query; };
       query.single = query.maybeSingle = () => { single = true; return query; };
       query.then = (fn: (value: unknown) => unknown) => {
         if (table === "organization" && update) Object.assign(organization, update);
-        return Promise.resolve({ data: table === "member" ? member : table === "organization" ? single ? organization : candidateEmail ? [organization] : [] : table === "paciente_identidad" && candidateEmail ? [{ id: "identity", organization_id: "org", email_hash: candidateEmail, dni_hash: "123", telefono_hash: null, paciente: { id: "patient", cuenta_id: null, pseudonimizado_en: null, deleted_at: null } }, ...additionalCandidates] : [], error: null }).then(fn);
+        return Promise.resolve({ data: table === "member" ? member : table === "organization" ? single ? organization : candidateEmail ? [organization] : [] : table === "servicio" ? readiness.services : table === "disponibilidad_profesional" ? readiness.hours : table === "paciente_identidad" && candidateEmail ? [{ id: "identity", organization_id: "org", email_hash: candidateEmail, dni_hash: "123", telefono_hash: null, paciente: { id: "patient", cuenta_id: null, pseudonimizado_en: null, deleted_at: null } }, ...additionalCandidates] : [], error: null }).then(fn);
       };
       return query;
     },
@@ -62,8 +64,26 @@ function scenario(role = "OWNER", completed = false, deleted: string | null = nu
     "@/lib/security/turnstile": { verifyTurnstile: async () => true },
     "@/lib/db/audit": { writeAuditEntry: async () => undefined },
   };
-  return { writes, events, additionalCandidates, user, rpcCalls, member, loadActions: () => load("app/(public)/onboarding/actions.ts", overrides), loadLinkage: () => load("lib/portal/link-actions.ts", overrides) };
+  return { writes, events, additionalCandidates, user, rpcCalls, member, organization, readiness, loadActions: () => load("app/(public)/onboarding/actions.ts", overrides), loadLinkage: () => load("lib/portal/link-actions.ts", overrides) };
 }
+
+test("a treating clinic owner is publicly ready only with accepted membership, active service and schedule", async () => {
+  const s = scenario("OWNER", true);
+  Object.assign(s.organization, { tipo: "CLINICA", nombre: "Clínica Ficticia", ciudad: "Córdoba", rubro: "cardiologia" });
+  Object.assign(s.member, { es_colegiado: true, accepted_at: "2026-09-20T00:00:00Z" });
+  s.readiness.services.push({ id: "service" });
+  s.readiness.hours.push({ id: "hours" });
+  const ready = await s.loadActions().finalizeOnboarding() as { ok: boolean; publicReady?: boolean };
+  assert.equal(ready.ok, true);
+  assert.equal(ready.publicReady, true);
+  s.readiness.hours.length = 0;
+  const noHours = await s.loadActions().finalizeOnboarding() as { ok: boolean; publicReady?: boolean };
+  assert.equal(noHours.publicReady, false);
+  s.readiness.hours.push({ id: "hours" });
+  s.member.es_colegiado = false;
+  const admin = await s.loadActions().finalizeOnboarding() as { ok: boolean; publicReady?: boolean };
+  assert.equal(admin.publicReady, false);
+});
 
 for (const role of ["PROFESIONAL", "ASISTENTE", "COORDINADOR", "DIRECTOR"]) {
   test(`onboarding refuses ${role} before any privileged write`, async () => {

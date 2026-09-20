@@ -1,5 +1,22 @@
 # Folio market readiness — approved implementation
 
+## Current coordination — 19 September 2026
+
+The current scope, owners and evidence are maintained in
+[LAUNCH-BOARD.md](../LAUNCH-BOARD.md). The owner's final checkpoint closes PR165,
+117 production migrations and M106/M120/M121 activation on master `c5c5fed`.
+The manager confirmed local HEAD and remote master; it did not repeat the hosted
+smoke. Statements below such as "not deployed", "92 migrations" or "no scheduler"
+are dated historical entries, not instructions to repeat completed work.
+
+The owner now prioritizes the existing Solo/Clinic offering, five specialties,
+Google and the portal for adults. Minors and automated agents are deferred.
+Access/registration/onboarding and the public professional page are explicit
+priorities. Preserve the historical ledger and its artifacts; use the board for
+current assignments and release gates.
+
+## Historical approval and scope — 8 September 2026
+
 Approved by the owner on 2026-09-08. Scope: Argentina, Córdoba/Alta Gracia;
 independent chiropractic, cardiology and psychology practices, adults and minors.
 Preserve existing test data, existing visual language and Next/Supabase/Vercel.
