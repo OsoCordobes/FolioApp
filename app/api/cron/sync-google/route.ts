@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
                 }
                 return stats;
             })()]);
-        const ok = outbound.retryable === 0 && outbound.terminal === 0 && inbound.failed === 0;
+        const ok = !signal.aborted && outbound.retryable === 0 && outbound.terminal === 0 && inbound.failed === 0;
         return NextResponse.json({ ok, outbound, inbound }, { status: ok ? 200 : 503 });
     }
     catch {

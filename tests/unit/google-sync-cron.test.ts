@@ -16,8 +16,10 @@ function fixture(options: {
   failInbound?: string;
   failDue?: boolean;
   failOutbound?: boolean;
+  abort?: "during-pick" | "between-integrations";
 } = {}) {
   const calls: string[] = [];
+  const controller = new AbortController();
   const outbound = options.outbound ?? { processed: 1, complete: 1, retryable: 0, terminal: 0 };
   const source = readFileSync("app/api/cron/sync-google/route.ts", "utf8");
   const exports: Record<string, (request: Request) => Promise<Response>> = {};
@@ -29,6 +31,7 @@ function fixture(options: {
         calls.push("service");
         return { rpc: async (name: string, args: { p_limit: number; p_watch: boolean }) => {
           calls.push(`rpc:${name}:${args.p_limit}:${args.p_watch}`);
+          if (options.abort === "during-pick") controller.abort();
           return { data: (options.due ?? []).map(id => ({ id })), error: options.failDue ? { message: "private SQL detail" } : null };
         } };
       },
@@ -45,6 +48,7 @@ function fixture(options: {
       assert.equal(signal.aborted, false);
       calls.push(`inbound:${row.id}`);
       if (options.failInbound === row.id) throw new Error("private provider detail");
+      if (options.abort === "between-integrations") controller.abort();
       return { skipped: false };
     } },
   };
@@ -55,7 +59,7 @@ function fixture(options: {
     AbortSignal,
     Error,
   });
-  return { route: exports, calls };
+  return { route: exports, calls, controller };
 }
 
 async function withCronSecret(secret: string | undefined, action: () => Promise<void>) {
@@ -69,8 +73,8 @@ async function withCronSecret(secret: string | undefined, action: () => Promise<
   }
 }
 
-function request(token = "synthetic-cron") {
-  return new Request("https://synthetic.test/api/cron/sync-google", { headers: { authorization: `Bearer ${token}` } });
+function request(token = "synthetic-cron", signal?: AbortSignal) {
+  return new Request("https://synthetic.test/api/cron/sync-google", { headers: { authorization: `Bearer ${token}` }, signal });
 }
 
 test("Google cron rejects missing or incorrect secret before opening a service client", async () => {
@@ -124,6 +128,20 @@ test("Google cron masks database and worker exceptions as a service failure", as
       const response = await f.route.GET(request());
       assert.equal(response.status, 503);
       assert.deepEqual(await response.json(), { ok: false, error: "google_sync_failed" });
+    }
+  });
+});
+
+test("Google cron reports an incomplete pass if aborted during selection or between integrations", async () => {
+  await withCronSecret("synthetic-cron", async () => {
+    for (const abort of ["during-pick", "between-integrations"] as const) {
+      const f = fixture({ abort, due: ["first", "second"] });
+      const response = await f.route.GET(request("synthetic-cron", f.controller.signal));
+      assert.equal(response.status, 503, abort);
+      const body = await response.json();
+      assert.equal(body.ok, false, abort);
+      assert.equal(JSON.stringify(body).includes("private"), false);
+      assert.deepEqual(f.calls.filter(call => call.startsWith("inbound:")), abort === "during-pick" ? [] : ["inbound:first"]);
     }
   });
 });
