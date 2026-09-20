@@ -26,7 +26,7 @@ import { getOnboardingResumeState } from "@/lib/db/onboarding-resume";
 // Server-only (resuelve MP_PLAN_PRICE_CENTS de env). Se baja como prop para
 // que el wizard (client) muestre el MISMO precio que el cobro real — antes
 // estaba hardcodeado en Step 1/8 y podía driftear del env de prod.
-import { MP_PLAN_PRICE_CENTS } from "@/lib/mercadopago/client";
+import { computeMonthlyPriceCents, resolveClinicSeatPriceCents } from "@/lib/billing/pricing";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -89,7 +89,7 @@ export default async function OnboardingPage() {
       safeLog("error", "app.public.onboarding.page.L87",
         { error: result.error },
       );
-      redirect("/hoy");
+      redirect("/cuenta-error");
     }
   }
 
@@ -102,7 +102,9 @@ export default async function OnboardingPage() {
           organizationId={organizationId}
           initialSlug={initialSlug}
           authedEmail={authedEmail}
-          planPriceCents={MP_PLAN_PRICE_CENTS}
+          soloPriceCents={computeMonthlyPriceCents("INDEPENDIENTE", 1)}
+          clinicPriceCents={computeMonthlyPriceCents("CLINICA", 1)}
+          clinicSeatPriceCents={resolveClinicSeatPriceCents()}
           googleConnected={googleConnected}
         />
       </Suspense>

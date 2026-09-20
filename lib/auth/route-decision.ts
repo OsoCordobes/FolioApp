@@ -90,7 +90,10 @@ export function decideRouteGate(pathname: string, hasUser: boolean): RouteGate {
   }
 
   // Con sesión: precedencia staff vs paciente sólo en las rutas ambiguas.
-  if (pathname === "/login" || pathname === "/") {
+  // La landing sigue siendo una salida pública aun con una sesión activa.
+  // Mandar / a /hoy atrapaba a una cuenta con alta incompleta en /onboarding.
+  if (pathname === "/") return { kind: "pass" };
+  if (pathname === "/login") {
     return { kind: "needs_audience", scope: "entry" };
   }
   if (pathname === "/portal/login") {

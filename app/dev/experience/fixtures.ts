@@ -212,10 +212,12 @@ export const configuration: ComponentProps<typeof Configuracion> = {
 };
 
 export const onboarding: ComponentProps<typeof OnboardingApp> = {
-  initialStep: 2, initialSlug: organization.slug, planPriceCents: 5000000,
+  initialStep: 2, initialSlug: organization.slug, soloPriceCents: 5000000,
+  clinicPriceCents: 10000000, clinicSeatPriceCents: 2500000,
   initialData: {
     email: "profesional@example.test", nombre: "Valentina", apellido: "Costa", matricula: "1234",
     consultorioNombre: organization.nombre, rubro: "kinesiologia", especialidad: "kinesiologia",
+    tipo: "INDEPENDIENTE", ownerTratante: true,
     ciudad: "Córdoba", provincia: "Córdoba", direccion: "Dirección de ejemplo",
   },
 };

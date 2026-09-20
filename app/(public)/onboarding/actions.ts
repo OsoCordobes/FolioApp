@@ -70,7 +70,17 @@ export interface OnboardingBootstrapResult {
   organizationId?: string;
   slug?: string;
   needsConfirmation?: boolean;
+  tipo?: "INDEPENDIENTE" | "CLINICA";
+  ownerTratante?: boolean;
+  existingAccount?: boolean;
 }
+
+const bootstrapChoiceSchema = z.object({
+  tipo: z.enum(["INDEPENDIENTE", "CLINICA"]),
+  ownerTratante: z.boolean(),
+}).refine((choice) => choice.tipo === "CLINICA" || choice.ownerTratante,
+  "El profesional independiente debe atender en su consultorio.");
+type BootstrapChoice = z.infer<typeof bootstrapChoiceSchema>;
 
 // M2 (docs/AUDIT.md · anti-enumeración): mensaje ÚNICO para todo fallo de
 // signup atribuible a "el email quizás ya existe". Condicional ("si ya
@@ -92,8 +102,10 @@ const SIGNUP_GENERIC_ERROR =
 export async function signUpAndInitOrganization(
   email: string,
   password: string,
-  options: { turnstileToken?: string | null; consent?: boolean } = {},
+  options: { turnstileToken?: string | null; consent?: boolean; choice?: BootstrapChoice } = {},
 ): Promise<OnboardingBootstrapResult> {
+  const choice = bootstrapChoiceSchema.safeParse(options.choice);
+  if (!choice.success) return { ok: false, error: "Elegí una modalidad y confirmá si atendés antes de crear la cuenta." };
   const parsed = signUpSchema.safeParse({ email, password });
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos." };
@@ -252,7 +264,7 @@ export async function signUpAndInitOrganization(
   const userAgent = reqHeaders.get("user-agent");
 
   const { data: bootstrapped, error: bootstrapErr } = await service.rpc(
-    "bootstrap_org_atomic",
+    "bootstrap_org_typed_atomic",
     {
       p_user_id: userId,
       p_email: email,
@@ -260,6 +272,8 @@ export async function signUpAndInitOrganization(
       p_consent_ip: ip,
       p_consent_user_agent: userAgent,
       p_consent_legal_text_version: "v1",
+      p_tipo: choice.data.tipo,
+      p_owner_tratante: choice.data.ownerTratante,
     },
   );
 
@@ -270,7 +284,7 @@ export async function signUpAndInitOrganization(
     };
   }
 
-  const result = bootstrapped as { organization_id: string; member_id: string; slug: string; created: boolean };
+  const result = bootstrapped as { organization_id: string; member_id: string; slug: string; created: boolean; tipo: "INDEPENDIENTE" | "CLINICA"; owner_tratante: boolean; role: string; onboarding_completed: boolean };
 
   // Business event: signup completado (funnel de activación). Sólo cuando el
   // RPC efectivamente creó la org (created=true) — así un re-signup idempotente
@@ -280,7 +294,9 @@ export async function signUpAndInitOrganization(
     void trackEvent.signupCompleted({ orgId: result.organization_id, source: "email" });
   }
 
-  return { ok: true, organizationId: result.organization_id, slug: result.slug };
+  return { ok: true, organizationId: result.organization_id, slug: result.slug,
+    tipo: result.tipo, ownerTratante: result.owner_tratante,
+    existingAccount: !result.created };
 }
 
 /**
@@ -295,8 +311,10 @@ export async function signUpAndInitOrganization(
  * loguearse vía Google el user no vió todavía nuestro aviso de privacidad.
  */
 export async function bootstrapOrgForAuthenticatedUser(
-  options: { turnstileToken?: string | null; consent?: boolean } = {},
+  options: { turnstileToken?: string | null; consent?: boolean; choice?: BootstrapChoice } = {},
 ): Promise<OnboardingBootstrapResult> {
+  const choice = bootstrapChoiceSchema.safeParse(options.choice);
+  if (!choice.success) return { ok: false, error: "Elegí una modalidad y confirmá si atendés antes de continuar." };
   const supabase = await createSupabaseServerClient();
   const verifiedSession = await verifyMfaSession(supabase);
   if (!verifiedSession.ok) return { ok: false, error: verifiedSession.error.message };
@@ -336,7 +354,7 @@ export async function bootstrapOrgForAuthenticatedUser(
   const provisionalSlug = await pickFreshSlug(service, deriveProvisionalSlug(emailBase));
 
   const { data: bootstrapped, error: bootstrapErr } = await service.rpc(
-    "bootstrap_org_atomic",
+    "bootstrap_org_typed_atomic",
     {
       p_user_id: user.id,
       p_email: user.email ?? "",
@@ -344,6 +362,8 @@ export async function bootstrapOrgForAuthenticatedUser(
       p_consent_ip: ip,
       p_consent_user_agent: userAgent,
       p_consent_legal_text_version: "v1",
+      p_tipo: choice.data.tipo,
+      p_owner_tratante: choice.data.ownerTratante,
     },
   );
 
@@ -354,7 +374,7 @@ export async function bootstrapOrgForAuthenticatedUser(
     };
   }
 
-  const result = bootstrapped as { organization_id: string; member_id: string; slug: string; created: boolean };
+  const result = bootstrapped as { organization_id: string; member_id: string; slug: string; created: boolean; tipo: "INDEPENDIENTE" | "CLINICA"; owner_tratante: boolean; role: string; onboarding_completed: boolean };
 
   // Business event: signup completado vía Google OAuth. Mismo guard que el
   // path email/password — sólo dispara si el RPC creó la org (created=true),
@@ -363,7 +383,9 @@ export async function bootstrapOrgForAuthenticatedUser(
     void trackEvent.signupCompleted({ orgId: result.organization_id, source: "google" });
   }
 
-  return { ok: true, organizationId: result.organization_id, slug: result.slug };
+  return { ok: true, organizationId: result.organization_id, slug: result.slug,
+    tipo: result.tipo, ownerTratante: result.owner_tratante,
+    existingAccount: !result.created };
 }
 
 // Helper interno: pickea un slug libre buscando un sufijo numérico si está tomado.
@@ -414,7 +436,7 @@ export interface Step3Data {
   rubro?: string;
   /** M50 · slug de especialidad. Validado server-side contra ESPECIALIDAD_SLUGS. */
   especialidad?: string;
-  /** M49 · tipo de organización. Validado server-side contra el enum organizacion_tipo. */
+  /** Legacy input ignored: the bootstrap is the authority for modality. */
   tipo?: string;
   ciudad: string;
   provincia: string;
@@ -553,7 +575,7 @@ export async function updateOnboardingStep(
         if (d.consultorioNombre !== undefined) orgPatch.nombre = d.consultorioNombre;
         if (d.rubro !== undefined) orgPatch.rubro = d.rubro;
         if (arq.data.especialidad !== undefined) orgPatch.especialidad = arq.data.especialidad;
-        if (arq.data.tipo !== undefined) orgPatch.tipo = arq.data.tipo;
+        // A forged or stale step payload must never convert an organization.
         if (d.ciudad !== undefined) orgPatch.ciudad = d.ciudad;
         // "" = sin elegir (ya no hay default Córdoba) → null, no string vacío.
         if (d.provincia !== undefined) orgPatch.provincia = d.provincia || null;

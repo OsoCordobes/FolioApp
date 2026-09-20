@@ -48,6 +48,8 @@ import { packDraft, unpackDraft } from "@/lib/onboarding/draft";
 import { validateFranjas } from "@/lib/onboarding/franjas";
 import { Step1Consent } from "@/components/onboarding/step1-consent";
 import { Step1Registro } from "@/components/onboarding/step1-registro";
+import { Step1Choice } from "@/components/onboarding/step1-choice";
+import { parseOnboardingIntent } from "@/lib/onboarding/intent";
 // ONBOARDING_INITIAL es un literal de data; OnboardingDataState es un type.
 // Ambos quedan en el initial bundle (no son pesados — solo constants/types).
 import {
@@ -97,6 +99,7 @@ const Step9Moment = dynamic(
 
 const ONB_TOTAL = 8;
 const STORAGE_KEY = "folio:onboarding";
+const INTENT_KEY = "folio:onboarding:intent";
 const AUTOSAVE_DEBOUNCE_MS = 800;
 
 const TIPO_CANONICO_MAP: Record<string, string> = {
@@ -128,7 +131,9 @@ interface OnboardingAppProps {
    * canónica del cobro real — y lo baja acá para que Step 1 y el moment
    * muestren el mismo monto que se va a debitar (nunca un hardcode que driftee).
    */
-  planPriceCents: number;
+  soloPriceCents: number;
+  clinicPriceCents: number;
+  clinicSeatPriceCents: number;
   /**
    * true si el member ya tiene la integración GOOGLE_CALENDAR (leído
    * server-side). El Step 7 lo usa para renderizar "Conectado ✓" en vez del
@@ -149,7 +154,9 @@ export function OnboardingApp({
   organizationId,
   initialSlug,
   authedEmail,
-  planPriceCents,
+  soloPriceCents,
+  clinicPriceCents,
+  clinicSeatPriceCents,
   googleConnected,
 }: OnboardingAppProps) {
   const router = useRouter();
@@ -170,6 +177,8 @@ export function OnboardingApp({
   // needsConfirmation (sin sesión ni org). Guardamos el email para mostrar
   // el panel "Revisá tu email" en lugar del form de registro.
   const [awaitingEmail, setAwaitingEmail] = useState<string | null>(null);
+  // Every return from email verification/OAuth reconfirms an unpersisted intent.
+  const [choiceConfirmed, setChoiceConfirmed] = useState(Boolean(organizationId));
 
   // ─── Auto-save refs declarados antes del useEffect de hidratación porque
   //     la hidratación los inicializa para evitar un auto-save espurio
@@ -221,10 +230,15 @@ export function OnboardingApp({
     const dbData = Object.fromEntries(
       Object.entries(initialData ?? {}).filter(([, v]) => v !== undefined),
     ) as Partial<OnboardingDataState>;
+    let intent: Partial<OnboardingDataState> = {};
+    if (!organizationId) {
+      try { intent = parseOnboardingIntent(sessionStorage.getItem(INTENT_KEY)) ?? {}; } catch { /* disabled storage */ }
+    }
     setData((prev) => {
       const next = {
         ...prev,
         ...restored,
+        ...intent,
         ...dbData,
         ...(prefillEmail ? { email: prefillEmail } : {}),
         ...(prefillNombre ? { nombre: prefillNombre } : {}),
@@ -237,6 +251,11 @@ export function OnboardingApp({
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!data.tipo || data.ownerTratante === null || orgId) return;
+    try { sessionStorage.setItem(INTENT_KEY, JSON.stringify({ tipo: data.tipo, ownerTratante: data.ownerTratante })); } catch { /* disabled storage */ }
+  }, [data.tipo, data.ownerTratante, orgId]);
 
   // Persistir cada cambio en localStorage (backup). packDraft excluye
   // `password` (secreto, no debe quedar en disco) y sella el draft con la
@@ -332,7 +351,6 @@ export function OnboardingApp({
               // no chocar con el z.enum del server.
               rubro: snapshot.rubro || undefined,
               especialidad: snapshot.especialidad || undefined,
-              tipo: snapshot.tipo,
               ciudad: snapshot.ciudad,
               provincia: snapshot.provincia,
               direccion: snapshot.direccion,
@@ -433,7 +451,7 @@ export function OnboardingApp({
     }
     setDirection("forward");
     void flushSaveIfPending();
-    setStepIdx((n) => Math.min(ONB_TOTAL, n + 1));
+    setStepIdx((n) => Math.min(ONB_TOTAL, n === 4 && data.ownerTratante === false ? 6 : n === 6 && data.ownerTratante === false ? 8 : n + 1));
   }, [flushSaveIfPending, stepIdx, persistInitialHours, data]);
 
   const back = useCallback(() => {
@@ -443,7 +461,7 @@ export function OnboardingApp({
     }
     setDirection("back");
     void flushSaveIfPending();
-    setStepIdx((n) => Math.max(1, n - 1));
+    setStepIdx((n) => Math.max(1, n === 6 && data.ownerTratante === false ? 4 : n === 8 && data.ownerTratante === false ? 6 : n - 1));
   }, [flushSaveIfPending, stepIdx, persistInitialHours, data]);
 
   const skip = next;
@@ -466,15 +484,21 @@ export function OnboardingApp({
     turnstileToken: string | null;
     consent: boolean;
   }) => {
+    if (!data.tipo || data.ownerTratante === null || !choiceConfirmed) {
+      setError("Confirmá la modalidad y el rol del titular antes de continuar.");
+      setChoiceConfirmed(false);
+      return;
+    }
     if (signupInFlightRef.current) return;
     signupInFlightRef.current = true;
     startSignupTransition(async () => {
       try {
         const result = authedEmail
-          ? await bootstrapOrgForAuthenticatedUser({ turnstileToken, consent })
+          ? await bootstrapOrgForAuthenticatedUser({ turnstileToken, consent, choice: { tipo: data.tipo!, ownerTratante: data.ownerTratante! } })
           : await signUpAndInitOrganization(data.email, data.password, {
               turnstileToken,
               consent,
+              choice: { tipo: data.tipo!, ownerTratante: data.ownerTratante! },
             });
         if (!result.ok) {
           setError(result.error ?? "No pude confirmar el registro. Verificá tu cuenta antes de reintentar.");
@@ -489,6 +513,9 @@ export function OnboardingApp({
         setError(null);
         if (result.organizationId) setOrgId(result.organizationId);
         if (result.slug) setOrgSlug(result.slug);
+        if (result.tipo) setData((prev) => ({ ...prev, tipo: result.tipo!, ownerTratante: result.ownerTratante ?? prev.ownerTratante }));
+        try { sessionStorage.removeItem(INTENT_KEY); } catch { /* disabled storage */ }
+        if (result.existingAccount) { router.refresh(); return; }
         setDirection("forward");
         setStepIdx(2);
       } catch {
@@ -549,7 +576,7 @@ export function OnboardingApp({
     orgId,
     orgSlug,
     direction,
-    planPriceCents,
+    planPriceCents: data.tipo === "CLINICA" ? clinicPriceCents : soloPriceCents,
   };
 
   // ─── Step 1: layout split con SideArt (mismo del /login) ──────────────────
@@ -564,9 +591,14 @@ export function OnboardingApp({
                 <FolioMark size={24} />
                 <span className="onb-brand-name">folio</span>
               </Link>
+              <Link className="onb-home-link" href="/">← Volver al inicio</Link>
             </header>
             <div key={stepKey} className={`onb-anim onb-anim-${direction}`}>
-              {authedEmail ? (
+              {!choiceConfirmed && !awaitingEmail ? <Step1Choice
+                data={data} set={set} onContinue={() => setChoiceConfirmed(true)}
+                soloPriceCents={soloPriceCents} clinicPriceCents={clinicPriceCents}
+                clinicSeatPriceCents={clinicSeatPriceCents}
+              /> : authedEmail ? (
                 <Step1Consent
                   email={authedEmail}
                   onSubmit={handleStep1Submit}
@@ -586,7 +618,7 @@ export function OnboardingApp({
                   onSubmit={handleStep1Submit}
                   loading={signingUp}
                   error={error}
-                  planPriceCents={planPriceCents}
+                  planPriceCents={data.tipo === "CLINICA" ? clinicPriceCents : soloPriceCents}
                   captchaResetKey={captchaResetKey}
                 />
               )}
@@ -605,6 +637,7 @@ export function OnboardingApp({
           <FolioMark size={24} />
           <span className="onb-brand-name">folio</span>
         </Link>
+        <Link className="onb-home-link" href="/">← Volver al inicio</Link>
         {stepIdx < ONB_TOTAL ? (
           <SaveIndicator state={saveState} onRetry={retrySave} />
         ) : (
@@ -644,7 +677,7 @@ export function OnboardingApp({
               finishing={finishing}
               error={error}
               finalizeOk={finalizeDone}
-              planPriceCents={planPriceCents}
+              planPriceCents={data.tipo === "CLINICA" ? clinicPriceCents : soloPriceCents}
             />
           ) : null}
         </div>

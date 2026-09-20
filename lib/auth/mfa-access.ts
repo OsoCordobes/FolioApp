@@ -49,7 +49,7 @@ export async function verifyMfaSession(client: MfaSessionClient): Promise<Result
 }
 
 const RECOVERY_PATHS = new Set([
-  MFA_PATH, `${MFA_PATH}/recuperar`, "/login", "/portal/login", "/forgot", "/reset-password",
+  MFA_PATH, `${MFA_PATH}/recuperar`, "/", "/login", "/portal/login", "/forgot", "/reset-password",
   "/api/auth/callback", "/api/auth/signout", "/api/auth/reset",
 ]);
 export function mfaRouteDecision(pathname: string, allowed: boolean): "pass" | "redirect" | "json" {

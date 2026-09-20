@@ -43,6 +43,7 @@ export interface OnboardingResumeState {
     especialidad?: string;
     /** M49 · tipo de organización. */
     tipo?: "INDEPENDIENTE" | "CLINICA";
+    ownerTratante?: boolean;
     ciudad?: string;
     provincia?: string;
     direccion?: string;
@@ -87,8 +88,9 @@ export async function getOnboardingResumeState(
   // app/api/auth/callback/route.ts.
   const { data: member, error: memErr } = await service
     .from("member")
-    .select("id, organization_id")
+    .select("id, organization_id, role, es_colegiado")
     .eq("profile_id", userId)
+    .eq("role", "OWNER")
     .is("deleted_at", null)
     .order("created_at", { ascending: true })
     .limit(1)
@@ -99,6 +101,11 @@ export async function getOnboardingResumeState(
   // Caso A: no tiene member → todavía no pasó por signUpAndInitOrganization.
   // Devolver estado "step 1, nada pre-llenado".
   if (!member) {
+    const { data: other, error: otherError } = await service.from("member")
+      .select("id").eq("profile_id", userId).is("deleted_at", null)
+      .limit(1).maybeSingle();
+    if (otherError) return err("db_error", "Error leyendo membresía.", otherError.message);
+    if (other) return err("forbidden", "Esta cuenta tiene acceso a un equipo, pero no es titular de un alta nueva.");
     return ok({
       shouldShowOnboarding: true,
       initialStep: 1,
@@ -291,6 +298,7 @@ export async function getOnboardingResumeState(
       // y anulaba el "sin preselección" del wizard.
       especialidad: org.rubro ? (org.especialidad ?? undefined) : undefined,
       tipo: org.tipo ?? undefined,
+      ownerTratante: member.es_colegiado as boolean,
       ciudad: org.ciudad ?? undefined,
       provincia: org.provincia ?? undefined,
       direccion: org.direccion_completa ?? undefined,

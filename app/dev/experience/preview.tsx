@@ -224,7 +224,7 @@ function OnboardingFinalPreview() {
     <header className="onb-app-head"><Link className="onb-app-brand fx-auth-brand" href="/"><FolioMark size={24} /><span>folio</span></Link></header>
     <main className="onb-app-main">
       <p style={{ textAlign: "center", color: "var(--ink-2)", fontSize: 13, margin: "0 0 26px" }}>Ejemplo visual del paso final. No se creó ni finalizó ninguna cuenta.</p>
-      <Step9Moment data={data} accent={data.acento} slug={onboarding.initialSlug} onFinish={() => {}} onGoToPanel={() => {}} planPriceCents={onboarding.planPriceCents} finishing={state === "pending"} finalizeOk={state === "complete"} error={state === "error" ? "Ejemplo: no se pudo confirmar el guardado. Tus datos siguen disponibles para reintentar." : null} />
+      <Step9Moment data={data} accent={data.acento} slug={onboarding.initialSlug} onFinish={() => {}} onGoToPanel={() => {}} planPriceCents={onboarding.soloPriceCents} finishing={state === "pending"} finalizeOk={state === "complete"} error={state === "error" ? "Ejemplo: no se pudo confirmar el guardado. Tus datos siguen disponibles para reintentar." : null} />
     </main>
   </div>;
 }

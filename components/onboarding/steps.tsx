@@ -47,7 +47,9 @@ export interface OnboardingDataState {
   /** M50 · especialidad arquitectural (quiropraxia | cardiologia | psicologia). Decide la herramienta clínica de la ficha. */
   especialidad: string;
   /** M49 · INDEPENDIENTE = consultorio de un profesional; CLINICA = org con equipo (invita después). */
-  tipo: "INDEPENDIENTE" | "CLINICA";
+  tipo: "INDEPENDIENTE" | "CLINICA" | null;
+  /** Elección explícita: el titular de una clínica puede no atender. */
+  ownerTratante: boolean | null;
   direccion: string;
   ciudad: string;
   provincia: string;
@@ -89,7 +91,8 @@ export const ONBOARDING_INITIAL: OnboardingDataState = {
   // de quiropraxia. El Step 3 exige elegirla para continuar.
   rubro: "",
   especialidad: "",
-  tipo: "INDEPENDIENTE",
+  tipo: null,
+  ownerTratante: null,
   direccion: "",
   ciudad: "",
   provincia: "",
@@ -102,11 +105,7 @@ export const ONBOARDING_INITIAL: OnboardingDataState = {
   diasActivos: ["lun", "mar", "mie", "jue", "vie"],
   franjas: [["09:00", "12:00"], ["15:00", "18:00"]],
   slotMin: 45,
-  servicios: [
-    { id: 1, nombre: "Consulta inicial", dur: 60, precio: 35000, soloNuevos: true },
-    { id: 2, nombre: "Seguimiento",      dur: 45, precio: 22000 },
-    { id: 3, nombre: "Pack 5 sesiones",  dur: 45, precio: 95000, paquete: true },
-  ],
+  servicios: [],
 };
 
 interface StepProps {
@@ -224,9 +223,9 @@ export function Step2Profesional({ data, set, next, back, orgSlug }: StepProps) 
     // vacía (contradicción: Continuar deshabilitado pero Saltar habilitado).
     <StepShell stepIdx={2} back={back} next={next} canSkip={false}
       headline="¿Cómo te llamás?"
-      sub="Tu nombre aparece en Folio y en tu perfil público. Podés cambiarlo después."
+      sub={data.ownerTratante === false ? "Tus datos identifican al responsable de la cuenta. No crean un perfil profesional público." : "Tu nombre aparece en Folio y en tu perfil público. Podés cambiarlo después."}
       nextDisabled={!canContinue}
-      previewData={previewDataFor(data)}
+      previewData={data.ownerTratante === false ? undefined : previewDataFor(data)}
       slug={orgSlug}
     >
       <div className="onb-form">
@@ -244,10 +243,10 @@ export function Step2Profesional({ data, set, next, back, orgSlug }: StepProps) 
               onBlur={() => onBlur("apellido")} />
           </Field>
         </div>
-        <Field label="Matrícula" hint="Formato libre. Si tu consejo usa otro, escribilo igual.">
+        {data.ownerTratante !== false ? <Field label="Matrícula" hint="Formato libre. Si tu consejo usa otro, escribilo igual.">
           <input type="text" placeholder="M.N. ACA 8942"
             value={data.matricula} onChange={(e) => set({ matricula: e.target.value })}/>
-        </Field>
+        </Field> : null}
         <Field label="Teléfono personal" error={errors.tel}
           hint="Para alertas internas. No se muestra a pacientes.">
           <div className="onb-input-prefix">
@@ -297,7 +296,7 @@ export function Step3Consultorio({ data, set, next, back, orgId, orgSlug }: Step
     if (!data.bio.trim() && data.ciudad.trim()) {
       patch.bio = tpl.bioTemplate(data.ciudad);
     }
-    if (serviciosUntouched(data.servicios)) {
+    if (data.ownerTratante !== false && serviciosUntouched(data.servicios)) {
       patch.servicios = templateToStateServicios(getEspecialidadServicios(slug));
     }
     const isDefaultHorarios =
@@ -327,7 +326,6 @@ export function Step3Consultorio({ data, set, next, back, orgId, orgSlug }: Step
           // "" (sin elegir) no pasa el z.enum del server — omitir hasta que elija.
           rubro: data.rubro || undefined,
           especialidad: data.especialidad || undefined,
-          tipo: data.tipo,
           ciudad: data.ciudad,
           provincia: data.provincia,
           direccion: data.direccion,
@@ -401,35 +399,7 @@ export function Step3Consultorio({ data, set, next, back, orgId, orgSlug }: Step
           </span>
         </div>
 
-        <div className="onb-field">
-          <span>Tipo de organización</span>
-          <div className="onb-dias" role="radiogroup" aria-label="Tipo de organización">
-            {([
-              { id: "INDEPENDIENTE", label: "Consultorio independiente" },
-              { id: "CLINICA", label: "Clínica" },
-            ] as const).map((opt) => {
-              const isOn = data.tipo === opt.id;
-              return (
-                <button
-                  key={opt.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={isOn}
-                  className={"onb-dia " + (isOn ? "is-on" : "")}
-                  style={{ width: "auto", padding: "0 14px" }}
-                  onClick={() => set({ tipo: opt.id })}
-                >
-                  {opt.label}
-                </button>
-              );
-            })}
-          </div>
-          <span className="onb-hint">
-            {data.tipo === "CLINICA"
-              ? "Al terminar, podés invitar profesionales y personal de secretaría desde Configuración."
-              : "Atendés y gestionás la agenda vos. Si más adelante sumás equipo, pasás a Clínica."}
-          </span>
-        </div>
+        <p className="onb-hint">{data.tipo === "CLINICA" ? "La clínica puede invitar profesionales desde Configuración. Las invitaciones pendientes aún no habilitan turnos." : "Configurás tu consultorio y tu agenda."}</p>
 
         <div className="onb-field">
           <SlugEditor
@@ -705,7 +675,7 @@ export function Step6Servicios({ data, set, next, back, skip, orgSlug }: StepPro
     const tplServicios = getEspecialidadServicios(data.especialidad);
     const tplSig = tplServicios.map((s) => s.nombre).join("|");
     const curSig = data.servicios.map((s) => s.nombre).join("|");
-    if (curSig === tplSig) return; // ya está el template correcto — no re-disparar autosave
+    if (data.ownerTratante === false || curSig === tplSig) return; // sin profesional no inventar servicios
     if (!serviciosUntouched(data.servicios)) return;
     set({ servicios: templateToStateServicios(tplServicios) });
     // Solo al montar: las ediciones posteriores del user no deben pisarse.
@@ -720,7 +690,7 @@ export function Step6Servicios({ data, set, next, back, skip, orgSlug }: StepPro
     set({ servicios: data.servicios.filter((_, k) => k !== i) });
 
   const canContinue =
-    data.servicios.length > 0 &&
+    (data.ownerTratante === false || data.servicios.length > 0) &&
     data.servicios.every((s) => s.nombre.trim() && s.dur > 0 && s.precio >= 0);
 
   return (

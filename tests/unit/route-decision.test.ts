@@ -99,8 +99,11 @@ test("sin sesión, las rutas públicas pasan", () => {
 
 // ─── Con sesión ─────────────────────────────────────────────────────────────
 
-test("con sesión, / y /login necesitan resolver la audiencia", () => {
-  assert.deepEqual(decideRouteGate("/", true), { kind: "needs_audience", scope: "entry" });
+test("con sesión, / deja volver al inicio incluso con un alta incompleta", () => {
+  assert.deepEqual(decideRouteGate("/", true), { kind: "pass" });
+});
+
+test("con sesión, /login necesita resolver la audiencia", () => {
   assert.deepEqual(decideRouteGate("/login", true), { kind: "needs_audience", scope: "entry" });
 });
 
