@@ -6,8 +6,27 @@
 .bl-preview-booking { color: var(--ink-2); font-size: 14px; line-height: 1.6; }
 .bl-preview-booking p { margin: 0; }
 
-/* Public profile D02: Folio's typography and surfaces carry the practice's accent. */
-.bl-root { background: var(--bg); }
+/* The public profile shares Folio's light identity, including inside app previews. */
+.bl-root {
+  --bg: #F5F5FA;
+  --surface: #FFFFFF;
+  --surface-2: #F0EFF8;
+  --surface-3: #E7E4F4;
+  --line: #DAD9E7;
+  --line-soft: #ECEBF2;
+  --ink: #292641;
+  --ink-2: #4B485F;
+  --ink-3: #69657D;
+  --ink-4: #79758A;
+  --accent: #6255C5;
+  --accent-2: #4E42AD;
+  --accent-soft: #EFECFC;
+  --accent-soft-2: #E2DDF7;
+  --on-accent: #FFFFFF;
+  --bl-on-accent: #FFFFFF;
+  background: var(--bg);
+  color: var(--ink);
+}
 .bl-header { min-height: 72px; padding-inline: clamp(18px, 4vw, 58px); background: var(--surface); border-bottom: 1px solid var(--line); }
 .bl-header-name { font-weight: 700; letter-spacing: -.03em; }
 .bl-main { width: min(100%, 1280px); max-width: none; padding-inline: clamp(14px, 3vw, 36px); }

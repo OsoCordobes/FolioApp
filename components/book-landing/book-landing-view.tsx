@@ -10,9 +10,7 @@ import { StickyBookCta } from "@/components/book-landing/sticky-book-cta";
 import { FolioMark } from "@/components/folio-mark";
 import { resolveBookLandingContent } from "@/lib/book-landing/content";
 import { formatArs } from "@/lib/format/currency";
-import { adjustHexLightness, contrastingTextColor } from "@/lib/format/initials";
-
-const DEFAULT_ACENTO = "#8A6722";
+const FOLIO_ACCENT = "#6255C5";
 
 export interface PublicLandingOrg {
   slug?: string | null;
@@ -73,11 +71,7 @@ export function BookLandingView({
   serviceAction?: (service: PublicLandingService) => ReactNode;
 }) {
   const { org, servicios, profesionales } = data;
-  // La identidad de la miniweb es Folio. Conservamos el color histórico en DB
-  // para no alterar datos, pero ya no cambia la composición pública.
-  const acento = DEFAULT_ACENTO;
-  const acento2 = adjustHexLightness(acento, -12);
-  const acentoSoft = `color-mix(in srgb, ${acento} 9%, #ffffff)`;
+  // El color propio del consultorio sigue guardado; esta página usa la marca Folio.
 
   const content = resolveBookLandingContent(org.especialidad, org.rubro);
   const lugar = [org.ciudad, org.provincia].filter(Boolean).join(", ");
@@ -109,12 +103,6 @@ export function BookLandingView({
       className="bl-root"
       data-mode={mode}
       data-kind={esClinica ? "clinic" : "solo"}
-      style={{
-        ["--accent" as string]: acento,
-        ["--accent-2" as string]: acento2,
-        ["--accent-soft" as string]: acentoSoft,
-        ["--bl-on-accent" as string]: contrastingTextColor(acento),
-      }}
     >
       {/* La marca del consultorio acompaña al profesional sin competir con su retrato. */}
       <header className="bl-header">
@@ -219,7 +207,7 @@ export function BookLandingView({
                 <div className="bl-team-grid">
                   {profesionales.map((p) => (
                     <div key={p.id} className="bl-team-card">
-                      <AvatarIniciales fullName={p.displayName} avatarUrl={p.fotoUrl} acentoHex={acento} size="md" />
+                      <AvatarIniciales fullName={p.displayName} avatarUrl={p.fotoUrl} acentoHex={FOLIO_ACCENT} size="md" />
                       <div className="bl-team-info">
                         <p className="bl-team-name">{p.displayName}</p>
                         {p.matricula ? <p className="bl-team-matricula fm-mono">M.P. {p.matricula}</p> : null}
