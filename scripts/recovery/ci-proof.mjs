@@ -14,6 +14,7 @@ import {verifyBackup} from '../backup/restore.mjs';
 import {validateReceipt} from '../backup/retention.mjs';
 import {parseSafeRestoreDiagnostic} from '../backup/restore-diagnostics.mjs';
 import {validateBridgeTarget,preflightBridgeTarget,openLoopbackBridge} from './ci-loopback-bridge.mjs';
+import {planRolePreparation} from './ci-role-preflight.mjs';
 
 const repo=path.resolve(fileURLToPath(new URL('../../',import.meta.url)));
 const compose=path.join(repo,'scripts/recovery/ci-compose.yml');
@@ -174,6 +175,31 @@ async function createTarget(state,env){
  assert.match(pid,/^[1-9][0-9]*$/);
  return pid;
 }
+async function prepareTargetRoles(state,backup){
+ const inventory=async()=>withPg(state.dbPassword,'postgres',async db=>{
+  const [roles,extension,versions,target]=await Promise.all([
+   db.query('SELECT rolname FROM pg_roles ORDER BY rolname'),
+   db.query("SELECT name,installed_version FROM pg_available_extensions WHERE name='pgsodium'"),
+   db.query("SELECT version FROM pg_available_extension_versions WHERE name='pgsodium' ORDER BY version"),
+   db.query('SELECT 1 FROM pg_database WHERE datname=$1',[targetDatabase]),
+  ]);
+  return {destinationRoles:roles.rows.map(row=>row.rolname),availablePgsodium:extension.rows[0]??null,availableVersions:versions.rows.map(row=>row.version),targetExists:target.rowCount!==0};
+ });
+ const plan=planRolePreparation({sourceRoles:backup.manifest.source.roles,sourceExtensions:backup.manifest.source.extensions,...await inventory()});
+ console.log(`c01_role_gap: pgsodium=${plan.knownMissing.join(',')||'none'} unknown_count=${plan.unknownCount}`);
+ if(plan.action==='none')return;
+ if(plan.action!=='install_pgsodium')throw Error(`c01_role_preparation_${plan.action}`);
+ // This fixed, official extension prepares only the synthetic cluster's roles.
+ // The new template0 target does not exist yet; no role SQL is replayed from backup.
+ try{await withPg(state.dbPassword,'postgres',db=>db.query(`CREATE EXTENSION pgsodium VERSION '${plan.version}'`));}
+ catch{throw Error('c01_pgsodium_install_failed');}
+ const after=await inventory();
+ const installed=await withPg(state.dbPassword,'postgres',db=>db.query("SELECT extversion FROM pg_extension WHERE extname='pgsodium'"));
+ assert.equal(installed.rows[0]?.extversion,plan.version,'pgsodium version changed during preparation');
+ const verified=planRolePreparation({sourceRoles:backup.manifest.source.roles,sourceExtensions:backup.manifest.source.extensions,...after});
+ assert.equal(verified.action,'none','required roles remain absent after pgsodium preparation');
+ console.log(`c01_pgsodium_roles_prepared: ${plan.knownMissing.length}`);
+}
 async function restore(state,backup,root,env,pid){
  const configPath=path.join(root,'restore-db.json');
  await writeJson(configPath,{phase:'database',directory:backup.directory,recipientPrivateKeyFile:path.join(root,'recipient.key'),confirmDatabase:targetDatabase,tools:{binDirectory:'/usr/lib/postgresql/17/bin'}});
@@ -280,6 +306,8 @@ async function main(){
   stage='target_empty';
   await dc(destination,['up','-d','--wait','db'],env);
   dbBridge=await startBridge(destination,'db',dbPort,5432,env);
+  stage='target_prerequisites';await prepareTargetRoles(state,backup);
+  stage='target_empty';
   const pid=await createTarget(state,env);
   stage='database_restore';await restore(state,backup,root,env,pid);
   stage='target_services';const targetEnv={...env,C01_APP_DATABASE:targetDatabase};
