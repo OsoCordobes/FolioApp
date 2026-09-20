@@ -24,8 +24,6 @@ services:
       - ${C01_OFFICIAL_DOCKER:?}/volumes/db/pooler.sql:/docker-entrypoint-initdb.d/migrations/99-pooler.sql:ro
       - pgdata:/var/lib/postgresql/data
       - pgconfig:/etc/postgresql-custom
-    ports:
-      - "127.0.0.1:55422:5432"
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "postgres", "-h", "127.0.0.1"]
       interval: 5s
@@ -128,8 +126,6 @@ services:
       - ${C01_OFFICIAL_DOCKER:?}/volumes/api/envoy/cds.yaml:/etc/envoy/cds.yaml:ro
       - ${C01_OFFICIAL_DOCKER:?}/volumes/api/envoy/lds.template.yaml:/etc/envoy/lds.template.yaml:ro
       - ${C01_OFFICIAL_DOCKER:?}/volumes/api/envoy/docker-entrypoint.sh:/docker-entrypoint.sh:ro
-    ports:
-      - "127.0.0.1:55421:8000"
 volumes:
   pgdata:
   pgconfig:

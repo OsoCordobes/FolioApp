@@ -12,6 +12,7 @@ import {createClient} from '@supabase/supabase-js';
 import {totp} from '../../scripts/testing/clinical-config.mjs';
 import {verifyBackup} from '../backup/restore.mjs';
 import {validateReceipt} from '../backup/retention.mjs';
+import {validateBridgeTarget,preflightBridgeTarget,openLoopbackBridge} from './ci-loopback-bridge.mjs';
 
 const repo=path.resolve(fileURLToPath(new URL('../../',import.meta.url)));
 const compose=path.join(repo,'scripts/recovery/ci-compose.yml');
@@ -45,6 +46,16 @@ function child(program,args,{env=process.env,input,allowFailure=false,limit=2621
 }
 const docker=(args,env,options)=>child('docker',args,{env,...options});
 const dc=(project,args,env,options)=>docker(['compose','-p',project,'-f',compose,...args],env,options);
+async function startBridge(project,service,localPort,remotePort,env){
+ const containerId=(await dc(project,['ps','-q',service],env)).output.trim();
+ assert.match(containerId,/^[a-f0-9]{64}$/);
+ const labels=JSON.parse((await docker(['inspect','--format','{{json .Config.Labels}}',containerId],env)).output);
+ const networks=JSON.parse((await docker(['inspect','--format','{{json .NetworkSettings.Networks}}',containerId],env)).output);
+ const network=JSON.parse((await docker(['network','inspect','--format','{{json .}}',`${project}_default`],env)).output);
+ const target=validateBridgeTarget({project,service,containerId,labels,networks,network,remotePort});
+ await preflightBridgeTarget(target);
+ return openLoopbackBridge(target,localPort);
+}
 const writeJson=(name,value)=>writeFile(name,JSON.stringify(value)+'\n',{flag:'wx',mode:0o600});
 const authOptions={auth:{autoRefreshToken:false,persistSession:false,detectSessionInUrl:false}};
 async function folioCrypto(){const loaded=await import('../../lib/crypto.ts');return loaded.default??loaded;}
@@ -152,7 +163,6 @@ async function capture(state,fixture,root,env){
  return {directory,receipt,manifest};
 }
 async function createTarget(state,env){
- await dc(destination,['up','-d','--wait','db'],env);
  const before=await withPg(state.dbPassword,'postgres',db=>db.query("SELECT datname FROM pg_database WHERE datname=$1",[targetDatabase]));
  assert.equal(before.rowCount,0);
  await withPg(state.dbPassword,'postgres',db=>db.query(`CREATE DATABASE ${targetDatabase} TEMPLATE template0`));
@@ -245,29 +255,42 @@ async function main(){
  const imageDigests=[];
  for(const name of images){const info=await docker(['image','inspect','--format','{{.Id}}',name],env);imageDigests.push(`${name} ${info.output.trim()}`);}
  let stage='source_start';
+ let dbBridge=null,apiBridge=null;
  try{
   await dc(source,['up','-d','--wait'],env);
   await assertInternal(source,env);
+  dbBridge=await startBridge(source,'db',dbPort,5432,env);
+  apiBridge=await startBridge(source,'api-gw',55421,8000,env);
   await waitApi(state.anonKey);
   stage='migrations';const migrationCount=await applyMigrations(dbPassword,env);
   stage='source_fixture';const fixture=await seed(state);
   stage='capture';const backup=await capture(state,fixture,root,env);
-  stage='source_stop';await dc(source,['down'],env); // No -v; keep evidence until runner disposal.
-  stage='target_empty';const pid=await createTarget(state,env);
+  stage='source_stop';
+  await apiBridge.close();apiBridge=null;
+  await dbBridge.close();dbBridge=null;
+  await dc(source,['down'],env); // No -v; keep evidence until runner disposal.
+  stage='target_empty';
+  await dc(destination,['up','-d','--wait','db'],env);
+  dbBridge=await startBridge(destination,'db',dbPort,5432,env);
+  const pid=await createTarget(state,env);
   stage='database_restore';await restore(state,backup,root,env,pid);
   stage='target_services';const targetEnv={...env,C01_APP_DATABASE:targetDatabase};
   await dc(destination,['up','-d','--wait'],targetEnv);
   await assertInternal(destination,targetEnv);
+  apiBridge=await startBridge(destination,'api-gw',55421,8000,targetEnv);
   await waitApi(state.anonKey);
   stage='storage_restore';const storage=await restoreStorage(state,backup,root,targetEnv);
   stage='integrated_verify';await verify(state,fixture,backup);
   stage='complete';
   const summary=process.env.GITHUB_STEP_SUMMARY;
   if(summary)await writeFile(summary,`## C01 synthetic recovery\n\n- PostgreSQL 17 migrations applied: ${migrationCount}\n- Complete authenticated package: yes\n- Empty template0 target and transactional restore: yes\n- Auth password and existing TOTP after restore: yes\n- Same restored DB: clinical ciphertext, Auth factor, Storage metadata verified\n- Private Storage bytes restored: ${storage.storageObjects}; SHA-256 matched\n- Tenant and anonymous denial: yes\n- Source and destination: sequential, internal networks, hosted runner only\n- Images (local IDs):\n${imageDigests.map(x=>`  - ${x}`).join('\n')}\n`,{flag:'a'});
+  await apiBridge.close();apiBridge=null;
+  await dbBridge.close();dbBridge=null;
   await dc(destination,['down'],targetEnv); // Preserve volumes; runner is ephemeral.
   console.log('c01_synthetic_recovery_verified');
  }catch(error){
   console.error(`c01_${stage}_failed: ${error.message}`);
+  console.error(`c01_loopback_bridges: db=${dbBridge?'open':'closed'} api=${apiBridge?'open':'closed'}`);
   const project=stage.startsWith('source')||stage==='migrations'||stage==='capture'?source:destination;
   for(const service of ['db','auth','rest','storage','api-gw']){
    try{
@@ -276,13 +299,12 @@ async function main(){
     const status=await docker(['inspect','--format','{{.State.Status}} {{.State.ExitCode}} {{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}',id],env);
     if(/^(created|running|restarting|removing|paused|exited|dead) [0-9]+ (healthy|unhealthy|starting|none)$/.test(status.output.trim()))
      console.error(`c01_service_${service}: ${status.output.trim()}`);
-    if(service==='db'||service==='api-gw'){
-     const port=await docker(['port',id,service==='db'?'5432/tcp':'8000/tcp'],env,{allowFailure:true});
-     console.error(`c01_port_${service}: ${port.code===0&&port.output.trim()?'mapped':'unmapped'}`);
-    }
    }catch{}
   }
   throw Error('c01_incomplete_evidence_retained_in_runner_temp');
+ }finally{
+  await apiBridge?.close();
+  await dbBridge?.close();
  }
 }
 main().catch(()=>{process.exitCode=1;});
