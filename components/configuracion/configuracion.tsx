@@ -38,7 +38,6 @@ import {
   revokeInvitationAction,
   saveBookingPrefsAction,
   saveConsultorioAction,
-  savePublicAccentAction,
   saveHorariosAction,
   readHorariosAction,
   saveServiciosAction,
@@ -66,6 +65,7 @@ import { formatArsFromCents } from "@/lib/format/currency";
 import { SUPPORT_EMAIL, supportMailto } from "@/lib/support";
 import type {
   ConsultorioData,
+  SaveConsultorioInput,
   DiaHorarios,
   HorariosContext,
   DiaSemanaId,
@@ -528,6 +528,7 @@ function SecConsultorio({
   canManageTeam: boolean;
 }) {
   const router = useRouter();
+  const bioCountId = useId();
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   // M50 · count de sesiones cargadas con la herramienta de OTRA especialidad.
   // Se consulta server-side al cambiar el selector; si hay, mostramos la
@@ -557,7 +558,7 @@ function SecConsultorio({
           <div className="perfil-editor-controls">
             <p>Completá los datos en las secciones indicadas y revisá la página entera abajo. Los cambios de texto se guardan con «Guardar cambios».</p>
             <nav className="perfil-editor-links" aria-label="Editar contenido de la página">
-              <a href="#cfg-identidad">Nombre</a>
+              <a href="#cfg-identidad">Nombre y descripción</a>
               <a href="#cfg-especialidad">Especialidad</a>
               {hasPerfilPublico ? <button type="button" onClick={() => openSection("perfil-publico")}>Foto, bio y matrícula del profesional</button> : null}
               <button type="button" onClick={() => openSection("servicios")}>Servicios y reserva</button>
@@ -584,6 +585,7 @@ function SecConsultorio({
               org: {
                 ...publicPreview.org,
                 nombre: c.nombre,
+                bio: c.bio.trim() || null,
                 ciudad: c.ciudad,
                 provincia: c.provincia,
                 especialidad: c.especialidad,
@@ -602,6 +604,13 @@ function SecConsultorio({
       <Section id="cfg-identidad" title="Identidad del consultorio" sub="Aparece en el menú, los recordatorios y tu página pública.">
         <Row label="Nombre del consultorio">
           <TextInput value={c.nombre} onChange={(v) => set({ nombre: v })} />
+        </Row>
+        <Row label="Descripción pública" sub="Se publica en tu página de reservas. No incluyas datos de pacientes." vertical>
+          <textarea className="cfg-input" aria-label="Descripción pública del consultorio"
+            aria-describedby={bioCountId} value={c.bio} maxLength={280} rows={4}
+            disabled={!canEdit}
+            onChange={(event) => set({ bio: event.target.value })} />
+          <span id={bioCountId} className="muted" aria-live="polite">{c.bio.length}/280</span>
         </Row>
       </Section>
 
@@ -1886,7 +1895,7 @@ function SecPlan({
 
 // ─── Page header con save bar ──────────────────────────────────────────────
 
-function PageHeader({ dirty, onSave, onDiscard, isSaving, saveError, canEdit }: { dirty: boolean; onSave: () => void; onDiscard: () => void; isSaving: boolean; saveError: string | null; canEdit: boolean }) {
+function PageHeader({ dirty, onSave, onDiscard, isSaving, saveError, canEdit, uncertain }: { dirty: boolean; onSave: () => void; onDiscard: () => void; isSaving: boolean; saveError: string | null; canEdit: boolean; uncertain: boolean }) {
   return (
     <header className="cfg-head">
       <div>
@@ -1906,9 +1915,9 @@ function PageHeader({ dirty, onSave, onDiscard, isSaving, saveError, canEdit }: 
           <>
             <span className="cfg-save-msg">
               <span className="cfg-save-dot" />
-              Hay cambios sin guardar
+              {uncertain ? "Resultado pendiente de confirmación" : "Hay cambios sin guardar"}
             </span>
-            <button type="button" className="fi-btn fi-btn-ghost" onClick={onDiscard}>Descartar</button>
+            <button type="button" className="fi-btn fi-btn-ghost" onClick={onDiscard} disabled={uncertain}>Descartar</button>
             <button
               type="button"
               className="fi-btn fi-btn-primary"
@@ -1916,7 +1925,7 @@ function PageHeader({ dirty, onSave, onDiscard, isSaving, saveError, canEdit }: 
               disabled={!canEdit}
               title={canEdit ? undefined : "Solo el titular o la dirección pueden editar"}
             >
-              Guardar cambios
+              {uncertain ? "Reintentar guardar" : "Guardar cambios"}
             </button>
           </>
         ) : (
@@ -2060,6 +2069,7 @@ export function Configuracion({
   const [serviciosSnap, setServiciosSnap] = useState<ServicioCfg[]>(initialServicios);
   const [dirty, setDirty] = useState<DirtyState>(NO_DIRTY);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveUncertain, setSaveUncertain] = useState(false);
   const [isSaving, startSavingTransition] = useTransition();
 
   useEffect(() => {
@@ -2090,7 +2100,7 @@ export function Configuracion({
   const anyDirty = dirty.consultorio || dirty.horarios || dirty.servicios;
 
   const setC = (patch: Partial<ConsultorioData>) => {
-    if (savingRef.current) return;
+    if (savingRef.current || saveUncertain) return;
     setConsultorio((prev) => ({ ...prev, ...patch }));
     setDirty((d) => ({ ...d, consultorio: true }));
   };
@@ -2113,41 +2123,38 @@ export function Configuracion({
       }
       // Save secciones marcadas dirty en serie. Si una falla, paramos y reportamos.
       if (dirty.consultorio) {
-        const accentChanged = consultorio.acento !== consultorioSnap.acento;
-        const otherFieldsChanged = (Object.keys(consultorio) as Array<keyof ConsultorioData>)
-          .some((key) => key !== "acento" && consultorio[key] !== consultorioSnap[key]);
-        if (accentChanged) {
-          const accentResult = await savePublicAccentAction({
-            accent: consultorio.acento,
-            expectedAccent: consultorioSnap.acento,
+        const organization: NonNullable<SaveConsultorioInput["organization"]> = {};
+        const profile: NonNullable<SaveConsultorioInput["profile"]> = {};
+        if (consultorio.nombre !== consultorioSnap.nombre) organization.nombre = consultorio.nombre;
+        if (consultorio.bio !== consultorioSnap.bio) organization.bio = consultorio.bio;
+        if (consultorio.ciudad !== consultorioSnap.ciudad) organization.ciudad = consultorio.ciudad;
+        if (consultorio.provincia !== consultorioSnap.provincia) organization.provincia = consultorio.provincia;
+        if (consultorio.tel !== consultorioSnap.tel) organization.tel = consultorio.tel;
+        if (consultorio.direccion !== consultorioSnap.direccion) organization.direccion = consultorio.direccion;
+        if (consultorio.instagram !== consultorioSnap.instagram) organization.instagram = consultorio.instagram;
+        if (consultorio.timezone !== consultorioSnap.timezone) organization.timezone = consultorio.timezone;
+        if (consultorio.especialidad !== consultorioSnap.especialidad) organization.especialidad = consultorio.especialidad;
+        if (consultorio.profesional !== consultorioSnap.profesional) profile.profesional = consultorio.profesional;
+        if (consultorio.matricula !== consultorioSnap.matricula) profile.matricula = consultorio.matricula;
+        if (Object.keys(organization).length || Object.keys(profile).length) {
+          const result = await saveConsultorioAction({
             organizationId: initialHorariosContext.organizationId,
             memberId: initialHorariosContext.memberId,
+            expectedOrganizationUpdatedAt: consultorioSnap.organizationUpdatedAt,
+            expectedProfileUpdatedAt: consultorioSnap.profileUpdatedAt,
+            ...(Object.keys(organization).length ? { organization } : {}),
+            ...(Object.keys(profile).length ? { profile } : {}),
           });
-          if (!accentResult.ok) {
-            setSaveError(`Color de la página: ${accentResult.error.message}`);
+          if (!result.ok) {
+            setSaveUncertain(result.error.code === "network");
+            setSaveError(`Consultorio: ${result.error.message}`);
             return;
           }
-          setConsultorioSnap((snapshot) => ({ ...snapshot, acento: consultorio.acento }));
+          setSaveUncertain(false);
+          const saved = { ...consultorio, ...result.data };
+          setConsultorio(saved);
+          setConsultorioSnap(saved);
         }
-        if (otherFieldsChanged) {
-        const result = await saveConsultorioAction({
-          nombre: consultorio.nombre,
-          profesional: consultorio.profesional,
-          matricula: consultorio.matricula,
-          ciudad: consultorio.ciudad,
-          provincia: consultorio.provincia,
-          tel: consultorio.tel,
-          direccion: consultorio.direccion,
-          instagram: consultorio.instagram,
-          timezone: consultorio.timezone,
-          especialidad: consultorio.especialidad,
-        });
-        if (!result.ok) {
-          setSaveError(`Consultorio: ${result.error.message}`);
-          return;
-        }
-        }
-        setConsultorioSnap(consultorio);
         setDirty((d) => ({ ...d, consultorio: false }));
       }
 
@@ -2164,6 +2171,7 @@ export function Configuracion({
 
       } catch {
         if (availability.pending) availability.finish({ ok: false, error: { code: "network", message: "Conexión interrumpida" } });
+        setSaveUncertain(true);
         setSaveError("No pudimos confirmar el guardado. Reintentá para recuperar el resultado.");
       } finally { savingRef.current = false; refreshAvailability(); }
     });
@@ -2184,7 +2192,7 @@ export function Configuracion({
   };
 
   const handleDiscard = () => {
-    if (savingRef.current || (dirty.horarios && !availability.discard())) return;
+    if (savingRef.current || saveUncertain || (dirty.horarios && !availability.discard())) return;
     if (dirty.consultorio) setConsultorio(consultorioSnap);
     refreshAvailability();
     if (dirty.servicios) setServicios(serviciosSnap);
@@ -2201,6 +2209,7 @@ export function Configuracion({
         isSaving={isSaving}
         saveError={availability.contextChanged ? "Cambió el consultorio activo. Volvé a cargar la página." : availability.conflict ? "Los horarios cambiaron en otra pestaña. Conservamos tu borrador: cargá los guardados para reemplazarlo y seguir." : saveError}
         canEdit={canEdit}
+        uncertain={saveUncertain}
       />
 
       <div className="cfg-grid">
@@ -2210,7 +2219,7 @@ export function Configuracion({
           showEquipo={canManageTeam || equipoSelf != null}
           showPerfilPublico={esColegiado && initialPerfilPublico != null}
         />
-        <fieldset className="cfg-pane" disabled={isSaving || availability.contextChanged} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+        <fieldset className="cfg-pane" disabled={isSaving || availability.contextChanged || saveUncertain} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
           {seccion === "cuenta"        ? <SecCuenta c={consultorio} set={setC} showVinculaciones={showVinculaciones} showAuditLog={canEdit} /> : null}
           {seccion === "perfil-publico" && initialPerfilPublico ? (
             <SecPerfilPublico initial={initialPerfilPublico} matricula={consultorio.matricula} />

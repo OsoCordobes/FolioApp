@@ -192,7 +192,9 @@ export const configuration: ComponentProps<typeof Configuracion> = {
   orgSlug: organization.slug,
   initialHorariosContext: { organizationId: PREVIEW_ORG, memberId: "folio-test-member", revision: 0, protectedDates: false },
   initialConsultorio: {
-    nombre: organization.nombre, acento: "#8A6722", profesional: "Valentina Costa", matricula: "Ejemplo 1234",
+    nombre: organization.nombre, bio: "Descripción pública de ejemplo.",
+    organizationUpdatedAt: "2026-09-20T00:00:00Z", profileUpdatedAt: "2026-09-20T00:00:00Z",
+    acento: "#8A6722", profesional: "Valentina Costa", matricula: "Ejemplo 1234",
     email: "profesional@example.test", tel: "", direccion: "Dirección de ejemplo", ciudad: "Córdoba",
     provincia: "Córdoba", instagram: "", timezone: "America/Argentina/Cordoba", especialidad: "kinesiologia",
   },

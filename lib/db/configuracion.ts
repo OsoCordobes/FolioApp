@@ -22,7 +22,7 @@ import { listProfesionalesPublico } from "@/lib/db/members";
 import { decodeAvailabilitySnapshot } from "@/lib/agenda/availability-snapshot";
 import { createHash } from "node:crypto";
 
-import { encryptColumn } from "@/lib/crypto";
+import { decryptColumn, encryptColumn } from "@/lib/crypto";
 import { ESPECIALIDAD_SLUGS, type EspecialidadSlug } from "@/lib/especialidades/meta";
 import { esIntegracionMuerta } from "@/lib/google/health";
 import {
@@ -37,6 +37,10 @@ import { err, mapSupabaseError, ok, type Result } from "./errors";
 
 export interface ConsultorioData {
   nombre: string;
+  /** Texto público de organization.bio; vacío en el editor equivale a NULL. */
+  bio: string;
+  organizationUpdatedAt: string;
+  profileUpdatedAt: string;
   acento: string;
   profesional: string;
   matricula: string;
@@ -146,13 +150,17 @@ export async function getConfiguracionData(expected?: { organizationId: string; 
     .maybeSingle();
 
   // 3. Organization fields nuevos (M20 agregó telefono_publico / direccion_completa / instagram_handle).
-  const { data: orgExtra } = await supabase
+  const { data: orgExtra, error: orgExtraError } = await supabase
     .from("organization")
     .select(
-      "telefono_publico, direccion_completa, instagram_handle, auto_confirmar_reservas, slot_margen_min, logo_url, card_mood, bio",
+      "telefono_publico, direccion_completa, instagram_handle, auto_confirmar_reservas, slot_margen_min, logo_url, card_mood, bio, updated_at",
     )
     .eq("id", ctx.data.organization.id)
     .maybeSingle();
+  if (orgExtraError || !orgExtra) return err("db_error", "No pudimos cargar los datos del consultorio.");
+  const { data: profileRevision, error: profileRevisionError } = await supabase
+    .from("profile").select("updated_at").eq("id", ctx.data.session.userId).maybeSingle();
+  if (profileRevisionError || !profileRevision) return err("db_error", "No pudimos cargar la revisión del perfil.");
 
   // 4. Una lectura fallida nunca se convierte en una semana vacía editable.
   const snapshot = await readHorarios(expected ?? { organizationId: ctx.data.organization.id, memberId: ctx.data.session.memberId });
@@ -164,6 +172,9 @@ export async function getConfiguracionData(expected?: { organizationId: string; 
 
   const consultorio: ConsultorioData = {
     nombre: ctx.data.organization.nombre,
+    bio: (orgExtra.bio as string | null) ?? "",
+    organizationUpdatedAt: orgExtra.updated_at as string,
+    profileUpdatedAt: profileRevision.updated_at as string,
     acento: ctx.data.organization.acentoHex || "#8A6722",
     profesional,
     matricula: ctx.data.profile.matricula ?? "",
@@ -261,89 +272,137 @@ export async function getConfiguracionData(expected?: { organizationId: string; 
 // ─── Mutation: guardar Consultorio ────────────────────────────────────────
 
 const saveConsultorioSchema = z.object({
-  nombre: z.string().min(1).max(120),
-  profesional: z.string().min(1).max(160),
-  matricula: z.string().max(60).optional(),
-  ciudad: z.string().max(60).optional(),
-  provincia: z.string().max(60).optional(),
-  tel: z.string().max(30).optional(),
-  direccion: z.string().max(200).optional(),
-  instagram: z.string().max(60).optional(),
-  timezone: z.string().min(1).max(60).optional(),
-  /** M50 · validado contra los slugs reales (CHECK organization_especialidad_valida). */
-  especialidad: z.enum(ESPECIALIDAD_SLUGS).optional(),
-});
+  organizationId: z.string().uuid(),
+  memberId: z.string().uuid(),
+  expectedOrganizationUpdatedAt: z.string().datetime({ offset: true }),
+  expectedProfileUpdatedAt: z.string().datetime({ offset: true }),
+  organization: z.object({
+    nombre: z.string().trim().min(1).max(120).optional(),
+    bio: z.string().trim().max(280).optional(),
+    ciudad: z.string().max(60).optional(),
+    provincia: z.string().max(60).optional(),
+    tel: z.string().max(30).optional(),
+    direccion: z.string().max(200).optional(),
+    instagram: z.string().max(40).optional(),
+    timezone: z.string().min(1).max(60).optional(),
+    especialidad: z.enum(ESPECIALIDAD_SLUGS).optional(),
+  }).strict().optional(),
+  profile: z.object({
+    profesional: z.string().trim().min(1).max(160).optional(),
+    matricula: z.string().max(60).optional(),
+  }).strict().optional(),
+}).refine((d) => Object.keys(d.organization ?? {}).length + Object.keys(d.profile ?? {}).length > 0);
 
 export type SaveConsultorioInput = z.infer<typeof saveConsultorioSchema>;
+export interface SaveConsultorioReceipt { organizationUpdatedAt: string; profileUpdatedAt: string }
+const receiptSchema = z.object({
+  organizationUpdatedAt: z.string().datetime({ offset: true }),
+  profileUpdatedAt: z.string().datetime({ offset: true }),
+});
 
-/**
- * Guarda los campos de "Consultorio" en `organization` + `profile`. El campo
- * profesional se split en nombre/apellido por la primera espacio y se
- * encripta antes de persistir. Tel/dirección/Instagram persisten en las
- * columnas M20 (telefono_publico, direccion_completa, instagram_handle).
- */
-export async function saveConsultorio(input: SaveConsultorioInput): Promise<Result<void>> {
+function nullablePublicValue(value: string): string | null { return value.trim() || null; }
+
+/** A lost response can only be confirmed by reading the exact requested fields. */
+async function readConsultorioReceipt(
+  client: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  organizationId: string,
+  userId: string,
+  orgPatch: Record<string, string | null>,
+  requestedProfile: SaveConsultorioInput["profile"],
+): Promise<SaveConsultorioReceipt | null> {
+  try {
+    const [orgResult, profileResult] = await Promise.all([
+      client.from("organization")
+        .select("id, updated_at, nombre, bio, ciudad, provincia, telefono_publico, direccion_completa, instagram_handle, timezone, especialidad")
+        .eq("id", organizationId).is("deleted_at", null).maybeSingle(),
+      client.from("profile")
+        .select("id, updated_at, nombre_cifrado, apellido_cifrado, matricula")
+        .eq("id", userId).maybeSingle(),
+    ]);
+    if (orgResult.error || !orgResult.data || profileResult.error || !profileResult.data) return null;
+    const org = orgResult.data as Record<string, string | null>;
+    if (Object.entries(orgPatch).some(([key, value]) => org[key] !== value)) return null;
+    const profile = profileResult.data;
+    if (requestedProfile?.profesional !== undefined) {
+      const [first, ...rest] = requestedProfile.profesional.trim().split(/\s+/);
+      if (decryptColumn(profile.nombre_cifrado) !== first ||
+          decryptColumn(profile.apellido_cifrado) !== (rest.join(" ") || first)) return null;
+    }
+    if (requestedProfile?.matricula !== undefined &&
+        profile.matricula !== nullablePublicValue(requestedProfile.matricula)) return null;
+    const receipt = receiptSchema.safeParse({
+      organizationUpdatedAt: orgResult.data.updated_at,
+      profileUpdatedAt: profile.updated_at,
+    });
+    return receipt.success ? receipt.data : null;
+  } catch { return null; }
+}
+
+/** M127 confirms both writes in one transaction, with current membership and revisions locked. */
+export async function saveConsultorio(input: SaveConsultorioInput): Promise<Result<SaveConsultorioReceipt>> {
   const parsed = saveConsultorioSchema.safeParse(input);
-  if (!parsed.success) {
-    return err("validation", "Datos inválidos.", parsed.error.message);
-  }
+  if (!parsed.success) return err("validation", "Datos inválidos.", parsed.error.message);
   const d = parsed.data;
-
   const ctx = await getActiveContext();
   if (!ctx.ok) return ctx;
-  if (ctx.data.session.role !== "OWNER" && ctx.data.session.role !== "DIRECTOR") {
-    return err("forbidden", "Solo OWNER/DIRECTOR puede editar el consultorio.");
+  if (ctx.data.organization.id !== d.organizationId || ctx.data.session.memberId !== d.memberId) {
+    return err("conflict", "Cambió el consultorio activo. Volvé a cargar la página.");
   }
+  if (ctx.data.session.role !== "OWNER" && ctx.data.session.role !== "DIRECTOR") {
+    return err("forbidden", "Solo el titular o la dirección pueden editar el consultorio.");
+  }
+
+  const orgPatch: Record<string, string | null> = {};
+  const o = d.organization;
+  if (o?.nombre !== undefined) orgPatch.nombre = o.nombre;
+  if (o?.bio !== undefined) orgPatch.bio = nullablePublicValue(o.bio);
+  if (o?.ciudad !== undefined) orgPatch.ciudad = nullablePublicValue(o.ciudad);
+  if (o?.provincia !== undefined) orgPatch.provincia = nullablePublicValue(o.provincia);
+  if (o?.tel !== undefined) orgPatch.telefono_publico = nullablePublicValue(o.tel);
+  if (o?.direccion !== undefined) orgPatch.direccion_completa = nullablePublicValue(o.direccion);
+  if (o?.instagram !== undefined) orgPatch.instagram_handle = nullablePublicValue(o.instagram);
+  if (o?.timezone !== undefined) orgPatch.timezone = o.timezone;
+  if (o?.especialidad !== undefined) orgPatch.especialidad = o.especialidad;
+  const profilePatch: Record<string, string | null> = {};
+  if (d.profile?.profesional !== undefined) {
+    const [first, ...rest] = d.profile.profesional.trim().split(/\s+/);
+    profilePatch.nombre_cifrado = encryptColumn(first)!;
+    profilePatch.apellido_cifrado = encryptColumn(rest.join(" ") || first)!;
+  }
+  if (d.profile?.matricula !== undefined) profilePatch.matricula = nullablePublicValue(d.profile.matricula);
 
   const supabase = await createSupabaseServerClient();
-
-  // 1. UPDATE organization.
-  const orgPatch: Record<string, unknown> = {
-    nombre: d.nombre,
-    ciudad: d.ciudad ?? null,
-    provincia: d.provincia ?? null,
-    telefono_publico: d.tel && d.tel.length > 0 ? d.tel : null,
-    direccion_completa: d.direccion && d.direccion.length > 0 ? d.direccion : null,
-    instagram_handle: d.instagram && d.instagram.length > 0 ? d.instagram : null,
-  };
-  if (d.timezone) {
-    orgPatch.timezone = d.timezone;
+  try {
+    const { data, error, status } = await supabase.rpc("save_consultorio_atomic", {
+      p_org: d.organizationId,
+      p_member: d.memberId,
+      p_expected_org_updated_at: d.expectedOrganizationUpdatedAt,
+      p_expected_profile_updated_at: d.expectedProfileUpdatedAt,
+      p_org_patch: orgPatch,
+      p_profile_patch: profilePatch,
+    });
+    if (!error) {
+      const receipt = receiptSchema.safeParse(data);
+      if (receipt.success) return ok(receipt.data);
+    }
+    const definitiveCode = error && ["42501", "22023", "23514", "23502", "23505", "PGRST301", "PGRST302"].includes(error.code);
+    const uncertainTransport = Boolean(error && !definitiveCode && (status === 0 || !error.code ||
+      /fetch failed|failed to fetch|network/i.test(error.message)));
+    if (error?.code === "40001" || !error || uncertainTransport) {
+      const recovered = await readConsultorioReceipt(supabase, d.organizationId,
+        ctx.data.session.userId, orgPatch, d.profile);
+      if (recovered) return ok(recovered);
+      if (error?.code === "40001") return err("conflict", "El consultorio cambió en otra pestaña. Recargá antes de guardar.");
+      return err("network", "No pudimos confirmar el guardado. Conservamos tus cambios; reintentá.");
+    }
+    const mapped = mapSupabaseError(error);
+    return err(mapped.code, mapped.message, error.message);
+  } catch {
+    const recovered = await readConsultorioReceipt(supabase, d.organizationId,
+      ctx.data.session.userId, orgPatch, d.profile);
+    if (recovered) return ok(recovered);
+    return err("network", "No pudimos confirmar el guardado. Conservamos tus cambios; reintentá.");
   }
-  if (d.especialidad) {
-    // M50 · cambiar la especialidad NO borra datos: las sesiones con tool_id
-    // de otra especialidad se conservan en DB pero la ficha deja de
-    // renderizarlas (el registry solo monta la herramienta de la especialidad
-    // activa). El client muestra la advertencia con el count antes de guardar
-    // (countSesionesOtraEspecialidad).
-    orgPatch.especialidad = d.especialidad;
-  }
-  const { error: orgErr } = await supabase
-    .from("organization")
-    .update(orgPatch)
-    .eq("id", ctx.data.organization.id);
-  if (orgErr) {
-    const mapped = mapSupabaseError(orgErr);
-    return err(mapped.code, mapped.message, orgErr.message);
-  }
-
-  // 2. UPDATE profile.nombre + apellido + matricula.
-  const [primerNombre, ...resto] = d.profesional.trim().split(/\s+/);
-  const apellido = resto.join(" ");
-  const profilePatch: Record<string, unknown> = {
-    nombre_cifrado: encryptColumn(primerNombre)!,
-    apellido_cifrado: encryptColumn(apellido || primerNombre)!,
-    matricula: d.matricula ?? null,
-  };
-  const { error: profErr } = await supabase
-    .from("profile")
-    .update(profilePatch)
-    .eq("id", ctx.data.profile.id);
-  if (profErr) {
-    const mapped = mapSupabaseError(profErr);
-    return err(mapped.code, mapped.message, profErr.message);
-  }
-
-  return ok(undefined);
 }
 
 /** Guardado aislado del color. La comparación evita reemplazar un cambio

@@ -24,6 +24,7 @@ import {
   saveServicios,
   type SaveBookingPrefsInput,
   type SaveConsultorioInput,
+  type SaveConsultorioReceipt,
   type SaveHorariosInput,
   type SaveServiciosInput,
 } from "@/lib/db/configuracion";
@@ -80,12 +81,12 @@ async function revalidateBookPublico(): Promise<void> {
   }
 }
 
-export async function saveConsultorioAction(input: SaveConsultorioInput): Promise<Result<void>> {
+export async function saveConsultorioAction(input: SaveConsultorioInput): Promise<Result<SaveConsultorioReceipt>> {
   const result = await saveConsultorio(input);
   if (result.ok) {
     revalidatePath("/configuracion");
     revalidatePath("/", "layout");
-    // Campos públicos (nombre, ciudad, tel, dirección, Instagram) viven en la
+    // Campos públicos (nombre, bio, ciudad, tel, dirección, Instagram) viven en la
     // página estática /book/<slug> — refrescarla on-demand.
     await revalidateBookPublico();
   }
