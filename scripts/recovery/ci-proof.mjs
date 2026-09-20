@@ -108,9 +108,11 @@ async function seed(state){
  Object.assign(foreign,await enrollTotp(foreignActor));
  must(await foreignActor.auth.signOut({scope:'local'}),'foreign_source_logout');
  const org=randomUUID(),member=randomUUID(),patient=randomUUID(),note=randomUUID();
- const marker=`C01 synthetic ${run}`;
+ const foreignOrg=randomUUID(),foreignMember=randomUUID(),foreignPatient=randomUUID(),foreignNote=randomUUID();
+ const marker=`C01 synthetic ${run}`,foreignMarker=`C01 foreign synthetic ${run}`;
  const {encryptColumn}=await folioCrypto();
  const encrypted=encryptColumn(marker);
+ const foreignEncrypted=encryptColumn(foreignMarker);
  assert.ok(encrypted?.startsWith('\\x'));
  await withPg(state.dbPassword,'postgres',async db=>{
   await db.query('BEGIN');
@@ -118,9 +120,13 @@ async function seed(state){
    await db.query('INSERT INTO public.profile(id,email,nombre_cifrado,apellido_cifrado,consent_pii_signed_at,consent_pii_text_version) VALUES($1,$2,$3,$4,now(),$5)',[owner.id,owner.email,Buffer.from(encrypted.slice(2),'hex'),Buffer.from(encrypted.slice(2),'hex'),'synthetic-c01.v1']);
    await db.query('INSERT INTO public.profile(id,email,nombre_cifrado,apellido_cifrado,consent_pii_signed_at,consent_pii_text_version) VALUES($1,$2,$3,$4,now(),$5)',[foreign.id,foreign.email,Buffer.from(encrypted.slice(2),'hex'),Buffer.from(encrypted.slice(2),'hex'),'synthetic-c01.v1']);
    await db.query(`INSERT INTO public.organization(id,slug,nombre,ciudad,provincia,timezone,especialidad,tipo,onboarding_completed,onboarding_step_max,is_internal_account,is_synthetic,opt_out_analytics,opt_out_public_listing) VALUES($1,$2,'Consultorio sintético C01','Alta Gracia','Córdoba','America/Argentina/Cordoba','quiropraxia','INDEPENDIENTE',true,9,true,true,true,true)`,[org,`folio-test-clinical-${run}`]);
+   await db.query(`INSERT INTO public.organization(id,slug,nombre,ciudad,provincia,timezone,especialidad,tipo,onboarding_completed,onboarding_step_max,is_internal_account,is_synthetic,opt_out_analytics,opt_out_public_listing) VALUES($1,$2,'Consultorio sintético C01 ajeno','Alta Gracia','Córdoba','America/Argentina/Cordoba','quiropraxia','INDEPENDIENTE',true,9,true,true,true,true)`,[foreignOrg,`folio-test-clinical-${run}-foreign`]);
    await db.query(`INSERT INTO public.member(id,organization_id,profile_id,role,accepted_at,es_colegiado,especialidad,alcance,profesionales_gestionados) VALUES($1,$2,$3,'OWNER',now(),true,'quiropraxia','TODOS','{}')`,[member,org,owner.id]);
+   await db.query(`INSERT INTO public.member(id,organization_id,profile_id,role,accepted_at,es_colegiado,especialidad,alcance,profesionales_gestionados) VALUES($1,$2,$3,'OWNER',now(),true,'quiropraxia','TODOS','{}')`,[foreignMember,foreignOrg,foreign.id]);
    await db.query('INSERT INTO public.paciente(id,organization_id) VALUES($1,$2)',[patient,org]);
+   await db.query('INSERT INTO public.paciente(id,organization_id) VALUES($1,$2)',[foreignPatient,foreignOrg]);
    await db.query('INSERT INTO public.nota_clinica(id,organization_id,paciente_id,autor_id,texto_cifrado) VALUES($1,$2,$3,$4,$5)',[note,org,patient,member,Buffer.from(encrypted.slice(2),'hex')]);
+   await db.query('INSERT INTO public.nota_clinica(id,organization_id,paciente_id,autor_id,texto_cifrado) VALUES($1,$2,$3,$4,$5)',[foreignNote,foreignOrg,foreignPatient,foreignMember,Buffer.from(foreignEncrypted.slice(2),'hex')]);
    await db.query('COMMIT');
   }catch(error){await db.query('ROLLBACK');throw error;}
  });
@@ -129,7 +135,7 @@ async function seed(state){
  must(await admin.storage.from(bucket).upload(object,bytes,{contentType:'application/octet-stream',upsert:false}),'private_upload');
  const download=must(await admin.storage.from(bucket).download(object),'source_download');
  assert.equal(sha(Buffer.from(await download.arrayBuffer())),sha(bytes));
- return {owner,foreign,org,member,patient,note,marker,bucket,object,bytesHash:sha(bytes)};
+ return {owner,foreign,org,member,patient,note,marker,foreignOrg,foreignMember,foreignPatient,foreignNote,foreignMarker,bucket,object,bytesHash:sha(bytes)};
 }
 async function capture(state,fixture,root,env){
  const configPath=path.join(root,'capture.json');
@@ -185,11 +191,17 @@ async function verify(state,fixture,backup){
  tampered[tampered.length-1]^=1;
  assert.throws(()=>decryptColumn(tampered),'modified clinical ciphertext must fail authentication');
  const foreign=await mfaLogin(fixture.foreign,state.anonKey);
+ const foreignOwn=must(await foreign.from('nota_clinica').select('id,texto_cifrado').eq('id',fixture.foreignNote).single(),'foreign_own_note_read');
+ assert.equal(foreignOwn.id,fixture.foreignNote);
+ assert.equal(decryptColumn(foreignOwn.texto_cifrado),fixture.foreignMarker);
  const denied=await foreign.from('nota_clinica').select('id').eq('id',fixture.note);
  assert.ok((denied.error===null&&Array.isArray(denied.data)&&denied.data.length===0)||(denied.error?.code==='42501'&&(!denied.data||denied.data.length===0)),'foreign clinical note exposed or unreadable for another reason');
+ const ownerDenied=await owner.from('nota_clinica').select('id').eq('id',fixture.foreignNote);
+ assert.ok((ownerDenied.error===null&&Array.isArray(ownerDenied.data)&&ownerDenied.data.length===0)||(ownerDenied.error?.code==='42501'&&(!ownerDenied.data||ownerDenied.data.length===0)),'owner saw foreign clinical note or read failed unexpectedly');
  const anon=client(state.anonKey);
  const privateRead=await anon.storage.from(fixture.bucket).download(fixture.object);
  assert.ok(privateRead.error,'anonymous private object exposed');
+ assert.ok([401,403,404].includes(Number(privateRead.error.statusCode??privateRead.error.status)),'private object negative must be an authorization or hidden-object response');
  const admin=client(state.serviceKey);
  const restored=must(await admin.storage.from(fixture.bucket).download(fixture.object),'restored_private_download');
  assert.equal(sha(Buffer.from(await restored.arrayBuffer())),fixture.bytesHash);
