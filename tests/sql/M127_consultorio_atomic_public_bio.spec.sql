@@ -42,10 +42,11 @@ UPDATE folio_mfa_private.policy SET application_ready=true,staff_enforce_after=n
 
 SELECT set_config('test.m127_uid','12700000-0000-4000-8000-000000000001',true);
 SELECT set_config('test.m127_jwt','{"aal":"aal1","session_id":"12700000-0000-4000-8000-000000000031"}',true);
+SELECT set_config('test.m127_org_rev',(SELECT updated_at::text FROM public.organization WHERE id='12700000-0000-4000-8000-000000000010'),true);
+SELECT set_config('test.m127_profile_rev',(SELECT updated_at::text FROM public.profile WHERE id='12700000-0000-4000-8000-000000000001'),true);
 SET LOCAL ROLE authenticated;
-DO $$ DECLARE org_rev timestamptz; profile_rev timestamptz; BEGIN
- SELECT updated_at INTO org_rev FROM public.organization WHERE id='12700000-0000-4000-8000-000000000010';
- SELECT updated_at INTO profile_rev FROM public.profile WHERE id='12700000-0000-4000-8000-000000000001';
+DO $$ DECLARE org_rev timestamptz := current_setting('test.m127_org_rev')::timestamptz;
+ profile_rev timestamptz := current_setting('test.m127_profile_rev')::timestamptz; BEGIN
  BEGIN
   PERFORM public.save_consultorio_atomic('12700000-0000-4000-8000-000000000010','12700000-0000-4000-8000-000000000011',
    org_rev,profile_rev,'{"nombre":"Forbidden"}'::jsonb,'{}'::jsonb);
@@ -59,10 +60,11 @@ DO $$ BEGIN
 END $$;
 
 SELECT set_config('test.m127_jwt','{"aal":"aal2","session_id":"12700000-0000-4000-8000-000000000031"}',true);
+SELECT set_config('test.m127_org_rev',(SELECT updated_at::text FROM public.organization WHERE id='12700000-0000-4000-8000-000000000010'),true);
+SELECT set_config('test.m127_profile_rev',(SELECT updated_at::text FROM public.profile WHERE id='12700000-0000-4000-8000-000000000001'),true);
 SET LOCAL ROLE authenticated;
-DO $$ DECLARE org_rev timestamptz; profile_rev timestamptz; receipt jsonb; BEGIN
- SELECT updated_at INTO org_rev FROM public.organization WHERE id='12700000-0000-4000-8000-000000000010';
- SELECT updated_at INTO profile_rev FROM public.profile WHERE id='12700000-0000-4000-8000-000000000001';
+DO $$ DECLARE org_rev timestamptz := current_setting('test.m127_org_rev')::timestamptz;
+ profile_rev timestamptz := current_setting('test.m127_profile_rev')::timestamptz; receipt jsonb; BEGIN
  receipt:=public.save_consultorio_atomic('12700000-0000-4000-8000-000000000010','12700000-0000-4000-8000-000000000011',
    org_rev,profile_rev,'{"nombre":"Actualizado"}'::jsonb,'{"matricula":"MP 127"}'::jsonb);
  IF receipt->>'organizationUpdatedAt' IS NULL OR receipt->>'profileUpdatedAt' IS NULL
@@ -88,13 +90,14 @@ END $$;
 
 SELECT set_config('test.m127_uid','12700000-0000-4000-8000-000000000002',true);
 SELECT set_config('test.m127_jwt','{"aal":"aal2","session_id":"12700000-0000-4000-8000-000000000032"}',true);
+SELECT set_config('test.m127_org_rev',(SELECT updated_at::text FROM public.organization WHERE id='12700000-0000-4000-8000-000000000010'),true);
+SELECT set_config('test.m127_profile_rev',(SELECT updated_at::text FROM public.profile WHERE id='12700000-0000-4000-8000-000000000002'),true);
 SET LOCAL ROLE authenticated;
-DO $$ DECLARE org_rev timestamptz; profile_rev timestamptz; BEGIN
- SELECT updated_at INTO org_rev FROM public.organization WHERE id='12700000-0000-4000-8000-000000000010';
- SELECT updated_at INTO profile_rev FROM public.profile WHERE id='12700000-0000-4000-8000-000000000002';
- PERFORM public.save_consultorio_atomic('12700000-0000-4000-8000-000000000010','12700000-0000-4000-8000-000000000012',
+DO $$ DECLARE org_rev timestamptz := current_setting('test.m127_org_rev')::timestamptz;
+ profile_rev timestamptz := current_setting('test.m127_profile_rev')::timestamptz; receipt jsonb; BEGIN
+ receipt:=public.save_consultorio_atomic('12700000-0000-4000-8000-000000000010','12700000-0000-4000-8000-000000000012',
    org_rev,profile_rev,'{"bio":"Bio del director","especialidad":"kinesiologia"}'::jsonb,'{}'::jsonb);
- SELECT updated_at INTO org_rev FROM public.organization WHERE id='12700000-0000-4000-8000-000000000010';
+ org_rev := (receipt->>'organizationUpdatedAt')::timestamptz;
  PERFORM public.save_consultorio_atomic('12700000-0000-4000-8000-000000000010','12700000-0000-4000-8000-000000000012',
    org_rev,profile_rev,'{"especialidad":"nutricion"}'::jsonb,'{}'::jsonb);
  BEGIN
@@ -112,10 +115,11 @@ END $$;
 
 UPDATE public.member SET accepted_at=NULL, invited_by_id='12700000-0000-4000-8000-000000000001'
  WHERE id='12700000-0000-4000-8000-000000000012';
+SELECT set_config('test.m127_org_rev',(SELECT updated_at::text FROM public.organization WHERE id='12700000-0000-4000-8000-000000000010'),true);
+SELECT set_config('test.m127_profile_rev',(SELECT updated_at::text FROM public.profile WHERE id='12700000-0000-4000-8000-000000000002'),true);
 SET LOCAL ROLE authenticated;
-DO $$ DECLARE org_rev timestamptz; profile_rev timestamptz; BEGIN
- SELECT updated_at INTO org_rev FROM public.organization WHERE id='12700000-0000-4000-8000-000000000010';
- SELECT updated_at INTO profile_rev FROM public.profile WHERE id='12700000-0000-4000-8000-000000000002';
+DO $$ DECLARE org_rev timestamptz := current_setting('test.m127_org_rev')::timestamptz;
+ profile_rev timestamptz := current_setting('test.m127_profile_rev')::timestamptz; BEGIN
  BEGIN
   PERFORM public.save_consultorio_atomic('12700000-0000-4000-8000-000000000010','12700000-0000-4000-8000-000000000012',
    org_rev,profile_rev,'{"bio":"Invitación pendiente"}'::jsonb,'{}'::jsonb);
@@ -128,10 +132,11 @@ UPDATE public.member SET accepted_at=now(), invited_by_id=NULL
 
 SELECT set_config('test.m127_uid','12700000-0000-4000-8000-000000000003',true);
 SELECT set_config('test.m127_jwt','{"aal":"aal2","session_id":"12700000-0000-4000-8000-000000000033"}',true);
+SELECT set_config('test.m127_org_rev',(SELECT updated_at::text FROM public.organization WHERE id='12700000-0000-4000-8000-000000000010'),true);
+SELECT set_config('test.m127_profile_rev',(SELECT updated_at::text FROM public.profile WHERE id='12700000-0000-4000-8000-000000000003'),true);
 SET LOCAL ROLE authenticated;
-DO $$ DECLARE org_rev timestamptz; profile_rev timestamptz; BEGIN
- SELECT updated_at INTO org_rev FROM public.organization WHERE id='12700000-0000-4000-8000-000000000010';
- SELECT updated_at INTO profile_rev FROM public.profile WHERE id='12700000-0000-4000-8000-000000000003';
+DO $$ DECLARE org_rev timestamptz := current_setting('test.m127_org_rev')::timestamptz;
+ profile_rev timestamptz := current_setting('test.m127_profile_rev')::timestamptz; BEGIN
  BEGIN
   PERFORM public.save_consultorio_atomic('12700000-0000-4000-8000-000000000010','12700000-0000-4000-8000-000000000013',
    org_rev,profile_rev,'{"bio":"Forbidden"}'::jsonb,'{}'::jsonb);
@@ -151,10 +156,11 @@ CREATE TRIGGER m127_fail_profile BEFORE UPDATE ON public.profile
  FOR EACH ROW EXECUTE FUNCTION pg_temp.m127_fail_profile();
 SELECT set_config('test.m127_uid','12700000-0000-4000-8000-000000000001',true);
 SELECT set_config('test.m127_jwt','{"aal":"aal2","session_id":"12700000-0000-4000-8000-000000000031"}',true);
+SELECT set_config('test.m127_org_rev',(SELECT updated_at::text FROM public.organization WHERE id='12700000-0000-4000-8000-000000000010'),true);
+SELECT set_config('test.m127_profile_rev',(SELECT updated_at::text FROM public.profile WHERE id='12700000-0000-4000-8000-000000000001'),true);
 SET LOCAL ROLE authenticated;
-DO $$ DECLARE org_rev timestamptz; profile_rev timestamptz; BEGIN
- SELECT updated_at INTO org_rev FROM public.organization WHERE id='12700000-0000-4000-8000-000000000010';
- SELECT updated_at INTO profile_rev FROM public.profile WHERE id='12700000-0000-4000-8000-000000000001';
+DO $$ DECLARE org_rev timestamptz := current_setting('test.m127_org_rev')::timestamptz;
+ profile_rev timestamptz := current_setting('test.m127_profile_rev')::timestamptz; BEGIN
  BEGIN
   PERFORM public.save_consultorio_atomic('12700000-0000-4000-8000-000000000010','12700000-0000-4000-8000-000000000011',
    org_rev,profile_rev,'{"nombre":"Should roll back"}'::jsonb,'{"matricula":"Would fail"}'::jsonb);
