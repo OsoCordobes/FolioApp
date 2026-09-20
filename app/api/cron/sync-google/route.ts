@@ -7,7 +7,9 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 export async function GET(request: NextRequest) {
-    if (!process.env.CRON_SECRET || !verifyBearer(request.headers.get('authorization'), process.env.CRON_SECRET))
+    if (!process.env.CRON_SECRET)
+        return NextResponse.json({ ok: false, error: 'cron_unconfigured' }, { status: 503 });
+    if (!verifyBearer(request.headers.get('authorization'), process.env.CRON_SECRET))
         return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 });
     const signal = AbortSignal.any([request.signal, AbortSignal.timeout(45000)]);
     const service = createSupabaseServiceClient();
@@ -32,7 +34,8 @@ export async function GET(request: NextRequest) {
                 }
                 return stats;
             })()]);
-        return NextResponse.json({ ok: true, outbound, inbound });
+        const ok = outbound.retryable === 0 && outbound.terminal === 0 && inbound.failed === 0;
+        return NextResponse.json({ ok, outbound, inbound }, { status: ok ? 200 : 503 });
     }
     catch {
         return NextResponse.json({ ok: false, error: 'google_sync_failed' }, { status: 503 });
