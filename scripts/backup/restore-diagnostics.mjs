@@ -32,6 +32,7 @@ const systemCodes=new Map([
  ['ENOTFOUND','dns'],
  ['EACCES','permission'],
 ]);
+const pgRestoreCategories=new Set(['pg_cron_database_mismatch','extension_version','extension_preload','extension_schema','permission','missing_role','other']);
 function safeProperty(error,key){
  try{const value=error?.[key];return typeof value==='string'?value:null;}
  catch{return null;}
@@ -63,4 +64,21 @@ export function parseSafeRestoreDiagnostic(stderr){
  if(systemCodes.get(code)===category)return {phase,category,code};
  if(category==='unknown'&&code==='unclassified')return {phase,category,code};
  return null;
+}
+
+/** Inspect bounded tool stderr in memory and return a fixed public category. */
+export function classifyPgRestoreStderr(stderr){
+ const value=Buffer.isBuffer(stderr)?stderr.toString('utf8'):String(stderr);
+ if(/can only create extension in database/i.test(value)&&/pg_cron|cron\.database_name/i.test(value))return 'pg_cron_database_mismatch';
+ if(/(?:extension .* is not available|could not open extension control file|no installation script|version .* is not available)/i.test(value))return 'extension_version';
+ if(/(?:can only be loaded via shared_preload_libraries|must be loaded via shared_preload_libraries)/i.test(value))return 'extension_preload';
+ if(/(?:extension .* must be installed in schema|schema .* already exists)/i.test(value))return 'extension_schema';
+ if(/(?:permission denied|must be owner of|must be superuser)/i.test(value))return 'permission';
+ if(/role .* does not exist/i.test(value))return 'missing_role';
+ return 'other';
+}
+
+export function parseSafePgRestoreDiagnostic(stderr){
+ const match=String(stderr).match(/^c01_pg_restore_diagnostic category=([a-z_]+)$/m);
+ return match&&pgRestoreCategories.has(match[1])?match[1]:null;
 }

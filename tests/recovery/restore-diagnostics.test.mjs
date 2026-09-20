@@ -3,7 +3,7 @@ import test from 'node:test';
 import {spawnSync} from 'node:child_process';
 import {EventEmitter} from 'node:events';
 import {fileURLToPath} from 'node:url';
-import {safeRestoreDiagnostic,parseSafeRestoreDiagnostic} from '../../scripts/backup/restore-diagnostics.mjs';
+import {safeRestoreDiagnostic,parseSafeRestoreDiagnostic,classifyPgRestoreStderr,parseSafePgRestoreDiagnostic} from '../../scripts/backup/restore-diagnostics.mjs';
 import {monitorPostgresChild} from '../../scripts/backup/postgres.mjs';
 
 test('restore diagnostics retain only fixed guard and PostgreSQL categories',()=>{
@@ -25,7 +25,8 @@ test('restore diagnostics retain only fixed guard and PostgreSQL categories',()=
 test('a real pg_restore process failure yields only a fixed phase and category',async()=>{
  const processChild=new EventEmitter();
  processChild.stderr=new EventEmitter();
- const completion=monitorPostgresChild(processChild,{timeoutMs:1000});
+ let pgRestoreCategory=null;
+ const completion=monitorPostgresChild(processChild,{timeoutMs:1000,diagnosticSink:stderr=>{pgRestoreCategory=classifyPgRestoreStderr(stderr);}});
  const secret='private pg_restore detail and ciphertext';
  processChild.stderr.emit('data',Buffer.from(`permission denied: ${secret}`));
  processChild.emit('close',1);
@@ -35,8 +36,30 @@ test('a real pg_restore process failure yields only a fixed phase and category',
   const line=`c01_restore_diagnostic phase=${diagnostic.phase} category=${diagnostic.category} code=${diagnostic.code}`;
   assert.deepEqual(parseSafeRestoreDiagnostic(line),diagnostic);
   assert.equal(line.includes(secret),false);
+  assert.equal(pgRestoreCategory,'permission');
   return true;
  });
+});
+
+test('pg_restore stderr is reduced to fixed categories without public detail',()=>{
+ const secret='postgresql://postgres:private@example.test/ciphertext';
+ const cases=[
+  [`ERROR: can only create extension in database postgres\nCommand was: CREATE EXTENSION pg_cron; ${secret}`,'pg_cron_database_mismatch'],
+  [`ERROR: version 3.1.9 is not available ${secret}`,'extension_version'],
+  [`ERROR: pg_cron can only be loaded via shared_preload_libraries ${secret}`,'extension_preload'],
+  [`ERROR: extension pg_cron must be installed in schema pg_catalog ${secret}`,'extension_schema'],
+  [`ERROR: permission denied for schema auth ${secret}`,'permission'],
+  [`ERROR: role missing_user does not exist ${secret}`,'missing_role'],
+  [`ERROR: unexplained failure ${secret}`,'other'],
+ ];
+ for(const [stderr,expected] of cases){
+  const category=classifyPgRestoreStderr(Buffer.from(stderr));
+  assert.equal(category,expected);
+  const line=`c01_pg_restore_diagnostic category=${category}`;
+  assert.equal(parseSafePgRestoreDiagnostic(line),expected);
+  assert.equal(line.includes(secret),false);
+ }
+ assert.equal(parseSafePgRestoreDiagnostic(`c01_pg_restore_diagnostic category=${secret}`),null);
 });
 
 test('restore diagnostics never echo raw messages, unknown SQLSTATE, or forged tokens',()=>{

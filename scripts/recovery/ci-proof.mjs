@@ -12,7 +12,7 @@ import {createClient} from '@supabase/supabase-js';
 import {totp} from '../../scripts/testing/clinical-config.mjs';
 import {verifyBackup} from '../backup/restore.mjs';
 import {validateReceipt} from '../backup/retention.mjs';
-import {parseSafeRestoreDiagnostic} from '../backup/restore-diagnostics.mjs';
+import {parseSafeRestoreDiagnostic,parseSafePgRestoreDiagnostic} from '../backup/restore-diagnostics.mjs';
 import {validateBridgeTarget,preflightBridgeTarget,openLoopbackBridge} from './ci-loopback-bridge.mjs';
 import {planRolePreparation} from './ci-role-preflight.mjs';
 
@@ -175,14 +175,22 @@ async function createTarget(state,env){
  assert.match(pid,/^[1-9][0-9]*$/);
  return pid;
 }
+async function inspectCronPrerequisites(state,backup){
+ const source=backup.manifest.source.extensions.some(extension=>extension.name==='pg_cron');
+ const destination=await withPg(state.dbPassword,'postgres',async db=>{
+  const setting=await db.query("SELECT current_setting('cron.database_name',true) AS database_name");
+  const installed=await db.query("SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname='pg_cron') AS installed");
+  return {database:setting.rows[0]?.database_name,installed:installed.rows[0]?.installed===true};
+ });
+ const configured=destination.database==='postgres'?'postgres':destination.database===targetDatabase?targetDatabase:'other';
+ console.log(`c01_pg_cron_preflight: source=${source} configured=${configured} installed_in_maintenance=${destination.installed}`);
+}
 async function prepareTargetRoles(state,backup){
  const inventory=async()=>withPg(state.dbPassword,'postgres',async db=>{
-  const [roles,extension,versions,target]=await Promise.all([
-   db.query('SELECT rolname FROM pg_roles ORDER BY rolname'),
-   db.query("SELECT name,installed_version FROM pg_available_extensions WHERE name='pgsodium'"),
-   db.query("SELECT version FROM pg_available_extension_versions WHERE name='pgsodium' ORDER BY version"),
-   db.query('SELECT 1 FROM pg_database WHERE datname=$1',[targetDatabase]),
-  ]);
+  const roles=await db.query('SELECT rolname FROM pg_roles ORDER BY rolname');
+  const extension=await db.query("SELECT name,installed_version FROM pg_available_extensions WHERE name='pgsodium'");
+  const versions=await db.query("SELECT version FROM pg_available_extension_versions WHERE name='pgsodium' ORDER BY version");
+  const target=await db.query('SELECT 1 FROM pg_database WHERE datname=$1',[targetDatabase]);
   return {destinationRoles:roles.rows.map(row=>row.rolname),availablePgsodium:extension.rows[0]??null,availableVersions:versions.rows.map(row=>row.version),targetExists:target.rowCount!==0};
  });
  const plan=planRolePreparation({sourceRoles:backup.manifest.source.roles,sourceExtensions:backup.manifest.source.extensions,...await inventory()});
@@ -206,6 +214,8 @@ async function restore(state,backup,root,env,pid){
  const command=[process.execPath,path.join(repo,'scripts/backup/restore-local.mjs'),configPath];
  const restored=await child('sudo',['-E','nsenter','--target',pid,'--net','--',...command],{env:{...env,FOLIO_BACKUP_RESTORE_DATABASE_URL:`postgresql://postgres:${state.dbPassword}@127.0.0.1:5432/${targetDatabase}`,FOLIO_BACKUP_RESTORE_PASSPHRASE:state.passphrase,FOLIO_BACKUP_RESTORE_DIAGNOSTICS:'c01'},allowFailure:true});
  if(restored.code!==0){
+  const pgRestoreCategory=parseSafePgRestoreDiagnostic(restored.errorOutput);
+  if(pgRestoreCategory)throw Error(`restore_pg_restore_${pgRestoreCategory}`);
   const diagnostic=parseSafeRestoreDiagnostic(restored.errorOutput);
   if(diagnostic?.phase==='database')throw Error(`restore_${diagnostic.category}_${diagnostic.code}`);
   if(/^nsenter:/m.test(restored.errorOutput))throw Error('restore_namespace_entry_failed');
@@ -306,7 +316,8 @@ async function main(){
   stage='target_empty';
   await dc(destination,['up','-d','--wait','db'],env);
   dbBridge=await startBridge(destination,'db',dbPort,5432,env);
-  stage='target_prerequisites';await prepareTargetRoles(state,backup);
+  stage='target_prerequisites';await inspectCronPrerequisites(state,backup);
+  await prepareTargetRoles(state,backup);
   stage='target_empty';
   const pid=await createTarget(state,env);
   stage='database_restore';await restore(state,backup,root,env,pid);
