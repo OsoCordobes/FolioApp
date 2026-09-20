@@ -52,7 +52,7 @@ const client=(key)=>createClient(api,key,authOptions);
 const must=(result,label)=>{if(result.error)throw Error(`${label}_failed`);return result.data;};
 const pg=(password,database='postgres')=>new Client({host:'127.0.0.1',port:dbPort,user:'postgres',password,database,connectionTimeoutMillis:10000,statement_timeout:30000});
 async function withPg(password,database,fn){const c=pg(password,database);await c.connect();try{return await fn(c);}finally{await c.end();}}
-async function waitApi(anon){for(let i=0;i<36;i++){try{const r=await fetch(`${api}/auth/v1/settings`,{headers:{apikey:anon},signal:AbortSignal.timeout(2000)});if(r.ok)return;}catch{}await new Promise(r=>setTimeout(r,3000));}throw Error('api_unhealthy');}
+async function waitApi(anon){let last='no_response';for(let i=0;i<36;i++){try{const r=await fetch(`${api}/auth/v1/settings`,{headers:{apikey:anon},signal:AbortSignal.timeout(2000)});if(r.ok)return;last=`http_${r.status}`;}catch{}await new Promise(r=>setTimeout(r,3000));}throw Error(`api_unhealthy_${last}`);}
 async function ensureFresh(env){
  for(const project of [source,destination]){
   const containers=await dc(project,['ps','-q'],env);
@@ -268,6 +268,20 @@ async function main(){
   console.log('c01_synthetic_recovery_verified');
  }catch(error){
   console.error(`c01_${stage}_failed: ${error.message}`);
+  const project=stage.startsWith('source')||stage==='migrations'||stage==='capture'?source:destination;
+  for(const service of ['db','auth','rest','storage','api-gw']){
+   try{
+    const id=(await dc(project,['ps','--all','--quiet',service],env,{allowFailure:true})).output.trim();
+    if(!/^[a-f0-9]{64}$/.test(id))continue;
+    const status=await docker(['inspect','--format','{{.State.Status}} {{.State.ExitCode}} {{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}',id],env);
+    if(/^(created|running|restarting|removing|paused|exited|dead) [0-9]+ (healthy|unhealthy|starting|none)$/.test(status.output.trim()))
+     console.error(`c01_service_${service}: ${status.output.trim()}`);
+    if(service==='db'||service==='api-gw'){
+     const port=await docker(['port',id,service==='db'?'5432/tcp':'8000/tcp'],env,{allowFailure:true});
+     console.error(`c01_port_${service}: ${port.code===0&&port.output.trim()?'mapped':'unmapped'}`);
+    }
+   }catch{}
+  }
   throw Error('c01_incomplete_evidence_retained_in_runner_temp');
  }
 }
