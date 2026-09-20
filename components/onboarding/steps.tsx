@@ -114,6 +114,7 @@ interface StepProps {
   next: () => void;
   back?: () => void;
   skip?: () => void;
+  savedAccent?: string;
   orgId?: string;
   orgSlug?: string;
   direction?: "forward" | "back";
@@ -451,9 +452,11 @@ export function Step3Consultorio({ data, set, next, back, orgId, orgSlug }: Step
 
 // ─── Step 4 · Identidad visual ──────────────────────────────────────────────
 
-export function Step4Personalizacion({ data, set, next, back, skip, orgSlug }: StepProps) {
+export function Step4Personalizacion({ data, set, next, back, skip, orgSlug, savedAccent }: StepProps) {
+  const accentPending = data.acento !== (savedAccent ?? ONBOARDING_INITIAL.acento);
   return (
     <StepShell stepIdx={4} compactFlow={data.ownerTratante === false} back={back} next={next} skip={skip}
+      nextLabel="Guardar y continuar"
       headline="Dale tu identidad a la página"
       sub={`Tu ${data.tipo === "CLINICA" ? "clínica" : "consultorio"} ya tiene una página lista para completar. Elegí un color ahora o personalizala después.`}
       previewData={previewDataFor(data)}
@@ -461,8 +464,8 @@ export function Step4Personalizacion({ data, set, next, back, skip, orgSlug }: S
     >
       <div className="onb-form onb-identity-editor">
         <div className="onb-identity-intro">
-          <p>Probá un color: lo vas a ver al instante en la vista previa. Podés volver a cambiarlo en Configuración → Consultorio.</p>
-          {skip ? <button type="button" className="onb-identity-later" onClick={skip}>Personalizar después <span aria-hidden="true">→</span></button> : null}
+          <p>Probá un color y mirá el resultado al instante. Se guarda al continuar. Más adelante podés cambiarlo en Configuración → Consultorio.</p>
+          {skip ? <button type="button" className="onb-identity-later" onClick={skip}>{accentPending ? "Descartar este color y personalizar después" : "Personalizar después"} <span aria-hidden="true">→</span></button> : null}
         </div>
         <section className="onb-identity-section">
           <h2 className="onb-identity-h">Color de la página</h2>
