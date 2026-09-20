@@ -362,10 +362,30 @@ export async function savePublicAccent(input: { accent: string; expectedAccent: 
   if (ctx.data.session.role !== "OWNER" && ctx.data.session.role !== "DIRECTOR") {
     return err("forbidden", "Solo el titular o la dirección pueden editar la página.");
   }
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.from("organization")
+  // M02 permite UPDATE de organization sólo al OWNER bajo RLS. La dirección
+  // también puede editar esta identidad pública: revalidar su membresía
+  // activa antes de usar el servicio, sin ampliar la policy de toda la tabla.
+  const service = createSupabaseServiceClient();
+  const { data: member, error: memberError } = await service.from("member")
+    .select("id, profile_id, organization_id, role, deleted_at, accepted_at, invited_by_id")
+    .eq("id", input.memberId)
+    .eq("profile_id", ctx.data.session.userId)
+    .eq("organization_id", input.organizationId)
+    .maybeSingle();
+  if (memberError) {
+    const mapped = mapSupabaseError(memberError);
+    return err(mapped.code, mapped.message, memberError.message);
+  }
+  if (!member || member.id !== input.memberId || member.profile_id !== ctx.data.session.userId ||
+      member.organization_id !== input.organizationId || member.deleted_at !== null ||
+      (member.accepted_at === null && member.invited_by_id !== null) ||
+      (member.role !== "OWNER" && member.role !== "DIRECTOR")) {
+    return err("forbidden", "Ya no tenés permiso para editar esta página. Volvé a cargarla.");
+  }
+  const { data, error } = await service.from("organization")
     .update({ acento_hex: input.accent })
-    .eq("id", ctx.data.organization.id)
+    .eq("id", input.organizationId)
+    .is("deleted_at", null)
     .eq("acento_hex", input.expectedAccent)
     .select("id").maybeSingle();
   if (error) {
@@ -375,8 +395,8 @@ export async function savePublicAccent(input: { accent: string; expectedAccent: 
   if (!data) {
     // Respuesta perdida tras un COMMIT: leer antes de reintentar evita el falso
     // conflicto sin pisar un tercer color escrito por otra pestaña.
-    const { data: current, error: readError } = await supabase.from("organization")
-      .select("acento_hex").eq("id", input.organizationId).maybeSingle();
+    const { data: current, error: readError } = await service.from("organization")
+      .select("acento_hex").eq("id", input.organizationId).is("deleted_at", null).maybeSingle();
     if (readError || !current) return err("db_error", "No pudimos confirmar el color guardado. Recargá la página.");
     if (current.acento_hex !== input.accent) return err("conflict", "El color cambió en otra pestaña. Recargá la página antes de guardar.");
   }
