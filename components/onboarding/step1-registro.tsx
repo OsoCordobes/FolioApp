@@ -30,10 +30,13 @@ interface Step1RegistroProps {
   data: OnboardingData;
   set: (patch: Partial<OnboardingData>) => void;
   onSubmit: (options: { turnstileToken: string | null; consent: boolean }) => void;
+  onBack?: () => void;
   loading?: boolean;
   error?: string | null;
   /** Precio del plan en centavos ARS — derivado server-side de MP_PLAN_PRICE_CENTS. */
   planPriceCents: number;
+  clinicSeatPriceCents?: number;
+  compactFlow?: boolean;
   captchaResetKey?: number;
 }
 
@@ -41,9 +44,12 @@ export function Step1Registro({
   data,
   set,
   onSubmit,
+  onBack,
   loading,
   error,
   planPriceCents,
+  clinicSeatPriceCents,
+  compactFlow,
   captchaResetKey,
 }: Step1RegistroProps) {
   const [emailErr, setEmailErr] = useState("");
@@ -92,12 +98,14 @@ export function Step1Registro({
   return (
     <StepShell
       stepIdx={1}
+      compactFlow={compactFlow}
       headline="Empezá creando tu cuenta."
       // Precio: fuente canónica MP_PLAN_PRICE_CENTS (lib/mercadopago/client.ts).
       // Llega como prop desde el server component de /onboarding — mismo valor
       // que el cobro real, sin hardcode que pueda driftear del env.
-      sub={`30 días de prueba sin tarjeta. Después, ${formatArsFromCents(planPriceCents)} / mes.`}
+      sub={`30 días de prueba sin tarjeta. Después, ${formatArsFromCents(planPriceCents)} / mes${clinicSeatPriceCents ? ` de base + ${formatArsFromCents(clinicSeatPriceCents)} por miembro adicional` : ""}.`}
       next={validateAndNext}
+      back={onBack}
       canSkip={false}
       nextLabel={loading ? "Creando cuenta…" : "Continuar"}
       nextDisabled={loading}

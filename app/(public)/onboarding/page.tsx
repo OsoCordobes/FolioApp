@@ -81,6 +81,14 @@ export default async function OnboardingPage() {
       organizationId = result.data.organizationId ?? undefined;
       initialSlug = result.data.slug ?? undefined;
       googleConnected = result.data.googleConnected;
+      if (organizationId) {
+        const current = await getActiveContext();
+        if (!current.ok || current.data.organization.id !== organizationId || current.data.session.role !== "OWNER") {
+          safeLog("error", "app.public.onboarding.page.context_mismatch",
+            { error: current.ok ? "active_organization_mismatch" : current.error });
+          redirect("/cuenta-error");
+        }
+      }
     } else {
       // No silenciar errores de DB: si no podemos leer el estado del wizard,
       // mandamos al user a /hoy con su sesión activa. El layout (app) tiene

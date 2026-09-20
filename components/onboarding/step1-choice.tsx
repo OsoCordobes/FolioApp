@@ -13,7 +13,7 @@ export function Step1Choice({ data, set, onContinue, soloPriceCents, clinicPrice
   clinicSeatPriceCents: number;
 }) {
   const ready = data.tipo === "INDEPENDIENTE" || (data.tipo === "CLINICA" && data.ownerTratante !== null);
-  return <StepShell stepIdx={1} headline="¿Cómo vas a usar Folio?" sub="Elegí antes de crear tu cuenta. La modalidad y el rol del titular definen qué vas a configurar." next={onContinue} nextDisabled={!ready} canSkip={false} nextLabel="Seguir con esta opción">
+  return <StepShell stepIdx={1} compactFlow={data.ownerTratante === false} headline="¿Cómo vas a usar Folio?" sub="Elegí antes de crear tu cuenta. La modalidad y el rol del titular definen qué vas a configurar." next={onContinue} nextDisabled={!ready} canSkip={false} nextLabel="Seguir con esta opción">
     <fieldset className="onb-choice-group">
       <legend className="onb-choice-label">Modalidad</legend>
       <label className={`onb-choice ${data.tipo === "INDEPENDIENTE" ? "is-selected" : ""}`}>

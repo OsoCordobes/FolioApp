@@ -29,11 +29,8 @@
 import type { ReactNode } from "react";
 import { useEffect, useId, useRef, useState } from "react";
 
-import {
-  PublicCard,
-  type PublicCardData,
-} from "@/components/public-card/public-card";
-import { getAppHost } from "@/lib/config/app-url";
+import { BookLandingPreview } from "@/components/book-landing/book-landing-preview";
+import type { PublicLandingViewData } from "@/components/book-landing/book-landing-view";
 
 export const ONB_TOTAL = 8;
 
@@ -47,17 +44,14 @@ interface StepShellProps {
   canSkip?: boolean;
   nextLabel?: string;
   nextDisabled?: boolean;
+  compactFlow?: boolean;
   isFinal?: boolean;
   /** Datos para el <PublicCardLive />. Si no hay → no se muestra preview. */
-  previewData?: PublicCardData;
-  /** Host base (getAppHost(), sin protocolo) para el link del preview. */
-  appUrl?: string;
+  previewData?: PublicLandingViewData;
   /** Slug actual de la org (sirve también para el link del preview). */
   slug?: string;
   children: ReactNode;
 }
-
-const APP_URL_DEFAULT = getAppHost();
 
 // Campos que reciben el autofocus al montar un paso. Excluimos hidden/file/
 // checkbox/radio (enfocar el file input del Step 4 haría ambiguo el Enter) y
@@ -75,9 +69,9 @@ export function StepShell({
   canSkip = true,
   nextLabel = "Continuar",
   nextDisabled = false,
+  compactFlow = false,
   isFinal = false,
   previewData,
-  appUrl,
   slug,
   children,
 }: StepShellProps) {
@@ -161,8 +155,13 @@ export function StepShell({
   }, [next, back, nextDisabled, drawerOpen]);
 
   const showPreview = !!previewData && !isFinal && stepIdx >= 3;
-  const previewProps: PublicCardData | undefined = previewData
-    ? { ...previewData, slug: slug ?? previewData.slug }
+  const progressStep = compactFlow ? ({ 1: 1, 2: 2, 3: 3, 4: 4, 6: 5, 8: 6 } as Record<number, number>)[stepIdx] ?? stepIdx : stepIdx;
+  const progressTotal = compactFlow ? 6 : ONB_TOTAL;
+  const progressLabel = compactFlow
+    ? ({ 1: "Tu cuenta", 2: "Titular", 3: "Tu clínica", 4: "Identidad visual", 6: "Servicios", 8: "Todo listo" } as Record<number, string>)[stepIdx]
+    : ["", "Tu cuenta", "Tu perfil", "Tu consultorio", "Identidad visual", "Horarios", "Servicios", "Calendario", "Todo listo"][stepIdx];
+  const previewProps: PublicLandingViewData | undefined = previewData
+    ? { ...previewData, org: { ...previewData.org, slug: slug ?? previewData.org.slug } }
     : undefined;
 
   return (
@@ -172,20 +171,20 @@ export function StepShell({
           {!isFinal ? (
             <header className="onb-step-head">
               <div className="fx-onb-progress-label">
-                <span className="onb-step-num">Paso {stepIdx} de {ONB_TOTAL}</span>
-                <span>{["", "Tu cuenta", "Tu perfil", "Tu consultorio", "Identidad visual", "Horarios", "Servicios", "Calendario", "Todo listo"][stepIdx]}</span>
+                <span className="onb-step-num">Paso {progressStep} de {progressTotal}</span>
+                <span>{progressLabel}</span>
               </div>
               <div
                 className="onb-progress"
                 role="progressbar"
                 aria-valuemin={1}
-                aria-valuemax={ONB_TOTAL}
-                aria-valuenow={stepIdx}
-                aria-label={`Paso ${stepIdx} de ${ONB_TOTAL}`}
+                aria-valuemax={progressTotal}
+                aria-valuenow={progressStep}
+                aria-label={`Paso ${progressStep} de ${progressTotal}`}
               >
                 <span
                   className="onb-progress-fill"
-                  style={{ width: `${((stepIdx - 1) / (ONB_TOTAL - 1)) * 100}%` }}
+                  style={{ width: `${((progressStep - 1) / (progressTotal - 1)) * 100}%` }}
                 />
               </div>
               <h1>{headline}</h1>
@@ -237,11 +236,7 @@ export function StepShell({
           <aside className="onb-shell-preview" aria-label="Vista previa de tu perfil público">
             <div className="onb-preview-sticky">
               <span className="onb-preview-label">Tu perfil público</span>
-              <PublicCard
-                data={previewProps}
-                variant="preview"
-                appUrl={appUrl ?? APP_URL_DEFAULT}
-              />
+              <div className="onb-landing-preview"><BookLandingPreview data={previewProps} /></div>
               <p className="onb-preview-fine">
                 Así se verá tu perfil para los pacientes. La vista previa se actualiza mientras escribís.
               </p>
@@ -291,11 +286,7 @@ export function StepShell({
                     </svg>
                   </button>
                 </div>
-                <PublicCard
-                  data={previewProps}
-                  variant="preview"
-                  appUrl={appUrl ?? APP_URL_DEFAULT}
-                />
+                <div className="onb-landing-preview"><BookLandingPreview data={previewProps} /></div>
               </div>
               <div className="onb-preview-drawer-backdrop" onClick={() => setDrawerOpen(false)} />
             </dialog>

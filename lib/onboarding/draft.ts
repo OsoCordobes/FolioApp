@@ -18,6 +18,7 @@ const DRAFT_VERSION = 1;
 interface DraftEnvelope {
   v: number;
   identity: string;
+  organizationId?: string;
   data: Record<string, unknown>;
 }
 
@@ -27,12 +28,13 @@ export function normalizeDraftIdentity(email: string | null | undefined): string
 }
 
 /** Serializa el draft con identidad. Excluye `password` siempre. */
-export function packDraft(email: string | null | undefined, data: Record<string, unknown>): string {
+export function packDraft(email: string | null | undefined, data: Record<string, unknown>, organizationId?: string): string {
   const { password: _omitPassword, ...safe } = data;
   void _omitPassword;
   const envelope: DraftEnvelope = {
-    v: DRAFT_VERSION,
+    v: organizationId ? 2 : DRAFT_VERSION,
     identity: normalizeDraftIdentity(email),
+    ...(organizationId ? { organizationId } : {}),
     data: safe,
   };
   return JSON.stringify(envelope);
@@ -46,6 +48,7 @@ export function packDraft(email: string | null | undefined, data: Record<string,
 export function unpackDraft(
   raw: string | null,
   currentEmail: string | null | undefined,
+  organizationId?: string,
 ): Record<string, unknown> | null {
   if (!raw) return null;
   let parsed: unknown;
@@ -56,7 +59,7 @@ export function unpackDraft(
   }
   if (!parsed || typeof parsed !== "object") return null;
   const env = parsed as Partial<DraftEnvelope>;
-  if (env.v !== DRAFT_VERSION) return null;
+  if (organizationId ? env.v !== 2 || env.organizationId !== organizationId : env.v !== DRAFT_VERSION) return null;
   if (typeof env.identity !== "string") return null;
   if (!env.data || typeof env.data !== "object" || Array.isArray(env.data)) return null;
   if (env.identity !== normalizeDraftIdentity(currentEmail)) return null;
@@ -64,5 +67,13 @@ export function unpackDraft(
   // Guard defensivo: aunque packDraft nunca lo escribe, un draft manipulado
   // a mano no debe poder inyectar un password al state.
   delete data.password;
+  // Sin email confirmado, una máquina compartida sólo puede recuperar la
+  // elección de modalidad; ningún dato personal del visitante anterior.
+  if (!organizationId && !env.identity) {
+    return {
+      ...(data.tipo === "INDEPENDIENTE" || data.tipo === "CLINICA" ? { tipo: data.tipo } : {}),
+      ...(typeof data.ownerTratante === "boolean" ? { ownerTratante: data.ownerTratante } : {}),
+    };
+  }
   return data;
 }

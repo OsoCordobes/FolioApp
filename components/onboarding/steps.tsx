@@ -20,12 +20,12 @@ import { connectGoogleCalendar } from "@/app/(app)/configuracion/actions";
 import { updateOnboardingStep } from "@/app/(public)/onboarding/actions";
 import { StepShell } from "@/components/onboarding/step-shell";
 import { SlugEditor } from "@/components/onboarding/slug-editor";
-import { type PublicCardData } from "@/components/public-card/public-card";
 import { LogoUpload } from "@/components/public-card/logo-upload";
 import { MoodPicker } from "@/components/public-card/mood-picker";
 import { type CardMood } from "@/components/public-card/public-card";
 import { ESPECIALIDADES_META, ESPECIALIDAD_SLUGS } from "@/lib/especialidades/meta";
 import { validateFranjas } from "@/lib/onboarding/franjas";
+import { toOnboardingLandingPreview as previewDataFor } from "@/lib/onboarding/public-preview";
 import {
   getEspecialidadServicios,
   getKnownTemplateServiceSignatures,
@@ -129,36 +129,6 @@ interface StepProps {
 
 const TEL_RE = /^[\d\s\-+()]{6,}$/;
 
-function previewDataFor(data: OnboardingDataState): PublicCardData {
-  const fullName = [data.nombre, data.apellido].filter(Boolean).join(" ").trim();
-  return {
-    nombre: fullName || data.consultorioNombre || undefined,
-    consultorioNombre: data.consultorioNombre || undefined,
-    rubro: rubroLabel(data.rubro),
-    ciudad: data.ciudad || undefined,
-    provincia: data.provincia || undefined,
-    bio: data.bio || undefined,
-    telefonoPublico: data.telefonoPublico || data.tel || undefined,
-    instagramHandle: data.instagram || undefined,
-    direccionCompleta: data.direccion || undefined,
-    acentoHex: data.acento,
-    logoUrl: data.logoUrl ?? undefined,
-    cardMood: data.cardMood,
-    servicios: data.servicios
-      .filter((s) => s.nombre.trim())
-      .map((s) => ({
-        nombre: s.nombre,
-        dur: s.dur,
-        precioCents: Math.round(s.precio * 100),
-      })),
-  };
-}
-
-function rubroLabel(id: string | undefined): string | undefined {
-  if (!id) return undefined;
-  return getRubroTemplate(id).label;
-}
-
 // ─── Helpers de templates de servicios (rubro + especialidad) ──────────────
 
 const INITIAL_SERVICIOS_SIG = ONBOARDING_INITIAL.servicios.map((s) => s.nombre).join("|");
@@ -221,7 +191,7 @@ export function Step2Profesional({ data, set, next, back, orgSlug }: StepProps) 
   return (
     // canSkip=false: paso obligatorio — saltearlo publicaba una card pública
     // vacía (contradicción: Continuar deshabilitado pero Saltar habilitado).
-    <StepShell stepIdx={2} back={back} next={next} canSkip={false}
+    <StepShell stepIdx={2} compactFlow={data.ownerTratante === false} back={back} next={next} canSkip={false}
       headline="¿Cómo te llamás?"
       sub={data.ownerTratante === false ? "Tus datos identifican al responsable de la cuenta. No crean un perfil profesional público." : "Tu nombre aparece en Folio y en tu perfil público. Podés cambiarlo después."}
       nextDisabled={!canContinue}
@@ -293,7 +263,7 @@ export function Step3Consultorio({ data, set, next, back, orgId, orgSlug }: Step
     const tpl = getRubroTemplate(slug); // rubro === especialidad (1:1)
     const patch: Partial<OnboardingDataState> = { especialidad: slug, rubro: slug };
 
-    if (!data.bio.trim() && data.ciudad.trim()) {
+    if (data.tipo !== "CLINICA" && !data.bio.trim() && data.ciudad.trim()) {
       patch.bio = tpl.bioTemplate(data.ciudad);
     }
     if (data.ownerTratante !== false && serviciosUntouched(data.servicios)) {
@@ -339,7 +309,8 @@ export function Step3Consultorio({ data, set, next, back, orgId, orgSlug }: Step
           return;
         }
       } catch {
-        // ignore — auto-save lo va a reintentar
+        setErrors((p) => ({ ...p, consultorioNombre: "No pudimos confirmar el link. Revisá tu conexión e intentá de nuevo." }));
+        return;
       }
     }
     next();
@@ -358,17 +329,17 @@ export function Step3Consultorio({ data, set, next, back, orgId, orgSlug }: Step
 
   return (
     // canSkip=false: igual que el Step 2 — este paso define la card pública.
-    <StepShell stepIdx={3} back={back} next={handleNext} canSkip={false}
-      headline="¿Dónde está tu consultorio?"
-      sub="Estos datos aparecen en tu perfil público de reservas."
+    <StepShell stepIdx={3} compactFlow={data.ownerTratante === false} back={back} next={handleNext} canSkip={false}
+      headline={data.tipo === "CLINICA" ? "¿Dónde está tu clínica?" : "¿Dónde está tu consultorio?"}
+      sub={data.ownerTratante === false ? "Estos datos identifican la clínica. La página podrá ofrecer turnos cuando incorpores profesionales y horarios." : "Estos datos aparecen en tu perfil público de reservas."}
       nextDisabled={!canContinue}
       previewData={previewDataFor(data)}
       slug={draftSlug || orgSlug}
     >
       <div className="onb-form">
-        <Field label="Nombre del consultorio" error={errors.consultorioNombre}
-          hint="Puede ser tu nombre o uno comercial.">
-          <input type="text" placeholder="Consultorio Lorenzo Martínez"
+        <Field label={data.tipo === "CLINICA" ? "Nombre de la clínica" : "Nombre del consultorio"} error={errors.consultorioNombre}
+          hint={data.tipo === "CLINICA" ? "Identifica a tu organización, no al titular." : "Puede ser tu nombre o uno comercial."}>
+          <input type="text" placeholder={data.tipo === "CLINICA" ? "Clínica del Centro" : "Consultorio Lorenzo Martínez"}
             value={data.consultorioNombre}
             onChange={(e) => { set({ consultorioNombre: e.target.value }); if (errors.consultorioNombre) setErrors((p) => ({ ...p, consultorioNombre: undefined })); }}
             onBlur={() => onBlur("consultorioNombre")} />
@@ -489,9 +460,9 @@ const ACENTOS_CURADOS = [
 
 export function Step4Personalizacion({ data, set, next, back, skip, orgSlug }: StepProps) {
   return (
-    <StepShell stepIdx={4} back={back} next={next} skip={skip}
+    <StepShell stepIdx={4} compactFlow={data.ownerTratante === false} back={back} next={next} skip={skip}
       headline="Tu identidad visual"
-      sub="Elegí cómo se presenta tu consultorio: logo, color y estilo. Podés cambiarlo después."
+      sub={`Elegí cómo se presenta ${data.tipo === "CLINICA" ? "tu clínica" : "tu consultorio"}: logo, color y estilo. Podés cambiarlo después.`}
       previewData={previewDataFor(data)}
       slug={orgSlug}
     >
@@ -694,9 +665,9 @@ export function Step6Servicios({ data, set, next, back, skip, orgSlug }: StepPro
     data.servicios.every((s) => s.nombre.trim() && s.dur > 0 && s.precio >= 0);
 
   return (
-    <StepShell stepIdx={6} back={back} next={next} skip={skip}
+    <StepShell stepIdx={6} compactFlow={data.ownerTratante === false} back={back} next={next} skip={skip}
       headline="¿Qué servicios ofrecés?"
-      sub="Los pacientes ven esta lista al reservar. Editable después en Configuración."
+      sub={data.ownerTratante === false ? "Podés preparar servicios de la clínica ahora o más tarde. Para ofrecer turnos necesitás profesionales aceptados y horarios configurados." : "Los pacientes ven esta lista al reservar. Editable después en Configuración."}
       nextDisabled={!canContinue}
       previewData={previewDataFor(data)}
       slug={orgSlug}
@@ -773,7 +744,7 @@ export function Step7Google({ data, next, back, skip, orgSlug, connected, connec
   return (
     <StepShell stepIdx={7} back={back} next={next} skip={skip} canSkip={!connected}
       headline="¿Conectamos tu Google Calendar?"
-      sub="Tus eventos de Google ocupan esos horarios en Folio. Las reservas confirmadas se sincronizan con tu calendario."
+      sub="Tus eventos de Google bloquean horarios en Folio. Las reservas de Folio crean eventos; cambios hechos sólo en Google no modifican los turnos de Folio."
       previewData={previewDataFor(data)}
       slug={orgSlug}
     >
@@ -785,7 +756,7 @@ export function Step7Google({ data, next, back, skip, orgSlug, connected, connec
             </div>
             <div className="onb-oauth-body">
               <b>Google Calendar conectado ✓</b>
-              <p>Tus eventos ocupan esos horarios y las reservas confirmadas se sincronizan con tu calendario.</p>
+              <p>Tus eventos bloquean horarios y las reservas de Folio crean eventos en Google.</p>
             </div>
           </div>
         ) : (

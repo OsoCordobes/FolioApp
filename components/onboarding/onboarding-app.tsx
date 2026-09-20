@@ -179,6 +179,8 @@ export function OnboardingApp({
   const [awaitingEmail, setAwaitingEmail] = useState<string | null>(null);
   // Every return from email verification/OAuth reconfirms an unpersisted intent.
   const [choiceConfirmed, setChoiceConfirmed] = useState(Boolean(organizationId));
+  const [recoverableDraft, setRecoverableDraft] = useState<Partial<OnboardingDataState> | null>(null);
+  const recoveryPendingRef = useRef(false);
 
   // ─── Auto-save refs declarados antes del useEffect de hidratación porque
   //     la hidratación los inicializa para evitar un auto-save espurio
@@ -186,6 +188,8 @@ export function OnboardingApp({
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedSnapshotRef = useRef<string>("");
   const pendingStepRef = useRef<number | null>(null);
+  const activeSaveRef = useRef<Promise<boolean> | null>(null);
+  const nextFlightRef = useRef(false);
 
   // Hidratación: prioriza initialData (DB) > localStorage > URL params.
   // Importante: NUNCA restauramos `password` del localStorage. Es secret + no
@@ -207,8 +211,8 @@ export function OnboardingApp({
     // por template de especialidad) nunca guardaba → 0 servicios y onboarding
     // sin finalizar. La hidratación es un evento de arranque, no de navegación.
     if (hydratedRef.current) return;
-    const prefillEmail = searchParams.get("email");
-    const prefillNombre = searchParams.get("nombre");
+    const prefillEmail = !authedEmail && !organizationId ? searchParams.get("email") : null;
+    const prefillNombre = !authedEmail && !organizationId ? searchParams.get("nombre") : null;
     // Draft namespaceado por identidad (lib/onboarding/draft): se descarta si
     // no pertenece a la identidad actual (authedEmail server-side, o el email
     // del prefill). En una máquina compartida, el PII del profesional anterior
@@ -219,8 +223,15 @@ export function OnboardingApp({
       const unpacked = unpackDraft(
         localStorage.getItem(STORAGE_KEY),
         authedEmail ?? prefillEmail ?? "",
+        organizationId,
       );
-      if (unpacked) restored = unpacked as Partial<OnboardingDataState>;
+      if (unpacked) {
+        if (organizationId) {
+          recoveryPendingRef.current = true;
+          setRecoverableDraft(unpacked as Partial<OnboardingDataState>);
+        }
+        else restored = unpacked as Partial<OnboardingDataState>;
+      }
     } catch {
       // ignore (privacy mode)
     }
@@ -262,15 +273,16 @@ export function OnboardingApp({
   // identidad del dueño (email) para que otro usuario en la misma máquina no
   // lo herede.
   useEffect(() => {
+    if (recoveryPendingRef.current || recoverableDraft) return;
     try {
       localStorage.setItem(
         STORAGE_KEY,
-        packDraft(authedEmail ?? data.email, data as unknown as Record<string, unknown>),
+        packDraft(authedEmail ?? data.email, data as unknown as Record<string, unknown>, orgId),
       );
     } catch {
       // quota / privacy mode
     }
-  }, [data, authedEmail]);
+  }, [data, authedEmail, orgId, recoverableDraft]);
 
   const hoursRef = useRef<AvailabilityDraft | null>(null);
   const hoursFlightRef = useRef<Promise<boolean> | null>(null);
@@ -329,9 +341,9 @@ export function OnboardingApp({
   // ─── Auto-save por step (debounce 800ms) ─────────────────────────────────
 
   const persistStep = useCallback(
-    async (step: number, snapshot: OnboardingDataState) => {
-      if (!orgId) return;
-      if (step === 5) { await persistInitialHours(snapshot); return; }
+    async (step: number, snapshot: OnboardingDataState): Promise<boolean> => {
+      if (!orgId) return false;
+      if (step === 5) return persistInitialHours(snapshot);
       try {
         setSaveState({ status: "saving" });
         let result;
@@ -380,15 +392,17 @@ export function OnboardingApp({
             break;
           default:
             setSaveState({ status: "idle" });
-            return;
+            return true;
         }
         if (result.ok) {
           if (step === 3 && result.slug && result.slug !== orgSlug) {
             setOrgSlug(result.slug);
           }
           setSaveState({ status: "saved", lastSavedAt: Date.now() });
+          return true;
         } else {
           setSaveState({ status: "error", message: result.error });
+          return false;
         }
       } catch (e) {
         // Lo que cae acá es una excepción de red o del runtime, con el texto en
@@ -401,10 +415,23 @@ export function OnboardingApp({
           status: "error",
           message: "No pudimos guardar. Revisá tu conexión — tus datos siguen acá.",
         });
+        return false;
       }
     },
     [orgId, orgSlug, persistInitialHours],
   );
+
+  const runPersistStep = useCallback((step: number, snapshot: OnboardingDataState): Promise<boolean> => {
+    const prior = activeSaveRef.current;
+    const work = prior ? prior.then(() => persistStep(step, snapshot)) : persistStep(step, snapshot);
+    activeSaveRef.current = work;
+    void work.then((saved) => {
+      if (saved && pendingStepRef.current === step) pendingStepRef.current = null;
+    }).finally(() => {
+      if (activeSaveRef.current === work) activeSaveRef.current = null;
+    });
+    return work;
+  }, [persistStep]);
 
   // Trigger auto-save cuando cambian datos relevantes
   useEffect(() => {
@@ -420,38 +447,43 @@ export function OnboardingApp({
 
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
-      void persistStep(stepIdx, data);
+      saveTimerRef.current = null;
+      void runPersistStep(stepIdx, data);
     }, AUTOSAVE_DEBOUNCE_MS);
 
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
-  }, [data, stepIdx, orgId, persistStep]);
+  }, [data, stepIdx, orgId, runPersistStep]);
 
   const set = (patch: Partial<OnboardingDataState>) => {
     if (stepIdx === 5 && (!hoursRef.current || hoursRef.current.locked || hoursError)) return;
     setData((prev) => ({ ...prev, ...patch }));
   };
 
-  const flushSaveIfPending = useCallback(async () => {
+  const flushSaveIfPending = useCallback(async (): Promise<boolean> => {
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
-      if (pendingStepRef.current !== null && orgId) {
-        await persistStep(pendingStepRef.current, data);
-        pendingStepRef.current = null;
-      }
     }
-  }, [data, orgId, persistStep]);
+    if (pendingStepRef.current !== null && orgId)
+      return runPersistStep(pendingStepRef.current, data);
+    return activeSaveRef.current ? activeSaveRef.current : true;
+  }, [data, orgId, runPersistStep]);
 
   const next = useCallback(() => {
+    if (nextFlightRef.current) return;
+    nextFlightRef.current = true;
     if (stepIdx === 5) {
       if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
-      void persistInitialHours(data).then((saved) => { if (saved) { setDirection("forward"); setStepIdx(6); } }); return;
+      void persistInitialHours(data).then((saved) => { if (saved) { setDirection("forward"); setStepIdx(6); } }).finally(() => { nextFlightRef.current = false; }); return;
     }
-    setDirection("forward");
-    void flushSaveIfPending();
-    setStepIdx((n) => Math.min(ONB_TOTAL, n === 4 && data.ownerTratante === false ? 6 : n === 6 && data.ownerTratante === false ? 8 : n + 1));
+    void flushSaveIfPending().then((saved) => {
+      if (saved) {
+        setDirection("forward");
+        setStepIdx((n) => Math.min(ONB_TOTAL, n === 4 && data.ownerTratante === false ? 6 : n === 6 && data.ownerTratante === false ? 8 : n + 1));
+      }
+    }).finally(() => { nextFlightRef.current = false; });
   }, [flushSaveIfPending, stepIdx, persistInitialHours, data]);
 
   const back = useCallback(() => {
@@ -531,15 +563,20 @@ export function OnboardingApp({
   // `finalizeDone` habilita "Ir al panel": sin finalize ok, /hoy redirige de
   // vuelta a /onboarding (loop). El moment muestra Reintentar si falló.
   const [finalizeDone, setFinalizeDone] = useState(false);
+  const [publicReady, setPublicReady] = useState(false);
   const handleFinish = async () => {
     setError(null);
-    await flushSaveIfPending();
+    if (!await flushSaveIfPending()) {
+      setError("No pudimos confirmar el último guardado. Revisá los datos y reintentá antes de terminar.");
+      return;
+    }
     const result = await finalizeOnboarding();
     if (!result.ok) {
       setError(result.error ?? "Error al finalizar onboarding");
       return;
     }
     if (result.slug && result.slug !== orgSlug) setOrgSlug(result.slug);
+    setPublicReady(Boolean(result.publicReady));
     setFinalizeDone(true);
     try {
       localStorage.removeItem(STORAGE_KEY);
@@ -558,8 +595,8 @@ export function OnboardingApp({
   // Reintento manual del autosave (indicador "Reintentar guardar" clickeable).
   const retrySave = useCallback(() => {
     const step = pendingStepRef.current ?? stepIdx;
-    void persistStep(step, data);
-  }, [stepIdx, data, persistStep]);
+    void runPersistStep(step, data);
+  }, [stepIdx, data, runPersistStep]);
 
   // Estado real de la integración Google (server) + retorno del OAuth.
   const gcalParam = searchParams.get("gcal");
@@ -602,6 +639,9 @@ export function OnboardingApp({
                 <Step1Consent
                   email={authedEmail}
                   onSubmit={handleStep1Submit}
+                  onBack={() => setChoiceConfirmed(false)}
+                  compactFlow={data.ownerTratante === false}
+                  clinicFlow={data.tipo === "CLINICA"}
                   loading={signingUp}
                   error={error}
                   captchaResetKey={captchaResetKey}
@@ -616,9 +656,12 @@ export function OnboardingApp({
                   data={{ email: data.email, password: data.password }}
                   set={(patch) => set(patch)}
                   onSubmit={handleStep1Submit}
+                  onBack={() => setChoiceConfirmed(false)}
+                  compactFlow={data.ownerTratante === false}
                   loading={signingUp}
                   error={error}
                   planPriceCents={data.tipo === "CLINICA" ? clinicPriceCents : soloPriceCents}
+                  clinicSeatPriceCents={data.tipo === "CLINICA" ? clinicSeatPriceCents : undefined}
                   captchaResetKey={captchaResetKey}
                 />
               )}
@@ -646,12 +689,23 @@ export function OnboardingApp({
       </header>
 
       <main className="onb-app-main">
+        {recoverableDraft ? <div className="onb-recovery" role="status">
+          <p>Hay cambios locales de esta organización sin confirmar. Los datos guardados siguen intactos.</p>
+          <button type="button" onClick={() => {
+            const { tipo: _tipo, ownerTratante: _owner, email: _email, password: _password, ...editable } = recoverableDraft;
+            void _tipo; void _owner; void _email; void _password;
+            setData((current) => ({ ...current, ...editable }));
+            recoveryPendingRef.current = false;
+            setRecoverableDraft(null);
+          }}>Revisar mis cambios</button>
+          <button type="button" onClick={() => { recoveryPendingRef.current = false; setRecoverableDraft(null); }}>Usar lo guardado</button>
+        </div> : null}
         {error && stepIdx !== ONB_TOTAL ? (
           <p className="au-err onb-banner-err" role="alert">{error}</p>
         ) : null}
 
         <div key={stepKey} className={`onb-anim onb-anim-${direction}`}>
-          {stepIdx === 2 ? <Step2Profesional {...commonStepProps} /> : null}
+          {stepIdx === 2 ? <Step2Profesional {...commonStepProps} back={undefined} /> : null}
           {stepIdx === 3 ? <Step3Consultorio {...commonStepProps} /> : null}
           {stepIdx === 4 ? <Step4Personalizacion {...commonStepProps} /> : null}
           {stepIdx === 5 ? <>
@@ -677,7 +731,9 @@ export function OnboardingApp({
               finishing={finishing}
               error={error}
               finalizeOk={finalizeDone}
+              publicReady={publicReady}
               planPriceCents={data.tipo === "CLINICA" ? clinicPriceCents : soloPriceCents}
+              clinicSeatPriceCents={clinicSeatPriceCents}
             />
           ) : null}
         </div>

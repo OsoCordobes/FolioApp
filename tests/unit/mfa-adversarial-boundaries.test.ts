@@ -55,6 +55,19 @@ test("actual middleware denies API requests and sanitizes failed authorization w
   }
 });
 
+test("actual middleware lets a logged-in, MFA-incomplete user reach the landing while the wizard stays gated",async()=>{
+  const home=middlewareFixture();
+  const response=await home.run("/");
+  assert.equal(response.status,200);
+  assert.equal(response.cookies.get("synthetic-refresh")?.value,"rotated");
+  assert.deepEqual(home.calls,[]);
+  const wizard=middlewareFixture();
+  const deniedResponse=await wizard.run("/onboarding");
+  assert.equal(deniedResponse.status,307);
+  assert.equal(new URL(deniedResponse.headers.get("location")!).pathname,"/seguridad/mfa");
+  assert.deepEqual(wizard.calls,["policy"]);
+});
+
 test("preparation disabled preserves ordinary navigation and recovery is reachable during policy outage",async()=>{
   const fixture=middlewareFixture({...denied,required:false,allowed:true});
   assert.equal((await fixture.run("/hoy")).status,200);

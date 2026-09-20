@@ -670,11 +670,28 @@ export async function updateOnboardingStep(
 /**
  * Marca el onboarding como completado. Llamada desde el paso final (moment).
  */
-export async function finalizeOnboarding(): Promise<{ ok: boolean; error?: string; slug?: string }> {
+export async function finalizeOnboarding(): Promise<{ ok: boolean; error?: string; slug?: string; publicReady?: boolean }> {
   const access = await resolveOrganizationEditor("finalize");
   if (!access.ok) return access;
-  const { service, orgId, organization } = access;
-  if (organization.onboarding_completed === true) return { ok: true, slug: organization.slug as string };
+  const { service, orgId, memberId, organization } = access;
+  const publicReady = async (): Promise<boolean> => {
+    // Clinic needs an accepted, visible professional and a reviewed schedule;
+    // the owner alone or a pending invitation never makes it publish-ready.
+    const { data: current } = await service.from("organization")
+      .select("tipo,nombre,ciudad,rubro").eq("id", orgId).maybeSingle();
+    if (!current || current.tipo !== "INDEPENDIENTE" || !current.nombre ||
+        current.nombre === "Mi consultorio" || !current.ciudad || !current.rubro) return false;
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Argentina/Cordoba" });
+    const [services, hours] = await Promise.all([
+      service.from("servicio").select("id").eq("organization_id", orgId).is("deleted_at", null).limit(1),
+      service.from("disponibilidad_profesional").select("id")
+        .eq("organization_id", orgId).eq("member_id", memberId).eq("activa", true)
+        .lte("vigencia_desde", today).or(`vigencia_hasta.is.null,vigencia_hasta.gte.${today}`).limit(1),
+    ]);
+    return !services.error && !hours.error && Boolean(services.data?.length && hours.data?.length);
+  };
+  if (organization.onboarding_completed === true)
+    return { ok: true, slug: organization.slug as string, publicReady: await publicReady() };
 
   // Compare-and-set: only the caller that completes the wizard emits the event.
   const { data: org, error } = await service.from("organization")
@@ -686,11 +703,11 @@ export async function finalizeOnboarding(): Promise<{ ok: boolean; error?: strin
     const retry = await resolveOrganizationEditor("finalize");
     if (!retry.ok) return retry;
     return retry.organization.onboarding_completed === true
-      ? { ok: true, slug: retry.organization.slug as string }
+      ? { ok: true, slug: retry.organization.slug as string, publicReady: await publicReady() }
       : { ok: false, error: "No se pudo completar el registro. Intentá de nuevo." };
   }
   void trackEvent.onboardingCompleted({ orgId, stepsCompleted: 8, isInternal: Boolean(organization.is_internal_account) });
-  return { ok: true, slug: org.slug as string };
+  return { ok: true, slug: org.slug as string, publicReady: await publicReady() };
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -802,7 +819,7 @@ async function resolveOrganizationEditor(mode: "wizard" | "settings" | "finalize
       (mode === "wizard" && org.onboarding_completed !== false)) {
     return { ok: false as const, error: "No tenés permiso para modificar esta configuración." };
   }
-  return { ok: true as const, service, orgId, userId, organization: org };
+  return { ok: true as const, service, orgId, memberId, userId, organization: org };
 }
 
 export async function uploadOrgLogo(formData: FormData): Promise<UploadOrgLogoResult> {

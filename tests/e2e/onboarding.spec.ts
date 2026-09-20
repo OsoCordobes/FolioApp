@@ -42,7 +42,7 @@ test.beforeEach(async ({ context }) => {
 });
 
 /**
- * /login → "Crear cuenta" → signup inline → espera /onboarding.
+ * /login → "Crear cuenta" → elección de modalidad → registro.
  * signUpAndInitOrganization corre server-side (auth.user + org + member OWNER)
  * y setea la cookie de sesión; el componente Signup redirige a /onboarding en
  * Step 2 (Step 1 ya está hecho por el signup inline).
@@ -54,13 +54,16 @@ async function signupHastaOnboarding(page: Page, email: string): Promise<void> {
   });
 
   await page.getByRole("button", { name: /crear cuenta/i }).first().click();
-  await expect(page.getByRole("heading", { level: 1, name: "Tu práctica empieza acá." })).toBeVisible();
+  await page.getByRole("link", { name: /Elegir modalidad/ }).click();
+  await page.getByRole("radio", { name: /Profesional independiente/ }).check();
+  await page.getByRole("button", { name: "Seguir con esta opción" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Empezá creando tu cuenta." })).toBeVisible();
 
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(PASSWORD);
   // Consent Ley 25.326 art. 14: obligatorio antes del signup.
   await page.locator('input[type="checkbox"]').first().check();
-  await page.getByRole("button", { name: "Crear cuenta", exact: true }).click();
+  await page.getByRole("button", { name: "Continuar", exact: true }).click();
 
   await page.waitForURL(/\/onboarding/, { timeout: 30_000 });
   // Resume state cae en Step 2 (signup ya hecho): NO debe verse el headline de

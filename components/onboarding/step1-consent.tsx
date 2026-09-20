@@ -24,12 +24,15 @@ const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
 interface Step1ConsentProps {
   email: string;
   onSubmit: (options: { turnstileToken: string | null; consent: boolean }) => void;
+  onBack?: () => void;
+  compactFlow?: boolean;
+  clinicFlow?: boolean;
   loading?: boolean;
   error?: string | null;
   captchaResetKey?: number;
 }
 
-export function Step1Consent({ email, onSubmit, loading, error, captchaResetKey }: Step1ConsentProps) {
+export function Step1Consent({ email, onSubmit, onBack, compactFlow, clinicFlow, loading, error, captchaResetKey }: Step1ConsentProps) {
   const [consent, setConsent] = useState(false);
   const [consentErr, setConsentErr] = useState("");
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
@@ -49,9 +52,11 @@ export function Step1Consent({ email, onSubmit, loading, error, captchaResetKey 
   return (
     <StepShell
       stepIdx={1}
+      compactFlow={compactFlow}
       headline="Confirmemos que sos vos."
-      sub="Ya entraste con tu cuenta de Google. Aceptá el aviso de privacidad y armamos tu consultorio."
+      sub={`Ya confirmaste tu email o entraste con Google. Aceptá el aviso de privacidad y armamos ${clinicFlow ? "tu clínica" : "tu consultorio"}.`}
       next={validateAndNext}
+      back={onBack}
       canSkip={false}
       nextLabel={loading ? "Creando consultorio…" : "Continuar"}
       nextDisabled={loading}

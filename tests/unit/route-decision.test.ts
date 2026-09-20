@@ -160,16 +160,11 @@ test("en /portal/*, quien no tiene cuenta de portal sale por donde corresponde",
 
 // ─── El loop reportado ──────────────────────────────────────────────────────
 
-test("el camino del loop: con sesión, / y /login SIEMPRE redirigen", () => {
-  // Este es el punto: las dos rutas más transitadas después de entrar producen
-  // un redirect. Si esa response no se lleva las cookies refrescadas, el
-  // refresh token rotado se pierde y la sesión muere. La preservación se testea
-  // en response-cookie-copy.test.ts; acá queda fijado que el redirect ocurre,
-  // que es lo que hace que el bug fuera sistemático y no ocasional.
-  for (const p of ["/", "/login"]) {
-    const g = decideRouteGate(p, true);
-    assert.equal(g.kind, "needs_audience");
-  }
+test("el login sigue redirigiendo y la raíz sirve de salida de un alta incompleta", () => {
+  // El login conserva la copia de cookies en su redirect. La landing puede
+  // abrirse con sesión sin volver al wizard por /hoy.
+  assert.equal(decideRouteGate("/login", true).kind, "needs_audience");
+  assert.equal(decideRouteGate("/", true).kind, "pass");
   // Y con cualquier audiencia, la decisión es un destino (nunca "quedate acá").
   for (const aud of [
     { isMember: true, isPortalAccount: false },

@@ -92,6 +92,7 @@ export async function getOnboardingResumeState(
     .eq("profile_id", userId)
     .eq("role", "OWNER")
     .is("deleted_at", null)
+    .or("accepted_at.not.is.null,invited_by_id.is.null")
     .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
@@ -103,6 +104,7 @@ export async function getOnboardingResumeState(
   if (!member) {
     const { data: other, error: otherError } = await service.from("member")
       .select("id").eq("profile_id", userId).is("deleted_at", null)
+      .or("accepted_at.not.is.null,invited_by_id.is.null")
       .limit(1).maybeSingle();
     if (otherError) return err("db_error", "Error leyendo membresía.", otherError.message);
     if (other) return err("forbidden", "Esta cuenta tiene acceso a un equipo, pero no es titular de un alta nueva.");
@@ -212,7 +214,10 @@ export async function getOnboardingResumeState(
   // Caso C: onboarding incompleto → resumir donde quedó.
   // Resume al MAYOR de: step_max guardado, o step 2 si recién pasó signup.
   // Clamp a 8: filas legacy del wizard de 9 pasos pueden traer step_max=9.
-  const resumeStep = Math.min(Math.max(org.onboarding_step_max, 2), 8);
+  const savedStep = Math.min(Math.max(org.onboarding_step_max, 2), 8);
+  const adminOnlyClinic = org.tipo === "CLINICA" && member.es_colegiado === false;
+  const resumeStep = adminOnlyClinic && savedStep === 5 ? 6
+    : adminOnlyClinic && savedStep === 7 ? 8 : savedStep;
 
   // Desencriptar PII del profile (con fallback null si falla).
   const tryDecrypt = (v: string | null | undefined): string | undefined => {
@@ -231,7 +236,7 @@ export async function getOnboardingResumeState(
   let slotMin: number | undefined;
   let servicios: OnboardingResumeState["initialData"]["servicios"];
 
-  if (resumeStep >= 5) {
+  if (resumeStep >= 5 && !adminOnlyClinic) {
     const { data: disp } = await service
       .from("disponibilidad_profesional")
       .select("dia_semana, hora_inicio, hora_fin")
@@ -271,7 +276,7 @@ export async function getOnboardingResumeState(
 
   // Estado real de la integración Google Calendar del member (Step 7 muestra
   // "Conectado ✓" en vez del botón de conectar).
-  const { data: gcalRow } = await service
+  const { data: gcalRow } = adminOnlyClinic ? { data: null } : await service
     .from("integration")
     .select("id")
     .eq("organization_id", org.id)

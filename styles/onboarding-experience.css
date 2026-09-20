@@ -15,5 +15,13 @@
 .onb-choice-followup { padding-top: 10px; border-top: 1px solid var(--line); }
 .onb-choice-compact { cursor: pointer; display: flex; gap: 10px; align-items: flex-start; font-size: .9rem; }
 .onb-choice-note { color: var(--ink-3); font-size: .78rem; line-height: 1.5; }
+.fx-onboarding .onb-landing-preview { max-height: min(70vh, 620px); overflow: auto; border: 1px solid var(--line); border-radius: 15px; background: var(--surface); overscroll-behavior: contain; }
+.fx-onboarding .onb-landing-preview .bl-root { min-height: 0; width: 151.52%; zoom: .66; }
+.fx-onboarding .onb-shell-preview .onb-landing-preview .bl-root { width: 222.23%; zoom: .45; }
+.fx-onboarding .onb-preview-drawer .onb-landing-preview .bl-root { width: 178.58%; zoom: .56; }
+.fx-onboarding .onb-moment-card.onb-landing-preview { max-width: 620px; }
+.fx-onboarding .onb-recovery { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; padding: 14px 16px; border: 1px solid var(--accent, #8A6722); border-radius: 12px; background: var(--surface-soft, #faf8f4); font-size: .84rem; }
+.fx-onboarding .onb-recovery p { flex: 1 1 100%; margin: 0; }
+.fx-onboarding .onb-recovery button { background: none; border: 0; padding: 3px 0; font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; color: var(--ink); }
 @media (max-width: 600px) { .fx-onboarding .onb-home-link { font-size: .75rem; } .onb-choice { padding: 16px; } }
 @media (prefers-reduced-motion: reduce) { .onb-choice { transition: none; } }
