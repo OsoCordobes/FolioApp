@@ -12,6 +12,7 @@ import {createClient} from '@supabase/supabase-js';
 import {totp} from '../../scripts/testing/clinical-config.mjs';
 import {verifyBackup} from '../backup/restore.mjs';
 import {validateReceipt} from '../backup/retention.mjs';
+import {parseSafeRestoreDiagnostic} from '../backup/restore-diagnostics.mjs';
 import {validateBridgeTarget,preflightBridgeTarget,openLoopbackBridge} from './ci-loopback-bridge.mjs';
 
 const repo=path.resolve(fileURLToPath(new URL('../../',import.meta.url)));
@@ -177,7 +178,14 @@ async function restore(state,backup,root,env,pid){
  const configPath=path.join(root,'restore-db.json');
  await writeJson(configPath,{phase:'database',directory:backup.directory,recipientPrivateKeyFile:path.join(root,'recipient.key'),confirmDatabase:targetDatabase,tools:{binDirectory:'/usr/lib/postgresql/17/bin'}});
  const command=[process.execPath,path.join(repo,'scripts/backup/restore-local.mjs'),configPath];
- const restored=await child('sudo',['-E','nsenter','--target',pid,'--net','--',...command],{env:{...env,FOLIO_BACKUP_RESTORE_DATABASE_URL:`postgresql://postgres:${state.dbPassword}@127.0.0.1:5432/${targetDatabase}`,FOLIO_BACKUP_RESTORE_PASSPHRASE:state.passphrase}});
+ const restored=await child('sudo',['-E','nsenter','--target',pid,'--net','--',...command],{env:{...env,FOLIO_BACKUP_RESTORE_DATABASE_URL:`postgresql://postgres:${state.dbPassword}@127.0.0.1:5432/${targetDatabase}`,FOLIO_BACKUP_RESTORE_PASSPHRASE:state.passphrase,FOLIO_BACKUP_RESTORE_DIAGNOSTICS:'c01'},allowFailure:true});
+ if(restored.code!==0){
+  const diagnostic=parseSafeRestoreDiagnostic(restored.errorOutput);
+  if(diagnostic?.phase==='database')throw Error(`restore_${diagnostic.category}_${diagnostic.code}`);
+  if(/^nsenter:/m.test(restored.errorOutput))throw Error('restore_namespace_entry_failed');
+  if(/^sudo:/m.test(restored.errorOutput))throw Error('restore_sudo_launch_failed');
+  throw Error('restore_process_failed');
+ }
  const result=JSON.parse(restored.output.trim());
  assert.equal(result.databaseRestored,true);
  assert.equal(result.authLoginVerified,false);

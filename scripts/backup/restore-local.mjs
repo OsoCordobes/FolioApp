@@ -2,11 +2,14 @@
 import { readFile } from "node:fs/promises";
 import { restoreDatabase } from "./restore.mjs";
 import { restoreStorageLocal } from "./storage-restore.mjs";
+import { safeRestoreDiagnostic } from "./restore-diagnostics.mjs";
+let phase = "unknown";
 try {
   const [configFile] = process.argv.slice(2);
   if (!configFile || process.argv.length !== 3) throw new Error();
   const c = JSON.parse(await readFile(configFile, "utf8"));
   if (c.phase && !["database", "storage"].includes(c.phase)) throw new Error();
+  phase = c.phase === "storage" ? "storage" : "database";
   const options = {
     ...c,
     privateKey: await readFile(c.recipientPrivateKeyFile, "utf8"),
@@ -23,7 +26,11 @@ try {
           databaseUrl: process.env.FOLIO_BACKUP_RESTORE_DATABASE_URL,
         });
   console.log(JSON.stringify(result));
-} catch {
+} catch (error) {
+  if (process.env.FOLIO_BACKUP_RESTORE_DIAGNOSTICS === "c01") {
+    const diagnostic = safeRestoreDiagnostic(error, phase);
+    console.error(`c01_restore_diagnostic phase=${diagnostic.phase} category=${diagnostic.category} code=${diagnostic.code}`);
+  }
   console.error(
     "restore_pending: database phase is transactional; Storage can be partially restored. Keep the journal and verified files; inspect local prerequisites and resume the same phase.",
   );
