@@ -192,9 +192,15 @@ export const configuration: ComponentProps<typeof Configuracion> = {
   orgSlug: organization.slug,
   initialHorariosContext: { organizationId: PREVIEW_ORG, memberId: "folio-test-member", revision: 0, protectedDates: false },
   initialConsultorio: {
-    nombre: organization.nombre, profesional: "Valentina Costa", matricula: "Ejemplo 1234",
+    nombre: organization.nombre, acento: "#8A6722", profesional: "Valentina Costa", matricula: "Ejemplo 1234",
     email: "profesional@example.test", tel: "", direccion: "Dirección de ejemplo", ciudad: "Córdoba",
     provincia: "Córdoba", instagram: "", timezone: "America/Argentina/Cordoba", especialidad: "kinesiologia",
+  },
+  initialPublicPreview: {
+    org: { tipo: "INDEPENDIENTE", nombre: organization.nombre, slug: organization.slug, acentoHex: "#8A6722", especialidad: "kinesiologia", ciudad: "Córdoba", provincia: "Córdoba", logoUrl: null },
+    profesional: { id: "folio-test-member", displayName: "Valentina Costa", matricula: null },
+    profesionales: [],
+    servicios: [{ id: "folio-test-service-1", nombre: "Seguimiento", duracion_min: 45, precio_cents: 2500000 }],
   },
   initialServicios: [{ id: "folio-test-service-1", nombre: "Seguimiento", dur: 45, precio: 25000, paraNuevos: false, activo: true }],
   initialDias: {

@@ -21,6 +21,7 @@ import { updateOnboardingStep } from "@/app/(public)/onboarding/actions";
 import { StepShell } from "@/components/onboarding/step-shell";
 import { SlugEditor } from "@/components/onboarding/slug-editor";
 import { LogoUpload } from "@/components/public-card/logo-upload";
+import { AccentPalette } from "@/components/book-landing/accent-palette";
 import { type CardMood } from "@/components/public-card/public-card";
 import { ESPECIALIDADES_META, ESPECIALIDAD_SLUGS } from "@/lib/especialidades/meta";
 import { validateFranjas } from "@/lib/onboarding/franjas";
@@ -448,28 +449,30 @@ export function Step3Consultorio({ data, set, next, back, orgId, orgSlug }: Step
   );
 }
 
-// ─── Step 4 · Identidad visual (logo + acento + mood) ──────────────────────
-
-const ACENTOS_CURADOS = [
-  { id: "#8A6722", nombre: "Brass",         desc: "Cálido, sobrio" },
-  { id: "#3F6B49", nombre: "Verde antiguo", desc: "Sereno, clínico" },
-  { id: "#3F5E75", nombre: "Azul piedra",   desc: "Sólido, neutral" },
-  { id: "#A8513A", nombre: "Terracota",     desc: "Cálido, presente" },
-];
+// ─── Step 4 · Identidad visual ──────────────────────────────────────────────
 
 export function Step4Personalizacion({ data, set, next, back, skip, orgSlug }: StepProps) {
   return (
     <StepShell stepIdx={4} compactFlow={data.ownerTratante === false} back={back} next={next} skip={skip}
-      headline="Tu identidad visual"
-      sub={`Elegí cómo se presenta ${data.tipo === "CLINICA" ? "tu clínica" : "tu consultorio"}: logo y color. Podés cambiarlos después.`}
+      headline="Dale tu identidad a la página"
+      sub={`Tu ${data.tipo === "CLINICA" ? "clínica" : "consultorio"} ya tiene una página lista para completar. Elegí un color ahora o personalizala después.`}
       previewData={previewDataFor(data)}
       slug={orgSlug}
     >
-      <div className="onb-form">
+      <div className="onb-form onb-identity-editor">
+        <div className="onb-identity-intro">
+          <p>Probá un color: lo vas a ver al instante en la vista previa. Podés volver a cambiarlo en Configuración → Consultorio.</p>
+          {skip ? <button type="button" className="onb-identity-later" onClick={skip}>Personalizar después <span aria-hidden="true">→</span></button> : null}
+        </div>
         <section className="onb-identity-section">
-          <h2 className="onb-identity-h">Logo</h2>
+          <h2 className="onb-identity-h">Color de la página</h2>
+          <p className="onb-identity-hint">Aparece en los botones y detalles.</p>
+          <AccentPalette value={data.acento} onChange={(acento) => set({ acento })} />
+        </section>
+        <section className="onb-identity-section">
+          <h2 className="onb-identity-h">Logo del consultorio <span className="onb-identity-optional">· opcional</span></h2>
           <p className="onb-identity-hint">
-            Opcional. Aparecerá en tu perfil público en lugar de tus iniciales.
+            Se muestra junto al nombre en la cabecera de tu página. Se guarda al cargarlo.
           </p>
           <LogoUpload
             currentLogoUrl={data.logoUrl}
@@ -477,47 +480,6 @@ export function Step4Personalizacion({ data, set, next, back, skip, orgSlug }: S
             onRemoved={() => set({ logoUrl: null })}
           />
         </section>
-
-        <section className="onb-identity-section">
-          <h2 className="onb-identity-h">Color de acento</h2>
-          <p className="onb-identity-hint">
-            Se usa en los botones y detalles de tu perfil público.
-          </p>
-          <div className="onb-acentos">
-            {ACENTOS_CURADOS.map(a => {
-              const isActive = data.acento === a.id;
-              return (
-                <button key={a.id} type="button"
-                  aria-pressed={isActive}
-                  className={"onb-acento " + (isActive ? "is-active" : "")}
-                  onClick={() => set({ acento: a.id })}>
-                  <div className="onb-acento-preview">
-                    <div className="onb-acento-chart">
-                      {[40, 65, 88, 72, 95, 60, 80].map((h, i) => (
-                        <span key={i} className="onb-chart-bar"
-                          style={{ height: h + "%", background: i === 4 ? a.id : `${a.id}33` }}/>
-                      ))}
-                    </div>
-                    <div className="onb-acento-cta" style={{ background: a.id }}>Confirmar</div>
-                  </div>
-                  <div className="onb-acento-meta">
-                    <span className="onb-acento-swatch" style={{ background: a.id }}/>
-                    <div>
-                      <b>{a.nombre}</b>
-                      <span>{a.desc}</span>
-                    </div>
-                    {isActive ? (
-                      <span className="onb-acento-check">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
-                      </span>
-                    ) : null}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-
       </div>
     </StepShell>
   );

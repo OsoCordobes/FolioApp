@@ -199,6 +199,7 @@ export function OnboardingApp({
   const pendingStepRef = useRef<number | null>(null);
   const activeSaveRef = useRef<Promise<boolean> | null>(null);
   const nextFlightRef = useRef(false);
+  const savedAccentRef = useRef(typeof initialData?.acento === "string" ? initialData.acento : ONBOARDING_INITIAL.acento);
 
   // Hidratación: prioriza initialData (DB) > localStorage > URL params.
   // Importante: NUNCA restauramos `password` del localStorage. Es secret + no
@@ -403,8 +404,6 @@ export function OnboardingApp({
           case 4:
             result = await updateOnboardingStep(4, {
               acento: snapshot.acento,
-              logoUrl: snapshot.logoUrl,
-              cardMood: snapshot.cardMood,
             });
             break;
           case 6:
@@ -468,7 +467,7 @@ export function OnboardingApp({
     if (!orgId) return;
     // Steps sin auto-save: 1 (signup), 7 (Google — persiste step_max al montar
     // y su OAuth escribe en `integration`), 8 (moment — finaliza, no edita).
-    if (stepIdx === 1 || stepIdx >= 7) return;
+    if (stepIdx === 1 || stepIdx === 4 || stepIdx >= 7) return;
 
     const snapshot = JSON.stringify({ step: stepIdx, data });
     if (snapshot === lastSavedSnapshotRef.current) return;
@@ -504,6 +503,16 @@ export function OnboardingApp({
   const next = useCallback(() => {
     if (nextFlightRef.current) return;
     nextFlightRef.current = true;
+    if (stepIdx === 4) {
+      void (async () => {
+        if (!await flushSaveIfPending()) return;
+        if (!await runPersistStep(4, data)) return;
+        savedAccentRef.current = data.acento;
+        setDirection("forward");
+        setStepIdx(data.ownerTratante === false ? 6 : 5);
+      })().finally(() => { nextFlightRef.current = false; });
+      return;
+    }
     if (stepIdx === 5) {
       if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
       void persistInitialHours(data).then((saved) => { if (saved) { setDirection("forward"); setStepIdx(6); } }).finally(() => { nextFlightRef.current = false; }); return;
@@ -514,7 +523,7 @@ export function OnboardingApp({
         setStepIdx((n) => Math.min(ONB_TOTAL, n === 4 && data.ownerTratante === false ? 6 : n === 6 && data.ownerTratante === false ? 8 : n + 1));
       }
     }).finally(() => { nextFlightRef.current = false; });
-  }, [flushSaveIfPending, stepIdx, persistInitialHours, data]);
+  }, [flushSaveIfPending, stepIdx, persistInitialHours, runPersistStep, data]);
 
   const back = useCallback(() => {
     if (stepIdx === 5) {
@@ -526,7 +535,18 @@ export function OnboardingApp({
     setStepIdx((n) => Math.max(1, n === 6 && data.ownerTratante === false ? 4 : n === 8 && data.ownerTratante === false ? 6 : n - 1));
   }, [flushSaveIfPending, stepIdx, persistInitialHours, data]);
 
-  const skip = next;
+  const skip = useCallback(() => {
+    if (stepIdx !== 4) { next(); return; }
+    if (nextFlightRef.current) return;
+    nextFlightRef.current = true;
+    void flushSaveIfPending().then((saved) => {
+      if (!saved) return;
+      // Este botón no escribe el color elegido ni reemplaza una identidad guardada.
+      setData((current) => ({ ...current, acento: savedAccentRef.current }));
+      setDirection("forward");
+      setStepIdx(data.ownerTratante === false ? 6 : 5);
+    }).finally(() => { nextFlightRef.current = false; });
+  }, [stepIdx, next, flushSaveIfPending, data.ownerTratante]);
 
   // Keyboard (Enter/Esc) vive en StepShell: Enter tiene que invocar el next
   // EFECTIVO del paso (p.ej. handleNext del Step 3 que persiste el slug) y

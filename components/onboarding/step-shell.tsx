@@ -165,7 +165,7 @@ export function StepShell({
     : undefined;
 
   return (
-    <div ref={shellRef} className={`onb-shell fx-onb-shell ${showPreview ? "onb-shell-split" : ""}`}>
+    <div ref={shellRef} className={`onb-shell fx-onb-shell ${showPreview ? "onb-shell-split" : ""} ${stepIdx === 4 ? "onb-step4" : ""}`}>
       <div className="onb-shell-form">
         <div className="onb-step">
           {!isFinal ? (
@@ -189,6 +189,11 @@ export function StepShell({
               </div>
               <h1>{headline}</h1>
               {sub ? <p className="onb-step-sub">{sub}</p> : null}
+              {stepIdx === 4 && showPreview ? (
+                <button type="button" className="onb-mobile-preview-trigger" onClick={() => setDrawerOpen(true)} aria-controls={previewId} aria-expanded={drawerOpen}>
+                  Ver mi página <span aria-hidden="true">↗</span>
+                </button>
+              ) : null}
             </header>
           ) : null}
 
@@ -212,7 +217,7 @@ export function StepShell({
                 <span />
               )}
               <span className="onb-foot-grow" />
-              {canSkip && skip ? (
+              {canSkip && skip && stepIdx !== 4 ? (
                 <button type="button" className="onb-skip" onClick={skip}>
                   Configurar después
                 </button>
@@ -235,10 +240,13 @@ export function StepShell({
         <>
           <aside className="onb-shell-preview" aria-label="Vista previa de tu perfil público">
             <div className="onb-preview-sticky">
-              <span className="onb-preview-label">Tu perfil público</span>
+              <div className="onb-preview-heading">
+                <span className="onb-preview-label">Vista previa de tu página</span>
+                {stepIdx === 4 ? <button type="button" className="onb-preview-expand" onClick={() => setDrawerOpen(true)}>Ampliar vista previa ↗</button> : null}
+              </div>
               <div className="onb-landing-preview"><BookLandingPreview data={previewProps} /></div>
               <p className="onb-preview-fine">
-                Así se verá tu perfil para los pacientes. La vista previa se actualiza mientras escribís.
+                La vista previa se actualiza mientras elegís. Los pacientes no pueden reservar desde acá.
               </p>
             </div>
           </aside>
@@ -247,7 +255,7 @@ export function StepShell({
             type="button"
             className={`onb-preview-fab ${drawerOpen ? "is-open" : ""}`}
             onClick={() => setDrawerOpen((v) => !v)}
-            aria-label={drawerOpen ? "Cerrar vista previa" : "Ver mi perfil público"}
+            aria-label={drawerOpen ? "Cerrar vista previa" : "Ampliar vista previa"}
             aria-expanded={drawerOpen}
             aria-controls={previewId}
           >
@@ -261,7 +269,7 @@ export function StepShell({
                 <circle cx="12" cy="12" r="3" />
               </svg>
             )}
-            <span>{drawerOpen ? "Cerrar" : "Ver mi perfil público"}</span>
+            <span>{drawerOpen ? "Cerrar" : "Ampliar vista previa"}</span>
           </button>
 
             <dialog
@@ -274,7 +282,7 @@ export function StepShell({
             >
               <div className="onb-preview-drawer-inner">
                 <div className="onb-preview-drawer-head">
-                  <span id={`${previewId}-title`} className="onb-preview-label">Tu perfil público</span>
+                  <span id={`${previewId}-title`} className="onb-preview-label">Vista previa de tu página</span>
                   <button
                     type="button"
                     className="onb-preview-close"

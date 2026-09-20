@@ -119,6 +119,7 @@ export default async function ConfiguracionPage({
     <Configuracion
       orgSlug={ctx.data.organization.slug}
       initialConsultorio={data.data.consultorio}
+      initialPublicPreview={data.data.publicPreview}
       initialServicios={data.data.servicios}
       initialDias={data.data.dias}
       initialHorariosContext={data.data.horariosContext}

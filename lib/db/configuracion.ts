@@ -17,6 +17,8 @@
  */
 
 import { z } from "zod";
+import type { PublicLandingViewData } from "@/components/book-landing/book-landing-view";
+import { listProfesionalesPublico } from "@/lib/db/members";
 import { decodeAvailabilitySnapshot } from "@/lib/agenda/availability-snapshot";
 import { createHash } from "node:crypto";
 
@@ -35,6 +37,7 @@ import { err, mapSupabaseError, ok, type Result } from "./errors";
 
 export interface ConsultorioData {
   nombre: string;
+  acento: string;
   profesional: string;
   matricula: string;
   email: string;
@@ -85,6 +88,7 @@ export interface DiaHorarios {
 
 export interface ConfiguracionData {
   consultorio: ConsultorioData;
+  publicPreview: PublicLandingViewData | null;
   servicios: ServicioRow[];
   googleCalendar: IntegrationStatus;
   /** Disponibilidad semanal del profesional actual (M04 disponibilidad_profesional). */
@@ -122,7 +126,7 @@ export async function getConfiguracionData(expected?: { organizationId: string; 
   // 1. Servicios activos de la org.
   const { data: serviciosRaw, error: servErr } = await supabase
     .from("servicio")
-    .select("id, nombre, duracion_min, precio_cents, activo, tipo_canonico")
+    .select("id, nombre, duracion_min, precio_cents, activo, tipo_canonico, deleted_at")
     .eq("organization_id", ctx.data.organization.id)
     .order("created_at", { ascending: true });
 
@@ -145,7 +149,7 @@ export async function getConfiguracionData(expected?: { organizationId: string; 
   const { data: orgExtra } = await supabase
     .from("organization")
     .select(
-      "telefono_publico, direccion_completa, instagram_handle, auto_confirmar_reservas, slot_margen_min, logo_url",
+      "telefono_publico, direccion_completa, instagram_handle, auto_confirmar_reservas, slot_margen_min, logo_url, card_mood, bio",
     )
     .eq("id", ctx.data.organization.id)
     .maybeSingle();
@@ -160,6 +164,7 @@ export async function getConfiguracionData(expected?: { organizationId: string; 
 
   const consultorio: ConsultorioData = {
     nombre: ctx.data.organization.nombre,
+    acento: ctx.data.organization.acentoHex || "#8A6722",
     profesional,
     matricula: ctx.data.profile.matricula ?? "",
     email: ctx.data.profile.email,
@@ -183,8 +188,42 @@ export async function getConfiguracionData(expected?: { organizationId: string; 
     }),
   );
 
+  // La vista previa usa la misma composición y los mismos profesionales públicos
+  // que /book. Un error de lectura no inventa perfiles clínicos.
+  const publicProfiles = await listProfesionalesPublico(ctx.data.organization.id);
+  const profesionales = publicProfiles.ok ? publicProfiles.data : [];
+  const publicPreview: PublicLandingViewData | null = publicProfiles.ok && orgExtra ? {
+    org: {
+      slug: ctx.data.organization.slug,
+      tipo: ctx.data.organization.tipo,
+      nombre: consultorio.nombre,
+      ciudad: consultorio.ciudad,
+      provincia: consultorio.provincia,
+      rubro: ctx.data.organization.rubro,
+      especialidad: consultorio.especialidad,
+      acentoHex: consultorio.acento,
+      logoUrl: (orgExtra?.logo_url as string | null) ?? null,
+      cardMood: (orgExtra?.card_mood ?? "editorial") as PublicLandingViewData["org"]["cardMood"],
+      bio: (orgExtra?.bio as string | null) ?? null,
+      telefonoPublico: consultorio.tel,
+      direccionCompleta: consultorio.direccion,
+      instagramHandle: consultorio.instagram,
+      autoConfirmar: (orgExtra?.auto_confirmar_reservas as boolean | null) ?? true,
+    },
+    profesional: ctx.data.organization.tipo === "INDEPENDIENTE" && profesionales.length === 1 ? profesionales[0] : null,
+    profesionales: ctx.data.organization.tipo === "CLINICA" ? profesionales : [],
+    servicios: (serviciosRaw ?? []).filter((service) => service.activo && !service.deleted_at).map((service) => ({
+      id: service.id,
+      nombre: service.nombre,
+      duracion_min: service.duracion_min,
+      precio_cents: service.precio_cents,
+      tipo_canonico: service.tipo_canonico,
+    })),
+  } : null;
+
   return ok({
     consultorio,
+    publicPreview,
     servicios,
     googleCalendar: {
       conectado: googleIntegration != null,
@@ -304,6 +343,43 @@ export async function saveConsultorio(input: SaveConsultorioInput): Promise<Resu
     return err(mapped.code, mapped.message, profErr.message);
   }
 
+  return ok(undefined);
+}
+
+/** Guardado aislado del color. La comparación evita reemplazar un cambio
+ * reciente hecho en otra pestaña o por otro director. */
+export async function savePublicAccent(input: { accent: string; expectedAccent: string; organizationId: string; memberId: string }): Promise<Result<void>> {
+  const accentSchema = z.string().regex(/^#[0-9A-Fa-f]{6}$/);
+  if (!accentSchema.safeParse(input.accent).success || !accentSchema.safeParse(input.expectedAccent).success ||
+      !z.string().uuid().safeParse(input.organizationId).success || !z.string().uuid().safeParse(input.memberId).success) {
+    return err("validation", "Elegí un color válido.");
+  }
+  const ctx = await getActiveContext();
+  if (!ctx.ok) return ctx;
+  if (ctx.data.organization.id !== input.organizationId || ctx.data.session.memberId !== input.memberId) {
+    return err("conflict", "Cambió el consultorio activo. Volvé a cargar la página.");
+  }
+  if (ctx.data.session.role !== "OWNER" && ctx.data.session.role !== "DIRECTOR") {
+    return err("forbidden", "Solo el titular o la dirección pueden editar la página.");
+  }
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.from("organization")
+    .update({ acento_hex: input.accent })
+    .eq("id", ctx.data.organization.id)
+    .eq("acento_hex", input.expectedAccent)
+    .select("id").maybeSingle();
+  if (error) {
+    const mapped = mapSupabaseError(error);
+    return err(mapped.code, mapped.message, error.message);
+  }
+  if (!data) {
+    // Respuesta perdida tras un COMMIT: leer antes de reintentar evita el falso
+    // conflicto sin pisar un tercer color escrito por otra pestaña.
+    const { data: current, error: readError } = await supabase.from("organization")
+      .select("acento_hex").eq("id", input.organizationId).maybeSingle();
+    if (readError || !current) return err("db_error", "No pudimos confirmar el color guardado. Recargá la página.");
+    if (current.acento_hex !== input.accent) return err("conflict", "El color cambió en otra pestaña. Recargá la página antes de guardar.");
+  }
   return ok(undefined);
 }
 

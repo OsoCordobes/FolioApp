@@ -22,6 +22,9 @@ import { PermissionMatrix } from "@/components/configuracion/permission-matrix";
 import { PhotoUpload } from "@/components/configuracion/photo-upload";
 import { UpgradeClinicaModal } from "@/components/configuracion/upgrade-clinica-modal";
 import { LogoUpload } from "@/components/public-card/logo-upload";
+import { AccentPalette } from "@/components/book-landing/accent-palette";
+import { BookLandingPreview } from "@/components/book-landing/book-landing-preview";
+import type { PublicLandingViewData } from "@/components/book-landing/book-landing-view";
 import { uploadSettingsOrgLogo, removeSettingsOrgLogo } from "@/app/(public)/onboarding/actions";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { contar } from "@/lib/format/plural";
@@ -36,6 +39,7 @@ import {
   revokeInvitationAction,
   saveBookingPrefsAction,
   saveConsultorioAction,
+  savePublicAccentAction,
   saveHorariosAction,
   readHorariosAction,
   saveServiciosAction,
@@ -497,6 +501,8 @@ function SecConsultorio({
   montoClinicaCents,
   showImportarPacientes,
   logoUrl,
+  onLogoChange,
+  publicPreview,
 }: {
   c: ConsultorioData;
   set: (patch: Partial<ConsultorioData>) => void;
@@ -520,6 +526,8 @@ function SecConsultorio({
   showImportarPacientes: boolean;
   /** Foto del consultorio ya subida (organization.logo_url), o null. */
   logoUrl: string | null;
+  onLogoChange: (url: string | null) => void;
+  publicPreview: PublicLandingViewData | null;
 }) {
   const router = useRouter();
   const [upgradeOpen, setUpgradeOpen] = useState(false);
@@ -546,29 +554,47 @@ function SecConsultorio({
 
   return (
     <>
+      <Section title="Tu página de reservas" sub="Elegí el color y revisá cómo se ve antes de guardar los cambios.">
+        <div className="perfil-editor">
+          <div className="perfil-editor-controls">
+            <span className="perfil-editor-label">Color de la página</span>
+            <AccentPalette value={c.acento} onChange={(acento) => set({ acento })} disabled={!canEdit} />
+            <p>El color se guarda con «Guardar cambios».</p>
+            {canEdit ? <details className="perfil-editor-logo">
+              <summary>{logoUrl ? "Cambiar logo del consultorio" : "Agregar logo del consultorio · opcional"}</summary>
+              <p>El logo aparece en la cabecera de la página y se guarda al subirlo.</p>
+              <LogoUpload
+                uploadAction={uploadSettingsOrgLogo}
+                removeAction={removeSettingsOrgLogo}
+                currentLogoUrl={logoUrl}
+                onUploaded={onLogoChange}
+                onRemoved={() => onLogoChange(null)}
+              />
+            </details> : null}
+          </div>
+          {publicPreview ? <div className="perfil-editor-preview" aria-label="Vista previa de la página de reservas">
+            <BookLandingPreview data={{
+              ...publicPreview,
+              org: {
+                ...publicPreview.org,
+                nombre: c.nombre,
+                ciudad: c.ciudad,
+                provincia: c.provincia,
+                especialidad: c.especialidad,
+                telefonoPublico: c.tel,
+                direccionCompleta: c.direccion,
+                instagramHandle: c.instagram,
+                acentoHex: c.acento,
+                logoUrl,
+              },
+            }} />
+          </div> : <p role="status" className="perfil-editor-unavailable">No pudimos cargar la vista previa. Tus cambios siguen en pantalla; podés abrir el enlace público para revisarlos después de guardar.</p>}
+          <a className="cfg-link perfil-editor-published" href={`/book/${encodeURIComponent(orgSlug)}`} target="_blank" rel="noopener noreferrer">Abrir enlace público ↗</a>
+        </div>
+      </Section>
       <Section title="Identidad del consultorio" sub="Aparece en el menú, los recordatorios y tu página pública.">
         <Row label="Nombre del consultorio">
           <TextInput value={c.nombre} onChange={(v) => set({ nombre: v })} />
-        </Row>
-        {/* El botón que había acá estaba `disabled` con el tooltip "el logo se
-            sube desde Onboarding > Identidad visual" — una pantalla a la que no
-            se vuelve una vez terminado el onboarding. Es decir: la única forma
-            de cambiar la foto era no haber terminado de configurar la cuenta.
-            El componente que sube de verdad ya existía (LogoUpload, el mismo
-            del paso 4) y su action resuelve la org desde la sesión, así que
-            persiste sola: no pasa por la save-bar. */}
-        <Row label="Foto del consultorio" sub="Opcional · PNG hasta 500 KB · se ve en tu link público">
-          <LogoUpload
-            uploadAction={uploadSettingsOrgLogo}
-            removeAction={removeSettingsOrgLogo}
-            currentLogoUrl={logoUrl}
-            // La action persiste sola; el componente ya muestra su propio
-            // preview. Un router.refresh() acá volvería a montar toda la
-            // pantalla de Configuración y perdería lo que el usuario esté
-            // editando sin guardar en la save-bar.
-            onUploaded={() => {}}
-            onRemoved={() => {}}
-          />
         </Row>
       </Section>
 
@@ -1898,6 +1924,7 @@ interface ConfiguracionProps {
   /** Slug real de la org (organization.slug) — fuente del link público copiable. */
   orgSlug: string;
   initialConsultorio: ConsultorioData;
+  initialPublicPreview: PublicLandingViewData | null;
   initialServicios: ServicioCfg[];
   initialDias: Record<DiaSemanaId, DiaHorarios>;
   initialHorariosContext: HorariosContext;
@@ -1959,6 +1986,7 @@ const NO_DIRTY: DirtyState = { consultorio: false, horarios: false, servicios: f
 export function Configuracion({
   orgSlug,
   initialConsultorio,
+  initialPublicPreview,
   initialServicios,
   initialDias,
   initialHorariosContext,
@@ -2010,6 +2038,7 @@ export function Configuracion({
   }, []);
 
   const [consultorio, setConsultorio] = useState<ConsultorioData>(initialConsultorio);
+  const [currentLogoUrl, setCurrentLogoUrl] = useState(logoUrl);
   const [consultorioSnap, setConsultorioSnap] = useState<ConsultorioData>(initialConsultorio);
   const [availability] = useState(() => new AvailabilityDraft({ context: initialHorariosContext, dias: initialDias }));
   const [, redrawAvailability] = useState(0);
@@ -2073,6 +2102,23 @@ export function Configuracion({
       }
       // Save secciones marcadas dirty en serie. Si una falla, paramos y reportamos.
       if (dirty.consultorio) {
+        const accentChanged = consultorio.acento !== consultorioSnap.acento;
+        const otherFieldsChanged = (Object.keys(consultorio) as Array<keyof ConsultorioData>)
+          .some((key) => key !== "acento" && consultorio[key] !== consultorioSnap[key]);
+        if (accentChanged) {
+          const accentResult = await savePublicAccentAction({
+            accent: consultorio.acento,
+            expectedAccent: consultorioSnap.acento,
+            organizationId: initialHorariosContext.organizationId,
+            memberId: initialHorariosContext.memberId,
+          });
+          if (!accentResult.ok) {
+            setSaveError(`Color de la página: ${accentResult.error.message}`);
+            return;
+          }
+          setConsultorioSnap((snapshot) => ({ ...snapshot, acento: consultorio.acento }));
+        }
+        if (otherFieldsChanged) {
         const result = await saveConsultorioAction({
           nombre: consultorio.nombre,
           profesional: consultorio.profesional,
@@ -2088,6 +2134,7 @@ export function Configuracion({
         if (!result.ok) {
           setSaveError(`Consultorio: ${result.error.message}`);
           return;
+        }
         }
         setConsultorioSnap(consultorio);
         setDirty((d) => ({ ...d, consultorio: false }));
@@ -2171,7 +2218,9 @@ export function Configuracion({
               montoActualCents={montoActualCents}
               montoClinicaCents={montoClinicaCents}
               showImportarPacientes={showImportarPacientes}
-              logoUrl={logoUrl}
+              logoUrl={currentLogoUrl}
+              onLogoChange={setCurrentLogoUrl}
+              publicPreview={initialPublicPreview}
             />
           ) : null}
           {seccion === "equipo" && (canManageTeam || equipoSelf != null) ? (
