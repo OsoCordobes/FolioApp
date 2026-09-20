@@ -2113,6 +2113,7 @@ export function Configuracion({
     setSaveError(null);
     refreshAvailability();
     startSavingTransition(async () => {
+      let consultorioAttempted = false;
       try {
       if (command) {
         const result = await saveHorariosAction(command);
@@ -2137,6 +2138,7 @@ export function Configuracion({
         if (consultorio.profesional !== consultorioSnap.profesional) profile.profesional = consultorio.profesional;
         if (consultorio.matricula !== consultorioSnap.matricula) profile.matricula = consultorio.matricula;
         if (Object.keys(organization).length || Object.keys(profile).length) {
+          consultorioAttempted = true;
           const result = await saveConsultorioAction({
             organizationId: initialHorariosContext.organizationId,
             memberId: initialHorariosContext.memberId,
@@ -2145,15 +2147,15 @@ export function Configuracion({
             ...(Object.keys(organization).length ? { organization } : {}),
             ...(Object.keys(profile).length ? { profile } : {}),
           });
+          consultorioAttempted = false;
           if (!result.ok) {
             setSaveUncertain(result.error.code === "network");
             setSaveError(`Consultorio: ${result.error.message}`);
             return;
           }
           setSaveUncertain(false);
-          const saved = { ...consultorio, ...result.data };
-          setConsultorio(saved);
-          setConsultorioSnap(saved);
+          setConsultorio(result.data);
+          setConsultorioSnap(result.data);
         }
         setDirty((d) => ({ ...d, consultorio: false }));
       }
@@ -2171,7 +2173,7 @@ export function Configuracion({
 
       } catch {
         if (availability.pending) availability.finish({ ok: false, error: { code: "network", message: "Conexión interrumpida" } });
-        setSaveUncertain(true);
+        if (consultorioAttempted) setSaveUncertain(true);
         setSaveError("No pudimos confirmar el guardado. Reintentá para recuperar el resultado.");
       } finally { savingRef.current = false; refreshAvailability(); }
     });

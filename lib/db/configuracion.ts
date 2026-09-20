@@ -23,7 +23,7 @@ import { decodeAvailabilitySnapshot } from "@/lib/agenda/availability-snapshot";
 import { createHash } from "node:crypto";
 
 import { decryptColumn, encryptColumn } from "@/lib/crypto";
-import { ESPECIALIDAD_SLUGS, type EspecialidadSlug } from "@/lib/especialidades/meta";
+import { ESPECIALIDAD_SLUGS, normalizeEspecialidadSlug, type EspecialidadSlug } from "@/lib/especialidades/meta";
 import { esIntegracionMuerta } from "@/lib/google/health";
 import {
   createSupabaseServerClient,
@@ -149,43 +149,51 @@ export async function getConfiguracionData(expected?: { organizationId: string; 
     .eq("proveedor", "GOOGLE_CALENDAR")
     .maybeSingle();
 
-  // 3. Organization fields nuevos (M20 agregó telefono_publico / direccion_completa / instagram_handle).
+  // 3. Cada fila editable se lee junto con su propia revisión. El contexto
+  // autentica la org y el perfil, pero sus valores pueden haber cambiado desde
+  // aquella lectura: mezclarlos con updated_at nuevo perdería cambios ajenos.
   const { data: orgExtra, error: orgExtraError } = await supabase
     .from("organization")
     .select(
-      "telefono_publico, direccion_completa, instagram_handle, auto_confirmar_reservas, slot_margen_min, logo_url, card_mood, bio, updated_at",
+      "nombre, ciudad, provincia, acento_hex, timezone, especialidad, telefono_publico, direccion_completa, instagram_handle, auto_confirmar_reservas, slot_margen_min, logo_url, card_mood, bio, updated_at",
     )
     .eq("id", ctx.data.organization.id)
     .maybeSingle();
   if (orgExtraError || !orgExtra) return err("db_error", "No pudimos cargar los datos del consultorio.");
-  const { data: profileRevision, error: profileRevisionError } = await supabase
-    .from("profile").select("updated_at").eq("id", ctx.data.session.userId).maybeSingle();
-  if (profileRevisionError || !profileRevision) return err("db_error", "No pudimos cargar la revisión del perfil.");
+  const { data: profileRow, error: profileError } = await supabase
+    .from("profile").select("email, nombre_cifrado, apellido_cifrado, matricula, updated_at")
+    .eq("id", ctx.data.session.userId).maybeSingle();
+  if (profileError || !profileRow) return err("db_error", "No pudimos cargar el perfil del consultorio.");
 
   // 4. Una lectura fallida nunca se convierte en una semana vacía editable.
   const snapshot = await readHorarios(expected ?? { organizationId: ctx.data.organization.id, memberId: ctx.data.session.memberId });
   if (!snapshot.ok) return snapshot;
   const { dias, context: horariosContext } = snapshot.data;
 
-  const profesional = [ctx.data.profile.nombre, ctx.data.profile.apellido]
-    .filter(Boolean).join(" ").trim() || "—";
+  let profesional: string;
+  try {
+    profesional = [decryptColumn(profileRow.nombre_cifrado), decryptColumn(profileRow.apellido_cifrado)]
+      .filter(Boolean).join(" ").trim() || "—";
+  } catch {
+    return err("db_error", "No pudimos leer el nombre del profesional.");
+  }
 
   const consultorio: ConsultorioData = {
-    nombre: ctx.data.organization.nombre,
+    nombre: orgExtra.nombre,
     bio: (orgExtra.bio as string | null) ?? "",
     organizationUpdatedAt: orgExtra.updated_at as string,
-    profileUpdatedAt: profileRevision.updated_at as string,
-    acento: ctx.data.organization.acentoHex || "#8A6722",
+    profileUpdatedAt: profileRow.updated_at as string,
+    acento: orgExtra.acento_hex || "#8A6722",
     profesional,
-    matricula: ctx.data.profile.matricula ?? "",
-    email: ctx.data.profile.email,
+    matricula: profileRow.matricula ?? "",
+    email: profileRow.email,
     tel: (orgExtra?.telefono_publico as string | null) ?? "",
     direccion: (orgExtra?.direccion_completa as string | null) ?? "",
-    ciudad: ctx.data.organization.ciudad ?? "",
-    provincia: ctx.data.organization.provincia ?? "",
+    ciudad: orgExtra.ciudad ?? "",
+    provincia: orgExtra.provincia ?? "",
     instagram: (orgExtra?.instagram_handle as string | null) ?? "",
-    timezone: ctx.data.organization.timezone || "America/Argentina/Cordoba",
-    especialidad: ctx.data.organization.especialidad,
+    timezone: orgExtra.timezone || "America/Argentina/Cordoba",
+    especialidad: normalizeEspecialidadSlug(orgExtra.especialidad),
   };
 
   const servicios: ServicioRow[] = (serviciosRaw ?? []).map(
@@ -294,7 +302,8 @@ const saveConsultorioSchema = z.object({
 }).refine((d) => Object.keys(d.organization ?? {}).length + Object.keys(d.profile ?? {}).length > 0);
 
 export type SaveConsultorioInput = z.infer<typeof saveConsultorioSchema>;
-export interface SaveConsultorioReceipt { organizationUpdatedAt: string; profileUpdatedAt: string }
+/** Cada valor editable viene de la misma lectura que la revisión de su fila. */
+export type SaveConsultorioReceipt = ConsultorioData;
 const receiptSchema = z.object({
   organizationUpdatedAt: z.string().datetime({ offset: true }),
   profileUpdatedAt: z.string().datetime({ offset: true }),
@@ -302,7 +311,7 @@ const receiptSchema = z.object({
 
 function nullablePublicValue(value: string): string | null { return value.trim() || null; }
 
-/** A lost response can only be confirmed by reading the exact requested fields. */
+/** Confirma los campos enviados y devuelve cada fila editable con su revisión. */
 async function readConsultorioReceipt(
   client: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   organizationId: string,
@@ -313,20 +322,21 @@ async function readConsultorioReceipt(
   try {
     const [orgResult, profileResult] = await Promise.all([
       client.from("organization")
-        .select("id, updated_at, nombre, bio, ciudad, provincia, telefono_publico, direccion_completa, instagram_handle, timezone, especialidad")
+        .select("id, updated_at, nombre, bio, ciudad, provincia, acento_hex, telefono_publico, direccion_completa, instagram_handle, timezone, especialidad")
         .eq("id", organizationId).is("deleted_at", null).maybeSingle(),
       client.from("profile")
-        .select("id, updated_at, nombre_cifrado, apellido_cifrado, matricula")
+        .select("id, updated_at, email, nombre_cifrado, apellido_cifrado, matricula")
         .eq("id", userId).maybeSingle(),
     ]);
     if (orgResult.error || !orgResult.data || profileResult.error || !profileResult.data) return null;
     const org = orgResult.data as Record<string, string | null>;
     if (Object.entries(orgPatch).some(([key, value]) => org[key] !== value)) return null;
     const profile = profileResult.data;
+    const firstName = decryptColumn(profile.nombre_cifrado);
+    const lastName = decryptColumn(profile.apellido_cifrado);
     if (requestedProfile?.profesional !== undefined) {
       const [first, ...rest] = requestedProfile.profesional.trim().split(/\s+/);
-      if (decryptColumn(profile.nombre_cifrado) !== first ||
-          decryptColumn(profile.apellido_cifrado) !== (rest.join(" ") || first)) return null;
+      if (firstName !== first || lastName !== (rest.join(" ") || first)) return null;
     }
     if (requestedProfile?.matricula !== undefined &&
         profile.matricula !== nullablePublicValue(requestedProfile.matricula)) return null;
@@ -334,7 +344,20 @@ async function readConsultorioReceipt(
       organizationUpdatedAt: orgResult.data.updated_at,
       profileUpdatedAt: profile.updated_at,
     });
-    return receipt.success ? receipt.data : null;
+    if (!receipt.success) return null;
+    return {
+      nombre: org.nombre!, bio: org.bio ?? "",
+      organizationUpdatedAt: receipt.data.organizationUpdatedAt,
+      profileUpdatedAt: receipt.data.profileUpdatedAt,
+      acento: org.acento_hex || "#8A6722",
+      profesional: [firstName, lastName].filter(Boolean).join(" ").trim() || "—",
+      matricula: profile.matricula ?? "", email: profile.email,
+      tel: org.telefono_publico ?? "", direccion: org.direccion_completa ?? "",
+      ciudad: org.ciudad ?? "", provincia: org.provincia ?? "",
+      instagram: org.instagram_handle ?? "",
+      timezone: org.timezone || "America/Argentina/Cordoba",
+      especialidad: normalizeEspecialidadSlug(org.especialidad),
+    };
   } catch { return null; }
 }
 
@@ -383,7 +406,12 @@ export async function saveConsultorio(input: SaveConsultorioInput): Promise<Resu
     });
     if (!error) {
       const receipt = receiptSchema.safeParse(data);
-      if (receipt.success) return ok(receipt.data);
+      if (receipt.success) {
+        const confirmed = await readConsultorioReceipt(supabase, d.organizationId,
+          ctx.data.session.userId, orgPatch, d.profile);
+        if (confirmed) return ok(confirmed);
+        return err("network", "El guardado se envió, pero no pudimos confirmar el estado actual. Conservamos tus cambios; reintentá.");
+      }
     }
     const definitiveCode = error && ["42501", "22023", "23514", "23502", "23505", "PGRST301", "PGRST302"].includes(error.code);
     const uncertainTransport = Boolean(error && !definitiveCode && (status === 0 || !error.code ||

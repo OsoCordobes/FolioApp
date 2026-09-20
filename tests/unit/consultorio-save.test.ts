@@ -24,6 +24,9 @@ interface Fixture {
   activeOrg?: string;
   storedBio?: string | null;
   storedRevision?: string;
+  storedProfileRevision?: string;
+  storedMatricula?: string | null;
+  postCommitOtherChange?: boolean;
   lostResponse?: boolean;
   transportError?: boolean;
   invalidReceipt?: boolean;
@@ -33,17 +36,19 @@ interface Fixture {
 
 function load({ role = "OWNER", currentRole = role, activeOrg = orgId,
   storedBio = "Bio existente", storedRevision = originalOrgRevision,
+  storedProfileRevision = originalProfileRevision, storedMatricula = null,
+  postCommitOtherChange = false,
   lostResponse = false, transportError = false, invalidReceipt = false,
   statusZeroForbidden = false,
   failBeforeCommit = false }: Fixture = {}) {
   const org: Record<string, string | null> = {
     id: orgId, updated_at: storedRevision, nombre: "Consultorio", bio: storedBio,
-    ciudad: null, provincia: null, telefono_publico: null, direccion_completa: null,
+    ciudad: null, provincia: null, acento_hex: "#8A6722", telefono_publico: null, direccion_completa: null,
     instagram_handle: null, timezone: "America/Argentina/Cordoba", especialidad: "kinesiologia",
   };
   const profile: Record<string, string | null> = {
-    id: userId, updated_at: originalProfileRevision, nombre_cifrado: "enc:Ana",
-    apellido_cifrado: "enc:Paz", matricula: null,
+    id: userId, updated_at: storedProfileRevision, email: "ana@example.invalid", nombre_cifrado: "enc:Ana",
+    apellido_cifrado: "enc:Paz", matricula: storedMatricula,
   };
   let writes = 0;
   let calls = 0;
@@ -71,6 +76,10 @@ function load({ role = "OWNER", currentRole = role, activeOrg = orgId,
       if (Object.keys(orgPatch).length) org.updated_at = "2026-09-20T00:00:02Z";
       if (Object.keys(profilePatch).length) profile.updated_at = "2026-09-20T00:00:03Z";
       writes++;
+      if (postCommitOtherChange) {
+        org.nombre = "Cambio de otra pestaña";
+        org.updated_at = "2026-09-20T00:00:04Z";
+      }
       if (lostResponse) throw new Error("network after commit");
       if (transportError) return { data: null, error: { code: "", message: "TypeError: fetch failed" }, status: 0 };
       if (invalidReceipt) return { data: { organizationUpdatedAt: "", profileUpdatedAt: "" }, error: null };
@@ -94,7 +103,8 @@ function load({ role = "OWNER", currentRole = role, activeOrg = orgId,
       decryptColumn: (value: string) => value.replace(/^enc:/, ""),
     },
     "@/lib/db/members": { listProfesionalesPublico: async () => ({ ok: true, data: [] }) },
-    "@/lib/especialidades/meta": { ESPECIALIDAD_SLUGS: ["quiropraxia", "cardiologia", "psicologia", "kinesiologia", "nutricion"] },
+    "@/lib/especialidades/meta": { ESPECIALIDAD_SLUGS: ["quiropraxia", "cardiologia", "psicologia", "kinesiologia", "nutricion"],
+      normalizeEspecialidadSlug: (value: string) => value },
     "@/lib/supabase/server": { createSupabaseServerClient: async () => client,
       createSupabaseServiceClient: () => { throw new Error("broad service writer must not be used"); } },
     "./active-context": { getActiveContext: async () => ({ ok: true, data: {
@@ -167,4 +177,23 @@ test("lost commit response is confirmed by readback; uncommitted network loss st
   const notCommitted = load({ failBeforeCommit: true });
   assert.equal((await notCommitted.save({ ...command, organization: { bio: "Nueva bio" } })).error?.code, "network");
   assert.equal(notCommitted.writes, 0);
+});
+
+test("recovered response includes a concurrent unrelated edit with its revision", async () => {
+  const fixture = load({ lostResponse: true, postCommitOtherChange: true });
+  const result = await fixture.save({ ...command, organization: { bio: "Nueva bio" } });
+  assert.equal(result.ok, true);
+  const confirmed = result.data as { nombre: string; bio: string; organizationUpdatedAt: string };
+  assert.equal(confirmed.nombre, "Cambio de otra pestaña");
+  assert.equal(confirmed.bio, "Nueva bio");
+  assert.equal(confirmed.organizationUpdatedAt, fixture.org.updated_at);
+});
+
+test("ordinary success also refreshes the unmodified profile before advancing its revision", async () => {
+  const fixture = load({ storedProfileRevision: "2026-09-20T00:00:09Z", storedMatricula: "Matriculación ajena" });
+  const result = await fixture.save({ ...command, organization: { bio: "Nueva bio" } });
+  assert.equal(result.ok, true);
+  const confirmed = result.data as { matricula: string; profileUpdatedAt: string };
+  assert.equal(confirmed.matricula, "Matriculación ajena");
+  assert.equal(confirmed.profileUpdatedAt, fixture.profile.updated_at);
 });
