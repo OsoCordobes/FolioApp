@@ -67,11 +67,11 @@ const must=(result,label)=>{if(result.error)throw Error(`${label}_failed`);retur
 const pg=(password,database='postgres')=>new Client({host:'127.0.0.1',port:dbPort,user:'postgres',password,database,connectionTimeoutMillis:10000,statement_timeout:30000});
 async function withPg(password,database,fn){const c=pg(password,database);await c.connect();try{return await fn(c);}finally{await c.end();}}
 async function waitApi(anon){let last='no_response';for(let i=0;i<36;i++){try{const r=await fetch(`${api}/auth/v1/settings`,{headers:{apikey:anon},signal:AbortSignal.timeout(2000)});if(r.ok)return;last=`http_${r.status}`;}catch{}await new Promise(r=>setTimeout(r,3000));}throw Error(`api_unhealthy_${last}`);}
-async function ensureFresh(env){
- for(const project of [source,destination]){
-  const containers=await dc(project,['ps','-q'],env);
+async function ensureFresh(sourceEnv,destinationEnv){
+ for(const [project,projectEnv] of [[source,sourceEnv],[destination,destinationEnv]]){
+  const containers=await dc(project,['ps','-q'],projectEnv);
   if(containers.output.trim())throw Error('c01_project_already_exists');
-  const volumes=await docker(['volume','ls','-q','--filter',`label=com.docker.compose.project=${project}`],env);
+  const volumes=await docker(['volume','ls','-q','--filter',`label=com.docker.compose.project=${project}`],projectEnv);
   if(volumes.output.trim())throw Error('c01_volume_already_exists');
  }
 }
@@ -181,10 +181,13 @@ async function inspectCronPrerequisites(state,backup){
  const destination=await withPg(state.dbPassword,'postgres',async db=>{
   const setting=await db.query("SELECT current_setting('cron.database_name',true) AS database_name");
   const installed=await db.query("SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname='pg_cron') AS installed");
-  return {database:setting.rows[0]?.database_name,installed:installed.rows[0]?.installed===true};
+  const target=await db.query('SELECT 1 FROM pg_database WHERE datname=$1',[targetDatabase]);
+  return {database:setting.rows[0]?.database_name,installed:installed.rows[0]?.installed===true,targetExists:target.rowCount!==0};
  });
  const configured=destination.database==='postgres'?'postgres':destination.database===targetDatabase?targetDatabase:'other';
  console.log(`c01_pg_cron_preflight: source=${source} configured=${configured} installed_in_maintenance=${destination.installed}`);
+ if(!source||destination.database!==targetDatabase||destination.installed||destination.targetExists)
+  throw Error('c01_pg_cron_prerequisites_invalid');
 }
 async function prepareTargetRoles(state,backup){
  const inventory=async()=>withPg(state.dbPassword,'postgres',async db=>{
@@ -210,10 +213,19 @@ async function prepareTargetRoles(state,backup){
  console.log(`c01_pgsodium_roles_prepared: ${plan.knownMissing.length}`);
 }
 async function restore(state,backup,root,env,pid){
+ // The pinned image demotes postgres. pg_restore must retain the source owners,
+ // so use its existing superuser only inside this target DB network namespace.
+ const operatorCheck=await child('sudo',['-E','nsenter','--target',pid,'--net','--',
+  '/usr/lib/postgresql/17/bin/psql','-X','-A','-t','-v','ON_ERROR_STOP=1',
+  '-h','127.0.0.1','-p','5432','-U','supabase_admin','-d',targetDatabase,
+  '-c',"SELECT CASE WHEN session_user='supabase_admin' AND current_database()='folio_restore_c01' AND inet_server_addr()=inet '127.0.0.1' AND (SELECT rolsuper AND rolcanlogin FROM pg_roles WHERE rolname='supabase_admin') THEN 'c01_restore_operator_ready' ELSE 'c01_restore_operator_invalid' END"],
+  {env:{...env,PGPASSWORD:state.dbPassword},allowFailure:true});
+ if(operatorCheck.code!==0||operatorCheck.output.trim()!=='c01_restore_operator_ready'||operatorCheck.errorOutput.trim())
+  throw Error('c01_restore_operator_preflight_failed');
  const configPath=path.join(root,'restore-db.json');
  await writeJson(configPath,{phase:'database',directory:backup.directory,recipientPrivateKeyFile:path.join(root,'recipient.key'),confirmDatabase:targetDatabase,tools:{binDirectory:'/usr/lib/postgresql/17/bin'}});
  const command=[process.execPath,path.join(repo,'scripts/backup/restore-local.mjs'),configPath];
- const restored=await child('sudo',['-E','nsenter','--target',pid,'--net','--',...command],{env:{...env,FOLIO_BACKUP_RESTORE_DATABASE_URL:`postgresql://postgres:${state.dbPassword}@127.0.0.1:5432/${targetDatabase}`,FOLIO_BACKUP_RESTORE_PASSPHRASE:state.passphrase,FOLIO_BACKUP_RESTORE_DIAGNOSTICS:'c01'},allowFailure:true});
+ const restored=await child('sudo',['-E','nsenter','--target',pid,'--net','--',...command],{env:{...env,FOLIO_BACKUP_RESTORE_DATABASE_URL:`postgresql://supabase_admin:${state.dbPassword}@127.0.0.1:5432/${targetDatabase}`,FOLIO_BACKUP_RESTORE_PASSPHRASE:state.passphrase,FOLIO_BACKUP_RESTORE_DIAGNOSTICS:'c01'},allowFailure:true});
  if(restored.code!==0){
   const pgRestoreCategory=parseSafePgRestoreDiagnostic(restored.errorOutput);
   if(pgRestoreCategory)throw Error(`restore_pg_restore_${pgRestoreCategory}`);
@@ -295,11 +307,12 @@ async function main(){
  await writeJson(path.join(root,'platform.json'),{auth:{provider:'local-synthetic',mfa:'totp'},storage:{provider:'local-file',private:true},database:{engine:'postgres',major:17},application:{name:'Folio C01 synthetic'},custody:{runner:'github-hosted',realData:false}});
  const secret=b64(48),dbPassword=b64(32);
  const state={passphrase,privateKey:keys.privateKey,dbPassword,anonKey:jwt(secret,'anon'),serviceKey:jwt(secret,'service_role')};
- const env={...process.env,C01_CHECKED_OUT_SHA:checkedOutSha,C01_OFFICIAL_DOCKER:official,C01_DB_PASSWORD:dbPassword,C01_JWT_SECRET:secret,C01_ANON_KEY:state.anonKey,C01_SERVICE_KEY:state.serviceKey,C01_DASHBOARD_PASSWORD:b64(18),C01_APP_DATABASE:'postgres',FOLIO_ENC_KEY:randomBytes(32).toString('base64'),FOLIO_ENC_HMAC_KEY:randomBytes(32).toString('base64')};
+ const env={...process.env,C01_CHECKED_OUT_SHA:checkedOutSha,C01_OFFICIAL_DOCKER:official,C01_DB_PASSWORD:dbPassword,C01_JWT_SECRET:secret,C01_ANON_KEY:state.anonKey,C01_SERVICE_KEY:state.serviceKey,C01_DASHBOARD_PASSWORD:b64(18),C01_APP_DATABASE:'postgres',C01_CRON_DATABASE:'postgres',FOLIO_ENC_KEY:randomBytes(32).toString('base64'),FOLIO_ENC_HMAC_KEY:randomBytes(32).toString('base64')};
+ const destinationEnv={...env,C01_CRON_DATABASE:targetDatabase};
  // The encryption key is process-local too, for the direct Folio decrypt check.
  process.env.FOLIO_ENC_KEY=env.FOLIO_ENC_KEY;
  process.env.FOLIO_ENC_HMAC_KEY=env.FOLIO_ENC_HMAC_KEY;
- await ensureFresh(env);
+ await ensureFresh(env,destinationEnv);
  await dc(source,['pull','db','auth','rest','storage','api-gw'],env,{limit:4*1024*1024});
  const imageDigests=[];
  for(const name of images){const info=await docker(['image','inspect','--format','{{.Id}}',name],env);imageDigests.push(`${name} ${info.output.trim()}`);}
@@ -310,6 +323,7 @@ async function main(){
   await assertInternal(source,env);
   dbBridge=await startBridge(source,'db',dbPort,5432,env);
   apiBridge=await startBridge(source,'api-gw',55421,8000,env);
+  assert.equal((await withPg(state.dbPassword,'postgres',async db=>(await db.query("SELECT current_setting('cron.database_name') AS database_name")).rows[0]?.database_name)),'postgres');
   await waitApi(state.anonKey);
   stage='migrations';const migrationCount=await applyMigrations(dbPassword,env);
   stage='source_fixture';const fixture=await seed(state);
@@ -319,14 +333,14 @@ async function main(){
   await dbBridge.close();dbBridge=null;
   await dc(source,['down'],env); // No -v; keep evidence until runner disposal.
   stage='target_empty';
-  await dc(destination,['up','-d','--wait','db'],env);
-  dbBridge=await startBridge(destination,'db',dbPort,5432,env);
+  await dc(destination,['up','-d','--wait','db'],destinationEnv);
+  dbBridge=await startBridge(destination,'db',dbPort,5432,destinationEnv);
   stage='target_prerequisites';await inspectCronPrerequisites(state,backup);
   await prepareTargetRoles(state,backup);
   stage='target_empty';
-  const pid=await createTarget(state,env);
-  stage='database_restore';await restore(state,backup,root,env,pid);
-  stage='target_services';const targetEnv={...env,C01_APP_DATABASE:targetDatabase};
+  const pid=await createTarget(state,destinationEnv);
+  stage='database_restore';await restore(state,backup,root,destinationEnv,pid);
+  stage='target_services';const targetEnv={...destinationEnv,C01_APP_DATABASE:targetDatabase};
   await dc(destination,['up','-d','--wait'],targetEnv);
   await assertInternal(destination,targetEnv);
   apiBridge=await startBridge(destination,'api-gw',55421,8000,targetEnv);
@@ -344,11 +358,12 @@ async function main(){
   console.error(`c01_${stage}_failed: ${error.message}`);
   console.error(`c01_loopback_bridges: db=${dbBridge?'open':'closed'} api=${apiBridge?'open':'closed'}`);
   const project=stage.startsWith('source')||stage==='migrations'||stage==='capture'?source:destination;
+  const projectEnv=project===source?env:destinationEnv;
   for(const service of ['db','auth','rest','storage','api-gw']){
    try{
-    const id=(await dc(project,['ps','--all','--quiet',service],env,{allowFailure:true})).output.trim();
+    const id=(await dc(project,['ps','--all','--quiet',service],projectEnv,{allowFailure:true})).output.trim();
     if(!/^[a-f0-9]{64}$/.test(id))continue;
-    const status=await docker(['inspect','--format','{{.State.Status}} {{.State.ExitCode}} {{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}',id],env);
+    const status=await docker(['inspect','--format','{{.State.Status}} {{.State.ExitCode}} {{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}',id],projectEnv);
     if(/^(created|running|restarting|removing|paused|exited|dead) [0-9]+ (healthy|unhealthy|starting|none)$/.test(status.output.trim()))
      console.error(`c01_service_${service}: ${status.output.trim()}`);
    }catch{}

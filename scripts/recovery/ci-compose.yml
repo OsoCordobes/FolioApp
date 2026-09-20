@@ -13,7 +13,7 @@ services:
       POSTGRES_DB: postgres
       JWT_SECRET: ${C01_JWT_SECRET:?}
       JWT_EXP: "3600"
-    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf", "-c", "log_min_messages=fatal"]
+    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf", "-c", "cron.database_name=${C01_CRON_DATABASE:?}", "-c", "log_min_messages=fatal"]
     volumes:
       - ${C01_OFFICIAL_DOCKER:?}/volumes/db/realtime.sql:/docker-entrypoint-initdb.d/migrations/99-realtime.sql:ro
       - ${C01_OFFICIAL_DOCKER:?}/volumes/db/webhooks.sql:/docker-entrypoint-initdb.d/init-scripts/98-webhooks.sql:ro
