@@ -113,3 +113,51 @@ test("al elegir la versión guardada descarta explícitamente el borrador y fina
   await expect(page.getByRole("heading", { name: "Tu espacio quedó creado." })).toBeVisible();
   await expect.poll(() => page.evaluate(() => localStorage.getItem("folio:onboarding"))).toBeNull();
 });
+
+test("una lectura tardía de horarios no pisa los horarios locales que se eligió restaurar", async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.addInitScript(() => localStorage.setItem("folio:onboarding", JSON.stringify({
+    v: 2,
+    organizationId: "12600000-0000-4000-8000-000000000126",
+    identity: "titular@example.test",
+    data: { diasActivos: ["sab"], franjas: [["10:00", "11:00"]], slotMin: 45 },
+  })));
+  await page.goto("/dev/onboarding-flow?mode=solo&step=8&hoursDelay=1200");
+  await page.getByRole("button", { name: "Restaurar y revisar mis cambios" }).click();
+  await page.waitForTimeout(1600);
+  await page.getByRole("button", { name: "Continuar", exact: true }).click();
+  await page.getByRole("button", { name: "Continuar", exact: true }).click();
+  await page.getByRole("button", { name: "Continuar", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "¿Cuándo atendés?" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sáb" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "Lun" })).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByLabel("Inicio de franja 1")).toHaveValue("10:00");
+});
+
+test("restaurar otros campos mantiene los horarios guardados aunque la lectura llegó durante la elección", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("folio:onboarding", JSON.stringify({
+    v: 2,
+    organizationId: "12600000-0000-4000-8000-000000000126",
+    identity: "titular@example.test",
+    data: { nombre: "Cambio Local" },
+  })));
+  await page.goto("/dev/onboarding-flow?mode=solo&step=8&initialHours=sab");
+  await expect(page.getByText(/Hay cambios locales de esta organización sin confirmar/)).toBeVisible();
+  await page.waitForTimeout(400);
+  await page.getByRole("button", { name: "Restaurar y revisar mis cambios" }).click();
+  await page.getByRole("button", { name: "Continuar", exact: true }).click();
+  await page.getByRole("button", { name: "Continuar", exact: true }).click();
+  await page.getByRole("button", { name: "Continuar", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "¿Cuándo atendés?" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Lun" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "Sáb" })).toHaveAttribute("aria-pressed", "false");
+});
+
+test("el cierre de Clínica administrativa muestra la vista pública completa en móvil", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/dev/onboarding-flow?mode=clinic-admin&step=8");
+  await expect(page.getByRole("heading", { name: "Tu espacio quedó creado." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Conocé nuestros servicios" })).toBeVisible();
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
+  expect(overflow).toBe(false);
+});

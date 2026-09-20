@@ -142,6 +142,7 @@ interface OnboardingAppProps {
   googleConnected?: boolean;
   /** Only the isolated, development-only flow fixture may simulate persistence. */
   syntheticFixture?: boolean;
+  syntheticHoursDelayMs?: number;
 }
 
 interface SaveState {
@@ -161,6 +162,7 @@ export function OnboardingApp({
   clinicSeatPriceCents,
   googleConnected,
   syntheticFixture = false,
+  syntheticHoursDelayMs = 0,
 }: OnboardingAppProps) {
   const synthetic = syntheticFixture && process.env.NODE_ENV !== "production";
   const router = useRouter();
@@ -186,6 +188,8 @@ export function OnboardingApp({
   const [recoverableDraft, setRecoverableDraft] = useState<Partial<OnboardingDataState> | null>(null);
   const [recoveryChecked, setRecoveryChecked] = useState(false);
   const recoveryPendingRef = useRef(false);
+  const restoredHoursRef = useRef(false);
+  const finalizedRef = useRef(false);
 
   // ─── Auto-save refs declarados antes del useEffect de hidratación porque
   //     la hidratación los inicializa para evitar un auto-save espurio
@@ -279,7 +283,7 @@ export function OnboardingApp({
   // identidad del dueño (email) para que otro usuario en la misma máquina no
   // lo herede.
   useEffect(() => {
-    if (recoveryPendingRef.current || recoverableDraft) return;
+    if (finalizedRef.current || recoveryPendingRef.current || recoverableDraft) return;
     try {
       localStorage.setItem(
         STORAGE_KEY,
@@ -298,26 +302,28 @@ export function OnboardingApp({
   useEffect(() => {
     if (!orgId) return;
     let cancelled = false;
+    let syntheticTimer: ReturnType<typeof setTimeout> | null = null;
     hoursRef.current = null; hoursSavedRef.current = false;
-    if (synthetic) {
-      hoursRef.current = new AvailabilityDraft({
-        context: { organizationId: orgId, memberId: "folio-test-owner", revision: 0, protectedDates: false },
-        dias: setupHoursWeek(ONBOARDING_INITIAL.diasActivos, ONBOARDING_INITIAL.franjas),
-      });
-      redrawHours((n) => n + 1);
-      return () => { cancelled = true; };
-    }
-    void readOnboardingHorarios(orgId).then((result) => {
+    const read = synthetic
+      ? new Promise<Awaited<ReturnType<typeof readOnboardingHorarios>>>((resolve) => {
+        syntheticTimer = setTimeout(() => resolve({ ok: true, data: {
+          context: { organizationId: orgId, memberId: "folio-test-owner", revision: 0, protectedDates: false },
+          dias: setupHoursWeek(ONBOARDING_INITIAL.diasActivos, ONBOARDING_INITIAL.franjas),
+        } }), syntheticHoursDelayMs);
+      })
+      : readOnboardingHorarios(orgId);
+    void read.then((result) => {
       if (cancelled) return;
       if (!result.ok) { setHoursError(result.error.message); return; }
       const uniform = uniformSetupHours(result.data);
       if (!uniform) { setHoursError("Hay horarios con fechas o franjas diferentes por día. Necesitan una revisión antes de continuar."); return; }
       hoursRef.current = new AvailabilityDraft(result.data);
-      if (uniform.diasActivos.length) setData((prev) => ({ ...prev, ...uniform }));
+      if (uniform.diasActivos.length && !recoveryPendingRef.current && !restoredHoursRef.current)
+        setData((prev) => ({ ...prev, ...uniform }));
       setHoursError(null); redrawHours((n) => n + 1);
     }).catch(() => { if (!cancelled) setHoursError("No pudimos leer los horarios. Volvé a cargar para intentarlo."); });
-    return () => { cancelled = true; };
-  }, [orgId, synthetic]);
+    return () => { cancelled = true; if (syntheticTimer) clearTimeout(syntheticTimer); };
+  }, [orgId, synthetic, syntheticHoursDelayMs]);
 
   const persistInitialHours = useCallback((snapshot: OnboardingDataState): Promise<boolean> => {
     if (synthetic) {
@@ -458,7 +464,7 @@ export function OnboardingApp({
 
   // Trigger auto-save cuando cambian datos relevantes
   useEffect(() => {
-    if (recoveryPendingRef.current || recoverableDraft) return;
+    if (finalizedRef.current || recoveryPendingRef.current || recoverableDraft) return;
     if (!orgId) return;
     // Steps sin auto-save: 1 (signup), 7 (Google — persiste step_max al montar
     // y su OAuth escribe en `integration`), 8 (moment — finaliza, no edita).
@@ -603,6 +609,7 @@ export function OnboardingApp({
     }
     if (result.slug && result.slug !== orgSlug) setOrgSlug(result.slug);
     setPublicReady(Boolean(result.publicReady));
+    finalizedRef.current = true;
     setFinalizeDone(true);
     try {
       localStorage.removeItem(STORAGE_KEY);
@@ -720,13 +727,27 @@ export function OnboardingApp({
           <button type="button" onClick={() => {
             const { tipo: _tipo, ownerTratante: _owner, email: _email, password: _password, ...editable } = recoverableDraft;
             void _tipo; void _owner; void _email; void _password;
-            setData((current) => ({ ...current, ...editable }));
+            const hasLocalHours = "diasActivos" in editable || "franjas" in editable || "slotMin" in editable;
+            restoredHoursRef.current = hasLocalHours;
+            const hours = hoursRef.current;
+            const savedHours = !hasLocalHours && hours
+              ? uniformSetupHours({ context: hours.context, dias: hours.dias }) : null;
+            setData((current) => ({ ...current, ...editable,
+              ...(savedHours?.diasActivos.length ? savedHours : {}) }));
             setDirection("back");
             setStepIdx(2);
             recoveryPendingRef.current = false;
             setRecoverableDraft(null);
           }}>Restaurar y revisar mis cambios</button>
-          <button type="button" onClick={() => { recoveryPendingRef.current = false; setRecoverableDraft(null); }}>Usar la versión guardada</button>
+          <button type="button" onClick={() => {
+            recoveryPendingRef.current = false;
+            const hours = hoursRef.current;
+            if (hours) {
+              const uniform = uniformSetupHours({ context: hours.context, dias: hours.dias });
+              if (uniform?.diasActivos.length) setData((current) => ({ ...current, ...uniform }));
+            }
+            setRecoverableDraft(null);
+          }}>Usar la versión guardada</button>
         </div> : null}
         {error && stepIdx !== ONB_TOTAL ? (
           <p className="au-err onb-banner-err" role="alert">{error}</p>

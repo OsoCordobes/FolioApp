@@ -461,7 +461,7 @@ export function Step4Personalizacion({ data, set, next, back, skip, orgSlug }: S
   return (
     <StepShell stepIdx={4} compactFlow={data.ownerTratante === false} back={back} next={next} skip={skip}
       headline="Tu identidad visual"
-      sub={`Elegí cómo se presenta ${data.tipo === "CLINICA" ? "tu clínica" : "tu consultorio"}: logo, color y estilo. Podés cambiarlo después.`}
+      sub={`Elegí cómo se presenta ${data.tipo === "CLINICA" ? "tu clínica" : "tu consultorio"}: logo y color. Podés cambiarlos después.`}
       previewData={previewDataFor(data)}
       slug={orgSlug}
     >
