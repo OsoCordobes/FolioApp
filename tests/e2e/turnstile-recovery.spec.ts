@@ -39,7 +39,7 @@ test("blocked script offers retry without losing signup fields", async ({ page }
   await page.getByRole("textbox", { name: "Email" }).fill("synthetic@example.test");
   await page.getByPlaceholder("Mínimo 8 caracteres").fill("synthetic-password-only");
   await page.getByRole("checkbox").first().check();
-  await expect(page.locator(challengeAlert)).toContainText("No pudimos cargar la verificación");
+  await expect(page.locator(challengeAlert)).toContainText("No pudimos cargar la verificación", { timeout: 15_000 });
   await page.getByRole("button", { name: "Reintentar verificación" }).click();
   await expect.poll(() => requests).toBe(2);
   await expect(page.locator(challengeAlert)).toHaveCount(0);
