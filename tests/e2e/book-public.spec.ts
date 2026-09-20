@@ -79,8 +79,7 @@ test.describe("/dev/book-preview · BookLanding + booking flow", () => {
   test("an incomplete Solo profile falls back without an empty section", async ({ page }) => {
     await page.goto("/dev/book-preview?variant=solo-empty");
     await expect(page.locator(".bl-hero h1")).toHaveText("Lic. Lorenzo Martínez");
-    await expect(page.locator(".bl-portrait-initials")).toBeVisible();
-    await expect(page.locator(".bl-portrait-image")).toHaveCount(0);
+    await expect(page.locator(".bl-hero-figure, .bl-portrait-initials")).toHaveCount(0);
     await expect(page.locator(".bl-about")).toHaveCount(0);
   });
 
@@ -88,7 +87,23 @@ test.describe("/dev/book-preview · BookLanding + booking flow", () => {
     await page.goto("/dev/book-preview?variant=solo-unnamed");
     await expect(page.locator(".bl-hero h1")).toHaveText("Consultorio Martínez");
     await expect(page.locator(".bl-portrait-image, .bl-hero-matricula, .bl-hero-practice")).toHaveCount(0);
-    await expect(page.locator(".bl-hero-figure")).toBeVisible();
+    await expect(page.locator(".bl-hero-figure")).toHaveCount(0);
+  });
+
+  test("different professional and practice bios remain visible in separate sections", async ({ page }) => {
+    await page.goto("/dev/book-preview?variant=solo-two-bios");
+    await expect(page.locator("#sobre")).toContainText("Kinesiólogo deportivo");
+    await expect(page.locator("#consultorio")).toContainText("Consultorio de rehabilitación en Córdoba.");
+  });
+
+  test("the public mini site keeps real sections and Folio branding without a decorative hero", async ({ page }) => {
+    await page.goto("/dev/book-preview?variant=clinic-one");
+    await expect(page.getByRole("navigation", { name: "Secciones de la página" })).toBeVisible();
+    await expect(page.locator("#equipo .bl-team-card")).toHaveCount(1);
+    await expect(page.locator("#servicios")).toBeVisible();
+    await expect(page.locator("#reservar #bk-flow")).toBeVisible();
+    await expect(page.locator(".bl-clinic-art")).toHaveCount(0);
+    await expect(page.locator(".bl-powered")).toContainText(/hecho con\s*folio/i);
   });
 
   test("a clinic with one professional keeps the clinic identity and team", async ({ page }) => {

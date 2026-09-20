@@ -158,8 +158,8 @@ export function StepShell({
   const progressStep = compactFlow ? ({ 1: 1, 2: 2, 3: 3, 4: 4, 6: 5, 8: 6 } as Record<number, number>)[stepIdx] ?? stepIdx : stepIdx;
   const progressTotal = compactFlow ? 6 : ONB_TOTAL;
   const progressLabel = compactFlow
-    ? ({ 1: "Tu cuenta", 2: "Titular", 3: "Tu clínica", 4: "Identidad visual", 6: "Servicios", 8: "Todo listo" } as Record<number, string>)[stepIdx]
-    : ["", "Tu cuenta", "Tu perfil", "Tu consultorio", "Identidad visual", "Horarios", "Servicios", "Calendario", "Todo listo"][stepIdx];
+    ? ({ 1: "Tu cuenta", 2: "Titular", 3: "Tu clínica", 4: "Tu página", 6: "Servicios", 8: "Todo listo" } as Record<number, string>)[stepIdx]
+    : ["", "Tu cuenta", "Tu perfil", "Tu consultorio", "Tu página", "Horarios", "Servicios", "Calendario", "Todo listo"][stepIdx];
   const previewProps: PublicLandingViewData | undefined = previewData
     ? { ...previewData, org: { ...previewData.org, slug: slug ?? previewData.org.slug } }
     : undefined;
@@ -246,7 +246,7 @@ export function StepShell({
               </div>
               <div className="onb-landing-preview"><BookLandingPreview data={previewProps} /></div>
               <p className="onb-preview-fine">
-                La vista previa se actualiza mientras elegís. Los pacientes no pueden reservar desde acá.
+                Esta página muestra los datos que completaste. Los pacientes no pueden reservar desde esta vista previa.
               </p>
             </div>
           </aside>

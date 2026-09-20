@@ -21,7 +21,6 @@ import { updateOnboardingStep } from "@/app/(public)/onboarding/actions";
 import { StepShell } from "@/components/onboarding/step-shell";
 import { SlugEditor } from "@/components/onboarding/slug-editor";
 import { LogoUpload } from "@/components/public-card/logo-upload";
-import { AccentPalette } from "@/components/book-landing/accent-palette";
 import { type CardMood } from "@/components/public-card/public-card";
 import { ESPECIALIDADES_META, ESPECIALIDAD_SLUGS } from "@/lib/especialidades/meta";
 import { validateFranjas } from "@/lib/onboarding/franjas";
@@ -456,26 +455,22 @@ export function Step4Personalizacion({ data, set, next, back, skip, orgSlug, sav
   const accentPending = data.acento !== (savedAccent ?? ONBOARDING_INITIAL.acento);
   return (
     <StepShell stepIdx={4} compactFlow={data.ownerTratante === false} back={back} next={next} skip={skip}
-      nextLabel="Guardar y continuar"
-      headline="Dale tu identidad a la página"
-      sub={`Tu ${data.tipo === "CLINICA" ? "clínica" : "consultorio"} ya tiene una página lista para completar. Elegí un color ahora o personalizala después.`}
+      nextLabel="Continuar"
+      headline="Tu página en Folio"
+      sub={`Tu ${data.tipo === "CLINICA" ? "clínica" : "consultorio"} ya tiene una página propia. Revisá su presentación completa y seguí configurando los turnos.`}
       previewData={previewDataFor(data)}
       slug={orgSlug}
     >
       <div className="onb-form onb-identity-editor">
         <div className="onb-identity-intro">
-          <p>Probá un color y mirá el resultado al instante. Se guarda al continuar. Más adelante podés cambiarlo en Configuración → Consultorio.</p>
-          {skip ? <button type="button" className="onb-identity-later" onClick={skip}>{accentPending ? "Descartar este color y personalizar después" : "Personalizar después"} <span aria-hidden="true">→</span></button> : null}
+          <p>La página reúne tus datos, presentación, servicios, reserva y contacto. Podés volver al paso anterior para editar la descripción y la ubicación.</p>
+          {back ? <button type="button" className="onb-identity-later" onClick={back}>Editar presentación y contacto <span aria-hidden="true">↗</span></button> : null}
+          {skip ? <button type="button" className="onb-identity-later" onClick={skip}>{accentPending ? "Descartar el color pendiente y completar después" : "Completar después"} <span aria-hidden="true">→</span></button> : null}
         </div>
         <section className="onb-identity-section">
-          <h2 className="onb-identity-h">Color de la página</h2>
-          <p className="onb-identity-hint">Aparece en los botones y detalles.</p>
-          <AccentPalette value={data.acento} onChange={(acento) => set({ acento })} />
-        </section>
-        <section className="onb-identity-section">
-          <h2 className="onb-identity-h">Logo del consultorio <span className="onb-identity-optional">· opcional</span></h2>
+          <h2 className="onb-identity-h">Logo <span className="onb-identity-optional">· opcional</span></h2>
           <p className="onb-identity-hint">
-            Se muestra junto al nombre en la cabecera de tu página. Se guarda al cargarlo.
+            Si ya tenés uno, se muestra junto al nombre. Se guarda al cargarlo. La foto y biografía de cada profesional se completan en Configuración → Perfil público.
           </p>
           <LogoUpload
             currentLogoUrl={data.logoUrl}

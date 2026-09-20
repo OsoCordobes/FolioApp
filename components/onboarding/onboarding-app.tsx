@@ -373,7 +373,7 @@ export function OnboardingApp({
       if (!orgId) return false;
       if (synthetic) {
         if (step === 4 && syntheticStep4Failure) {
-          setSaveState({ status: "error", message: "Ejemplo: no pudimos guardar el color. Reintentá." });
+          setSaveState({ status: "error", message: "Ejemplo: no pudimos guardar el avance. Reintentá." });
           return false;
         }
         try { sessionStorage.setItem("folio:onboarding:synthetic-save", JSON.stringify({ step, data: snapshot })); } catch { /* isolated fixture */ }

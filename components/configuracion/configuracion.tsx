@@ -22,7 +22,6 @@ import { PermissionMatrix } from "@/components/configuracion/permission-matrix";
 import { PhotoUpload } from "@/components/configuracion/photo-upload";
 import { UpgradeClinicaModal } from "@/components/configuracion/upgrade-clinica-modal";
 import { LogoUpload } from "@/components/public-card/logo-upload";
-import { AccentPalette } from "@/components/book-landing/accent-palette";
 import { BookLandingPreview } from "@/components/book-landing/book-landing-preview";
 import type { PublicLandingViewData } from "@/components/book-landing/book-landing-view";
 import { uploadSettingsOrgLogo, removeSettingsOrgLogo } from "@/app/(public)/onboarding/actions";
@@ -164,9 +163,9 @@ function SideNav({ active, setActive, showEquipo, showPerfilPublico }: { active:
 
 // ─── Section / Row / TextInput / Toggle helpers ────────────────────────────
 
-function Section({ title, sub, children, action }: { title: string; sub?: string; children: ReactNode; action?: ReactNode }) {
+function Section({ title, sub, children, action, id }: { title: string; sub?: string; children: ReactNode; action?: ReactNode; id?: string }) {
   return (
-    <section className="cfg-section">
+    <section id={id} className="cfg-section">
       <header>
         <div>
           <h2>{title}</h2>
@@ -369,13 +368,6 @@ function SecCuenta({
         <Row label="Email" sub="Es tu email de inicio de sesión — se gestiona desde tu cuenta, no se edita acá.">
           <TextInput type="email" value={c.email} onChange={() => {}} readOnly />
         </Row>
-        <Row label="Teléfono">
-          <TextInput
-            prefix="+54"
-            value={c.tel.replace("+54 ", "")}
-            onChange={(v) => set({ tel: "+54 " + v })}
-          />
-        </Row>
       </Section>
 
       <Section title="Seguridad">
@@ -503,6 +495,9 @@ function SecConsultorio({
   logoUrl,
   onLogoChange,
   publicPreview,
+  openSection,
+  hasPerfilPublico,
+  canManageTeam,
 }: {
   c: ConsultorioData;
   set: (patch: Partial<ConsultorioData>) => void;
@@ -528,6 +523,9 @@ function SecConsultorio({
   logoUrl: string | null;
   onLogoChange: (url: string | null) => void;
   publicPreview: PublicLandingViewData | null;
+  openSection: (section: SeccionId) => void;
+  hasPerfilPublico: boolean;
+  canManageTeam: boolean;
 }) {
   const router = useRouter();
   const [upgradeOpen, setUpgradeOpen] = useState(false);
@@ -554,15 +552,21 @@ function SecConsultorio({
 
   return (
     <>
-      <Section title="Tu página de reservas" sub="Elegí el color y revisá cómo se ve antes de guardar los cambios.">
+      <Section title="Tu página de reservas" sub="Una miniweb Folio con tu presentación, servicios, turnos y contacto.">
         <div className="perfil-editor">
           <div className="perfil-editor-controls">
-            <span className="perfil-editor-label">Color de la página</span>
-            <AccentPalette value={c.acento} onChange={(acento) => set({ acento })} disabled={!canEdit} />
-            <p>El color se guarda con «Guardar cambios».</p>
+            <p>Completá los datos en las secciones indicadas y revisá la página entera abajo. Los cambios de texto se guardan con «Guardar cambios».</p>
+            <nav className="perfil-editor-links" aria-label="Editar contenido de la página">
+              <a href="#cfg-identidad">Nombre</a>
+              <a href="#cfg-especialidad">Especialidad</a>
+              {hasPerfilPublico ? <button type="button" onClick={() => openSection("perfil-publico")}>Foto, bio y matrícula del profesional</button> : null}
+              <button type="button" onClick={() => openSection("servicios")}>Servicios y reserva</button>
+              {canManageTeam && orgTipo === "CLINICA" ? <button type="button" onClick={() => openSection("equipo")}>Equipo</button> : null}
+              <a href="#cfg-ubicacion">Ubicación y contacto</a>
+            </nav>
             {canEdit ? <details className="perfil-editor-logo">
-              <summary>{logoUrl ? "Cambiar logo del consultorio" : "Agregar logo del consultorio · opcional"}</summary>
-              <p>El logo aparece en la cabecera de la página y se guarda al subirlo.</p>
+              <summary>{logoUrl ? "Cambiar logo del consultorio" : "Agregar logo · opcional"}</summary>
+              <p>Aparece junto al nombre en la cabecera y se guarda al subirlo.</p>
               <LogoUpload
                 uploadAction={uploadSettingsOrgLogo}
                 removeAction={removeSettingsOrgLogo}
@@ -572,6 +576,8 @@ function SecConsultorio({
               />
             </details> : null}
           </div>
+          <details className="perfil-editor-preview-disclosure">
+            <summary>Ver página completa</summary>
           {publicPreview ? <div className="perfil-editor-preview" aria-label="Vista previa de la página de reservas">
             <BookLandingPreview data={{
               ...publicPreview,
@@ -589,16 +595,18 @@ function SecConsultorio({
               },
             }} />
           </div> : <p role="status" className="perfil-editor-unavailable">No pudimos cargar la vista previa. Tus cambios siguen en pantalla; podés abrir el enlace público para revisarlos después de guardar.</p>}
+          </details>
           <a className="cfg-link perfil-editor-published" href={`/book/${encodeURIComponent(orgSlug)}`} target="_blank" rel="noopener noreferrer">Abrir enlace público ↗</a>
         </div>
       </Section>
-      <Section title="Identidad del consultorio" sub="Aparece en el menú, los recordatorios y tu página pública.">
+      <Section id="cfg-identidad" title="Identidad del consultorio" sub="Aparece en el menú, los recordatorios y tu página pública.">
         <Row label="Nombre del consultorio">
           <TextInput value={c.nombre} onChange={(v) => set({ nombre: v })} />
         </Row>
       </Section>
 
       <Section
+        id="cfg-especialidad"
         title="Especialidad y equipo"
         sub="La especialidad define la herramienta clínica de la ficha del paciente."
       >
@@ -683,7 +691,10 @@ function SecConsultorio({
         />
       ) : null}
 
-      <Section title="Ubicación" sub="Aparece en los recordatorios de turno enviados al paciente.">
+      <Section id="cfg-ubicacion" title="Ubicación" sub="Aparece en los recordatorios de turno enviados al paciente.">
+        <Row label="Teléfono público" sub="Se muestra como contacto en tu página de reservas.">
+          <TextInput prefix="+54" value={c.tel.replace("+54 ", "")} onChange={(v) => set({ tel: "+54 " + v })} />
+        </Row>
         <Row label="Dirección">
           <TextInput value={c.direccion} onChange={(v) => set({ direccion: v })} />
         </Row>
@@ -2221,6 +2232,9 @@ export function Configuracion({
               logoUrl={currentLogoUrl}
               onLogoChange={setCurrentLogoUrl}
               publicPreview={initialPublicPreview}
+              openSection={setSeccion}
+              hasPerfilPublico={esColegiado && initialPerfilPublico != null}
+              canManageTeam={canManageTeam}
             />
           ) : null}
           {seccion === "equipo" && (canManageTeam || equipoSelf != null) ? (

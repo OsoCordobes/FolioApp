@@ -22,43 +22,40 @@ async function fillOrganization(page: Page, clinic: boolean) {
   await page.getByRole("radio", { name: "Cardiología" }).click();
   await page.getByLabel("Ciudad", { exact: true }).fill("Córdoba");
   await page.getByRole("button", { name: "Continuar", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Dale tu identidad a la página" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Tu página en Folio" })).toBeVisible();
 }
 
-test("Solo distingue color pendiente, pospone sin guardarlo y permite volver a elegirlo", async ({ page }) => {
+test("Solo puede revisar la miniweb completa y continuar después de posponer", async ({ page }) => {
   await page.goto("/dev/onboarding-flow?mode=solo&step=4");
-  await page.getByRole("button", { name: /^Verde/ }).click();
-  await expect(page.getByText("Color sin guardar")).toBeVisible();
-  await page.getByRole("button", { name: /Descartar este color y personalizar después/ }).click();
+  await expect(page.getByRole("heading", { name: "Tu página en Folio" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Secciones de la página" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Verde/ })).toHaveCount(0);
+  await page.getByRole("button", { name: "Completar después" }).click();
   await expect(page.getByRole("heading", { name: "¿Cuándo atendés?" })).toBeVisible();
   expect(await page.evaluate(() => sessionStorage.getItem("folio:onboarding:synthetic-deferred"))).toBe("true");
   await expect(page.getByRole("button", { name: "Atrás" })).toBeEnabled();
   await page.getByRole("button", { name: "Atrás" }).click();
-  await expect(page.getByRole("heading", { name: "Dale tu identidad a la página" })).toBeVisible();
-  await expect(page.getByRole("button", { name: /^Dorado/ })).toHaveAttribute("aria-pressed", "true");
-  await page.getByRole("button", { name: /^Azul/ }).click();
-  await page.getByRole("button", { name: "Guardar y continuar" }).click();
+  await expect(page.getByRole("heading", { name: "Tu página en Folio" })).toBeVisible();
+  await page.getByRole("button", { name: "Continuar", exact: true }).click();
   await expect.poll(() => page.evaluate(() => sessionStorage.getItem("folio:onboarding:synthetic-save"))).toContain('"step":4');
   const saved = await page.evaluate(() => sessionStorage.getItem("folio:onboarding:synthetic-save"));
   expect(saved).toContain('"step":4');
-  expect(saved).toContain('"acento":"#3F5E75"');
   await expect(page.getByRole("heading", { name: "¿Cuándo atendés?" })).toBeVisible();
 });
 
 test("Clínica administrativa pospone identidad sin abrir horarios", async ({ page }) => {
   await page.goto("/dev/onboarding-flow?mode=clinic-admin&step=4");
-  await page.getByRole("button", { name: "Personalizar después" }).click();
+  await page.getByRole("button", { name: "Completar después" }).click();
   await expect(page.getByRole("heading", { name: "¿Qué servicios ofrecés?" })).toBeVisible();
   await expect(page.getByRole("progressbar", { name: "Paso 5 de 6" })).toBeVisible();
   expect(await page.evaluate(() => sessionStorage.getItem("folio:onboarding:synthetic-deferred"))).toBe("true");
 });
 
-test("si falla guardar el color, el alta permanece en identidad y muestra reintento", async ({ page }) => {
+test("si falla guardar el avance, el alta permanece en la página y muestra reintento", async ({ page }) => {
   await page.goto("/dev/onboarding-flow?mode=solo&step=4&step4Fail=1");
-  await page.getByRole("button", { name: /^Verde/ }).click();
-  await page.getByRole("button", { name: "Guardar y continuar" }).click();
-  await expect(page.getByRole("heading", { name: "Dale tu identidad a la página" })).toBeVisible();
-  await expect(page.getByText("Ejemplo: no pudimos guardar el color. Reintentá.")).toBeVisible();
+  await page.getByRole("button", { name: "Continuar", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Tu página en Folio" })).toBeVisible();
+  await expect(page.getByText("Ejemplo: no pudimos guardar el avance. Reintentá.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Reintentar guardar" })).toBeVisible();
 });
 
@@ -73,10 +70,10 @@ test("un color restaurado sigue pendiente hasta guardarlo o descartarlo expresam
   await page.getByRole("button", { name: "Restaurar y revisar mis cambios" }).click();
   await page.getByRole("button", { name: "Continuar", exact: true }).click();
   await page.getByRole("button", { name: "Continuar", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Dale tu identidad a la página" })).toBeVisible();
-  await expect(page.getByRole("button", { name: /^Verde/ })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("heading", { name: "Tu página en Folio" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Verde/ })).toHaveCount(0);
   await expect(page.getByText("Color sin guardar")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Descartar este color y personalizar después" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Descartar el color pendiente y completar después" })).toBeVisible();
 });
 
 test("Solo recorre perfil, horarios y Google; el cierre muestra página sólo tras datos sintéticos completos", async ({ page }) => {
@@ -84,7 +81,7 @@ test("Solo recorre perfil, horarios y Google; el cierre muestra página sólo tr
   await page.goto("/dev/onboarding-flow?mode=solo");
   await fillIdentity(page, true);
   await fillOrganization(page, false);
-  await page.getByRole("button", { name: "Guardar y continuar" }).click();
+  await page.getByRole("button", { name: "Continuar", exact: true }).click();
   await expect(page.getByRole("heading", { name: "¿Cuándo atendés?" })).toBeVisible();
   await page.getByRole("button", { name: "Continuar", exact: true }).click();
   await expect(page.getByRole("heading", { name: "¿Qué servicios ofrecés?" })).toBeVisible();
@@ -100,7 +97,7 @@ test("Clínica con titular tratante conserva perfil, horarios y opción de Googl
   await page.goto("/dev/onboarding-flow?mode=clinic-treating");
   await fillIdentity(page, true);
   await fillOrganization(page, true);
-  await page.getByRole("button", { name: "Guardar y continuar" }).click();
+  await page.getByRole("button", { name: "Continuar", exact: true }).click();
   await expect(page.getByRole("heading", { name: "¿Cuándo atendés?" })).toBeVisible();
   await page.getByRole("button", { name: "Continuar", exact: true }).click();
   await page.getByRole("button", { name: "Continuar", exact: true }).click();
@@ -115,11 +112,11 @@ test("Clínica administrativa omite matrícula, horarios y Google; Atrás y rean
   await page.goto("/dev/onboarding-flow?mode=clinic-admin");
   await fillIdentity(page, false);
   await fillOrganization(page, true);
-  await page.getByRole("button", { name: "Guardar y continuar" }).click();
+  await page.getByRole("button", { name: "Continuar", exact: true }).click();
   await expect(page.getByRole("heading", { name: "¿Qué servicios ofrecés?" })).toBeVisible();
   await expect(page.getByRole("progressbar", { name: "Paso 5 de 6" })).toBeVisible();
   await page.getByRole("button", { name: "Atrás" }).click();
-  await expect(page.getByRole("heading", { name: "Dale tu identidad a la página" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Tu página en Folio" })).toBeVisible();
   await page.goto("/dev/onboarding-flow?mode=clinic-admin&step=6");
   await expect(page.getByText(/Hay cambios locales de esta organización sin confirmar/)).toBeVisible();
   await page.getByRole("button", { name: "Usar la versión guardada" }).click();
@@ -149,7 +146,7 @@ test("al reanudar en el cierre conserva el borrador hasta elegir y obliga a revi
   await page.getByRole("button", { name: "Continuar", exact: true }).click();
   await expect(page.getByLabel("Nombre de la clínica")).toHaveValue("Clínica Local");
   await page.getByRole("button", { name: "Continuar", exact: true }).click();
-  await page.getByRole("button", { name: "Guardar y continuar" }).click();
+  await page.getByRole("button", { name: "Continuar", exact: true }).click();
   await page.getByRole("button", { name: "Continuar", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Tu espacio quedó creado." })).toBeVisible();
   await expect(page.getByRole("button", { name: "Ver mi página" })).toHaveCount(0);
@@ -181,7 +178,7 @@ test("una lectura tardía de horarios no pisa los horarios locales que se eligi�
   await page.waitForTimeout(1600);
   await page.getByRole("button", { name: "Continuar", exact: true }).click();
   await page.getByRole("button", { name: "Continuar", exact: true }).click();
-  await page.getByRole("button", { name: "Guardar y continuar" }).click();
+  await page.getByRole("button", { name: "Continuar", exact: true }).click();
   await expect(page.getByRole("heading", { name: "¿Cuándo atendés?" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Sáb" })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("button", { name: "Lun" })).toHaveAttribute("aria-pressed", "false");
@@ -201,7 +198,7 @@ test("restaurar otros campos mantiene los horarios guardados aunque la lectura l
   await page.getByRole("button", { name: "Restaurar y revisar mis cambios" }).click();
   await page.getByRole("button", { name: "Continuar", exact: true }).click();
   await page.getByRole("button", { name: "Continuar", exact: true }).click();
-  await page.getByRole("button", { name: "Guardar y continuar" }).click();
+  await page.getByRole("button", { name: "Continuar", exact: true }).click();
   await expect(page.getByRole("heading", { name: "¿Cuándo atendés?" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Lun" })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("button", { name: "Sáb" })).toHaveAttribute("aria-pressed", "false");

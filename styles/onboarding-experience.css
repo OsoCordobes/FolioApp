@@ -46,7 +46,10 @@
 .fx-onboarding .onb-preview-expand:hover, .fx-onboarding .onb-identity-later:hover { color: var(--ink); }
 .fx-onboarding .onb-mobile-preview-trigger { display: none; }
 @media (min-width: 1024px) {
-  .fx-onboarding .fx-onb-shell.onb-step4.onb-shell-split { max-width: 1160px; grid-template-columns: minmax(0, 420px) minmax(0, 1fr); gap: 28px; }
+  .fx-onboarding .fx-onb-shell.onb-step4.onb-shell-split { display: flex; flex-direction: column; max-width: 1160px; gap: 28px; }
+  .fx-onboarding .onb-step4.onb-shell-split .onb-shell-form { max-width: none; }
+  .fx-onboarding .onb-step4 .onb-shell-preview { position: static; width: 100%; }
+  .fx-onboarding .onb-step4 .onb-landing-preview { max-height: none; overflow: visible; }
   .fx-onboarding .onb-step4 .onb-preview-drawer-inner { width: min(900px, calc(100vw - 64px)); max-width: 900px; max-height: calc(100vh - 64px); margin: auto; border-radius: 14px; }
 }
 @media (max-width: 1023px) { .fx-onboarding .onb-preview-expand { display: none; } }

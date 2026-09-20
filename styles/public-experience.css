@@ -1,4 +1,4 @@
-/* Public surfaces. Individual practices keep their chosen accent. */
+/* Public surfaces share Folio's visual identity. */
 .bl-root :is(.bl-header-cta, .bl-btn-lg, .bl-service-cta, .bk-back) { min-height: 44px; }
 .bl-root :is(a, button, input):focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 .bl-preview-label { display: inline-flex; align-items: center; min-height: 32px; padding: 5px 11px; border: 1px solid var(--line); border-radius: var(--r-md); color: var(--ink-2); font-size: 12px; font-weight: 600; }
@@ -110,6 +110,34 @@
 .bl-root[data-mode="preview"] .bl-service-card { grid-template-columns: minmax(0, 1fr); }
 .bl-root[data-mode="preview"] .bl-service-foot { align-items: flex-start; }
 
+/* A complete, calm mini site: editorial sections instead of a portrait card. */
+.bl-header { gap: 24px; }
+.bl-header-nav { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px 20px; margin-left: auto; }
+.bl-header-nav a { color: var(--ink-2); font-size: 12px; font-weight: 650; text-decoration: none; white-space: nowrap; }
+.bl-header-nav a:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 4px; }
+.bl-hero, .bl-root[data-mode="preview"] .bl-hero {
+  display: block; min-height: 0; margin-top: 0; padding: clamp(44px, 7vw, 86px) 0;
+  border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent;
+}
+.bl-hero.bl-hero-has-photo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 330px); align-items: center; }
+.bl-hero:not(.bl-hero-has-photo) { display: block; }
+.bl-hero::before { display: none; }
+.bl-hero-text { max-width: 750px; }
+.bl-hero-title, .bl-root[data-mode="preview"] .bl-hero-title { max-width: 18ch; font-size: clamp(2.35rem, 4vw, 4rem); letter-spacing: -.05em; }
+.bl-hero-value { max-width: 56ch; }
+.bl-portrait, .bl-root[data-mode="preview"] .bl-portrait { height: auto; max-width: 330px; aspect-ratio: 4 / 4.6; border-radius: 8px; background: var(--surface-2); }
+.bl-portrait::after { display: none; }
+.bl-details { gap: 0 36px; }
+.bl-story { padding-top: 38px; padding-bottom: 12px; }
+.bl-story + .bl-reservation { padding-top: 28px; }
+.bl-details > section { padding: 32px 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; }
+.bl-team-card { border: 0; border-top: 1px solid var(--line-soft); border-radius: 0; padding: 18px 0; }
+.bl-service-card { border: 0; border-top: 1px solid var(--line); border-radius: 0; padding: 17px 0; background: transparent; }
+.bl-root[data-mode="preview"] .bl-main { padding-inline: clamp(16px, 3vw, 36px); }
+.bl-root[data-mode="preview"] .bl-hero { gap: 24px; }
+.bl-root[data-mode="preview"] .bl-hero-has-photo { display: grid; }
+.bl-root[data-mode="preview"] .bl-reservation { padding-block: 40px; }
+
 @media (max-width: 900px) {
   .bl-hero { grid-template-columns: minmax(0, 1fr) minmax(220px, .75fr); }
   .bl-reservation-grid { grid-template-columns: minmax(0, 1fr); }
@@ -136,6 +164,13 @@
   .bl-book { padding: 22px 18px; }
   .bl-details .bl-team { grid-column: auto; }
   .bl-powered { flex-wrap: wrap; }
+  .bl-header { flex-wrap: wrap; gap: 8px; }
+  .bl-header-nav { order: 3; width: 100%; justify-content: flex-start; margin: 0; padding-bottom: 8px; overflow-x: auto; flex-wrap: nowrap; }
+  .bl-hero, .bl-root[data-mode="preview"] .bl-hero { padding: 38px 0 42px; }
+  .bl-hero.bl-hero-has-photo, .bl-root[data-mode="preview"] .bl-hero-has-photo { display: flex; flex-direction: column; align-items: flex-start; }
+  .bl-hero-title, .bl-root[data-mode="preview"] .bl-hero-title { font-size: clamp(2.2rem, 9vw, 3.35rem); }
+  .bl-hero-figure { align-self: flex-start; }
+  .bl-portrait, .bl-root[data-mode="preview"] .bl-portrait { width: min(100%, 300px); height: auto; }
 }
 .dir-root :is(a, button):focus-visible, .pt-tabs a:focus-visible, .pt-main :is(a, button):focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 .pt-tabs { scroll-padding-inline: 12px; }

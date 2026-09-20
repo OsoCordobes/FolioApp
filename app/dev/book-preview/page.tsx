@@ -38,7 +38,7 @@ export default async function BookPreviewDevPage({ searchParams }: { searchParam
       servicios: [{ id: "draft-1", nombre: "Consulta inicial", duracion_min: 60, precio_cents: 3500000 }],
     }} />;
   }
-  const solo = variant === "solo" || variant === "solo-empty" || variant === "solo-unnamed" || variant === "solo-slots";
+  const solo = variant === "solo" || variant === "solo-empty" || variant === "solo-unnamed" || variant === "solo-slots" || variant === "solo-two-bios";
   const clinicOne = variant === "clinic-one";
   const clinicEmpty = variant === "clinic-empty";
 
@@ -55,7 +55,7 @@ export default async function BookPreviewDevPage({ searchParams }: { searchParam
         acentoHex: "#8A6722",
         logoUrl: null,
         cardMood: "editorial",
-        bio: solo ? null : "Atención en kinesiología en Córdoba.",
+        bio: variant === "solo-two-bios" ? "Consultorio de rehabilitación en Córdoba." : solo ? null : "Atención en kinesiología en Córdoba.",
         telefonoPublico: "+54 9 351 411-2233",
         direccionCompleta: "Av. Colón 1234 · Nueva Córdoba",
         instagramHandle: "loremartinez.kine",
