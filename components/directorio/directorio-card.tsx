@@ -3,7 +3,7 @@
  *
  * Server component liviano (NO el PublicCard client pesado): logo/iniciales,
  * nombre, badge de especialidad, ciudad, bio truncada, CTA "Reservar" →
- * /book/[slug]?ref=directorio. Acento por org. Solo datos públicos de la org.
+ * /book/[slug]?ref=directorio. Marca Folio; solo datos públicos de la org.
  */
 
 import Image from "next/image";
@@ -13,12 +13,9 @@ import type { DirectorioOrg } from "@/lib/db/directorio";
 import { getEspecialidadMeta } from "@/lib/especialidades/meta";
 import { formatRubro } from "@/lib/format/identity";
 
-function isValidHex(s: string | null | undefined): s is string {
-  return !!s && /^#[0-9a-fA-F]{6}$/.test(s);
-}
+const FOLIO_ACCENT = "#6255C5";
 
 export function DirectorioCard({ org }: { org: DirectorioOrg }) {
-  const acento = isValidHex(org.acentoHex) ? org.acentoHex : "#8A6722";
   // Etiqueta de especialidad: nombre del registry si es slug conocido; si no,
   // el rubro humanizado (no etiqueta mal a orgs fuera de las 3 especialidades).
   const espLabel =
@@ -31,7 +28,6 @@ export function DirectorioCard({ org }: { org: DirectorioOrg }) {
     <a
       className="dir-card"
       href={`/book/${org.slug}?ref=directorio`}
-      style={{ ["--accent" as string]: acento }}
     >
       <div className="dir-card-head">
         {org.logoUrl ? (
@@ -43,7 +39,7 @@ export function DirectorioCard({ org }: { org: DirectorioOrg }) {
             height={48}
           />
         ) : (
-          <AvatarIniciales fullName={org.nombre} acentoHex={acento} size="md" />
+          <AvatarIniciales fullName={org.nombre} acentoHex={FOLIO_ACCENT} size="md" />
         )}
         <div className="dir-card-id">
           <h2 className="dir-card-name">{org.nombre}</h2>
