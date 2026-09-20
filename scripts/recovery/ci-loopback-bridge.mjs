@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import net from 'node:net';
+import {performance} from 'node:perf_hooks';
 
 function ipv4Number(value){
  if(net.isIP(value)!==4)throw Error('c01_bridge_ipv4_required');
@@ -40,14 +41,50 @@ export function validateBridgeTarget({project,service,containerId,labels,network
  return {address:attachment.IPAddress,port:remotePort};
 }
 
-/** A failed direct route aborts before synthetic records or restore writes. */
+/** A failed direct route aborts before its loopback bridge opens. */
 export async function preflightBridgeTarget(target,timeoutMs=3000){
  await new Promise((resolve,reject)=>{
-  const socket=net.connect({host:target.address,port:target.port});
-  const timer=setTimeout(()=>{socket.destroy();reject(Error('c01_bridge_direct_route_unavailable'));},timeoutMs);
+  let socket;
+  try{socket=net.connect({host:target.address,port:target.port});}
+  catch{reject(bridgeFailure('other'));return;}
+  const timer=setTimeout(()=>{socket.destroy();reject(bridgeFailure('timeout'));},timeoutMs);
   socket.once('connect',()=>{clearTimeout(timer);socket.destroy();resolve();});
-  socket.once('error',()=>{clearTimeout(timer);reject(Error('c01_bridge_direct_route_unavailable'));});
+  socket.once('error',error=>{clearTimeout(timer);reject(bridgeFailure(bridgeFailureCategory(error?.code)));});
  });
+}
+
+export function bridgeFailureCategory(code){
+ if(code==='ECONNREFUSED')return 'refused';
+ if(code==='ETIMEDOUT')return 'timeout';
+ if(code==='EHOSTUNREACH'||code==='ENETUNREACH')return 'unreachable';
+ return 'other';
+}
+function bridgeFailure(reason,probes=0){
+ const failure=Error('c01_bridge_direct_route_unavailable');
+ failure.reason=reason;
+ failure.probes=probes;
+ failure.retryable=reason==='refused'||reason==='timeout';
+ return failure;
+}
+
+/** Wait for the already-validated listener; never retry a route/permission error. */
+export async function waitForBridgeTarget(target,totalTimeoutMs=15000){
+ if(!Number.isInteger(totalTimeoutMs)||totalTimeoutMs<1||totalTimeoutMs>30000)
+  throw bridgeFailure('other');
+ const deadline=performance.now()+totalTimeoutMs;
+ let probes=0,lastCategory='none';
+ while(performance.now()<deadline){
+  const remaining=Math.max(1,Math.ceil(deadline-performance.now()));
+  probes++;
+  try{await preflightBridgeTarget(target,Math.min(1000,remaining));return {probes,lastCategory};}
+  catch(error){
+   lastCategory=error?.reason??'other';
+   if(error?.retryable!==true)throw bridgeFailure(lastCategory,probes);
+  }
+  const pause=Math.min(250,Math.max(0,deadline-performance.now()));
+  if(pause>0)await new Promise(resolve=>setTimeout(resolve,pause));
+ }
+ throw bridgeFailure(lastCategory,probes);
 }
 
 /** Fixed upstream; no generic CONNECT handler, public listener, or DNS lookup. */

@@ -14,7 +14,7 @@ import {totp} from '../../scripts/testing/clinical-config.mjs';
 import {verifyBackup} from '../backup/restore.mjs';
 import {validateReceipt} from '../backup/retention.mjs';
 import {parseSafeRestoreDiagnostic,parseSafePgRestoreDiagnostic} from '../backup/restore-diagnostics.mjs';
-import {validateBridgeTarget,preflightBridgeTarget,openLoopbackBridge} from './ci-loopback-bridge.mjs';
+import {validateBridgeTarget,preflightBridgeTarget,waitForBridgeTarget,openLoopbackBridge} from './ci-loopback-bridge.mjs';
 import {planRolePreparation} from './ci-role-preflight.mjs';
 
 const repo=path.resolve(fileURLToPath(new URL('../../',import.meta.url)));
@@ -49,14 +49,24 @@ function child(program,args,{env=process.env,input,allowFailure=false,limit=2621
 }
 const docker=(args,env,options)=>child('docker',args,{env,...options});
 const dc=(project,args,env,options)=>docker(['compose','-p',project,'-f',compose,...args],env,options);
-async function startBridge(project,service,localPort,remotePort,env){
+async function startBridge(project,service,localPort,remotePort,env,{waitForListener=false}={}){
  const containerId=(await dc(project,['ps','-q',service],env)).output.trim();
  assert.match(containerId,/^[a-f0-9]{64}$/);
  const labels=JSON.parse((await docker(['inspect','--format','{{json .Config.Labels}}',containerId],env)).output);
  const networks=JSON.parse((await docker(['inspect','--format','{{json .NetworkSettings.Networks}}',containerId],env)).output);
  const network=JSON.parse((await docker(['network','inspect','--format','{{json .}}',`${project}_default`],env)).output);
  const target=validateBridgeTarget({project,service,containerId,labels,networks,network,remotePort});
- await preflightBridgeTarget(target);
+ if(waitForListener){
+  try{
+  const readiness=await waitForBridgeTarget(target);
+  console.log(`c01_api_gw_readiness: probes=${readiness.probes} last=${readiness.lastCategory}`);
+  }catch(error){
+   const reason=['refused','timeout','unreachable'].includes(error?.reason)?error.reason:'other';
+   const probes=Number.isInteger(error?.probes)&&error.probes>=0&&error.probes<=1000?error.probes:0;
+   console.error(`c01_api_gw_readiness: probes=${probes} last=${reason}`);
+   throw Error('c01_bridge_direct_route_unavailable');
+  }
+ }else await preflightBridgeTarget(target);
  return openLoopbackBridge(target,localPort);
 }
 const writeJson=(name,value)=>writeFile(name,JSON.stringify(value)+'\n',{flag:'wx',mode:0o600});
@@ -343,7 +353,7 @@ async function main(){
   stage='target_services';const targetEnv={...destinationEnv,C01_APP_DATABASE:targetDatabase};
   await dc(destination,['up','-d','--wait'],targetEnv);
   await assertInternal(destination,targetEnv);
-  apiBridge=await startBridge(destination,'api-gw',55421,8000,targetEnv);
+  apiBridge=await startBridge(destination,'api-gw',55421,8000,targetEnv,{waitForListener:true});
   await waitApi(state.anonKey);
   stage='storage_restore';const storage=await restoreStorage(state,backup,root,targetEnv);
   stage='integrated_verify';await verify(state,fixture,backup);
