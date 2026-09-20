@@ -10,6 +10,8 @@
 
 import Script from "next/script";
 import { useEffect, useRef, useState, useTransition } from "react";
+import { useBookingEntry } from "@/components/book-landing/booking-entry";
+import { planServiceEntry } from "@/components/book-landing/service-entry-plan";
 import { BookingSubmissionAttempt } from "@/lib/booking/submission-attempt";
 
 import {
@@ -98,14 +100,18 @@ export function BookingWizard({
   org,
   servicios,
   profesionales = [],
+  fetchSlotsAction = fetchSlotsPublico,
 }: {
   org: OrgPublic;
   servicios: ServicioPublic[];
   /** Colegiados reservables (CLINICA-4). Con 0–1, el wizard es el histórico. */
   profesionales?: ProfesionalPublico[];
+  /** Injectable Server Action for the isolated development preview. */
+  fetchSlotsAction?: typeof fetchSlotsPublico;
 }) {
   const [vista, setVista] = useState<Vista>("servicio");
   const [servicioId, setServicioId] = useState<string>(servicios[0]?.id ?? "");
+  const servicioSeleccionado = servicios.find((service) => service.id === servicioId);
   // CLINICA-4 · paso "Elegí profesional": solo existe con >1 colegiado. En
   // ese caso el id elegido viaja a fetchSlotsPublico/createPedidoPublico;
   // con 0–1 NO se manda nada y el server resuelve el default (flujo Solo
@@ -135,6 +141,32 @@ export function BookingWizard({
   const captchaContainerRef = useRef<HTMLDivElement | null>(null);
   const captchaWidgetIdRef = useRef<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const bookingEntry = useBookingEntry();
+  const lastExternalSelection = useRef(0);
+
+  // A service card begins the next step. Keep the wizard's service ID as the
+  // sole booking payload source; never replace an in-flight or uncertain attempt.
+  const externalSelection = bookingEntry?.selection;
+  useEffect(() => {
+    if (!externalSelection || externalSelection.sequence === lastExternalSelection.current) return;
+    lastExternalSelection.current = externalSelection.sequence;
+    if (pending || submissionUncertain || submissionRef.current.inFlight || vista === "ok") return;
+    if (!servicios.some((service) => service.id === externalSelection.serviceId)) return;
+    const plan = planServiceEntry({ serviceId: servicioId, vista, slots }, externalSelection.serviceId, multiProf);
+    if (!plan) return;
+    setServicioId(plan.serviceId);
+    setProfesionalSelId(null);
+    setSlots([...plan.slots]);
+    setSlotPicked(null);
+    setCaptchaToken(null);
+    setErr(null);
+    setVista(plan.vista);
+  }, [externalSelection, multiProf, pending, servicioId, servicios, slots, submissionUncertain, vista]);
+
+  const setEntryBlocked = bookingEntry?.setBlocked;
+  useEffect(() => {
+    setEntryBlocked?.(pending || submissionUncertain || submissionRef.current.inFlight || vista === "ok");
+  }, [pending, setEntryBlocked, submissionUncertain, vista]);
 
   // A11y · anuncio de pasos: al cambiar de vista movemos el foco al heading
   // del paso (tabIndex={-1}). El lector de pantalla anuncia el nuevo contexto
@@ -197,14 +229,16 @@ export function BookingWizard({
     // Multi-prof sin elección no debería ocurrir (el paso fuerza el click),
     // pero si pasa NO consultamos: el server devolvería err de validación.
     if (multiProf && !profesionalSelId) return;
+    let cancelled = false;
     startTransition(async () => {
       setErr(null);
-      const result = await fetchSlotsPublico({
+      const result = await fetchSlotsAction({
         orgSlug: org.slug,
         servicioId,
         profesionalId: profesionalIdParaActions(multiProf, profesionalSelId),
         diasAdelante: 14,
       });
+      if (cancelled) return;
       if (!result.ok) {
         setErr(result.error.message);
         setSlots([]);
@@ -212,7 +246,8 @@ export function BookingWizard({
       }
       setSlots(result.data);
     });
-  }, [vista, servicioId, org.slug, multiProf, profesionalSelId]);
+    return () => { cancelled = true; };
+  }, [vista, servicioId, org.slug, multiProf, profesionalSelId, fetchSlotsAction]);
 
   // ─── Render ──────────────────────────────────────────────────────────
   // El chrome de página (hero, header sticky, "atienden acá", powered-by) lo
@@ -285,6 +320,7 @@ export function BookingWizard({
             >
               Elegí profesional
             </h2>
+            {servicioSeleccionado ? <p className="bk-current-service">Para {servicioSeleccionado.nombre}</p> : null}
             <div className="bk-lista">
               {profesionales.map((p) => (
                 <button
@@ -326,6 +362,7 @@ export function BookingWizard({
                 <span className="bk-step-subtitle">con {profesionalSelNombre}</span>
               ) : null}
             </h2>
+            {servicioSeleccionado ? <p className="bk-current-service">{servicioSeleccionado.nombre} · {servicioSeleccionado.duracion_min} min</p> : null}
             {pending ? (
               // Placeholder de carga: misma grilla que los horarios reales,
               // con shimmer sobre tokens (.bk-skel en folio.css).

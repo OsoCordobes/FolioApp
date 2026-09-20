@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { BookLanding } from "@/components/book-landing/book-landing";
 import { BookLandingPreview } from "@/components/book-landing/book-landing-preview";
+import { previewSlotsAction } from "@/app/dev/book-preview/actions";
 
 /**
  * Folio · /dev/book-preview · dev-only preview of /book/[slug].
@@ -37,7 +38,7 @@ export default async function BookPreviewDevPage({ searchParams }: { searchParam
       servicios: [{ id: "draft-1", nombre: "Consulta inicial", duracion_min: 60, precio_cents: 3500000 }],
     }} />;
   }
-  const solo = variant === "solo" || variant === "solo-empty" || variant === "solo-unnamed";
+  const solo = variant === "solo" || variant === "solo-empty" || variant === "solo-unnamed" || variant === "solo-slots";
   const clinicOne = variant === "clinic-one";
   const clinicEmpty = variant === "clinic-empty";
 
@@ -102,6 +103,7 @@ export default async function BookPreviewDevPage({ searchParams }: { searchParam
           matricula: "18.902",
         }] : []),
       ]}
+      fetchSlotsAction={variant === "solo-slots" ? previewSlotsAction : undefined}
     />
   );
 }

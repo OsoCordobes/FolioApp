@@ -18,6 +18,53 @@ import { expect, test } from "../fixtures/local-test";
  */
 
 test.describe("/dev/book-preview · BookLanding + booking flow", () => {
+  test("a service card carries its choice into the next Solo step and can be changed", async ({ page }) => {
+    await page.goto("/dev/book-preview?variant=solo");
+    await page.locator(".bl-service-card").filter({ hasText: "Seguimiento" }).getByRole("link", { name: /elegir seguimiento/i }).click();
+    await expect(page.locator("#bk-flow").getByRole("heading", { name: /elegí un horario/i })).toBeVisible();
+    await expect(page.locator("#bk-flow .bk-current-service")).toContainText("Seguimiento");
+    await page.locator("#bk-flow").getByRole("button", { name: /cambiar servicio/i }).click();
+    await expect(page.locator("#bk-flow").getByRole("heading", { name: /elegí el servicio/i })).toBeVisible();
+  });
+
+  test("reselecting the active service keeps a loaded slot selectable", async ({ page }) => {
+    await page.goto("/dev/book-preview?variant=solo-slots");
+    const currentCard = page.locator(".bl-service-card").filter({ hasText: "Seguimiento" });
+    await currentCard.getByRole("link", { name: /elegir seguimiento/i }).click();
+    await expect(page.locator("#bk-flow").getByRole("heading", { name: /elegí un horario/i })).toBeVisible();
+    const slot = page.locator("#bk-flow .bk-slot").first();
+    await expect(slot).toBeVisible();
+    const slotLabel = await slot.getAttribute("aria-label");
+    await currentCard.getByRole("link", { name: /elegir seguimiento/i }).click();
+    await expect(slot).toBeVisible();
+    await expect(slot).toHaveAttribute("aria-label", slotLabel!);
+    await expect(page.locator("#bk-flow .bk-current-service")).toContainText("Seguimiento");
+    await slot.click();
+    await expect(page.locator("#bk-flow").getByRole("heading", { name: /tus datos/i })).toBeVisible();
+  });
+
+  test("a clinic service card goes straight to professional choice", async ({ page }) => {
+    await page.goto("/dev/book-preview");
+    await page.locator(".bl-service-card").filter({ hasText: "Consulta inicial" }).getByRole("link", { name: /elegir consulta inicial/i }).click();
+    await expect(page.locator("#bk-flow").getByRole("heading", { name: /elegí profesional/i })).toBeVisible();
+    await expect(page.locator("#bk-flow .bk-current-service")).toContainText("Consulta inicial");
+  });
+
+  test("draft preview shares the public layout without a working reservation", async ({ page }) => {
+    await page.goto("/dev/book-preview?variant=draft-preview");
+    await expect(page.locator(".bl-root[data-mode='preview']")).toBeVisible();
+    await expect(page.locator(".bl-preview-label")).toContainText("Vista previa");
+    await expect(page.locator("#reservar")).toContainText("Los pacientes podrán elegir servicio y horario");
+    await expect(page.locator("#bk-flow, .bl-service-cta, .bl-powered-cta")).toHaveCount(0);
+  });
+
+  test("a clinic without accepted professionals does not offer booking", async ({ page }) => {
+    await page.goto("/dev/book-preview?variant=clinic-empty");
+    await expect(page.locator(".bl-hero")).toContainText("Turnos online en preparación");
+    await expect(page.locator(".bl-book")).toContainText("todavía no tiene profesionales disponibles");
+    await expect(page.locator(".bl-header-cta, .bl-btn-lg, .bl-service-cta, #bk-flow")).toHaveCount(0);
+  });
+
   test("Solo prioritizes the professional and keeps the practice secondary", async ({ page }) => {
     await page.goto("/dev/book-preview?variant=solo");
     await expect(page.locator(".bl-hero h1")).toHaveText("Lic. Lorenzo Martínez");
@@ -121,7 +168,7 @@ test.describe("/dev/book-preview · BookLanding + booking flow", () => {
     }
 
     const colors = await page.evaluate(() => {
-      const selectors = [".bl-eyebrow", ".bl-hero-value", ".bl-hero-sub", ".bl-hero-matricula", ".bl-confirm-note", ".bl-trust-micro", ".bl-service-dur", ".bl-trust-lead", ".bl-trust-item-text", ".bl-location-row", ".bl-powered-text"];
+      const selectors = [".bl-eyebrow", ".bl-hero-value", ".bl-hero-sub", ".bl-hero-matricula", ".bl-confirm-note", ".bl-section-kicker", ".bl-reservation-heading p", ".bl-service-dur", ".bl-service-cta", ".bl-book-footnote", ".bl-location-row", ".bl-powered-text"];
       const rgba = (value: string) => {
         const channels = [...value.matchAll(/[\d.]+/g)].map((match) => Number(match[0]));
         return { rgb: channels.slice(0, 3), alpha: channels[3] ?? 1 };

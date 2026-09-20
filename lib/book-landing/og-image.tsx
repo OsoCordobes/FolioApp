@@ -23,38 +23,41 @@ export interface BookOgInput {
 
 export async function renderBookOg(input: BookOgInput): Promise<Response> {
   const fonts = await loadFolioOgFonts();
-  const titleSize = input.nombre.length > 35 ? 52 : input.nombre.length > 22 ? 62 : 76;
+  const titleSize = input.nombre.length > 35 ? 50 : input.nombre.length > 22 ? 60 : 72;
   const acento = /^#[0-9a-fA-F]{6}$/.test(input.acento) ? input.acento : BRASS;
   const initials = getInitials(input.nombre);
 
   const createImage = (photo: string | null) => new ImageResponse(
-    <div style={{ width: "100%", height: "100%", display: "flex", backgroundColor: BG, color: INK, fontFamily: "Plus Jakarta Sans", padding: "58px 64px", gap: 48 }}>
-      <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 23, color: INK_2 }}>
-          <div style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: acento }} />
-          {input.especialidad}
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 19 }}>
-          <div style={{ display: "flex", fontSize: titleSize, fontWeight: 600, lineHeight: 1.06, letterSpacing: "-0.035em", maxWidth: 730, overflowWrap: "anywhere" }}>
-            {input.nombre}
+    <div style={{ width: "100%", height: "100%", display: "flex", backgroundColor: BG, color: INK, fontFamily: "Plus Jakarta Sans", padding: 34 }}>
+      <div style={{ display: "flex", width: "100%", height: "100%", overflow: "hidden", border: "1px solid #DDD5C0", borderRadius: 28, backgroundColor: SURFACE }}>
+        <div style={{ display: "flex", width: 10, height: "100%", backgroundColor: acento }} />
+        <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", flex: 1, minWidth: 0, padding: "48px 38px 43px 50px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 13, fontSize: 21, fontWeight: 600, color: INK_2 }}>
+            <div style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: acento }} />
+            {input.especialidad}
           </div>
-          {input.lugar ? <div style={{ display: "flex", fontSize: 26, color: INK_2 }}>{input.lugar}</div> : null}
-          <div style={{ display: "flex", fontSize: 23, color: INK_2 }}>Reservá tu turno online</div>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 16, fontSize: 19, color: INK_2 }}>
-          <div style={{ width: 52, height: 4, borderRadius: 2, backgroundColor: acento }} />
-          {input.solo && input.consultorio !== input.nombre ? input.consultorio : "Hecho con Folio"}
-        </div>
-      </div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 340, height: 514, backgroundColor: SURFACE, borderRadius: 24, overflow: "hidden", border: "1px solid #DDD5C0" }}>
-        {photo ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={photo} alt="" width={340} height={514} style={{ objectFit: "cover", objectPosition: "center 25%" }} />
-        ) : (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 220, height: 220, borderRadius: 110, backgroundColor: "#EDE7D8", color: INK, fontSize: 80, fontWeight: 500, border: `2px solid ${acento}` }}>
-            {initials}
+          <div style={{ display: "flex", flexDirection: "column", gap: 19 }}>
+            <div style={{ display: "flex", fontSize: titleSize, fontWeight: 700, lineHeight: 1.04, letterSpacing: "-0.055em", maxWidth: 680, overflowWrap: "anywhere" }}>
+              {input.nombre}
+            </div>
+            {input.lugar ? <div style={{ display: "flex", fontSize: 23, color: INK_2 }}>{input.lugar}</div> : null}
+            <div style={{ display: "flex", fontSize: 21, color: INK_2 }}>Reservá tu turno online</div>
           </div>
-        )}
+          <div style={{ display: "flex", alignItems: "center", gap: 15, fontSize: 17, fontWeight: 600, color: INK_2 }}>
+            <div style={{ width: 42, height: 3, borderRadius: 2, backgroundColor: acento }} />
+            {input.solo && input.consultorio !== input.nombre ? input.consultorio : "Hecho con Folio"}
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 342, height: "100%", overflow: "hidden", backgroundColor: "#EDE7D8" }}>
+          {photo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={photo} alt="" width={342} height={560} style={{ objectFit: "cover", objectPosition: "center 25%" }} />
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 224, height: 224, borderRadius: 28, backgroundColor: SURFACE, color: INK, fontSize: 78, fontWeight: 650, border: `2px solid ${acento}` }}>
+              {initials}
+            </div>
+          )}
+        </div>
       </div>
     </div>,
     { width: 1200, height: 630, fonts },
