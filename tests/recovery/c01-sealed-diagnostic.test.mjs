@@ -64,3 +64,23 @@ test("bounded synthetic stderr is encrypted, context-bound, and rejects tamperin
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("exclusive sealing preserves an existing artifact on EEXIST", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "folio-c01-existing-"));
+  const file = path.join(dir, "c01-pg-restore-error.sealed");
+  const existing = Buffer.from("preexisting synthetic evidence");
+  const keys = generateKeyPairSync("rsa", {
+    modulusLength: 3072,
+    publicKeyEncoding: { type: "spki", format: "pem" },
+    privateKeyEncoding: { type: "pkcs8", format: "pem" },
+  });
+  try {
+    await writeFile(file, existing, { flag: "wx" });
+    await assert.rejects(sealBoundedDiagnostic(Buffer.from("new sensitive stderr"), file, keys.publicKey,
+      { checkedOutSha: "a".repeat(40), runId: "123456", runAttempt: "2", stage: "pg_restore" }),
+      { code: "EEXIST" });
+    assert.deepEqual(await readFile(file), existing);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

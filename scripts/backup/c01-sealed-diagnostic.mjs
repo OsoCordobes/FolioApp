@@ -1,5 +1,5 @@
 import { recipientFingerprint, sealArtifact } from "./envelope.mjs";
-import { chown, lstat, readFile, unlink } from "node:fs/promises";
+import { chown, lstat, readFile } from "node:fs/promises";
 import path from "node:path";
 
 const EXPECTED_RECIPIENT = "609ccec0c317088256a01f259c11e333823318759a0b7ca54123211c3c080230";
@@ -59,7 +59,6 @@ export async function captureC01PgRestoreFailure(stderr, metadata, env = process
     await chown(file, owner.uid, owner.gid);
     return true;
   } catch {
-    await unlink(file).catch(() => undefined);
     throw new Error("c01_diagnostic_capture_failed");
   }
 }
