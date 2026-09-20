@@ -1,6 +1,10 @@
 /* Public surfaces. Individual practices keep their chosen accent. */
 .bl-root :is(.bl-header-cta, .bl-btn-lg, .bl-service-cta, .bk-back) { min-height: 44px; }
 .bl-root :is(a, button, input):focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.bl-preview-label { display: inline-flex; align-items: center; min-height: 32px; padding: 5px 11px; border: 1px solid var(--line); border-radius: var(--r-md); color: var(--ink-2); font-size: 12px; font-weight: 600; }
+.bl-preview-cta { cursor: default; }
+.bl-preview-booking { color: var(--ink-2); font-size: 14px; line-height: 1.6; }
+.bl-preview-booking p { margin: 0; }
 .dir-root :is(a, button):focus-visible, .pt-tabs a:focus-visible, .pt-main :is(a, button):focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 .pt-tabs { scroll-padding-inline: 12px; }
 .pt-main :is(.fi-btn, .pt-link-btn) { min-height: 44px; }

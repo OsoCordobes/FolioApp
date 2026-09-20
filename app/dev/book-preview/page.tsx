@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { BookLanding } from "@/components/book-landing/book-landing";
+import { BookLandingPreview } from "@/components/book-landing/book-landing-preview";
 
 /**
  * Folio · /dev/book-preview · dev-only preview of /book/[slug].
@@ -24,6 +25,18 @@ export default async function BookPreviewDevPage({ searchParams }: { searchParam
   }
 
   const variant = (await searchParams).variant;
+  if (variant === "draft-preview") {
+    return <BookLandingPreview data={{
+      org: {
+        tipo: "INDEPENDIENTE", nombre: "Consultorio en preparación", rubro: "Kinesiología",
+        ciudad: "Córdoba", provincia: "Córdoba", acentoHex: "#8A6722",
+        logoUrl: null, bio: "Atención personalizada en Córdoba.", autoConfirmar: null,
+      },
+      profesional: null,
+      profesionales: [],
+      servicios: [{ id: "draft-1", nombre: "Consulta inicial", duracion_min: 60, precio_cents: 3500000 }],
+    }} />;
+  }
   const solo = variant === "solo" || variant === "solo-empty" || variant === "solo-unnamed";
   const clinicOne = variant === "clinic-one";
   const clinicEmpty = variant === "clinic-empty";
