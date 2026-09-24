@@ -56,6 +56,8 @@ const systemCodes=new Map([
  ['EACCES','permission'],
 ]);
 const pgRestoreCategories=new Set(['pg_cron_database_mismatch','extension_version','extension_preload','extension_schema','permission','missing_role','other']);
+const storageHttpStatuses=new Set(['400','401','403','404','409','429','500','502','503','504','other']);
+const storageHttpCodes=new Set(['NoSuchKey','NoSuchBucket','AccessDenied','InvalidJWT','InternalError','DatabaseError','UnknownError','other']);
 function safeProperty(error,key){
  try{const value=error?.[key];return typeof value==='string'?value:null;}
  catch{return null;}
@@ -65,6 +67,55 @@ function safeProperty(error,key){
 export function safeStorageRestoreCause(error){
  const message=safeProperty(error,'message');
  return storageErrors.has(message)?message:'unclassified';
+}
+
+/** The only HTTP information allowed to leave a C01 Storage inspect failure. */
+export function safeStorageInspectHttp(status,code){
+ if(status===null||status===undefined)return null;
+ if(typeof status!=='number'&&typeof status!=='string')return {status:'other',code:'other'};
+ const statusToken=String(status);
+ return {
+  status:storageHttpStatuses.has(statusToken)?statusToken:'other',
+  code:typeof code==='string'&&storageHttpCodes.has(code)?code:'other',
+ };
+}
+
+/** Consume at most 4 KiB of an error body and return only checked fields. */
+export async function safeStorageInspectResponse(response){
+ let fields=null;
+ if(!response.ok&&response.body){
+  const reader=response.body.getReader();
+  const chunks=[];
+  let bytes=0;
+  try{
+   for(;;){
+    const {done,value}=await reader.read();
+    if(done)break;
+    bytes+=value.byteLength;
+    if(bytes>4096)break;
+    chunks.push(value);
+   }
+   if(bytes<=4096)fields=JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  }catch{fields=null;}
+  finally{await reader.cancel().catch(()=>{});}
+ }
+ return {
+  ...safeStorageInspectHttp(response.status,fields?.code),
+  missingStatusCode404:fields?.statusCode==='404'||fields?.statusCode===404,
+ };
+}
+
+export function safeStorageInspectFromError(error){
+ try{
+  const detail=error?.c01StorageInspectHttp;
+  return detail&&typeof detail==='object'?safeStorageInspectHttp(detail.status,detail.code):null;
+ }catch{return null;}
+}
+
+export function parseSafeStorageInspectHttp(stderr){
+ const match=String(stderr).match(/^c01_storage_inspect_http status=([0-9]+|other) code=([A-Za-z]+)$/m);
+ if(!match||!storageHttpStatuses.has(match[1])||!storageHttpCodes.has(match[2]))return null;
+ return {status:match[1],code:match[2]};
 }
 
 /** Fixed public tokens only; never copy an exception message into CI output. */

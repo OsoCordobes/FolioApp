@@ -7,6 +7,7 @@ import { createHash, generateKeyPairSync } from "node:crypto";
 import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
+import { fileURLToPath } from "node:url";
 import { createBackup } from "../../scripts/backup/core.mjs";
 import { restoreStorageLocal } from "../../scripts/backup/storage-restore.mjs";
 import { safeRestoreDiagnostic } from "../../scripts/backup/restore-diagnostics.mjs";
@@ -72,6 +73,7 @@ async function fixture(t) {
     corruptAt = -1,
     extra = false,
     missingAs400 = false,
+    inspectFailure = null,
     onUpload = async () => {}, afterAcceptance = async () => {};
   const server = createServer(async (req, res) => {
     const url = new URL(req.url, "http://localhost");
@@ -140,6 +142,11 @@ async function fixture(t) {
     }
     assert.equal(req.method, "GET");
     if (!bytes.has(i)) {
+      if (inspectFailure) {
+        res.statusCode = inspectFailure.status;
+        res.setHeader("content-type", "application/json");
+        return res.end(JSON.stringify({statusCode:String(inspectFailure.status),code:inspectFailure.code,message:inspectFailure.message}));
+      }
       res.statusCode = missingAs400 ? 400 : 404;
       return res.end(missingAs400 ? JSON.stringify({ statusCode: "404" }) : "");
     }
@@ -178,6 +185,9 @@ async function fixture(t) {
     setMissingAs400() {
       missingAs400 = true;
     },
+    setInspectFailure(failure) {
+      inspectFailure = failure;
+    },
     setOnUpload(fn) {
       onUpload = fn;
     },
@@ -208,6 +218,41 @@ test("local Storage restores exact paths and bytes, verifies download, then resu
   assert.ok(!text.includes("private-fixture"));
   assert.ok(!text.includes("synthetic-local-key"));
   assert.equal(JSON.parse(text).phase, "verified");
+});
+
+test("Storage inspect keeps denied and server errors pending without treating them as missing", async (t) => {
+  for (const [status,code] of [[403,'AccessDenied'],[500,'InternalError']]) {
+    const f = await fixture(t);
+    const secret = 'private bucket/path and HTTP body';
+    f.setInspectFailure({status,code,message:secret});
+    await assert.rejects(restoreStorageLocal(f.options),(error)=>{
+      assert.match(error.message,/storage_restore_pending/);
+      assert.equal(error.c01StorageCauseCode,'storage_restore_download_failed');
+      assert.deepEqual(error.c01StorageInspectHttp,{status:String(status),code});
+      assert.equal(JSON.stringify(error.c01StorageInspectHttp).includes(secret),false);
+      return true;
+    });
+    assert.deepEqual(f.uploads,[]);
+  }
+});
+
+test("C01 Storage launcher emits bounded HTTP tokens without the server body", async (t) => {
+  const f = await fixture(t);
+  const secret = 'private bucket/path, key and HTTP body';
+  f.setInspectFailure({status:500,code:'InternalError',message:secret});
+  const keyFile=path.join(f.temporary,'recipient.key');
+  const configFile=path.join(f.temporary,'restore.json');
+  await writeFile(keyFile,keys.privateKey);
+  await writeFile(configFile,JSON.stringify({phase:'storage',directory:f.options.directory,recipientPrivateKeyFile:keyFile,storageUrl:f.options.storageUrl,confirmStorageOrigin:f.options.confirmStorageOrigin,metadataRestored:true,journalDirectory:f.options.journalDirectory}));
+  const launcher=fileURLToPath(new URL('../../scripts/backup/restore-local.mjs',import.meta.url));
+  const child=spawn(process.execPath,[launcher,configFile],{env:{...process.env,NODE_OPTIONS:'',FOLIO_BACKUP_RESTORE_DIAGNOSTICS:'c01',FOLIO_BACKUP_RESTORE_STORAGE_SERVICE_KEY:f.options.serviceKey},stdio:['ignore','pipe','pipe'],windowsHide:true});
+  let stderr='';child.stderr.on('data',chunk=>{stderr+=chunk;});
+  const [code]=await once(child,'close');
+  assert.equal(code,1);
+  assert.match(stderr,/c01_storage_inspect_http status=500 code=InternalError/);
+  assert.match(stderr,/c01_restore_diagnostic phase=storage category=transfer code=storage_restore_download_failed/);
+  for(const value of [secret,f.temporary,'private-fixture','synthetic-local-key'])assert.equal(stderr.includes(value),false);
+  assert.deepEqual(f.uploads,[]);
 });
 
 test("failed and uncertain uploads stay pending; retry retains verified files and observes prior acceptance", async (t) => {

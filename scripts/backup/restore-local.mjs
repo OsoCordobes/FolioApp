@@ -2,7 +2,7 @@
 import { readFile } from "node:fs/promises";
 import { restoreDatabase } from "./restore.mjs";
 import { restoreStorageLocal } from "./storage-restore.mjs";
-import { safeRestoreDiagnostic, classifyPgRestoreStderr } from "./restore-diagnostics.mjs";
+import { safeRestoreDiagnostic, safeStorageInspectFromError, classifyPgRestoreStderr } from "./restore-diagnostics.mjs";
 import { captureC01PgRestoreFailure } from "./c01-sealed-diagnostic.mjs";
 let phase = "unknown";
 let pgRestoreCategory = null;
@@ -39,6 +39,10 @@ try {
   if (process.env.FOLIO_BACKUP_RESTORE_DIAGNOSTICS === "c01") {
     if(phase==='database'&&pgRestoreCategory)
       console.error(`c01_pg_restore_diagnostic category=${pgRestoreCategory}`);
+    if(phase==='storage'){
+      const http=safeStorageInspectFromError(error);
+      if(http)console.error(`c01_storage_inspect_http status=${http.status} code=${http.code}`);
+    }
     // Revalidate the fixed Storage cause carried by a pending restore error.
     const diagnostic = safeRestoreDiagnostic(error, phase);
     console.error(`c01_restore_diagnostic phase=${diagnostic.phase} category=${diagnostic.category} code=${diagnostic.code}`);

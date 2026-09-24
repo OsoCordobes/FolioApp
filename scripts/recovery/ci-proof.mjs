@@ -13,7 +13,7 @@ import {createClient} from '@supabase/supabase-js';
 import {totp} from '../../scripts/testing/clinical-config.mjs';
 import {verifyBackup} from '../backup/restore.mjs';
 import {validateReceipt} from '../backup/retention.mjs';
-import {parseSafeRestoreDiagnostic,parseSafePgRestoreDiagnostic} from '../backup/restore-diagnostics.mjs';
+import {parseSafeRestoreDiagnostic,parseSafePgRestoreDiagnostic,parseSafeStorageInspectHttp,safeStorageInspectResponse} from '../backup/restore-diagnostics.mjs';
 import {validateBridgeTarget,preflightBridgeTarget,waitForBridgeTarget,openLoopbackBridge} from './ci-loopback-bridge.mjs';
 import {planRolePreparation} from './ci-role-preflight.mjs';
 
@@ -251,13 +251,44 @@ async function restore(state,backup,root,env,pid){
  assert.equal(result.authLoginVerified,false);
  assert.equal(result.storageFilesRestored,false);
 }
-async function restoreStorage(state,backup,root,env){
+async function inspectStorage500Control(state,fixture,env){
+ // This check is read-only and synthetic: no path, object name or body is logged.
+ const scan="const fs=require('node:fs'),path=require('node:path');let dirs=['/var/lib/storage'],found=false;try{while(dirs.length&&!found){const dir=dirs.pop();for(const item of fs.readdirSync(dir,{withFileTypes:true})){if(item.isDirectory())dirs.push(path.join(dir,item.name));else{found=true;break}}}process.stdout.write(found?'nonempty':'empty')}catch{process.stdout.write('unknown')}";
+ let bytesAbsent='unknown';
+ try{
+  const result=await dc(destination,['exec','-T','storage','node','-e',scan],env,{allowFailure:true,limit:4096});
+  if(result.code===0&&result.output.trim()==='empty')bytesAbsent='yes';
+  if(result.code===0&&result.output.trim()==='nonempty')bytesAbsent='no';
+ }catch{}
+ const controlKey=`c01-control-${randomUUID()}`;
+ let metadataAbsent='unknown';
+ try{
+  const present=await withPg(state.dbPassword,targetDatabase,async db=>(await db.query('SELECT EXISTS (SELECT 1 FROM storage.objects WHERE bucket_id=$1 AND name=$2) AS present',[fixture.bucket,controlKey])).rows[0]?.present);
+  if(typeof present==='boolean')metadataAbsent=present?'no':'yes';
+ }catch{}
+ let controlStatus='other',controlCode='other';
+ if(metadataAbsent==='yes'){
+  try{
+   const response=await fetch(`${api}/storage/v1/object/${encodeURIComponent(fixture.bucket)}/${encodeURIComponent(controlKey)}`,{headers:{Authorization:`Bearer ${state.serviceKey}`,apikey:state.serviceKey,'Cache-Control':'no-cache'},redirect:'error',signal:AbortSignal.timeout(5000)});
+   const control=await safeStorageInspectResponse(response);
+   controlStatus=control.status;controlCode=control.code;
+   await response.body?.cancel().catch(()=>{});
+  }catch{}
+ }
+ console.error(`c01_storage_500_control bytes_absent=${bytesAbsent} metadata_absent=${metadataAbsent} control_status=${controlStatus} control_code=${controlCode}`);
+}
+async function restoreStorage(state,backup,root,env,fixture){
  const configPath=path.join(root,'restore-storage.json');
  await writeJson(configPath,{phase:'storage',directory:backup.directory,recipientPrivateKeyFile:path.join(root,'recipient.key'),storageUrl:api,confirmStorageOrigin:api,metadataRestored:true,journalDirectory:path.join(root,'journal')});
  const restored=await child(process.execPath,[path.join(repo,'scripts/backup/restore-local.mjs'),configPath],{env:{...env,FOLIO_BACKUP_RESTORE_PASSPHRASE:state.passphrase,FOLIO_BACKUP_RESTORE_STORAGE_SERVICE_KEY:state.serviceKey,FOLIO_BACKUP_RESTORE_DIAGNOSTICS:'c01'},allowFailure:true}).catch(()=>{throw Error('restore_process_failed');});
  if(restored.code!==0){
   const diagnostic=parseSafeRestoreDiagnostic(restored.errorOutput);
-  if(diagnostic?.phase==='storage')throw Error(`restore_${diagnostic.category}_${diagnostic.code}`);
+  if(diagnostic?.phase==='storage'){
+   const http=parseSafeStorageInspectHttp(restored.errorOutput);
+   if(http)console.error(`c01_storage_inspect_http status=${http.status} code=${http.code}`);
+   if(http?.status==='500'&&http.code==='InternalError')await inspectStorage500Control(state,fixture,env);
+   throw Error(`restore_${diagnostic.category}_${diagnostic.code}`);
+  }
   throw Error('restore_process_failed');
  }
  let result;
@@ -362,7 +393,7 @@ async function main(){
   await assertInternal(destination,targetEnv);
   apiBridge=await startBridge(destination,'api-gw',55421,8000,targetEnv);
   await waitApi(state.anonKey);
-  stage='storage_restore';const storage=await restoreStorage(state,backup,root,targetEnv);
+  stage='storage_restore';const storage=await restoreStorage(state,backup,root,targetEnv,fixture);
   stage='integrated_verify';await verify(state,fixture,backup);
   stage='complete';
   const summary=process.env.GITHUB_STEP_SUMMARY;

@@ -6,7 +6,7 @@ import {fileURLToPath} from 'node:url';
 import {mkdtemp,writeFile,rm} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import {safeRestoreDiagnostic,safeStorageRestoreCause,parseSafeRestoreDiagnostic,classifyPgRestoreStderr,parseSafePgRestoreDiagnostic} from '../../scripts/backup/restore-diagnostics.mjs';
+import {safeRestoreDiagnostic,safeStorageRestoreCause,safeStorageInspectHttp,safeStorageInspectFromError,safeStorageInspectResponse,parseSafeStorageInspectHttp,parseSafeRestoreDiagnostic,classifyPgRestoreStderr,parseSafePgRestoreDiagnostic} from '../../scripts/backup/restore-diagnostics.mjs';
 import {monitorPostgresChild} from '../../scripts/backup/postgres.mjs';
 
 test('restore diagnostics retain only fixed guard and PostgreSQL categories',()=>{
@@ -126,6 +126,38 @@ test('Storage diagnostic never publishes an arbitrary exception, path, bucket, o
   'c01_restore_diagnostic phase=storage category=transfer code=storage_restore_pending',
   'c01_restore_diagnostic phase=storage category=inventory code=storage_restore_download_failed',
  ])assert.equal(parseSafeRestoreDiagnostic(line),null);
+});
+
+test('Storage inspect HTTP diagnostic accepts only finite status and documented code tokens',()=>{
+ const secret='secret bucket/path and response body';
+ for(const [status,code] of [[400,'NoSuchKey'],[403,'AccessDenied'],[500,'InternalError']]){
+  const expected={status:String(status),code};
+  const detail=safeStorageInspectHttp(status,code);
+  assert.deepEqual(detail,expected);
+  const line=`c01_storage_inspect_http status=${detail.status} code=${detail.code}`;
+  assert.deepEqual(parseSafeStorageInspectHttp(line),expected);
+  assert.equal(line.includes(secret),false);
+ }
+ assert.deepEqual(safeStorageInspectHttp(599,secret),{status:'other',code:'other'});
+ assert.deepEqual(safeStorageInspectFromError({c01StorageInspectHttp:{status:500,code:secret}}),{status:'500',code:'other'});
+ assert.equal(safeStorageInspectFromError({get c01StorageInspectHttp(){throw Error(secret);}}),null);
+ for(const line of [
+  `c01_storage_inspect_http status=500 code=${secret}`,
+  'c01_storage_inspect_http status=599 code=InternalError',
+  'c01_storage_inspect_http status=500 code=ENOENT',
+  'c01_storage_inspect_http status=200 code=NoSuchKey',
+ ])assert.equal(parseSafeStorageInspectHttp(line),null);
+});
+
+test('Storage HTTP response handling extracts only bounded documented fields',async()=>{
+ const secret='private object path, credential and full HTTP body';
+ const missing=await safeStorageInspectResponse(new Response(JSON.stringify({statusCode:'404',code:'NoSuchKey',message:secret}),{status:400}));
+ assert.deepEqual(missing,{status:'400',code:'NoSuchKey',missingStatusCode404:true});
+ const serverError=await safeStorageInspectResponse(new Response(JSON.stringify({statusCode:'500',code:'InternalError',message:secret}),{status:500}));
+ assert.deepEqual(serverError,{status:'500',code:'InternalError',missingStatusCode404:false});
+ const oversized=await safeStorageInspectResponse(new Response(JSON.stringify({statusCode:'404',code:'NoSuchKey',message:secret.repeat(256)}),{status:400}));
+ assert.deepEqual(oversized,{status:'400',code:'other',missingStatusCode404:false});
+ assert.equal(JSON.stringify([missing,serverError,oversized]).includes(secret),false);
 });
 
 test('Storage launcher opt-in emits only a fixed diagnostic for an invalid loopback target',async()=>{
