@@ -1,9 +1,89 @@
 # Folio — tablero único de lanzamiento
 
-Actualizado: 21 de septiembre de 2026 (Europe/Copenhagen; evidencias con hora UTC). Responsable: A, manager.
+Actualizado: 25 de septiembre de 2026 (Europe/Copenhagen; evidencias con hora UTC). Responsable: A, manager.
 Este tablero gobierna el trabajo nuevo. Los informes anteriores se conservan como evidencia fechada; sus bloqueos superados no se convierten nuevamente en tareas.
 
-## Checkpoint vigente — PR168 publicada
+## Dirección vigente — trabajo continuo por checkpoints, aprobado 25/09
+
+El titular aprobó ejecutar el plan por resultados, sin entregas obligatorias por semana. A representa sus prioridades ante los agentes: calidad, utilidad, protección de datos y consumo justificado. Orden de selección: riesgo, dependencias, beneficio concreto y esfuerzo restante. Terminar, comprobar, entregar y tomar el siguiente paquete disponible; ni publicar por apuro ni repetir revisiones para consumir una cuota. Si un frente depende del titular/proveedor, preservar preparación y evidencia y avanzar otro independiente.
+
+Base revalidada al iniciar: Escritorio y master remoto `8b57010d6e378cf21185412595eb7c45f15273a4`, sin cambios tracked en Escritorio. Publicación vigente PR169 según evidencia histórica inferior; no hubo nueva verificación productiva ni publicación en este arranque. Manager trabaja ahora en `codex/launch-checkpoints`, desde ese master, conservando las modificaciones operativas del tablero. Copia previa: `%TEMP%/folio-launch-board-before-continuous-20260925T000100704.md`.
+
+### Cuota y regla de cierre vigentes
+
+Reinicio manual aplicado por el titular. Lectura al iniciar implementación: **1% usado / 99% restante**; reinicio informado **01/10/2026 21:27:44 UTC (23:27:44 Copenhague)**, cero créditos de reinicio. El sábado 26/09 NO se presupone otra cuota. Esta lectura sustituye las previsiones anteriores de reinicio el 26/09 y las reservas históricas del 10% o agotamiento total, conservadas abajo como antecedentes.
+
+Reservar **15 puntos porcentuales** para revisión, integración y cierre. A partir de 85% usado no iniciar implementación nueva; cerrar paquetes revisables, preservar evidencia y dejar continuación. No convertir cuota en horas prometidas ni atribuir el consumo de la cuenta a un agente exacto. Medir al comenzar/cerrar paquetes. No correr trabajo artificial para alcanzar el umbral.
+
+### Equipo activo y límites
+
+Máximo dos escritores de implementación en copias aisladas; A sólo coordinación/integración y un revisor independiente. GPT-6 Sol High para implementación acotada; Astra High para dirección y decisiones delicadas. Modelos menores sólo si el paquete justifica el ahorro. Cada encargo fija base, ámbito propio, dependencias, entorno, pruebas y cierre. Los agentes no abren campañas adyacentes ni subagentes sin cupo y encargo aprobado por A.
+
+| Paquete | Responsable / revisión | Base y copia | Alcance y cierre |
+|---|---|---|---|
+| C01 Storage diagnóstico | `c01_restore_storage` / `recovery_start_review` | `3f85af5bcf6d934445c94c4c7e89b1d73e2aa5c0`, ede1; integrar master vigente antes de prueba de cierre | Opt-in del hijo Storage, categorías fijas allowlist, parser exclusivo de fase, sin datos ni stderr crudo. Pruebas negativas y diff revisado antes de UN ensayo alojado. C01 global exige restauración integral sobre las 120 migraciones vigentes |
+| B05a pedidos de Clínica | `b05_clinic_permissions` / revisor independiente después de candidato | `8b57010d6e378cf21185412595eb7c45f15273a4`, `C:/Users/amiun/.codex/worktrees/folio-clinic-permissions/folio-app` | Reproducir y cerrar lectura directa fuera de alcance, lectores de agenda y datos mínimos. SQL real sintético, roles y dos organizaciones; ningún cambio productivo. **M128 reservada sólo para B05a** si necesaria; B04 continúa sin número reservado |
+| D06 miniweb profesional | siguiente escritor disponible / revisión visual independiente + titular | base vigente al asignar | Dos disposiciones, mapa confirmado, editor común y enlace por profesional de Clínica. Ver contrato inferior; no reabrir D03-D05 por rutina |
+
+No Docker local, reset, prune, inicio de runtime protegido ni borrado de volúmenes/evidencia. C01 y SQL se prueban en entornos efímeros aislados autorizados. No env pull sobre archivos existentes, exposición de secretos, compras, cargas clínicas reales ni reactivación de controles. No repetir PR165 ni reaplicar M106/M120/M121/M125/M126/M127. Cambios productivos sensibles, envíos y cargos se preparan con evidencia para autorización concreta. Las autorizaciones históricas cumplidas no se ejecutan nuevamente.
+
+### Checkpoints del alcance vigente
+
+Esta lista gobierna los resultados y no fija semanas. Los IDs anteriores se conservan para enlazar evidencia. Estados: implementando, por implementar, evidencia pendiente, decisión humana, revisado local, publicado o cerrado; no confundirlos.
+
+| Checkpoint | IDs / estado inicial | Condición de cierre |
+|---|---|---|
+| Recuperación completa | C01 / implementando paquete acotado | DB, Auth/contraseña/MFA, archivos privados, información cifrada y aislamiento restaurados y comprobados juntos |
+| Permisos y privacidad | B05 / implementando B05a | Roles/alcances/organizaciones, acceso directo, archivos, consentimiento y revocación comprobados |
+| Ingreso y onboarding | B01/B02/B02b / publicado parcial; evidencia pendiente | Registro, confirmación, recuperación y Solo/Clínica sin reparación manual; salir, volver y completar luego |
+| Recepción | B03 / candidato local; dependiente de B05a | Agenda y llegada con mínimo administrativo, sin iniciar atención al llamar |
+| Atención adulta | B04 / contrato; decisiones clínicas pendientes | Edad verificada para nuevas atenciones; conservar continuidad, historias y correcciones autorizadas |
+| Miniweb profesional | D06 / por implementar | Plantilla Folio, dos disposiciones, mapa, contacto y reserva; perfil propio dentro de Clínica; editor simple, móvil/escritorio revisados |
+| Ficha del paciente | B09 / por implementar | Datos, motivo y 5–10 preguntas pertinentes por especialidad; envío protegido, revisión y aceptación sin reescritura ni sobrescritura silenciosa |
+| Llamador | B10 / por implementar | Código de espera y destino, pantalla limitada/revocable, conexión visible; llamado separado de atención |
+| Google | C05 / evidencia externa pendiente | Folio gestiona turnos; reflejo Google y eventos externos bloquean horarios; cambios/reintentos sin duplicación |
+| Correo | C03 / evidencia pendiente | Buzones controlados, errores y cuota visibles, sin duplicados; invitación de ficha el día del turno |
+| Pagos/suscripciones | C04 / evidencia pendiente | Solo/Clínica, asientos, cancelación, mora y conciliación; duplicados/desorden/respuestas inciertas |
+| Portal y exportación | B06 / evidencia pendiente | Acceso adulto autorizado y entrega íntegra de datos/archivos; no confundir enlace con archivo entregado |
+| Continuidad y soporte | C02/C06 / decisión humana y evidencia | Copia y material portable fuera del perfil Windows, alertas externas, responsables y capacidad inicial |
+| Validación/piloto | H01/L01 / decisión humana y evidencia | Cinco especialidades revisadas; 14 días, tres profesionales y cinco jornadas/persona; cero problemas críticos/altos del alcance |
+| Lanzamiento | L02 / pendiente | Versión publicada idéntica a candidata probada; oferta y soporte acordes a capacidades verificadas |
+
+### Decisiones de producto confirmadas por el titular
+
+- Empezar con pacientes nuevos. No contactar a Coofit ni construir importador para formatos desconocidos; evaluar sus exportaciones cuando los profesionales las aporten. La importación existente no acredita compatibilidad con Coofit. Menores, WhatsApp automático y agentes operativos quedan después.
+- **Miniweb D06:** una plantilla de identidad Folio violeta, profesional y sobria; disposiciones Perfil (predeterminada Solo) y Consultorio (predeterminada Clínica). Datos, fotos/logo y textos propios; sin credenciales, reseñas, métricas o fotografías inventadas. Mismos datos/componentes en preview y publicación. Editor: disposición, identidad, presentación, servicios, contacto y ubicación, preview móvil/escritorio y completar después. Dirección completa, mapa con ubicación confirmada y Cómo llegar; cambiar dirección requiere reconfirmar mapa y su falla conserva dirección/reserva. Usar frontend-design + emil-design-eng de forma focal; revisión visual independiente con fotos faltantes, nombres largos, equipos y cinco especialidades. Clínica conserva página de equipo y cada miembro público autorizado obtiene enlace propio con perfil y reserva dirigida a él; se mantiene identidad de clínica y permisos de edición. La ruta actual `/book/[slug]` es de organización: el enlace individual es trabajo nuevo, no capacidad publicada.
+- **Ficha B09:** datos personales/contacto/cobertura, motivo y 5–10 preguntas rápidas por especialidad, revisadas por un profesional competente. Sí/No/No sé/Prefiero no responder; omisión nunca equivale a No. Enlace opaco, revocable y temporal limitado al turno; no requiere cuenta Auth y no muestra ficha previa. Respuestas cifradas/versionadas como aporte del paciente, revisión clínica separada de contacto administrativo, sin fusionar identidades ni sobrescribir antecedentes. No obstaculiza la atención si falta completar. Correo automático el día del turno (dos horas antes dentro del mismo día; reserva posterior al confirmar), link manual para WhatsApp y QR individual en recepción tras cotejo. Permisos/alcance adulto y entrega C03 aprobados antes de uso clínico real.
+- **Llamador B10:** código de espera (por ejemplo A23), destino legible y sonido breve opcional; sin nombres, motivos, pagos ni historia. Recepción/profesional con alcance llama desde EN_SALA mediante evento separado; no cambia a ATENDIENDO. Credencial de pantalla independiente, mínima y revocable, mostrar desconexión y evitar sonidos/llamados antiguos al reconectar. No inventar que la TV posee permiso de agenda.
+- **Google C05:** el profesional administra turnos desde Folio. Reservas confirmadas se reflejan en Google; otros eventos de Google bloquean disponibilidad. No crear pacientes/turnos interpretando títulos de eventos, ni ofrecer gestión bidireccional desde Google.
+
+### Aceptación y continuidad
+
+Cada paquete termina al cumplir el contrato y las pruebas apropiadas más revisión independiente. Repetir sólo por cambios, fallo o incertidumbre concreta. Separar defecto reproducido, hipótesis, evidencia pendiente y decisión humana. Un fallo opaco exige diagnóstico nuevo, no retry ciego. Mejoras opcionales pasan al backlog posterior. Entrega al titular: resultado, prueba breve, dónde probarlo, límite/pending y siguiente acción; no narrar rutina ni cifras de pruebas como certificado global.
+
+A coordina continuidad desde este tablero y prepara relevo si el contexto pierde claridad. Reanudaciones programadas sólo toman trabajo concreto, con cuota/cupo disponibles y autorizaciones vigentes; no duplican agentes activos ni generan campañas o mensajes vacíos. El equipo y la app deben permanecer disponibles para trabajos locales. Al alcanzar reserva o dependencias humanas que impidan avanzar, preservar checkpoint y reportar el bloqueo en vez de consumir cuota en espera.
+
+## Antecedente — reanudación acotada del 24/09 antes del reinicio manual
+
+El titular autorizó aprovechar el3% semanal restante y continuar el sábado26/09 después del reinicio. Lectura actual97%usado/3%restante; próximo reinicio26/09 14:59:03UTC. Existe un crédito de reinicio completo disponible; no fue solicitado ni consumido. No presupuestarlo como cuota autorizada.
+
+Verificado el24/09: Escritorio y master remoto siguen en8b57010, sin cambios tracked; no hubo publicación posterior. Worktree C ede1 está en3f85af5bcf6d934445c94c4c7e89b1d73e2aa5c0 sobre da9cf38, limpio tras el commit; A tomó temporalmente este paquete con C inactiva. Sólo se modifica la elección de espera en el arranque del ensayo: todos los api-gw usan espera limitada, DB mantiene prueba única. Reproducción TCP local: preflight inmediato rechaza listener tardío; misma dirección con espera pasa(probes2). Cuatro pruebas focales, sintaxis,lint ydiff-checkPASS; revisión independiente recovery_start_review/SolHigh aprobada. Identidad, red interna, IP, puerto, categorías cerradas y plazo15s conservados. Ensayo único36052134742 terminóFAIL20:03:54UTC en storage_restore, después de restaurar DB y verificar disponibilidad HTTP del destino. Gatewayorigen probes1/none; destino probes7/refused: la espera sí se ejercitó y avanzó. No prueba causa de los fallos históricos ni recuperación completa. PR167 sigue borrador y producción no cambia.
+
+Evidencia24/09: `C:/Users/amiun/Documents/Codex/folio-c01-evidence/run-36052134742.log`, SHA2560DB1B1BC007AA599674BBDBF462830338C00BCFE38F57800EF71B91EE1CC9294; metadata en subdirectorio delrun, cero artifacts. Fallo fijo `c01_storage_restore_failed: command_failed:node:1`; no permite distinguir inventario,descarga,carga u otro requisito. Próximo paquete acotado: propagar opt-in C01 al hijo Storage, recibir salida con allowFailure y analizar sólo diagnósticos allowlist de phase=storage; extender lista de errores literales del restaurador con pruebas negativas contra mensajes arbitrarios. Nunca imprimir stderr ni cuerpos HTTP. Revisar antes de un ensayo único; no modificar almacenamiento,red,permisos o flags por hipótesis. La verificación integrada posterior (contraseña,TOTP,cifrado,archivos,aislamiento) no se alcanzó. Antes de cerrar C01, actualizar su rama al master vigente y probar ese candidato: la rama ensayada conserva119migraciones frente a120del master publicado.
+
+Cierre del paquete24/09: App36052134762 y SQL36052135036SUCCESS para3f85af5;2272/2272unidades, recuperación de formatos90PASS/15SKIP/0FAIL y buildPASS. Logs privados `run-36052134762-app.log`(SHA25618EC9B96CE88669DCAF7B4FB8D57C04BD097E9E8CB514927964D3895A5437707) y `run-36052135036-sql.log`(63882B55BA20D472AC7537395D1358485BFD29A4C15180112124846673843523), mismo directorio C01. PR167 descripción actualizada, borrador, sin merge. Worktree ede1 limpio y commit remoto preservado; tablero manager mantiene actualización operativa local deliberada. No hay ensayos en curso ni otro intento automático programado.
+
+Acuerdo de dirección: A decide equipo y modelos disponibles según cada paquete, conserva máximo2escritores con ámbitos separados y asigna revisión independiente. Los informes al titular serán breves: resultado, bloqueo, siguiente entrega y decisión necesaria. Antes de abrir otra campaña se cierra o se entrega explícitamente la actual. Si la conversación pierde claridad por longitud, preparar relevo con este tablero, evidencia y autorización vigente; la nueva sesión debe verificar estado antes de escribir. No hace falta que el titular distribuya tareas ni supervise B/C/D.
+
+Inicio del sábado: consultar cuota y cambios desde8b57010; leer primero el resultado final del ensayo24/09 agregado al final de este tablero. Priorizar C01recuperación y B05permisos de Clínica como frentes independientes; máximo2escritores. C01 debe probar acceso con contraseña y segundo factor, archivos privados, información cifrada y aislamiento sobre el candidato actualizado antes de cerrar. B05 debe reproducir con datos ficticios el alcance de pedidos por profesional/recepción antes de corregir; no dar M124 por solución completa. Luego atender B04adultos y recorridos reales de registro, Google/reservas, correo, pagos y portal. Cada asignación llevará base exacta, archivos propios, entorno, pruebas y condición de cierre; reservar margen para integrar y publicar. Menores y agentes automáticos siguen fuera de esta etapa. No repetir PR165, M106/M120/M121 ni migraciones ya instaladas.
+
+## Checkpoint vigente — PR169 publicada
+
+PR169 integrada por squash el20/09/2026 a23:07:38UTC: master `8b57010d6e378cf21185412595eb7c45f15273a4`, candidato `3b2c4a9c7abc27592b0b3b8a1d2ec97e7e681df8`, árbol idéntico `98d3cd764ec162fdfe19c53f51efec4b4777ba44`. Deployment Git `dpl_ESe7DDcy3y1MCXu7P1LCqrscxT4o` READY,gru1,SHA exacto y ambos dominios confirmados. Escritorio actualizado sin cambios tracked y archivos ajenos preservados. Directorio público verificado con filtros violeta y marca vigente; sin consultorios listados, por lo que las tarjetas siguen acreditadas por preview sintético escritorio/móvil. No se publicaron datos para obtener una captura.
+
+CI candidato App35543294230/SQL35543294214SUCCESS,2272unidades/38+6navegador,73PASS+15SKIP recuperación de formatos y buildPASS. CI master App35543716257 y SQL35543716064SUCCESS sobre8b57010; último control terminó23:15:44UTC. Logs completos y hashes preservados. Sin migraciones adicionales a M127. PR167recuperación permanece borrador e incompleta. Esta actualización operativa posterior al merge se conserva en el tablero local y evidencia privada; no modifica el candidato desplegado.
+
+## Checkpoint publicado de PR168
 
 El titular autorizó «cierra y mergea lo que se pueda ver y testear ya». PR168 integrada por squash el 20/09/2026 a las22:45:41UTC: master `0e58d2edf5b65e6b2080f1da248e52859868f158`, candidato `2bdb60870caf8556f24a25db49e5ec1564b36003`, árbol idéntico `12167bec48d3171db5da643dc208097df80d0543`. Vercel Git `dpl_5NTN6XEijtwrfbQydV7ULQbXD8bH` READY, gru1, SHA exacto y ambos dominios confirmados. Escritorio actualizado por fast-forward, tracked limpio, archivos ajenos preservados. Health/login/onboarding anónimos200; dev/experience404. Miniweb real abierta desde enlace de la cuenta, secciones y marca Folio nueva observadas, sin editar ni reservar. CI master App35542640353 y SQL35542640354 SUCCESS sobre0e58d2e; logs completos preservados.
 
@@ -75,12 +155,12 @@ El ensayo de efectivo ficticio no prueba Mercado Pago, entrega de mensajes, rest
 
 El par Upstash nuevo prevalece sobre el del sobre antiguo. Su referencia privada es `C:/Users/amiun/folio-recovery/upstash-pair-repair-20260919T171749782Z-5f582d02dafa/new-pair.dpapi`. No copiar secretos a este tablero ni restaurar el par antiguo sobre el reparado. DPAPI depende de la identidad/perfil Windows.
 
-## Autoridad, coordinación y entornos
+## Antecedente 19–20/09 — autoridad, coordinación y entornos
 
 - A mantiene este tablero, reserva cambios compartidos y decide el orden de integración. Cada trabajador entrega un reporte breve con SHA y referencias sanitizadas; no crea otro backlog general.
 - Copia canónica de coordinación: `C:/Users/amiun/.codex/worktrees/folio-launch-manager/folio-app/docs/LAUNCH-BOARD.md`, rama actual `codex/launch-next-checkpoint`, creada desde el squash c816230. Rama anterior `codex/launch-manager` preservada.
 - El Escritorio, sus archivos no seguidos, otros proyectos, respaldos, fixtures y worktrees anteriores se preservan. Cada tarea usa su worktree; no escribe en el de otra.
-- Escritura actual: A documentación e integración final. B/C/D cerraron sus paquetes; C01 queda incompleto y D05 espera publicación. B04 queda como contrato de diseño revisado, sin código. Máximo dos escritores de implementación, cada uno en su ámbito. B02b y D02 publicados en PR166.
+- Escritura actual: A documentación e integración final. B/C/D cerraron sus paquetes; C01 queda incompleto y D05 está publicado. B04 queda como contrato de diseño revisado, sin código. Máximo dos escritores de implementación, cada uno en su ámbito. B02b y D02 publicados en PR166.
 - B y C no editan migraciones sin reserva explícita del manager. **M124 reservada exclusivamente a D para B03**, paquete separado de PR166: lectura de rango para Calendario de recepción, sin cambiar migraciones anteriores ni aplicar en producción.
 - Reserva adicional B01: `scripts/testing/app-config.mjs`, `app-bootstrap.mjs`, `isolation-policy.mjs` y tipos/pruebas asociados, sólo para sitekey oficial de prueba constante bajo opt-in estricto. Mantener red externa y credenciales heredadas bloqueadas. C no edita esa frontera; coordinar necesidades de `recovery-bootstrap.mjs`.
 - Reserva D01: componentes y estilos `.bl` de la página pública, página/OG `/book/[slug]`, contenido, fixtures y pruebas focales. Incluye `app/(app)/configuracion/perfil-publico-actions.ts` para invalidar página/OG al editar o retirar datos públicos, sin ampliar su exposición. B no edita esos archivos.
@@ -92,7 +172,7 @@ El par Upstash nuevo prevalece sobre el del sobre antiguo. Su referencia privada
 - No copiar `.env.local` productivo a worktrees. Antes de CLIs que puedan escribir configuración, preservar copia protegida fuera del repo. Nunca imprimir secretos ni activar proveedores en pruebas automatizadas.
 - Leer `C:/Users/amiun/.codex/RTK.md`; usar salida acotada y conservar logs completos. `AGENTS.md` no está versionado: leer también el del Escritorio y `CLAUDE.md` de cada checkout.
 
-## Equipo y cuota
+## Antecedente 19–20/09 — equipo y cuota
 
 | Sesión | Modelo/esfuerzo solicitado | Primera asignación | Permiso inicial |
 |---|---|---|---|
@@ -113,7 +193,7 @@ Cuota observada al iniciar ejecución: **67% restante**, reinicio **26/09/2026 1
 
 Medir antes/después de cada paquete. Tras tres intentos sin nueva evidencia, detener ese enfoque, describir el bloqueo y cambiar de estrategia. No lanzar auditorías amplias ni subagentes sin una subtarea acotada, ahorro probable y cupo disponible.
 
-### Política de cierre semanal solicitada por el titular
+### Política histórica de cierre semanal (sustituida por la reserva vigente del 15%)
 
 Continuar trabajo útil mientras haya margen y entregar un checkpoint con mejoras visibles para probar hasta el siguiente reinicio. No consumir cuota para alcanzar un umbral artificialmente.
 
@@ -137,7 +217,7 @@ Las evidencias locales de B01/B02/B02b/B07/D01/D02 de la tabla quedaron publicad
 | B01 | Bloqueante resuelto / configuración comprobada + recuperación UI | B / D | comprobado en destino PR166 | Cloudflare corregido y titular confirma desaparición del error. UI recuperable publicada; CI master PASS. Cuenta/confirmación real sigue en B02 |
 | B02 | Alta / recuperación corregida + evidencia pendiente | B / D | código publicado PR166 | Recuperación de contraseña respeta límite, respuesta incierta y doble envío. CI master PASS; registro/confirmación/MFA/correo reales siguen pendientes |
 | B02b | Alta / reforma solicitada por titular | B / D + A | publicado PR166 | Tres recorridos y bootstrap M126 instalados; 32 casos conjuntos de onboarding/página pública PASS. Elección y salida al inicio comprobadas en producción anónima. No acredita alta/correo reales. D03 mejora ahora personalización |
-| C01 | Bloqueante / evidencia pendiente | C / B + A (D en revisiones anteriores) | PR167 draft, da9cf38; ensayo35542642620 falló en gateway origen | Ensayo anterior a5ffb6b restauró DB; operador existente supabase_admin y pg_cron configurado desde inicio resolvieron prerequisitos. Último run no llegó a datos. Falta readiness demostrada y login/MFA/Storage/cifrado integrado. Logs preservados; Docker local intacto |
+| C01 | Bloqueante / evidencia pendiente | A paquete24/09 / recovery_start_review independiente; C próximo ciclo | PR167 draft,3f85af5; ensayo36052134742 avanzó hasta archivos | DB restaurada y ambos gateways disponibles; destino7probes/refused. Falló Storage con error opaco; siguiente paso diagnóstico cerrado, no retry ciego. Login/MFA/Storage/cifrado integrado pendientes. Logs preservados; Docker local intacto |
 | C02 | Alta / decisión humana + evidencia pendiente | C / A | pendiente | Copia externa y material portable probado fuera del perfil Windows; par Upstash actualizado; custodio y destino autorizados |
 | B03 | Alta / brecha de implementación identificada | D / B | aprobado local `5288a0b`, separado de PR166 | M124 compone M122, cinco fuentes por alcance, semana/mes y campos mínimos. Tipos/lint/build y2248 unidades PASS;118 migraciones replay y M124 focal PASS. B aprueba SHA exacto; fullSQL posterior/M113 corregido y navegador pendiente. No prod ni push; recursos/errores preservados |
 | B04 | Alta / brecha identificada por código, ejecución pendiente | B / D + A | contrato revisado por D/A; sin M128 ni implementación autorizada | Algunas rutas inician atención sin DOB verificada y hoy no existe constancia persistida de verificación. Contrato separado de declaración pública, guard DB y atestación staff con CAS, revisiones y trazabilidad protegida. REOPEN observado sólo reabre la ficha para lectura; M91 impide reabrir el estado clínico. Conservar guardado/cierre de atención ya iniciada, lectura y correcciones históricas vinculadas. Reservas administrativas conservadas. Faltan decisiones explícitas y ejecución sintética; no cambio productivo |
@@ -153,11 +233,11 @@ Las evidencias locales de B01/B02/B02b/B07/D01/D02 de la tabla quedaron publicad
 | C06 | Alta / evidencia pendiente | C / D | pendiente | Alerta externa de caída/copia vencida comprobada; responsable/suplente, cuotas y soporte; capacidad medida para hasta 10 profesionales inicialmente |
 | D03 | Alta / reforma solicitada con captura real y corrección de dirección | D / B + A visual + titular | publicado PR168; dirección aceptada por titular | Miniweb común3d72c64 incorporada como0bc46ef, candidato b61cd22: sin paleta, datos propios, página completa, editor con preview plegable y completar después. CI2263unidades,38+6navegador,SQL/build PASS. B revisó SHA; A visual Solo/Clínica, móvil y Config. Brechas de bio clínica y guardado DIRECTOR resueltas por B08 en PR168 |
 | D04 | Alta / defecto visual observado | D / A | publicado PR168, CI candidato y master PASS | Miniweb/preview/OG unificados con marca vigente: tokens violeta y FolioMark actual. Datos/logo/foto propios y valores históricos conservados. Tipos/lint y3/3OG PASS; A revisó diff y navegador con acento#6255c5 y logo rgb98,85,197. Marca nueva verificada en página pública real |
-| D05 | Media / inconsistencia visual corregida | D / B + A visual | PR169; producto7f4641c aprobado, CI7346ad7 PASS; actualización documental final vuelve a validar | DirectorioCard y su raíz usan identidad Folio vigente, conservan logo/datos/href/filtros y valores DB. Tres archivos, sin migración. D escritorio/móvil390, A desktop4335 y B revisión exacta/integración aprobados; blobs iguales a2aa9892. Preview4335/dev/directory-preview |
+| D05 | Media / inconsistencia visual corregida | D / B + A visual | publicado PR169, candidato3b2c4a9 CI PASS | DirectorioCard y su raíz usan identidad Folio vigente, conservan logo/datos/href/filtros y valores DB. Tres archivos, sin migración. D escritorio/móvil390, A desktop4335 y B revisión exacta/integración aprobados; blobs iguales a2aa9892. Directorio vacío productivo verificado con marca/filtros nuevos; preview4335/dev/directory-preview |
 | B08 | Alta / brechas corregidas | B / A + D | publicado PR168, M127 instalada y verificada | Bio editable postalta y guardado OWNER/DIRECTOR atómico. Carga y confirmación devuelven valores coherentes con su revisión; errores conservan borrador y no confirman rechazos. D8focales PASS y candidato conjunto2272unidades/38+6navegador/build/SQL PASS |
 | H01 | Alta / decisión humana | Titular y profesionales / A | pendiente | Tres profesionales piloto; revisión adicional de kinesio/nutrición; identidad/habilitación, instrumentos adultos, responsabilidades, privacidad/contratos/facturación revisados |
 | L01 | Bloqueante / evidencia pendiente | A + profesionales / D | pendiente | Puertas previas aprobadas, piloto 14 días y al menos 5 jornadas por cada uno de los 3 profesionales; cero bloqueos críticos/altos del alcance ofrecido |
-| L02 | Alta / publicación | A / revisor independiente | checkpoint PR168 comprobado; lanzamiento global pendiente | 0e58d2e, CI exacta, M125/M126/M127, deployment READY y HTTP coherentes. Cierre no incluye Google real, correo, pagos ni recuperación integral |
+| L02 | Alta / publicación | A / revisor independiente | checkpoint PR169 comprobado; lanzamiento global pendiente | 8b57010, CI candidato exacta, M125/M126/M127, deployment READY. Cierre no incluye Google real, correo, pagos ni recuperación integral |
 
 ## Contratos de la primera ola
 
@@ -207,7 +287,7 @@ Dirección confirmada por el titular: base visual Folio con identidad del profes
 - Diseño: tipografía y tokens Folio, jerarquía clara, identidad propia sin claims inventados, formulario de reserva integrado sin pedir dos veces el servicio seleccionado, estados vacíos cuidados, CTA principal claro. Sin constructor genérico, Tailwind, biblioteca nueva ni fotografías/testimonios ficticios en producto.
 - Aceptación: Solo, Clínica con responsable tratante y no tratante; elección/email/OAuth/recarga/multi-org; bootstrap repetido/concurrente; guardados inciertos, permisos y datos ajenos; precio y preparación reales; móvil 360/390, escritorio, teclado, foco, contraste y movimiento reducido. Pruebas sintéticas no acreditan entrega de correo ni proveedores reales. Revisión independiente y vista visible antes de cerrar estética.
 
-## Calendario, verificación y publicación
+## Calendario histórico (sustituido por checkpoints sin semanas fijas)
 
 - Saldo actual hasta 26/09: B01 + C01 primero; preparar puertas del piloto y proveedores. Objetivo de inicio de piloto alrededor del 23–25/09 sólo si aprueban sus puertas.
 - Ciclo adicional 1, 26/09–03/10: cerrar proveedores, recepción, portal adulto y D01; resolver problemas del piloto.
