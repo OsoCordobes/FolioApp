@@ -106,6 +106,8 @@ B05 loader `96d5bb5`: sólo prueba modificada, ninguna función productiva ni SQ
 
 Última lectura CI B05 `96d5bb5`: SQL `36069376432` SUCCESS y Supabase Preview SUCCESS; App `36069376608` todavía en curso. D06a aprobado por A en `e51ec6f`, sin publicación: capturas finales `C:/Users/amiun/.codex/visualizations/2026/09/19/01a0bb0b-ad4d-7cc2-84c0-acc037b0672b/folio-d06a-review2/`. Preview `http://127.0.0.1:4410/dev/book-preview?variant=clinic-logo&layout=consultorio` y variante `solo&layout=perfil`. D06b requiere revisión de sus permisos y pruebas propias; no presenta la elección de layout ni mapa como persistidos actualmente.
 
+Contrato M130 aprobado por A: consentimiento personal en tabla específica con RLS propia y grants por columna; no añadir flag a member porque el OWNER heredaría UPDATE sobre el consentimiento ajeno. Actor propio activo/colegiado/aceptado, organización válida, exigencia MFA también en acceso directo y auditoría transaccional en DB; repetir el mismo estado no crea una transición nueva. Sin policy para OWNER ajeno. Probar acceso directo, otro actor/tenant, MFA, activación y revocación. Ruta personal lee dinámicamente con servicio y revalida organización/miembro/consentimiento. D implementa, sin push hasta revisión.
+
 ## Antecedente — reanudación acotada del 24/09 antes del reinicio manual
 
 El titular autorizó aprovechar el3% semanal restante y continuar el sábado26/09 después del reinicio. Lectura actual97%usado/3%restante; próximo reinicio26/09 14:59:03UTC. Existe un crédito de reinicio completo disponible; no fue solicitado ni consumido. No presupuestarlo como cuota autorizada.
