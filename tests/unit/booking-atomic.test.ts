@@ -4,6 +4,7 @@ import {createRequire} from "node:module";
 import {readFileSync} from "node:fs";
 import {dirname,resolve} from "node:path";
 import {runInNewContext} from "node:vm";
+import {createHash} from "node:crypto";
 import ts from "typescript";
 const actual=createRequire(import.meta.url);
 const id="11000000-0000-4000-8000-000000000001";
@@ -30,6 +31,13 @@ function publicAction(receipt:unknown=null,dbError:unknown=null){
 }
 const publicInput={operacionId:id,orgSlug:"synthetic",servicioId:id,inicio:"2026-10-01T12:00:00Z",nombre:"Synthetic",telefono:"3515551100",consentAccepted:true,consentVersion:"synthetic-v1",captchaToken:"one-use"};
 test("public action recovers a persisted receipt before a second one-use captcha",async()=>{const a=publicAction({id,autoConfirmado:true});const result=await a.call(publicInput) as {ok:boolean};assert.equal(result.ok,true);assert.equal(a.captcha(),0);assert.deepEqual(a.calls.map(c=>c.name),["public_booking_receipt"]);});
+test("legacy public booking receipt keeps the pre-personal-page hash across deployment",async()=>{
+ const a=publicAction({id,autoConfirmado:true});await a.call(publicInput);
+ const expected=createHash("sha256").update(JSON.stringify({org:"synthetic",service:id,professional:null,inicio:"2026-10-01T12:00:00.000Z",nombre:"Synthetic",telefono:"3515551100",email:null,motivo:null,consent:"synthetic-v1"})).digest("hex");
+ assert.equal(a.calls[0].args.p_hash,expected);
+ const personal=publicAction({id,autoConfirmado:true});await personal.call({...publicInput,profesionalId:id,personalPageMemberId:id});
+ assert.notEqual(personal.calls[0].args.p_hash,expected);
+});
 test("public action uses stable request hash independent from captcha and delegates the entire insert",async()=>{const a=publicAction();await a.call(publicInput);await a.call({...publicInput,captchaToken:"replacement"});assert.equal(a.calls[0].args.p_hash,a.calls[2].args.p_hash);assert.equal(a.calls[1].name,"submit_public_booking");assert.equal(a.calls[1].args.p_operation,id);});
 test("public receipt database failure stops without captcha, fallback inserts or acknowledgement",async()=>{const a=publicAction(null,{code:"08006",message:"synthetic private SQL detail"});const result=await a.call(publicInput) as {ok:boolean};assert.equal(result.ok,false);assert.equal(a.captcha(),0);assert.equal(a.calls.length,1);assert.equal(JSON.stringify(result).includes("private SQL"),false);});
 

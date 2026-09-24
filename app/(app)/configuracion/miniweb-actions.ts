@@ -8,7 +8,7 @@ import { extractGoogleMapsEmbedUrl } from "@/lib/book-landing/map-embed";
 import { getActiveContext } from "@/lib/db/active-context";
 import { createSupabaseServerClient, createSupabaseServiceClient } from "@/lib/supabase/server";
 
-type SaveResult = { ok: true; value?: string | null } | { ok: false; error: string };
+type SaveResult = { ok: true; value?: string | null } | { ok: false; error: string; uncertain?: boolean };
 
 async function editableOrg() {
   const client = await createSupabaseServerClient();
@@ -27,7 +27,7 @@ export async function saveMiniwebLayoutAction(layout: PublicLandingLayout): Prom
   const service = createSupabaseServiceClient();
   const { data, error } = await service.from("organization").update({ miniweb_layout: layout })
     .eq("id", org.id).is("deleted_at", null).select("id").maybeSingle();
-  if (error || !data) return { ok: false, error: "No pudimos guardar la disposición. Conservamos tu selección." };
+  if (error || !data) return { ok: false, uncertain: true, error: "No pudimos confirmar la disposición. Recargá la página para verificarla." };
   revalidatePath(`/book/${org.slug}`);
   revalidatePath("/configuracion");
   return { ok: true };
@@ -55,7 +55,7 @@ export async function saveMiniwebMapAction(input: { snippet: string | null; expe
     ? update.is("direccion_completa", null)
     : update.eq("direccion_completa", current.direccion_completa);
   const { data, error } = await update.select("id").maybeSingle();
-  if (error || !data) return { ok: false, error: "La dirección cambió o el mapa no pudo guardarse. Recargá la página." };
+  if (error || !data) return { ok: false, uncertain: true, error: "No pudimos confirmar si cambió el mapa. Recargá la página para verificarlo." };
   revalidatePath(`/book/${org.slug}`);
   revalidatePath("/configuracion");
   return { ok: true, value: embedUrl };

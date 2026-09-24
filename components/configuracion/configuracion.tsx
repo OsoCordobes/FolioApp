@@ -25,6 +25,7 @@ import { LogoUpload } from "@/components/public-card/logo-upload";
 import { BookLandingPreview } from "@/components/book-landing/book-landing-preview";
 import type { PublicLandingLayout, PublicLandingViewData } from "@/components/book-landing/book-landing-view";
 import { saveMiniwebLayoutAction, saveMiniwebMapAction } from "@/app/(app)/configuracion/miniweb-actions";
+import { extractGoogleMapsEmbedUrl } from "@/lib/book-landing/map-embed";
 import { uploadSettingsOrgLogo, removeSettingsOrgLogo } from "@/app/(public)/onboarding/actions";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { contar } from "@/lib/format/plural";
@@ -256,6 +257,7 @@ function SecPerfilPublico({ initial, matricula, isClinic, orgSlug, memberId, ini
   const [bioSaved, setBioSaved] = useState(initial.bioPublica ?? "");
   const [mostrar, setMostrar] = useState(initial.mostrarMatricula);
   const [personalPageEnabled, setPersonalPageEnabled] = useState(initialConsent);
+  const [personalPageUnknown, setPersonalPageUnknown] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [profilePending, startTransition] = useTransition();
   const bioCounterId = useId();
@@ -287,14 +289,23 @@ function SecPerfilPublico({ initial, matricula, isClinic, orgSlug, memberId, ini
   };
 
   const onTogglePersonalPage = (enabled: boolean) => {
-    if (profilePending) return;
+    if (profilePending || personalPageUnknown) return;
     const previous = personalPageEnabled;
     setPersonalPageEnabled(enabled);
     setErr(null);
     startTransition(async () => {
-      const result = await setOwnMiniwebConsent(enabled);
-      if (!result.ok) { setPersonalPageEnabled(previous); setErr(result.error ?? "No pudimos guardar el cambio."); }
-      else router.refresh();
+      try {
+        const result = await setOwnMiniwebConsent(enabled);
+        if (!result.ok) {
+          if (result.uncertain) setPersonalPageUnknown(true);
+          else setPersonalPageEnabled(previous);
+          setErr(result.error ?? "No pudimos guardar el cambio.");
+        }
+        else router.refresh();
+      } catch {
+        setPersonalPageUnknown(true);
+        setErr("No pudimos confirmar si cambió la publicación. Recargá la página para verificarlo.");
+      }
     });
   };
 
@@ -353,8 +364,8 @@ function SecPerfilPublico({ initial, matricula, isClinic, orgSlug, memberId, ini
         <Toggle value={mostrar} onChange={onToggleMatricula} />
       </Row>
       {isClinic ? <Row label="Publicar mi página personal" sub="Sólo vos podés activar o revocar este enlace. Tu perfil en el equipo y las reservas del consultorio siguen disponibles por separado." vertical>
-        <Toggle value={personalPageEnabled} onChange={onTogglePersonalPage} disabled={profilePending} />
-        {personalPageEnabled && !profilePending ? <a className="cfg-link" href={`/book/${encodeURIComponent(orgSlug)}/p/${encodeURIComponent(memberId)}`} target="_blank" rel="noopener noreferrer">Abrir mi enlace personal ↗</a> : null}
+        <Toggle value={personalPageEnabled} onChange={onTogglePersonalPage} disabled={profilePending || personalPageUnknown} />
+        {personalPageEnabled && !profilePending && !personalPageUnknown ? <a className="cfg-link" href={`/book/${encodeURIComponent(orgSlug)}/p/${encodeURIComponent(memberId)}`} target="_blank" rel="noopener noreferrer">Abrir mi enlace personal ↗</a> : null}
       </Row> : null}
       {err ? (
         <p className="au-err" role="alert" style={{ marginTop: 8 }}>
@@ -558,34 +569,54 @@ function SecConsultorio({
   const [miniwebLayout, setMiniwebLayout] = useState(initialMiniwebLayout);
   const [previewDevice, setPreviewDevice] = useState<"mobile" | "desktop">("desktop");
   const [mapSnippet, setMapSnippet] = useState("");
+  const [miniwebUnknown, setMiniwebUnknown] = useState(false);
   const [mapAddressConfirmed, setMapAddressConfirmed] = useState(false);
   const [mapUrl, setMapUrl] = useState(publicPreview?.org.mapsEmbedUrl ?? null);
   const [mapConfirmedAddress, setMapConfirmedAddress] = useState(publicPreview?.org.mapsConfirmedAddress ?? null);
   const [miniwebMessage, setMiniwebMessage] = useState<string | null>(null);
   const [miniwebPending, startMiniwebTransition] = useTransition();
+  const candidateMapUrl = mapSnippet.trim() ? extractGoogleMapsEmbedUrl(mapSnippet) : null;
   const mapIsCurrent = Boolean(mapUrl && mapConfirmedAddress === savedAddress && c.direccion === savedAddress);
   const changeLayout = (next: PublicLandingLayout) => {
-    if (!canEdit || next === miniwebLayout) return;
+    if (!canEdit || miniwebUnknown || next === miniwebLayout) return;
     const previous = miniwebLayout;
     setMiniwebLayout(next);
     setMiniwebMessage(null);
     startMiniwebTransition(async () => {
-      const result = await saveMiniwebLayoutAction(next);
-      if (!result.ok) { setMiniwebLayout(previous); setMiniwebMessage(result.error); }
-      else router.refresh();
+      try {
+        const result = await saveMiniwebLayoutAction(next);
+        if (!result.ok) {
+          if (result.uncertain) setMiniwebUnknown(true);
+          else setMiniwebLayout(previous);
+          setMiniwebMessage(result.error);
+        }
+        else router.refresh();
+      } catch {
+        setMiniwebUnknown(true);
+        setMiniwebMessage("No pudimos confirmar la disposición. Recargá la página para verificarla.");
+      }
     });
   };
   const saveMap = (remove = false) => {
     setMiniwebMessage(null);
     startMiniwebTransition(async () => {
-      const result = await saveMiniwebMapAction({ snippet: remove ? null : mapSnippet, expectedAddress: savedAddress });
-      if (!result.ok) { setMiniwebMessage(result.error); return; }
-      setMapUrl(result.value ?? null);
-      setMapConfirmedAddress(remove ? null : savedAddress);
-      setMapSnippet("");
-      setMapAddressConfirmed(false);
-      setMiniwebMessage(remove ? "Mapa quitado." : "Mapa confirmado para esta dirección.");
-      router.refresh();
+      try {
+        const result = await saveMiniwebMapAction({ snippet: remove ? null : mapSnippet, expectedAddress: savedAddress });
+        if (!result.ok) {
+          if (result.uncertain) setMiniwebUnknown(true);
+          setMiniwebMessage(result.error);
+          return;
+        }
+        setMapUrl(result.value ?? null);
+        setMapConfirmedAddress(remove ? null : savedAddress);
+        setMapSnippet("");
+        setMapAddressConfirmed(false);
+        setMiniwebMessage(remove ? "Mapa quitado." : "Mapa confirmado para esta dirección.");
+        router.refresh();
+      } catch {
+        setMiniwebUnknown(true);
+        setMiniwebMessage("No pudimos confirmar si cambió el mapa. Recargá la página para verificarlo.");
+      }
     });
   };
   const bioCountId = useId();
@@ -617,7 +648,7 @@ function SecConsultorio({
         <div className="perfil-editor">
           <div className="perfil-editor-controls">
             <p>Completá los datos en las secciones indicadas y revisá la página entera abajo. Los cambios de texto se guardan con «Guardar cambios».</p>
-            <fieldset className="miniweb-layout-options" disabled={!canEdit || miniwebPending}>
+            <fieldset className="miniweb-layout-options" disabled={!canEdit || miniwebPending || miniwebUnknown}>
               <legend>Disposición de la página</legend>
               <label><input type="radio" name="miniweb-layout" checked={miniwebLayout === "perfil"} onChange={() => changeLayout("perfil")} /> Perfil</label>
               <label><input type="radio" name="miniweb-layout" checked={miniwebLayout === "consultorio"} onChange={() => changeLayout("consultorio")} /> Consultorio</label>
@@ -782,11 +813,13 @@ function SecConsultorio({
           {mapIsCurrent ? <p className="muted">Mapa confirmado para {savedAddress}.</p> : mapUrl ? <p className="muted">La dirección cambió. Confirmá un mapa nuevo cuando guardes la dirección.</p> : null}
           <textarea className="cfg-input" aria-label="Código para insertar mapa de Google" value={mapSnippet}
             onChange={(event) => { setMapSnippet(event.target.value); setMapAddressConfirmed(false); }} rows={3} maxLength={4000}
-            disabled={!canEdit || miniwebPending} placeholder="<iframe src=…></iframe>" />
-          <label className="miniweb-map-confirm"><input type="checkbox" checked={mapAddressConfirmed} onChange={(event) => setMapAddressConfirmed(event.target.checked)} disabled={!canEdit || miniwebPending || !mapSnippet.trim()} /> Confirmo que este mapa muestra la dirección guardada.</label>
+            disabled={!canEdit || miniwebPending || miniwebUnknown} placeholder="Pegá lo que copiaste de Google Maps" />
+          {mapSnippet.trim() && !candidateMapUrl ? <p role="alert" className="miniweb-map-error">Ese código no parece ser «Insertar un mapa» de Google Maps. Copialo otra vez desde Compartir.</p> : null}
+          {candidateMapUrl ? <div className="miniweb-map-preview"><p>Vista previa del mapa · comprobá que el marcador corresponda a {savedAddress || "la dirección guardada"}.</p><iframe src={candidateMapUrl} title="Vista previa del mapa pegado" loading="lazy" referrerPolicy="no-referrer-when-downgrade" /></div> : null}
+          <label className="miniweb-map-confirm"><input type="checkbox" checked={mapAddressConfirmed} onChange={(event) => setMapAddressConfirmed(event.target.checked)} disabled={!canEdit || miniwebPending || miniwebUnknown || !candidateMapUrl} /> Confirmo que este mapa muestra la dirección guardada.</label>
           <div className="miniweb-map-actions">
-            <button type="button" className="fi-btn fi-btn-secondary" disabled={!canEdit || miniwebPending || !mapSnippet.trim() || !mapAddressConfirmed || !savedAddress.trim() || c.direccion !== savedAddress} onClick={() => saveMap()}>Confirmar mapa</button>
-            {mapUrl ? <button type="button" className="fi-btn fi-ghost" disabled={!canEdit || miniwebPending} onClick={() => saveMap(true)}>Quitar mapa</button> : null}
+            <button type="button" className="fi-btn fi-btn-secondary" disabled={!canEdit || miniwebPending || miniwebUnknown || !candidateMapUrl || !mapAddressConfirmed || !savedAddress.trim() || c.direccion !== savedAddress} onClick={() => saveMap()}>Confirmar mapa</button>
+            {mapUrl ? <button type="button" className="fi-btn fi-ghost" disabled={!canEdit || miniwebPending || miniwebUnknown} onClick={() => saveMap(true)}>Quitar mapa</button> : null}
           </div>
           <p className="muted">Podés completar el mapa después. La dirección y las reservas funcionan igual.</p>
           {miniwebMessage ? <p role="status" className="muted">{miniwebMessage}</p> : null}

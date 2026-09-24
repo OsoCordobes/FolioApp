@@ -33,6 +33,7 @@ import {
 export interface PerfilPublicoActionResult {
   ok: boolean;
   error?: string;
+  uncertain?: boolean;
 }
 
 export interface UploadPhotoResult extends PerfilPublicoActionResult {
@@ -224,10 +225,16 @@ export async function setOwnMiniwebConsent(enabled: boolean): Promise<PerfilPubl
     ? await client.from("member_miniweb_consent").update({ enabled })
       .eq("id", memberId).eq("organization_id", organizationId)
     : await client.from("member_miniweb_consent").insert({ id: memberId, organization_id: organizationId, enabled: true });
-  if (write.error) {
-    const { data: current } = await client.from("member_miniweb_consent")
-      .select("enabled").eq("id", memberId).eq("organization_id", organizationId).maybeSingle();
-    if (current?.enabled !== enabled) return { ok: false, error: "No pudimos confirmar el cambio. Recargá la página." };
+  // UPDATE can affect zero rows without an error; read back even on apparent success.
+  const { data: current, error: confirmError } = await client.from("member_miniweb_consent")
+    .select("enabled").eq("id", memberId).eq("organization_id", organizationId).maybeSingle();
+  if (confirmError) {
+    return { ok: false, uncertain: true, error: "No pudimos confirmar si cambió la publicación. Recargá la página para verificarlo." };
+  }
+  if (current?.enabled !== enabled) {
+    return { ok: false, error: write.error
+      ? "No pudimos guardar el cambio. Recargá la página."
+      : "No pudimos confirmar el cambio. Recargá la página." };
   }
   revalidatePath(`/book/${ctx.data.organization.slug}/p/${memberId}`);
   revalidatePath(`/book/${ctx.data.organization.slug}`);

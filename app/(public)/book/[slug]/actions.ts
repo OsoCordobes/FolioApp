@@ -170,7 +170,10 @@ export async function createPedidoPublico(input:z.infer<typeof createPedidoInput
   const ip=await clientIp(),rl=await limitByIp("book.create",ip,5);
   if(!rl.ok)return err("validation",`Demasiados intentos, probá en ${rl.resetIn}s.`);
   const service=createSupabaseServiceClient();
-  const hash=createHash("sha256").update(JSON.stringify({org:d.orgSlug,service:d.servicioId,professional:d.profesionalId??null,personalPage:d.personalPageMemberId??null,inicio:new Date(d.inicio).toISOString(),nombre:d.nombre,telefono:d.telefono,email:d.email??null,motivo:d.motivo??null,consent:d.consentVersion})).digest("hex");
+  // Preserve the exact legacy receipt identity when no personal-page marker is sent.
+  const hash=createHash("sha256").update(JSON.stringify({org:d.orgSlug,service:d.servicioId,professional:d.profesionalId??null,
+    ...(d.personalPageMemberId?{personalPage:d.personalPageMemberId}:{}),inicio:new Date(d.inicio).toISOString(),
+    nombre:d.nombre,telefono:d.telefono,email:d.email??null,motivo:d.motivo??null,consent:d.consentVersion})).digest("hex");
   // A durable receipt is recoverable without spending a one-use captcha again.
   const previous=await service.rpc("public_booking_receipt",{p_slug:d.orgSlug,p_operation:d.operacionId,p_hash:hash});
   if(previous.error){const mapped=mapSupabaseError(previous.error);return err(mapped.code,mapped.message);}

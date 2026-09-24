@@ -6,7 +6,9 @@ export function normalizeGoogleMapsEmbedUrl(value: string | null | undefined): s
     if (url.protocol !== "https:" || url.hostname !== "www.google.com" || url.port ||
         url.username || url.password || url.pathname !== "/maps/embed" || url.hash) return null;
     const entries = [...url.searchParams.entries()];
-    if (entries.length !== 1 || entries[0][0] !== "pb" || !/^![\w!.,:+-]{20,2500}$/.test(entries[0][1])) return null;
+    const pb = entries[0]?.[1] ?? "";
+    if (entries.length !== 1 || entries[0][0] !== "pb" || pb.length < 20 || pb.length > 2500 ||
+        !pb.startsWith("!") || /[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}<>"'`]/u.test(pb)) return null;
     return url.toString();
   } catch {
     return null;

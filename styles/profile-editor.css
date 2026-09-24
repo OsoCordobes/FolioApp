@@ -35,6 +35,10 @@
 .miniweb-preview-mobile .bl-header-nav { order: 3; width: 100%; justify-content: flex-start; margin: 0; overflow-x: auto; flex-wrap: nowrap; }
 .miniweb-preview-mobile .bl-hero-title { overflow-wrap: anywhere; }
 .miniweb-map-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.miniweb-map-error { margin: 8px 0 0; color: var(--red); font-size: 13px; line-height: 1.5; }
+.miniweb-map-preview { width: min(100%, 640px); margin-top: 12px; }
+.miniweb-map-preview p { margin: 0 0 8px; color: var(--ink-2); font-size: 13px; line-height: 1.5; }
+.miniweb-map-preview iframe { display: block; width: 100%; height: 280px; border: 1px solid var(--line); border-radius: var(--r-sm); }
 .miniweb-map-confirm { display: flex; align-items: center; gap: 8px; min-height: 44px; margin-top: 8px; color: var(--ink-2); font-size: 13px; line-height: 1.4; cursor: pointer; }
 .miniweb-map-confirm input { accent-color: var(--accent); flex: none; }
 .miniweb-map-confirm input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
