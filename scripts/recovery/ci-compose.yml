@@ -1,5 +1,7 @@
 # C01: only synthetic services, on a Docker internal network. The official
-# self-hosted/v0.8.1 Docker files are fetched at a pinned commit by ci-run.sh.
+# self-hosted/v0.8.1 Docker files are fetched at a pinned commit by CI.
+# S3 follows 8c7a4d9d/docker/docker-compose.s3.yml; both Chainguard images
+# use OCI index digests verified from cgr.dev (including linux/amd64).
 services:
   db:
     image: supabase/postgres:17.6.1.136
@@ -82,6 +84,8 @@ services:
     depends_on:
       db: {condition: service_healthy}
       rest: {condition: service_started}
+      minio: {condition: service_healthy}
+      minio-createbucket: {condition: service_completed_successfully}
     environment:
       ANON_KEY: ${C01_ANON_KEY:?}
       SERVICE_KEY: ${C01_SERVICE_KEY:?}
@@ -91,19 +95,51 @@ services:
       STORAGE_PUBLIC_URL: http://127.0.0.1:55421
       REQUEST_ALLOW_X_FORWARDED_PATH: "true"
       FILE_SIZE_LIMIT: "52428800"
-      STORAGE_BACKEND: file
-      GLOBAL_S3_BUCKET: stub
-      FILE_STORAGE_BACKEND_PATH: /var/lib/storage
+      STORAGE_BACKEND: s3
+      GLOBAL_S3_BUCKET: ${C01_S3_BUCKET:?}
+      GLOBAL_S3_ENDPOINT: http://minio:9000
+      GLOBAL_S3_PROTOCOL: http
+      GLOBAL_S3_FORCE_PATH_STYLE: "true"
+      AWS_ACCESS_KEY_ID: ${C01_MINIO_USER:?}
+      AWS_SECRET_ACCESS_KEY: ${C01_MINIO_PASSWORD:?}
       TENANT_ID: stub
-      REGION: local
+      REGION: stub
       ENABLE_IMAGE_TRANSFORMATION: "false"
-    volumes:
-      - storagefiles:/var/lib/storage
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:5000/status"]
       interval: 5s
       timeout: 5s
       retries: 15
+  minio:
+    image: cgr.dev/chainguard/minio@sha256:bd014394a80898e68c149f2311fdf8d5a2c2f3bb2c33b9327ae6d02b4b065ae1
+    environment:
+      MINIO_ROOT_USER: ${C01_MINIO_USER:?}
+      MINIO_ROOT_PASSWORD: ${C01_MINIO_PASSWORD:?}
+    command: server --console-address ":9001" /data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 2s
+      timeout: 10s
+      retries: 5
+    volumes:
+      - minio-data:/data
+  minio-createbucket:
+    image: cgr.dev/chainguard/minio-client@sha256:f0dd93b48af1f8a641edcd3c64661c8dbe05189bd2ef2f8cea216eb18af10bf8
+    depends_on:
+      minio: {condition: service_healthy}
+    environment:
+      MINIO_ROOT_USER: ${C01_MINIO_USER:?}
+      MINIO_ROOT_PASSWORD: ${C01_MINIO_PASSWORD:?}
+      C01_S3_BUCKET: ${C01_S3_BUCKET:?}
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        mc alias set c01 http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}" >/dev/null 2>&1
+        mc mb --ignore-existing "c01/$${C01_S3_BUCKET}" >/dev/null 2>&1
+        objects="$$(mc --json ls --recursive "c01/$${C01_S3_BUCKET}" 2>/dev/null)" || exit 43
+        [ -z "$$objects" ] || exit 44
+        printf 'c01_s3_bucket_empty\n'
   api-gw:
     image: envoyproxy/envoy:v1.39.1
     depends_on:
@@ -129,7 +165,7 @@ services:
 volumes:
   pgdata:
   pgconfig:
-  storagefiles:
+  minio-data:
 networks:
   default:
     internal: true

@@ -13,14 +13,15 @@ import {createClient} from '@supabase/supabase-js';
 import {totp} from '../../scripts/testing/clinical-config.mjs';
 import {verifyBackup} from '../backup/restore.mjs';
 import {validateReceipt} from '../backup/retention.mjs';
-import {parseSafeRestoreDiagnostic,parseSafePgRestoreDiagnostic,parseSafeStorageInspectHttp,safeStorageInspectResponse} from '../backup/restore-diagnostics.mjs';
+import {parseSafeRestoreDiagnostic,parseSafePgRestoreDiagnostic,parseSafeStorageInspectHttp} from '../backup/restore-diagnostics.mjs';
 import {validateBridgeTarget,preflightBridgeTarget,waitForBridgeTarget,openLoopbackBridge} from './ci-loopback-bridge.mjs';
 import {planRolePreparation} from './ci-role-preflight.mjs';
+import {requireEmptyS3Bucket} from './ci-s3-preflight.mjs';
 
 const repo=path.resolve(fileURLToPath(new URL('../../',import.meta.url)));
 const compose=path.join(repo,'scripts/recovery/ci-compose.yml');
 const upstreamCommit='8c7a4d9dbbaf8b552893822e89d7bf06f33f9220';
-const images=['supabase/postgres:17.6.1.136','supabase/gotrue:v2.196.0','postgrest/postgrest:v14.17','supabase/storage-api:v1.74.0','envoyproxy/envoy:v1.39.1'];
+const images=['supabase/postgres:17.6.1.136','supabase/gotrue:v2.196.0','postgrest/postgrest:v14.17','supabase/storage-api:v1.74.0','envoyproxy/envoy:v1.39.1','cgr.dev/chainguard/minio@sha256:bd014394a80898e68c149f2311fdf8d5a2c2f3bb2c33b9327ae6d02b4b065ae1','cgr.dev/chainguard/minio-client@sha256:f0dd93b48af1f8a641edcd3c64661c8dbe05189bd2ef2f8cea216eb18af10bf8'];
 const source='folio_c01_source',destination='folio_c01_destination';
 const api='http://127.0.0.1:55421';
 const dbPort=55422;
@@ -86,9 +87,12 @@ async function ensureFresh(sourceEnv,destinationEnv){
   if(volumes.output.trim())throw Error('c01_volume_already_exists');
  }
 }
-async function assertInternal(project,env){
+async function assertProjectInternalNetwork(project,env){
  const result=await docker(['network','inspect',`${project}_default`,'--format','{{.Internal}}'],env);
  assert.equal(result.output.trim(),'true','Docker network must deny outbound routing');
+}
+async function assertInternal(project,env){
+ await assertProjectInternalNetwork(project,env);
  const probe=await dc(project,['exec','-T','auth','wget','-q','-T','3','-O','/dev/null','http://1.1.1.1/'],env,{allowFailure:true});
  assert.notEqual(probe.code,0,'Auth unexpectedly has outbound access');
 }
@@ -187,6 +191,12 @@ async function createTarget(state,env){
  assert.match(pid,/^[1-9][0-9]*$/);
  return pid;
 }
+async function preflightEmptyDestinationBucket(env){
+ const result=await dc(destination,['run','-T','--rm','--no-deps','minio-createbucket'],env,{allowFailure:true,limit:4096})
+  .catch(()=>{throw Error('c01_s3_bucket_preflight_failed');});
+ requireEmptyS3Bucket(result);
+ console.log('c01_s3_destination_bucket_empty');
+}
 async function inspectCronPrerequisites(state,backup){
  const source=backup.manifest.source.extensions.some(extension=>extension.name==='pg_cron');
  const destination=await withPg(state.dbPassword,'postgres',async db=>{
@@ -251,33 +261,7 @@ async function restore(state,backup,root,env,pid){
  assert.equal(result.authLoginVerified,false);
  assert.equal(result.storageFilesRestored,false);
 }
-async function inspectStorage500Control(state,fixture,env){
- // This check is read-only and synthetic: no path, object name or body is logged.
- const scan="const fs=require('node:fs'),path=require('node:path');let dirs=['/var/lib/storage'],found=false;try{while(dirs.length&&!found){const dir=dirs.pop();for(const item of fs.readdirSync(dir,{withFileTypes:true})){if(item.isDirectory())dirs.push(path.join(dir,item.name));else{found=true;break}}}process.stdout.write(found?'nonempty':'empty')}catch{process.stdout.write('unknown')}";
- let bytesAbsent='unknown';
- try{
-  const result=await dc(destination,['exec','-T','storage','node','-e',scan],env,{allowFailure:true,limit:4096});
-  if(result.code===0&&result.output.trim()==='empty')bytesAbsent='yes';
-  if(result.code===0&&result.output.trim()==='nonempty')bytesAbsent='no';
- }catch{}
- const controlKey=`c01-control-${randomUUID()}`;
- let metadataAbsent='unknown';
- try{
-  const present=await withPg(state.dbPassword,targetDatabase,async db=>(await db.query('SELECT EXISTS (SELECT 1 FROM storage.objects WHERE bucket_id=$1 AND name=$2) AS present',[fixture.bucket,controlKey])).rows[0]?.present);
-  if(typeof present==='boolean')metadataAbsent=present?'no':'yes';
- }catch{}
- let controlStatus='other',controlCode='other';
- if(metadataAbsent==='yes'){
-  try{
-   const response=await fetch(`${api}/storage/v1/object/${encodeURIComponent(fixture.bucket)}/${encodeURIComponent(controlKey)}`,{headers:{Authorization:`Bearer ${state.serviceKey}`,apikey:state.serviceKey,'Cache-Control':'no-cache'},redirect:'error',signal:AbortSignal.timeout(5000)});
-   const control=await safeStorageInspectResponse(response);
-   controlStatus=control.status;controlCode=control.code;
-   await response.body?.cancel().catch(()=>{});
-  }catch{}
- }
- console.error(`c01_storage_500_control bytes_absent=${bytesAbsent} metadata_absent=${metadataAbsent} control_status=${controlStatus} control_code=${controlCode}`);
-}
-async function restoreStorage(state,backup,root,env,fixture){
+async function restoreStorage(state,backup,root,env){
  const configPath=path.join(root,'restore-storage.json');
  await writeJson(configPath,{phase:'storage',directory:backup.directory,recipientPrivateKeyFile:path.join(root,'recipient.key'),storageUrl:api,confirmStorageOrigin:api,metadataRestored:true,journalDirectory:path.join(root,'journal')});
  const restored=await child(process.execPath,[path.join(repo,'scripts/backup/restore-local.mjs'),configPath],{env:{...env,FOLIO_BACKUP_RESTORE_PASSPHRASE:state.passphrase,FOLIO_BACKUP_RESTORE_STORAGE_SERVICE_KEY:state.serviceKey,FOLIO_BACKUP_RESTORE_DIAGNOSTICS:'c01'},allowFailure:true}).catch(()=>{throw Error('restore_process_failed');});
@@ -286,7 +270,6 @@ async function restoreStorage(state,backup,root,env,fixture){
   if(diagnostic?.phase==='storage'){
    const http=parseSafeStorageInspectHttp(restored.errorOutput);
    if(http)console.error(`c01_storage_inspect_http status=${http.status} code=${http.code}`);
-   if(http?.status==='500'&&http.code==='InternalError')await inspectStorage500Control(state,fixture,env);
    throw Error(`restore_${diagnostic.category}_${diagnostic.code}`);
   }
   throw Error('restore_process_failed');
@@ -352,16 +335,16 @@ async function main(){
  const passphrase=b64(36),keys=generateKeyPairSync('rsa',{modulusLength:3072,publicKeyEncoding:{type:'spki',format:'pem'},privateKeyEncoding:{type:'pkcs8',format:'pem',cipher:'aes-256-cbc',passphrase}});
  await writeFile(path.join(root,'recipient.pub'),keys.publicKey,{flag:'wx',mode:0o600});
  await writeFile(path.join(root,'recipient.key'),keys.privateKey,{flag:'wx',mode:0o600});
- await writeJson(path.join(root,'platform.json'),{auth:{provider:'local-synthetic',mfa:'totp'},storage:{provider:'local-file',private:true},database:{engine:'postgres',major:17},application:{name:'Folio C01 synthetic'},custody:{runner:'github-hosted',realData:false}});
+ await writeJson(path.join(root,'platform.json'),{auth:{provider:'local-synthetic',mfa:'totp'},storage:{provider:'local-s3',private:true},database:{engine:'postgres',major:17},application:{name:'Folio C01 synthetic'},custody:{runner:'github-hosted',realData:false}});
  const secret=b64(48),dbPassword=b64(32);
  const state={passphrase,privateKey:keys.privateKey,dbPassword,anonKey:jwt(secret,'anon'),serviceKey:jwt(secret,'service_role')};
- const env={...process.env,C01_CHECKED_OUT_SHA:checkedOutSha,C01_OFFICIAL_DOCKER:official,C01_DB_PASSWORD:dbPassword,C01_JWT_SECRET:secret,C01_ANON_KEY:state.anonKey,C01_SERVICE_KEY:state.serviceKey,C01_DASHBOARD_PASSWORD:b64(18),C01_APP_DATABASE:'postgres',C01_CRON_DATABASE:'postgres',FOLIO_ENC_KEY:randomBytes(32).toString('base64'),FOLIO_ENC_HMAC_KEY:randomBytes(32).toString('base64')};
- const destinationEnv={...env,C01_CRON_DATABASE:targetDatabase};
+ const env={...process.env,C01_CHECKED_OUT_SHA:checkedOutSha,C01_OFFICIAL_DOCKER:official,C01_DB_PASSWORD:dbPassword,C01_JWT_SECRET:secret,C01_ANON_KEY:state.anonKey,C01_SERVICE_KEY:state.serviceKey,C01_DASHBOARD_PASSWORD:b64(18),C01_APP_DATABASE:'postgres',C01_CRON_DATABASE:'postgres',C01_S3_BUCKET:'c01-synthetic-objects',C01_MINIO_USER:randomBytes(16).toString('hex'),C01_MINIO_PASSWORD:b64(36),FOLIO_ENC_KEY:randomBytes(32).toString('base64'),FOLIO_ENC_HMAC_KEY:randomBytes(32).toString('base64')};
+ const destinationEnv={...env,C01_CRON_DATABASE:targetDatabase,C01_MINIO_USER:randomBytes(16).toString('hex'),C01_MINIO_PASSWORD:b64(36)};
  // The encryption key is process-local too, for the direct Folio decrypt check.
  process.env.FOLIO_ENC_KEY=env.FOLIO_ENC_KEY;
  process.env.FOLIO_ENC_HMAC_KEY=env.FOLIO_ENC_HMAC_KEY;
  await ensureFresh(env,destinationEnv);
- await dc(source,['pull','db','auth','rest','storage','api-gw'],env,{limit:4*1024*1024});
+ await dc(source,['pull','db','auth','rest','storage','api-gw','minio','minio-createbucket'],env,{limit:4*1024*1024});
  const imageDigests=[];
  for(const name of images){const info=await docker(['image','inspect','--format','{{.Id}}',name],env);imageDigests.push(`${name} ${info.output.trim()}`);}
  let stage='source_start';
@@ -381,8 +364,10 @@ async function main(){
   await dbBridge.close();dbBridge=null;
   await dc(source,['down'],env); // No -v; keep evidence until runner disposal.
   stage='target_empty';
-  await dc(destination,['up','-d','--wait','db'],destinationEnv);
+  await dc(destination,['up','-d','--wait','db','minio'],destinationEnv);
+  await assertProjectInternalNetwork(destination,destinationEnv);
   dbBridge=await startBridge(destination,'db',dbPort,5432,destinationEnv);
+  stage='target_s3_preflight';await preflightEmptyDestinationBucket(destinationEnv);
   stage='target_prerequisites';await inspectCronPrerequisites(state,backup);
   await prepareTargetRoles(state,backup);
   stage='target_empty';
@@ -393,11 +378,11 @@ async function main(){
   await assertInternal(destination,targetEnv);
   apiBridge=await startBridge(destination,'api-gw',55421,8000,targetEnv);
   await waitApi(state.anonKey);
-  stage='storage_restore';const storage=await restoreStorage(state,backup,root,targetEnv,fixture);
+  stage='storage_restore';const storage=await restoreStorage(state,backup,root,targetEnv);
   stage='integrated_verify';await verify(state,fixture,backup);
   stage='complete';
   const summary=process.env.GITHUB_STEP_SUMMARY;
-  if(summary)await writeFile(summary,`## C01 synthetic recovery\n\n- PostgreSQL 17 migrations applied: ${migrationCount}\n- Complete authenticated package: yes\n- Empty template0 target and transactional restore: yes\n- Auth password and existing TOTP after restore: yes\n- Same restored DB: clinical ciphertext, Auth factor, Storage metadata verified\n- Private Storage bytes restored: ${storage.storageObjects}; SHA-256 matched\n- Tenant and anonymous denial: yes\n- Source and destination: sequential, internal networks, hosted runner only\n- Images (local IDs):\n${imageDigests.map(x=>`  - ${x}`).join('\n')}\n`,{flag:'a'});
+  if(summary)await writeFile(summary,`## C01 synthetic recovery\n\n- PostgreSQL 17 migrations applied: ${migrationCount}\n- Complete authenticated package: yes\n- Empty template0 target and transactional restore: yes\n- Auth password and existing TOTP after restore: yes\n- Same restored DB: clinical ciphertext, Auth factor, Storage metadata verified\n- Private Storage bytes restored: ${storage.storageObjects}; SHA-256 matched\n- Tenant and anonymous denial: yes\n- Synthetic S3 destination: fresh empty bucket, separate credentials and volume\n- Source and destination: sequential, internal networks, hosted runner only\n- Images (local IDs):\n${imageDigests.map(x=>`  - ${x}`).join('\n')}\n`,{flag:'a'});
   await apiBridge.close();apiBridge=null;
   await dbBridge.close();dbBridge=null;
   await dc(destination,['down'],targetEnv); // Preserve volumes; runner is ephemeral.
@@ -407,7 +392,7 @@ async function main(){
   console.error(`c01_loopback_bridges: db=${dbBridge?'open':'closed'} api=${apiBridge?'open':'closed'}`);
   const project=stage.startsWith('source')||stage==='migrations'||stage==='capture'?source:destination;
   const projectEnv=project===source?env:destinationEnv;
-  for(const service of ['db','auth','rest','storage','api-gw']){
+  for(const service of ['db','auth','rest','storage','api-gw','minio','minio-createbucket']){
    try{
     const id=(await dc(project,['ps','--all','--quiet',service],projectEnv,{allowFailure:true})).output.trim();
     if(!/^[a-f0-9]{64}$/.test(id))continue;
