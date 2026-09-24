@@ -5,6 +5,11 @@ CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$
   SELECT NULLIF(current_setting('folio.test_uid', true), '')::uuid
 $$;
 GRANT USAGE ON SCHEMA public TO authenticated;
+-- M84's additional permissive INSERT policy reads paciente; its SELECT policy
+-- reads member. Vanilla CI has no Supabase default table grants. Mirror the
+-- existing M84 portal spec inside this rolled-back fixture only, so INSERT
+-- exercises pedido RLS instead of failing at an unrelated table privilege.
+GRANT SELECT ON public.paciente, public.member TO authenticated;
 
 INSERT INTO auth.users(id,email) VALUES
  ('b1280000-0000-4000-8000-000000000001','b05-p1@spec.test'),
