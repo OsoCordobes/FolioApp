@@ -135,8 +135,8 @@ services:
       - /bin/sh
       - -ec
       - |
-        mc alias set c01 http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}" >/dev/null 2>&1
-        mc mb --ignore-existing "c01/$${C01_S3_BUCKET}" >/dev/null 2>&1
+        mc alias set c01 http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}" >/dev/null 2>&1 || exit 41
+        mc mb --ignore-existing "c01/$${C01_S3_BUCKET}" >/dev/null 2>&1 || exit 42
         objects="$$(mc --json ls --recursive "c01/$${C01_S3_BUCKET}" 2>/dev/null)" || exit 43
         [ -z "$$objects" ] || exit 44
         printf 'c01_s3_bucket_empty\n'

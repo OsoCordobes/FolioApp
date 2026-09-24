@@ -25,8 +25,11 @@ test('synthetic S3 uses pinned official-overlay images and an internal project v
 
 test('destination bucket preflight runs before database restore and exposes no object names',()=>{
  const init=service('minio-createbucket');
+ assert.match(init,/mc alias set .* >\/dev\/null 2>&1 \|\| exit 41/);
+ assert.match(init,/mc mb --ignore-existing .* >\/dev\/null 2>&1 \|\| exit 42/);
  assert.match(init,/objects="\$\$\(mc --json ls --recursive .* 2>\/dev\/null\)" \|\| exit 43/);
  assert.match(init,/\[ -z "\$\$objects" \] \|\| exit 44/);
+ assert.match(proof,/c01_service_\$\{service\}: \$\{status\.output\.trim\(\)\}/);
  assert.match(init,/printf 'c01_s3_bucket_empty\\n'/);
  assert.ok(proof.indexOf("stage='target_s3_preflight';await preflightEmptyDestinationBucket(destinationEnv)")<proof.indexOf("stage='database_restore';await restore("));
  assert.equal(requireEmptyS3Bucket({code:0,output:'c01_s3_bucket_empty\n',errorOutput:''}),undefined);
