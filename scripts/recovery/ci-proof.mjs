@@ -49,14 +49,15 @@ function child(program,args,{env=process.env,input,allowFailure=false,limit=2621
 }
 const docker=(args,env,options)=>child('docker',args,{env,...options});
 const dc=(project,args,env,options)=>docker(['compose','-p',project,'-f',compose,...args],env,options);
-async function startBridge(project,service,localPort,remotePort,env,{waitForListener=false}={}){
+async function startBridge(project,service,localPort,remotePort,env){
  const containerId=(await dc(project,['ps','-q',service],env)).output.trim();
  assert.match(containerId,/^[a-f0-9]{64}$/);
  const labels=JSON.parse((await docker(['inspect','--format','{{json .Config.Labels}}',containerId],env)).output);
  const networks=JSON.parse((await docker(['inspect','--format','{{json .NetworkSettings.Networks}}',containerId],env)).output);
  const network=JSON.parse((await docker(['network','inspect','--format','{{json .}}',`${project}_default`],env)).output);
  const target=validateBridgeTarget({project,service,containerId,labels,networks,network,remotePort});
- if(waitForListener){
+ // Both gateways lack a Compose healthcheck: running does not mean listening.
+ if(service==='api-gw'){
   try{
   const readiness=await waitForBridgeTarget(target);
   console.log(`c01_api_gw_readiness: probes=${readiness.probes} last=${readiness.lastCategory}`);
@@ -353,7 +354,7 @@ async function main(){
   stage='target_services';const targetEnv={...destinationEnv,C01_APP_DATABASE:targetDatabase};
   await dc(destination,['up','-d','--wait'],targetEnv);
   await assertInternal(destination,targetEnv);
-  apiBridge=await startBridge(destination,'api-gw',55421,8000,targetEnv,{waitForListener:true});
+  apiBridge=await startBridge(destination,'api-gw',55421,8000,targetEnv);
   await waitApi(state.anonKey);
   stage='storage_restore';const storage=await restoreStorage(state,backup,root,targetEnv);
   stage='integrated_verify';await verify(state,fixture,backup);
