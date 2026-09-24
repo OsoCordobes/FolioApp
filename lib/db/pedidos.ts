@@ -4,6 +4,7 @@
 
 import { z } from "zod";
 
+import { capabilitiesFor } from "@/lib/auth/capabilities";
 import { blindIndex, blindIndexPhone, encryptColumn, tryDecrypt } from "@/lib/crypto";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -86,6 +87,26 @@ const createPedidoSchema = z.object({
 
 export type CreatePedidoInput = z.infer<typeof createPedidoSchema>;
 
+/** Clinical booking reasons use M128's checked RPC. Reception never calls it. */
+export async function readPedidoMotivosClinicos(
+  client: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  organizationId: string,
+  ids: string[],
+): Promise<Result<Map<string, string | null>>> {
+  const motivos = new Map<string, string | null>();
+  for (let offset = 0; offset < ids.length; offset += 500) {
+    const { data, error } = await client.rpc("pedido_motivos_clinicos", {
+      p_org: organizationId,
+      p_ids: ids.slice(offset, offset + 500),
+    });
+    if (error) return err("db_error", "No se pudo leer el motivo de los pedidos.");
+    for (const row of data ?? []) {
+      motivos.set(row.id as string, tryDecrypt(row.motivo_cifrado, `pedido.${row.id}.motivo`));
+    }
+  }
+  return ok(motivos);
+}
+
 // ─── List pedidos pendientes (para inbox) ──────────────────────────────
 
 export async function listPedidos(estado?: string): Promise<Result<Record<string, unknown>[]>> {
@@ -93,9 +114,10 @@ export async function listPedidos(estado?: string): Promise<Result<Record<string
   if (!session.ok) return session;
 
   const supabase = await createSupabaseServerClient();
+  const canReadClinical = capabilitiesFor(session.data.role, session.data.esColegiado).canReadClinical;
   let query = supabase
     .from("pedido")
-    .select("*")
+    .select("id, organization_id, canal, estado, nombre_cifrado, telefono_cifrado, email_cifrado, paciente_id, profesional_id, fecha_propuesta, duracion_min, servicio_id, precio_cents, recibido_ts, confirmado_ts, rechazado_motivo, contra_propuesta")
     .eq("organization_id", session.data.organizationId)
     .order("recibido_ts", { ascending: false });
 
@@ -103,6 +125,11 @@ export async function listPedidos(estado?: string): Promise<Result<Record<string
 
   const { data, error } = await query;
   if (error) return err("db_error", "Error listando pedidos.", error.message);
+
+  const motivosResult = canReadClinical
+    ? await readPedidoMotivosClinicos(supabase, session.data.organizationId, (data ?? []).map((row) => row.id as string))
+    : ok(new Map<string, string | null>());
+  if (!motivosResult.ok) return motivosResult;
 
   // Decode los cifrados. tryDecrypt (no decryptColumn crudo): una fila con
   // ciphertext corrupto no debe tirar una excepción que tumbe el listado
@@ -112,7 +139,7 @@ export async function listPedidos(estado?: string): Promise<Result<Record<string
     nombre: tryDecrypt(row.nombre_cifrado as Buffer | null, "pedido.nombre"),
     telefono: tryDecrypt(row.telefono_cifrado as Buffer | null, "pedido.telefono"),
     email: tryDecrypt(row.email_cifrado as Buffer | null, "pedido.email"),
-    motivo: tryDecrypt(row.motivo_cifrado as Buffer | null, "pedido.motivo"),
+    motivo: motivosResult.data.get(row.id as string) ?? null,
   }));
   return ok(decoded);
 }
@@ -250,7 +277,6 @@ interface PedidoConfirmRow {
   nombre_cifrado: Buffer | null;
   telefono_cifrado: Buffer | null;
   email_cifrado: Buffer | null;
-  motivo_cifrado: Buffer | null;
 }
 
 /**
@@ -357,7 +383,7 @@ export async function aceptarPedido(
   const { data: pedidoRaw, error: pedErr } = await supabase
     .from("pedido")
     .select(
-      "id, organization_id, paciente_id, profesional_id, servicio_id, fecha_propuesta, duracion_min, precio_cents, canal, estado, nombre_cifrado, telefono_cifrado, email_cifrado, motivo_cifrado",
+      "id, organization_id, paciente_id, profesional_id, servicio_id, fecha_propuesta, duracion_min, precio_cents, canal, estado, nombre_cifrado, telefono_cifrado, email_cifrado",
     )
     .eq("id", pedidoId)
     .eq("organization_id", session.data.organizationId)
@@ -390,7 +416,6 @@ export async function aceptarPedido(
   const nombreDec = tryDecrypt(pedidoRaw.nombre_cifrado, "pedido.nombre_cifrado");
   const telefonoDec = tryDecrypt(pedidoRaw.telefono_cifrado, "pedido.telefono_cifrado");
   const email = tryDecrypt(pedidoRaw.email_cifrado, "pedido.email_cifrado");
-  const motivo = tryDecrypt(pedidoRaw.motivo_cifrado, "pedido.motivo_cifrado");
 
   if (
     pedidoIlegibleParaAceptar({
@@ -436,7 +461,7 @@ export async function aceptarPedido(
     nombre,
     telefono,
     email,
-    motivo,
+    motivo: null,
     orgEsInterna: session.data.isInternalAccount,
   });
 }
@@ -510,7 +535,7 @@ export async function aceptarPedidoConHorario(
   const { data: pedidoRaw, error: pedErr } = await supabase
     .from("pedido")
     .select(
-      "id, organization_id, paciente_id, profesional_id, servicio_id, fecha_propuesta, duracion_min, precio_cents, canal, estado, nombre_cifrado, telefono_cifrado, email_cifrado, motivo_cifrado",
+      "id, organization_id, paciente_id, profesional_id, servicio_id, fecha_propuesta, duracion_min, precio_cents, canal, estado, nombre_cifrado, telefono_cifrado, email_cifrado",
     )
     .eq("id", pedidoId)
     .eq("organization_id", session.data.organizationId)
@@ -561,7 +586,6 @@ export async function aceptarPedidoConHorario(
   const nombreDec = repair ? `${repair.nombre} ${repair.apellido}`.trim() : tryDecrypt(pedidoRaw.nombre_cifrado, "pedido.nombre_cifrado");
   const telefonoDec = repair?.telefono ?? tryDecrypt(pedidoRaw.telefono_cifrado, "pedido.telefono_cifrado");
   const email = repair ? repair.email || null : tryDecrypt(pedidoRaw.email_cifrado, "pedido.email_cifrado");
-  const motivo = tryDecrypt(pedidoRaw.motivo_cifrado, "pedido.motivo_cifrado");
 
   if (
     pedidoIlegibleParaAceptar({
@@ -603,7 +627,7 @@ export async function aceptarPedidoConHorario(
     identityParts: repair ? {nombre:repair.nombre,apellido:repair.apellido}:undefined,
     telefono,
     email,
-    motivo,
+    motivo: null,
     orgEsInterna: session.data.isInternalAccount,
   });
 }
