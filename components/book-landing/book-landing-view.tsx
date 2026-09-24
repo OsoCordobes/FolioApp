@@ -101,7 +101,7 @@ export function BookLandingView({
   const heroDescription = bioProfesional || bioConsultorio || (puedeReservar
     ? (esClinica ? "Conocé nuestros servicios y encontrá un horario disponible." : "Conocé los servicios y elegí un horario disponible.")
     : (esClinica ? "Conocé nuestro espacio y los servicios del consultorio." : "Conocé el consultorio y sus datos de contacto."));
-  const mostrarPanelConsultorio = disposition === "consultorio" && Boolean(org.logoUrl || (esClinica && profesionales.length > 0));
+  const mostrarLogoConsultorio = disposition === "consultorio" && Boolean(org.logoUrl);
   const mostrarRetrato = disposition === "perfil" && Boolean(heroFotoProfesional);
   const ContentTag = mode === "published" ? "main" : "div";
 
@@ -144,8 +144,12 @@ export function BookLandingView({
 
       <ContentTag className="bl-main">
         {/* Identity first: the clinic remains a clinic even with one professional. */}
-        <section id={bioProfesional || bioConsultorio ? "sobre" : undefined} className={`bl-hero${mostrarRetrato || mostrarPanelConsultorio ? " bl-hero-has-visual" : ""}`}>
+        <section id={bioProfesional || bioConsultorio ? "sobre" : undefined} className={`bl-hero${mostrarRetrato ? " bl-hero-has-visual" : ""}`}>
           <div className="bl-hero-text">
+            {mostrarLogoConsultorio && org.logoUrl ? (
+              <PublicImage src={org.logoUrl} alt={`Logo de ${org.nombre}`}
+                className="bl-practice-mark" width={80} height={80} priority mode={mode} />
+            ) : null}
             <div className="bl-eyebrow">
               <Motif motif={content.motif} size={18} className="bl-eyebrow-motif" />
               <span>{content.heroEyebrow}</span>
@@ -184,27 +188,6 @@ export function BookLandingView({
                 <PublicImage src={heroFotoProfesional} alt={`Retrato de ${heroNombre}`}
                   className="bl-portrait-image" width={340} height={400}
                   sizes="(max-width: 760px) 240px, 340px" priority mode={mode} />
-              </div>
-            </div>
-          ) : null}
-          {mostrarPanelConsultorio ? (
-            <div className="bl-hero-figure bl-hero-figure-practice">
-              <div className="bl-practice-panel">
-                {org.logoUrl ? <div className="bl-practice-sign">
-                    <PublicImage src={org.logoUrl} alt={`Logo de ${org.nombre}`}
-                      className="bl-practice-logo" width={88} height={88} mode={mode} />
-                </div> : (
-                  <div className="bl-practice-people" aria-hidden="true">
-                    {profesionales.slice(0, 3).map((person) => (
-                      <AvatarIniciales key={person.id} fullName={person.displayName} avatarUrl={person.fotoUrl} acentoHex={FOLIO_ACCENT} size="md" />
-                    ))}
-                  </div>
-                )}
-                <div className="bl-practice-info">
-                  <p className="bl-practice-name">{org.nombre}</p>
-                  {org.direccionCompleta ? <p>{org.direccionCompleta}</p> : null}
-                  {lugar ? <p>{lugar}</p> : null}
-                </div>
               </div>
             </div>
           ) : null}
@@ -276,7 +259,7 @@ export function BookLandingView({
             <section id="reservar" className="bl-book" aria-label={puedeReservar ? "Reservá tu turno" : "Estado de la reserva online"}>
               <div className="bl-book-head">
                 <span className="bl-section-kicker">{puedeReservar ? "Reserva" : "Próximamente"}</span>
-                <h3 className="bl-book-title">{puedeReservar ? "Tu turno empieza acá" : "Turnos online en preparación"}</h3>
+                <h3 className="bl-book-title">{puedeReservar ? "Elegí tu turno" : "Turnos online en preparación"}</h3>
               </div>
               <div className="bl-book-frame">{booking}</div>
               {puedeReservar ? <p className="bl-book-footnote">Elegí un horario, completá tus datos y revisá el estado de tu solicitud.</p> : null}

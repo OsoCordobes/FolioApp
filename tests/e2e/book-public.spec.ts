@@ -252,6 +252,14 @@ test.describe("/dev/book-preview · BookLanding + booking flow", () => {
       await expect(root).toHaveAttribute("data-layout", example.layout);
       await expect(root.locator("#servicios")).toBeVisible();
       await expect(root.locator("#reservar #bk-flow")).toBeVisible();
+      await expect(root.locator("#reservar .bl-book-title")).toHaveText("Elegí tu turno");
+      if (example.layout === "consultorio") {
+        await expect(root.locator(".bl-practice-panel")).toHaveCount(0);
+        await expect(root.locator(".bl-practice-mark")).toHaveCount(example.variant === "clinic-logo" ? 1 : 0);
+      }
+      const serviceLink = root.locator(".bk-outside-service a");
+      await expect(serviceLink).toBeVisible();
+      expect(await serviceLink.evaluate((element) => getComputedStyle(element).display)).toBe("flex");
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
       expect(overflow, `${example.variant}/${example.layout} at ${example.width}px`).toBeLessThanOrEqual(0);
       if (example.variant === "solo-long" || example.variant === "solo-empty") {
