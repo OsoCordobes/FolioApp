@@ -1,0 +1,171 @@
+# C01: only synthetic services, on a Docker internal network. The official
+# self-hosted/v0.8.1 Docker files are fetched at a pinned commit by CI.
+# S3 follows 8c7a4d9d/docker/docker-compose.s3.yml; both Chainguard images
+# use OCI index digests verified from cgr.dev (including linux/amd64).
+services:
+  db:
+    image: supabase/postgres:17.6.1.136
+    environment:
+      POSTGRES_HOST: /var/run/postgresql
+      PGPORT: "5432"
+      POSTGRES_PORT: "5432"
+      PGPASSWORD: ${C01_DB_PASSWORD:?}
+      POSTGRES_PASSWORD: ${C01_DB_PASSWORD:?}
+      PGDATABASE: postgres
+      POSTGRES_DB: postgres
+      JWT_SECRET: ${C01_JWT_SECRET:?}
+      JWT_EXP: "3600"
+    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf", "-c", "cron.database_name=${C01_CRON_DATABASE:?}", "-c", "log_min_messages=fatal"]
+    volumes:
+      - ${C01_OFFICIAL_DOCKER:?}/volumes/db/realtime.sql:/docker-entrypoint-initdb.d/migrations/99-realtime.sql:ro
+      - ${C01_OFFICIAL_DOCKER:?}/volumes/db/webhooks.sql:/docker-entrypoint-initdb.d/init-scripts/98-webhooks.sql:ro
+      - ${C01_OFFICIAL_DOCKER:?}/volumes/db/roles.sql:/docker-entrypoint-initdb.d/init-scripts/99-roles.sql:ro
+      - ${C01_OFFICIAL_DOCKER:?}/volumes/db/jwt.sql:/docker-entrypoint-initdb.d/init-scripts/99-jwt.sql:ro
+      - ${C01_OFFICIAL_DOCKER:?}/volumes/db/_supabase.sql:/docker-entrypoint-initdb.d/migrations/97-_supabase.sql:ro
+      - ${C01_OFFICIAL_DOCKER:?}/volumes/db/logs.sql:/docker-entrypoint-initdb.d/migrations/99-logs.sql:ro
+      - ${C01_OFFICIAL_DOCKER:?}/volumes/db/pooler.sql:/docker-entrypoint-initdb.d/migrations/99-pooler.sql:ro
+      - pgdata:/var/lib/postgresql/data
+      - pgconfig:/etc/postgresql-custom
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-h", "127.0.0.1"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+  auth:
+    image: supabase/gotrue:v2.196.0
+    depends_on:
+      db: {condition: service_healthy}
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: "9999"
+      API_EXTERNAL_URL: http://127.0.0.1:55421/auth/v1
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${C01_DB_PASSWORD:?}@db:5432/${C01_APP_DATABASE:?}
+      GOTRUE_SITE_URL: http://127.0.0.1:55421
+      GOTRUE_URI_ALLOW_LIST: ""
+      GOTRUE_DISABLE_SIGNUP: "false"
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_EXP: "3600"
+      GOTRUE_JWT_SECRET: ${C01_JWT_SECRET:?}
+      GOTRUE_JWT_ISSUER: http://127.0.0.1:55421/auth/v1
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED: "false"
+      GOTRUE_MAILER_AUTOCONFIRM: "true"
+      GOTRUE_EXTERNAL_PHONE_ENABLED: "false"
+      GOTRUE_MFA_TOTP_ENROLL_ENABLED: "true"
+      GOTRUE_MFA_TOTP_VERIFY_ENABLED: "true"
+      GOTRUE_MFA_PHONE_ENROLL_ENABLED: "false"
+      GOTRUE_MFA_PHONE_VERIFY_ENABLED: "false"
+      GOTRUE_MFA_MAX_ENROLLED_FACTORS: "10"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:9999/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+  rest:
+    image: postgrest/postgrest:v14.17
+    depends_on:
+      db: {condition: service_healthy}
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${C01_DB_PASSWORD:?}@db:5432/${C01_APP_DATABASE:?}
+      PGRST_DB_SCHEMAS: public,storage,graphql_public
+      PGRST_DB_EXTRA_SEARCH_PATH: public,extensions
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_ADMIN_SERVER_PORT: "3001"
+      PGRST_ADMIN_SERVER_HOST: localhost
+      PGRST_JWT_SECRET: ${C01_JWT_SECRET:?}
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+      PGRST_APP_SETTINGS_JWT_SECRET: ${C01_JWT_SECRET:?}
+      PGRST_APP_SETTINGS_JWT_EXP: "3600"
+  storage:
+    image: supabase/storage-api:v1.74.0
+    depends_on:
+      db: {condition: service_healthy}
+      rest: {condition: service_started}
+      minio: {condition: service_healthy}
+      minio-createbucket: {condition: service_completed_successfully}
+    environment:
+      ANON_KEY: ${C01_ANON_KEY:?}
+      SERVICE_KEY: ${C01_SERVICE_KEY:?}
+      POSTGREST_URL: http://rest:3000
+      AUTH_JWT_SECRET: ${C01_JWT_SECRET:?}
+      DATABASE_URL: postgres://supabase_storage_admin:${C01_DB_PASSWORD:?}@db:5432/${C01_APP_DATABASE:?}
+      STORAGE_PUBLIC_URL: http://127.0.0.1:55421
+      REQUEST_ALLOW_X_FORWARDED_PATH: "true"
+      FILE_SIZE_LIMIT: "52428800"
+      STORAGE_BACKEND: s3
+      GLOBAL_S3_BUCKET: ${C01_S3_BUCKET:?}
+      GLOBAL_S3_ENDPOINT: http://minio:9000
+      GLOBAL_S3_PROTOCOL: http
+      GLOBAL_S3_FORCE_PATH_STYLE: "true"
+      AWS_ACCESS_KEY_ID: ${C01_MINIO_USER:?}
+      AWS_SECRET_ACCESS_KEY: ${C01_MINIO_PASSWORD:?}
+      TENANT_ID: stub
+      REGION: stub
+      ENABLE_IMAGE_TRANSFORMATION: "false"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:5000/status"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+  minio:
+    image: cgr.dev/chainguard/minio@sha256:bd014394a80898e68c149f2311fdf8d5a2c2f3bb2c33b9327ae6d02b4b065ae1
+    environment:
+      MINIO_ROOT_USER: ${C01_MINIO_USER:?}
+      MINIO_ROOT_PASSWORD: ${C01_MINIO_PASSWORD:?}
+    command: server --console-address ":9001" /data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 2s
+      timeout: 10s
+      retries: 5
+    volumes:
+      - minio-data:/data
+  minio-createbucket:
+    image: cgr.dev/chainguard/minio-client@sha256:f0dd93b48af1f8a641edcd3c64661c8dbe05189bd2ef2f8cea216eb18af10bf8
+    depends_on:
+      minio: {condition: service_healthy}
+    environment:
+      MINIO_ROOT_USER: ${C01_MINIO_USER:?}
+      MINIO_ROOT_PASSWORD: ${C01_MINIO_PASSWORD:?}
+      C01_S3_BUCKET: ${C01_S3_BUCKET:?}
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        mc alias set c01 http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}" >/dev/null 2>&1 || exit 41
+        mc mb --ignore-existing "c01/$${C01_S3_BUCKET}" >/dev/null 2>&1 || exit 42
+        objects="$$(mc --json ls --recursive "c01/$${C01_S3_BUCKET}" 2>/dev/null)" || exit 43
+        [ -z "$$objects" ] || exit 44
+        printf 'c01_s3_bucket_empty\n'
+  api-gw:
+    image: envoyproxy/envoy:v1.39.1
+    depends_on:
+      auth: {condition: service_healthy}
+      rest: {condition: service_started}
+      storage: {condition: service_healthy}
+    entrypoint: ["/bin/sh", "/docker-entrypoint.sh"]
+    environment:
+      ANON_KEY: ${C01_ANON_KEY:?}
+      SERVICE_ROLE_KEY: ${C01_SERVICE_KEY:?}
+      SUPABASE_PUBLISHABLE_KEY: ""
+      SUPABASE_SECRET_KEY: ""
+      ANON_KEY_ASYMMETRIC: ""
+      SERVICE_ROLE_KEY_ASYMMETRIC: ""
+      SUPABASE_PUBLIC_URL: http://127.0.0.1:55421
+      DASHBOARD_USERNAME: synthetic
+      DASHBOARD_PASSWORD: ${C01_DASHBOARD_PASSWORD:?}
+    volumes:
+      - ${C01_OFFICIAL_DOCKER:?}/volumes/api/envoy/envoy.yaml:/etc/envoy/envoy.yaml:ro
+      - ${C01_OFFICIAL_DOCKER:?}/volumes/api/envoy/cds.yaml:/etc/envoy/cds.yaml:ro
+      - ${C01_OFFICIAL_DOCKER:?}/volumes/api/envoy/lds.template.yaml:/etc/envoy/lds.template.yaml:ro
+      - ${C01_OFFICIAL_DOCKER:?}/volumes/api/envoy/docker-entrypoint.sh:/docker-entrypoint.sh:ro
+volumes:
+  pgdata:
+  pgconfig:
+  minio-data:
+networks:
+  default:
+    internal: true
