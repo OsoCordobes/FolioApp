@@ -58,17 +58,22 @@ export interface PublicLandingViewData {
   servicios: PublicLandingService[];
 }
 
+/** Presentational choice only. Publication settings belong to a later release. */
+export type PublicLandingLayout = "perfil" | "consultorio";
+
 export function BookLandingView({
   data,
   mode,
   booking,
   serviceAction,
+  layout,
 }: {
   data: PublicLandingViewData;
   mode: "published" | "preview";
   booking: ReactNode;
   /** Optional action island for each service; defaults to an ordinary anchor. */
   serviceAction?: (service: PublicLandingService) => ReactNode;
+  layout?: PublicLandingLayout;
 }) {
   const { org, servicios, profesionales } = data;
   // El color propio del consultorio sigue guardado; esta página usa la marca Folio.
@@ -76,6 +81,7 @@ export function BookLandingView({
   const content = resolveBookLandingContent(org.especialidad, org.rubro);
   const lugar = [org.ciudad, org.provincia].filter(Boolean).join(", ");
   const esClinica = org.tipo === "CLINICA";
+  const disposition = layout ?? (esClinica ? "consultorio" : "perfil");
   const tieneEquipoParaReservar = !esClinica || profesionales.length > 0;
   const puedeReservar = servicios.length > 0 && tieneEquipoParaReservar;
   const tieneContacto = Boolean(lugar || org.direccionCompleta || org.telefonoPublico || org.instagramHandle);
@@ -92,10 +98,11 @@ export function BookLandingView({
   const bioProfesional = profesionalIdentificado?.bioPublica?.trim() || null;
   const bioConsultorio = org.bio?.trim() || null;
   const mostrarBioConsultorio = bioConsultorio && bioConsultorio !== bioProfesional ? bioConsultorio : null;
-  const tienePresentacion = Boolean(bioProfesional || mostrarBioConsultorio);
-  const heroDescription = puedeReservar
+  const heroDescription = bioProfesional || bioConsultorio || (puedeReservar
     ? (esClinica ? "Conocé nuestros servicios y encontrá un horario disponible." : "Conocé los servicios y elegí un horario disponible.")
-    : (esClinica ? "Conocé nuestro espacio y los servicios del consultorio." : "Conocé el consultorio y sus datos de contacto.");
+    : (esClinica ? "Conocé nuestro espacio y los servicios del consultorio." : "Conocé el consultorio y sus datos de contacto."));
+  const mostrarPanelConsultorio = disposition === "consultorio" && Boolean(org.logoUrl || (esClinica && profesionales.length > 0));
+  const mostrarRetrato = disposition === "perfil" && Boolean(heroFotoProfesional);
   const ContentTag = mode === "published" ? "main" : "div";
 
   return (
@@ -103,6 +110,7 @@ export function BookLandingView({
       className="bl-root"
       data-mode={mode}
       data-kind={esClinica ? "clinic" : "solo"}
+      data-layout={disposition}
     >
       {/* La marca del consultorio acompaña al profesional sin competir con su retrato. */}
       <header className="bl-header">
@@ -136,7 +144,7 @@ export function BookLandingView({
 
       <ContentTag className="bl-main">
         {/* Identity first: the clinic remains a clinic even with one professional. */}
-        <section className={`bl-hero${heroFotoProfesional ? " bl-hero-has-photo" : ""}`}>
+        <section id={bioProfesional || bioConsultorio ? "sobre" : undefined} className={`bl-hero${mostrarRetrato || mostrarPanelConsultorio ? " bl-hero-has-visual" : ""}`}>
           <div className="bl-hero-text">
             <div className="bl-eyebrow">
               <Motif motif={content.motif} size={18} className="bl-eyebrow-motif" />
@@ -170,7 +178,7 @@ export function BookLandingView({
               </p>
             ) : null}
           </div>
-          {heroFotoProfesional ? (
+          {mostrarRetrato && heroFotoProfesional ? (
             <div className="bl-hero-figure bl-hero-figure-person">
               <div className="bl-portrait">
                 <PublicImage src={heroFotoProfesional} alt={`Retrato de ${heroNombre}`}
@@ -179,22 +187,36 @@ export function BookLandingView({
               </div>
             </div>
           ) : null}
+          {mostrarPanelConsultorio ? (
+            <div className="bl-hero-figure bl-hero-figure-practice">
+              <div className="bl-practice-panel">
+                {org.logoUrl ? <div className="bl-practice-sign">
+                    <PublicImage src={org.logoUrl} alt={`Logo de ${org.nombre}`}
+                      className="bl-practice-logo" width={88} height={88} mode={mode} />
+                </div> : (
+                  <div className="bl-practice-people" aria-hidden="true">
+                    {profesionales.slice(0, 3).map((person) => (
+                      <AvatarIniciales key={person.id} fullName={person.displayName} avatarUrl={person.fotoUrl} acentoHex={FOLIO_ACCENT} size="md" />
+                    ))}
+                  </div>
+                )}
+                <div className="bl-practice-info">
+                  <p className="bl-practice-name">{org.nombre}</p>
+                  {org.direccionCompleta ? <p>{org.direccionCompleta}</p> : null}
+                  {lugar ? <p>{lugar}</p> : null}
+                </div>
+              </div>
+            </div>
+          ) : null}
         </section>
 
         {/* Barra sticky de reserva (solo mobile, aparece al pasar el hero). */}
         {mode === "published" && puedeReservar ? <StickyBookCta label={content.reservarCtaLabel} targetId="servicios" /> : null}
 
-        {(tienePresentacion || (esClinica && profesionales.length > 0)) ? (
+        {((bioProfesional && mostrarBioConsultorio) || (esClinica && profesionales.length > 0)) ? (
           <div className="bl-details bl-story">
-            {bioProfesional ? (
-              <section id="sobre" className="bl-about" aria-label="Sobre el profesional">
-                <span className="bl-section-kicker">Presentación</span>
-                <h2 className="bl-section-title">Sobre {nombreProfesional}</h2>
-                <p className="bl-about-text">{bioProfesional}</p>
-              </section>
-            ) : null}
-            {mostrarBioConsultorio ? (
-              <section id={bioProfesional ? "consultorio" : "sobre"} className="bl-about" aria-label="Sobre el consultorio">
+            {bioProfesional && mostrarBioConsultorio ? (
+              <section id="consultorio" className="bl-about" aria-label="Sobre el consultorio">
                 <span className="bl-section-kicker">El consultorio</span>
                 <h2 className="bl-section-title">Sobre el consultorio</h2>
                 <p className="bl-about-text">{mostrarBioConsultorio}</p>

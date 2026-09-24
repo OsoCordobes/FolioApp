@@ -230,4 +230,60 @@ test.describe("/dev/book-preview · BookLanding + booking flow", () => {
     await expect(page.locator(".bl-hero h1")).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(640);
   });
+
+  test("D06a: both arrangements keep real content legible with and without imagery", async ({ page }, testInfo) => {
+    await page.addInitScript(() => {
+      try { localStorage.setItem("folio.cookieConsent", "denied"); } catch { /* private browsing */ }
+    });
+    const cases = [
+      { variant: "solo", layout: "perfil", width: 1440, height: 900 },
+      { variant: "solo", layout: "perfil", width: 375, height: 812 },
+      { variant: "clinic-logo", layout: "consultorio", width: 1440, height: 900 },
+      { variant: "clinic-logo", layout: "consultorio", width: 375, height: 812 },
+      { variant: "clinic-one", layout: "consultorio", width: 1440, height: 900 },
+      { variant: "solo-empty", layout: "consultorio", width: 375, height: 812 },
+      { variant: "solo-long", layout: "perfil", width: 375, height: 812 },
+    ] as const;
+
+    for (const example of cases) {
+      await page.setViewportSize({ width: example.width, height: example.height });
+      await page.goto(`/dev/book-preview?variant=${example.variant}&layout=${example.layout}`);
+      const root = page.locator(".bl-root");
+      await expect(root).toHaveAttribute("data-layout", example.layout);
+      await expect(root.locator("#servicios")).toBeVisible();
+      await expect(root.locator("#reservar #bk-flow")).toBeVisible();
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+      expect(overflow, `${example.variant}/${example.layout} at ${example.width}px`).toBeLessThanOrEqual(0);
+      if (example.variant === "solo-long" || example.variant === "solo-empty") {
+        await expect(root.locator(".bl-hero-figure")).toHaveCount(0);
+      }
+      await page.screenshot({
+        path: testInfo.outputPath(`d06a-${example.variant}-${example.layout}-${example.width}.png`),
+        fullPage: true,
+        animations: "disabled",
+      });
+    }
+
+    await page.goto("/dev/book-preview?variant=solo");
+    await expect(page.locator(".bl-root")).toHaveAttribute("data-layout", "perfil");
+    await page.goto("/dev/book-preview?variant=clinic-one");
+    await expect(page.locator(".bl-root")).toHaveAttribute("data-layout", "consultorio");
+
+    await page.goto("/dev/book-preview?variant=draft-preview&layout=consultorio");
+    await expect(page.locator(".bl-root[data-mode='preview']")).toHaveAttribute("data-layout", "consultorio");
+    await expect(page.locator("#bk-flow")).toHaveCount(0);
+
+    const arrangementLink = page.getByRole("navigation", { name: "Disposición de prueba" }).getByRole("link", { name: "Perfil" });
+    await arrangementLink.focus();
+    expect(await arrangementLink.evaluate((element) => getComputedStyle(element).outlineStyle)).not.toBe("none");
+    await page.goto("/dev/book-preview?variant=solo&layout=perfil");
+    const reserve = page.locator(".bl-hero .bl-btn-lg");
+    await reserve.focus();
+    const visualFocus = await reserve.evaluate((element) => ({
+      outline: getComputedStyle(element).outlineStyle,
+      height: element.getBoundingClientRect().height,
+    }));
+    expect(visualFocus.outline).not.toBe("none");
+    expect(visualFocus.height).toBeGreaterThanOrEqual(44);
+  });
 });

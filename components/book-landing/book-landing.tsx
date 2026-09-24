@@ -1,6 +1,6 @@
 /** Published composition of the public profile and the real booking flow. */
 
-import { BookLandingView, type PublicLandingOrg, type PublicLandingService } from "@/components/book-landing/book-landing-view";
+import { BookLandingView, type PublicLandingLayout, type PublicLandingOrg, type PublicLandingService } from "@/components/book-landing/book-landing-view";
 import { BookingEntryProvider, ServiceReserveLink } from "@/components/book-landing/booking-entry";
 import { BookingWizard } from "@/components/booking/booking-wizard";
 import type { fetchSlotsPublico } from "@/app/(public)/book/[slug]/actions";
@@ -32,12 +32,15 @@ export function BookLanding({
   servicios,
   profesionales = [],
   fetchSlotsAction,
+  layout,
 }: {
   org: BookLandingOrg;
   servicios: BookLandingService[];
   profesionales?: ProfesionalPerfilPublico[];
   /** Used only by the local development preview to exercise a populated calendar. */
   fetchSlotsAction?: typeof fetchSlotsPublico;
+  /** Development preview override; published pages use the type-based default. */
+  layout?: PublicLandingLayout;
 }) {
   const solo = org.tipo === "INDEPENDIENTE" && profesionales.length === 1
     ? profesionales[0]
@@ -51,6 +54,7 @@ export function BookLanding({
       <BookLandingView
         data={{ org, profesional, profesionales, servicios }}
         mode="published"
+        layout={layout}
         serviceAction={(service) => <ServiceReserveLink serviceId={service.id} serviceName={service.nombre} />}
         booking={sinEquipoClinico ? (
           <div className="bl-preview-booking">
