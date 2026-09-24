@@ -3,6 +3,15 @@
 Actualizado: 25 de septiembre de 2026 (Europe/Copenhagen; evidencias con hora UTC). Responsable: A, manager.
 Este tablero gobierna el trabajo nuevo. Los informes anteriores se conservan como evidencia fechada; sus bloqueos superados no se convierten nuevamente en tareas.
 
+### Estado inmediato para la próxima reanudación
+
+- **Producción sin cambios:** master publicado `8b57010`; PR167 y PR170 siguen borradores. Nunca aplicar M128/M129 por encontrar el código aquí.
+- **B05a:** candidato remoto PR170 `96d5bb54a0d7f1fe9e367371950ac8d112c841a1`. Revisión original independiente y correcciones focales revisadas por A. Corrección del loader carga el helper real y comprueba 1001 pedidos, lotes, límites clínicos y fallo tardío. Focal 23/23, unidades 2273/2273, typecheck/lint aprobados. CI App `36069376608` y SQL `36069376432` en curso al registrar; Preview SUCCESS. Consultar resultados y preservar evidencia antes de preparar publicación. SQL anterior sobre `9b0775d` aprobado; no confundir ese resultado con el SHA nuevo.
+- **C01:** `c01_restore_storage` escribe el paquete **S3 sintético** en ede1 desde `8e5e514`; ya cerró el ajuste temporal B05. Sólo compose/harness, imágenes por digest, bucket destino vacío, sin cambiar el restaurador ni aceptar 500 como missing. Debe entregar commit local para revisión antes de push y un único ensayo. No iniciar un segundo autor ni repetir el ensayo file fallido.
+- **D06a:** `miniweb_design_plan` escribe una revisión visual acotada en folio-miniweb-quality desde `7d81a9b245e0b1c96fcfb331da4b1a9c45b38542`. Primer preview aislado funciona en puerto4410, 19 pruebas/typecheck/lint aprobados; A pidió retirar la tarjeta duplicada del hero Consultorio y mejorar la jerarquía del inicio de reserva. No aprobado visualmente todavía; sin push. Persistencia/editor/mapa/enlace personal quedan D06b.
+- **Cupos:** C01 y D06a son los dos escritores. B original está cerrado; no reactivarlo sobre su copia mientras cambien estos encargos. `recovery_start_review` quedó atascado en pending_init y recibió cancelación; A hizo la revisión independiente del último diagnóstico C01. No gastar recursos iniciando revisores duplicados.
+- **Cuota:** última lectura 3% usado / 97% restante, reserva 15%. Heartbeat horario activo en esta tarea. El manager sólo modificó documentación y gestionó revisión/CI; ninguna migración, envío ni cargo productivo.
+
 ## Dirección vigente — trabajo continuo por checkpoints, aprobado 25/09
 
 El titular aprobó ejecutar el plan por resultados, sin entregas obligatorias por semana. A representa sus prioridades ante los agentes: calidad, utilidad, protección de datos y consumo justificado. Orden de selección: riesgo, dependencias, beneficio concreto y esfuerzo restante. Terminar, comprobar, entregar y tomar el siguiente paquete disponible; ni publicar por apuro ni repetir revisiones para consumir una cuota. Si un frente depende del titular/proveedor, preservar preparación y evidencia y avanzar otro independiente.
@@ -90,6 +99,10 @@ Resultado siguiente: C01 `36068098311` FAIL a las 22:35:20 UTC. Ahora sí se obs
 B05a `9b0775d`: SQL `36068103880` SUCCESS y Supabase Preview SUCCESS; App `36068104081` FAIL en pruebas de agenda cuyo loader no contempla el nuevo import `./pedidos`. Logs B05: `run-36068103880-sql.log`, SHA256 `C2662DCF595BA46681168290BC8C4AA9B4EF5350D037A139C4FB3F56C76EA0E0`; `run-36068104081-app.log`, SHA256 `BD2656E11158C9126F3A4C8302AB4E8013AB0755F1562F038E1CD87FD4CFE24B`. Corrección acotada asignada temporalmente a **`c01_restore_storage` en la copia B05**, porque su paquete C01 terminó; no duplicar con B original. D06a es el otro escritor. A revisará el arreglo y se ejecutará una suite unitaria completa tras corregir; se conservarán los casos de más de 1000 pedidos y fallos tardíos. El helper actual ya usa lotes de 500, no necesita cambiarse por hipótesis.
 
 Preflight productivo exclusivamente de lectura para B05: 120 migraciones hasta `20260920205140`; M128/M129 ausentes; RLS de pedido activo, políticas esperadas y SELECT amplio previo todavía presentes. No prueba una explotación ni autorización de escritura. Evidencia `C:/Users/amiun/Documents/Codex/folio-b05-evidence/production-preflight-20260924.json`, SHA256 `D465641BEDC112283B642A4D9DCDAE54A5885FCD7BA39E8110EB1C1711998033`. Revalidar antes de cualquier instalación autorizada. No hay cambios productivos.
+
+Cierre de diagnóstico C01 `8e5e514`: App `36068098249` y SQL `36068098105` SUCCESS, última finalización 22:41:49 UTC; 2272 unidades y formatos 98 PASS/15 SKIP/0 FAIL, build aprobado. Recuperación integrada sigue FAIL según el ensayo descrito. Logs C01 `run-36068098249-app.log` SHA256 `19D9C456203034D79CF56479F48382DDB2C5C2E1FA838A111456D5289D09F061`, `run-36068098105-sql.log` SHA256 `E80A36E76403AF5FCD7EB00BCE2FEECA40796746A0CDD823C45CC4954DF2C607`. PR167 actualizada con estos límites.
+
+B05 loader `96d5bb5`: sólo prueba modificada, ninguna función productiva ni SQL. Log unitario completo `C:/Users/amiun/Documents/Codex/folio-b05-evidence/b05a-unit-after-loader.log`, SHA256 `C5FFDCAC59A93D79D4C761829667623C41FA8F7179539B525772897E0191C5B0`. A revisó el delta y autorizó un push. Próxima comprobación es CI del SHA nuevo, no volver a ejecutar unidades locales aprobadas.
 
 ## Antecedente — reanudación acotada del 24/09 antes del reinicio manual
 
