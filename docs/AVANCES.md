@@ -2,15 +2,17 @@
 
 Actualizado: 25/09/2026. Este es el registro breve del trabajo; [el tablero técnico](LAUNCH-BOARD.md) conserva el detalle y los antecedentes. Cada fila cambia sólo ante un resultado o bloqueo real.
 
+**Equipo comprobado:** A · dirección, revisión y publicación. C · implementa recepción. D · prepara miniweb y sus controles. Los dos subagentes trabajan en paralelo; las tareas pendientes aún no tienen un agente asignado.
+
 **Publicado** = disponible en Folio. **Probado** = pasó sus controles, todavía sin publicar. **En curso** = falta comprobarlo. Las pruebas parciales no cierran un checkpoint completo.
 
 | Checkpoint | Resultado, responsable y prueba |
 |---|---|
 | **Ingreso y onboarding** · publicado parcial | Ya se publicó la elección Solo/Clínica y la vuelta al inicio; siguen pendientes los recorridos completos con cuentas. A/B · [publicación PR166](https://github.com/OsoCordobes/FolioApp/pull/166). |
-| **Permisos de Clínica** · paquete publicado | Pedidos y motivos clínicos ya respetan el alcance de cada rol; revisión independiente, controles y publicación comprobados. B + integración A/revisión C · [PR170](https://github.com/OsoCordobes/FolioApp/pull/170), [verificación final](C:/Users/amiun/Documents/Codex/folio-b05-evidence/pr170-final-readback-verified.json). La integración automática adelantó el último paso; se verificó sin repetirlo y se corrigió el procedimiento futuro. |
-| **Recuperación completa** · ensayo actualizado aprobado | [Ensayo integral sobre la versión actual aprobado](https://github.com/OsoCordobes/FolioApp/actions/runs/36073216478): información cifrada, archivos, contraseña, segundo factor y separación entre organizaciones, con datos ficticios. C/revisión A · falta integrar el candidato; se conserva el fallo de arranque anterior sin atribuirle una causa no comprobada. |
-| **Miniweb profesional** · diseño probado, editor en curso | Plantilla Folio con dos disposiciones revisada en teléfono y escritorio. D + revisión A · [vista de clínica](C:/Users/amiun/.codex/visualizations/2026/09/19/01a0bb0b-ad4d-7cc2-84c0-acc037b0672b/folio-d06a-review2/d06a-clinic-logo-consultorio-1440.png), [vista móvil](C:/Users/amiun/.codex/visualizations/2026/09/19/01a0bb0b-ad4d-7cc2-84c0-acc037b0672b/folio-d06a-review2/d06a-solo-perfil-375.png). En curso: guardar diseño, mapa confirmado y enlace individual revocable. |
-| **Trabajo de recepción** · pendiente de integración | La agenda y llegada necesitan completar su comprobación junto con los permisos de Clínica. No se considera cerrado. |
+| **Permisos de Clínica** · paquete publicado | Pedidos y motivos clínicos protegidos según el rol. B · integración A y revisión C. [Publicación comprobada](https://github.com/OsoCordobes/FolioApp/pull/170); otros ámbitos de privacidad siguen pendientes. |
+| **Recuperación completa** · ensayo aprobado e integrado | Datos, archivos, contraseña y segundo factor recuperados con datos ficticios. C · revisión A. [Prueba aprobada](https://github.com/OsoCordobes/FolioApp/actions/runs/36073216478), [entrega integrada](https://github.com/OsoCordobes/FolioApp/pull/167); custodia externa pendiente. |
+| **Miniweb profesional** · controles finales | Dos disposiciones, editor, mapa confirmado y enlace propio por profesional implementados; revisión móvil/escritorio aprobada. D · revisión A; [propuesta entregada](https://github.com/OsoCordobes/FolioApp/pull/171), controles finales y publicación pendientes. |
+| **Trabajo de recepción** · en curso | C adapta la agenda a los permisos recién publicados: coordinación sin mostrar información clínica ni iniciar una consulta. A revisa; faltan pruebas integradas. |
 | **Atención adulta** · pendiente | Contrato preparado; faltan decisiones clínicas e implementación de la verificación para nuevas atenciones. |
 | **Ficha completada por el paciente** · pendiente | Alcance acordado: enlace o QR, preguntas por especialidad y revisión del profesional sin sobrescribir datos. |
 | **Llamador de recepción** · pendiente | Alcance acordado: código de espera y destino en pantalla; llamar no inicia la consulta. |
@@ -22,8 +24,8 @@ Actualizado: 25/09/2026. Este es el registro breve del trabajo; [el tablero téc
 | **Validación profesional y piloto** · pendiente humano | Cinco especialidades y piloto de 14 días, con tres profesionales y cinco jornadas por persona. |
 | **Lanzamiento** · pendiente | Se cerrará cuando la versión publicada y la oferta comercial coincidan con lo demostrado. |
 
-**Última versión publicada:** [PR170](https://github.com/OsoCordobes/FolioApp/pull/170), permisos de Clínica. La nueva miniweb sigue en revisión. **Última cuota consultada:** 94% disponible; reserva de cierre: 15%. No se atribuye consumo exacto a cada agente.
+**Última publicación comprobada:** [PR167](https://github.com/OsoCordobes/FolioApp/pull/167), ensayo de recuperación integrado; conserva los permisos publicados en PR170. La nueva miniweb sigue en revisión. **Última cuota consultada:** 94% disponible; reserva de cierre: 15%.
 
 **Forma de trabajo:** continuar mientras haya trabajo útil, cerrar cada paquete con evidencia y tomar el siguiente. La reanudación horaria es respaldo ante un corte, no una espera entre tareas.
 
-Últimos cierres: **B05a, 25/09** · publicado y comprobado; **C01, 25/09 01:34** · ensayo integral actualizado aprobado; **D06a, 25/09** · plantilla aprobada en móvil/escritorio. Horario de Copenhague; evidencia enlazada en cada fila.
+Últimos cierres: **B05a, 25/09** · publicado y comprobado; **C01, 25/09 01:44** · integrado tras aprobar sus controles; **D06a, 25/09** · plantilla aprobada en móvil/escritorio. Horario de Copenhague; evidencia enlazada en cada fila.
