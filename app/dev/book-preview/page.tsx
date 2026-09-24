@@ -44,7 +44,7 @@ export default async function BookPreviewDevPage({ searchParams }: { searchParam
   const solo = ["solo", "solo-empty", "solo-unnamed", "solo-slots", "solo-two-bios", "solo-long"].includes(variant ?? "");
   const layout: PublicLandingLayout = layoutParam === "perfil" || layoutParam === "consultorio"
     ? layoutParam
-    : solo || variant === "draft-preview" ? "perfil" : "consultorio";
+    : solo || variant === "draft-preview" || variant === "clinic-personal" ? "perfil" : "consultorio";
   if (variant === "draft-preview") {
     return (
       <>
@@ -129,7 +129,13 @@ export default async function BookPreviewDevPage({ searchParams }: { searchParam
           matricula: "18.902",
         }] : []),
       ]}
-        fetchSlotsAction={variant === "solo-slots" ? previewSlotsAction : undefined}
+      featuredProfessional={variant === "clinic-personal" ? {
+        id: "p1", displayName: "Lic. Lorenzo Martínez", fotoUrl: PORTRAIT,
+        bioPublica: "Kinesiólogo deportivo. Acompaño procesos de recuperación con una atención cercana y horarios claros.",
+        matricula: "12.345",
+      } : undefined}
+      personalPageMemberId={variant === "clinic-personal" ? "p1" : undefined}
+      fetchSlotsAction={variant === "solo-slots" || variant === "clinic-personal" ? previewSlotsAction : undefined}
       />
     </>
   );

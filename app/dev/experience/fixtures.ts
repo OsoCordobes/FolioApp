@@ -204,6 +204,7 @@ export const configuration: ComponentProps<typeof Configuracion> = {
     profesionales: [],
     servicios: [{ id: "folio-test-service-1", nombre: "Seguimiento", duracion_min: 45, precio_cents: 2500000 }],
   },
+  initialMiniwebLayout: "perfil",
   initialServicios: [{ id: "folio-test-service-1", nombre: "Seguimiento", dur: 45, precio: 25000, paraNuevos: false, activo: true }],
   initialDias: {
     lun: { on: true, franjas: [["08:30", "17:00"]] }, mar: { on: true, franjas: [["08:30", "17:00"]] },
@@ -216,6 +217,7 @@ export const configuration: ComponentProps<typeof Configuracion> = {
   montoActualCents: 5000000, montoClinicaCents: 10000000, canManageTeam: false, isOwner: false,
   equipoMembers: [], equipoInvitations: [], equipoSelf: null, esColegiado: true,
   initialPerfilPublico: null, initialListarEnDirectorio: false, suscripcionEstado: null,
+  ownMemberId: "folio-test-member", initialMiniwebConsent: false,
   whatsappConfigured: false, showVinculaciones: false, logoUrl: null, showImportarPacientes: false,
 };
 

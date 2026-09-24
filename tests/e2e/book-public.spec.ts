@@ -231,6 +231,28 @@ test.describe("/dev/book-preview · BookLanding + booking flow", () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(640);
   });
 
+  test("a personal clinic page keeps its professional through service changes", async ({ page }, testInfo) => {
+    await page.addInitScript(() => {
+      try { localStorage.setItem("folio.cookieConsent", "denied"); } catch { /* private browsing */ }
+    });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/dev/book-preview?variant=clinic-personal");
+    await expect(page.locator(".bl-hero h1")).toHaveText("Lic. Lorenzo Martínez");
+    await expect(page.locator(".bl-team")).toHaveCount(0);
+    await page.screenshot({ path: testInfo.outputPath("d06b-personal-desktop-1440.png"), fullPage: true });
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.screenshot({ path: testInfo.outputPath("d06b-personal-mobile-375.png"), fullPage: true });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.locator(".bl-service-card").filter({ hasText: "Consulta inicial" }).getByRole("link", { name: /elegir consulta inicial/i }).click();
+    await expect(page.locator("#bk-flow").getByRole("heading", { name: /elegí un horario/i })).toBeVisible();
+    await expect(page.locator("#bk-flow").getByRole("heading", { name: /elegí profesional/i })).toHaveCount(0);
+    await page.locator("#bk-flow").getByRole("link", { name: /cambiar servicio/i }).click();
+    await page.locator(".bl-service-card").filter({ hasText: "Seguimiento" }).getByRole("link", { name: /elegir seguimiento/i }).click();
+    await expect(page.locator("#bk-flow .bk-current-service")).toContainText("Seguimiento");
+    await expect(page.locator("#bk-flow").getByRole("heading", { name: /elegí un horario/i })).toBeVisible();
+  });
+
   test("D06a: both arrangements keep real content legible with and without imagery", async ({ page }, testInfo) => {
     await page.addInitScript(() => {
       try { localStorage.setItem("folio.cookieConsent", "denied"); } catch { /* private browsing */ }

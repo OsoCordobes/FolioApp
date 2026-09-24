@@ -23,6 +23,21 @@
 .perfil-editor-preview-disclosure[open] summary { margin-bottom: 12px; }
 .perfil-editor-preview { overflow: visible; border: 1px solid var(--line); border-radius: 12px; }
 .perfil-editor-preview .bl-root { min-height: 0; width: 100%; }
+.miniweb-layout-options { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 0; padding: 0; border: 0; }
+.miniweb-layout-options legend { float: left; width: 100%; margin-bottom: 5px; color: var(--ink); font-size: 13px; font-weight: 700; }
+.miniweb-layout-options label { display: inline-flex; align-items: center; gap: 7px; min-height: 44px; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--r-sm); cursor: pointer; }
+.miniweb-layout-options input { accent-color: var(--accent); }
+.miniweb-preview-switch { display: flex; gap: 8px; margin: 0 0 12px; }
+.miniweb-preview-switch button { min-height: 44px; padding: 8px 13px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; }
+.miniweb-preview-switch button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); font-weight: 700; }
+.miniweb-preview-switch button:focus-visible, .miniweb-layout-options input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.miniweb-preview-mobile { width: min(375px, 100%); margin-inline: auto; }
+.miniweb-preview-mobile .bl-header-nav { order: 3; width: 100%; justify-content: flex-start; margin: 0; overflow-x: auto; flex-wrap: nowrap; }
+.miniweb-preview-mobile .bl-hero-title { overflow-wrap: anywhere; }
+.miniweb-map-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.miniweb-map-confirm { display: flex; align-items: center; gap: 8px; min-height: 44px; margin-top: 8px; color: var(--ink-2); font-size: 13px; line-height: 1.4; cursor: pointer; }
+.miniweb-map-confirm input { accent-color: var(--accent); flex: none; }
+.miniweb-map-confirm input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .perfil-editor-unavailable { margin: 0; padding: 16px; border: 1px solid var(--line); border-radius: 10px; color: var(--ink-2); font-size: 13px; line-height: 1.5; }
 .perfil-editor-published { justify-self: start; font-size: 12px; }
 @media (max-width: 600px) { .perfil-editor { padding: 16px; } .perfil-accent-options { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

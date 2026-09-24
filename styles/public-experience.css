@@ -298,6 +298,8 @@
 .bl-root .bl-location { max-width: 760px; }
 .bl-root .bl-location-list { gap: 14px; }
 .bl-root .bl-location-row { line-height: 1.55; }
+.bl-root .bl-location-map { display: block; width: 100%; min-height: 250px; margin-top: 24px; border: 0; border-radius: var(--r-md); background: var(--surface-2); }
+.bl-root .bl-team-personal-link { display: inline-flex; align-items: center; min-height: 44px; margin-top: 6px; color: var(--accent-2); font-size: 13px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
 
 /* The switch exists only on the synthetic development route. */
 .bl-dev-controls {

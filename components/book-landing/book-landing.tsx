@@ -33,6 +33,8 @@ export function BookLanding({
   profesionales = [],
   fetchSlotsAction,
   layout,
+  featuredProfessional,
+  personalPageMemberId,
 }: {
   org: BookLandingOrg;
   servicios: BookLandingService[];
@@ -41,11 +43,14 @@ export function BookLanding({
   fetchSlotsAction?: typeof fetchSlotsPublico;
   /** Development preview override; published pages use the type-based default. */
   layout?: PublicLandingLayout;
+  /** A consented Clinic professional has a page of their own. */
+  featuredProfessional?: ProfesionalPerfilPublico;
+  personalPageMemberId?: string;
 }) {
   const solo = org.tipo === "INDEPENDIENTE" && profesionales.length === 1
     ? profesionales[0]
     : null;
-  const profesional = solo?.displayName?.trim() && solo.displayName !== "Profesional" ? solo : null;
+  const profesional = featuredProfessional ?? (solo?.displayName?.trim() && solo.displayName !== "Profesional" ? solo : null);
   const profesionalesLite = profesionales.map((p) => ({ id: p.id, displayName: p.displayName }));
   const sinEquipoClinico = org.tipo === "CLINICA" && profesionales.length === 0;
 
@@ -78,6 +83,7 @@ export function BookLanding({
           }}
           servicios={servicios}
           profesionales={profesionalesLite}
+          fixedProfessionalId={personalPageMemberId}
           fetchSlotsAction={fetchSlotsAction}
           serviceCatalogOutside
           />
