@@ -9,6 +9,7 @@ import * as timelineCore from "../../lib/ficha/timeline-core";
 import * as rango from "../../lib/agenda/rango-horario";
 import * as closeContract from "../../lib/turnos/close-contract";
 import { capabilitiesFor, type Role } from "../../lib/auth/capabilities";
+import { z } from "zod";
 
 const org="synthetic-org",patient="synthetic-patient";
 const row=(i:number)=>({id:`turno-${String(i).padStart(5,"0")}`,organization_id:org,paciente_id:patient,profesional_id:"member",inicio:"2026-09-08T13:00:00Z",duracion_min:30,estado:"CERRADO",origen:"MANUAL",paciente_tipo:"ACTIVO",servicio_nombre:"Consulta",modalidad:"telemedicina"});
@@ -30,18 +31,31 @@ function fixture(data:Record<string,any[]>, failure?:(call:Call)=>boolean, denie
     if(c.columns!=="*"){const keys=c.columns.split(",").map(v=>v.trim());rows=rows.map(r=>Object.fromEntries(Object.entries(r).filter(([key])=>keys.includes(key))));}
     return Promise.resolve({data:single?(rows[0]??null):rows,error:null,count:count?total:null}).then(resolve,reject);
    }};return q;
- },rpc(name:string,args:Record<string,unknown>,opts?:{count?:string}){rpcCalls.push({name,args,count:opts?.count});return api.from(name).select("*",opts);}};return api;};
+ },rpc(name:string,args:Record<string,unknown>,opts?:{count?:string}){
+  rpcCalls.push({name,args,count:opts?.count});
+  if(name==="pedido_motivos_clinicos"){
+   const ids=args.p_ids as string[];
+   const c:Call={table:name,service,from:0,to:ids.length-1,orders:[],filters:[["organization_id",args.p_org],["id",ids]],columns:"id,motivo_cifrado"};
+   calls.push(c);
+   if(failure?.(c))return Promise.resolve({data:null,error:{message:"SECRET SDK BODY"},count:null});
+   const rows=(data[name]??[]).filter(r=>r.organization_id===args.p_org&&ids.includes(r.id));
+   return Promise.resolve({data:rows.slice(0,1000),error:null,count:null});
+  }
+  return api.from(name).select("*",opts);
+ }};return api;};
  const imports:Record<string,unknown>={
   "@/lib/turnos/close-contract":closeContract,
-  "@/lib/observability/safe-log":{safeLog(){}},"@/lib/crypto":{decryptColumn:()=>null,tryDecrypt:()=>null},
+  "@/lib/observability/safe-log":{safeLog(){}},"@/lib/crypto":{decryptColumn:()=>null,tryDecrypt:(value:unknown,context:string)=>context.endsWith(".motivo")&&typeof value==="string"?value:null},
   "@/lib/auth/capabilities":{capabilitiesFor},"./session":{getActiveSession:async()=>denied?{ok:false,error:{code:"forbidden",message:"Denied"}}:{ok:true,data:{role,esColegiado:role==="OWNER"}}},
   "./active-context":{getActiveContext:async()=>({ok:true,data:{session:{role:denied?"ASISTENTE":"OWNER",memberId:"member"},organization:{id:org}}})},
   "./errors":{ok:(data:unknown)=>({ok:true,data}),err:(code:string,message:string)=>({ok:false,error:{code,message}})},
+  "./profesional-destino":{},"zod":{z},
   "./complete-collection":{readCompleteCollection},"./confirmado-via":{loadConfirmadoViaByTurnoId:async()=>({})},"./cancelado-por-paciente":{loadCanceladoPorPacienteIds:async()=>new Set()},
   "@/lib/types":{normalizeModalidad:(v:unknown)=>v==="telemedicina"?"telemedicina":"presencial"},"@/lib/agenda/rango-horario":rango,"@/lib/ficha/timeline-core":timelineCore,
   "@/lib/supabase/server":{createSupabaseServerClient:async()=>client(false),createSupabaseServiceClient:()=>{serviceCreated++;return client(true);}},
  };
  const load=(file:string)=>{const exports:Record<string,(...args:any[])=>Promise<any>>={};runInNewContext(ts.transpileModule(readFileSync(file,"utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,Date,Intl,Map,Set,require(name:string){if(name in imports)return imports[name];throw Error(name);}});return exports;};
+ imports["./pedidos"]={readPedidoMotivosClinicos:load("lib/db/pedidos.ts").readPedidoMotivosClinicos};
  return {load,calls,rpcCalls,get serviceCreated(){return serviceCreated;}};
 }
 const day={organizationId:org,fechaIso:"2026-09-08",timezone:"America/Argentina/Cordoba"};
@@ -81,6 +95,27 @@ test("requests, blocks and availability each paginate past 1,000",async()=>{
  const f=fixture({pedido:source,bloqueo:source,disponibilidad_profesional:source});const r=await f.load("lib/db/calendario.ts").getCalendarioSemana(week);
  assert.equal(r.ok,true);assert.equal(r.data.pedidos.length,1001);assert.equal(r.data.bloqueos.length,1001);
  for(const table of ["pedido","bloqueo","disponibilidad_profesional"])assert.ok(f.calls.some(c=>c.table===table&&c.from===1000),table);
+});
+test("clinical request reasons use scoped RPC batches and fail closed on a later batch",async()=>{
+ const pedido=Array.from({length:1001},(_,i)=>({...row(i),estado:"PENDIENTE",canal:"WEB",recibido_ts:"2026-09-08T12:00:00Z"}));
+ const motivos=pedido.map((p,i)=>({id:p.id,organization_id:org,motivo_cifrado:`synthetic-reason-${i}`}));
+ motivos.unshift({id:pedido[1000].id,organization_id:"foreign-org",motivo_cifrado:"SECRET FOREIGN REASON"});
+ const data={pedido,pedido_motivos_clinicos:motivos};
+ const f=fixture(data),result=await f.load("lib/db/calendario.ts").getCalendarioSemana(week);
+ assert.equal(result.ok,true);assert.equal(result.data.pedidos.length,1001);
+ assert.equal(result.data.pedidos.find((p:any)=>p.id===pedido[1000].id).motivo,"synthetic-reason-1000");
+ assert.equal(JSON.stringify(result).includes("SECRET FOREIGN REASON"),false);
+ assert.deepEqual(f.rpcCalls.map(c=>c.name),Array(3).fill("pedido_motivos_clinicos"));
+ assert.deepEqual(f.rpcCalls.map(c=>(c.args.p_ids as string[]).length),[500,500,1]);
+ assert.deepEqual(f.rpcCalls.flatMap(c=>c.args.p_ids as string[]),pedido.map(p=>p.id));
+ assert.ok(f.rpcCalls.every(c=>c.args.p_org===org));
+ const broken=fixture(data,c=>c.table==="pedido_motivos_clinicos"&&c.filters.some(([key,value])=>key==="id"&&Array.isArray(value)&&value.includes(pedido[500].id)));
+ const failed=await broken.load("lib/db/calendario.ts").getCalendarioSemana(week);
+ assert.equal(failed.ok,false);assert.equal(JSON.stringify(failed).includes("SECRET"),false);
+ assert.deepEqual(broken.rpcCalls.map(c=>(c.args.p_ids as string[]).length),[500,500]);
+ const reception=fixture(data,undefined,false,"ASISTENTE");
+ const receptionResult=await reception.load("lib/db/calendario.ts").getCalendarioSemana(week);
+ assert.equal(receptionResult.ok,true);assert.ok(receptionResult.data.pedidos.every((p:any)=>p.motivo===""));assert.equal(reception.rpcCalls.length,0);
 });
 test("monthly projection preserves telemedicine",async()=>{
  const f=fixture({turno_extendido:[row(1)]});assert.equal((await f.load("lib/db/calendario.ts").getCalendarioMes(month)).data.turnos[0].modalidad,"telemedicina");
