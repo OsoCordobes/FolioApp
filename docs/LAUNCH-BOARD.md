@@ -21,7 +21,7 @@ Máximo dos escritores de implementación en copias aisladas; A sólo coordinaci
 
 | Paquete | Responsable / revisión | Base y copia | Alcance y cierre |
 |---|---|---|---|
-| C01 Storage diagnóstico | `c01_restore_storage` / `recovery_start_review` | `3f85af5bcf6d934445c94c4c7e89b1d73e2aa5c0`, ede1; integrar master vigente antes de prueba de cierre | Opt-in del hijo Storage, categorías fijas allowlist, parser exclusivo de fase, sin datos ni stderr crudo. Pruebas negativas y diff revisado antes de UN ensayo alojado. C01 global exige restauración integral sobre las 120 migraciones vigentes |
+| C01 Storage diagnóstico HTTP | `c01_restore_storage` / revisión independiente antes de push | `d2b16ea526727391b8877974c84ce392c83baf8b`, ede1; contiene master vigente | Diagnóstico inicial revisado y ensayado: falla al inspeccionar/descargar objeto de destino. Nuevo paquete: códigos HTTP finitos y control sintético del destino sin exponer rutas/cuerpos. 403/500 siguen siendo fallo. C01 global exige restauración integral sobre las 120 migraciones vigentes |
 | B05a pedidos de Clínica | `b05_clinic_permissions` / revisor independiente después de candidato | `8b57010d6e378cf21185412595eb7c45f15273a4`, `C:/Users/amiun/.codex/worktrees/folio-clinic-permissions/folio-app` | Reproducir y cerrar lectura directa fuera de alcance, lectores de agenda y datos mínimos. SQL real sintético, roles y dos organizaciones; ningún cambio productivo. **M128 expansión y M129 cierre reservadas sólo para B05a** si necesarias; B04 continúa sin número reservado. Revocar columnas sólo después del código compatible; probar código viejo+expansión y código nuevo+cierre |
 | D06 miniweb profesional | siguiente escritor disponible / revisión visual independiente + titular | base vigente al asignar | Dos disposiciones, mapa confirmado, editor común y enlace por profesional de Clínica. Ver contrato inferior; no reabrir D03-D05 por rutina |
 
@@ -64,6 +64,20 @@ Cada paquete termina al cumplir el contrato y las pruebas apropiadas más revisi
 A coordina continuidad desde este tablero y prepara relevo si el contexto pierde claridad. Reanudaciones programadas sólo toman trabajo concreto, con cuota/cupo disponibles y autorizaciones vigentes; no duplican agentes activos ni generan campañas o mensajes vacíos. El equipo y la app deben permanecer disponibles para trabajos locales. Al alcanzar reserva o dependencias humanas que impidan avanzar, preservar checkpoint y reportar el bloqueo en vez de consumir cuota en espera.
 
 Reanudación creada y confirmada por la app: heartbeat `folio-manager-por-checkpoints`, ACTIVE, cada hora en esta tarea. Primero verifica cuota/agentes/estado; pausa al entrar en reserva o quedar sólo dependencias humanas. No modifica el recordatorio semanal `copia-semanal-de-folio-al-disco`. Creación del worktree B05 también confirmada y registrada, sin segunda copia ni error de registro.
+
+### Evidencia nueva — 24/09 22:16:54 UTC
+
+Saldo consultado al cerrar el primer paquete diagnóstico: **2% usado / 98% restante**, mismo reinicio del 01/10. No se atribuye ese consumo a un agente concreto.
+
+C01: diagnóstico fijo `f67e2b92fe766338c985a44672a1e9792b589108`, 18 pruebas focales y revisión independiente aprobadas. Integración sin conflictos del master publicado: candidato `d2b16ea526727391b8877974c84ce392c83baf8b` (120 migraciones). PR167 sigue borrador. Ensayo único [36065756903](https://github.com/OsoCordobes/FolioApp/actions/runs/36065756903) falló a las 22:10:57 UTC con `c01_storage_restore_failed: restore_transfer_storage_restore_download_failed`, después de restaurar DB y alcanzar ambos gateways. La lectura de la implementación fijada de Storage sugiere un error al consultar bytes ausentes tras recuperar sus metadatos; **es hipótesis, no causa demostrada**. No se alcanzaron las comprobaciones posteriores de contraseña, TOTP, archivos e aislamiento. El siguiente paquete agrega diagnóstico HTTP cerrado y control sintético comparable; no reclasifica 403/500 como objeto ausente.
+
+App [36065756840](https://github.com/OsoCordobes/FolioApp/actions/runs/36065756840) y SQL [36065757051](https://github.com/OsoCordobes/FolioApp/actions/runs/36065757051) aprobados en el candidato exacto: 2272 unidades, 38+6 casos de navegador, formatos de recuperación 94 PASS/15 SKIP/0 FAIL y build PASS. Supabase Preview SKIPPED. Estos controles no acreditan recuperación completa.
+
+Logs en `C:/Users/amiun/Documents/Codex/folio-c01-evidence/`: `run-36065756903.log`, SHA256 `D14A23A049FFA3DB6AB4807F9207EAE37ACAA6B756D564D1D389D806A37EFA02`; `run-36065756840-app.log`, SHA256 `D8210062CA1333C05F3ADC7E4A465B1A04D6F5951E7E04EEE7D0F6DB22E1569F`; `run-36065757051-sql.log`, SHA256 `19C71F1DAB079BCA3E1B4F52C4BC691BED93D328E769E6292E74D0CE991EEFBE`. Intentos anteriores preservados.
+
+B05a: candidato local `445205f6a65c3689d7eb42813ccc8260b6d9d980`, limpio y pendiente de revisión independiente. Typecheck, lint focal y 29 unidades aprobados. Las pruebas SQL preparadas aún no se ejecutaron; la afirmación del comportamiento legado no se presenta como RED observado. M128 expande, código compatible se despliega después y M129 cierra lectura de columnas al final; no aplicar ambas antes del código. No hay push ni cambios productivos.
+
+D06: contrato de dos disposiciones, enlace individual y mapa confirmado preparado por lectura independiente. Copia aislada registrada en `C:/Users/amiun/.codex/worktrees/folio-miniweb-quality/folio-app`, base master vigente, sin implementación. No reserva aún otra migración ni ocupa un tercer escritor.
 
 ## Antecedente — reanudación acotada del 24/09 antes del reinicio manual
 
