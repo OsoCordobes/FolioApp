@@ -22,6 +22,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { loadCanceladoPorPacienteIds } from "./cancelado-por-paciente";
 import { loadConfirmadoViaByTurnoId } from "./confirmado-via";
 import { err, ok, type Result } from "./errors";
+import { readPedidoMotivosClinicos } from "./pedidos";
 import { getActiveSession } from "./session";
 import { readCompleteCollection } from "./complete-collection";
 import { normalizeModalidad } from "@/lib/types";
@@ -80,7 +81,6 @@ interface PedidoRow {
   fecha_propuesta: string | null;
   duracion_min: number;
   servicio_id: string | null;
-  motivo_cifrado: string | null;
   precio_cents: number | null;
   recibido_ts: string;
   confirmado_ts: string | null;
@@ -302,14 +302,19 @@ export async function getCalendarioSemana(input: FetcherInput): Promise<Result<C
       if (profesionalId) q = q.eq("profesional_id", profesionalId);
       return q;
     }),
-    readCompleteCollection<PedidoRow>((from, to) => supabase
-      .from("pedido")
-      .select("id, canal, estado, nombre_cifrado, telefono_cifrado, email_cifrado, paciente_id, profesional_id, fecha_propuesta, duracion_min, servicio_id, motivo_cifrado, precio_cents, recibido_ts, confirmado_ts", { count: "exact" })
-      .eq("organization_id", organizationId)
-      // Solo PENDIENTE: la UI filtra estricto por "pendiente"; traer REAGENDADO
-      // descifraba PII de filas que ninguna vista renderiza (audit L9).
-      .eq("estado", "PENDIENTE")
-      .order("recibido_ts", { ascending: false }).order("id", { ascending: false }).range(from, to)),
+    readCompleteCollection<PedidoRow>((from, to) => {
+      let q = supabase
+        .from("pedido")
+        .select("id, canal, estado, nombre_cifrado, telefono_cifrado, email_cifrado, paciente_id, profesional_id, fecha_propuesta, duracion_min, servicio_id, precio_cents, recibido_ts, confirmado_ts", { count: "exact" })
+        .eq("organization_id", organizationId)
+        // La UI solo renderiza pendientes; no descifrar filas invisibles.
+        .eq("estado", "PENDIENTE")
+        .order("recibido_ts", { ascending: false }).order("id", { ascending: false }).range(from, to);
+      // Un pedido sin profesional puede ser tomado por un clínico (M110).
+      // Con filtro, nunca cargar los pedidos asignados a otro profesional.
+      if (profesionalId) q = q.or(`profesional_id.eq.${profesionalId},profesional_id.is.null`);
+      return q;
+    }),
     // Disponibilidad activa — decide qué días de finde se pintan "Cerrado" y
     // el denominador del % de capacidad por día. Con filtro de profesional
     // activo se acota a SUS franjas (su agenda, su capacidad); en "Todos" es
@@ -335,6 +340,10 @@ export async function getCalendarioSemana(input: FetcherInput): Promise<Result<C
   const turnoRows = (turnosRes.data ?? []) as unknown as TurnoExtendidoRow[];
   const bloqueoRows = (bloqueosRes.data ?? []) as unknown as BloqueoRow[];
   const pedidoRows = (pedidosRes.data ?? []) as unknown as PedidoRow[];
+  const motivosResult = canReadClinical
+    ? await readPedidoMotivosClinicos(supabase, organizationId, pedidoRows.map((row) => row.id))
+    : ok(new Map<string, string | null>());
+  if (!motivosResult.ok) return motivosResult;
 
   // M90 · confirmado_via para el chip "Confirmó el paciente" del detalle.
   // Batch directo a `turno` (turno_extendido no expone la columna — ver
@@ -398,9 +407,7 @@ export async function getCalendarioSemana(input: FetcherInput): Promise<Result<C
     // M56/M3: el motivo del booking es PHI clínica — solo se descifra para roles
     // clínicos (mismo gate fail-closed que turno.notaReserva). Recepción triage
     // por nombre/servicio/fecha; no ve el motivo.
-    const motivo = canReadClinical
-      ? (tryDecrypt(row.motivo_cifrado, `pedido.${row.id}.motivo`) ?? "")
-      : "";
+    const motivo = motivosResult.data.get(row.id) ?? "";
 
     return {
       id: row.id,
