@@ -9,6 +9,7 @@ import path from "node:path";
 import os from "node:os";
 import { createBackup } from "../../scripts/backup/core.mjs";
 import { restoreStorageLocal } from "../../scripts/backup/storage-restore.mjs";
+import { safeRestoreDiagnostic } from "../../scripts/backup/restore-diagnostics.mjs";
 
 const keys = generateKeyPairSync("rsa", {
   modulusLength: 3072,
@@ -214,7 +215,12 @@ test("failed and uncertain uploads stay pending; retry retains verified files an
   f.setFailure(1);
   await assert.rejects(
     restoreStorageLocal(f.options),
-    /storage_restore_pending/,
+    (error) => {
+      assert.match(error.message,/storage_restore_pending/);
+      assert.equal(error.c01StorageCauseCode,'storage_restore_upload_failed');
+      assert.deepEqual(safeRestoreDiagnostic(error,'storage'),{phase:'storage',category:'transfer',code:'storage_restore_upload_failed'});
+      return true;
+    },
   );
   assert.deepEqual(f.uploads, [0, 1]);
   assert.deepEqual(f.bytes.get(0), data[0]);
@@ -222,7 +228,12 @@ test("failed and uncertain uploads stay pending; retry retains verified files an
   f.setLostResponse(1);
   await assert.rejects(
     restoreStorageLocal(f.options),
-    /storage_restore_pending/,
+    (error) => {
+      assert.match(error.message,/storage_restore_pending/);
+      assert.equal(error.c01StorageCauseCode,'unclassified');
+      assert.deepEqual(safeRestoreDiagnostic(error,'storage'),{phase:'storage',category:'unknown',code:'unclassified'});
+      return true;
+    },
   );
   assert.deepEqual(f.uploads, [0, 1, 1]);
   f.setLostResponse(-1);

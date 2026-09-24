@@ -22,6 +22,29 @@ const knownErrors=new Map([
  ['postgres_timeout_invalid','configuration'],
  ['postgres_tool_version_invalid','tool_version'],
 ]);
+// Storage restore errors are literal local guards. Never derive a public code
+// from an HTTP response, object path, bucket, or arbitrary exception message.
+const storageErrors=new Map([
+ ['storage_restore_target_not_confirmed_loopback','target_guard'],
+ ['storage_restore_prepared_target_required','target_guard'],
+ ['storage_restore_object_path_invalid','package'],
+ ['storage_restore_object_size_invalid','integrity'],
+ ['storage_restore_manifest_inventory_invalid','integrity'],
+ ['storage_restore_inventory_unavailable','inventory'],
+ ['storage_restore_inventory_bucket_configuration_mismatch','inventory'],
+ ['storage_restore_inventory_not_restored_metadata','inventory'],
+ ['storage_restore_legacy_lock_review_required','journal'],
+ ['storage_restore_lease_path_invalid','journal'],
+ ['storage_restore_journal_invalid','journal'],
+ ['storage_restore_journal_mismatch','journal'],
+ ['storage_restore_download_failed','transfer'],
+ ['storage_restore_foreign_bytes','conflict'],
+ ['storage_restore_artifact_changed','integrity'],
+ ['storage_restore_upload_failed','transfer'],
+ ['storage_restore_uploaded_bytes_mismatch','integrity'],
+ ['storage_restore_final_verification_failed','integrity'],
+]);
+const storagePendingMessage='storage_restore_pending: verified files preserved; resume the same package and target';
 const postgresToolErrors=new Set(['backup_database_operation_failed','postgres_tool_failed_or_warned','postgres_diagnostic_capture_failed']);
 const sqlStates=new Set(['08001','08006','23503','23505','28000','28P01','3D000','42501','42P01','42704']);
 const systemCodes=new Map([
@@ -38,11 +61,26 @@ function safeProperty(error,key){
  catch{return null;}
 }
 
+/** Attach only a checked literal cause to a pending Storage error. */
+export function safeStorageRestoreCause(error){
+ const message=safeProperty(error,'message');
+ return storageErrors.has(message)?message:'unclassified';
+}
+
 /** Fixed public tokens only; never copy an exception message into CI output. */
 export function safeRestoreDiagnostic(error,phase){
  const safePhase=phase==='database'||phase==='storage'?phase:'unknown';
  const message=safeProperty(error,'message');
  const code=safeProperty(error,'code');
+ if(safePhase==='storage'){
+  if(message===storagePendingMessage){
+   const causeCode=safeProperty(error,'c01StorageCauseCode');
+   return storageErrors.has(causeCode)
+    ?{phase:safePhase,category:storageErrors.get(causeCode),code:causeCode}
+    :{phase:safePhase,category:'unknown',code:'unclassified'};
+  }
+  if(storageErrors.has(message))return {phase:safePhase,category:storageErrors.get(message),code:message};
+ }
  if(knownErrors.has(message))return {phase:safePhase,category:knownErrors.get(message),code:message};
  if(postgresToolErrors.has(message)){
   const {category}=safePostgresDiagnostic(error);
@@ -58,6 +96,8 @@ export function parseSafeRestoreDiagnostic(stderr){
  const match=String(stderr).match(/^c01_restore_diagnostic phase=(database|storage|unknown) category=([a-z_]+) code=([A-Za-z0-9_]+)$/m);
  if(!match)return null;
  const [,phase,category,code]=match;
+ if(phase==='storage'&&storageErrors.get(code)===category)return {phase,category,code};
+ if(phase!=='storage'&&storageErrors.has(code))return null;
  if(knownErrors.get(code)===category)return {phase,category,code};
  if(postgresToolErrors.has(code)&&[...POSTGRES_CATEGORIES,'unspecified'].includes(category))return {phase,category,code};
  if(sqlStates.has(code)&&category==='sqlstate')return {phase,category,code};

@@ -254,9 +254,15 @@ async function restore(state,backup,root,env,pid){
 async function restoreStorage(state,backup,root,env){
  const configPath=path.join(root,'restore-storage.json');
  await writeJson(configPath,{phase:'storage',directory:backup.directory,recipientPrivateKeyFile:path.join(root,'recipient.key'),storageUrl:api,confirmStorageOrigin:api,metadataRestored:true,journalDirectory:path.join(root,'journal')});
- const restored=await child(process.execPath,[path.join(repo,'scripts/backup/restore-local.mjs'),configPath],{env:{...env,FOLIO_BACKUP_RESTORE_PASSPHRASE:state.passphrase,FOLIO_BACKUP_RESTORE_STORAGE_SERVICE_KEY:state.serviceKey}});
- const result=JSON.parse(restored.output.trim());
- assert.equal(result.storageFilesRestored,true);
+ const restored=await child(process.execPath,[path.join(repo,'scripts/backup/restore-local.mjs'),configPath],{env:{...env,FOLIO_BACKUP_RESTORE_PASSPHRASE:state.passphrase,FOLIO_BACKUP_RESTORE_STORAGE_SERVICE_KEY:state.serviceKey,FOLIO_BACKUP_RESTORE_DIAGNOSTICS:'c01'},allowFailure:true}).catch(()=>{throw Error('restore_process_failed');});
+ if(restored.code!==0){
+  const diagnostic=parseSafeRestoreDiagnostic(restored.errorOutput);
+  if(diagnostic?.phase==='storage')throw Error(`restore_${diagnostic.category}_${diagnostic.code}`);
+  throw Error('restore_process_failed');
+ }
+ let result;
+ try{result=JSON.parse(restored.output.trim());}catch{throw Error('restore_result_invalid');}
+ if(result?.storageFilesRestored!==true)throw Error('restore_result_invalid');
  return result;
 }
 async function verify(state,fixture,backup){

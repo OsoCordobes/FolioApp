@@ -39,6 +39,7 @@ try {
   if (process.env.FOLIO_BACKUP_RESTORE_DIAGNOSTICS === "c01") {
     if(phase==='database'&&pgRestoreCategory)
       console.error(`c01_pg_restore_diagnostic category=${pgRestoreCategory}`);
+    // Revalidate the fixed Storage cause carried by a pending restore error.
     const diagnostic = safeRestoreDiagnostic(error, phase);
     console.error(`c01_restore_diagnostic phase=${diagnostic.phase} category=${diagnostic.category} code=${diagnostic.code}`);
   }

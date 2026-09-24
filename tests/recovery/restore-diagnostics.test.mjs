@@ -3,7 +3,10 @@ import test from 'node:test';
 import {spawnSync} from 'node:child_process';
 import {EventEmitter} from 'node:events';
 import {fileURLToPath} from 'node:url';
-import {safeRestoreDiagnostic,parseSafeRestoreDiagnostic,classifyPgRestoreStderr,parseSafePgRestoreDiagnostic} from '../../scripts/backup/restore-diagnostics.mjs';
+import {mkdtemp,writeFile,rm} from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import {safeRestoreDiagnostic,safeStorageRestoreCause,parseSafeRestoreDiagnostic,classifyPgRestoreStderr,parseSafePgRestoreDiagnostic} from '../../scripts/backup/restore-diagnostics.mjs';
 import {monitorPostgresChild} from '../../scripts/backup/postgres.mjs';
 
 test('restore diagnostics retain only fixed guard and PostgreSQL categories',()=>{
@@ -71,6 +74,75 @@ test('restore diagnostics never echo raw messages, unknown SQLSTATE, or forged t
  assert.equal(parseSafeRestoreDiagnostic(`c01_restore_diagnostic phase=database category=unknown code=${secret}`),null);
  const hostile={get message(){throw Error(secret);},get code(){throw Error(secret);}};
  assert.deepEqual(safeRestoreDiagnostic(hostile,'database'),unknown);
+});
+
+test('Storage diagnostics accept only exact fixed errors in the Storage phase',()=>{
+ const cases=[
+  ['storage_restore_target_not_confirmed_loopback','target_guard'],
+  ['storage_restore_inventory_bucket_configuration_mismatch','inventory'],
+  ['storage_restore_download_failed','transfer'],
+  ['storage_restore_foreign_bytes','conflict'],
+  ['storage_restore_journal_mismatch','journal'],
+ ];
+ for(const [message,category] of cases){
+  const code=message;
+  const expected={phase:'storage',category,code};
+  const diagnostic=safeRestoreDiagnostic(Error(message),'storage');
+  assert.deepEqual(diagnostic,expected);
+  const line=`c01_restore_diagnostic phase=storage category=${category} code=${code}`;
+  assert.deepEqual(parseSafeRestoreDiagnostic(line),expected);
+  assert.equal(parseSafeRestoreDiagnostic(line.replace('phase=storage','phase=database')),null);
+  assert.deepEqual(safeRestoreDiagnostic(Error(message),'database'),{phase:'database',category:'unknown',code:'unclassified'});
+ }
+});
+
+test('pending Storage restore keeps its message but publishes only a checked literal cause',()=>{
+ const pending='storage_restore_pending: verified files preserved; resume the same package and target';
+ const sensitive='patient/bucket/private-key HTTP body';
+ const fixed=Object.assign(Error(pending),{c01StorageCauseCode:'storage_restore_upload_failed'});
+ assert.deepEqual(safeRestoreDiagnostic(fixed,'storage'),{phase:'storage',category:'transfer',code:'storage_restore_upload_failed'});
+ assert.equal(safeStorageRestoreCause(Object.assign(Error(sensitive),{cause:Error('storage_restore_download_failed')})),'unclassified');
+ for(const hostile of [
+  Object.assign(Error(pending),{c01StorageCauseCode:sensitive}),
+  Object.assign(Error(pending),{c01StorageCauseCode:'storage_restore_upload_failed '+sensitive}),
+  Object.assign(Error(pending),{cause:Error('storage_restore_upload_failed')}),
+  Object.defineProperty(Error(pending),'c01StorageCauseCode',{get(){throw Error(sensitive);}}),
+ ]){
+  assert.deepEqual(safeRestoreDiagnostic(hostile,'storage'),{phase:'storage',category:'unknown',code:'unclassified'});
+ }
+ assert.deepEqual(safeRestoreDiagnostic(fixed,'database'),{phase:'database',category:'unknown',code:'unclassified'});
+});
+
+test('Storage diagnostic never publishes an arbitrary exception, path, bucket, or HTTP body',()=>{
+ const sensitive='postgresql://private:secret@example.test/clinical/bucket patient HTTP body';
+ for(const message of [sensitive,`storage_restore_pending: ${sensitive}`,`storage_restore_download_failed ${sensitive}`]){
+  const diagnostic=safeRestoreDiagnostic(Object.assign(Error(message),{code:'HTTP_400'}),'storage');
+  assert.deepEqual(diagnostic,{phase:'storage',category:'unknown',code:'unclassified'});
+  const line=`c01_restore_diagnostic phase=${diagnostic.phase} category=${diagnostic.category} code=${diagnostic.code}`;
+  assert.equal(line.includes(sensitive),false);
+ }
+ for(const line of [
+  `c01_restore_diagnostic phase=storage category=transfer code=${sensitive}`,
+  'c01_restore_diagnostic phase=storage category=transfer code=storage_restore_pending',
+  'c01_restore_diagnostic phase=storage category=inventory code=storage_restore_download_failed',
+ ])assert.equal(parseSafeRestoreDiagnostic(line),null);
+});
+
+test('Storage launcher opt-in emits only a fixed diagnostic for an invalid loopback target',async()=>{
+ const temporary=await mkdtemp(path.join(os.tmpdir(),'folio-c01-storage-diagnostic-'));
+ try{
+  const key=path.join(temporary,'recipient.key');
+  const config=path.join(temporary,'restore.json');
+  await writeFile(key,'synthetic-key');
+  await writeFile(config,JSON.stringify({phase:'storage',recipientPrivateKeyFile:key,storageUrl:'https://example.test/',confirmStorageOrigin:'https://example.test/'}));
+  const launcher=fileURLToPath(new URL('../../scripts/backup/restore-local.mjs',import.meta.url));
+  const result=spawnSync(process.execPath,[launcher,config],{encoding:'utf8',env:{...process.env,NODE_OPTIONS:'',FOLIO_BACKUP_RESTORE_DIAGNOSTICS:'c01'}});
+  assert.equal(result.status,1);
+  assert.deepEqual(parseSafeRestoreDiagnostic(result.stderr),{phase:'storage',category:'target_guard',code:'storage_restore_target_not_confirmed_loopback'});
+  assert.equal(result.stderr.includes(temporary),false);
+  assert.equal(result.stderr.includes('example.test'),false);
+  assert.equal(result.stderr.includes('synthetic-key'),false);
+ }finally{await rm(temporary,{recursive:true,force:true});}
 });
 
 test('restore launcher emits a fixed diagnostic when invoked without a config',()=>{

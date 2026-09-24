@@ -8,6 +8,7 @@ import { createStorageReader } from "./storage.mjs";
 import { writeAtomicJson } from "./retention.mjs";
 import { resolveOutsideRepository } from "./paths.mjs";
 import { acquireBackupLock } from "./lock.mjs";
+import { safeStorageRestoreCause } from "./restore-diagnostics.mjs";
 
 const repository = fileURLToPath(new URL("../../", import.meta.url));
 
@@ -282,14 +283,16 @@ export async function restoreStorageLocal({
         authLoginVerified: false,
         storageOwnershipVerified: false,
       };
-    } catch {
+    } catch (error) {
       journal.phase = "pending";
       await save();
       // No cross-service rollback exists. Retain verified objects and journal;
       // never delete metadata, previous histories or clinical rows after failure.
-      throw new Error(
+      const pending = new Error(
         "storage_restore_pending: verified files preserved; resume the same package and target",
       );
+      pending.c01StorageCauseCode = safeStorageRestoreCause(error);
+      throw pending;
     }
   } finally {
     await lease.release();
