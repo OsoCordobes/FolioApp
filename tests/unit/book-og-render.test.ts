@@ -31,7 +31,7 @@ test("OG renders the five specialties and long names at 1200×630", async () => 
   }
 });
 
-test("OG renders public PNG, JPEG and WebP photos; corrupt bytes fall back to initials", async () => {
+test("OG renders public PNG, JPEG and WebP photos; corrupt bytes fall back to the text layout", async () => {
   for (const [ext, mime] of [["png", "image/png"], ["jpg", "image/jpeg"], ["webp", "image/webp"]]) {
     const bytes = await readFile(join(process.cwd(), `tests/fixtures/d01-portrait.${ext}`));
     await pngBytes({ ...base, foto: `data:${mime};base64,${bytes.toString("base64")}` });
@@ -39,4 +39,11 @@ test("OG renders public PNG, JPEG and WebP photos; corrupt bytes fall back to in
   const initials = await pngBytes(base);
   const corrupt = await pngBytes({ ...base, foto: "data:image/png;base64,bm90LWFuLWltYWdl" });
   assert.deepEqual(corrupt, initials);
+});
+
+test("OG keeps Folio's identity regardless of the stored practice accent", async () => {
+  assert.deepEqual(
+    await pngBytes({ ...base, acento: "#8A6722" }),
+    await pngBytes({ ...base, acento: "#3F6B49" }),
+  );
 });

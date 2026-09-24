@@ -10,9 +10,7 @@ import { StickyBookCta } from "@/components/book-landing/sticky-book-cta";
 import { FolioMark } from "@/components/folio-mark";
 import { resolveBookLandingContent } from "@/lib/book-landing/content";
 import { formatArs } from "@/lib/format/currency";
-import { adjustHexLightness, contrastingTextColor } from "@/lib/format/initials";
-
-const DEFAULT_ACENTO = "#8A6722";
+const FOLIO_ACCENT = "#6255C5";
 
 export interface PublicLandingOrg {
   slug?: string | null;
@@ -60,10 +58,6 @@ export interface PublicLandingViewData {
   servicios: PublicLandingService[];
 }
 
-function isValidHex(s: string | null | undefined): s is string {
-  return !!s && /^#[0-9a-fA-F]{6}$/.test(s);
-}
-
 export function BookLandingView({
   data,
   mode,
@@ -77,17 +71,14 @@ export function BookLandingView({
   serviceAction?: (service: PublicLandingService) => ReactNode;
 }) {
   const { org, servicios, profesionales } = data;
-  const acento = isValidHex(org.acentoHex) ? org.acentoHex : DEFAULT_ACENTO;
-  const acento2 = adjustHexLightness(acento, -12);
-  const acentoSoft = `color-mix(in srgb, ${acento} 9%, #ffffff)`;
+  // El color propio del consultorio sigue guardado; esta página usa la marca Folio.
 
   const content = resolveBookLandingContent(org.especialidad, org.rubro);
   const lugar = [org.ciudad, org.provincia].filter(Boolean).join(", ");
   const esClinica = org.tipo === "CLINICA";
   const tieneEquipoParaReservar = !esClinica || profesionales.length > 0;
   const puedeReservar = servicios.length > 0 && tieneEquipoParaReservar;
-  const tieneContacto =
-    !!org.direccionCompleta || !!org.telefonoPublico || !!org.instagramHandle;
+  const tieneContacto = Boolean(lugar || org.direccionCompleta || org.telefonoPublico || org.instagramHandle);
   // El plan, no la cantidad de profesionales cargados, decide quién firma la
   // página. Una Clínica con un solo integrante conserva su identidad de equipo.
   const profesionalSolo = !esClinica ? data.profesional : null;
@@ -98,13 +89,13 @@ export function BookLandingView({
   const heroNombre = nombreProfesional ?? org.nombre;
   const heroMatricula = profesionalIdentificado?.matricula ?? null;
   const heroFotoProfesional = profesionalIdentificado?.fotoUrl ?? null;
-  const heroBio = profesionalIdentificado?.bioPublica?.trim() || (!esClinica ? org.bio?.trim() : null);
-  const sobreBio = org.bio?.trim() && (esClinica || org.bio.trim() !== heroBio)
-    ? org.bio.trim()
-    : null;
-  const heroDescription = heroBio || (puedeReservar
+  const bioProfesional = profesionalIdentificado?.bioPublica?.trim() || null;
+  const bioConsultorio = org.bio?.trim() || null;
+  const mostrarBioConsultorio = bioConsultorio && bioConsultorio !== bioProfesional ? bioConsultorio : null;
+  const tienePresentacion = Boolean(bioProfesional || mostrarBioConsultorio);
+  const heroDescription = puedeReservar
     ? (esClinica ? "Conocé nuestros servicios y encontrá un horario disponible." : "Conocé los servicios y elegí un horario disponible.")
-    : (esClinica ? "Conocé nuestro espacio y los servicios del consultorio." : "Conocé el consultorio y sus datos de contacto."));
+    : (esClinica ? "Conocé nuestro espacio y los servicios del consultorio." : "Conocé el consultorio y sus datos de contacto.");
   const ContentTag = mode === "published" ? "main" : "div";
 
   return (
@@ -112,12 +103,6 @@ export function BookLandingView({
       className="bl-root"
       data-mode={mode}
       data-kind={esClinica ? "clinic" : "solo"}
-      style={{
-        ["--accent" as string]: acento,
-        ["--accent-2" as string]: acento2,
-        ["--accent-soft" as string]: acentoSoft,
-        ["--bl-on-accent" as string]: contrastingTextColor(acento),
-      }}
     >
       {/* La marca del consultorio acompaña al profesional sin competir con su retrato. */}
       <header className="bl-header">
@@ -132,11 +117,16 @@ export function BookLandingView({
               priority
               mode={mode}
             />
-          ) : (
-            <AvatarIniciales fullName={org.nombre} acentoHex={acento} size="sm" />
-          )}
+          ) : <FolioMark size={28} />}
           <span className="bl-header-name">{org.nombre}</span>
         </div>
+        <nav className="bl-header-nav" aria-label="Secciones de la página">
+          {bioProfesional ? <a href="#sobre">Sobre mí</a> : null}
+          {mostrarBioConsultorio ? <a href={bioProfesional ? "#consultorio" : "#sobre"}>Consultorio</a> : null}
+          <a href="#servicios">Servicios</a>
+          {esClinica && profesionales.length > 0 ? <a href="#equipo">Equipo</a> : null}
+          {tieneContacto ? <a href="#contacto">Contacto</a> : null}
+        </nav>
         {mode === "published" && puedeReservar ? (
           <a href="#servicios" className="fi-btn fi-btn-primary bl-header-cta">Reservar</a>
         ) : mode === "preview" ? (
@@ -146,7 +136,7 @@ export function BookLandingView({
 
       <ContentTag className="bl-main">
         {/* Identity first: the clinic remains a clinic even with one professional. */}
-        <section className="bl-hero">
+        <section className={`bl-hero${heroFotoProfesional ? " bl-hero-has-photo" : ""}`}>
           <div className="bl-hero-text">
             <div className="bl-eyebrow">
               <Motif motif={content.motif} size={18} className="bl-eyebrow-motif" />
@@ -180,69 +170,56 @@ export function BookLandingView({
               </p>
             ) : null}
           </div>
-          <div className={`bl-hero-figure${profesionalIdentificado ? " bl-hero-figure-person" : ""}${profesionalIdentificado && !heroFotoProfesional ? " bl-hero-figure-no-photo" : ""}`}>
-            {profesionalIdentificado ? (
-              <div className={`bl-portrait${heroFotoProfesional ? "" : " bl-portrait-no-photo"}`}>
-                {heroFotoProfesional ? (
-                  <PublicImage
-                    src={heroFotoProfesional}
-                    alt={`Retrato de ${heroNombre}`}
-                    className="bl-portrait-image"
-                    width={340}
-                    height={400}
-                    sizes="(max-width: 760px) 240px, 340px"
-                    priority
-                    mode={mode}
-                  />
-                ) : (
-                  <AvatarIniciales
-                    fullName={heroNombre}
-                    acentoHex={acento}
-                    size="lg"
-                    className="bl-portrait-initials"
-                  />
-                )}
-                <span className="bl-portrait-caption">{org.nombre}</span>
+          {heroFotoProfesional ? (
+            <div className="bl-hero-figure bl-hero-figure-person">
+              <div className="bl-portrait">
+                <PublicImage src={heroFotoProfesional} alt={`Retrato de ${heroNombre}`}
+                  className="bl-portrait-image" width={340} height={400}
+                  sizes="(max-width: 760px) 240px, 340px" priority mode={mode} />
               </div>
-            ) : (
-              <div className="bl-clinic-art">
-                <div className="bl-clinic-art-mark">
-                  {org.logoUrl ? (
-                    <PublicImage
-                      src={org.logoUrl}
-                      alt={`Logo de ${org.nombre}`}
-                      className="bl-hero-logo"
-                      width={112}
-                      height={112}
-                      priority
-                      mode={mode}
-                    />
-                  ) : (
-                    <AvatarIniciales fullName={org.nombre} acentoHex={acento} size="xl" className="bl-clinic-avatar" />
-                  )}
-                </div>
-                <div className="bl-clinic-art-foot">
-                  <span>{esClinica ? "Nuestro equipo" : "Consultorio"}</span>
-                  {esClinica && profesionales.length > 0 ? (
-                    <div className="bl-clinic-art-team">
-                      {profesionales.slice(0, 3).map((p) => (
-                        <span key={p.id} className="bl-clinic-art-person" title={p.displayName}>
-                          <AvatarIniciales fullName={p.displayName} avatarUrl={p.fotoUrl} acentoHex={acento} size="sm" />
-                          <span>{p.displayName}</span>
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <span className="bl-clinic-art-name">{org.nombre}</span>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
+            </div>
+          ) : null}
         </section>
 
         {/* Barra sticky de reserva (solo mobile, aparece al pasar el hero). */}
         {mode === "published" && puedeReservar ? <StickyBookCta label={content.reservarCtaLabel} targetId="servicios" /> : null}
+
+        {(tienePresentacion || (esClinica && profesionales.length > 0)) ? (
+          <div className="bl-details bl-story">
+            {bioProfesional ? (
+              <section id="sobre" className="bl-about" aria-label="Sobre el profesional">
+                <span className="bl-section-kicker">Presentación</span>
+                <h2 className="bl-section-title">Sobre {nombreProfesional}</h2>
+                <p className="bl-about-text">{bioProfesional}</p>
+              </section>
+            ) : null}
+            {mostrarBioConsultorio ? (
+              <section id={bioProfesional ? "consultorio" : "sobre"} className="bl-about" aria-label="Sobre el consultorio">
+                <span className="bl-section-kicker">El consultorio</span>
+                <h2 className="bl-section-title">Sobre el consultorio</h2>
+                <p className="bl-about-text">{mostrarBioConsultorio}</p>
+              </section>
+            ) : null}
+            {esClinica && profesionales.length > 0 ? (
+              <section id="equipo" className="bl-team" aria-label="Profesionales que atienden en este consultorio">
+                <span className="bl-section-kicker">Personas</span>
+                <h2 className="bl-section-title">Nuestro equipo</h2>
+                <div className="bl-team-grid">
+                  {profesionales.map((p) => (
+                    <div key={p.id} className="bl-team-card">
+                      <AvatarIniciales fullName={p.displayName} avatarUrl={p.fotoUrl} acentoHex={FOLIO_ACCENT} size="md" />
+                      <div className="bl-team-info">
+                        <p className="bl-team-name">{p.displayName}</p>
+                        {p.matricula ? <p className="bl-team-matricula fm-mono">M.P. {p.matricula}</p> : null}
+                        {p.bioPublica ? <p className="bl-team-bio">{p.bioPublica}</p> : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+          </div>
+        ) : null}
 
         <section className="bl-reservation" aria-label="Servicios y reserva">
           <div className="bl-reservation-heading">
@@ -285,38 +262,13 @@ export function BookLandingView({
           </div>
         </section>
 
-        {(sobreBio || (esClinica && profesionales.length > 0) || tieneContacto) ? (
+        {tieneContacto ? (
           <div className="bl-details">
-            {sobreBio ? (
-              <section className="bl-about" aria-label="Sobre el consultorio">
-                <span className="bl-section-kicker">Sobre nosotros</span>
-                <h2 className="bl-section-title">Conocé el consultorio</h2>
-                <p className="bl-about-text">{sobreBio}</p>
-              </section>
-            ) : null}
-            {esClinica && profesionales.length > 0 ? (
-              <section className="bl-team" aria-label="Profesionales que atienden en este consultorio">
-                <span className="bl-section-kicker">Personas</span>
-                <h2 className="bl-section-title">Nuestro equipo</h2>
-                <div className="bl-team-grid">
-                  {profesionales.map((p) => (
-                    <div key={p.id} className="bl-team-card">
-                      <AvatarIniciales fullName={p.displayName} avatarUrl={p.fotoUrl} acentoHex={acento} size="md" />
-                      <div className="bl-team-info">
-                        <p className="bl-team-name">{p.displayName}</p>
-                        {p.matricula ? <p className="bl-team-matricula fm-mono">M.P. {p.matricula}</p> : null}
-                        {p.bioPublica ? <p className="bl-team-bio">{p.bioPublica}</p> : null}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            ) : null}
-            {tieneContacto ? (
-              <section className="bl-location" aria-label="Ubicación y contacto">
+              <section id="contacto" className="bl-location" aria-label="Ubicación y contacto">
                 <span className="bl-section-kicker">Contacto</span>
                 <h2 className="bl-section-title">Dónde encontrarnos</h2>
                 <ul className="bl-location-list">
+                  {lugar ? <li className="bl-location-row"><IconPin /><span>{lugar}</span></li> : null}
                   {org.direccionCompleta ? <li className="bl-location-row"><IconPin /><span>{org.direccionCompleta}</span></li> : null}
                   {org.telefonoPublico ? (
                     <li className="bl-location-row"><IconPhone /><a href={`https://wa.me/${org.telefonoPublico.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer">{org.telefonoPublico}</a></li>
@@ -326,7 +278,6 @@ export function BookLandingView({
                   ) : null}
                 </ul>
               </section>
-            ) : null}
           </div>
         ) : null}
 

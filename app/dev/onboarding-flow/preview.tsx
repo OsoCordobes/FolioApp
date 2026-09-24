@@ -47,5 +47,6 @@ export function OnboardingFlowFixture({ soloPriceCents, clinicPriceCents, clinic
     clinicSeatPriceCents={clinicSeatPriceCents}
     syntheticFixture
     syntheticHoursDelayMs={hoursDelay}
+    syntheticStep4Failure={params.get("step4Fail") === "1"}
   /></MotionProvider>;
 }

@@ -22,6 +22,8 @@ import { PermissionMatrix } from "@/components/configuracion/permission-matrix";
 import { PhotoUpload } from "@/components/configuracion/photo-upload";
 import { UpgradeClinicaModal } from "@/components/configuracion/upgrade-clinica-modal";
 import { LogoUpload } from "@/components/public-card/logo-upload";
+import { BookLandingPreview } from "@/components/book-landing/book-landing-preview";
+import type { PublicLandingViewData } from "@/components/book-landing/book-landing-view";
 import { uploadSettingsOrgLogo, removeSettingsOrgLogo } from "@/app/(public)/onboarding/actions";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { contar } from "@/lib/format/plural";
@@ -63,6 +65,7 @@ import { formatArsFromCents } from "@/lib/format/currency";
 import { SUPPORT_EMAIL, supportMailto } from "@/lib/support";
 import type {
   ConsultorioData,
+  SaveConsultorioInput,
   DiaHorarios,
   HorariosContext,
   DiaSemanaId,
@@ -160,9 +163,9 @@ function SideNav({ active, setActive, showEquipo, showPerfilPublico }: { active:
 
 // ─── Section / Row / TextInput / Toggle helpers ────────────────────────────
 
-function Section({ title, sub, children, action }: { title: string; sub?: string; children: ReactNode; action?: ReactNode }) {
+function Section({ title, sub, children, action, id }: { title: string; sub?: string; children: ReactNode; action?: ReactNode; id?: string }) {
   return (
-    <section className="cfg-section">
+    <section id={id} className="cfg-section">
       <header>
         <div>
           <h2>{title}</h2>
@@ -365,13 +368,6 @@ function SecCuenta({
         <Row label="Email" sub="Es tu email de inicio de sesión — se gestiona desde tu cuenta, no se edita acá.">
           <TextInput type="email" value={c.email} onChange={() => {}} readOnly />
         </Row>
-        <Row label="Teléfono">
-          <TextInput
-            prefix="+54"
-            value={c.tel.replace("+54 ", "")}
-            onChange={(v) => set({ tel: "+54 " + v })}
-          />
-        </Row>
       </Section>
 
       <Section title="Seguridad">
@@ -497,6 +493,11 @@ function SecConsultorio({
   montoClinicaCents,
   showImportarPacientes,
   logoUrl,
+  onLogoChange,
+  publicPreview,
+  openSection,
+  hasPerfilPublico,
+  canManageTeam,
 }: {
   c: ConsultorioData;
   set: (patch: Partial<ConsultorioData>) => void;
@@ -520,8 +521,14 @@ function SecConsultorio({
   showImportarPacientes: boolean;
   /** Foto del consultorio ya subida (organization.logo_url), o null. */
   logoUrl: string | null;
+  onLogoChange: (url: string | null) => void;
+  publicPreview: PublicLandingViewData | null;
+  openSection: (section: SeccionId) => void;
+  hasPerfilPublico: boolean;
+  canManageTeam: boolean;
 }) {
   const router = useRouter();
+  const bioCountId = useId();
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   // M50 · count de sesiones cargadas con la herramienta de OTRA especialidad.
   // Se consulta server-side al cambiar el selector; si hay, mostramos la
@@ -546,33 +553,69 @@ function SecConsultorio({
 
   return (
     <>
-      <Section title="Identidad del consultorio" sub="Aparece en el menú, los recordatorios y tu página pública.">
+      <Section title="Tu página de reservas" sub="Una miniweb Folio con tu presentación, servicios, turnos y contacto.">
+        <div className="perfil-editor">
+          <div className="perfil-editor-controls">
+            <p>Completá los datos en las secciones indicadas y revisá la página entera abajo. Los cambios de texto se guardan con «Guardar cambios».</p>
+            <nav className="perfil-editor-links" aria-label="Editar contenido de la página">
+              <a href="#cfg-identidad">Nombre y descripción</a>
+              <a href="#cfg-especialidad">Especialidad</a>
+              {hasPerfilPublico ? <button type="button" onClick={() => openSection("perfil-publico")}>Foto, bio y matrícula del profesional</button> : null}
+              <button type="button" onClick={() => openSection("servicios")}>Servicios y reserva</button>
+              {canManageTeam && orgTipo === "CLINICA" ? <button type="button" onClick={() => openSection("equipo")}>Equipo</button> : null}
+              <a href="#cfg-ubicacion">Ubicación y contacto</a>
+            </nav>
+            {canEdit ? <details className="perfil-editor-logo">
+              <summary>{logoUrl ? "Cambiar logo del consultorio" : "Agregar logo · opcional"}</summary>
+              <p>Aparece junto al nombre en la cabecera y se guarda al subirlo.</p>
+              <LogoUpload
+                uploadAction={uploadSettingsOrgLogo}
+                removeAction={removeSettingsOrgLogo}
+                currentLogoUrl={logoUrl}
+                onUploaded={onLogoChange}
+                onRemoved={() => onLogoChange(null)}
+              />
+            </details> : null}
+          </div>
+          <details className="perfil-editor-preview-disclosure">
+            <summary>Ver página completa</summary>
+          {publicPreview ? <div className="perfil-editor-preview" aria-label="Vista previa de la página de reservas">
+            <BookLandingPreview data={{
+              ...publicPreview,
+              org: {
+                ...publicPreview.org,
+                nombre: c.nombre,
+                bio: c.bio.trim() || null,
+                ciudad: c.ciudad,
+                provincia: c.provincia,
+                especialidad: c.especialidad,
+                telefonoPublico: c.tel,
+                direccionCompleta: c.direccion,
+                instagramHandle: c.instagram,
+                acentoHex: c.acento,
+                logoUrl,
+              },
+            }} />
+          </div> : <p role="status" className="perfil-editor-unavailable">No pudimos cargar la vista previa. Tus cambios siguen en pantalla; podés abrir el enlace público para revisarlos después de guardar.</p>}
+          </details>
+          <a className="cfg-link perfil-editor-published" href={`/book/${encodeURIComponent(orgSlug)}`} target="_blank" rel="noopener noreferrer">Abrir enlace público ↗</a>
+        </div>
+      </Section>
+      <Section id="cfg-identidad" title="Identidad del consultorio" sub="Aparece en el menú, los recordatorios y tu página pública.">
         <Row label="Nombre del consultorio">
           <TextInput value={c.nombre} onChange={(v) => set({ nombre: v })} />
         </Row>
-        {/* El botón que había acá estaba `disabled` con el tooltip "el logo se
-            sube desde Onboarding > Identidad visual" — una pantalla a la que no
-            se vuelve una vez terminado el onboarding. Es decir: la única forma
-            de cambiar la foto era no haber terminado de configurar la cuenta.
-            El componente que sube de verdad ya existía (LogoUpload, el mismo
-            del paso 4) y su action resuelve la org desde la sesión, así que
-            persiste sola: no pasa por la save-bar. */}
-        <Row label="Foto del consultorio" sub="Opcional · PNG hasta 500 KB · se ve en tu link público">
-          <LogoUpload
-            uploadAction={uploadSettingsOrgLogo}
-            removeAction={removeSettingsOrgLogo}
-            currentLogoUrl={logoUrl}
-            // La action persiste sola; el componente ya muestra su propio
-            // preview. Un router.refresh() acá volvería a montar toda la
-            // pantalla de Configuración y perdería lo que el usuario esté
-            // editando sin guardar en la save-bar.
-            onUploaded={() => {}}
-            onRemoved={() => {}}
-          />
+        <Row label="Descripción pública" sub="Se publica en tu página de reservas. No incluyas datos de pacientes." vertical>
+          <textarea className="cfg-input" aria-label="Descripción pública del consultorio"
+            aria-describedby={bioCountId} value={c.bio} maxLength={280} rows={4}
+            disabled={!canEdit}
+            onChange={(event) => set({ bio: event.target.value })} />
+          <span id={bioCountId} className="muted" aria-live="polite">{c.bio.length}/280</span>
         </Row>
       </Section>
 
       <Section
+        id="cfg-especialidad"
         title="Especialidad y equipo"
         sub="La especialidad define la herramienta clínica de la ficha del paciente."
       >
@@ -657,7 +700,10 @@ function SecConsultorio({
         />
       ) : null}
 
-      <Section title="Ubicación" sub="Aparece en los recordatorios de turno enviados al paciente.">
+      <Section id="cfg-ubicacion" title="Ubicación" sub="Aparece en los recordatorios de turno enviados al paciente.">
+        <Row label="Teléfono público" sub="Se muestra como contacto en tu página de reservas.">
+          <TextInput prefix="+54" value={c.tel.replace("+54 ", "")} onChange={(v) => set({ tel: "+54 " + v })} />
+        </Row>
         <Row label="Dirección">
           <TextInput value={c.direccion} onChange={(v) => set({ direccion: v })} />
         </Row>
@@ -1849,7 +1895,7 @@ function SecPlan({
 
 // ─── Page header con save bar ──────────────────────────────────────────────
 
-function PageHeader({ dirty, onSave, onDiscard, isSaving, saveError, canEdit }: { dirty: boolean; onSave: () => void; onDiscard: () => void; isSaving: boolean; saveError: string | null; canEdit: boolean }) {
+function PageHeader({ dirty, onSave, onDiscard, isSaving, saveError, canEdit, uncertain }: { dirty: boolean; onSave: () => void; onDiscard: () => void; isSaving: boolean; saveError: string | null; canEdit: boolean; uncertain: boolean }) {
   return (
     <header className="cfg-head">
       <div>
@@ -1869,9 +1915,9 @@ function PageHeader({ dirty, onSave, onDiscard, isSaving, saveError, canEdit }: 
           <>
             <span className="cfg-save-msg">
               <span className="cfg-save-dot" />
-              Hay cambios sin guardar
+              {uncertain ? "Resultado pendiente de confirmación" : "Hay cambios sin guardar"}
             </span>
-            <button type="button" className="fi-btn fi-btn-ghost" onClick={onDiscard}>Descartar</button>
+            <button type="button" className="fi-btn fi-btn-ghost" onClick={onDiscard} disabled={uncertain}>Descartar</button>
             <button
               type="button"
               className="fi-btn fi-btn-primary"
@@ -1879,7 +1925,7 @@ function PageHeader({ dirty, onSave, onDiscard, isSaving, saveError, canEdit }: 
               disabled={!canEdit}
               title={canEdit ? undefined : "Solo el titular o la dirección pueden editar"}
             >
-              Guardar cambios
+              {uncertain ? "Reintentar guardar" : "Guardar cambios"}
             </button>
           </>
         ) : (
@@ -1898,6 +1944,7 @@ interface ConfiguracionProps {
   /** Slug real de la org (organization.slug) — fuente del link público copiable. */
   orgSlug: string;
   initialConsultorio: ConsultorioData;
+  initialPublicPreview: PublicLandingViewData | null;
   initialServicios: ServicioCfg[];
   initialDias: Record<DiaSemanaId, DiaHorarios>;
   initialHorariosContext: HorariosContext;
@@ -1959,6 +2006,7 @@ const NO_DIRTY: DirtyState = { consultorio: false, horarios: false, servicios: f
 export function Configuracion({
   orgSlug,
   initialConsultorio,
+  initialPublicPreview,
   initialServicios,
   initialDias,
   initialHorariosContext,
@@ -2010,6 +2058,7 @@ export function Configuracion({
   }, []);
 
   const [consultorio, setConsultorio] = useState<ConsultorioData>(initialConsultorio);
+  const [currentLogoUrl, setCurrentLogoUrl] = useState(logoUrl);
   const [consultorioSnap, setConsultorioSnap] = useState<ConsultorioData>(initialConsultorio);
   const [availability] = useState(() => new AvailabilityDraft({ context: initialHorariosContext, dias: initialDias }));
   const [, redrawAvailability] = useState(0);
@@ -2020,6 +2069,7 @@ export function Configuracion({
   const [serviciosSnap, setServiciosSnap] = useState<ServicioCfg[]>(initialServicios);
   const [dirty, setDirty] = useState<DirtyState>(NO_DIRTY);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveUncertain, setSaveUncertain] = useState(false);
   const [isSaving, startSavingTransition] = useTransition();
 
   useEffect(() => {
@@ -2050,7 +2100,7 @@ export function Configuracion({
   const anyDirty = dirty.consultorio || dirty.horarios || dirty.servicios;
 
   const setC = (patch: Partial<ConsultorioData>) => {
-    if (savingRef.current) return;
+    if (savingRef.current || saveUncertain) return;
     setConsultorio((prev) => ({ ...prev, ...patch }));
     setDirty((d) => ({ ...d, consultorio: true }));
   };
@@ -2063,6 +2113,7 @@ export function Configuracion({
     setSaveError(null);
     refreshAvailability();
     startSavingTransition(async () => {
+      let consultorioAttempted = false;
       try {
       if (command) {
         const result = await saveHorariosAction(command);
@@ -2073,23 +2124,39 @@ export function Configuracion({
       }
       // Save secciones marcadas dirty en serie. Si una falla, paramos y reportamos.
       if (dirty.consultorio) {
-        const result = await saveConsultorioAction({
-          nombre: consultorio.nombre,
-          profesional: consultorio.profesional,
-          matricula: consultorio.matricula,
-          ciudad: consultorio.ciudad,
-          provincia: consultorio.provincia,
-          tel: consultorio.tel,
-          direccion: consultorio.direccion,
-          instagram: consultorio.instagram,
-          timezone: consultorio.timezone,
-          especialidad: consultorio.especialidad,
-        });
-        if (!result.ok) {
-          setSaveError(`Consultorio: ${result.error.message}`);
-          return;
+        const organization: NonNullable<SaveConsultorioInput["organization"]> = {};
+        const profile: NonNullable<SaveConsultorioInput["profile"]> = {};
+        if (consultorio.nombre !== consultorioSnap.nombre) organization.nombre = consultorio.nombre;
+        if (consultorio.bio !== consultorioSnap.bio) organization.bio = consultorio.bio;
+        if (consultorio.ciudad !== consultorioSnap.ciudad) organization.ciudad = consultorio.ciudad;
+        if (consultorio.provincia !== consultorioSnap.provincia) organization.provincia = consultorio.provincia;
+        if (consultorio.tel !== consultorioSnap.tel) organization.tel = consultorio.tel;
+        if (consultorio.direccion !== consultorioSnap.direccion) organization.direccion = consultorio.direccion;
+        if (consultorio.instagram !== consultorioSnap.instagram) organization.instagram = consultorio.instagram;
+        if (consultorio.timezone !== consultorioSnap.timezone) organization.timezone = consultorio.timezone;
+        if (consultorio.especialidad !== consultorioSnap.especialidad) organization.especialidad = consultorio.especialidad;
+        if (consultorio.profesional !== consultorioSnap.profesional) profile.profesional = consultorio.profesional;
+        if (consultorio.matricula !== consultorioSnap.matricula) profile.matricula = consultorio.matricula;
+        if (Object.keys(organization).length || Object.keys(profile).length) {
+          consultorioAttempted = true;
+          const result = await saveConsultorioAction({
+            organizationId: initialHorariosContext.organizationId,
+            memberId: initialHorariosContext.memberId,
+            expectedOrganizationUpdatedAt: consultorioSnap.organizationUpdatedAt,
+            expectedProfileUpdatedAt: consultorioSnap.profileUpdatedAt,
+            ...(Object.keys(organization).length ? { organization } : {}),
+            ...(Object.keys(profile).length ? { profile } : {}),
+          });
+          consultorioAttempted = false;
+          if (!result.ok) {
+            setSaveUncertain(result.error.code === "network");
+            setSaveError(`Consultorio: ${result.error.message}`);
+            return;
+          }
+          setSaveUncertain(false);
+          setConsultorio(result.data);
+          setConsultorioSnap(result.data);
         }
-        setConsultorioSnap(consultorio);
         setDirty((d) => ({ ...d, consultorio: false }));
       }
 
@@ -2106,6 +2173,7 @@ export function Configuracion({
 
       } catch {
         if (availability.pending) availability.finish({ ok: false, error: { code: "network", message: "Conexión interrumpida" } });
+        if (consultorioAttempted) setSaveUncertain(true);
         setSaveError("No pudimos confirmar el guardado. Reintentá para recuperar el resultado.");
       } finally { savingRef.current = false; refreshAvailability(); }
     });
@@ -2126,7 +2194,7 @@ export function Configuracion({
   };
 
   const handleDiscard = () => {
-    if (savingRef.current || (dirty.horarios && !availability.discard())) return;
+    if (savingRef.current || saveUncertain || (dirty.horarios && !availability.discard())) return;
     if (dirty.consultorio) setConsultorio(consultorioSnap);
     refreshAvailability();
     if (dirty.servicios) setServicios(serviciosSnap);
@@ -2143,6 +2211,7 @@ export function Configuracion({
         isSaving={isSaving}
         saveError={availability.contextChanged ? "Cambió el consultorio activo. Volvé a cargar la página." : availability.conflict ? "Los horarios cambiaron en otra pestaña. Conservamos tu borrador: cargá los guardados para reemplazarlo y seguir." : saveError}
         canEdit={canEdit}
+        uncertain={saveUncertain}
       />
 
       <div className="cfg-grid">
@@ -2152,7 +2221,7 @@ export function Configuracion({
           showEquipo={canManageTeam || equipoSelf != null}
           showPerfilPublico={esColegiado && initialPerfilPublico != null}
         />
-        <fieldset className="cfg-pane" disabled={isSaving || availability.contextChanged} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+        <fieldset className="cfg-pane" disabled={isSaving || availability.contextChanged || saveUncertain} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
           {seccion === "cuenta"        ? <SecCuenta c={consultorio} set={setC} showVinculaciones={showVinculaciones} showAuditLog={canEdit} /> : null}
           {seccion === "perfil-publico" && initialPerfilPublico ? (
             <SecPerfilPublico initial={initialPerfilPublico} matricula={consultorio.matricula} />
@@ -2171,7 +2240,12 @@ export function Configuracion({
               montoActualCents={montoActualCents}
               montoClinicaCents={montoClinicaCents}
               showImportarPacientes={showImportarPacientes}
-              logoUrl={logoUrl}
+              logoUrl={currentLogoUrl}
+              onLogoChange={setCurrentLogoUrl}
+              publicPreview={initialPublicPreview}
+              openSection={setSeccion}
+              hasPerfilPublico={esColegiado && initialPerfilPublico != null}
+              canManageTeam={canManageTeam}
             />
           ) : null}
           {seccion === "equipo" && (canManageTeam || equipoSelf != null) ? (

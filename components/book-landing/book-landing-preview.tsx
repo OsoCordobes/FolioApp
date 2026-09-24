@@ -13,7 +13,7 @@ export function BookLandingPreview({ data }: { data: PublicLandingViewData }) {
         <div className="bl-preview-booking">
           <p>{sinEquipoClinico
             ? "Cuando incorpores profesionales que atienden en el consultorio, podrás habilitar la reserva online."
-            : "Los pacientes podrán elegir servicio y horario acá cuando publiques tu página."}</p>
+            : "Los pacientes podrán elegir servicio y horario acá cuando habilites las reservas."}</p>
         </div>
       )}
     />

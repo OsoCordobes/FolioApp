@@ -208,7 +208,7 @@ function PanelContent({ panel, empty, step, specialty, editable, patientId }: { 
     case "pacientes": return <PacientesDir initialPage={directoryPage(empty)} especialidad="kinesiologia" />;
     case "ficha": return chartData ? <PacienteDetalle {...chartData} /> : null;
     case "finanzas": return <Finanzas data={finance} periodo="mes" canMarcarCobrado={false} />;
-    case "configuracion": return <Configuracion {...configuration} />;
+    case "configuracion": return <Configuracion {...configuration} canEdit={editable} isOwner={editable} />;
     case "onboarding": return <MotionProvider>{step === 8 ? <OnboardingFinalPreview /> : <OnboardingApp {...onboarding} initialStep={step} />}</MotionProvider>;
     case "portal-turnos": return <><header className="pt-page-head"><h1 className="pt-page-title">Tus turnos</h1><p className="pt-page-sub">Tus próximas visitas al consultorio.</p></header><TurnosList turnos={empty ? [] : portalAppointments} /></>;
     case "portal-resumen": return <><header className="pt-page-head"><h1 className="pt-page-title">Tu resumen</h1></header><ResumenView resumen={empty ? { turnosPasados: [], consentimientos: [] } : portalSummary} /></>;

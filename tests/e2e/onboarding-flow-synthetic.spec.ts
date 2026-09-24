@@ -22,8 +22,59 @@ async function fillOrganization(page: Page, clinic: boolean) {
   await page.getByRole("radio", { name: "Cardiología" }).click();
   await page.getByLabel("Ciudad", { exact: true }).fill("Córdoba");
   await page.getByRole("button", { name: "Continuar", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Tu identidad visual" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Tu página en Folio" })).toBeVisible();
 }
+
+test("Solo puede revisar la miniweb completa y continuar después de posponer", async ({ page }) => {
+  await page.goto("/dev/onboarding-flow?mode=solo&step=4");
+  await expect(page.getByRole("heading", { name: "Tu página en Folio" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Secciones de la página" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Verde/ })).toHaveCount(0);
+  await page.getByRole("button", { name: "Completar después" }).click();
+  await expect(page.getByRole("heading", { name: "¿Cuándo atendés?" })).toBeVisible();
+  expect(await page.evaluate(() => sessionStorage.getItem("folio:onboarding:synthetic-deferred"))).toBe("true");
+  await expect(page.getByRole("button", { name: "Atrás" })).toBeEnabled();
+  await page.getByRole("button", { name: "Atrás" }).click();
+  await expect(page.getByRole("heading", { name: "Tu página en Folio" })).toBeVisible();
+  await page.getByRole("button", { name: "Continuar", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem("folio:onboarding:synthetic-save"))).toContain('"step":4');
+  const saved = await page.evaluate(() => sessionStorage.getItem("folio:onboarding:synthetic-save"));
+  expect(saved).toContain('"step":4');
+  await expect(page.getByRole("heading", { name: "¿Cuándo atendés?" })).toBeVisible();
+});
+
+test("Clínica administrativa pospone identidad sin abrir horarios", async ({ page }) => {
+  await page.goto("/dev/onboarding-flow?mode=clinic-admin&step=4");
+  await page.getByRole("button", { name: "Completar después" }).click();
+  await expect(page.getByRole("heading", { name: "¿Qué servicios ofrecés?" })).toBeVisible();
+  await expect(page.getByRole("progressbar", { name: "Paso 5 de 6" })).toBeVisible();
+  expect(await page.evaluate(() => sessionStorage.getItem("folio:onboarding:synthetic-deferred"))).toBe("true");
+});
+
+test("si falla guardar el avance, el alta permanece en la página y muestra reintento", async ({ page }) => {
+  await page.goto("/dev/onboarding-flow?mode=solo&step=4&step4Fail=1");
+  await page.getByRole("button", { name: "Continuar", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Tu página en Folio" })).toBeVisible();
+  await expect(page.getByText("Ejemplo: no pudimos guardar el avance. Reintentá.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Reintentar guardar" })).toBeVisible();
+});
+
+test("un color restaurado sigue pendiente hasta guardarlo o descartarlo expresamente", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("folio:onboarding", JSON.stringify({
+    v: 2,
+    organizationId: "12600000-0000-4000-8000-000000000126",
+    identity: "titular@example.test",
+    data: { acento: "#3F6B49" },
+  })));
+  await page.goto("/dev/onboarding-flow?mode=solo&step=4");
+  await page.getByRole("button", { name: "Restaurar y revisar mis cambios" }).click();
+  await page.getByRole("button", { name: "Continuar", exact: true }).click();
+  await page.getByRole("button", { name: "Continuar", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Tu página en Folio" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Verde/ })).toHaveCount(0);
+  await expect(page.getByText("Color sin guardar")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Descartar el color pendiente y completar después" })).toBeVisible();
+});
 
 test("Solo recorre perfil, horarios y Google; el cierre muestra página sólo tras datos sintéticos completos", async ({ page }) => {
   test.setTimeout(90_000);
@@ -65,7 +116,7 @@ test("Clínica administrativa omite matrícula, horarios y Google; Atrás y rean
   await expect(page.getByRole("heading", { name: "¿Qué servicios ofrecés?" })).toBeVisible();
   await expect(page.getByRole("progressbar", { name: "Paso 5 de 6" })).toBeVisible();
   await page.getByRole("button", { name: "Atrás" }).click();
-  await expect(page.getByRole("heading", { name: "Tu identidad visual" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Tu página en Folio" })).toBeVisible();
   await page.goto("/dev/onboarding-flow?mode=clinic-admin&step=6");
   await expect(page.getByText(/Hay cambios locales de esta organización sin confirmar/)).toBeVisible();
   await page.getByRole("button", { name: "Usar la versión guardada" }).click();

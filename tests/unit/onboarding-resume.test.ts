@@ -181,6 +181,37 @@ test("no member: returns step 1 with prefilled email (existing behavior preserve
   assert.equal(state.memberUpdates.length, 0);
 });
 
+test("postponed visual identity resumes at schedules for Solo and services for admin clinic", async () => {
+  for (const adminOnly of [false, true]) {
+    const from = (table: string) => {
+      let columns = "";
+      const result = () => {
+        if (table === "member") return { data: { id: "member-1", organization_id: "org-1", role: "OWNER", es_colegiado: !adminOnly }, error: null };
+        if (table === "organization" && columns === "id, deleted_at") return { data: { id: "org-1", deleted_at: null }, error: null };
+        if (table === "organization") return { data: {
+          id: "org-1", deleted_at: null, slug: "demo", nombre: "Demo", tipo: adminOnly ? "CLINICA" : "INDEPENDIENTE",
+          onboarding_completed: false, onboarding_step_max: 5, acento_hex: "#AB8A55", logo_url: null,
+        }, error: null };
+        return { data: null, error: null };
+      };
+      const query = {
+        select(value: string) { columns = value; return query; },
+        eq() { return query; }, is() { return query; }, or() { return query; },
+        order() { return query; }, limit() { return query; },
+        maybeSingle() { return Promise.resolve(result()); },
+        then(resolve: (value: ReturnType<typeof result>) => void) { return Promise.resolve(result()).then(resolve); },
+      };
+      return query;
+    };
+    const service = { from } as unknown as Parameters<typeof getOnboardingResumeState>[2];
+    const resumed = await getOnboardingResumeState("user-1", "titular@example.test", service);
+    assert.equal(resumed.ok, true);
+    if (!resumed.ok) continue;
+    assert.equal(resumed.data.initialStep, adminOnly ? 6 : 5);
+    assert.equal(resumed.data.initialData.acento, "#AB8A55");
+  }
+});
+
 test("member lookup error: propagates db_error", async () => {
   const { service } = makeService({ memberError: "connection refused" });
 
