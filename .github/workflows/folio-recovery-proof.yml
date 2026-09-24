@@ -1,0 +1,70 @@
+name: Folio C01 synthetic recovery proof
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/folio-recovery-proof.yml
+      - scripts/backup/**
+      - scripts/recovery/**
+      - tests/recovery/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: folio-c01-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  recovery-proof:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      CI: 'true'
+      FOLIO_C01_SEAL_PG_RESTORE_ERROR: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install locked application tools
+        run: pnpm install --frozen-lockfile
+      - name: Install PostgreSQL 17 client from PGDG
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq curl ca-certificates
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl --fail --silent --show-error -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          . /etc/os-release
+          printf 'Types: deb\nURIs: https://apt.postgresql.org/pub/repos/apt\nSuites: %s-pgdg\nComponents: main\nSigned-By: /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc\n' "$VERSION_CODENAME" | sudo tee /etc/apt/sources.list.d/pgdg.sources >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+          echo '/usr/lib/postgresql/17/bin' >> "$GITHUB_PATH"
+      - name: Fetch exact official Supabase Docker release
+        shell: bash
+        run: |
+          set -euo pipefail
+          upstream="$RUNNER_TEMP/supabase-upstream"
+          git clone --quiet --depth 1 --filter=blob:none --sparse --branch self-hosted/v0.8.1 https://github.com/supabase/supabase "$upstream"
+          git -C "$upstream" sparse-checkout set docker
+          test "$(git -C "$upstream" rev-parse HEAD)" = '8c7a4d9dbbaf8b552893822e89d7bf06f33f9220'
+          echo "C01_OFFICIAL_DOCKER=$upstream/docker" >> "$GITHUB_ENV"
+      - name: Verify and restore only synthetic local services
+        run: node --conditions=react-server --import tsx scripts/recovery/ci-proof.mjs
+      - name: Preserve encrypted pg_restore diagnostic on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c01-pg-restore-error-sealed
+          path: ${{ runner.temp }}/c01-pg-restore-error.sealed
+          if-no-files-found: ignore
+          retention-days: 1

@@ -8,6 +8,7 @@ import { createStorageReader } from "./storage.mjs";
 import { writeAtomicJson } from "./retention.mjs";
 import { resolveOutsideRepository } from "./paths.mjs";
 import { acquireBackupLock } from "./lock.mjs";
+import { safeStorageRestoreCause, safeStorageInspectHttp, safeStorageInspectFromError, safeStorageInspectResponse } from "./restore-diagnostics.mjs";
 
 const repository = fileURLToPath(new URL("../../", import.meta.url));
 
@@ -198,12 +199,14 @@ export async function restoreStorageLocal({
         return "missing";
       }
       // Supabase can encode a missing backend key as HTTP 400 + statusCode 404.
-      if (response.status === 400) {
-        const error = await response.json().catch(() => null);
-        if (String(error?.statusCode) === "404") return "missing";
+      const http = response.ok ? null : await safeStorageInspectResponse(response);
+      if (response.status === 400 && http?.missingStatusCode404)
+        return "missing";
+      if (!response.ok || !response.body) {
+        const failure = new Error("storage_restore_download_failed");
+        failure.c01StorageInspectHttp = http ?? safeStorageInspectHttp(response.status,null);
+        throw failure;
       }
-      if (!response.ok || !response.body)
-        throw new Error("storage_restore_download_failed");
       let size = 0;
       const hash = createHash("sha256");
       for await (const chunk of response.body) {
@@ -282,14 +285,17 @@ export async function restoreStorageLocal({
         authLoginVerified: false,
         storageOwnershipVerified: false,
       };
-    } catch {
+    } catch (error) {
       journal.phase = "pending";
       await save();
       // No cross-service rollback exists. Retain verified objects and journal;
       // never delete metadata, previous histories or clinical rows after failure.
-      throw new Error(
+      const pending = new Error(
         "storage_restore_pending: verified files preserved; resume the same package and target",
       );
+      pending.c01StorageCauseCode = safeStorageRestoreCause(error);
+      pending.c01StorageInspectHttp = safeStorageInspectFromError(error);
+      throw pending;
     }
   } finally {
     await lease.release();
