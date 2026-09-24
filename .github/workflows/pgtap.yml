@@ -63,12 +63,21 @@ jobs:
             if [[ "$f" == *"_M118_billing_authority.sql" ]]; then
               psql -X -v ON_ERROR_STOP=1 -f tests/migrations/M118_ledger_transaction.sql
             fi
+            if [[ "$f" == *"_M128_pedido_scoped_access.sql" ]]; then
+              # Reproduce the existing org-wide leak on synthetic roles before
+              # the fix. This assertion passes only when the old leak exists.
+              psql -X -v ON_ERROR_STOP=1 -f tests/migrations/M128_pedido_before.sql
+            fi
             # The runner owns each migration transaction. Specs below retain
             # their own boundaries, including M91's transaction-local checks.
             psql --single-transaction -X -v ON_ERROR_STOP=1 -f "$f" || {
               echo "::error file=$f::Migration failed"
               exit 1
             }
+            if [[ "$f" == *"_M128_pedido_scoped_access.sql" ]]; then
+              # Old app SELECT contract stays available during expand.
+              psql -X -v ON_ERROR_STOP=1 -f tests/migrations/M128_pedido_expand.sql
+            fi
             echo "::endgroup::"
           done
 
