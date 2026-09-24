@@ -31,3 +31,38 @@ test("miniweb editor previews a validated map before address confirmation", asyn
   await mapRow.screenshot({ path: testInfo.outputPath("d06b-map-editor-mobile-375.png") });
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
 });
+
+test("mobile preview with a portrait follows its own width on a 1440px monitor", async ({ page }, testInfo) => {
+  await page.addInitScript(() => {
+    try { localStorage.setItem("folio.cookieConsent", "denied"); } catch { /* private browsing */ }
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/dev/experience?panel=configuracion&editing=1");
+  await page.getByText("Ver página completa", { exact: true }).click();
+  const preview = page.locator(".perfil-editor-preview");
+  const hero = preview.locator(".bl-hero-has-visual");
+  await expect(hero.locator(".bl-portrait-image")).toBeVisible();
+  await preview.screenshot({ path: testInfo.outputPath("d06b-editor-desktop-on-1440.png") });
+  await page.getByRole("group", { name: "Tamaño de vista previa" }).getByRole("button", { name: "Móvil" }).click();
+  await expect(preview).toHaveClass(/miniweb-preview-mobile/);
+  await expect(hero).toHaveCSS("display", "flex");
+  const bounds = await preview.evaluate((element) => {
+    const outer = element.getBoundingClientRect();
+    const text = element.querySelector(".bl-hero-text")!.getBoundingClientRect();
+    const portrait = element.querySelector(".bl-hero-figure-person")!.getBoundingClientRect();
+    return { width: outer.width, overflow: element.scrollWidth - element.clientWidth,
+      titleSize: parseFloat(getComputedStyle(element.querySelector(".bl-hero-title")!).fontSize),
+      heroTopPadding: parseFloat(getComputedStyle(element.querySelector(".bl-hero")!).paddingTop),
+      textLeft: text.left, textRight: text.right, portraitLeft: portrait.left, portraitRight: portrait.right,
+      outerLeft: outer.left, outerRight: outer.right };
+  });
+  expect(bounds.width).toBeLessThanOrEqual(375);
+  expect(bounds.overflow).toBeLessThanOrEqual(0);
+  expect(bounds.titleSize).toBeLessThanOrEqual(40);
+  expect(bounds.heroTopPadding).toBeLessThanOrEqual(42);
+  expect(bounds.textLeft).toBeGreaterThanOrEqual(bounds.outerLeft);
+  expect(bounds.textRight).toBeLessThanOrEqual(bounds.outerRight);
+  expect(bounds.portraitLeft).toBeGreaterThanOrEqual(bounds.outerLeft);
+  expect(bounds.portraitRight).toBeLessThanOrEqual(bounds.outerRight);
+  await preview.screenshot({ path: testInfo.outputPath("d06b-editor-mobile-on-1440.png") });
+});

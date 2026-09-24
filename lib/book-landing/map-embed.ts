@@ -8,7 +8,7 @@ export function normalizeGoogleMapsEmbedUrl(value: string | null | undefined): s
     const entries = [...url.searchParams.entries()];
     const pb = entries[0]?.[1] ?? "";
     if (entries.length !== 1 || entries[0][0] !== "pb" || pb.length < 20 || pb.length > 2500 ||
-        !pb.startsWith("!") || /[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}<>"'`]/u.test(pb)) return null;
+        !pb.startsWith("!") || /[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}<>"`]/u.test(pb)) return null;
     return url.toString();
   } catch {
     return null;

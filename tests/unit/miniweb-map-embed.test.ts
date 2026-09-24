@@ -5,10 +5,12 @@ import { extractGoogleMapsEmbedUrl, normalizeGoogleMapsEmbedUrl } from "../../li
 
 const source = "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d123.45";
 const addressSource = "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d123.45!2sAv.%20C%C3%B3rdoba%20123!3d-31.4201!4d-64.1888";
+const apostropheSource = "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d123.45!2sAv.%20O%27Higgins%20123!3d-31.4201!4d-64.1888";
 
 test("Google Maps Share HTML yields only the allowed iframe src", () => {
   assert.equal(extractGoogleMapsEmbedUrl(`<iframe src="${source}" width="600" height="450" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>`), source);
   assert.equal(extractGoogleMapsEmbedUrl(`<iframe src="${addressSource}" width="600" height="450"></iframe>`), addressSource);
+  assert.equal(extractGoogleMapsEmbedUrl(`<iframe src="${apostropheSource}" width="600" height="450"></iframe>`), apostropheSource);
 });
 
 test("map parser rejects other hosts, paths, scripts and arbitrary markup", () => {
