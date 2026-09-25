@@ -1,6 +1,8 @@
 # B04 · Contrato de diseño para atención de adultos
 
-Estado: B04a asignado a `b04_adult_attestation`, Sol High, en copia aislada `C:/Users/amiun/.codex/worktrees/folio-adult-attestation/folio-app`, rama `codex/launch-adult-attestation`, base `3c56a334d10911fc2f2c9c8269277bd883949e02`. M142 reservada por A el25/09 para este paquete; M141 pertenece al llamador y sigue pendiente de publicación. Sin ejecución ni activación productiva. Las referencias a ausencia de reserva abajo describen la preparación anterior; esta asignación gobierna. Diseño inicial sobre `2bdb60870caf8556f24a25db49e5ec1564b36003` conservado.
+Estado vigente, 25/09: B04a publicada como PR183, master `c0fdf6312e9e9b60bd19dbc7b7d7cd1129ee56fa`, con M142/M143 instaladas una vez y controles posteriores aprobados. Protege constancias, revisiones y autoría; no incorpora interfaz ni activa la exigencia clínica. La copia `folio-adult-attestation/folio-app` quedó congelada en el candidato `eff59f9d7fd24cc4806258eeab0d55734169b393`. Evidencia y límites en [LAUNCH-BOARD.md](LAUNCH-BOARD.md).
+
+Antecedente conservado: asignación inicial a `b04_adult_attestation`, Sol High, rama `codex/launch-adult-attestation`, base `3c56a334d10911fc2f2c9c8269277bd883949e02`; reserva M142 mientras el llamador M141 seguía pendiente. Diseño inicial sobre `2bdb60870caf8556f24a25db49e5ec1564b36003`. Las referencias inferiores a preparación, reserva o ausencia de aplicación pertenecen a ese diseño y no autorizan reinstalar ni reabrir los controles ya aprobados.
 
 Nota de continuidad del 25/09: producción llegó a `987202afa3ae170061e0e121c09fedb911a7ffac`. A comparó M96, M106, M120 y los escritores `sesiones.ts`, `notas-clinicas.ts` y `clinical-write-context.ts` con la base del diseño: no cambiaron. Esto conserva la relevancia del análisis; no reemplaza la revisión de todas las rutas durante implementación. M128 ya fue utilizada para otro checkpoint; no reserva números ni autoriza activación.
 
