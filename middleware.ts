@@ -23,12 +23,13 @@
  * redirects — permite la visual regression con mock data y el dev pre-setup.
  */
 
-import { type NextRequest } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { MFA_PATH, MFA_MESSAGE, mfaRouteDecision, readMfaStatus } from "@/lib/auth/mfa-access";
 
 import {
   decideRouteGate,
   entryDestination,
+  isCallerScreenPath,
   portalDestination,
   portalLoginDestination,
 } from "@/lib/auth/route-decision";
@@ -40,8 +41,15 @@ import {
 } from "@/lib/supabase/middleware";
 
 export async function middleware(request: NextRequest) {
-  const { response, user, supabase } = await updateSupabaseSession(request);
   const { pathname } = request.nextUrl;
+  if (isCallerScreenPath(pathname)) {
+    // Screen auth is a separate, cookie-scoped credential checked by its API.
+    // Do not refresh a coincident staff session or run staff MFA for this path.
+    const headers = new Headers(request.headers);
+    headers.set("x-pathname", pathname);
+    return NextResponse.next({ request: { headers } });
+  }
+  const { response, user, supabase } = await updateSupabaseSession(request);
 
   // Sin Supabase configurado no aplicamos gating.
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
