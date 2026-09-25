@@ -26,7 +26,7 @@ Actualizado: 25/09/2026. Este es el registro breve del trabajo; [el tablero téc
 | **Validación profesional y piloto** · pendiente humano | Cinco especialidades y piloto de 14 días, con tres profesionales y cinco jornadas por persona. |
 | **Lanzamiento** · pendiente | Se cerrará cuando la versión publicada y la oferta comercial coincidan con lo demostrado. |
 
-**Última publicación comprobada:** [PR182 · historia y archivos en una descarga](https://github.com/OsoCordobes/FolioApp/pull/182), desde el25/09 a las11:59 (Copenhague). Para probar: Mis datos y solicitudes → Archivo clínico → Preparar o retomar entrega → Guardar historia y archivos, con cuenta autorizada y navegador compatible. Control automático posterior de master aún en curso. **Última cuota consultada:**72% disponible; reserva de cierre:15%.
+**Última publicación comprobada:** [PR182 · historia y archivos en una descarga](https://github.com/OsoCordobes/FolioApp/pull/182), desde el25/09 a las11:59 (Copenhague). Para probar: Mis datos y solicitudes → Archivo clínico → Preparar o retomar entrega → Guardar historia y archivos, con cuenta autorizada y navegador compatible. Control automático posterior de master también aprobado. **Última cuota consultada:**72% disponible; reserva de cierre:15%.
 
 **Forma de trabajo:** continuar mientras haya trabajo útil, cerrar cada paquete con evidencia y tomar el siguiente. La reanudación horaria es respaldo ante un corte, no una espera entre tareas.
 
