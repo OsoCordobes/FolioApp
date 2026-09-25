@@ -139,6 +139,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE actor public.member; patient public.paciente; identity_row public.paciente_identidad;
   last_event folio_adult_private.attestation;
 BEGIN
+  PERFORM folio_mfa_private.assert_access();
   actor:=folio_adult_private.require_staff(p_org);
   SELECT * INTO patient FROM public.paciente
    WHERE id=p_patient AND organization_id=p_org AND deleted_at IS NULL
@@ -175,6 +176,7 @@ CREATE FUNCTION public.attest_adult_dob(
 DECLARE actor public.member; patient public.paciente; identity_row public.paciente_identidad;
   correction boolean; event_id bigint;
 BEGIN
+  PERFORM folio_mfa_private.assert_access();
   actor:=folio_adult_private.require_staff(p_org);
   IF p_expected_dob_revision IS NULL OR p_expected_dob_revision<0
     OR p_expected_link_revision IS NULL OR p_expected_link_revision<0
