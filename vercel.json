@@ -12,7 +12,8 @@
       "codex/launch-clinic-permissions": false,
       "codex/launch-miniweb-quality": false,
       "codex/launch-reception": false,
-      "codex/launch-export-integrity": false
+      "codex/launch-export-integrity": false,
+      "codex/launch-export-package": false
     }
   },
   "regions": [
