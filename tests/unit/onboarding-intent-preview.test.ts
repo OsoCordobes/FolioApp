@@ -26,7 +26,7 @@ test("borrador de clínica no atribuye identidad profesional al titular administ
   const preview = toOnboardingLandingPreview({ ...base,
     tipo: "CLINICA", ownerTratante: false, nombre: "Ana", apellido: "Costa",
     matricula: "M.P. 123", consultorioNombre: "Clínica Ejemplo",
-    servicios: [{ id: 1, nombre: "Evaluación", dur: 30, precio: 25000 }],
+    servicios: [{ id: "00000000-0000-4000-8000-000000000001", nombre: "Evaluación", dur: 30, precio: 25000 }],
   }, "clinica-ejemplo");
   assert.equal(preview?.org.nombre, "Clínica Ejemplo");
   assert.equal(preview?.profesional, null);
