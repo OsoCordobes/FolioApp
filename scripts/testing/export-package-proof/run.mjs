@@ -11,6 +11,7 @@ import {Client} from 'pg';
 import {createClient} from '@supabase/supabase-js';
 import {totp} from '../clinical-config.mjs';
 import {openLoopbackBridge,validateBridgeTarget,waitForBridgeTarget} from '../../recovery/ci-loopback-bridge.mjs';
+import {safeServiceState,SERVICES} from './service-diagnostics.mjs';
 
 const repo=path.resolve(fileURLToPath(new URL('../../../',import.meta.url)));
 const compose=path.join(repo,'scripts/recovery/ci-compose.yml');
@@ -55,6 +56,22 @@ async function must(program,args,settings){
 }
 const docker=(args,env)=>must('docker',args,{env,timeout:300000});
 const dc=(args,env)=>docker(['compose','-p',project,'-f',compose,...args],env);
+async function serviceStates(env){
+ const states=[];
+ for(const service of SERVICES){
+  try{
+   const ps=await run('docker',['compose','-p',project,'-f',compose,'ps','--all','-q',service],{env,timeout:10000,limit:8192});
+   if(ps.code!==0){states.push(safeServiceState(service,null));continue;}
+   const id=ps.output.trim();
+   if(!/^[a-f0-9]{64}$/.test(id)){states.push(safeServiceState(service,null));continue;}
+   const inspected=await run('docker',['inspect','--format','{{json .State}}',id],{env,timeout:10000,limit:8192});
+   if(inspected.code!==0){states.push(safeServiceState(service,null));continue;}
+   const raw=JSON.parse(inspected.output);
+   states.push(safeServiceState(service,raw));
+  }catch{states.push(safeServiceState(service,null));}
+ }
+ return states;
+}
 async function bridge(service,port,remotePort,env){
  const id=(await dc(['ps','-q',service],env)).trim();
  assert.match(id,/^[a-f0-9]{64}$/);
@@ -136,7 +153,7 @@ async function fixture(state,mark){
    await db.query('INSERT INTO public.paciente_identidad(id,organization_id,nombre_cifrado,apellido_cifrado,telefono_cifrado) VALUES($1,$2,$3,$3,$3)',[identity,org,cipher]);
    await db.query('INSERT INTO public.paciente(id,organization_id,identidad_id) VALUES($1,$2,$3)',[patient,org,identity]);
    await db.query("INSERT INTO public.plantilla_consentimiento(id,organization_id,tipo,titulo,texto_markdown) VALUES($1,$2,'GENERAL','Consentimiento sintético',$3)",[template,org,'Prueba sintética de consentimiento. '.repeat(5)]);
-   await db.query("INSERT INTO public.documento_clinico(id,organization_id,paciente_id,tipo,storage_path,mime_type,tamanio_bytes,subido_por_id,content_sha256) VALUES($1,$2,$3,'INFORME_EXTERNO',$4,'application/pdf',$5,$6,$7)",[document,org,patient,documentPath,file.length,member,sha(file)]);
+   await db.query("INSERT INTO public.documento_clinico(id,organization_id,paciente_id,tipo,storage_path,mime_type,tamanio_bytes,subido_por_id,content_sha256,validated_at) VALUES($1,$2,$3,'INFORME_EXTERNO',$4,'application/pdf',$5,$6,$7,now())",[document,org,patient,documentPath,file.length,member,sha(file)]);
    await db.query("INSERT INTO public.documento_clinico(id,organization_id,paciente_id,tipo,storage_path,mime_type,tamanio_bytes,subido_por_id,deleted_at) VALUES($1,$2,$3,'INFORME_EXTERNO',$4,'application/pdf',$5,$6,now())",[withdrawn,org,patient,withdrawnPath,file.length,member]);
    await db.query("INSERT INTO public.consentimiento(id,organization_id,paciente_id,plantilla_id,tipo,firma_storage_path) VALUES($1,$2,$3,$4,'GENERAL',$5)",[consent,org,patient,template,signaturePath]);
    // Only this disposable database enables the staff MFA policy. The actor's
@@ -328,11 +345,13 @@ async function main(){
  process.env.FOLIO_ENC_HMAC_KEY=env.FOLIO_ENC_HMAC_KEY;
  assert.equal((await dc(['ps','-q'],env)).trim(),'','project_not_fresh');
  assert.equal((await docker(['volume','ls','-q','--filter',`label=com.docker.compose.project=${project}`],env)).trim(),'','volumes_not_fresh');
- let stage='pull',dbBridge=null,apiBridge=null;
+ let stage='pull',dbBridge=null,apiBridge=null,composeExit=null;
  try{
   await dc(['pull','db','auth','rest','storage','api-gw','minio','minio-createbucket'],env);
   stage='services';
-  await dc(['up','-d','--wait'],env);
+  const started=await run('docker',['compose','-p',project,'-f',compose,'up','-d','--wait'],{env,timeout:300000});
+  composeExit=Number.isInteger(started.code)&&started.code>=0&&started.code<=255?started.code:null;
+  assert.equal(composeExit,0,'compose_services_failed');
   assert.equal((await docker(['network','inspect',`${project}_default`,'--format','{{.Internal}}'],env)).trim(),'true');
   dbBridge=await bridge('db',dbPort,5432,env);
   apiBridge=await bridge('api-gw',55421,8000,env);
@@ -353,6 +372,10 @@ async function main(){
    await appendFile(process.env.GITHUB_STEP_SUMMARY,`## B06b2 synthetic package proof\n\n- Exact head: ${(await must('git',['rev-parse','HEAD'])).trim()}\n- Migrations in fresh PostgreSQL 17: ${files.length}\n- Auth AAL2, RLS, private S3 Storage and SQL ledger: verified\n- JSON, document and signature bytes reassembled with SHA-256: verified\n- Withdrawn document: inventory only; no source read\n- Lost-response replay: same job, entry and bytes\n- Revocation before continuation: blocked\n- Next request/session wrapper and user delivery: B06b3 pending\n`,{flag:'a'});
   }
  }catch{
+  if(stage==='services'){
+   const states=await serviceStates(env);
+   console.error(JSON.stringify({diagnostic:'b06b2_compose_services',composeExit,states}));
+  }
   console.error(`b06b2_${STAGES.has(stage)?stage:'unclassified'}_failed`); // No raw HTTP, SQL, Storage or Auth bodies.
   process.exitCode=1;
  }finally{
