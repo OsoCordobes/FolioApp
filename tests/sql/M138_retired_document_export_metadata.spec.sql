@@ -82,6 +82,21 @@ DO $$ BEGIN
 END $$;
 RESET ROLE;
 
+UPDATE public.paciente SET profesional_principal_id=NULL
+ WHERE id='13800000-0000-4000-8000-000000000101';
+SELECT set_config('test.m138_uid','13800000-0000-4000-8000-000000000002',true);
+SET LOCAL ROLE authenticated;
+DO $$ BEGIN
+ BEGIN
+  PERFORM public.export_retired_document_metadata(
+   '13800000-0000-4000-8000-000000000010','13800000-0000-4000-8000-000000000101',0,500);
+  RAISE EXCEPTION 'M138 unrelated professional read metadata';
+ EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+END $$;
+RESET ROLE;
+UPDATE public.paciente SET profesional_principal_id='13800000-0000-4000-8000-000000000012'
+ WHERE id='13800000-0000-4000-8000-000000000101';
+
 SELECT set_config('test.m138_uid','13800000-0000-4000-8000-000000000005',true);
 SET LOCAL ROLE authenticated;
 DO $$ BEGIN
@@ -90,6 +105,20 @@ DO $$ BEGIN
  THEN RAISE EXCEPTION 'M138 colegiado director cannot read metadata'; END IF;
 END $$;
 RESET ROLE;
+
+UPDATE public.member SET es_colegiado=false
+ WHERE id='13800000-0000-4000-8000-000000000015';
+SET LOCAL ROLE authenticated;
+DO $$ BEGIN
+ BEGIN
+  PERFORM public.export_retired_document_metadata(
+   '13800000-0000-4000-8000-000000000010','13800000-0000-4000-8000-000000000101',0,500);
+  RAISE EXCEPTION 'M138 non-colegiado director read metadata';
+ EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+END $$;
+RESET ROLE;
+UPDATE public.member SET es_colegiado=true
+ WHERE id='13800000-0000-4000-8000-000000000015';
 
 SELECT set_config('test.m138_uid','13800000-0000-4000-8000-000000000003',true);
 SET LOCAL ROLE authenticated;
@@ -101,6 +130,49 @@ DO $$ BEGIN
  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
 END $$;
 RESET ROLE;
+
+SELECT set_config('test.m138_uid','13800000-0000-4000-8000-000000000001',true);
+UPDATE public.paciente SET deleted_at=now()
+ WHERE id='13800000-0000-4000-8000-000000000101';
+SET LOCAL ROLE authenticated;
+DO $$ BEGIN
+ BEGIN
+  PERFORM public.export_retired_document_metadata(
+   '13800000-0000-4000-8000-000000000010','13800000-0000-4000-8000-000000000101',0,500);
+  RAISE EXCEPTION 'M138 retired patient read metadata';
+ EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+END $$;
+RESET ROLE;
+UPDATE public.paciente SET deleted_at=NULL
+ WHERE id='13800000-0000-4000-8000-000000000101';
+
+UPDATE public.paciente_identidad SET deleted_at=now()
+ WHERE id='13800000-0000-4000-8000-000000000111';
+SET LOCAL ROLE authenticated;
+DO $$ BEGIN
+ BEGIN
+  PERFORM public.export_retired_document_metadata(
+   '13800000-0000-4000-8000-000000000010','13800000-0000-4000-8000-000000000101',0,500);
+  RAISE EXCEPTION 'M138 retired identity read metadata';
+ EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+END $$;
+RESET ROLE;
+UPDATE public.paciente_identidad SET deleted_at=NULL
+ WHERE id='13800000-0000-4000-8000-000000000111';
+
+UPDATE public.paciente SET identidad_id=NULL,pseudonimizado_en=now()
+ WHERE id='13800000-0000-4000-8000-000000000101';
+SET LOCAL ROLE authenticated;
+DO $$ BEGIN
+ BEGIN
+  PERFORM public.export_retired_document_metadata(
+   '13800000-0000-4000-8000-000000000010','13800000-0000-4000-8000-000000000101',0,500);
+  RAISE EXCEPTION 'M138 pseudonymized patient read metadata';
+ EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+END $$;
+RESET ROLE;
+UPDATE public.paciente SET identidad_id='13800000-0000-4000-8000-000000000111',pseudonimizado_en=NULL
+ WHERE id='13800000-0000-4000-8000-000000000101';
 
 UPDATE public.paciente SET caja_fuerte_profesional='13800000-0000-4000-8000-000000000012'
  WHERE id='13800000-0000-4000-8000-000000000101';
