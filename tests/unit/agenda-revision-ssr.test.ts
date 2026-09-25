@@ -1,4 +1,7 @@
 import { isAgendaRevisionToken } from "../../lib/agenda/revision-token";
+import { resolveAgendaProfesional } from "../../lib/agenda/profesional";
+import { capabilitiesFor } from "../../lib/auth/capabilities";
+import { readCompleteCollection } from "../../lib/db/complete-collection";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
@@ -69,6 +72,41 @@ test("SSR revision helper preserves bigint text and hides SDK failures/malformed
     const value = await loaded.readAgendaRevision({ organizationId: "trusted-org" });
     assert.equal(value, result?.data === "9223372036854775807:2026-09-08" ? result.data : null);
     assert.deepEqual(JSON.parse(JSON.stringify(calls)), [["read_agenda_revision", { p_org: "trusted-org" }]]);
+  }
+});
+
+test("calendar reception picker excludes professionals outside current scope and ignores a forged filter", async () => {
+  const professionals = ["doctor-a", "doctor-b", "doctor-c"].map(id => ({ id, displayName: id }));
+  for (const [requested, expected] of [["doctor-b", null], ["doctor-c", "doctor-c"]] as const) {
+    const calls: Array<{ name: string; input?: unknown }> = [];
+    const session = { organizationId: "trusted-org", memberId: "reception-member", role: "COORDINADOR", esColegiado: false };
+    const loaded = load("app/(app)/calendario/page.tsx", {
+      "@/lib/db/session": { getActiveSession: async () => ({ ok: true, data: session }) },
+      "@/lib/db/active-context": { getActiveContext: async () => ({ ok: true, data: { session, organization: { id: "trusted-org", timezone: "America/Argentina/Cordoba" } } }) },
+      "@/lib/db/agenda-revision": { readAgendaRevision: async () => null },
+      "@/lib/db/members": { listProfesionalesLite: async () => ({ ok: true, data: professionals }) },
+      "@/lib/db/complete-collection": { readCompleteCollection },
+      "@/lib/supabase/server": { createSupabaseServerClient: async () => ({ rpc(name: string, args: unknown, opts: unknown) {
+        calls.push({ name, input: { args, opts } });
+        return { order() { return this; }, range() { return Promise.resolve({ data: [{ id: "doctor-a" }, { id: "doctor-c" }], count: 2, error: null }); } };
+      } }) },
+      "@/lib/auth/capabilities": { capabilitiesFor },
+      "@/lib/agenda/profesional": { resolveAgendaProfesional },
+      "@/lib/db/calendario": {
+        getCalendarioSemana: async (input: unknown) => { calls.push({ name: "week", input }); return { ok: true, data: { turnos: [], pacientes: {} } }; },
+        getCalendarioMes: async (input: unknown) => { calls.push({ name: "month", input }); return { ok: true, data: { turnos: [], pacientes: {}, grid: [] } }; },
+        getMondayOfWeekInTz: () => "2026-09-07", monthAnchorInTz: () => "2026-09", shiftMonth: () => "2026-08", shiftWeek: () => "2026-08-31", formatMonthLabel: () => "Septiembre",
+      },
+    });
+    const tree = await loaded.default({ searchParams: Promise.resolve({ prof: requested }) }) as { props: { profesionales: Array<{ id: string }>; colegiados: Array<{ id: string }>; profActivo: string | null } };
+    assert.deepEqual(tree.props.profesionales.map(p => p.id), ["doctor-a", "doctor-c"]);
+    assert.deepEqual(tree.props.colegiados.map(p => p.id), ["doctor-a", "doctor-c"]);
+    assert.equal(tree.props.profActivo, expected);
+    assert.equal((calls.find(c => c.name === "week")?.input as { profesionalId: string | null }).profesionalId, expected);
+    assert.equal((calls.find(c => c.name === "month")?.input as { profesionalId: string | null }).profesionalId, expected);
+    assert.deepEqual(JSON.parse(JSON.stringify(calls.filter(c => c.name === "agenda_recepcion_profesionales"))), [
+      { name: "agenda_recepcion_profesionales", input: { args: { p_org: "trusted-org", p_fecha: "2026-09-07" }, opts: { count: "exact" } } },
+    ]);
   }
 });
 

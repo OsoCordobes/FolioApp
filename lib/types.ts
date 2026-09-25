@@ -219,7 +219,8 @@ export interface Pedido {
   hora: string | null;
   dur: number;
   servicio: string;
-  precio: number;
+  /** Null cuando recepción no tiene acceso a importes. */
+  precio: number | null;
   motivo: string;
   recibidoHace: string;
   propuesta?: { fecha: string; hora: string };
