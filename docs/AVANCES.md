@@ -14,17 +14,17 @@ Actualizado: 25/09/2026. Este es el registro breve del trabajo; [el tablero téc
 | **Miniweb profesional** · publicada | Dos disposiciones, mapa confirmado, editor y enlace individual con permiso propio. D · revisión A. [Publicación verificada](https://github.com/OsoCordobes/FolioApp/pull/171) y [prueba del permiso](https://github.com/OsoCordobes/FolioApp/actions/runs/36076159519). |
 | **Trabajo de recepción** · publicada | Agenda publicada con el alcance de Asistente y Coordinador. C · revisión A; [entrega](https://github.com/OsoCordobes/FolioApp/pull/172). [Prueba aprobada, sin omisiones](https://github.com/OsoCordobes/FolioApp/actions/runs/36076854795). |
 | **Atención adulta** · pendiente | Contrato preparado; faltan decisiones clínicas e implementación de la verificación para nuevas atenciones. |
-| **Ficha completada por el paciente** · pendiente | Alcance acordado: enlace o QR, preguntas por especialidad y revisión del profesional sin sobrescribir datos. |
-| **Llamador de recepción** · en curso | D · contrato revisado por A: código y destino sin datos personales. Prepara permisos, pantalla revocable y repetición segura; todavía no publicado. |
+| **Ficha completada por el paciente** · contrato preparado | A · [alcance preparado](B09-PATIENT-FORM-CONTRACT.md): enlace o QR, datos aportados y revisión sin sobrescribir antecedentes. Preguntas clínicas pendientes de aprobación profesional. |
+| **Llamador de recepción** · permisos probados; pantalla en construcción | D · revisión A; [PR179](https://github.com/OsoCordobes/FolioApp/pull/179) pasó permisos, códigos y revocación. Sigue con la pantalla y controles dentro de Folio; todavía no disponible para usar. |
 | **Google Calendar** · prueba externa pendiente | Debemos demostrar reservas reflejadas en Google, ocupación externa y cambios sin duplicados. |
 | **Correo y comunicaciones** · prueba externa pendiente | La entrega global sigue desactivada; falta comprobar recepción y reintentos en buzones controlados. |
 | **Pagos y suscripciones** · prueba externa pendiente | Los cobros ficticios previos no prueban Mercado Pago real; faltan los recorridos comerciales ofrecidos. |
-| **Portal y exportación** · archivos comprobados; descarga en construcción | C · revisión A; [prueba aprobada](https://github.com/OsoCordobes/FolioApp/actions/runs/36090170105): archivos reconstruidos, reintentos sin duplicación y revocación de acceso. [PR178](https://github.com/OsoCordobes/FolioApp/pull/178) pendiente de publicación; todavía falta el botón de descarga completa. |
+| **Portal y exportación** · base de archivos publicada; descarga en construcción | C · revisión A; [PR178 publicada](https://github.com/OsoCordobes/FolioApp/pull/178). [Prueba aprobada](https://github.com/OsoCordobes/FolioApp/actions/runs/36090170105): archivos reconstruidos, reintentos sin duplicación y revocación; todavía falta la descarga completa desde la aplicación. |
 | **Continuidad y soporte** · pendiente | Faltan custodia externa, alertas, responsables y procedimiento de ayuda comprobados. |
 | **Validación profesional y piloto** · pendiente humano | Cinco especialidades y piloto de 14 días, con tres profesionales y cinco jornadas por persona. |
 | **Lanzamiento** · pendiente | Se cerrará cuando la versión publicada y la oferta comercial coincidan con lo demostrado. |
 
-**Última publicación comprobada:** [PR177 · guardado de servicios](https://github.com/OsoCordobes/FolioApp/pull/177), disponible desde el 25/09 a las 05:20 (Copenhague). Para probar: editar servicios durante el onboarding, salir y volver. **Última cuota consultada:** 83% disponible; reserva de cierre: 15%.
+**Última publicación comprobada:** [PR178 · preparación segura de archivos](https://github.com/OsoCordobes/FolioApp/pull/178), desde el 25/09 a las 05:45 (Copenhague). La mejora visible más reciente sigue siendo guardar servicios durante el onboarding, salir y volver sin perderlos. **Última cuota consultada:** 80% disponible; reserva de cierre: 15%.
 
 **Forma de trabajo:** continuar mientras haya trabajo útil, cerrar cada paquete con evidencia y tomar el siguiente. La reanudación horaria es respaldo ante un corte, no una espera entre tareas.
 
