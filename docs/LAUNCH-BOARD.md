@@ -67,7 +67,7 @@ Selección por riesgo, dependencia, utilidad y esfuerzo restante. Terminar, comp
 
 ## Cuota, autonomía y continuidad
 
-Última lectura real:24% usado/76% disponible; reserva15%. Reinicio informado por la herramienta:01/10/2026 21:27:44 UTC, cero créditos. No presumir reinicio el sábado26/09. No atribuir consumo exacto a cada agente ni convertir cuota en horas garantizadas.
+Última lectura real:26% usado/74% disponible; reserva15%. Reinicio informado por la herramienta:01/10/2026 21:27:44 UTC, cero créditos. No presumir reinicio el sábado26/09. No atribuir consumo exacto a cada agente ni convertir cuota en horas garantizadas.
 
 Al llegar a85% usado, no abrir implementación nueva: cerrar paquetes revisables, preservar evidencia y dejar continuación. La calidad y los criterios gobiernan el cierre; no consumir cuota artificialmente ni repetir pruebas verdes sin cambio, fallo o duda concreta. El titular autorizó continuar autónomamente mientras duerme; pedir sólo decisiones indispensables y seguir con trabajo independiente.
 
