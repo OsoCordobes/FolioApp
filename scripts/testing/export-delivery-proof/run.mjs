@@ -189,24 +189,55 @@ async function fixture(state,mark){
  assert.match(encrypted,/^\\x[0-9a-f]+$/);
  const cipher=Buffer.from(encrypted.slice(2),'hex');
  mark('fixture_db');
- await withPg(state.dbPassword,async db=>{
+ let fixtureStep='connect';
+ try{await withPg(state.dbPassword,async db=>{
+  fixtureStep='begin';
   await db.query('BEGIN');
   try{
+   fixtureStep='profile';
    await db.query('INSERT INTO public.profile(id,email,nombre_cifrado,apellido_cifrado,consent_pii_signed_at,consent_pii_text_version) VALUES($1,$2,$3,$3,now(),$4)',[user,email,cipher,'synthetic-b06.v1']);
+   fixtureStep='organization';
    await db.query("INSERT INTO public.organization(id,slug,nombre,ciudad,provincia,timezone,especialidad,tipo,onboarding_completed,onboarding_step_max,is_internal_account,is_synthetic,opt_out_analytics,opt_out_public_listing) VALUES($1,$2,'Consultorio sintético B06','Alta Gracia','Córdoba','America/Argentina/Cordoba','quiropraxia','INDEPENDIENTE',true,9,true,true,true,true)",[org,`folio-test-clinical-${randomUUID().slice(0,12)}`]);
+   fixtureStep='member';
    await db.query("INSERT INTO public.member(id,organization_id,profile_id,role,accepted_at,es_colegiado,especialidad,alcance,profesionales_gestionados) VALUES($1,$2,$3,'OWNER',now(),true,'quiropraxia','TODOS','{}')",[member,org,user]);
+   fixtureStep='identity';
    await db.query('INSERT INTO public.paciente_identidad(id,organization_id,nombre_cifrado,apellido_cifrado,telefono_cifrado) VALUES($1,$2,$3,$3,$3)',[identity,org,cipher]);
+   fixtureStep='patient';
    await db.query('INSERT INTO public.paciente(id,organization_id,identidad_id) VALUES($1,$2,$3)',[patient,org,identity]);
+   fixtureStep='template';
    await db.query("INSERT INTO public.plantilla_consentimiento(id,organization_id,tipo,titulo,texto_markdown) VALUES($1,$2,'GENERAL','Consentimiento sintético',$3)",[template,org,'Prueba sintética de consentimiento. '.repeat(5)]);
-   await db.query("INSERT INTO public.documento_clinico(id,organization_id,paciente_id,tipo,storage_path,mime_type,tamanio_bytes,subido_por_id,content_sha256,validated_at) VALUES($1,$2,$3,'INFORME_EXTERNO',$4,'application/pdf',$5,$6,$7,now())",[document,org,patient,documentPath,file.length,member,sha(file)]);
+   // M102 reserves validated metadata for objects <= 4 MiB. Prove the guard
+   // rejects this 50 MiB source before inserting it as a legitimate legacy row.
+   fixtureStep='validated_document_guard';
+   await db.query('SAVEPOINT oversized_verified');
+   let rejected=false;
+   try{
+    await db.query("INSERT INTO public.documento_clinico(id,organization_id,paciente_id,tipo,storage_path,mime_type,tamanio_bytes,subido_por_id,content_sha256,validated_at) VALUES($1,$2,$3,'INFORME_EXTERNO',$4,'application/pdf',$5,$6,$7,now())",[document,org,patient,documentPath,file.length,member,sha(file)]);
+   }catch(error){
+    rejected=error?.code==='23514'&&error?.constraint==='documento_validated_content';
+   }
+   await db.query('ROLLBACK TO SAVEPOINT oversized_verified');
+   assert.equal(rejected,true,'oversized_validated_document_accepted');
+   await db.query('RELEASE SAVEPOINT oversized_verified');
+   fixtureStep='legacy_document';
+   await db.query("INSERT INTO public.documento_clinico(id,organization_id,paciente_id,tipo,storage_path,mime_type,tamanio_bytes,subido_por_id) VALUES($1,$2,$3,'INFORME_EXTERNO',$4,'application/pdf',$5,$6)",[document,org,patient,documentPath,file.length,member]);
+   fixtureStep='withdrawn';
    await db.query("INSERT INTO public.documento_clinico(id,organization_id,paciente_id,tipo,storage_path,mime_type,tamanio_bytes,subido_por_id,deleted_at) VALUES($1,$2,$3,'INFORME_EXTERNO',$4,'application/pdf',$5,$6,now())",[withdrawn,org,patient,withdrawnPath,file.length,member]);
+   fixtureStep='consent';
    await db.query("INSERT INTO public.consentimiento(id,organization_id,paciente_id,plantilla_id,tipo,firma_storage_path) VALUES($1,$2,$3,$4,'GENERAL',$5)",[consent,org,patient,template,signaturePath]);
    // Only this disposable database enables the staff MFA policy. The actor's
    // real TOTP session must satisfy M138; no production flag is touched.
+   fixtureStep='mfa_policy';
    await db.query('UPDATE folio_mfa_private.policy SET application_ready=true,staff_enforce_after=now() WHERE singleton');
+   fixtureStep='commit';
    await db.query('COMMIT');
   }catch(error){await db.query('ROLLBACK');throw error;}
- });
+ });}catch(error){
+  const code=String(error?.code??'');
+  console.error(JSON.stringify({diagnostic:'b06b3_fixture_db',step:fixtureStep,
+   code:/^[A-Z0-9_]{2,24}$/.test(code)?code:null}));
+  throw error;
+ }
  mark('source_upload');
  for(const [bucket,fullPath,bytes] of [
   ['documentos-clinicos',documentPath,file],['consentimientos-firmados',signaturePath,signature],

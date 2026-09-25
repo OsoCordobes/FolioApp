@@ -84,6 +84,9 @@ export async function proveHttp({state,seed,mark,app,api}){
  const json=manifest.entries.find(row=>row.kind==='json');
  assert.equal(document?.expected_fragments,17,'actual_50mib_not_17_fragments');
  assert.equal(document?.total_bytes,seed.file.byteLength,'actual_50mib_size');
+ assert.equal(document?.source_hash_kind,'not_recorded','legacy_document_hash_kind');
+ assert.equal(document?.source_sha256,null,'legacy_document_source_hash_unexpected');
+ assert.equal(document?.computed_sha256,sha(seed.file),'legacy_document_computed_hash');
  assert.equal(withdrawn?.expected_fragments,0,'withdrawn_bytes_present');
  assert.ok(json&&signature&&document&&withdrawn,'manifest_kinds');
  mark('reconstruction');

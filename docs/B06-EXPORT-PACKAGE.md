@@ -173,8 +173,12 @@ fragmentos, muy por encima de ese techo. También pueden intervenir cuotas compa
 latencia y vencimiento. B06 global queda abierto para ese caso: requiere
 presupuesto/capacidad explícitos y una ruta de trabajo largo comprobada;
 no se aumentan límites ni TTL por suposición. El ensayo hospedado de B06b3b
-usa un documento ficticio real de casi 50 MiB/17 fragmentos, rutas Next
-reales, navegador Chromium con escritor OPFS para sustituir sólo el diálogo
+usa un documento ficticio legado de casi 50 MiB/17 fragmentos, sin hash de
+origen validado en su registro según M102. Comprueba que M102 rechaza esos
+metadatos para ese tamaño y compara el SHA calculado durante la entrega con
+el de los bytes sintéticos originales. Esto no acredita la carga normal de
+50 MiB con metadatos validados. El ensayo usa rutas Next reales y navegador
+Chromium con escritor OPFS para sustituir sólo el diálogo
 nativo, y extracción TAR independiente. No acredita el selector nativo de
 otros navegadores ni volúmenes máximos. El mismo ensayo conserva capturas
 sintéticas a 375 y 1440 px para revisar la vista; no contienen pacientes
