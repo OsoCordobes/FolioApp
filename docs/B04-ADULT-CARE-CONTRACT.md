@@ -1,8 +1,16 @@
 # B04 · Contrato de diseño para atención de adultos
 
-Estado: diseño para revisión de A, D y Launch Manager. Sin migración reservada, código, ejecución ni despliegue. Base clínica inspeccionada: candidato `2bdb60870caf8556f24a25db49e5ec1564b36003`; este documento vive en el worktree B y no modifica ese candidato.
+Estado: contrato habilitado por A para preparar implementación y pruebas aisladas cuando se libere un escritor. Sin migración reservada, código, ejecución ni activación productiva. Diseño inicial sobre `2bdb60870caf8556f24a25db49e5ec1564b36003`; ahora se conserva en la copia del manager.
 
-Nota de continuidad del 25/09: se conserva ese diseño histórico. El documento está ahora en la copia del manager; producción llegó a `22f4e034991cc467b748e9a2534872e3bedcb492`. M128 ya fue utilizada y publicada para otro checkpoint. Este contrato no reserva números ni autoriza activación: antes de implementarlo hay que confirmar las decisiones clínicas señaladas y contrastar las rutas con la base vigente.
+Nota de continuidad del 25/09: producción llegó a `987202afa3ae170061e0e121c09fedb911a7ffac`. A comparó M96, M106, M120 y los escritores `sesiones.ts`, `notas-clinicas.ts` y `clinical-write-context.ts` con la base del diseño: no cambiaron. Esto conserva la relevancia del análisis; no reemplaza la revisión de todas las rutas durante implementación. M128 ya fue utilizada para otro checkpoint; no reserva números ni autoriza activación.
+
+## Decisión de A para avanzar sin bloquear el desarrollo
+
+Se puede construir y probar el control con datos ficticios sin esperar una decisión humana. La preparación productiva será aditiva y la exigencia para nuevas atenciones tendrá activación separada, con lectura posterior; nunca se activará por instalar una migración. Las historias y consultas ya iniciadas deben conservarse según el contrato de abajo.
+
+Para la prueba se utilizará una atestación explícita por un miembro con permiso clínico sobre la ficha y condición profesional acreditada en Folio; recepción no atestigua. Se registrará que el profesional comprobó la fecha y cuál fue la fuente, sin copiar documentos de identidad ni afirmar verificación material por software. El criterio provisional del 29/2 será el 1/3 en año no bisiesto y se cubrirá con pruebas de frontera. Son decisiones para diseñar y ensayar, no conclusiones jurídicas ni aprobación clínica del piloto.
+
+Antes de exigirlo en pacientes reales quedará una revisión concreta y breve del responsable clínico: quién realiza la comprobación, qué fuente acepta el consultorio y cómo resuelve una discrepancia. No hace falta mantener detenido el desarrollo mientras se prepara esa revisión. No dar por terminada la atención adulta sólo por publicar código con el control desactivado.
 
 ## Regla de producto y límite comprobable
 
