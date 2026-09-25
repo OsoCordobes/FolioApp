@@ -120,13 +120,14 @@ async function currentPlan(client: Client, session: ActiveSession, patientId: st
     if (!sources.ok) return sources;
     return ok({ sources: sources.data, fingerprint: fingerprintExportPackage(exported, sources.data) });
   } catch {
-    return err("db_error", "No se pudo verificar el inventario actual. Prepará otra entrega si cambió.");
+    return err("db_error", "No se pudo verificar el inventario actual. Consultá antes de reintentar.");
   }
 }
 
 async function samePlan(client: Client, session: ActiveSession, operation: PackageOperation) {
   const plan = await currentPlan(client, session, operation.paciente_id);
-  if (!plan.ok || plan.data.fingerprint !== operation.source_fingerprint ||
+  if (!plan.ok) return plan;
+  if (plan.data.fingerprint !== operation.source_fingerprint ||
       plan.data.sources.length + 1 !== operation.expected_entries) {
     return err("conflict", "Las fuentes cambiaron. Prepará una nueva entrega explícitamente.");
   }

@@ -24,6 +24,7 @@ function fixture() {
   let downloadedBytes: Uint8Array = bytes;
   let onDownload = () => {};
   let operationError = false, operationAbsent = false, operationMalformed = false;
+  let planFailure: { code: string; message: string } | null = null, planThrows = false;
   const calls: string[] = [];
   let downloads = 0;
   const source = () => ({ kind: withdrawn ? "withdrawn_document" : "document",
@@ -65,8 +66,11 @@ function fixture() {
       if (name === "@/lib/db/errors") return { ok: (data: unknown) => ({ ok: true, data }),
         err: (code: string, message: string) => ({ ok: false, error: { code, message } }) };
       if (name === "@/lib/supabase/server") return { createSupabaseServiceClient: () => service };
-      if (name === "./export-builder") return { buildPatientExport: async () =>
-        ({ ok: true, data: { version: withdrawn ? "withdrawn" : "original" } }) };
+      if (name === "./export-builder") return { buildPatientExport: async () => {
+        if (planThrows) throw Error("SECRET clinical data");
+        return planFailure ? { ok: false, error: planFailure } :
+          { ok: true, data: { version: withdrawn ? "withdrawn" : "original" } };
+      } };
       if (name === "./export-authorization") return { revalidateClinicalDelivery: async () =>
         revoked ? { ok: false, error: { code: "mfa_required", message: "MFA required" } } :
           { ok: true, data: undefined } };
@@ -98,6 +102,8 @@ function fixture() {
     operationError: () => { operationError = true; },
     operationAbsent: () => { operationAbsent = true; },
     operationMalformed: () => { operationMalformed = true; },
+    failPlan: (code: string) => { planFailure = { code, message: "Lectura no confirmada." }; },
+    throwPlan: () => { planThrows = true; },
     onDownload: (callback: () => void) => { onDownload = callback; },
     pageRows: (value: unknown[]) => { rows = value; } };
 }
@@ -150,6 +156,31 @@ test("manifest is exact, bounded, and withheld after a source is withdrawn", asy
   f.withdraw();
   const retired = await f.exports.readPackageManifestPage(f.client, session, bound, 1, 1) as { ok: boolean };
   assert.equal(retired.ok, false);
+});
+
+test("an unreadable current plan is not mislabeled as a changed source", async () => {
+  for (const code of ["db_error", "network", "mfa_required"]) {
+    const f = fixture();
+    f.failPlan(code);
+    const result = await f.exports.readPackageManifestPage(f.client, session, bound, 1, 1) as
+      { ok: boolean; error: { code: string; message: string } };
+    assert.equal(result.ok, false);
+    assert.equal(result.error.code, code);
+    assert.doesNotMatch(result.error.message, /nueva entrega|fuentes cambiaron/i);
+  }
+  const thrown = fixture();
+  thrown.throwPlan();
+  const unknown = await thrown.exports.readPackageManifestPage(thrown.client, session, bound, 1, 1) as
+    { ok: boolean; error: { code: string; message: string } };
+  assert.equal(unknown.ok, false);
+  assert.equal(unknown.error.code, "db_error");
+  assert.doesNotMatch(unknown.error.message, /SECRET|nueva entrega|fuentes cambiaron/i);
+  const changed = fixture();
+  changed.withdraw();
+  const mismatch = await changed.exports.readPackageManifestPage(changed.client, session, bound, 1, 1) as
+    { ok: boolean; error: { code: string } };
+  assert.equal(mismatch.ok, false);
+  assert.equal(mismatch.error.code, "conflict");
 });
 
 test("50 MiB legacy metadata requires 17 bounded fragments, never 18 or oversize", async () => {
