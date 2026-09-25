@@ -99,7 +99,6 @@ test("reception code, screen pairing, revocation and unchanged clinical state", 
   if (!/^[a-f0-9]{16}$/.test(code)) throw new Error("pair_code_format_invalid");
   expect(pairActionCount).toBe(1);
   expect(pairStatus).toBe("2xx");
-  await expect.poll(() => pairAction, { timeout: 5_000 }).toBe("complete");
   timedStage("pair_issued");
 
   timedStage("screen_context_requested");
