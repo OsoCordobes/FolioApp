@@ -49,14 +49,6 @@ test("reception code, screen pairing, revocation and unchanged clinical state", 
   const fixture = JSON.parse(await readFile(path.join(tmpdir(), "folio-caller-proof-fixture.json"), "utf8")) as Fixture;
   expect(fixture.userId).toMatch(/^[0-9a-f-]{36}$/i);
   expect(fixture.browserCookies.length).toBeGreaterThan(0);
-  const beforeHydration = await browser.newContext({ javaScriptEnabled: false });
-  try {
-    await beforeHydration.addCookies(fixture.browserCookies);
-    const serverPage = await beforeHydration.newPage();
-    await serverPage.goto("http://localhost:4430/configuracion/pantallas");
-    await expect(serverPage.getByRole("button", { name: "Generar código de vinculación" })).toBeDisabled();
-  } finally { await beforeHydration.close(); }
-  timedStage("ssr_control_disabled");
   await page.context().addCookies(fixture.browserCookies);
   const staffScreen = await page.request.get("http://localhost:4430/api/caller/screen");
   expect(staffScreen.status()).toBe(401);

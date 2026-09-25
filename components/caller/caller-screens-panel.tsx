@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 
 import { createCallerPairAction, listCallerScreensAction, revokeCallerScreenAction } from "@/app/(app)/configuracion/pantallas/actions";
 import type { listCallerScreens } from "@/lib/db/caller";

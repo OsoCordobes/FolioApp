@@ -86,6 +86,8 @@ jobs:
           echo "C01_OFFICIAL_DOCKER=$upstream/docker" >> "$GITHUB_ENV"
       - name: Install isolated Chromium
         run: pnpm exec playwright install --with-deps chromium
+      - name: Prove caller controls disabled in server HTML
+        run: node --import tsx --test tests/ssr/caller-screens-hydration.test.ts
       - name: Exercise local caller HTTP and browser contract
         run: node --conditions=react-server --import tsx scripts/testing/caller-proof/run.mjs
       - name: Preserve synthetic screen views
