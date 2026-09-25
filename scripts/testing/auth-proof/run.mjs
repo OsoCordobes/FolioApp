@@ -162,6 +162,10 @@ async function main(){
   for(const stage of stages.slice(-30))console.log(`auth_proof_stage:${stage}`);
   const mailDiagnostics=[...result.output.matchAll(/auth_proof_mail_diagnostic:kind=(?:signup|recovery) messages=[0-9] urls=[0-9] origin=[01] path=[01] type=[01]/g)];
   for(const diagnostic of mailDiagnostics.slice(-2))console.log(diagnostic[0]);
+  const uiDiagnostics=[...result.output.matchAll(/auth_proof_ui_diagnostic:path=(?:\/onboarding|\/login|\/seguridad\/mfa|\/api\/auth\/callback|other) choice=[01] registration=[01] consent=[01] auth_cookie=[01] pkce_cookie=[01] selected=[01] continue_enabled=[01]/g)];
+  for(const diagnostic of uiDiagnostics.slice(-2))console.log(diagnostic[0]);
+  const sessionDiagnostics=[...result.output.matchAll(/auth_proof_session_diagnostic:verify=[01] callback=[01] onboarding=[01] callback_status=(?:none|redirect|ok|other) callback_to=(?:none|onboarding|login|mfa|hoy|reset|other) cookie_kind=(?:missing|chunk_gap|empty|decode_failed|token_missing|config_missing|auth_rejected|auth_missing|auth_unavailable|valid) auth_valid=[01] same_user=[01] reload_choice=[01] reload_registration=[01] reload_consent=[01] reload_error=[01] reload_cookie_kind=(?:missing|chunk_gap|empty|decode_failed|token_missing|config_missing|auth_rejected|auth_missing|auth_unavailable|valid) reload_auth_valid=[01] reload_same_user=[01]/g)];
+  for(const diagnostic of sessionDiagnostics.slice(-2))console.log(diagnostic[0]);
   for(const count of counts.slice(-3))console.log(cleanOutput(count));
   if(result.code!==0){
    // The browser's raw report can contain one-use mail links and credentials.
@@ -175,6 +179,7 @@ async function main(){
     'auth_proof_redirect_mismatch','auth_proof_mailbox_invalid','auth_proof_mailbox_shape',
     'auth_proof_requires_dedicated_local_auth','auth_proof_local_target_mismatch',
     'auth_proof_turnstile_must_use_existing_development_path','auth_proof_local_read_key_missing',
+    'auth_proof_consent_screen_missing',
    ]);
    const detected=[...result.output.matchAll(/auth_proof_[a-z0-9_]+(?=\b)/gi)]
     .map(match=>match[0]).find(value=>allowedErrors.has(value))??'';
