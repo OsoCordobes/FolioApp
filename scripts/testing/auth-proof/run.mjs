@@ -164,6 +164,8 @@ async function main(){
   for(const diagnostic of mailDiagnostics.slice(-2))console.log(diagnostic[0]);
   const uiDiagnostics=[...result.output.matchAll(/auth_proof_ui_diagnostic:path=(?:\/onboarding|\/login|\/seguridad\/mfa|\/api\/auth\/callback|other) choice=[01] registration=[01] consent=[01] auth_cookie=[01] pkce_cookie=[01] selected=[01] continue_enabled=[01]/g)];
   for(const diagnostic of uiDiagnostics.slice(-2))console.log(diagnostic[0]);
+  const sessionDiagnostics=[...result.output.matchAll(/auth_proof_session_diagnostic:verify=[01] callback=[01] onboarding=[01] cookie_parsed=[01] auth_valid=[01] same_user=[01] reload_choice=[01] reload_registration=[01] reload_consent=[01] reload_error=[01] reload_auth_valid=[01] reload_same_user=[01]/g)];
+  for(const diagnostic of sessionDiagnostics.slice(-2))console.log(diagnostic[0]);
   for(const count of counts.slice(-3))console.log(cleanOutput(count));
   if(result.code!==0){
    // The browser's raw report can contain one-use mail links and credentials.
