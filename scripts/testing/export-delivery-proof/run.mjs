@@ -300,10 +300,19 @@ async function main(){
    const {appendFile}=await import('node:fs/promises');
    await appendFile(process.env.GITHUB_STEP_SUMMARY,`## B06b3 synthetic HTTP delivery proof\n\n- Exact head: ${(await must('git',['rev-parse','HEAD'])).trim()}\n- Migrations in fresh PostgreSQL 17: ${files.length}\n- Seven Next HTTP routes with real session, AAL2, RLS and private S3 Storage: verified\n- Actual 50 MiB document in 17 fragments, JSON and signature: reconstructed with SHA-256\n- Retired document: inventory only; no bytes\n- Lost begin response: same operation and job\n- Source withdrawal after READY: blocked\n- Chromium writer: real OPFS file handle, native picker substituted; interrupted overwrite aborted after partial write and prior file SHA-256 preserved; unsupported API explained\n- Independent TAR reader: document, signature and JSON verified\n- TAR bytes: ${proof.archiveBytes}; SHA-256: ${proof.archiveSha256}; browser seconds: ${proof.elapsedSeconds}\n- Maximum observed progress call: ${proof.maxProgressMs} ms\n- Native OS picker and maximum inventory volume: not certified\n`,{flag:'a'});
   }
- }catch{
+ }catch(error){
   if(stage==='services'){
    const states=await serviceStates(env);
    console.error(JSON.stringify({diagnostic:'b06b3_compose_services',composeExit,states}));
+  }
+  const reason=error instanceof Error?error.message:'';
+  if(/^http_status_(?:400|401|403|404|409|413|429|503|other)_(?:auth_required|mfa_required|no_org|forbidden|validation|conflict|not_found|network|db_error|capacity|rate_limited|unknown)$/.test(reason)||
+   reason==='unexpected_auth_redirect'){
+   console.error(JSON.stringify({diagnostic:'b06b3_http',stage,reason}));
+  }else if(stage==='begin'&&['job_id_missing','lost_begin_identity_changed',
+   'begin_replay_changed','source_count_changed','route_response_unconfirmed']
+   .includes(reason.split('\n',1)[0])){
+   console.error(JSON.stringify({diagnostic:'b06b3_begin_assertion',reason:reason.split('\n',1)[0]}));
   }
   console.error(`b06b3_${STAGES.has(stage)?stage:'unclassified'}_failed`); // No raw HTTP, SQL, Storage or Auth bodies.
   process.exitCode=1;

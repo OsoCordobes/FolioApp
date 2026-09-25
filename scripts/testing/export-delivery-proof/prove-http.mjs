@@ -5,6 +5,8 @@ import {proveBrowser} from './prove-browser.mjs';
 
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const SAFE_ROUTE_CODES=new Set(['auth_required','mfa_required','no_org','forbidden',
+ 'validation','conflict','not_found','network','db_error','capacity','rate_limited']);
 
 async function cookieHeader(api,anon,seed){
  let cookies=[];
@@ -26,8 +28,18 @@ export async function proveHttp({state,seed,mark,app,api}){
   const response=await fetch(`${app}${path}`,{method,redirect:'manual',cache:'no-store',
    headers:{Cookie:session.header,...(body?{Origin:app,'Content-Type':'application/json'}:{})},
    body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(90_000)});
-  assert.equal(response.status>=300&&response.status<400,false,'unexpected_auth_redirect');
-  if(!response.ok)throw Error(`http_status_${[400,401,403,404,409,429,503].includes(response.status)?response.status:'other'}`);
+  if(response.status>=300&&response.status<400)throw Error('unexpected_auth_redirect');
+  if(!response.ok){
+   let code='unknown';
+   if((response.headers.get('content-type')??'').startsWith('application/json')){
+    try{
+     const body=await response.json();
+     if(SAFE_ROUTE_CODES.has(body?.error?.code))code=body.error.code;
+    }catch{}
+   }
+   const status=[400,401,403,404,409,413,429,503].includes(response.status)?response.status:'other';
+   throw Error(`http_status_${status}_${code}`);
+  }
   if(path.includes('/fragments/')){
    assert.equal(response.headers.get('content-type'),'application/octet-stream','fragment_type');
    return {bytes:new Uint8Array(await response.arrayBuffer()),headers:response.headers};
