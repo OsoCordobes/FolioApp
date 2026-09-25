@@ -34,8 +34,9 @@ export async function claimDueExportPackageCleanup(): Promise<Result<{
   }
 }
 
-/** One bounded page, always under an expiry-only CAS. Only names within a
- * ledger-derived job/entry prefix and expected ordinal range can be removed. */
+/** One entry per invocation, always under an expiry-only CAS. Each entry can
+ * require several timed Storage calls; processing a whole SQL page would run
+ * longer than one request. Only ledger-derived names can be removed. */
 export async function cleanupExportPackageStep(
   jobId: string, token: string, revision: number,
 ): Promise<Result<{ complete: boolean }>> {
@@ -57,7 +58,7 @@ export async function cleanupExportPackageStep(
     });
     if (error || !Array.isArray(data) || data.length > 10) throw new Error("cleanup_inventory_failed");
     const bucket = privateExportBucket();
-    for (const entry of data) {
+    for (const entry of data.slice(0, 1)) {
       if (!UUID.test(String(entry.entry_id)) || !Number.isSafeInteger(entry.expected_fragments) ||
           entry.expected_fragments < 0 || entry.expected_fragments > 10000) {
         throw new Error("cleanup_entry_invalid");
