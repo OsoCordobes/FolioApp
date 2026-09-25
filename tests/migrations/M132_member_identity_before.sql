@@ -28,7 +28,11 @@ INSERT INTO auth.sessions(id,user_id,aal,factor_id) VALUES
  ('13200000-0000-4000-8000-000000000041','13200000-0000-4000-8000-000000000001','aal2','13200000-0000-4000-8000-000000000031'),
  ('13200000-0000-4000-8000-000000000043','13200000-0000-4000-8000-000000000003','aal2','13200000-0000-4000-8000-000000000033');
 UPDATE folio_mfa_private.policy SET application_ready=true,staff_enforce_after=now();
-GRANT SELECT ON public.member,public.organization TO authenticated;
+-- Vanilla PG CI omits Supabase's Data API grants; production grants UPDATE
+-- on member to authenticated (including these identity columns).
+GRANT SELECT ON public.member TO authenticated;
+GRANT UPDATE (profile_id,organization_id) ON public.member TO authenticated;
+GRANT SELECT ON public.organization TO authenticated;
 
 SELECT set_config('test.m132_uid','13200000-0000-4000-8000-000000000001',true);
 SELECT set_config('test.m132_jwt','{"aal":"aal2","session_id":"13200000-0000-4000-8000-000000000041"}',true);
