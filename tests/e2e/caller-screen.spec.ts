@@ -8,6 +8,91 @@ import { totp } from "../../scripts/testing/clinical-config.mjs";
 
 type Fixture = { email: string; password: string; totpSecret: string; enrollmentOtpWindow: number; databaseUrl: string; turnoId: string };
 
+function mfaAlertKind(message: string) {
+  const known: Record<string, string> = {
+    "Ingresá los 6 números de tu autenticador.": "validation",
+    "Volvé a iniciar sesión.": "session",
+    "No pudimos verificar tu sesión. Reintentá.": "session_check",
+    "Hubo demasiados intentos. Esperá antes de volver a probar.": "rate",
+    "No pudimos consultar tus dispositivos. Reintentá.": "factor_list",
+    "No encontramos ese dispositivo en tu cuenta.": "factor_missing",
+    "No pudimos iniciar la verificación. Reintentá en unos instantes.": "challenge",
+    "El código no es válido o venció. Ingresá el código actual de tu autenticador.": "otp",
+    "No pudimos verificar la seguridad de tu sesión. Reintentá.": "policy_read",
+    "Completá la verificación en dos pasos para continuar.": "policy",
+    "No pudimos verificar el código. Reintentá.": "network",
+  };
+  return known[message.trim()] ?? (message ? "unknown" : "none");
+}
+
+async function browserMfaReadProbe(page: import("@playwright/test").Page, expectedEmail: string) {
+  const empty = "shape=none required=none staff=none factor=none allowed=none session=none rpc_code=none";
+  const cookies = await page.context().cookies("http://localhost:4430");
+  const base = cookies.find(cookie => /^sb-[a-z0-9-]+-auth-token$/.test(cookie.name));
+  const key = base?.name ?? cookies.find(cookie => /^sb-[a-z0-9-]+-auth-token\.0$/.test(cookie.name))?.name.slice(0, -2);
+  if (!key) return `cookie=missing auth=none same=0 aal=none rpc=none ${empty}`;
+  const chunks = cookies.filter(cookie => cookie.name.startsWith(`${key}.`))
+    .sort((a, b) => Number(a.name.slice(key.length + 1)) - Number(b.name.slice(key.length + 1)));
+  if (!base && chunks.some((cookie, index) => cookie.name !== `${key}.${index}`))
+    return `cookie=chunk_gap auth=none same=0 aal=none rpc=none ${empty}`;
+  const serialized = base?.value ?? chunks.map(cookie => cookie.value).join("");
+  let accessToken: string | undefined;
+  try {
+    const json = serialized.startsWith("base64-") ? Buffer.from(serialized.slice(7), "base64url").toString("utf8") : serialized;
+    const session = JSON.parse(json) as { access_token?: unknown };
+    if (session && typeof session === "object" && typeof session.access_token === "string") accessToken = session.access_token;
+  } catch { /* Cookie data stays private, even on a malformed value. */ }
+  if (!accessToken) return `cookie=invalid auth=none same=0 aal=none rpc=none ${empty}`;
+  const api = process.env.FOLIO_TEST_SUPABASE_URL;
+  const anon = process.env.FOLIO_TEST_SUPABASE_ANON_KEY;
+  if (api !== "http://127.0.0.1:55421" || !anon) return `cookie=valid auth=config same=0 aal=none rpc=none ${empty}`;
+  let aal = "other";
+  try {
+    const claims = JSON.parse(Buffer.from(accessToken.split(".")[1] ?? "", "base64url").toString("utf8")) as { aal?: unknown };
+    aal = claims.aal === "aal1" || claims.aal === "aal2" ? claims.aal : "other";
+  } catch { aal = "invalid"; }
+  const headers = { apikey: anon, Authorization: `Bearer ${accessToken}` };
+  let auth = "transport", same = 0, rpc = "none", shape = "none", rpcCode = "none";
+  let required = "none", staff = "none", factor = "none", allowed = "none", session = "none";
+  try {
+    const response = await fetch(`${api}/auth/v1/user`, { headers, signal: AbortSignal.timeout(5000) });
+    auth = response.ok ? "valid" : response.status === 401 ? "unauthorized" : "http_other";
+    if (response.ok) {
+      try {
+        const user = await response.json() as { email?: unknown };
+        same = user.email === expectedEmail ? 1 : 0;
+      } catch { auth = "format"; }
+    }
+  } catch { auth = "transport"; }
+  try {
+    const response = await fetch(`${api}/rest/v1/rpc/mfa_access_status`, {
+      method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: "{}", signal: AbortSignal.timeout(5000),
+    });
+    rpc = response.ok ? "ok" : response.status === 401 ? "unauthorized" : response.status === 403 ? "forbidden" : response.status >= 500 ? "server" : "http_other";
+    if (response.ok) {
+      try {
+        const data = await response.json() as Record<string, unknown>;
+        const keys = ["required", "allowed", "isStaff", "hasVerifiedFactor", "sessionValid"];
+        shape = data && typeof data === "object" && keys.every(key => typeof data[key] === "boolean") ? "valid" : "invalid";
+        if (shape === "valid") {
+          required = data.required === true ? "1" : "0";
+          staff = data.isStaff === true ? "1" : "0";
+          factor = data.hasVerifiedFactor === true ? "1" : "0";
+          allowed = data.allowed === true ? "1" : "0";
+          session = data.sessionValid === true ? "1" : "0";
+        }
+      } catch { shape = "invalid"; }
+    } else {
+      try {
+        const data = await response.json() as { code?: unknown };
+        const code = data && typeof data === "object" ? data.code : null;
+        rpcCode = ["42501", "42883", "42P01", "42703", "PGRST202", "PGRST301", "PGRST302", "PGRST303"].includes(String(code)) ? String(code) : "other";
+      } catch { rpcCode = "other"; }
+    }
+  } catch { rpc = "transport"; }
+  return `cookie=valid auth=${auth} same=${same} aal=${aal} rpc=${rpc} shape=${shape} required=${required} staff=${staff} factor=${factor} allowed=${allowed} session=${session} rpc_code=${rpcCode}`;
+}
+
 test("reception code, screen pairing, revocation and unchanged clinical state", async ({ browser, page }) => {
   test.setTimeout(180_000);
   if (process.env.FOLIO_TEST_REAL_SUPABASE !== "1" || process.env.CI !== "true") throw new Error("caller_proof_requires_isolated_ci");
@@ -32,15 +117,10 @@ test("reception code, screen pairing, revocation and unchanged clinical state", 
       await expect(page.getByRole("heading", { name: "Verificación completada" })).toBeVisible();
     } catch (error) {
       const alert = (await page.getByRole("alert").first().textContent({ timeout: 500 }).catch(() => null)) ?? "";
-      const kind = alert.includes("no es válido o venció") ? "otp"
-        : alert.includes("verificación en dos pasos") ? "policy"
-        : alert.includes("verificar tu sesión") || alert.includes("iniciar sesión") ? "session"
-        : alert.includes("demasiados intentos") ? "rate"
-        : alert.includes("ese dispositivo") ? "factor"
-        : alert.includes("iniciar la verificación") ? "challenge"
-        : alert.includes("verificar el código") ? "network" : alert ? "other" : "none";
+      const kind = mfaAlertKind(alert);
       const pathname = new URL(page.url()).pathname;
       console.log(`caller_proof_mfa_diagnostic:path=${pathname === "/seguridad/mfa" ? "mfa" : pathname === "/hoy" ? "hoy" : "other"} alert=${kind}`);
+      if (kind === "policy_read") console.log(`caller_proof_mfa_read_probe:${await browserMfaReadProbe(page, fixture.email)}`);
       throw error;
     }
     await page.getByRole("link", { name: "Continuar" }).first().click();
