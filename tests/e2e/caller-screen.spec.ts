@@ -209,8 +209,17 @@ test("reception code, screen pairing, revocation and unchanged clinical state", 
   const panel = await row.locator(".caller-control-panel").boundingBox();
   expect(panel).not.toBeNull();
   expect(panel!.x).toBeGreaterThanOrEqual(0);
+  expect(panel!.y).toBeGreaterThanOrEqual(0);
   expect(panel!.x + panel!.width).toBeLessThanOrEqual(376);
+  expect(panel!.y + panel!.height).toBeLessThanOrEqual(812);
   await expect(row.getByRole("button", { name: "Cerrar panel de llamado" })).toBeVisible();
+  await expect(row.getByRole("button", { name: "Cerrar panel de llamado" })).toBeFocused();
+  const cookie = page.locator(".fi-cookie");
+  if (await cookie.isVisible()) {
+    const cookieBox = await cookie.boundingBox();
+    expect(cookieBox).not.toBeNull();
+    expect(panel!.y + panel!.height).toBeLessThanOrEqual(cookieBox!.y);
+  }
   await page.screenshot({ path: "test-results/caller-hoy-375.png", fullPage: true });
   await page.keyboard.press("Escape");
   await expect(row.locator(".caller-control-panel")).toHaveCount(0);

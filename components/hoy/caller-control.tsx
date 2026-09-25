@@ -20,7 +20,9 @@ export function CallerControl({ turnoId, identity }: { turnoId: string; identity
   const storageKey = `folio.caller.pending.v1:${identity.userId}:${identity.organizationId}:${turnoId}`;
   const clearStoredIntent = () => { try { sessionStorage.removeItem(storageKey); } catch { /* Confirmed DB result remains authoritative. */ } };
 
-  useEffect(() => { if (open) closeRef.current?.focus(); }, [open]);
+  // The issue button disappears when the code arrives; keep focus inside the
+  // active panel so Escape affects only this row, not a different dialog.
+  useEffect(() => { if (open) closeRef.current?.focus(); }, [open, code]);
   function closePanel() { setOpen(false); toggleRef.current?.focus(); }
   function panelKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); closePanel(); }

@@ -63,7 +63,7 @@ export function CallerScreensPanel({ initial }: { initial: InventoryResult }) {
   return <div className="caller-settings-grid">
     <section className="caller-settings-card" aria-labelledby="caller-link-title">
       <h2 id="caller-link-title">Vincular una pantalla</h2>
-      <p>En el televisor o monitor, abrí <a href="/pantalla" target="_blank" rel="noopener noreferrer">folio · Pantalla de espera ↗</a>. Después generá el código temporal acá.</p>
+      <p>En el televisor o monitor, abrí{" "}<a href="/pantalla" target="_blank" rel="noopener noreferrer">folio · Pantalla de espera ↗</a>. Después generá el código temporal acá.</p>
       <button type="button" className="fi-btn fi-btn-primary" disabled={busy} onClick={() => void createPair()}>{busy ? "Preparando…" : "Generar código de vinculación"}</button>
       {pairCode ? <div className="caller-settings-code" role="status"><span>Código temporal</span><strong>{pairCode}</strong>
         {pairExpires ? <small>Vence a las {new Date(pairExpires).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}</small> : null}
