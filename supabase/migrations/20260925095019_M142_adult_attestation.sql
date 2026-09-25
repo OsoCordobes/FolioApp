@@ -62,10 +62,12 @@ CREATE SCHEMA folio_adult_private;
 REVOKE ALL ON SCHEMA folio_adult_private FROM PUBLIC,anon,authenticated,service_role;
 CREATE TABLE folio_adult_private.attestation (
   id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  -- No FK to physically deletable identity/patient: pseudonymization must
-  -- remain possible and must not rewrite or remove historical evidence.
+  -- Identity has no FK so a future reviewed identity-retention workflow can
+  -- remove it without altering evidence. The patient row key is immutable
+  -- once attested: renaming/recreating its ID would revive an old event.
   organization_id uuid NOT NULL,
-  paciente_id uuid NOT NULL,
+  paciente_id uuid NOT NULL CONSTRAINT adult_attestation_patient_fk
+    REFERENCES public.paciente(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
   identidad_id uuid NOT NULL,
   dob_revision bigint NOT NULL CHECK (dob_revision>=0),
   identity_link_revision bigint NOT NULL CHECK (identity_link_revision>=0),

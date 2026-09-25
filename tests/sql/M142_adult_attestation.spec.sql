@@ -187,6 +187,44 @@ DO $$ BEGIN
  PERFORM pg_temp.m142_expect($q$DELETE FROM folio_adult_private.attestation$q$,'42501');
 END $$;
 
+-- The event must keep the patient row key from being renamed and recreated.
+-- Existing patient rows have no visit children in this fixture, so this
+-- specifically exercises the new restrictive FK.
+SELECT pg_temp.m142_expect($q$UPDATE public.paciente SET id=pg_temp.m142_id(35)
+ WHERE id=pg_temp.m142_id(32)$q$,'23503');
+SELECT pg_temp.m142_expect($q$DELETE FROM public.paciente WHERE id=pg_temp.m142_id(32)$q$,'23503');
+SELECT pg_temp.m142_expect($q$INSERT INTO public.paciente(id,organization_id,identidad_id)
+ VALUES(pg_temp.m142_id(32),pg_temp.m142_id(10),NULL)$q$,'23505');
+DO $$ BEGIN
+ IF NOT EXISTS(SELECT 1 FROM pg_constraint
+   WHERE conname='adult_attestation_patient_fk'
+    AND conrelid='folio_adult_private.attestation'::regclass
+    AND confrelid='public.paciente'::regclass
+    AND confupdtype='r' AND confdeltype='r') THEN
+  RAISE EXCEPTION 'M142 patient key retention FK changed';
+ END IF;
+ IF NOT EXISTS(SELECT 1 FROM public.paciente WHERE id=pg_temp.m142_id(32))
+  OR NOT EXISTS(SELECT 1 FROM folio_adult_private.attestation WHERE paciente_id=pg_temp.m142_id(32)) THEN
+  RAISE EXCEPTION 'M142 patient key or its event changed after blocked rename';
+ END IF;
+END $$;
+
+-- Session revocation is a separate failure from factor revocation. The JWT
+-- remains aal2 and its factor remains verified while the DB session expires.
+UPDATE auth.sessions SET not_after=now()-interval '1 minute' WHERE id=pg_temp.m142_id(901);
+DO $$ BEGIN
+ IF NOT EXISTS(SELECT 1 FROM auth.mfa_factors WHERE id=pg_temp.m142_id(801) AND status='verified')
+  OR (public.mfa_access_status()->>'hasVerifiedFactor')::boolean IS DISTINCT FROM true
+  OR (public.mfa_access_status()->>'sessionValid')::boolean IS DISTINCT FROM false THEN
+  RAISE EXCEPTION 'M142 expired-session fixture did not isolate session validity';
+ END IF;
+END $$;
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.m142_expect($q$SELECT public.read_adult_attestation(pg_temp.m142_id(10),pg_temp.m142_id(32))$q$,'42501');
+SELECT pg_temp.m142_expect($q$SELECT public.attest_adult_dob(pg_temp.m142_id(10),pg_temp.m142_id(32),pg_temp.m142_id(31),1,0,'1990-01-01','1990-01-01','DOCUMENTO_EXHIBIDO')$q$,'42501');
+RESET ROLE;
+UPDATE auth.sessions SET not_after=NULL WHERE id=pg_temp.m142_id(901);
+
 -- Direct DOB A->B->A and link A->B->A cannot reactivate old evidence.
 UPDATE public.paciente_identidad SET fecha_nacimiento='1992-01-01' WHERE id=pg_temp.m142_id(31);
 UPDATE public.paciente_identidad SET fecha_nacimiento='1990-01-01' WHERE id=pg_temp.m142_id(31);
@@ -195,6 +233,14 @@ SET LOCAL ROLE authenticated;
 DO $$ BEGIN
  IF (public.read_adult_attestation(pg_temp.m142_id(10),pg_temp.m142_id(32))->>'attested')::boolean IS DISTINCT FROM false THEN
   RAISE EXCEPTION 'M142 DOB ABA revived old attestation';
+ END IF;
+ IF (public.attest_adult_dob(pg_temp.m142_id(10),pg_temp.m142_id(32),
+   pg_temp.m142_id(31),3,0,'1990-01-01','1990-01-01','DOCUMENTO_EXHIBIDO')->>'status')
+   IS DISTINCT FROM 'attested' THEN
+  RAISE EXCEPTION 'M142 could not refresh attestation after DOB ABA';
+ END IF;
+ IF (public.read_adult_attestation(pg_temp.m142_id(10),pg_temp.m142_id(32))->>'attested')::boolean IS DISTINCT FROM true THEN
+  RAISE EXCEPTION 'M142 fresh attestation missing before link ABA';
  END IF;
 END $$;
 RESET ROLE;
@@ -267,11 +313,35 @@ SELECT pg_temp.m142_expect($q$SELECT public.read_adult_attestation(pg_temp.m142_
 SELECT pg_temp.m142_expect($q$SELECT public.attest_adult_dob(pg_temp.m142_id(10),pg_temp.m142_id(32),pg_temp.m142_id(31),3,2,'1990-01-01','1990-01-01','DOCUMENTO_EXHIBIDO')$q$,'55000');
 RESET ROLE;
 UPDATE public.paciente_identidad SET deleted_at=NULL WHERE id=pg_temp.m142_id(31);
+-- Re-attest the current link, then unlink: identity removal preserves the
+-- immutable event but cannot leave it current or revive it after relinking.
+SET LOCAL ROLE authenticated;
+DO $$ BEGIN
+ IF (public.attest_adult_dob(pg_temp.m142_id(10),pg_temp.m142_id(32),
+   pg_temp.m142_id(31),3,2,'1990-01-01','1990-01-01','DOCUMENTO_EXHIBIDO')->>'status')
+   IS DISTINCT FROM 'attested'
+  OR (public.read_adult_attestation(pg_temp.m142_id(10),pg_temp.m142_id(32))->>'attested')::boolean IS DISTINCT FROM true THEN
+  RAISE EXCEPTION 'M142 current event missing before unlink';
+ END IF;
+END $$;
+RESET ROLE;
 UPDATE public.paciente SET identidad_id=NULL WHERE id=pg_temp.m142_id(32);
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.m142_expect($q$SELECT public.read_adult_attestation(pg_temp.m142_id(10),pg_temp.m142_id(32))$q$,'55000');
 RESET ROLE;
+DO $$ BEGIN
+ IF (SELECT count(*) FROM folio_adult_private.attestation WHERE paciente_id=pg_temp.m142_id(32))<>4 THEN
+  RAISE EXCEPTION 'M142 unlink removed historical attestation';
+ END IF;
+END $$;
 UPDATE public.paciente SET identidad_id=pg_temp.m142_id(31) WHERE id=pg_temp.m142_id(32);
+SET LOCAL ROLE authenticated;
+DO $$ BEGIN
+ IF (public.read_adult_attestation(pg_temp.m142_id(10),pg_temp.m142_id(32))->>'attested')::boolean IS DISTINCT FROM false THEN
+  RAISE EXCEPTION 'M142 relink revived old attestation';
+ END IF;
+END $$;
+RESET ROLE;
 UPDATE public.paciente SET identidad_id=NULL,pseudonimizado_en=now() WHERE id=pg_temp.m142_id(32);
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.m142_expect($q$SELECT public.read_adult_attestation(pg_temp.m142_id(10),pg_temp.m142_id(32))$q$,'42501');
