@@ -136,3 +136,62 @@ Este tramo expone una API interna, no una entrega completa al usuario. B06b3b
 debe reconstruir archivos ordinarios y ofrecer un camino verificable para
 obtener el conjunto completo sin guardar parciales; la UI y su prueba HTTP
 con navegador todavía no forman parte de B06b3a.
+
+## Entrega profesional en navegador (B06b3b, candidato)
+
+El archivo clínico conserva sus botones PDF y JSON. Una acción nueva prepara
+o retoma una operación fija para ese usuario, organización y paciente; sólo
+guarda el identificador de operación en `sessionStorage`, separado por ese
+alcance. El lease permanece en memoria. Una respuesta incierta se consulta
+con el mismo identificador, sin crear otra intención. Tras confirmar READY,
+la persona elige un archivo local; el navegador debe ofrecer
+`showSaveFilePicker` y `FileSystemWritableFileStream` en contexto seguro.
+Los navegadores sin esas capacidades reciben una explicación y conservan
+los recorridos PDF/JSON. No se promete compatibilidad universal.
+
+El cliente produce un TAR ustar secuencial con `historia.json`, documentos,
+firmas, `manifiesto.jsonl` y `LEEME.txt`. Los documentos retirados figuran
+sólo como metadatos, sin bytes. El nombre y la extensión proceden de un
+identificador fijo y del MIME validado en el JSON; ante ausencia de MIME se
+usa `.bin`. Cada fragmento de hasta 3 MiB y cada archivo se cotejan con
+SHA-256. El inventario, autoridad y vencimiento se consultan otra vez antes
+de cerrar el archivo. Fallas y revocaciones abortan el escritor; el usuario
+debe revisar la carpeta elegida porque el navegador podría haber creado un
+archivo vacío o dejado un estado incierto. Si vence el tiempo de `close()`,
+el cierre puede seguir en curso y ni siquiera un `abort()` posterior acredita
+la conservación del archivo anterior. El JSON declara la fecha de
+preparación, no una instantánea transaccional global ni el estado actual.
+
+TAR no codifica un offset total de 32 bits como ZIP32: admite el inventario
+sin truncarlo por superar 4 GiB. Esto **no** acredita entrega de todo el
+máximo aceptado. Las rutas de avance y fragmento permiten 1200 solicitudes
+por ventana fija de una hora y el trabajo vence a las 24 horas. Incluso sin
+latencia ni reintentos, una ventana que empezó antes del trabajo permite
+como máximo 25 ventanas tocadas: 1200 × 25 × 3 MiB ≈ 87,9 GiB de
+fragmentos por ruta. 10.000 documentos de 50 MiB exigirían unos 170.000
+fragmentos, muy por encima de ese techo. También pueden intervenir cuotas compartidas,
+latencia y vencimiento. B06 global queda abierto para ese caso: requiere
+presupuesto/capacidad explícitos y una ruta de trabajo largo comprobada;
+no se aumentan límites ni TTL por suposición. El ensayo hospedado de B06b3b
+usa un documento ficticio legado de 50 MiB exactos (52.428.800 bytes) en 17
+fragmentos, sin hash de
+origen validado en su registro según M102. Comprueba que M102 rechaza esos
+metadatos para ese tamaño y compara el SHA calculado durante la entrega con
+el de los bytes sintéticos originales. Esto no acredita la carga normal de
+50 MiB con metadatos validados. El ensayo usa rutas Next reales y navegador
+Chromium con escritor OPFS para sustituir sólo el diálogo
+nativo, y extracción TAR independiente. No acredita el selector nativo de
+otros navegadores ni volúmenes máximos. El mismo ensayo conserva capturas
+sintéticas a 375 y 1440 px para revisar la vista; no contienen pacientes
+reales. La prueba del escritor OPFS interrumpe una segunda escritura tras
+bytes parciales y compara el SHA-256 anterior, sin afirmar custodia del TAR
+temporal del runner.
+
+Antes de crear un trabajo nuevo, el servidor calcula una **cota inferior**
+de solicitudes de avance: una para JSON, una por retirado y por firma, y
+`ceil(tamaño / 3 MiB)` por documento activo. Si ya supera 30.000 llamadas,
+rechaza con 413 y un mensaje fijo, antes de crear ledger u objetos. Las
+firmas no tienen tamaño declarado, por lo que una cota inferior aceptable no
+garantiza que la operación sea realizable; cuotas compartidas y tiempo real
+pueden reducirla. Una respuesta de lectura incierta conserva el identificador
+de operación para consultarlo; jamás se confunde con rechazo de capacidad.

@@ -9,9 +9,13 @@ const { chromium } = require('@playwright/test');
 const cwd = path.resolve(__dirname, '../..');
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'folio-archive-smoke-'));
 const patientId = '00000000-0000-4000-8000-000000000123';
-const entry = `import React,{StrictMode}from'react';import{createRoot}from'react-dom/client';import{ClinicalArchive}from'@/components/clinical-archive/archive';
-window.qa={calls:[],jobs:[],settle(value){this.jobs.shift().resolve(value)},reject(){this.jobs.shift().reject(Error('synthetic interruption'))}};
-createRoot(document.getElementById('root')).render(<StrictMode><main style={{maxWidth:960,margin:'0 auto',padding:24}}><h1>Archivo clínico</h1><ClinicalArchive initialPage={{patients:[{id:'${patientId}',name:'Paciente Sintético'}],total:70,nextCursor:'first-cursor'}}/></main></StrictMode>);`;
+const entry = `import React,{StrictMode,useState}from'react';import{createRoot}from'react-dom/client';import{ClinicalArchive}from'@/components/clinical-archive/archive';
+const oldScope={userId:'00000000-0000-4000-8000-000000000001',organizationId:'00000000-0000-4000-8000-000000000002'};
+const newScope={userId:'00000000-0000-4000-8000-000000000003',organizationId:'00000000-0000-4000-8000-000000000004'};
+window.qa={calls:[],jobs:[],oldScope,newScope,settle(value){this.jobs.shift().resolve(value)},reject(){this.jobs.shift().reject(Error('synthetic interruption'))}};
+function App(){const[scope,setScope]=useState(oldScope);window.qa.changeScope=()=>setScope(newScope);const key=scope.userId+':'+scope.organizationId;
+return <main style={{maxWidth:960,margin:'0 auto',padding:24}}><h1>Archivo clínico</h1><ClinicalArchive key={key} initialPage={{patients:[{id:'${patientId}',name:scope===oldScope?'Paciente Sintético':'Paciente Nuevo'}],total:70,nextCursor:'first-cursor',scope}}/></main>}
+createRoot(document.getElementById('root')).render(<StrictMode><App/></StrictMode>);`;
 (async () => {
   for (const mode of ['development', 'production']) await esbuild.build({ stdin: { contents: entry, resolveDir: cwd, loader: 'tsx' }, bundle: true,
     outfile: path.join(dir, mode+'.js'), platform: 'browser', jsx: 'automatic', define: {'process.env.NODE_ENV':JSON.stringify(mode)}, tsconfig:path.join(cwd,'tsconfig.json'),
@@ -41,7 +45,7 @@ createRoot(document.getElementById('root')).render(<StrictMode><main style={{max
         await page.getByLabel('Buscar paciente').fill('Documento sintético');
         await page.getByRole('button',{name:'Buscar',exact:true}).evaluate(button=>{button.click();button.click();});
         assert.equal(await page.evaluate(()=>qa.calls.length),1); assert.equal(page.url(),`${origin}/${mode}`);
-        await page.evaluate(()=>qa.settle({ok:true,data:{patients:[],total:0,nextCursor:null}}));
+        await page.evaluate(()=>qa.settle({ok:true,data:{patients:[],total:0,nextCursor:null,scope:qa.oldScope}}));
         await page.getByRole('heading',{name:'0 pacientes en la búsqueda'}).waitFor();
         assert.equal(await page.getByLabel('Buscar paciente').inputValue(),'Documento sintético');
       });
@@ -52,7 +56,7 @@ createRoot(document.getElementById('root')).render(<StrictMode><main style={{max
       });
       await run('pagination remains bound to submitted search despite later input edits',async page=>{
         await page.getByLabel('Buscar paciente').fill('Nombre original');await page.getByRole('button',{name:'Buscar',exact:true}).click();
-        await page.evaluate(()=>qa.settle({ok:true,data:{patients:[],total:70,nextCursor:'next-signed'}}));
+        await page.evaluate(()=>qa.settle({ok:true,data:{patients:[],total:70,nextCursor:'next-signed',scope:qa.oldScope}}));
         await page.getByRole('heading',{name:'70 pacientes en la búsqueda'}).waitFor();
         await page.getByLabel('Buscar paciente').fill('Nombre editado');await page.getByRole('button',{name:'Siguiente página'}).click();
         assert.deepEqual(await page.evaluate(()=>qa.calls[1]),{query:'Nombre original',cursor:'next-signed'});
@@ -62,6 +66,18 @@ createRoot(document.getElementById('root')).render(<StrictMode><main style={{max
         const downloaded=page.waitForEvent('download');await page.getByRole('button',{name:'Descargar PDF de Paciente Sintético',exact:true}).click();
         assert.equal((await downloaded).suggestedFilename(),'folio-historia-00000000.pdf');assert.equal(requests,1);
         await page.getByRole('status').filter({hasText:'Archivo preparado'}).waitFor();
+      });
+      await run('remount with a new scope ignores a retained response from the old scope',async page=>{
+        await page.getByLabel('Buscar paciente').fill('Paciente anterior');
+        await page.getByRole('button',{name:'Buscar',exact:true}).click();
+        assert.equal(await page.evaluate(()=>qa.jobs.length),1);
+        await page.evaluate(()=>qa.changeScope());
+        await page.getByText('Paciente Nuevo',{exact:true}).waitFor();
+        await page.evaluate(()=>qa.settle({ok:true,data:{patients:[{id:'${patientId}',name:'Respuesta antigua'}],total:1,nextCursor:null,scope:qa.oldScope}}));
+        await page.getByText('Paciente Nuevo',{exact:true}).waitFor();
+        assert.equal(await page.getByText('Respuesta antigua',{exact:true}).count(),0);
+        assert.equal(await page.getByRole('heading',{name:'70 pacientes disponibles'}).count(),1);
+        assert.equal(await page.getByLabel('Buscar paciente').inputValue(),'');
       });
       for(const [status,type,message] of [[403,'application/json','permiso'],[413,'application/json','excede'],[200,'text/html','interrumpió'],[302,'text/html','sesión necesita']]) {
         await run(`HTTP ${status} ${type} never downloads a false clinical document`,async page=>{
