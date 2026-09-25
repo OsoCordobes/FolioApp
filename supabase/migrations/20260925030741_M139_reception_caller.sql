@@ -325,7 +325,9 @@ BEGIN
    'cursor',cursor_no) ORDER BY cursor_no DESC),'[]'::jsonb),min(cursor_no)
  INTO calls,oldest FROM top20;
  RETURN jsonb_build_object('cursor',current_cursor,'reset',
-  p_cursor IS NULL OR p_cursor<0 OR p_cursor>current_cursor OR (oldest IS NOT NULL AND p_cursor<oldest-1),
+  p_cursor IS NULL OR p_cursor<0 OR p_cursor>current_cursor
+   OR p_cursor<greatest(current_cursor-20,0)
+   OR (oldest IS NOT NULL AND p_cursor<oldest-1),
   'snapshot',calls);
 END $$;
 

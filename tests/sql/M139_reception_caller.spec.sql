@@ -177,6 +177,7 @@ BEGIN
  IF length(paired->>'token')<>64 THEN RAISE EXCEPTION 'M139 token entropy contract changed';END IF;
  PERFORM pg_temp.m139_expect('SELECT public.caller_pair(current_setting(''test.m139_pair_code''))','42501');
  snapshot:=public.caller_screen_read(pg_temp.m139_id(10),paired->>'token',NULL);
+ PERFORM set_config('test.m139_initial_cursor',snapshot->>'cursor',true);
  reconnect:=public.caller_screen_read(pg_temp.m139_id(10),paired->>'token',(snapshot->>'cursor')::bigint);
  IF (snapshot->>'reset')::boolean IS DISTINCT FROM true
   OR (reconnect->>'reset')::boolean IS DISTINCT FROM false
@@ -189,6 +190,30 @@ BEGIN
  PERFORM pg_temp.m139_expect('SELECT public.caller_screen_read(pg_temp.m139_id(20),current_setting(''test.m139_screen_token''),NULL)','42501');
 END $$;
 RESET ROLE;
+-- More than one display window of calls can disappear by cancellation. A
+-- reconnect still receives an unequivocal reset with its empty full snapshot.
+SELECT pg_temp.m139_login(1);
+SAVEPOINT lagged_empty_screen;
+SET LOCAL ROLE authenticated;
+DO $$ BEGIN
+ FOR n IN 700..720 LOOP
+  PERFORM public.caller_call(pg_temp.m139_id(10),pg_temp.m139_id(n),pg_temp.m139_id(40),'RECEPCION',NULL);
+ END LOOP;
+END $$;
+RESET ROLE;
+UPDATE public.turno SET estado='CANCELADO' WHERE id=pg_temp.m139_id(40);
+SELECT pg_temp.m139_anon();
+SET LOCAL ROLE anon;
+DO $$ DECLARE snapshot jsonb;
+BEGIN
+ snapshot:=public.caller_screen_read(pg_temp.m139_id(10),current_setting('test.m139_screen_token'),
+  current_setting('test.m139_initial_cursor')::bigint);
+ IF (snapshot->>'reset')::boolean IS DISTINCT FROM true OR jsonb_array_length(snapshot->'snapshot')<>0 THEN
+  RAISE EXCEPTION 'M139 lagged canceled screen did not reset';
+ END IF;
+END $$;
+RESET ROLE;
+ROLLBACK TO lagged_empty_screen;
 SELECT pg_temp.m139_login(6);
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.m139_expect('SELECT public.caller_revoke_screen(pg_temp.m139_id(10),current_setting(''test.m139_screen_id'')::uuid)','42501');
