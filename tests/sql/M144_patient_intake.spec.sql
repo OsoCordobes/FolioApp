@@ -254,6 +254,14 @@ END $$;
 RESET ROLE;
 UPDATE public.organization SET deleted_at=now() WHERE id=pg_temp.m144_id(10);
 UPDATE public.organization SET deleted_at=NULL WHERE id=pg_temp.m144_id(10);
+-- M37 intentionally leaves members soft-deleted on org restoration. Restore
+-- only these synthetic fixture members so the rejection isolates org revision.
+UPDATE public.member SET deleted_at=NULL WHERE organization_id=pg_temp.m144_id(10);
+DO $$ BEGIN
+ IF EXISTS(SELECT 1 FROM public.member WHERE organization_id=pg_temp.m144_id(10) AND deleted_at IS NOT NULL) THEN
+  RAISE EXCEPTION 'M144 org ABA fixture membership was not restored';
+ END IF;
+END $$;
 SET LOCAL ROLE service_role;
 DO $$ DECLARE token text;
 BEGIN
