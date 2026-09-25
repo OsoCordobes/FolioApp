@@ -105,6 +105,23 @@ DO $$ BEGIN
   RAISE EXCEPTION 'M139 private event count or clinical state changed';
  END IF;
 END $$;
+-- A lost reply is recoverable with the same receipt after the appointment
+-- leaves EN_SALA; a new operation cannot create another call in that state.
+SAVEPOINT after_call_canceled;
+UPDATE public.turno SET estado='CANCELADO' WHERE id=pg_temp.m139_id(40);
+SET LOCAL ROLE authenticated;
+DO $$ DECLARE replay jsonb;
+BEGIN
+ replay:=public.caller_call(pg_temp.m139_id(10),pg_temp.m139_id(500),pg_temp.m139_id(40),'CONSULTORIO',4);
+ IF replay->>'code' IS DISTINCT FROM 'A0001' OR replay->>'cursor' IS DISTINCT FROM '1'
+  OR (replay->>'reused')::boolean IS DISTINCT FROM true THEN
+  RAISE EXCEPTION 'M139 lost response could not recover original call';
+ END IF;
+ PERFORM pg_temp.m139_expect('SELECT public.caller_call(pg_temp.m139_id(10),pg_temp.m139_id(508),pg_temp.m139_id(40),''CONSULTORIO'',4)','55000');
+ PERFORM pg_temp.m139_expect('SELECT public.caller_call(pg_temp.m139_id(10),pg_temp.m139_id(500),pg_temp.m139_id(40),''RECEPCION'',NULL)','40001');
+END $$;
+RESET ROLE;
+ROLLBACK TO after_call_canceled;
 SELECT pg_temp.m139_login(2);
 SET LOCAL ROLE authenticated;
 SELECT public.caller_issue_code(pg_temp.m139_id(10),pg_temp.m139_id(41));

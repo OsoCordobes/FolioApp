@@ -63,6 +63,30 @@ REVOKE ALL ON ALL TABLES IN SCHEMA folio_caller_private FROM PUBLIC,anon,authent
 
 -- Shared current-authority gate. Reception retains M122's explicit current AAL2
 -- requirement; owners/directors and clinicians retain the active MFA policy.
+CREATE FUNCTION folio_caller_private.random_hex(p_bytes integer)
+RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE extension_schema text; result text;
+BEGIN
+ IF p_bytes NOT IN (8,32) THEN
+  RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='Unsupported caller secret size';
+ END IF;
+ -- pgcrypto is in public on vanilla PG16 and extensions on hosted Supabase.
+ -- Resolve the actual extension-owned function, never caller search_path.
+ SELECT n.nspname INTO extension_schema FROM pg_extension e
+ JOIN pg_depend d ON d.refclassid='pg_extension'::regclass AND d.refobjid=e.oid
+  AND d.classid='pg_proc'::regclass AND d.deptype='e'
+ JOIN pg_proc p ON p.oid=d.objid AND p.proname='gen_random_bytes'
+  AND p.pronargs=1 AND p.proargtypes[0]=23
+ JOIN pg_namespace n ON n.oid=p.pronamespace
+ WHERE e.extname='pgcrypto';
+ IF NOT FOUND THEN
+  RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='pgcrypto random source unavailable';
+ END IF;
+ EXECUTE format('SELECT pg_catalog.encode(%I.gen_random_bytes($1),''hex'')',extension_schema)
+  INTO result USING p_bytes;
+ RETURN result;
+END $$;
+
 CREATE FUNCTION folio_caller_private.staff(p_org uuid,p_pair boolean DEFAULT false)
 RETURNS public.member LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE actor public.member; mfa jsonb;
@@ -93,11 +117,12 @@ BEGIN
 END $$;
 
 -- Row locks follow organization -> actor -> professional -> turno -> patient ->
--- identity as in M117/M119. All are SHARE, so M106's turno-first clinical
--- transition never waits on one of our exclusive row locks. A canceled turn
--- cannot pass after its UPDATE commits. SQLSTATE 40P01/55P03 is propagated;
--- callers read the same operation receipt before deciding whether to retry.
-CREATE FUNCTION folio_caller_private.current_turn(p_org uuid,p_turno uuid,p_actor public.member)
+-- identity as in M117/M119. SHARE blocks a competing turno UPDATE; M106's
+-- turno-first path can therefore wait, while its later org/member SHARE locks
+-- are compatible with ours. Cross-path deadlocks remain possible with other
+-- concurrent writers: propagate 40P01/55P03 and inspect the same operation,
+-- never blindly retry with a new ID.
+CREATE FUNCTION folio_caller_private.current_turn(p_org uuid,p_turno uuid,p_actor public.member,p_require_waiting boolean)
 RETURNS public.turno LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE t public.turno; target public.member; target_id uuid; patient public.paciente; tz text;
 BEGIN
@@ -115,8 +140,11 @@ BEGIN
   RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='Current professional scope required';
  END IF;
  SELECT * INTO t FROM public.turno WHERE id=p_turno AND organization_id=p_org AND deleted_at IS NULL FOR SHARE;
- IF NOT FOUND OR t.profesional_id IS DISTINCT FROM target.id OR t.estado::text <> 'EN_SALA'
-  OR (timezone(tz,t.inicio))::date IS DISTINCT FROM (timezone(tz,clock_timestamp()))::date THEN
+ IF NOT FOUND OR t.profesional_id IS DISTINCT FROM target.id THEN
+  RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='Current visit scope required';
+ END IF;
+ IF p_require_waiting IS DISTINCT FROM false AND (t.estado::text <> 'EN_SALA'
+  OR (timezone(tz,t.inicio))::date IS DISTINCT FROM (timezone(tz,clock_timestamp()))::date) THEN
   RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='Visit is no longer waiting today';
  END IF;
  SELECT * INTO patient FROM public.paciente WHERE id=t.paciente_id AND organization_id=p_org
@@ -133,7 +161,7 @@ RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE actor public.member; t public.turno; day date; tz text; prior folio_caller_private.ticket; n integer;
 BEGIN
  actor:=folio_caller_private.staff(p_org,false);
- t:=folio_caller_private.current_turn(p_org,p_turno,actor);
+ t:=folio_caller_private.current_turn(p_org,p_turno,actor,true);
  SELECT timezone INTO tz FROM public.organization WHERE id=p_org;
  day:=(timezone(tz,t.inicio))::date;
  -- One sequence per organization/local day, without an organization row UPDATE.
@@ -158,14 +186,13 @@ BEGIN
   RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='Explicit operation and structured destination required';
  END IF;
  actor:=folio_caller_private.staff(p_org,false);
- t:=folio_caller_private.current_turn(p_org,p_turno,actor);
- SELECT timezone INTO tz FROM public.organization WHERE id=p_org;
- day:=(timezone(tz,t.inicio))::date;
  PERFORM pg_advisory_xact_lock(hashtextextended('caller-operation:'||p_org::text||':'||p_operation::text,0));
  SELECT * INTO prior FROM folio_caller_private.call_event WHERE organization_id=p_org AND operation_id=p_operation;
  IF FOUND THEN
+  -- Recovery confirms a committed call even if care began or the appointment
+  -- was canceled afterward. Current actor/target/patient authority still holds.
+  t:=folio_caller_private.current_turn(p_org,p_turno,actor,false);
   IF prior.actor_id IS DISTINCT FROM actor.id OR prior.turno_id IS DISTINCT FROM p_turno
-   OR prior.local_day IS DISTINCT FROM day
    OR prior.destination_kind IS DISTINCT FROM p_kind OR prior.room_number IS DISTINCT FROM p_room THEN
    RAISE EXCEPTION USING ERRCODE='40001',MESSAGE='Operation reused for different call';
   END IF;
@@ -173,6 +200,9 @@ BEGIN
     ELSE 'Consultorio '||prior.room_number::text END;
   RETURN jsonb_build_object('code',prior.code,'destination',label,'cursor',prior.cursor_no,'reused',true);
  END IF;
+ t:=folio_caller_private.current_turn(p_org,p_turno,actor,true);
+ SELECT timezone INTO tz FROM public.organization WHERE id=p_org;
+ day:=(timezone(tz,t.inicio))::date;
  SELECT * INTO ticket FROM folio_caller_private.ticket
   WHERE organization_id=p_org AND local_day=day AND turno_id=p_turno;
  IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='Issue the waiting code first';END IF;
@@ -198,7 +228,7 @@ BEGIN
  IF FOUND THEN RETURN jsonb_build_object('screenId',prior.id,'alreadyIssued',true);END IF;
  UPDATE folio_caller_private.screen SET revoked_at=clock_timestamp()
   WHERE organization_id=p_org AND issuer_id=actor.id AND pair_used_at IS NULL AND revoked_at IS NULL;
- code:=encode(public.gen_random_bytes(8),'hex');
+ code:=folio_caller_private.random_hex(8);
  expiry:=clock_timestamp()+interval '5 minutes';
  INSERT INTO folio_caller_private.screen(organization_id,issuer_id,operation_id,pair_hash,pair_expires_at)
   VALUES(p_org,actor.id,p_operation,pg_catalog.sha256(convert_to(code,'UTF8')),expiry)
@@ -241,7 +271,7 @@ BEGIN
   AND (m.accepted_at IS NOT NULL OR m.invited_by_id IS NULL)) THEN
   RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='Pairing issuer unavailable';
  END IF;
- token:=encode(public.gen_random_bytes(32),'hex');
+ token:=folio_caller_private.random_hex(32);
  UPDATE folio_caller_private.screen SET pair_used_at=clock_timestamp(),
   token_hash=pg_catalog.sha256(convert_to(token,'UTF8')),
   token_expires_at=clock_timestamp()+interval '12 hours' WHERE id=s.id;
