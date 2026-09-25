@@ -2,7 +2,7 @@
 
 Actualizado: 25/09/2026. Este es el registro breve del trabajo; [el tablero técnico](LAUNCH-BOARD.md) conserva el detalle y los antecedentes. Cada fila cambia sólo ante un resultado o bloqueo real.
 
-**Equipo comprobado:** A · dirección, revisión y publicación. C · incorpora los archivos a la exportación reanudable. D · investiga el ensayo de acceso y prepara el guardado seguro de servicios. Los dos subagentes trabajan en paralelo.
+**Equipo comprobado:** A · dirección, revisión y publicación. C · incorpora los archivos a la exportación reanudable. D · comprueba el guardado seguro de servicios; acceso ya publicado. Los dos subagentes trabajan en paralelo.
 
 **Publicado** = disponible en Folio. **Probado** = pasó sus controles, todavía sin publicar. **En curso** = falta comprobarlo. Las pruebas parciales no cierran un checkpoint completo.
 
