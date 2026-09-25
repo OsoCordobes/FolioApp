@@ -156,6 +156,7 @@ async function main(){
    'independiente_db_saved','independiente_fresh_context_resumed',
    'clinica_signup_mail_captured','clinica_confirmed_and_bootstrapped',
    'clinica_db_saved','clinica_fresh_context_resumed',
+   'independiente_service_recovered','clinica_service_reopened',
    'recovery_mail_captured','password_updated','old_password_rejected_new_login_resumed',
   ]);
   const stages=[...result.output.matchAll(/auth_proof_stage:([a-z0-9_]+)/g)]
@@ -185,6 +186,7 @@ async function main(){
     'auth_proof_turnstile_must_use_existing_development_path','auth_proof_local_read_key_missing',
     'auth_proof_consent_screen_missing',
     'auth_proof_reset_form_missing',
+    'services_proof_committed_response_missing',
    ]);
    const detected=[...result.output.matchAll(/auth_proof_[a-z0-9_]+(?=\b)/gi)]
     .map(match=>match[0]).find(value=>allowedErrors.has(value))??'';
@@ -197,7 +199,9 @@ async function main(){
   }
   if(/\bskipped\b|\bskip\b/i.test(result.output))throw Error('auth_proof_skipped_test');
   if(!/\b1 passed\b/.test(result.output))throw Error('auth_proof_pass_count_missing');
-  console.log(`auth_proof_pass: migrations=${files.length} modes=2 confirmation=2 reset=1 mailbox=local mfa=fresh_policy_unenforced`);
+  if(!stages.includes('independiente_service_recovered')||!stages.includes('clinica_service_reopened'))
+   throw Error('auth_proof_services_stage_missing');
+  console.log(`auth_proof_pass: migrations=${files.length} modes=2 confirmation=2 services=2 lost_response=1 reset=1 mailbox=local mfa=fresh_policy_unenforced`);
  }finally{
   if(inboxBridge)await inboxBridge.close();
   if(apiBridge)await apiBridge.close();

@@ -33,7 +33,7 @@ export function OnboardingFlowFixture({ soloPriceCents, clinicPriceCents, clinic
     ciudad: completedFields ? "Córdoba" : "",
     provincia: completedFields ? "Córdoba" : "",
     diasActivos: params.get("initialHours") === "sab" ? ["sab"] : ONBOARDING_INITIAL.diasActivos,
-    servicios: completedFields && ownerTratante ? [{ id: 1, nombre: "Consulta sintética", dur: 45, precio: 10000 }] : [],
+    servicios: completedFields && ownerTratante ? [{ id: "00000000-0000-4000-8000-000000000001", nombre: "Consulta sintética", dur: 45, precio: 10000 }] : [],
   };
   return <MotionProvider><OnboardingApp
     key={`${mode}-${step}`}

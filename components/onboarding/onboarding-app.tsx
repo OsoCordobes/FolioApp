@@ -8,7 +8,8 @@ import { safeLog } from "@/lib/observability/safe-log";
  * Flow:
  *   - Step 1 (signup) crea auth.user + organization + member en el mismo paso
  *     via signUpAndInitOrganization. Devuelve organizationId + slug provisional.
- *   - Steps 2-6 hacen auto-save por step (debounce 800ms) via updateOnboardingStep.
+ *   - Steps 2-5 hacen auto-save por step; Step 6 guarda el catálogo completo
+ *     con revisión y una operación reintentable.
  *     Cada cambio actualiza optimistic state local; el persist a DB ocurre async.
  *   - Step 7 (Google Calendar) persiste solo step_max al montar (su flow OAuth
  *     escribe en `integration` por su cuenta).
@@ -41,6 +42,9 @@ import {
   signUpAndInitOrganization,
   updateOnboardingStep,
   readOnboardingHorarios,
+  readOnboardingServices,
+  saveOnboardingServices,
+  type OnboardingServicesSnapshot,
 } from "@/app/(public)/onboarding/actions";
 import { CheckEmailPanel } from "@/components/auth/check-email-panel";
 import { SideArt } from "@/components/auth/side-art";
@@ -51,6 +55,8 @@ import { Step1Consent } from "@/components/onboarding/step1-consent";
 import { Step1Registro } from "@/components/onboarding/step1-registro";
 import { Step1Choice } from "@/components/onboarding/step1-choice";
 import { parseOnboardingIntent } from "@/lib/onboarding/intent";
+import { OnboardingServicesDraft, parseStoredServicesCommand, storeServicesCommand } from "@/lib/onboarding/services-draft";
+import { TIPOS_CANONICOS_VALIDOS } from "@/lib/onboarding/templates";
 // ONBOARDING_INITIAL es un literal de data; OnboardingDataState es un type.
 // Ambos quedan en el initial bundle (no son pesados — solo constants/types).
 import {
@@ -102,15 +108,29 @@ const ONB_TOTAL = 8;
 const STORAGE_KEY = "folio:onboarding";
 const INTENT_KEY = "folio:onboarding:intent";
 const AUTOSAVE_DEBOUNCE_MS = 800;
+const servicesKey = (organizationId: string) => `folio:onboarding:services:${organizationId}`;
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const TIPO_CANONICO_MAP: Record<string, string> = {
+function servicesForEditor(rows: OnboardingServicesSnapshot["servicios"]): OnboardingDataState["servicios"] {
+  return rows.map((row) => ({ id: row.id, nombre: row.nombre, dur: row.dur,
+    precio: row.precioCents / 100, tipoCanonico: row.tipoCanonico }));
+}
+
+type CanonicalService = OnboardingServicesSnapshot["servicios"][number]["tipoCanonico"];
+function servicesForCommand(rows: OnboardingDataState["servicios"]): OnboardingServicesSnapshot["servicios"] {
+  return rows.map((row) => ({ id: row.id, nombre: row.nombre, dur: row.dur,
+    precioCents: Math.round(row.precio * 100), tipoCanonico: row.tipoCanonico && TIPOS_CANONICOS_VALIDOS.includes(row.tipoCanonico as CanonicalService)
+      ? row.tipoCanonico as CanonicalService : inferTipoCanonico(row.nombre) }));
+}
+
+const TIPO_CANONICO_MAP: Record<string, CanonicalService> = {
   "consulta inicial":  "CONSULTA_INICIAL",
   "seguimiento":       "SEGUIMIENTO_ESTANDAR",
   "pack 5 sesiones":   "PACK_SESIONES",
   "deportiva":         "SERVICIO_ESPECIALIZADO",
 };
 
-function inferTipoCanonico(nombre: string): string {
+function inferTipoCanonico(nombre: string): CanonicalService {
   const key = nombre.trim().toLowerCase();
   return TIPO_CANONICO_MAP[key] ?? "SERVICIO_ESPECIALIZADO";
 }
@@ -211,8 +231,8 @@ export function OnboardingApp({
   //
   // `hydratedRef` evita que el primer setData (la hidratación) dispare el
   // auto-save effect — sin esto, al volver al wizard tras reload, el cliente
-  // haría DELETE+INSERT inmediato de horarios/servicios sobre los datos
-  // recién leídos de la DB. Marcamos el snapshot inicial como "ya guardado".
+  // volvería a escribir los datos recién leídos. Marcamos el snapshot inicial
+  // como "ya guardado".
   const hydratedRef = useRef(false);
   useEffect(() => {
     // Hidratar SOLO una vez al montar. Tener `stepIdx` en las deps hacía que
@@ -303,6 +323,62 @@ export function OnboardingApp({
   const hoursSavedRef = useRef(false);
   const [hoursError, setHoursError] = useState<string | null>(null);
   const [, redrawHours] = useState(0);
+  const servicesRef = useRef<OnboardingServicesDraft | null>(null);
+  const servicesFlightRef = useRef<Promise<boolean> | null>(null);
+  const servicesProgressSavedRef = useRef((initialStep ?? 1) >= 6);
+  const [servicesStatus, setServicesStatus] = useState<"loading" | "ready" | "error" | "uncertain" | "conflict">("loading");
+  const [servicesMessage, setServicesMessage] = useState<string | null>(null);
+  const [persistedServices, setPersistedServices] = useState(false);
+  const servicesOwner = (authedEmail ?? data.email).trim().toLowerCase();
+
+  useEffect(() => {
+    if (stepIdx !== 6 || !orgId || recoverableDraft) return;
+    let cancelled = false;
+    servicesRef.current = null;
+    setServicesStatus("loading");
+    setServicesMessage(null);
+    const read = synthetic
+      ? Promise.resolve({ ok: true as const, data: { revision: 0, servicios: servicesForCommand(data.servicios) } })
+      : readOnboardingServices(orgId);
+    void read.then((result) => {
+      if (cancelled) return;
+      if (!result.ok) {
+        setServicesStatus("error");
+        setServicesMessage("No pudimos leer los servicios guardados. Volvé a cargar para continuar.");
+        return;
+      }
+      let pending = null;
+      try { pending = parseStoredServicesCommand(sessionStorage.getItem(servicesKey(orgId)), orgId, servicesOwner); }
+      catch { /* el guardado nuevo exige almacenamiento disponible */ }
+      const draft = new OnboardingServicesDraft(orgId, result.data, pending ?? undefined);
+      if (!pending && result.data.servicios.length === 0 && data.ownerTratante !== false && data.servicios.length > 0) {
+        // Drafts previos al catálogo versionado tenían IDs numéricos locales.
+        // Sin filas guardadas se pueden reemplazar sin alterar ninguna identidad en DB.
+        const local = data.servicios.map((row) => ({ ...row, id: uuidPattern.test(String(row.id)) ? row.id : crypto.randomUUID() }));
+        draft.edit(servicesForCommand(local));
+        setData((current) => ({ ...current, servicios: local }));
+      }
+      servicesRef.current = draft;
+      setPersistedServices(result.data.servicios.length > 0 || Boolean(pending));
+      if (pending) {
+        setData((current) => ({ ...current, servicios: servicesForEditor(draft.rows) }));
+        setServicesStatus("uncertain");
+        setServicesMessage("No pudimos confirmar un guardado anterior. Verificá ese mismo cambio antes de editar.");
+      } else {
+        if (result.data.servicios.length > 0 || data.ownerTratante === false)
+          setData((current) => ({ ...current, servicios: servicesForEditor(result.data.servicios) }));
+        setServicesStatus("ready");
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setServicesStatus("error");
+        setServicesMessage("No pudimos leer los servicios guardados. Volvé a cargar para continuar.");
+      }
+    });
+    return () => { cancelled = true; };
+    // Se lee una vez por entrada al Paso 6; las ediciones posteriores no deben disparar otra lectura.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stepIdx, orgId, synthetic, servicesOwner, recoverableDraft]);
   useEffect(() => {
     if (!orgId) return;
     let cancelled = false;
@@ -366,11 +442,78 @@ export function OnboardingApp({
     return pending;
   }, [orgId, synthetic]);
 
+  const persistServices = useCallback((allowRetry = false): Promise<boolean> => {
+    if (servicesFlightRef.current) return servicesFlightRef.current;
+    const draft = servicesRef.current;
+    if (!draft || draft.organizationId !== orgId || !servicesOwner || servicesStatus === "loading" || servicesStatus === "error") return Promise.resolve(false);
+    if (draft.conflict) {
+      setServicesStatus("conflict");
+      setServicesMessage("Los servicios cambiaron. Cargá los guardados antes de continuar.");
+      return Promise.resolve(false);
+    }
+    if (draft.uncertain && !allowRetry) return Promise.resolve(false);
+    if (!draft.dirty && servicesProgressSavedRef.current && !draft.uncertain) return Promise.resolve(true);
+    const prior = draft.attemptedCommand;
+    const command = draft.begin(crypto.randomUUID(), { retry: allowRetry, force: !servicesProgressSavedRef.current });
+    if (!command) return Promise.resolve(false);
+    if (!prior) {
+      try { sessionStorage.setItem(servicesKey(command.organizationId), storeServicesCommand(command, servicesOwner)); }
+      catch {
+        draft.finish({ ok: false, uncertain: false, conflict: false });
+        setSaveState({ status: "error", message: "No pudimos preparar el guardado. Habilitá almacenamiento del navegador y reintentá." });
+        return Promise.resolve(false);
+      }
+    }
+    setSaveState({ status: "saving" });
+    const flight = (async () => {
+      try {
+        const result = synthetic
+          ? { ok: true as const, data: { revision: command.revision + 1, servicios: command.servicios } }
+          : await saveOnboardingServices(command);
+        if (result.ok) {
+          draft.finish({ ok: true, data: result.data });
+          try { sessionStorage.removeItem(servicesKey(command.organizationId)); } catch { /* no cambia el recibo */ }
+          setData((current) => ({ ...current, servicios: servicesForEditor(draft.rows) }));
+          if (draft.conflict) {
+            setServicesStatus("conflict");
+            setServicesMessage("Los servicios cambiaron después de tu guardado. Cargá los guardados antes de continuar.");
+            setSaveState({ status: "error", message: "Cargá los servicios guardados." });
+            return false;
+          }
+          servicesProgressSavedRef.current = true;
+          setPersistedServices(draft.rows.length > 0);
+          setServicesStatus("ready"); setServicesMessage(null);
+          setSaveState({ status: "saved", lastSavedAt: Date.now() });
+          return true;
+        }
+        const uncertain = result.error.mutationOutcome === "uncertain";
+        const conflict = result.error.code === "conflict";
+        draft.finish({ ok: false, uncertain, conflict });
+        if (!uncertain) try { sessionStorage.removeItem(servicesKey(command.organizationId)); } catch { /* no cambia el resultado */ }
+        setServicesStatus(uncertain ? "uncertain" : conflict ? "conflict" : "ready");
+        setServicesMessage(uncertain
+          ? "No pudimos confirmar el guardado. Verificá el mismo cambio antes de editar."
+          : conflict ? "Los servicios cambiaron. Cargá los guardados antes de continuar." : result.error.message);
+        setSaveState({ status: "error", message: uncertain ? "Verificar guardado" : result.error.message });
+        return false;
+      } catch {
+        draft.finish({ ok: false, uncertain: true, conflict: false });
+        setServicesStatus("uncertain");
+        setServicesMessage("No pudimos confirmar el guardado. Verificá el mismo cambio antes de editar.");
+        setSaveState({ status: "error", message: "Verificar guardado" });
+        return false;
+      } finally { servicesFlightRef.current = null; }
+    })();
+    servicesFlightRef.current = flight;
+    return flight;
+  }, [orgId, servicesOwner, servicesStatus, synthetic]);
+
   // ─── Auto-save por step (debounce 800ms) ─────────────────────────────────
 
   const persistStep = useCallback(
     async (step: number, snapshot: OnboardingDataState): Promise<boolean> => {
       if (!orgId) return false;
+      if (step === 6) return persistServices();
       if (synthetic) {
         if (step === 4 && syntheticStep4Failure) {
           setSaveState({ status: "error", message: "Ejemplo: no pudimos guardar el avance. Reintentá." });
@@ -413,18 +556,6 @@ export function OnboardingApp({
               acento: snapshot.acento,
             });
             break;
-          case 6:
-            result = await updateOnboardingStep(6, {
-              servicios: snapshot.servicios.map((s) => ({
-                nombre: s.nombre,
-                dur: s.dur,
-                precioCents: Math.round(s.precio * 100),
-                // Los templates (rubro/especialidad) ya traen el enum correcto;
-                // para servicios tipeados a mano lo inferimos por nombre.
-                tipoCanonico: s.tipoCanonico ?? inferTipoCanonico(s.nombre),
-              })),
-            });
-            break;
           default:
             setSaveState({ status: "idle" });
             return true;
@@ -453,7 +584,7 @@ export function OnboardingApp({
         return false;
       }
     },
-    [orgId, orgSlug, persistInitialHours, synthetic, syntheticStep4Failure],
+    [orgId, orgSlug, persistInitialHours, persistServices, synthetic, syntheticStep4Failure],
   );
 
   const runPersistStep = useCallback((step: number, snapshot: OnboardingDataState): Promise<boolean> => {
@@ -475,6 +606,7 @@ export function OnboardingApp({
     // Steps sin auto-save: 1 (signup), 7 (Google — persiste step_max al montar
     // y su OAuth escribe en `integration`), 8 (moment — finaliza, no edita).
     if (stepIdx === 1 || stepIdx === 4 || stepIdx >= 7) return;
+    if (stepIdx === 6 && (servicesStatus !== "ready" || !servicesRef.current || servicesRef.current.locked)) return;
 
     const snapshot = JSON.stringify({ step: stepIdx, data });
     if (snapshot === lastSavedSnapshotRef.current) return;
@@ -490,10 +622,13 @@ export function OnboardingApp({
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
-  }, [data, stepIdx, orgId, runPersistStep, recoverableDraft]);
+  }, [data, stepIdx, orgId, runPersistStep, recoverableDraft, servicesStatus]);
 
   const set = (patch: Partial<OnboardingDataState>) => {
     if (stepIdx === 5 && (!hoursRef.current || hoursRef.current.locked || hoursError)) return;
+    if (stepIdx === 6 && patch.servicios !== undefined) {
+      if (servicesStatus !== "ready" || !servicesRef.current?.edit(servicesForCommand(patch.servicios))) return;
+    }
     if (stepIdx === 4 && patch.acento !== undefined) setSaveState({ status: patch.acento === savedAccentRef.current ? "idle" : "unsaved" });
     setData((prev) => ({ ...prev, ...patch }));
   };
@@ -526,23 +661,41 @@ export function OnboardingApp({
       if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
       void persistInitialHours(data).then((saved) => { if (saved) { setDirection("forward"); setStepIdx(6); } }).finally(() => { nextFlightRef.current = false; }); return;
     }
+    if (stepIdx === 6) {
+      void (async () => {
+        if (!await flushSaveIfPending()) return;
+        if (!await persistServices()) return;
+        setDirection("forward");
+        setStepIdx(data.ownerTratante === false ? 8 : 7);
+      })().finally(() => { nextFlightRef.current = false; });
+      return;
+    }
     void flushSaveIfPending().then((saved) => {
       if (saved) {
         setDirection("forward");
         setStepIdx((n) => Math.min(ONB_TOTAL, n === 4 && data.ownerTratante === false ? 6 : n === 6 && data.ownerTratante === false ? 8 : n + 1));
       }
     }).finally(() => { nextFlightRef.current = false; });
-  }, [flushSaveIfPending, stepIdx, persistInitialHours, runPersistStep, data]);
+  }, [flushSaveIfPending, stepIdx, persistInitialHours, persistServices, runPersistStep, data]);
 
   const back = useCallback(() => {
     if (stepIdx === 5) {
       if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
       void persistInitialHours(data).then((saved) => { if (saved) { setDirection("back"); setStepIdx(4); } }); return;
     }
+    if (stepIdx === 6) {
+      void (async () => {
+        if (!await flushSaveIfPending()) return;
+        if (!await persistServices()) return;
+        setDirection("back");
+        setStepIdx(data.ownerTratante === false ? 4 : 5);
+      })();
+      return;
+    }
     setDirection("back");
     void flushSaveIfPending();
     setStepIdx((n) => Math.max(1, n === 6 && data.ownerTratante === false ? 4 : n === 8 && data.ownerTratante === false ? 6 : n - 1));
-  }, [flushSaveIfPending, stepIdx, persistInitialHours, data]);
+  }, [flushSaveIfPending, stepIdx, persistInitialHours, persistServices, data]);
 
   const skip = useCallback(() => {
     if (stepIdx !== 4) { next(); return; }
@@ -669,11 +822,12 @@ export function OnboardingApp({
 
   // Reintento manual del autosave (indicador "Reintentar guardar" clickeable).
   const retrySave = useCallback(() => {
+    if (stepIdx === 6) { void persistServices(true); return; }
     const step = pendingStepRef.current ?? stepIdx;
     void runPersistStep(step, data).then((saved) => {
       if (saved && step === 4) savedAccentRef.current = data.acento;
     });
-  }, [stepIdx, data, runPersistStep]);
+  }, [stepIdx, data, persistServices, runPersistStep]);
 
   // Estado real de la integración Google (server) + retorno del OAuth.
   const gcalParam = searchParams.get("gcal");
@@ -807,7 +961,16 @@ export function OnboardingApp({
             {!hoursRef.current && !hoursError ? <p role="status">Leyendo horarios…</p> : null}
             <fieldset disabled={!hoursRef.current || hoursRef.current.locked || !!hoursError} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}><Step5Horarios {...commonStepProps} /></fieldset>
           </> : null}
-          {stepIdx === 6 ? <Step6Servicios {...commonStepProps} /> : null}
+          {stepIdx === 6 ? <>
+            {servicesMessage ? <p className="au-err onb-banner-err" role="alert">{servicesMessage}</p> : null}
+            {servicesStatus === "loading" ? <p role="status">Leyendo servicios guardados…</p> : null}
+            {servicesStatus === "error" || servicesStatus === "conflict" ?
+              <button type="button" className="fi-btn" onClick={() => window.location.reload()}>Cargar servicios guardados</button> : null}
+            {servicesStatus === "uncertain" ?
+              <button type="button" className="fi-btn" onClick={() => void persistServices(true)}>Verificar guardado</button> : null}
+            {servicesStatus !== "loading" && servicesStatus !== "error" ?
+              <Step6Servicios {...commonStepProps} persistedServices={persistedServices} servicesLocked={servicesStatus !== "ready" || Boolean(servicesRef.current?.locked)} /> : null}
+          </> : null}
           {stepIdx === 7 ? (
             <Step7Google
               {...commonStepProps}

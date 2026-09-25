@@ -494,6 +494,71 @@ export interface Step6Data {
   }>;
 }
 
+const onboardingServiceSchema = z.object({
+  id: z.string().uuid(),
+  nombre: z.string().trim().min(1).max(120),
+  dur: z.number().int().min(5).max(480),
+  precioCents: z.number().int().min(0).max(2147483647),
+  tipoCanonico: z.enum(TIPOS_CANONICOS_VALIDOS),
+}).strict();
+const onboardingServicesSnapshotSchema = z.object({
+  revision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  servicios: z.array(onboardingServiceSchema).max(30),
+}).strict();
+const onboardingServicesCommandSchema = z.object({
+  organizationId: z.string().uuid(),
+  revision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  operacionId: z.string().uuid(),
+  servicios: z.array(onboardingServiceSchema).max(30),
+}).strict();
+export type OnboardingServicesSnapshot = z.infer<typeof onboardingServicesSnapshotSchema>;
+export type OnboardingServicesCommand = z.infer<typeof onboardingServicesCommandSchema>;
+
+/** Current full catalog; no omission can be interpreted before this read. */
+export async function readOnboardingServices(organizationId: string): Promise<Result<OnboardingServicesSnapshot>> {
+  if (!z.string().uuid().safeParse(organizationId).success) return err("validation", "Consultorio inválido.");
+  const session = await getActiveSession(); if (!session.ok) return session;
+  if (session.data.organizationId !== organizationId || session.data.role !== "OWNER")
+    return err("forbidden", "Cambió el consultorio activo. Volvé a cargar la página.");
+  try {
+    const client = await createSupabaseServerClient();
+    const { data, error } = await client.rpc("read_onboarding_services", { p_org: organizationId });
+    if (error) { const mapped = mapSupabaseError(error); return err(mapped.code, mapped.message); }
+    const parsed = onboardingServicesSnapshotSchema.safeParse(data);
+    return parsed.success ? ok(parsed.data) : err("db_error", "No pudimos leer los servicios guardados. Volvé a cargar.");
+  } catch { return err("network", "No pudimos leer los servicios guardados. Volvé a cargar."); }
+}
+
+/** One exact command is replayed on an uncertain transport response. */
+export async function saveOnboardingServices(input: OnboardingServicesCommand): Promise<Result<OnboardingServicesSnapshot>> {
+  const parsed = onboardingServicesCommandSchema.safeParse(input);
+  if (!parsed.success) return err("validation", "Revisá los servicios antes de guardar.");
+  const session = await getActiveSession(); if (!session.ok) return session;
+  if (session.data.organizationId !== parsed.data.organizationId || session.data.role !== "OWNER")
+    return err("forbidden", "Cambió el consultorio activo. Volvé a cargar la página.");
+  try {
+    const client = await createSupabaseServerClient();
+    const { data, error } = await client.rpc("save_onboarding_services", {
+      p_org: parsed.data.organizationId,
+      p_expected_revision: parsed.data.revision,
+      p_operation: parsed.data.operacionId,
+      p_services: parsed.data.servicios,
+    });
+    if (error) {
+      if (error.code === "40001") return err("conflict", "Los servicios cambiaron. Cargá la versión guardada antes de continuar.");
+      if (!error.code || error.code.startsWith("08") || /^PGRST00[0-3]$/.test(error.code))
+        return { ok: false, error: { code: "network", message: "No pudimos confirmar el guardado. Verificá el estado antes de cambiar los servicios.", mutationOutcome: "uncertain" } };
+      const mapped = mapSupabaseError(error); return err(mapped.code, mapped.message);
+    }
+    const result = onboardingServicesSnapshotSchema.safeParse(data);
+    if (!result.success || result.data.revision <= parsed.data.revision)
+      return { ok: false, error: { code: "db_error", message: "El guardado no quedó confirmado. Verificá el estado antes de cambiar los servicios.", mutationOutcome: "uncertain" } };
+    return ok(result.data);
+  } catch {
+    return { ok: false, error: { code: "network", message: "No pudimos confirmar el guardado. Verificá el estado antes de cambiar los servicios.", mutationOutcome: "uncertain" } };
+  }
+}
+
 /**
  * Step 7 (Google Calendar) no persiste datos propios — el cliente llama con
  * `{}` al ENTRAR al paso solo para subir onboarding_step_max: el OAuth de
@@ -512,7 +577,6 @@ const step3ArquitecturaSchema = z.object({
 
 // M09 · valores válidos de tipo_servicio_canonico. Un valor fuera del enum
 // rompería el INSERT del Step 6 — degradamos a SERVICIO_ESPECIALIZADO.
-const TIPOS_CANONICOS_SET = new Set<string>(TIPOS_CANONICOS_VALIDOS);
 
 /**
  * Persiste el delta de un step específico. El cliente llama con debounce
@@ -561,6 +625,7 @@ export async function updateOnboardingStep(
     return { ok: false, error: "Paso de configuración inválido." };
   }
   if (stepId === 5) return saveInitialHorarios(data as Step5Data);
+  if (stepId === 6) return { ok: false, code: "validation", error: "Recargá Folio para guardar los servicios de forma segura." };
   const access = await resolveOrganizationEditor("wizard");
   if (!access.ok) return access;
   const { service, orgId, userId } = access;
@@ -644,26 +709,6 @@ export async function updateOnboardingStep(
             .from("organization")
             .update(patch)
             .eq("id", orgId);
-          if (error) return { ok: false, error: error.message };
-        }
-        break;
-      }
-      case 6: {
-        const d = data as Step6Data;
-        // Reemplazo total de servicios
-        await service.from("servicio").delete().eq("organization_id", orgId);
-        if (d.servicios.length > 0) {
-          const { error } = await service.from("servicio").insert(
-            d.servicios.map((s) => ({
-              organization_id: orgId,
-              nombre: s.nombre,
-              tipo_canonico: TIPOS_CANONICOS_SET.has(s.tipoCanonico)
-                ? s.tipoCanonico
-                : "SERVICIO_ESPECIALIZADO",
-              duracion_min: s.dur,
-              precio_cents: s.precioCents,
-            })),
-          );
           if (error) return { ok: false, error: error.message };
         }
         break;
