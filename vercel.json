@@ -13,7 +13,8 @@
       "codex/launch-miniweb-quality": false,
       "codex/launch-reception": false,
       "codex/launch-export-integrity": false,
-      "codex/launch-export-package": false
+      "codex/launch-export-package": false,
+      "codex/launch-export-bytes": false
     }
   },
   "regions": [
