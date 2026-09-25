@@ -96,7 +96,8 @@ async function fixture(state){
  const login=await actor.auth.signInWithPassword({email,password});assert.equal(login.error,null,'login_failed');
  const enrolled=await actor.auth.mfa.enroll({factorType:'totp',friendlyName:'Synthetic caller'});assert.equal(enrolled.error,null,'factor_enroll_failed');
  const challenge=await actor.auth.mfa.challenge({factorId:enrolled.data.id});assert.equal(challenge.error,null,'factor_challenge_failed');
- const verified=await actor.auth.mfa.verify({factorId:enrolled.data.id,challengeId:challenge.data.id,code:totp(enrolled.data.totp.secret)});
+ const enrollmentOtpAt=Date.now();
+ const verified=await actor.auth.mfa.verify({factorId:enrolled.data.id,challengeId:challenge.data.id,code:totp(enrolled.data.totp.secret,enrollmentOtpAt)});
  assert.equal(verified.error,null,'factor_verify_failed');
  const org=randomUUID(),member=randomUUID(),patient=randomUUID(),identity=randomUUID(),servicio=randomUUID(),turno=randomUUID();
  process.env.FOLIO_ENC_KEY=Buffer.alloc(32,37).toString('base64');
@@ -118,7 +119,7 @@ async function fixture(state){
    await db.query('COMMIT');
   }catch(error){await db.query('ROLLBACK');throw error;}
  });
- await writeFile(fixtureFile,JSON.stringify({email,password,totpSecret:enrolled.data.totp.secret,databaseUrl:`postgresql://postgres:${state.dbPassword}@127.0.0.1:55422/postgres`,turnoId:turno}),{flag:'wx',mode:0o600});
+ await writeFile(fixtureFile,JSON.stringify({email,password,totpSecret:enrolled.data.totp.secret,enrollmentOtpWindow:Math.floor(enrollmentOtpAt/30000),databaseUrl:`postgresql://postgres:${state.dbPassword}@127.0.0.1:55422/postgres`,turnoId:turno}),{flag:'wx',mode:0o600});
 }
 async function main(){
  assert.equal(process.env.GITHUB_ACTIONS,'true');assert.equal(process.env.RUNNER_ENVIRONMENT,'github-hosted');assert.equal(process.env.RUNNER_OS,'Linux');assert.equal(process.platform,'linux');
@@ -143,6 +144,10 @@ async function main(){
   stage='browser';const browserEnv={...env,E2E_BASE_URL:'http://localhost:4430',FOLIO_TEST_SUPABASE_URL:api,FOLIO_TEST_SUPABASE_ANON_KEY:state.anonKey,FOLIO_TEST_SUPABASE_SERVICE_KEY:state.serviceKey,FOLIO_TEST_DATABASE_URL:`postgresql://postgres:${dbPassword}@127.0.0.1:55422/postgres`,FOLIO_TEST_CLINICAL:'1'};
   const result=await run('pnpm',['test:e2e','--','tests/e2e/caller-screen.spec.ts','--trace=off'],{env:browserEnv,timeout:900000,limit:2000000});
   const markers=[...result.output.matchAll(/caller_proof_stage:([a-z0-9_]+)(?: visible_11s=([0-9]+) hidden_6s=0)?/g)].map(match=>({stage:match[1],visible:match[2]}));
+  const mfaDiagnostic=result.output.match(/caller_proof_mfa_diagnostic:path=(mfa|hoy|other) alert=(otp|policy|session|rate|factor|challenge|network|none|other)/);
+  if(mfaDiagnostic)console.log(`caller_proof_mfa_diagnostic:path=${mfaDiagnostic[1]} alert=${mfaDiagnostic[2]}`);
+  const mfaPreflight=result.output.match(/caller_proof_mfa_preflight:same_window=([01])/);
+  if(mfaPreflight)console.log(`caller_proof_mfa_preflight:same_window=${mfaPreflight[1]}`);
   for(const item of markers)if(['pair_issued','screen_paired','called_on_screen','lost_response_reused','visit_unchanged','polling_bounded','reconnect_silent','revoked_after_reload'].includes(item.stage))
    console.log(`caller_proof_stage:${item.stage}${item.visible?` visible_11s=${item.visible} hidden_6s=0`:''}`);
   const counts=result.output.split(/\r?\n/).filter(line=>/^\s*\d+ (?:passed|failed|skipped)\b/.test(line));

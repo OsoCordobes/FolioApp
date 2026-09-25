@@ -9,6 +9,8 @@ on:
       - tests/unit/caller-screen-http.test.ts
       - tests/unit/caller-rpc-result.test.ts
       - tests/unit/caller-pending-call.test.ts
+      - tests/unit/route-decision.test.ts
+      - tests/unit/mfa-adversarial-boundaries.test.ts
       - app/api/caller/**
       - app/(public)/pantalla/**
       - app/(app)/configuracion/pantallas/**
@@ -19,9 +21,11 @@ on:
       - components/hoy/turno-row.tsx
       - components/configuracion/configuracion.tsx
       - lib/caller/**
+      - lib/auth/route-decision.ts
       - lib/db/caller.ts
       - lib/supabase/caller-screen.ts
       - styles/caller.css
+      - middleware.ts
       - scripts/recovery/ci-compose.yml
       - scripts/recovery/ci-loopback-bridge.mjs
       - scripts/testing/app-config.mjs
@@ -92,5 +96,9 @@ jobs:
           path: |
             test-results/caller-screen-375.png
             test-results/caller-screen-1440.png
+            test-results/caller-settings-375.png
+            test-results/caller-settings-1440.png
+            test-results/caller-hoy-375.png
+            test-results/caller-hoy-1440.png
           if-no-files-found: ignore
           retention-days: 7

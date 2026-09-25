@@ -16,7 +16,7 @@ function loadModule(file: string, dependencies: Record<string, unknown>) {
   const compiled = ts.transpileModule(readFileSync(file,"utf8"), {
     compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022},
   }).outputText;
-  runInNewContext(compiled, {exports,process:{env:{NEXT_PUBLIC_SUPABASE_URL:"https://synthetic.invalid"}},require:(name:string)=>{
+  runInNewContext(compiled, {exports,Headers,process:{env:{NEXT_PUBLIC_SUPABASE_URL:"https://synthetic.invalid"}},require:(name:string)=>{
     if (!(name in dependencies)) throw new Error(`Unexpected boundary dependency: ${name}`);
     return dependencies[name];
   }});
@@ -29,6 +29,7 @@ function middlewareFixture(status=denied, policyError=false) {
   const calls:string[]=[];
   const client={rpc:async()=>{calls.push("policy");return {data:status,error:policyError?{message:"PRIVATE_PROVIDER_DETAIL"}:null};}};
   const loaded=loadModule("middleware.ts",{
+    "next/server":{NextResponse},
     "@/lib/auth/mfa-access":mfa,"@/lib/auth/route-decision":routes,
     "@/lib/supabase/middleware":{
       updateSupabaseSession:async()=>({response,user:{id:"dual-user"},supabase:client}),
@@ -38,6 +39,26 @@ function middlewareFixture(status=denied, policyError=false) {
   });
   return {calls,async run(path:string){return await loaded.middleware(new NextRequest(`https://folio.invalid${path}`) as never) as NextResponse;}};
 }
+
+test("screen credential routes bypass staff refresh and MFA before their own handler",async()=>{
+  const calls:string[]=[];
+  const loaded=loadModule("middleware.ts",{
+    "next/server":{NextResponse},
+    "@/lib/auth/mfa-access":mfa,"@/lib/auth/route-decision":routes,
+    "@/lib/supabase/middleware":{
+      updateSupabaseSession:async()=>{calls.push("staff_refresh");throw new Error("staff auth reached");},
+      redirectWithCookies,jsonWithCookies,resolveAudience:async()=>{calls.push("audience");return {isMember:true,isPortalAccount:false};},
+    },
+  });
+  for(const path of routes.CALLER_SCREEN_PATHS){
+    const request=new NextRequest(`https://folio.invalid${path}`,{headers:{cookie:"sb-fake-auth-token=staff"}});
+    const response=await loaded.middleware(request as never) as NextResponse;
+    assert.equal(response.status,200);
+    assert.equal(response.headers.get("x-middleware-request-x-pathname"),path);
+    assert.equal(response.cookies.getAll().length,0);
+  }
+  assert.deepEqual(calls,[]);
+});
 
 test("actual middleware rejects a dual portal account before audience lookup and preserves rotated cookies",async()=>{
   const fixture=middlewareFixture();const response=await fixture.run("/portal/consentimientos");

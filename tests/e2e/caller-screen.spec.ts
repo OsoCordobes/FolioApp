@@ -6,7 +6,7 @@ import { Client } from "pg";
 
 import { totp } from "../../scripts/testing/clinical-config.mjs";
 
-type Fixture = { email: string; password: string; totpSecret: string; databaseUrl: string; turnoId: string };
+type Fixture = { email: string; password: string; totpSecret: string; enrollmentOtpWindow: number; databaseUrl: string; turnoId: string };
 
 test("reception code, screen pairing, revocation and unchanged clinical state", async ({ browser, page }) => {
   test.setTimeout(180_000);
@@ -18,9 +18,31 @@ test("reception code, screen pairing, revocation and unchanged clinical state", 
   await page.getByRole("button", { name: "Ingresar a Folio" }).click();
   await page.waitForURL(/\/seguridad\/mfa|\/hoy/);
   if (new URL(page.url()).pathname === "/seguridad/mfa") {
+    const sameWindow = Math.floor(Date.now() / 30_000) <= fixture.enrollmentOtpWindow;
+    console.log(`caller_proof_mfa_preflight:same_window=${sameWindow ? 1 : 0}`);
+    // The setup ceremony already consumed its OTP. Use a fresh time step,
+    // and leave enough time for the browser action to reach GoTrue.
+    if (sameWindow || Date.now() % 30_000 > 23_000) {
+      const nextWindow = Math.max(fixture.enrollmentOtpWindow + 1, Math.floor(Date.now() / 30_000) + 1);
+      await page.waitForTimeout(nextWindow * 30_000 - Date.now() + 1_000);
+    }
     await page.getByLabel("Código de seis números").fill(totp(fixture.totpSecret));
     await page.getByRole("button", { name: "Verificar código" }).click();
-    await expect(page.getByRole("heading", { name: "Verificación completada" })).toBeVisible();
+    try {
+      await expect(page.getByRole("heading", { name: "Verificación completada" })).toBeVisible();
+    } catch (error) {
+      const alert = (await page.getByRole("alert").first().textContent({ timeout: 500 }).catch(() => null)) ?? "";
+      const kind = alert.includes("no es válido o venció") ? "otp"
+        : alert.includes("verificación en dos pasos") ? "policy"
+        : alert.includes("verificar tu sesión") || alert.includes("iniciar sesión") ? "session"
+        : alert.includes("demasiados intentos") ? "rate"
+        : alert.includes("ese dispositivo") ? "factor"
+        : alert.includes("iniciar la verificación") ? "challenge"
+        : alert.includes("verificar el código") ? "network" : alert ? "other" : "none";
+      const pathname = new URL(page.url()).pathname;
+      console.log(`caller_proof_mfa_diagnostic:path=${pathname === "/seguridad/mfa" ? "mfa" : pathname === "/hoy" ? "hoy" : "other"} alert=${kind}`);
+      throw error;
+    }
     await page.getByRole("link", { name: "Continuar" }).first().click();
   }
   const staffScreen = await page.request.get("http://localhost:4430/api/caller/screen");
@@ -62,12 +84,28 @@ test("reception code, screen pairing, revocation and unchanged clinical state", 
   expect(screenCookies.some(cookie => /auth-token/.test(cookie.name))).toBe(false);
   console.log("caller_proof_stage:screen_paired");
 
+  await mkdir("test-results", { recursive: true });
+  await page.reload();
+  await expect(page.getByText("Activa", { exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.screenshot({ path: "test-results/caller-settings-375.png", fullPage: true });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.screenshot({ path: "test-results/caller-settings-1440.png", fullPage: true });
+
   await page.goto("/hoy");
   const row = page.locator(".fi-turno").filter({ hasText: "Paciente sintético" }).first();
   await expect(row).toBeVisible();
   await row.getByRole("button", { name: "Código de espera y llamado" }).click();
   await row.getByRole("button", { name: "Entregar código" }).click();
   await expect(row.locator(".caller-control-code strong")).toHaveText("A0001");
+  await page.setViewportSize({ width: 375, height: 812 });
+  const panel = await row.locator(".caller-control-panel").boundingBox();
+  expect(panel).not.toBeNull();
+  expect(panel!.x).toBeGreaterThanOrEqual(0);
+  expect(panel!.x + panel!.width).toBeLessThanOrEqual(376);
+  await page.screenshot({ path: "test-results/caller-hoy-375.png", fullPage: true });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.screenshot({ path: "test-results/caller-hoy-1440.png", fullPage: true });
   let lostResponse = false;
   const hoyActionPath = /\/hoy(?:\?.*)?$/;
   await page.route(hoyActionPath, async route => {
@@ -92,7 +130,6 @@ test("reception code, screen pairing, revocation and unchanged clinical state", 
   await screen.bringToFront();
   await expect(screen.locator(".caller-call-list li").first()).toContainText("A0001");
   await expect(screen.locator(".caller-call-list li").first()).toContainText("Consultorio 1");
-  await mkdir("test-results", { recursive: true });
   await screen.setViewportSize({ width: 375, height: 812 });
   await screen.screenshot({ path: "test-results/caller-screen-375.png", fullPage: true });
   await screen.setViewportSize({ width: 1440, height: 900 });
