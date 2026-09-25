@@ -1,0 +1,65 @@
+name: Folio B06b2 synthetic package proof
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/folio-export-package-proof.yml
+      - scripts/testing/export-package-proof/**
+      - lib/patient/export-jobs*
+      - lib/patient/export-retired-documents.ts
+      - lib/patient/export-evidence.ts
+      - supabase/migrations/*_M137_export_package_bytes.sql
+      - supabase/migrations/*_M138_retired_document_export_metadata.sql
+
+permissions:
+  contents: read
+
+concurrency:
+  group: folio-b06b2-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  export-package-proof:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (github.event.pull_request.base.ref == 'codex/launch-onboarding-services' ||
+       github.event.pull_request.base.ref == 'master')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install locked application tools
+        run: pnpm install --frozen-lockfile
+      - name: Install PostgreSQL 17 client from PGDG
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq curl ca-certificates
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl --fail --silent --show-error -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          . /etc/os-release
+          printf 'Types: deb\nURIs: https://apt.postgresql.org/pub/repos/apt\nSuites: %s-pgdg\nComponents: main\nSigned-By: /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc\n' "$VERSION_CODENAME" | sudo tee /etc/apt/sources.list.d/pgdg.sources >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+          echo '/usr/lib/postgresql/17/bin' >> "$GITHUB_PATH"
+      - name: Fetch exact official Supabase Docker release
+        shell: bash
+        run: |
+          set -euo pipefail
+          upstream="$RUNNER_TEMP/supabase-upstream"
+          git clone --quiet --depth 1 --filter=blob:none --sparse --branch self-hosted/v0.8.1 https://github.com/supabase/supabase "$upstream"
+          git -C "$upstream" sparse-checkout set docker
+          test "$(git -C "$upstream" rev-parse HEAD)" = '8c7a4d9dbbaf8b552893822e89d7bf06f33f9220'
+          echo "C01_OFFICIAL_DOCKER=$upstream/docker" >> "$GITHUB_ENV"
+      - name: Verify synthetic package bytes on isolated Auth DB and Storage
+        run: node --conditions=react-server --import tsx scripts/testing/export-package-proof/run.mjs

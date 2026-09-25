@@ -4,15 +4,19 @@ import net from 'node:net';
 import {validateBridgeTarget,preflightBridgeTarget,waitForBridgeTarget,bridgeFailureCategory} from '../../scripts/recovery/ci-loopback-bridge.mjs';
 
 const project='folio_c01_source',service='db',containerId='a'.repeat(64),networkId='b'.repeat(64);
-function metadata(){return {
- project,service,containerId,remotePort:5432,
- labels:{'com.docker.compose.project':project,'com.docker.compose.service':service},
- networks:{[`${project}_default`]:{NetworkID:networkId,IPAddress:'172.30.0.3'}},
- network:{Name:`${project}_default`,Id:networkId,Internal:true,Driver:'bridge',Options:{},Labels:{'com.docker.compose.project':project},IPAM:{Config:[{Subnet:'172.30.0.0/16'}]},Containers:{[containerId]:{IPv4Address:'172.30.0.3/16'}}},
+function metadata(selectedProject=project){return {
+ project:selectedProject,service,containerId,remotePort:5432,
+ labels:{'com.docker.compose.project':selectedProject,'com.docker.compose.service':service},
+ networks:{[`${selectedProject}_default`]:{NetworkID:networkId,IPAddress:'172.30.0.3'}},
+ network:{Name:`${selectedProject}_default`,Id:networkId,Internal:true,Driver:'bridge',Options:{},Labels:{'com.docker.compose.project':selectedProject},IPAM:{Config:[{Subnet:'172.30.0.0/16'}]},Containers:{[containerId]:{IPv4Address:'172.30.0.3/16'}}},
 };}
 
 test('bridge accepts only the exact internal Compose target',()=>{
  assert.deepEqual(validateBridgeTarget(metadata()),{address:'172.30.0.3',port:5432});
+ assert.deepEqual(validateBridgeTarget(metadata('folio_export_bytes_proof')),{address:'172.30.0.3',port:5432});
+ for(const rejected of ['folio_export_bytes_proof_extra','folio_export_bytes','folio_c01_source_extra']){
+  assert.throws(()=>validateBridgeTarget(metadata(rejected)));
+ }
  for(const mutate of [
   x=>{x.labels['com.docker.compose.project']='other';},
   x=>{x.network.Internal=false;},

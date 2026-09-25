@@ -7,7 +7,10 @@ const org="11600000-0000-4000-8000-000000000001",patient="11600000-0000-4000-800
 type Row={id:string}&Record<string,unknown>;
 function fixture(extra:Record<string,Row[]>={}, failTable?:string, mutate=false){
  const calls:Record<string,number>={};
- return {from(table:string){let start=0,end=499;calls[table]=(calls[table]??0)+1;const query={
+ return {rpc:async(name:string)=>{assert.equal(name,'export_retired_document_metadata');return {data:{
+  total:extra.retired_document?.length??0,all_total:(extra.documento_clinico?.length??0)+(extra.retired_document?.length??0),
+  rows:extra.retired_document??[]},error:null}},
+  from(table:string){let start=0,end=499;calls[table]=(calls[table]??0)+1;const query={
   select(){return query},eq(key:string,value:string){if(key==='organization_id')assert.equal(value,org);if(key==='paciente_id')assert.equal(value,patient);return query},in(){return query},is(){return query},order(){return query},
   range(a:number,b:number){start=a;end=b;return query},
   then(resolve:(v:unknown)=>unknown){let rows=(extra[table]??[]).map(row=>({organization_id:org,paciente_id:patient,...row}));if(mutate&&table==='instrumento_respuesta'&&calls[table]>1)rows=rows.map(r=>({...r,banda:'CHANGED'}));return Promise.resolve(resolve({data:rows.slice(start,Math.min(end+1,start+111)),count:rows.length,error:failTable===table?{message:'PRIVATE SDK DATA'}:null}));}
@@ -21,6 +24,20 @@ test('clinical export preserves every instrument response, recorded score and hi
 test('clinical document inventory does not claim included bytes or expose storage paths',async()=>{
  const id='11600000-0000-4000-8000-000000000003';const r=await buildClinicalExport(fixture({documento_clinico:[{id,storage_bucket:'documentos-clinicos',storage_path:`documentos-clinicos/${org}/${patient}/synthetic.pdf`,mime_type:'application/pdf',tamanio_bytes:123,content_sha256:'a'.repeat(64),descripcion_cifrado:encryptColumn('Descripción sintética'),deleted_at:null}]}),org,patient);assert.equal(r.ok,true);if(!r.ok)return;
  const d=(r.data as unknown as {documentos:Record<string,unknown>[]}).documentos?.[0];assert.ok(d);assert.equal(d.bytes_incluidos,false);assert.equal(d.download_url,`/api/documentos/${id}/archivo`);assert.equal(JSON.stringify(d).includes('synthetic.pdf'),false);
+});
+test('withdrawn document remains metadata-only in the complete clinical inventory',async()=>{
+ const id='11600000-0000-4000-8000-000000000005';
+ const retired={id,organization_id:org,paciente_id:patient,sesion_id:null,tipo:'INFORME_EXTERNO',
+  mime_type:'application/pdf',tamanio_bytes:123,content_sha256:null,fecha_estudio:null,
+  descripcion_cifrado:encryptColumn('Informe retirado sintético'),subido_por_id:null,
+  consentimiento_id:null,created_at:'2026-09-08',deleted_at:'2026-09-09'};
+ const result=await buildClinicalExport(fixture({retired_document:[retired]}),org,patient);
+ assert.equal(result.ok,true);if(!result.ok)return;
+ const item=result.data.documentos[0];
+ assert.equal(item.id,id);assert.equal(item.disponibilidad,'retirado_sin_descarga');
+ assert.equal(item.download_url,null);assert.equal(item.bytes_incluidos,false);
+ assert.equal(item.descripcion,'Informe retirado sintético');
+ assert.doesNotMatch(JSON.stringify(item),/storage_path|storage_bucket|\.pdf/);
 });
 for(const table of ['instrumento_respuesta','documento_clinico','consentimiento','consentimiento_evaluacion'])test(`clinical export fails on unreadable collection ${table}`,async()=>{const r=await buildClinicalExport(fixture({},table),org,patient);assert.equal(r.ok,false);assert.equal(JSON.stringify(r).includes('PRIVATE SDK DATA'),false)});
 test('clinical export refuses corrupted instrument JSON',async()=>{const r=await buildClinicalExport(fixture({instrumento_respuesta:[{...instrument(),respuestas_cifrado:encryptColumn('not json')}]}),org,patient);assert.equal(r.ok,false)});
