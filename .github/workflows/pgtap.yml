@@ -123,6 +123,13 @@ jobs:
           FOLIO_M142_SYNTHETIC: '1'
         run: node tests/concurrency/M142_adult_attestation.mjs
 
+      - name: Run M144 real PostgreSQL row-lock races
+        if: hashFiles('tests/concurrency/M144_patient_intake.mjs') != ''
+        timeout-minutes: 3
+        env:
+          FOLIO_M144_SYNTHETIC: '1'
+        run: node tests/concurrency/M144_patient_intake.mjs
+
       - name: Summary
         if: always()
         run: |
