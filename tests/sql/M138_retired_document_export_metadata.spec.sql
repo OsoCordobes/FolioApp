@@ -203,10 +203,10 @@ DO $$ BEGIN
 END $$;
 RESET ROLE;
 
+SELECT set_config('test.m138_uid','13800000-0000-4000-8000-000000000001',true);
 UPDATE public.paciente SET caja_fuerte_profesional=NULL
  WHERE id='13800000-0000-4000-8000-000000000101';
 UPDATE folio_mfa_private.policy SET application_ready=true,staff_enforce_after=now();
-SELECT set_config('test.m138_uid','13800000-0000-4000-8000-000000000001',true);
 SET LOCAL ROLE authenticated;
 DO $$ BEGIN
  BEGIN
