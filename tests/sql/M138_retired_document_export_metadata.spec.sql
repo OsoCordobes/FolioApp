@@ -38,6 +38,10 @@ INSERT INTO public.documento_clinico(id,organization_id,paciente_id,tipo,storage
  ('13800000-0000-4000-8000-000000000301','13800000-0000-4000-8000-000000000010','13800000-0000-4000-8000-000000000101','INFORME_EXTERNO','documentos-clinicos/13800000-0000-4000-8000-000000000010/13800000-0000-4000-8000-000000000101/live.pdf','application/pdf',100,'13800000-0000-4000-8000-000000000011',repeat('a',64),now(),NULL),
  ('13800000-0000-4000-8000-000000000302','13800000-0000-4000-8000-000000000010','13800000-0000-4000-8000-000000000101','INFORME_EXTERNO','documentos-clinicos/13800000-0000-4000-8000-000000000010/13800000-0000-4000-8000-000000000101/old.pdf','application/pdf',200,'13800000-0000-4000-8000-000000000011',repeat('b',64),now(),now());
 
+-- The vanilla CI stub lacks Supabase production's public default table grants.
+-- These three SELECTs are confirmed in production; this transaction rolls back.
+GRANT SELECT ON public.member,public.paciente,public.documento_clinico TO authenticated;
+
 DO $$ BEGIN
  IF has_function_privilege('anon','public.export_retired_document_metadata(uuid,uuid,integer,integer)','EXECUTE')
  OR has_function_privilege('service_role','public.export_retired_document_metadata(uuid,uuid,integer,integer)','EXECUTE')

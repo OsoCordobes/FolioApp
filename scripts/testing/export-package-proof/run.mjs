@@ -87,6 +87,35 @@ async function withPg(password,fn){
  await client.connect();
  try{return await fn(client);}finally{await client.end();}
 }
+async function installPublicDefaultPrivileges(password){
+ // Exact Supabase production role defaults, only in this disposable database
+ // and before M01. Later migrations can still revoke/limit their own objects.
+ await withPg(password,async db=>{
+  await db.query('ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON TABLES TO anon,authenticated,service_role');
+  await db.query('ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON SEQUENCES TO anon,authenticated,service_role');
+  await db.query('ALTER DEFAULT PRIVILEGES FOR ROLE postgres REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC');
+  await db.query('ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO anon,authenticated,service_role');
+ });
+}
+async function assertPublicPrivilegeParity(password){
+ await withPg(password,async db=>{
+  const {rows}=await db.query(`SELECT
+    has_table_privilege('authenticated','public.member','SELECT') AS member_read,
+    has_table_privilege('authenticated','public.paciente','SELECT') AS patient_read,
+    has_table_privilege('authenticated','public.documento_clinico','SELECT') AS document_read,
+    has_table_privilege('authenticated','public.pedido','SELECT') AS broad_pedido_read,
+    has_column_privilege('authenticated','public.pedido','motivo_cifrado','SELECT') AS motivo_read,
+    has_schema_privilege('authenticated','folio_export_private','USAGE') AS export_schema_usage,
+    has_table_privilege('service_role','folio_export_private.job','SELECT') AS direct_job_read,
+    (SELECT count(*)::int FROM pg_policies WHERE
+      (schemaname='public' AND tablename='documento_clinico' AND policyname IN ('documento_server_insert','documento_server_update') AND permissive='RESTRICTIVE')
+      OR (schemaname='storage' AND tablename='objects' AND policyname='clinical_attachments_server_only' AND permissive='RESTRICTIVE')) AS attachment_guards`);
+  const actual=rows[0];
+  assert.deepEqual(actual,{member_read:true,patient_read:true,document_read:true,
+   broad_pedido_read:false,motivo_read:false,export_schema_usage:false,direct_job_read:false,attachment_guards:3},
+   'public_privilege_parity_failed');
+ });
+}
 async function rpc(client,name,args){
  const {data,error}=await client.rpc(name,args);
  assert.equal(error,null,`${name}_failed`);
@@ -357,11 +386,13 @@ async function main(){
   apiBridge=await bridge('api-gw',55421,8000,env);
   await waitApi(state.anonKey);
   stage='migrations';
+  await installPublicDefaultPrivileges(dbPassword);
   const folder=path.join(repo,'supabase/migrations');
   const files=(await readdir(folder)).filter(name=>/^\d{14}_.+\.sql$/.test(name)).sort();
   assert.ok(files.some(name=>name.endsWith('_M137_export_package_bytes.sql')),'M137_missing');
   assert.ok(files.some(name=>name.endsWith('_M138_retired_document_export_metadata.sql')),'M138_missing');
   for(const file of files)await must('psql',['-X','-v','ON_ERROR_STOP=1','-h','127.0.0.1','-p',String(dbPort),'-U','postgres','-d','postgres','-f',path.join(folder,file)],{env:{...env,PGPASSWORD:dbPassword},timeout:120000});
+  await assertPublicPrivilegeParity(dbPassword);
   await reloadRest(dbPassword,env,state.serviceKey);
   const mark=value=>{assert.ok(STAGES.has(value));stage=value;};
   stage='user_create';const seed=await fixture(state,mark);
