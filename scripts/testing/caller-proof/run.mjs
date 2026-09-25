@@ -22,6 +22,25 @@ const random=bytes=>randomBytes(bytes).toString('base64url');
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const options={auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}};
 const stages=new Set(['pull','services','migrations','schema','auth','fixture','browser','complete']);
+const serviceNames=['db','auth','rest','storage','minio','minio-createbucket','api-gw'];
+
+async function finiteServicesDiagnostic(env,step){
+ try{
+  const result=await run('docker',['compose','-p',project,'-f',compose,'ps','--all','--format','json'],{env,timeout:10000,limit:100000});
+  if(result.code!==0)return `step=${step} ps=unavailable`;
+  const output=result.output.trim();
+  let rows;
+  try{const value=JSON.parse(output);rows=Array.isArray(value)?value:[value];}
+  catch{rows=output.split(/\r?\n/).filter(Boolean).flatMap(line=>{const value=JSON.parse(line);return Array.isArray(value)?value:[value];});}
+  const states=serviceNames.map(name=>{
+   const row=rows.find(item=>item?.Service===name);
+   const state=['running','exited','restarting','created','paused','dead'].includes(String(row?.State).toLowerCase())?String(row.State).toLowerCase():'other';
+   const health=['healthy','unhealthy','starting'].includes(String(row?.Health).toLowerCase())?String(row.Health).toLowerCase():'none';
+   return `${name}=${state}_${health}`;
+  });
+  return `step=${step} ${states.join(' ')}`;
+ }catch{return `step=${step} ps=unavailable`;}
+}
 
 function token(secret,role){
  const encode=value=>Buffer.from(JSON.stringify(value)).toString('base64url');
@@ -133,12 +152,14 @@ async function main(){
   C01_DASHBOARD_PASSWORD:random(18),C01_APP_DATABASE:'postgres',C01_CRON_DATABASE:'postgres',C01_S3_BUCKET:'caller-proof-synthetic',C01_MINIO_USER:random(18),C01_MINIO_PASSWORD:random(36)};
  assert.equal((await dc(['ps','-q'],env)).trim(),'','project_not_fresh');
  assert.equal((await docker(['volume','ls','-q','--filter',`label=com.docker.compose.project=${project}`],env)).trim(),'','volumes_not_fresh');
- let stage='pull',dbBridge=null,apiBridge=null;
+ let stage='pull',servicesStep='none',dbBridge=null,apiBridge=null;
  try{
   await dc(['pull','db','auth','rest','storage','api-gw','minio','minio-createbucket'],env);
-  stage='services';await dc(['up','-d','--wait'],env);
-  assert.equal((await docker(['network','inspect',`${project}_default`,'--format','{{.Internal}}'],env)).trim(),'true');
-  dbBridge=await bridge('db',55422,5432,env);apiBridge=await bridge('api-gw',55421,8000,env);await waitApi(state.anonKey);
+  stage='services';servicesStep='compose_up';await dc(['up','-d','--wait'],env);
+  servicesStep='network';assert.equal((await docker(['network','inspect',`${project}_default`,'--format','{{.Internal}}'],env)).trim(),'true');
+  servicesStep='db_bridge';dbBridge=await bridge('db',55422,5432,env);
+  servicesStep='api_bridge';apiBridge=await bridge('api-gw',55421,8000,env);
+  servicesStep='api_ready';await waitApi(state.anonKey);
   stage='migrations';const count=await prepareSchema(dbPassword,env,state.serviceKey);
   stage='auth';await fixture(state);
   stage='browser';const browserEnv={...env,E2E_BASE_URL:'http://localhost:4430',FOLIO_TEST_SUPABASE_URL:api,FOLIO_TEST_SUPABASE_ANON_KEY:state.anonKey,FOLIO_TEST_SUPABASE_SERVICE_KEY:state.serviceKey,FOLIO_TEST_DATABASE_URL:`postgresql://postgres:${dbPassword}@127.0.0.1:55422/postgres`,FOLIO_TEST_CLINICAL:'1'};
@@ -165,6 +186,7 @@ async function main(){
    assert.ok(markers.some(item=>item.stage===required),'caller_stage_missing');
   stage='complete';console.log(`caller_proof_pass:migrations=${count} polls_11s=${markers.find(item=>item.stage==='polling_bounded')?.visible} hidden_6s=0`);
  }catch{
+  if(stage==='services')console.error(`caller_proof_services_diagnostic:${await finiteServicesDiagnostic(env,servicesStep)}`);
   console.error(`caller_proof_${stages.has(stage)?stage:'unclassified'}_failed`);
   process.exitCode=1;
  }finally{
