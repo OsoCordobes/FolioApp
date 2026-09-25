@@ -1,4 +1,5 @@
 import { startPackageOperation } from "@/lib/patient/export-package-delivery";
+import { PACKAGE_CAPACITY_MESSAGE } from "@/lib/patient/export-package-capacity";
 import { invalidPackageRequest, packageBody, packageContext, packageFailure,
   packageJson, packageResult, unavailablePackage, UUID } from "@/lib/patient/export-package-delivery-http";
 
@@ -17,6 +18,10 @@ export async function POST(request: Request) {
     if (!context.ok) return packageFailure(context.error);
     const { client, session } = context.data;
     const operation = await startPackageOperation(client, session, body.patientId, body.operationId);
+    if (!operation.ok && operation.error.code === "validation" &&
+        operation.error.message === PACKAGE_CAPACITY_MESSAGE) {
+      return packageJson({ ok: false, error: { code: "capacity", message: PACKAGE_CAPACITY_MESSAGE } }, 413);
+    }
     return packageResult(operation, data => packageJson({ ok: true, operation: data }, 201));
   } catch { return unavailablePackage(); }
 }

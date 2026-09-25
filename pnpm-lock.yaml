@@ -12,6 +12,9 @@ importers:
 
   .:
     dependencies:
+      '@noble/hashes':
+        specifier: 1.8.0
+        version: 1.8.0
       '@react-pdf/renderer':
         specifier: ^4.5.1
         version: 4.5.1(react@19.1.0)

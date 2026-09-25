@@ -26,7 +26,7 @@ function fixture() {
   let operationError = false, operationAbsent = false, operationMalformed = false;
   let planFailure: { code: string; message: string } | null = null, planThrows = false;
   const calls: string[] = [];
-  let downloads = 0;
+  let downloads = 0, begins = 0;
   const source = () => ({ kind: withdrawn ? "withdrawn_document" : "document",
     sourceId: documentId, sourceIndex: 0, storageBucket: withdrawn ? null : "clinical",
     storagePath: withdrawn ? null : "private/path", deletedAt: withdrawn ? "2026-09-25" : null,
@@ -81,8 +81,10 @@ function fixture() {
       if (name === "./export-jobs") return { readExportPackageJob: async () =>
         ({ ok: true, data: { ...operation(), paciente_id: patient } }),
         claimExportPackageJob: async () => { calls.push("claim"); return { ok: true, data: { leaseToken: id(400), revision: 3 } }; } };
-      if (name === "./export-jobs-worker") return { beginVerifiedExportPackage: async () =>
-        ({ ok: true, data: jobId }), stageExportPackageEntry: async () => ({ ok: true, data: {} }),
+      if (name === "./export-jobs-worker") return { beginVerifiedExportPackage: async () => {
+        begins++; operationAbsent = false;
+        return { ok: true, data: jobId };
+      }, stageExportPackageEntry: async () => ({ ok: true, data: {} }),
       finishVerifiedExportPackage: async () => ({ ok: true, data: undefined }) };
       if (name === "./export-jobs-sources") return { readPackageSourcePlan: async () =>
         ({ ok: true, data: moved ? [] : [source()] }) };
@@ -93,6 +95,7 @@ function fixture() {
     }, Blob });
   return { client, exports, calls, page, source, operation,
     get downloads() { return downloads; },
+    get begins() { return begins; },
     withdraw: () => { withdrawn = true; }, moveSource: () => { moved = true; },
     revoke: () => { revoked = true; },
     expire: () => { expiresAt = new Date(Date.now() - 1000).toISOString(); },
@@ -107,6 +110,30 @@ function fixture() {
     onDownload: (callback: () => void) => { onDownload = callback; },
     pageRows: (value: unknown[]) => { rows = value; } };
 }
+
+test("begin replays an existing operation before planning; uncertain lookup cannot create another", async () => {
+  const existing = fixture();
+  existing.withdraw();
+  const replay = await existing.exports.startPackageOperation(existing.client, session,
+    patient, operationId) as { ok: boolean; data: { job_id: string } };
+  assert.equal(replay.ok, true);
+  assert.equal(replay.data.job_id, jobId);
+  assert.equal(existing.begins, 0);
+  const uncertain = fixture();
+  uncertain.operationError();
+  const failed = await uncertain.exports.startPackageOperation(uncertain.client, session,
+    patient, operationId) as { ok: boolean; error: { code: string } };
+  assert.equal(failed.ok, false);
+  assert.equal(failed.error.code, "db_error");
+  assert.equal(uncertain.begins, 0);
+  const absent = fixture();
+  absent.operationAbsent();
+  const started = await absent.exports.startPackageOperation(absent.client, session,
+    patient, operationId) as { ok: boolean; data: { job_id: string } };
+  assert.equal(absent.begins, 1);
+  assert.equal(started.ok, true);
+  assert.equal(started.data.job_id, jobId);
+});
 
 test("operation lookup distinguishes service failure from confirmed absence", async () => {
   const f = fixture();
