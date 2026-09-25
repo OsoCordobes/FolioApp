@@ -2,7 +2,7 @@
 
 Actualizado: 25/09/2026. Este es el registro breve del trabajo; [el tablero técnico](LAUNCH-BOARD.md) conserva el detalle y los antecedentes. Cada fila cambia sólo ante un resultado o bloqueo real.
 
-**Equipo comprobado:** A · dirección, revisión y publicación. C · prueba recepción y corrige la exportación. D · prepara la publicación de la miniweb. Los dos subagentes trabajan en paralelo.
+**Equipo comprobado:** A · dirección, revisión y publicación. C · corrige exportación y prepara recepción para publicar. D · prepara pruebas completas de acceso y onboarding. Los dos subagentes trabajan en paralelo.
 
 **Publicado** = disponible en Folio. **Probado** = pasó sus controles, todavía sin publicar. **En curso** = falta comprobarlo. Las pruebas parciales no cierran un checkpoint completo.
 
@@ -11,8 +11,8 @@ Actualizado: 25/09/2026. Este es el registro breve del trabajo; [el tablero téc
 | **Ingreso y onboarding** · publicado parcial | Ya se publicó la elección Solo/Clínica y la vuelta al inicio; siguen pendientes los recorridos completos con cuentas. A/B · [publicación PR166](https://github.com/OsoCordobes/FolioApp/pull/166). |
 | **Permisos de Clínica** · paquete publicado | Pedidos y motivos clínicos protegidos según el rol. B · integración A y revisión C. [Publicación comprobada](https://github.com/OsoCordobes/FolioApp/pull/170); otros ámbitos de privacidad siguen pendientes. |
 | **Recuperación completa** · ensayo aprobado e integrado | Datos, archivos, contraseña y segundo factor recuperados con datos ficticios. C · revisión A. [Prueba aprobada](https://github.com/OsoCordobes/FolioApp/actions/runs/36073216478), [entrega integrada](https://github.com/OsoCordobes/FolioApp/pull/167); custodia externa pendiente. |
-| **Miniweb profesional** · corrección comprobada, publicación en preparación | Plantilla, editor y mapa revisados. El problema de permiso detectado por A fue reproducido y corregido por D; [prueba aprobada](https://github.com/OsoCordobes/FolioApp/actions/runs/36076159519). [Entrega preparada](https://github.com/OsoCordobes/FolioApp/pull/171). |
-| **Trabajo de recepción** · prueba integral en curso | C integró la agenda con la nueva miniweb; 48 controles focales aprobados y revisión A. [Prueba de dos roles en curso](https://github.com/OsoCordobes/FolioApp/actions/runs/36076854795), con acceso y base de datos aislados. |
+| **Miniweb profesional** · publicada | Dos disposiciones, mapa confirmado, editor y enlace individual con permiso propio. D · revisión A. [Publicación verificada](https://github.com/OsoCordobes/FolioApp/pull/171) y [prueba del permiso](https://github.com/OsoCordobes/FolioApp/actions/runs/36076159519). |
+| **Trabajo de recepción** · probado, publicación en preparación | La agenda pasó con Asistente y Coordinador en acceso y base de datos aislados. C · revisión A. [Prueba aprobada, sin omisiones](https://github.com/OsoCordobes/FolioApp/actions/runs/36076854795). |
 | **Atención adulta** · pendiente | Contrato preparado; faltan decisiones clínicas e implementación de la verificación para nuevas atenciones. |
 | **Ficha completada por el paciente** · pendiente | Alcance acordado: enlace o QR, preguntas por especialidad y revisión del profesional sin sobrescribir datos. |
 | **Llamador de recepción** · pendiente | Alcance acordado: código de espera y destino en pantalla; llamar no inicia la consulta. |
@@ -24,7 +24,7 @@ Actualizado: 25/09/2026. Este es el registro breve del trabajo; [el tablero téc
 | **Validación profesional y piloto** · pendiente humano | Cinco especialidades y piloto de 14 días, con tres profesionales y cinco jornadas por persona. |
 | **Lanzamiento** · pendiente | Se cerrará cuando la versión publicada y la oferta comercial coincidan con lo demostrado. |
 
-**Última publicación comprobada:** [PR167](https://github.com/OsoCordobes/FolioApp/pull/167), ensayo de recuperación integrado; conserva los permisos publicados en PR170. La nueva miniweb sigue en preparación. **Última cuota consultada:** 92% disponible; reserva de cierre: 15%.
+**Última publicación comprobada:** [PR171 · nueva miniweb](https://github.com/OsoCordobes/FolioApp/pull/171), disponible en foliosalud.com desde el 25/09 a las 02:25 (Copenhague). Conserva la recuperación y permisos previos. **Última cuota consultada:** 92% disponible; reserva de cierre: 15%.
 
 **Forma de trabajo:** continuar mientras haya trabajo útil, cerrar cada paquete con evidencia y tomar el siguiente. La reanudación horaria es respaldo ante un corte, no una espera entre tareas.
 
