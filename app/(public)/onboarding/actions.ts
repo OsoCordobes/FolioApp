@@ -566,6 +566,7 @@ export async function updateOnboardingStep(
   const { service, orgId, userId } = access;
   const user = { id: userId };
   try {
+    let savedSlug: string | undefined;
     switch (stepId) {
       case 2: {
         const d = data as Step2Data;
@@ -628,7 +629,7 @@ export async function updateOnboardingStep(
             .select("slug")
             .single();
           if (error) return { ok: false, error: error.message };
-          return { ok: true, slug: updated.slug as string };
+          savedSlug = updated.slug as string;
         }
         break;
       }
@@ -673,13 +674,24 @@ export async function updateOnboardingStep(
     }
 
     // Actualizar onboarding_step_max si avanzó
-    await service
+    const { data: progress, error: progressError } = await service
       .from("organization")
       .update({ onboarding_step_max: stepId })
       .eq("id", orgId)
-      .lt("onboarding_step_max", stepId);
+      .lt("onboarding_step_max", stepId)
+      .select("onboarding_step_max")
+      .maybeSingle();
+    if (progressError) return { ok: false, error: "No pudimos confirmar el avance guardado. Reintentá." };
+    if (!progress) {
+      // A no-row response is valid only when an earlier save already reached
+      // this step (or a later one). Missing/deleted org must not report success.
+      const { data: current, error } = await service.from("organization")
+        .select("onboarding_step_max").eq("id", orgId).maybeSingle();
+      if (error || !current || Number(current.onboarding_step_max) < stepId)
+        return { ok: false, error: "No pudimos confirmar el avance guardado. Reintentá." };
+    }
 
-    return { ok: true };
+    return { ok: true, slug: savedSlug };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return { ok: false, error: msg };
