@@ -3,7 +3,7 @@ import { safeLog } from "@/lib/observability/safe-log";
 /**
  * Folio · /calendario data fetcher (Sprint S1 T-1.5).
  *
- * Lee `turno_extendido` + `bloqueo` + `pedido` para la semana de un
+ * Lee la proyección de turnos según rol + `bloqueo` + `pedido` para la semana de un
  * `weekStartIso` (lunes ancla en TZ local de la org) y devuelve el shape
  * que consume `<Calendario />`.
  *
@@ -50,13 +50,13 @@ interface TurnoExtendidoRow {
   paciente_nombre_cifrado: string | null;
   paciente_apellido_cifrado: string | null;
   paciente_telefono_cifrado: string | null;
-  paciente_tipo: "ACTIVO" | "INACTIVO" | "EN_ESPERA" | "NUEVO";
-  paciente_tags: string[] | null;
-  paciente_alerta_alergia: boolean;
+  paciente_tipo?: "ACTIVO" | "INACTIVO" | "EN_ESPERA" | "NUEVO" | null;
+  paciente_tags?: string[] | null;
+  paciente_alerta_alergia?: boolean | null;
   servicio_nombre: string;
   profesional_id: string;
   /** M56 · motivo del booking público (PHI). Solo se descifra para roles clínicos. */
-  nota_reserva_cifrado: string | null;
+  nota_reserva_cifrado?: string | null;
   /** M72 · modalidad del turno (presencial | telemedicina). */
   modalidad: string | null;
 }
@@ -277,10 +277,21 @@ export async function getCalendarioSemana(input: FetcherInput): Promise<Result<C
   const canReadClinical = sessionRes.ok
     ? capabilitiesFor(sessionRes.data.role, sessionRes.data.esColegiado).canReadClinical
     : false;
+  const isReception = capabilitiesFor(sessionRes.data.role, sessionRes.data.esColegiado).isReception;
+  const weekDates = enumerateWeekDates(weekStartIso);
 
   // 4 queries en paralelo: turnos, bloqueos, pedidos, disponibilidad.
   const [turnosRes, bloqueosRes, pedidosRes, dispRes] = await Promise.all([
     readCompleteCollection<TurnoExtendidoRow>(async (from, to) => {
+      if (isReception) {
+        return supabase.rpc("agenda_recepcion_rango", {
+          p_org: organizationId,
+          p_desde: weekStartIso,
+          p_hasta: weekDates[6],
+          p_profesional: profesionalId ?? null,
+        }, { count: "exact" })
+          .order("inicio", { ascending: true }).order("id", { ascending: true }).range(from, to);
+      }
       let q = supabase
         .from("turno_extendido")
         .select("id, organization_id, inicio, duracion_min, estado, origen, paciente_id, paciente_nombre_cifrado, paciente_apellido_cifrado, paciente_telefono_cifrado, paciente_tipo, paciente_tags, paciente_alerta_alergia, servicio_nombre, profesional_id, nota_reserva_cifrado, modalidad", { count: "exact" })
@@ -292,6 +303,16 @@ export async function getCalendarioSemana(input: FetcherInput): Promise<Result<C
       return q;
     }),
     readCompleteCollection<BloqueoRow>(async (from, to) => {
+      if (isReception) {
+        return supabase.rpc("agenda_recepcion_bloqueos", {
+          p_org: organizationId,
+          p_fecha: weekStartIso,
+          p_desde: startUtc,
+          p_hasta: endUtc,
+          p_profesional: profesionalId ?? null,
+        }, { count: "exact" })
+          .order("inicio", { ascending: true }).order("id", { ascending: true }).range(from, to);
+      }
       let q = supabase
         .from("bloqueo")
         .select("id, inicio, duracion_min, titulo, origen", { count: "exact" })
@@ -303,6 +324,14 @@ export async function getCalendarioSemana(input: FetcherInput): Promise<Result<C
       return q;
     }),
     readCompleteCollection<PedidoRow>((from, to) => {
+      if (isReception) {
+        return supabase.rpc("agenda_recepcion_pedidos", {
+          p_org: organizationId,
+          p_fecha: weekStartIso,
+          p_profesional: profesionalId ?? null,
+        }, { count: "exact" })
+          .order("recibido_ts", { ascending: false }).order("id", { ascending: false }).range(from, to);
+      }
       let q = supabase
         .from("pedido")
         .select("id, canal, estado, nombre_cifrado, telefono_cifrado, email_cifrado, paciente_id, profesional_id, fecha_propuesta, duracion_min, servicio_id, precio_cents, recibido_ts, confirmado_ts", { count: "exact" })
@@ -322,6 +351,14 @@ export async function getCalendarioSemana(input: FetcherInput): Promise<Result<C
     // (unión) y la capacidad suma a todos los colegiados. Org-scoped: la RLS
     // disp_select_org (M02) limita a miembros de la org.
     readCompleteCollection<{id:string; dia_semana:number; hora_inicio:string; hora_fin:string; vigencia_desde:string; vigencia_hasta:string|null}>(async (from, to) => {
+      if (isReception) {
+        return supabase.rpc("agenda_recepcion_disponibilidad", {
+          p_org: organizationId,
+          p_fecha: weekStartIso,
+          p_profesional: profesionalId ?? null,
+        }, { count: "exact" })
+          .order("vigencia_desde", { ascending: true }).order("id", { ascending: true }).range(from, to);
+      }
       let q = supabase
         .from("disponibilidad_profesional")
         .select("id, dia_semana, hora_inicio, hora_fin, vigencia_desde, vigencia_hasta", { count: "exact" })
@@ -396,7 +433,7 @@ export async function getCalendarioSemana(input: FetcherInput): Promise<Result<C
     fecha: ymdInTz(row.inicio, tz),
     hora: hhmmInTz(row.inicio, tz),
     dur: row.duracion_min,
-    titulo: row.titulo ?? "Sin título",
+    titulo: row.titulo ?? (isReception ? "Ocupado" : "Sin título"),
     origen: row.origen === "google" ? "google" : "manual",
   }));
 
@@ -427,14 +464,13 @@ export async function getCalendarioSemana(input: FetcherInput): Promise<Result<C
       hora: row.fecha_propuesta ? hhmmInTz(row.fecha_propuesta, tz) : null,
       dur: row.duracion_min,
       servicio: "—",
-      precio: Math.round((row.precio_cents ?? 0) / 100),
+      precio: row.precio_cents == null ? null : Math.round(row.precio_cents / 100),
       motivo,
       recibidoHace: relativeFromNow(row.recibido_ts),
       confirmadoEn: row.confirmado_ts ?? undefined,
     };
   });
 
-  const weekDates = enumerateWeekDates(weekStartIso);
   const weekRangeLabel = formatWeekRangeLabel(weekStartIso, weekDates[6]);
 
   // Empty availability is valid only after a complete successful read.
@@ -780,6 +816,7 @@ export async function getCalendarioMes(input: MesFetcherInput): Promise<Result<C
     : false;
 
   const hoyIso = ymdInTz(new Date().toISOString(), tz);
+  const isReception = capabilitiesFor(sessionRes.data.role, sessionRes.data.esColegiado).isReception;
   const grid = buildMonthGrid(monthIso, hoyIso);
   const firstIso = grid[0].dateIso;
   const lastIso = grid[grid.length - 1].dateIso;
@@ -791,6 +828,16 @@ export async function getCalendarioMes(input: MesFetcherInput): Promise<Result<C
   const endUtc = wallClockInTzToUtc(ly, lm, ld + 1, 0, 0, 0, tz).toISOString();
 
   const turnosRes = await readCompleteCollection<TurnoExtendidoRow>(async (from, to) => {
+  if (isReception) {
+    return supabase.rpc("agenda_recepcion_rango", {
+      p_org: organizationId,
+      p_desde: firstIso,
+      p_hasta: lastIso,
+      p_profesional: profesionalId ?? null,
+    }, { count: "exact" })
+      .in("estado", ["AGENDADO", "CONFIRMADO", "EN_SALA", "ATENDIENDO", "CERRADO"])
+      .order("inicio", { ascending: true }).order("id", { ascending: true }).range(from, to);
+  }
   let q = supabase
     .from("turno_extendido")
     .select("id, organization_id, inicio, duracion_min, estado, origen, paciente_id, paciente_nombre_cifrado, paciente_apellido_cifrado, paciente_telefono_cifrado, paciente_tipo, paciente_tags, paciente_alerta_alergia, servicio_nombre, profesional_id, nota_reserva_cifrado, modalidad", { count: "exact" })
