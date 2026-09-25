@@ -11,6 +11,7 @@ const stubs={
  '@/components/hoy/turno-list': `import React from 'react';import{TurnoList as Actual}from ${JSON.stringify(path.join(cwd,'components/hoy/turno-list.tsx'))};export const TurnoList=props=>{qa.state=props.turnos;return <Actual {...props}/>}`,
  'next/navigation':`export const useRouter=()=>({push(){qa.navigations++},refresh(){qa.refreshes++}})`,
  '@/app/(app)/hoy/actions':`const write=(name,input)=>{qa.calls.push({name,input});return new Promise((resolve,reject)=>qa.jobs.push({resolve,reject}))};export const transitionTurnoAction=input=>write('CLOSE',input);export const resolveTurnoCloseAction=input=>write('RESOLVE',input);export const marcarPagoCobradoAgendaAction=input=>write('SETTLE',input);export const getTurnoCloseReceiptAction=input=>write('PROBE',input);export const getTurnoCloseStatusAction=async()=>{qa.statusReads=(qa.statusReads??0)+1;if(qa.holdStatus)return new Promise(resolve=>(qa.readJobs??=[]).push(resolve));return qa.statusError?{ok:false,error:{message:'No se pudo leer',mutationOutcome:'uncertain'}}:{ok:true,data:qa.status}};`,
+ '@/app/(app)/hoy/caller-actions':`export const issueCallerCodeAction=()=>{throw Error('Unexpected caller code in close harness')};export const callWaitingCodeAction=()=>{throw Error('Unexpected caller call in close harness')};`,
  '@/lib/use-agenda-refresh':`export const useAgendaAutoRefresh=()=>({status:'active',retry(){}})`,
  '@/components/agenda/agenda-sync-notice':`export const AgendaSyncNotice=()=>null`,
  '@/components/hoy/turno-create-modal':`export const TurnoCreateModal=()=>null`,

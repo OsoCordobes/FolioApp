@@ -28,6 +28,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { Dashboard } from "@/components/hoy/dashboard";
 import { GcalNudgeBanner } from "@/components/hoy/gcal-nudge-banner";
 import { PrimerosPasosCard } from "@/components/hoy/primeros-pasos-card";
+import "@/styles/caller.css";
 
 export const dynamic = "force-dynamic";
 
@@ -133,6 +134,7 @@ export default async function HoyPage({ searchParams }: PageProps) {
         nowIso={new Date().toISOString()}
         timezone={timezone}
         organizationId={ctx.data.organization.id}
+        callerUserId={identity.data.userId}
         agendaRevision={agendaRevision}
         profesionales={selectorVisible ? profesionales : []}
         profActivo={selectorVisible ? profesionalIdEfectivo : null}

@@ -131,7 +131,7 @@ type ServicioCfg = ServicioRow;
 
 type SeccionId = "cuenta" | "perfil-publico" | "consultorio" | "equipo" | "horarios" | "servicios" | "integraciones" | "plan";
 
-function SideNav({ active, setActive, showEquipo, showPerfilPublico }: { active: SeccionId; setActive: (s: SeccionId) => void; showEquipo: boolean; showPerfilPublico: boolean }) {
+function SideNav({ active, setActive, showEquipo, showPerfilPublico, showPantallas }: { active: SeccionId; setActive: (s: SeccionId) => void; showEquipo: boolean; showPerfilPublico: boolean; showPantallas: boolean }) {
   const items: { id: SeccionId; label: string; icon: ReactNode }[] = [
     { id: "cuenta",        label: "Cuenta",         icon: <I.Users size={14} /> },
     ...(showPerfilPublico
@@ -160,6 +160,7 @@ function SideNav({ active, setActive, showEquipo, showPerfilPublico }: { active:
           <span>{it.label}</span>
         </button>
       ))}
+      {showPantallas ? <a className="cfg-sidenav-item" href="/configuracion/pantallas"><span className="cfg-sidenav-ico"><I.Settings size={14} /></span><span>Pantallas</span></a> : null}
     </nav>
   );
 }
@@ -2343,6 +2344,7 @@ export function Configuracion({
           setActive={setSeccion}
           showEquipo={canManageTeam || equipoSelf != null}
           showPerfilPublico={esColegiado && initialPerfilPublico != null}
+          showPantallas={canEdit}
         />
         <fieldset className="cfg-pane" disabled={isSaving || availability.contextChanged || saveUncertain} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
           {seccion === "cuenta"        ? <SecCuenta c={consultorio} set={setC} showVinculaciones={showVinculaciones} showAuditLog={canEdit} /> : null}

@@ -1,0 +1,114 @@
+name: Folio B10 isolated reception caller proof
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/folio-caller-proof.yml
+      - scripts/testing/caller-proof/**
+      - tests/e2e/caller-screen.spec.ts
+      - tests/unit/caller-screen-http.test.ts
+      - tests/unit/caller-rpc-result.test.ts
+      - tests/unit/caller-pending-call.test.ts
+      - tests/unit/route-decision.test.ts
+      - tests/unit/mfa-adversarial-boundaries.test.ts
+      - app/api/caller/**
+      - app/(public)/pantalla/**
+      - app/(app)/configuracion/pantallas/**
+      - app/(app)/hoy/caller-actions.ts
+      - app/(app)/hoy/page.tsx
+      - components/caller/**
+      - components/hoy/caller-control.tsx
+      - components/hoy/turno-row.tsx
+      - components/configuracion/configuracion.tsx
+      - lib/caller/**
+      - lib/auth/route-decision.ts
+      - lib/db/caller.ts
+      - lib/supabase/caller-screen.ts
+      - styles/caller.css
+      - middleware.ts
+      - scripts/recovery/ci-compose.yml
+      - scripts/recovery/ci-loopback-bridge.mjs
+      - scripts/testing/app-config.mjs
+      - scripts/testing/app-bootstrap.mjs
+      - scripts/testing/isolation-policy.mjs
+      - scripts/testing/browser-network.mjs
+      - scripts/testing/run-browser.mjs
+      - supabase/migrations/*_M141_caller_screen_list.sql
+
+permissions:
+  contents: read
+
+concurrency:
+  group: folio-caller-proof-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  caller-proof:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install locked tools
+        run: pnpm install --frozen-lockfile
+      - name: Install PostgreSQL 17 client
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq curl ca-certificates
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl --fail --silent --show-error -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          . /etc/os-release
+          printf 'Types: deb\nURIs: https://apt.postgresql.org/pub/repos/apt\nSuites: %s-pgdg\nComponents: main\nSigned-By: /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc\n' "$VERSION_CODENAME" | sudo tee /etc/apt/sources.list.d/pgdg.sources >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+          echo '/usr/lib/postgresql/17/bin' >> "$GITHUB_PATH"
+      - name: Fetch exact official Supabase Docker release
+        shell: bash
+        run: |
+          set -euo pipefail
+          upstream="$RUNNER_TEMP/supabase-upstream"
+          git clone --quiet --depth 1 --filter=blob:none --sparse --branch self-hosted/v0.8.1 https://github.com/supabase/supabase "$upstream"
+          git -C "$upstream" sparse-checkout set docker
+          test "$(git -C "$upstream" rev-parse HEAD)" = '8c7a4d9dbbaf8b552893822e89d7bf06f33f9220'
+          echo "C01_OFFICIAL_DOCKER=$upstream/docker" >> "$GITHUB_ENV"
+      - name: Install isolated Chromium
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Prove caller controls disabled in server HTML
+        run: node --import tsx --test tests/ssr/caller-screens-hydration.test.ts
+      - name: Exercise local caller HTTP and browser contract
+        run: node --conditions=react-server --import tsx scripts/testing/caller-proof/run.mjs
+      - name: Preserve synthetic screen views
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: caller-screen-views
+          path: |
+            test-results/caller-screen-375.png
+            test-results/caller-screen-1440.png
+            test-results/caller-settings-375.png
+            test-results/caller-settings-1440.png
+            test-results/caller-hoy-375.png
+            test-results/caller-hoy-1440.png
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Preserve masked synthetic caller diagnostic on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: caller-pair-diagnostic
+          path: test-results/caller-pair-failure.png
+          if-no-files-found: ignore
+          retention-days: 7

@@ -13,6 +13,7 @@ import test from "node:test";
 import {
   decideRouteGate,
   entryDestination,
+  isCallerScreenPath,
   isPortalPath,
   isPublicPath,
   portalDestination,
@@ -47,6 +48,18 @@ test("/cuenta-error es pública: el usuario tiene sesión pero su contexto no re
 test("una ruta de la app no es pública", () => {
   for (const p of ["/hoy", "/pacientes", "/pacientes/abc", "/configuracion", "/finanzas", "/agenda"]) {
     assert.equal(isPublicPath(p), false, `${p} NO debería ser pública`);
+  }
+});
+
+test("pantalla usa sólo tres rutas públicas exactas; vecinos conservan auth", () => {
+  for (const path of ["/pantalla", "/api/caller/screen", "/api/caller/screen/pair"]) {
+    assert.equal(isCallerScreenPath(path), true);
+    assert.deepEqual(decideRouteGate(path, false), { kind: "pass" });
+  }
+  for (const path of ["/pantalla-privada", "/api/caller/screen/extra", "/api/caller/issue", "/configuracion/pantallas"]) {
+    assert.equal(isCallerScreenPath(path), false);
+    assert.equal(isPublicPath(path), false);
+    assert.deepEqual(decideRouteGate(path, false), { kind: "redirect", to: "/login", keepRedirectParam: true });
   }
 });
 

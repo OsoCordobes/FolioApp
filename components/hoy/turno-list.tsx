@@ -32,6 +32,7 @@ interface TurnoListProps {
   timezone?: string;
   /** PR #118 · gate del mini-diálogo de cobro al cerrar (ver TurnoRow). */
   canRegistrarCobro?: boolean;
+  callerIdentity?: { userId: string; organizationId: string };
   pendingIds?: ReadonlySet<string>;
   onCloseTurno?: (id: string) => void;
   onReviewCobro?: (id: string) => void;
@@ -68,7 +69,7 @@ function rangoHorasGrupo(turnos: Turno[]): string | null {
   return primera === ultima ? `${pad(primera)} hs` : `${pad(primera)} – ${pad(ultima)} hs`;
 }
 
-export function TurnoList({ turnos, pacientes, nextId, now, timezone, canRegistrarCobro = true, pendingIds, onCloseTurno, onReviewCobro, onTransition, onOpenFicha, onReagendar, dense }: TurnoListProps) {
+export function TurnoList({ turnos, pacientes, nextId, now, timezone, canRegistrarCobro = true, callerIdentity, pendingIds, onCloseTurno, onReviewCobro, onTransition, onOpenFicha, onReagendar, dense }: TurnoListProps) {
   const [showCerrados, setShowCerrados] = useState(true);
   const [showCancelados, setShowCancelados] = useState(false);
 
@@ -125,6 +126,7 @@ export function TurnoList({ turnos, pacientes, nextId, now, timezone, canRegistr
                   now={now}
                   timezone={timezone}
                   canRegistrarCobro={canRegistrarCobro}
+                  callerIdentity={callerIdentity}
                   pending={pendingIds?.has(t.id) ?? false}
                   onCloseTurno={onCloseTurno}
                   onTransition={onTransition}
