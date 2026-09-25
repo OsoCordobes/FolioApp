@@ -139,6 +139,10 @@ export async function startPackageOperation(client: Client, session: ActiveSessi
   if (!UUID.test(patientId) || !UUID.test(operationId)) {
     return err("validation", "La operación de entrega es inválida.");
   }
+  // A lost begin response may already have committed. Read the same operation
+  // before planning a new job, even if the current inventory has since changed.
+  const existing = await readPackageOperation(client, session, patientId, operationId);
+  if (existing.ok || existing.error.code !== "not_found") return existing;
   const begun = await beginVerifiedExportPackage(client, session, patientId, operationId);
   if (!begun.ok) return begun;
   return readPackageOperation(client, session, patientId, operationId, begun.data);

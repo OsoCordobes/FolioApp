@@ -6,6 +6,8 @@ import { CLINICAL_LEGACY_MAX_BYTES, clinicalObjectPath, inspectClinicalFile } fr
 import { createSupabaseServiceClient, type createSupabaseServerClient } from "@/lib/supabase/server";
 import { buildPatientExport } from "./export-builder";
 import { revalidateClinicalDelivery } from "./export-authorization";
+import { minimumPackageProgressCalls, PACKAGE_CAPACITY_MESSAGE,
+  PACKAGE_MAX_PROGRESS_CALLS } from "./export-package-capacity";
 import { PACKAGE_CHUNK_BYTES, frozenPackageJson, packageChunks, sha256 } from "./export-jobs-chunks";
 import { fingerprintExportPackage } from "./export-jobs-fingerprint";
 import { beginExportPackageJob, readExportPackageJob } from "./export-jobs";
@@ -55,6 +57,9 @@ export async function beginVerifiedExportPackage(
 ): Promise<Result<string>> {
   const plan = await currentPlan(client, session, pacienteId);
   if (!plan.ok) return plan;
+  const minimum = minimumPackageProgressCalls(plan.data.sources, PACKAGE_CHUNK_BYTES);
+  if (minimum === null) return err("db_error", "No se pudo verificar el tamaño del inventario.");
+  if (minimum > PACKAGE_MAX_PROGRESS_CALLS) return err("validation", PACKAGE_CAPACITY_MESSAGE);
   return beginExportPackageJob(client, session, { pacienteId, idempotencyKey,
     verifiedInventoryFingerprint: plan.data.fingerprint,
     expectedEntries: plan.data.sources.length + 1 });

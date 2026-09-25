@@ -21,13 +21,15 @@ export default async function ClinicalArchivePage() {
     </div></header>
     <p>Este acceso sigue disponible cuando la suscripción está suspendida. Las historias conservan sus permisos de confidencialidad.</p>
     <p>La entrega de historias completas corresponde al titular del consultorio o a la dirección clínica habilitada. Para otros permisos de atención, coordiná la entrega con ese responsable.</p>
-    {result.ok ? <ClinicalArchive initialPage={result.data} /> : <section>
+    {result.ok ? <ClinicalArchive
+      key={`${result.data.scope.userId}:${result.data.scope.organizationId}`}
+      initialPage={result.data} /> : <section>
       <p role="alert">{result.error.message}</p>
       <a className="fi-btn" href="/archivo-clinico">Volver a intentar</a>
     </section>}
     <section style={{ marginTop: "var(--space-6)" }} aria-labelledby="archive-delivery-help">
       <h2 id="archive-delivery-help">Si necesitás otra entrega</h2>
-      <p>Para archivos adjuntos, historias que exceden la descarga disponible o acceso después de una baja, coordiná una entrega autorizada con soporte.</p>
+      <p>Si una entrega excede la descarga disponible o necesitás acceso después de una baja, coordiná una vía autorizada con soporte.</p>
       <p><a href={supportMailto("Coordinar una entrega de historias clínicas")}>Contactar a soporte</a>. En el primer mensaje no adjuntes historias ni datos de pacientes.</p>
     </section>
   </main>;

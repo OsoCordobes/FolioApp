@@ -25,7 +25,9 @@ test("commercially suspended owner can read a scoped page without disclosing unr
   const f = fixture();
   const result = await readClinicalArchive({ query: " sintético ", cursor: "signed-next" }, f.dependencies);
   assert.deepEqual(f.calls, [[{ query: "sintético", cursor: "signed-next", status: "todos", coverage: "todas" }, undefined, { organizationId: "org", memberId: "member" }]]);
-  assert.deepEqual(result, ok({ patients: [{ id: "patient", name: "Paciente sintético" }], total: 70, nextCursor: "signed-next" }));
+  assert.deepEqual(result, ok({ patients: [{ id: "patient", name: "Paciente sintético" }],
+    total: 70, nextCursor: "signed-next",
+    scope: { userId: "owner", organizationId: "org" } }));
   assert.doesNotMatch(JSON.stringify(result), /PRIVATE_/);
 });
 for (const role of ["ASISTENTE", "COORDINADOR", "PROFESIONAL", "DIRECTOR"] as const) {
