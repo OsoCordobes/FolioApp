@@ -79,9 +79,13 @@ export async function readPackageOperation(client: Client, session: ActiveSessio
       p_actor: session.userId, p_org: session.organizationId,
       p_patient: patientId, p_operation: operationId,
     });
-    const row = Array.isArray(data) && data.length === 1 ? data[0] as PackageOperation : null;
-    if (error || !row || !validOperation(row, session, patientId, expectedJobId)) {
-      return err("not_found", "No se encontró esa operación para tu acceso actual.");
+    if (error || !Array.isArray(data)) {
+      return err("db_error", "No se pudo confirmar la operación. Consultá antes de reintentar.");
+    }
+    if (data.length === 0) return err("not_found", "No se encontró esa operación para tu acceso actual.");
+    const row = data.length === 1 ? data[0] as PackageOperation : null;
+    if (!row || !validOperation(row, session, patientId, expectedJobId)) {
+      return err("db_error", "La respuesta de la operación no fue verificable. Consultá antes de reintentar.");
     }
     return ok(row);
   } catch {
@@ -198,6 +202,8 @@ function validPageRow(row: PageRow, operation: PackageOperation, sources: Map<st
       Boolean(source) && row.source_hash_kind === (source!.recordedSha256 ? "recorded" : "not_recorded") &&
       row.source_sha256 === source!.recordedSha256 &&
       (row.kind !== "document" || row.total_bytes === source!.sizeBytes)) &&
+    (row.source_hash_kind !== "recorded" || withdrawn ||
+      row.source_sha256 === row.computed_sha256) &&
     (withdrawn ? row.expected_fragments === 0 && row.total_bytes === 0 &&
       row.computed_sha256 === null : row.expected_fragments >= 1 &&
       row.total_bytes >= 1 && row.expected_fragments === Math.ceil(row.total_bytes / PACKAGE_CHUNK_BYTES) &&
@@ -249,7 +255,9 @@ export async function readPackageManifestPage(client: Client, session: ActiveSes
 }
 
 export async function readPackageFragment(client: Client, session: ActiveSession,
-  bound: Bound, entryId: string, ordinal: number): Promise<Result<{
+  bound: Bound, entryId: string, ordinal: number,
+  beforeFinalValidation: () => Promise<void> = async () => {},
+): Promise<Result<{
     bytes: Uint8Array; sha256: string; fileSha256: string; totalFragments: number;
   }>> {
   if (!UUID.test(entryId) || !Number.isSafeInteger(ordinal) || ordinal < 0 || ordinal >= 10000) {
@@ -275,6 +283,7 @@ export async function readPackageFragment(client: Client, session: ActiveSession
           row.source_hash_kind !== "not_applicable" || row.source_sha256 !== null :
           !source || row.source_hash_kind !== (source.recordedSha256 ? "recorded" : "not_recorded") ||
           row.source_sha256 !== source.recordedSha256) ||
+        (row.source_hash_kind === "recorded" && row.source_sha256 !== row.computed_sha256) ||
         !Number.isSafeInteger(row.expected_fragments) || ordinal >= row.expected_fragments ||
         !Number.isSafeInteger(row.fragment_bytes) || row.fragment_bytes < 1 ||
         row.fragment_bytes > PACKAGE_CHUNK_BYTES || !SHA.test(row.fragment_sha256) ||
@@ -295,6 +304,7 @@ export async function readPackageFragment(client: Client, session: ActiveSession
     }
     const fileSha256 = row.computed_sha256;
     if (fileSha256 === null) return err("db_error", "El archivo no tiene verificación completa.");
+    await beforeFinalValidation();
     const after = await samePlan(client, session, job.data);
     if (!after.ok) return after;
     const fresh = await readBound(client, session, bound);

@@ -14,7 +14,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ job
         typeof body.operationId !== "string" || typeof body.leaseToken !== "string" ||
         !UUID.test(body.patientId) || !UUID.test(body.operationId) ||
         !UUID.test(body.leaseToken) || !Number.isSafeInteger(body.revision)) return invalidPackageRequest();
-    const context = await packageContext();
+    const context = await packageContext("finish");
     if (!context.ok) return packageFailure(context.error);
     const finished = await finishPackageOperation(context.data.client, context.data.session,
       { patientId: body.patientId, operationId: body.operationId, jobId },

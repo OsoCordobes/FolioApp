@@ -16,7 +16,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ job
         !UUID.test(body.patientId) || !UUID.test(body.operationId) ||
         !UUID.test(body.leaseToken) || !Number.isSafeInteger(body.revision) ||
         !Number.isSafeInteger(body.sourceOrdinal)) return invalidPackageRequest();
-    const context = await packageContext();
+    const context = await packageContext("progress");
     if (!context.ok) return packageFailure(context.error);
     const progress = await progressPackageOperation(context.data.client, context.data.session,
       { patientId: body.patientId, operationId: body.operationId, jobId },

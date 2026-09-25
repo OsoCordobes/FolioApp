@@ -114,6 +114,13 @@ se consulta el estado, se espera a que venza el lease y se reclama de forma
 explícita con la revisión actual. No se roba un lease vigente ni se guarda el
 token en URL, cookie o log.
 
+Las mutaciones exigen `Origin` del mismo origen, `Content-Type` exactamente
+`application/json` y cuerpo de hasta 2 KiB. Las rutas aplican límites por
+actor y organización antes de crear trabajos o leer Storage; una petición
+limitada responde 429 con `Retry-After`. La prueba HTTP hospedada medirá
+consultas y latencia de la revalidación del inventario por fragmento antes de
+habilitar la entrega completa.
+
 El manifiesto READY se pagina de a lo sumo 50 entradas y declara el total
 exacto, tamaño y SHA-256 calculado de cada archivo. Distingue el hash de
 origen registrado del calculado durante preparación, y lista retirados sin

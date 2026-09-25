@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     const body = await packageBody(request, ["patientId", "operationId"]);
     if (!body || typeof body.patientId !== "string" || !UUID.test(body.patientId) ||
         typeof body.operationId !== "string" || !UUID.test(body.operationId)) return invalidPackageRequest();
-    const context = await packageContext();
+    const context = await packageContext("begin");
     if (!context.ok) return packageFailure(context.error);
     const { client, session } = context.data;
     const operation = await startPackageOperation(client, session, body.patientId, body.operationId);

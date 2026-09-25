@@ -3,10 +3,15 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { getActiveSession } from "@/lib/db/session";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { limitByKey } from "@/lib/security/rate-limit";
 import type { FolioError, Result } from "@/lib/db/errors";
 
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const RESPONSE_HEADERS = { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" };
+const RATE_LIMITS = { begin: 12, status: 600, claim: 120, progress: 1200,
+  finish: 120, manifest: 600, fragment: 1200 } as const;
+type PackageRateScope = keyof typeof RATE_LIMITS;
+type PackageRateError = { code: "rate_limited"; message: string; retryAfter: number };
 export function exactPackageQuery(query: URLSearchParams, keys: string[]) {
   const actual = [...query.keys()];
   return actual.length === keys.length && actual.every(key => keys.includes(key)) &&
@@ -16,7 +21,12 @@ export function exactPackageQuery(query: URLSearchParams, keys: string[]) {
 export function packageJson(data: unknown, status = 200) {
   return NextResponse.json(data, { status, headers: RESPONSE_HEADERS });
 }
-export function packageFailure(error: FolioError) {
+export function packageFailure(error: FolioError | PackageRateError) {
+  if (error.code === "rate_limited") return NextResponse.json({ ok: false,
+    error: { code: "rate_limited", message: error.message } }, {
+    status: 429, headers: { ...RESPONSE_HEADERS,
+      "Retry-After": String(Math.max(1, Math.min(3600, error.retryAfter))) },
+  });
   const status = error.code === "auth_required" ? 401 :
     ["no_org", "mfa_required", "forbidden"].includes(error.code) ? 403 :
       error.code === "not_found" ? 404 : error.code === "validation" ? 400 :
@@ -26,9 +36,16 @@ export function packageFailure(error: FolioError) {
 export function packageResult<T>(result: Result<T>, success: (data: T) => NextResponse) {
   return result.ok ? success(result.data) : packageFailure(result.error);
 }
-export async function packageContext() {
+export async function packageContext(scope: PackageRateScope) {
   const session = await getActiveSession();
   if (!session.ok) return session;
+  const limit = await limitByKey(`patient.export-package.${scope}`,
+    `${session.data.organizationId}:${session.data.userId}`, RATE_LIMITS[scope]);
+  if (!limit.ok) return { ok: false as const, error: {
+    code: "rate_limited" as const,
+    message: "Demasiadas solicitudes de entrega. Esperá y reintentá.",
+    retryAfter: limit.resetIn,
+  } };
   try {
     const client = await createSupabaseServerClient();
     return { ok: true as const, data: { client, session: session.data } };
@@ -38,7 +55,9 @@ export async function packageContext() {
   }
 }
 export async function packageBody(request: Request, keys: string[]): Promise<Record<string, unknown> | null> {
-  if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json") || !request.body) return null;
+  if (request.headers.get("origin") !== new URL(request.url).origin ||
+      request.headers.get("content-type") !== "application/json" ||
+      !request.body) return null;
   const reader = request.body.getReader();
   let size = 0;
   const parts: Uint8Array[] = [];

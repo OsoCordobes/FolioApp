@@ -13,7 +13,7 @@ export async function GET(request: Request,
     const patientId = query.get("patientId") ?? "";
     if (!exactPackageQuery(query, ["patientId"]) ||
         !UUID.test(operationId) || !UUID.test(patientId)) return invalidPackageRequest();
-    const context = await packageContext();
+    const context = await packageContext("status");
     if (!context.ok) return packageFailure(context.error);
     const status = await readPackageOperation(context.data.client, context.data.session,
       patientId, operationId);

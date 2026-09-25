@@ -17,7 +17,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ jobI
     if (!exactPackageQuery(query, ["patientId", "operationId", "offset", "limit"]) ||
         !UUID.test(jobId) || !UUID.test(patientId) || !UUID.test(operationId) ||
         !/^(0|[1-9]\d{0,3})$/.test(offset) || !/^([1-9]|[1-4]\d|50)$/.test(limit)) return invalidPackageRequest();
-    const context = await packageContext();
+    const context = await packageContext("manifest");
     if (!context.ok) return packageFailure(context.error);
     const page = await readPackageManifestPage(context.data.client, context.data.session,
       { patientId, operationId, jobId }, Number(offset), Number(limit));

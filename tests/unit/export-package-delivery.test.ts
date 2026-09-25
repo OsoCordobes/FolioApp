@@ -11,7 +11,7 @@ const jobId = id(200), operationId = id(201), entryId = id(301), documentId = id
 const bytes = Buffer.alloc(3 * 1024 * 1024, 7);
 const digest = (value: Uint8Array) => createHash("sha256").update(value).digest("hex");
 const computed = digest(bytes);
-const sha = "b".repeat(64);
+const sha = computed;
 const session = { userId: actor, memberId: member, organizationId: org,
   role: "OWNER", esColegiado: true };
 const bound = { patientId: patient, operationId, jobId };
@@ -23,6 +23,7 @@ function fixture() {
   let state = "ready", leaseUntil: string | null = null;
   let downloadedBytes: Uint8Array = bytes;
   let onDownload = () => {};
+  let operationError = false, operationAbsent = false, operationMalformed = false;
   const calls: string[] = [];
   let downloads = 0;
   const source = () => ({ kind: withdrawn ? "withdrawn_document" : "document",
@@ -45,7 +46,9 @@ function fixture() {
     fragment_bytes: bytes.byteLength, fragment_sha256: computed, expires_at: expiresAt });
   const service = { rpc: async (name: string) => {
     calls.push(name);
-    if (name === "export_package_operation_read") return { data: [operation()], error: null };
+    if (name === "export_package_operation_read") return { data: operationAbsent ? [] :
+      operationMalformed ? { job_id: jobId } : [operation()],
+      error: operationError ? { message: "SECRET bucket and SQL body" } : null };
     if (name === "export_package_delivery_page") return { data: rows ?? [page()], error: null };
     if (name === "export_package_delivery_fragment") return { data: [fragment()], error: null };
     throw Error(`unexpected rpc ${name}`);
@@ -92,9 +95,34 @@ function fixture() {
     sourceSize: (size: number) => { sourceBytes = size; },
     downloadBytes: (value: Uint8Array) => { downloadedBytes = value; },
     activeLease: () => { state = "leased"; leaseUntil = future(); },
+    operationError: () => { operationError = true; },
+    operationAbsent: () => { operationAbsent = true; },
+    operationMalformed: () => { operationMalformed = true; },
     onDownload: (callback: () => void) => { onDownload = callback; },
     pageRows: (value: unknown[]) => { rows = value; } };
 }
+
+test("operation lookup distinguishes service failure from confirmed absence", async () => {
+  const f = fixture();
+  f.operationError();
+  const uncertain = await f.exports.readPackageOperation(f.client, session, patient, operationId) as
+    { ok: boolean; error: { code: string } };
+  assert.equal(uncertain.ok, false);
+  assert.equal(uncertain.error.code, "db_error");
+  assert.doesNotMatch(JSON.stringify(uncertain), /SECRET|bucket|SQL/);
+  const absent = fixture();
+  absent.operationAbsent();
+  const missing = await absent.exports.readPackageOperation(absent.client, session, patient, operationId) as
+    { ok: boolean; error: { code: string } };
+  assert.equal(missing.ok, false);
+  assert.equal(missing.error.code, "not_found");
+  const malformed = fixture();
+  malformed.operationMalformed();
+  const uncertainShape = await malformed.exports.readPackageOperation(malformed.client,
+    session, patient, operationId) as { ok: boolean; error: { code: string } };
+  assert.equal(uncertainShape.ok, false);
+  assert.equal(uncertainShape.error.code, "db_error");
+});
 
 test("an operation lookup binds actor, member, organization, patient and operation", async () => {
   const f = fixture();
@@ -124,7 +152,7 @@ test("manifest is exact, bounded, and withheld after a source is withdrawn", asy
   assert.equal(retired.ok, false);
 });
 
-test("a real 50 MiB legacy document has 17 bounded fragments, never 18 or an oversize manifest", async () => {
+test("50 MiB legacy metadata requires 17 bounded fragments, never 18 or oversize", async () => {
   const f = fixture();
   f.sourceSize(50 * 1024 * 1024);
   f.pageRows([{ ...f.page(50 * 1024 * 1024, 17) }]);
@@ -148,6 +176,14 @@ test("fragment hash is checked and post-read withdrawal, MFA loss or TTL denies 
     assert.equal(result.data, undefined);
     assert.equal(f.downloads, 1);
   }
+});
+
+test("revocation during the audit callback prevents fragment bytes", async () => {
+  const f = fixture();
+  const result = await f.exports.readPackageFragment(f.client, session, bound, entryId, 0,
+    async () => { f.revoke(); }) as { ok: boolean; data?: unknown };
+  assert.equal(result.ok, false);
+  assert.equal(result.data, undefined);
 });
 
 test("one 3 MiB verified fragment is returned; changed bytes fail before delivery", async () => {

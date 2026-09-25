@@ -12,7 +12,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ job
     if (!UUID.test(jobId) || !body || typeof body.patientId !== "string" ||
         typeof body.operationId !== "string" || !UUID.test(body.patientId) ||
         !UUID.test(body.operationId) || !Number.isSafeInteger(body.revision)) return invalidPackageRequest();
-    const context = await packageContext();
+    const context = await packageContext("claim");
     if (!context.ok) return packageFailure(context.error);
     const claim = await claimPackageOperation(context.data.client, context.data.session,
       { patientId: body.patientId, operationId: body.operationId, jobId }, body.revision as number);

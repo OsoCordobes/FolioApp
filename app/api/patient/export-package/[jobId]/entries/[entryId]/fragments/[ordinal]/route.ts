@@ -19,19 +19,20 @@ export async function GET(request: Request, { params }: {
     if (!exactPackageQuery(query, ["patientId", "operationId"]) ||
         !UUID.test(jobId) || !UUID.test(entryId) || !UUID.test(patientId) ||
         !UUID.test(operationId) || !/^(0|[1-9]\d{0,3})$/.test(ordinal)) return invalidPackageRequest();
-    const context = await packageContext();
+    const context = await packageContext("fragment");
     if (!context.ok) return packageFailure(context.error);
     const fragment = await readPackageFragment(context.data.client, context.data.session,
-      { patientId, operationId, jobId }, entryId, Number(ordinal));
+      { patientId, operationId, jobId }, entryId, Number(ordinal), async () => {
+        await writeAuditEntry({ organizationId: context.data.session.organizationId,
+          actorId: context.data.session.userId, actorRole: context.data.session.role,
+          action: "paciente.export-package.fragment", resourceType: "paciente",
+          resourceId: patientId,
+          ip: request.headers.get("x-forwarded-for") ?? request.headers.get("x-real-ip"),
+          userAgent: request.headers.get("user-agent"),
+          payload: { formato: "package", canal: "profesional", job_id: jobId,
+            entry_id: entryId, ordinal: Number(ordinal) } });
+    });
     if (!fragment.ok) return packageFailure(fragment.error);
-    await writeAuditEntry({ organizationId: context.data.session.organizationId,
-      actorId: context.data.session.userId, actorRole: context.data.session.role,
-      action: "paciente.export-package.fragment", resourceType: "paciente",
-      resourceId: patientId,
-      ip: request.headers.get("x-forwarded-for") ?? request.headers.get("x-real-ip"),
-      userAgent: request.headers.get("user-agent"),
-      payload: { formato: "package", canal: "profesional", job_id: jobId,
-        entry_id: entryId, ordinal: Number(ordinal) } });
     return new NextResponse(Buffer.from(fragment.data.bytes), { status: 200,
       headers: { ...packageHeaders, "Content-Type": "application/octet-stream",
         "Content-Length": String(fragment.data.bytes.byteLength),
