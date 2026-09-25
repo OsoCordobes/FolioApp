@@ -17,7 +17,7 @@
  */
 
 import { z } from "zod";
-import type { PublicLandingViewData } from "@/components/book-landing/book-landing-view";
+import type { PublicLandingLayout, PublicLandingViewData } from "@/components/book-landing/book-landing-view";
 import { listProfesionalesPublico } from "@/lib/db/members";
 import { decodeAvailabilitySnapshot } from "@/lib/agenda/availability-snapshot";
 import { createHash } from "node:crypto";
@@ -92,6 +92,7 @@ export interface DiaHorarios {
 
 export interface ConfiguracionData {
   consultorio: ConsultorioData;
+  miniwebLayout: PublicLandingLayout;
   publicPreview: PublicLandingViewData | null;
   servicios: ServicioRow[];
   googleCalendar: IntegrationStatus;
@@ -155,7 +156,7 @@ export async function getConfiguracionData(expected?: { organizationId: string; 
   const { data: orgExtra, error: orgExtraError } = await supabase
     .from("organization")
     .select(
-      "nombre, ciudad, provincia, acento_hex, timezone, especialidad, telefono_publico, direccion_completa, instagram_handle, auto_confirmar_reservas, slot_margen_min, logo_url, card_mood, bio, updated_at",
+      "nombre, ciudad, provincia, acento_hex, timezone, especialidad, telefono_publico, direccion_completa, instagram_handle, auto_confirmar_reservas, slot_margen_min, logo_url, card_mood, bio, miniweb_layout, maps_embed_url, maps_confirmed_address, updated_at",
     )
     .eq("id", ctx.data.organization.id)
     .maybeSingle();
@@ -226,6 +227,8 @@ export async function getConfiguracionData(expected?: { organizationId: string; 
       bio: (orgExtra?.bio as string | null) ?? null,
       telefonoPublico: consultorio.tel,
       direccionCompleta: consultorio.direccion,
+      mapsEmbedUrl: orgExtra.maps_embed_url,
+      mapsConfirmedAddress: orgExtra.maps_confirmed_address,
       instagramHandle: consultorio.instagram,
       autoConfirmar: (orgExtra?.auto_confirmar_reservas as boolean | null) ?? true,
     },
@@ -242,6 +245,8 @@ export async function getConfiguracionData(expected?: { organizationId: string; 
 
   return ok({
     consultorio,
+    miniwebLayout: orgExtra.miniweb_layout === "perfil" || orgExtra.miniweb_layout === "consultorio"
+      ? orgExtra.miniweb_layout : ctx.data.organization.tipo === "CLINICA" ? "consultorio" : "perfil",
     publicPreview,
     servicios,
     googleCalendar: {

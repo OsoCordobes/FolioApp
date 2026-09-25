@@ -23,7 +23,9 @@ import { PhotoUpload } from "@/components/configuracion/photo-upload";
 import { UpgradeClinicaModal } from "@/components/configuracion/upgrade-clinica-modal";
 import { LogoUpload } from "@/components/public-card/logo-upload";
 import { BookLandingPreview } from "@/components/book-landing/book-landing-preview";
-import type { PublicLandingViewData } from "@/components/book-landing/book-landing-view";
+import type { PublicLandingLayout, PublicLandingViewData } from "@/components/book-landing/book-landing-view";
+import { saveMiniwebLayoutAction, saveMiniwebMapAction } from "@/app/(app)/configuracion/miniweb-actions";
+import { extractGoogleMapsEmbedUrl } from "@/lib/book-landing/map-embed";
 import { uploadSettingsOrgLogo, removeSettingsOrgLogo } from "@/app/(public)/onboarding/actions";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { contar } from "@/lib/format/plural";
@@ -46,6 +48,7 @@ import {
 import { setListarEnDirectorioAction } from "@/app/(app)/configuracion/directorio-actions";
 import {
   saveBioPublica,
+  setOwnMiniwebConsent,
   setMostrarMatricula,
 } from "@/app/(app)/configuracion/perfil-publico-actions";
 import { roleLabel } from "@/lib/auth/capabilities";
@@ -215,7 +218,7 @@ function TextInput({ value, onChange, placeholder, prefix, type = "text", readOn
   );
 }
 
-function Toggle({ value, onChange, label }: { value: boolean; onChange: (v: boolean) => void; label?: string }) {
+function Toggle({ value, onChange, label, disabled = false }: { value: boolean; onChange: (v: boolean) => void; label?: string; disabled?: boolean }) {
   const fieldLabel = useContext(FieldLabelContext);
   return (
     <button
@@ -224,6 +227,7 @@ function Toggle({ value, onChange, label }: { value: boolean; onChange: (v: bool
       role="switch"
       aria-label={label ?? fieldLabel}
       aria-checked={value}
+      disabled={disabled}
       onClick={() => onChange(!value)}
     >
       <span className="cfg-switch-thumb" />
@@ -244,13 +248,18 @@ interface PerfilPublicoData {
  * visibilidad de la matrícula. Persisten ON-CHANGE vía server actions propias
  * (como el toggle de auto-confirmar / margen), no por la save-bar.
  */
-function SecPerfilPublico({ initial, matricula }: { initial: PerfilPublicoData; matricula: string }) {
+function SecPerfilPublico({ initial, matricula, isClinic, orgSlug, memberId, initialConsent }: {
+  initial: PerfilPublicoData; matricula: string; isClinic: boolean; orgSlug: string; memberId: string; initialConsent: boolean;
+}) {
+  const router = useRouter();
   const [fotoUrl, setFotoUrl] = useState<string | null>(initial.fotoUrl);
   const [bio, setBio] = useState(initial.bioPublica ?? "");
   const [bioSaved, setBioSaved] = useState(initial.bioPublica ?? "");
   const [mostrar, setMostrar] = useState(initial.mostrarMatricula);
+  const [personalPageEnabled, setPersonalPageEnabled] = useState(initialConsent);
+  const [personalPageUnknown, setPersonalPageUnknown] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [, startTransition] = useTransition();
+  const [profilePending, startTransition] = useTransition();
   const bioCounterId = useId();
 
   const onBioBlur = () => {
@@ -275,6 +284,27 @@ function SecPerfilPublico({ initial, matricula }: { initial: PerfilPublicoData; 
       if (!r.ok) {
         setMostrar(prev); // revertir
         setErr(r.error ?? "No pude guardar el cambio.");
+      }
+    });
+  };
+
+  const onTogglePersonalPage = (enabled: boolean) => {
+    if (profilePending || personalPageUnknown) return;
+    const previous = personalPageEnabled;
+    setPersonalPageEnabled(enabled);
+    setErr(null);
+    startTransition(async () => {
+      try {
+        const result = await setOwnMiniwebConsent(enabled);
+        if (!result.ok) {
+          if (result.uncertain) setPersonalPageUnknown(true);
+          else setPersonalPageEnabled(previous);
+          setErr(result.error ?? "No pudimos guardar el cambio.");
+        }
+        else router.refresh();
+      } catch {
+        setPersonalPageUnknown(true);
+        setErr("No pudimos confirmar si cambió la publicación. Recargá la página para verificarlo.");
       }
     });
   };
@@ -333,6 +363,10 @@ function SecPerfilPublico({ initial, matricula }: { initial: PerfilPublicoData; 
       >
         <Toggle value={mostrar} onChange={onToggleMatricula} />
       </Row>
+      {isClinic ? <Row label="Publicar mi página personal" sub="Sólo vos podés activar o revocar este enlace. Tu perfil en el equipo y las reservas del consultorio siguen disponibles por separado." vertical>
+        <Toggle value={personalPageEnabled} onChange={onTogglePersonalPage} disabled={profilePending || personalPageUnknown} />
+        {personalPageEnabled && !profilePending && !personalPageUnknown ? <a className="cfg-link" href={`/book/${encodeURIComponent(orgSlug)}/p/${encodeURIComponent(memberId)}`} target="_blank" rel="noopener noreferrer">Abrir mi enlace personal ↗</a> : null}
+      </Row> : null}
       {err ? (
         <p className="au-err" role="alert" style={{ marginTop: 8 }}>
           {err}
@@ -495,6 +529,8 @@ function SecConsultorio({
   logoUrl,
   onLogoChange,
   publicPreview,
+  initialMiniwebLayout,
+  savedAddress,
   openSection,
   hasPerfilPublico,
   canManageTeam,
@@ -523,11 +559,66 @@ function SecConsultorio({
   logoUrl: string | null;
   onLogoChange: (url: string | null) => void;
   publicPreview: PublicLandingViewData | null;
+  initialMiniwebLayout: PublicLandingLayout;
+  savedAddress: string;
   openSection: (section: SeccionId) => void;
   hasPerfilPublico: boolean;
   canManageTeam: boolean;
 }) {
   const router = useRouter();
+  const [miniwebLayout, setMiniwebLayout] = useState(initialMiniwebLayout);
+  const [previewDevice, setPreviewDevice] = useState<"mobile" | "desktop">("desktop");
+  const [mapSnippet, setMapSnippet] = useState("");
+  const [miniwebUnknown, setMiniwebUnknown] = useState(false);
+  const [mapAddressConfirmed, setMapAddressConfirmed] = useState(false);
+  const [mapUrl, setMapUrl] = useState(publicPreview?.org.mapsEmbedUrl ?? null);
+  const [mapConfirmedAddress, setMapConfirmedAddress] = useState(publicPreview?.org.mapsConfirmedAddress ?? null);
+  const [miniwebMessage, setMiniwebMessage] = useState<string | null>(null);
+  const [miniwebPending, startMiniwebTransition] = useTransition();
+  const candidateMapUrl = mapSnippet.trim() ? extractGoogleMapsEmbedUrl(mapSnippet) : null;
+  const mapIsCurrent = Boolean(mapUrl && mapConfirmedAddress === savedAddress && c.direccion === savedAddress);
+  const changeLayout = (next: PublicLandingLayout) => {
+    if (!canEdit || miniwebUnknown || next === miniwebLayout) return;
+    const previous = miniwebLayout;
+    setMiniwebLayout(next);
+    setMiniwebMessage(null);
+    startMiniwebTransition(async () => {
+      try {
+        const result = await saveMiniwebLayoutAction(next);
+        if (!result.ok) {
+          if (result.uncertain) setMiniwebUnknown(true);
+          else setMiniwebLayout(previous);
+          setMiniwebMessage(result.error);
+        }
+        else router.refresh();
+      } catch {
+        setMiniwebUnknown(true);
+        setMiniwebMessage("No pudimos confirmar la disposición. Recargá la página para verificarla.");
+      }
+    });
+  };
+  const saveMap = (remove = false) => {
+    setMiniwebMessage(null);
+    startMiniwebTransition(async () => {
+      try {
+        const result = await saveMiniwebMapAction({ snippet: remove ? null : mapSnippet, expectedAddress: savedAddress });
+        if (!result.ok) {
+          if (result.uncertain) setMiniwebUnknown(true);
+          setMiniwebMessage(result.error);
+          return;
+        }
+        setMapUrl(result.value ?? null);
+        setMapConfirmedAddress(remove ? null : savedAddress);
+        setMapSnippet("");
+        setMapAddressConfirmed(false);
+        setMiniwebMessage(remove ? "Mapa quitado." : "Mapa confirmado para esta dirección.");
+        router.refresh();
+      } catch {
+        setMiniwebUnknown(true);
+        setMiniwebMessage("No pudimos confirmar si cambió el mapa. Recargá la página para verificarlo.");
+      }
+    });
+  };
   const bioCountId = useId();
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   // M50 · count de sesiones cargadas con la herramienta de OTRA especialidad.
@@ -557,6 +648,11 @@ function SecConsultorio({
         <div className="perfil-editor">
           <div className="perfil-editor-controls">
             <p>Completá los datos en las secciones indicadas y revisá la página entera abajo. Los cambios de texto se guardan con «Guardar cambios».</p>
+            <fieldset className="miniweb-layout-options" disabled={!canEdit || miniwebPending || miniwebUnknown}>
+              <legend>Disposición de la página</legend>
+              <label><input type="radio" name="miniweb-layout" checked={miniwebLayout === "perfil"} onChange={() => changeLayout("perfil")} /> Perfil</label>
+              <label><input type="radio" name="miniweb-layout" checked={miniwebLayout === "consultorio"} onChange={() => changeLayout("consultorio")} /> Consultorio</label>
+            </fieldset>
             <nav className="perfil-editor-links" aria-label="Editar contenido de la página">
               <a href="#cfg-identidad">Nombre y descripción</a>
               <a href="#cfg-especialidad">Especialidad</a>
@@ -579,7 +675,11 @@ function SecConsultorio({
           </div>
           <details className="perfil-editor-preview-disclosure">
             <summary>Ver página completa</summary>
-          {publicPreview ? <div className="perfil-editor-preview" aria-label="Vista previa de la página de reservas">
+          <div className="miniweb-preview-switch" role="group" aria-label="Tamaño de vista previa">
+            <button type="button" aria-pressed={previewDevice === "desktop"} onClick={() => setPreviewDevice("desktop")}>Escritorio</button>
+            <button type="button" aria-pressed={previewDevice === "mobile"} onClick={() => setPreviewDevice("mobile")}>Móvil</button>
+          </div>
+          {publicPreview ? <div className={`perfil-editor-preview miniweb-preview-${previewDevice}`} aria-label="Vista previa de la página de reservas">
             <BookLandingPreview data={{
               ...publicPreview,
               org: {
@@ -591,11 +691,13 @@ function SecConsultorio({
                 especialidad: c.especialidad,
                 telefonoPublico: c.tel,
                 direccionCompleta: c.direccion,
+                mapsEmbedUrl: mapIsCurrent ? mapUrl : null,
+                mapsConfirmedAddress: mapIsCurrent ? mapConfirmedAddress : null,
                 instagramHandle: c.instagram,
                 acentoHex: c.acento,
                 logoUrl,
               },
-            }} />
+            }} layout={miniwebLayout} />
           </div> : <p role="status" className="perfil-editor-unavailable">No pudimos cargar la vista previa. Tus cambios siguen en pantalla; podés abrir el enlace público para revisarlos después de guardar.</p>}
           </details>
           <a className="cfg-link perfil-editor-published" href={`/book/${encodeURIComponent(orgSlug)}`} target="_blank" rel="noopener noreferrer">Abrir enlace público ↗</a>
@@ -706,6 +808,21 @@ function SecConsultorio({
         </Row>
         <Row label="Dirección">
           <TextInput value={c.direccion} onChange={(v) => set({ direccion: v })} />
+        </Row>
+        <Row label="Mapa de Google" sub="Opcional. Primero guardá la dirección; después copiá en Google Maps «Compartir → Insertar un mapa → Copiar HTML». El mapa se quita si cambiás la dirección." vertical>
+          {mapIsCurrent ? <p className="muted">Mapa confirmado para {savedAddress}.</p> : mapUrl ? <p className="muted">La dirección cambió. Confirmá un mapa nuevo cuando guardes la dirección.</p> : null}
+          <textarea className="cfg-input" aria-label="Código para insertar mapa de Google" value={mapSnippet}
+            onChange={(event) => { setMapSnippet(event.target.value); setMapAddressConfirmed(false); }} rows={3} maxLength={4000}
+            disabled={!canEdit || miniwebPending || miniwebUnknown} placeholder="Pegá lo que copiaste de Google Maps" />
+          {mapSnippet.trim() && !candidateMapUrl ? <p role="alert" className="miniweb-map-error">Ese código no parece ser «Insertar un mapa» de Google Maps. Copialo otra vez desde Compartir.</p> : null}
+          {candidateMapUrl ? <div className="miniweb-map-preview"><p>Vista previa del mapa · comprobá que el marcador corresponda a {savedAddress || "la dirección guardada"}.</p><iframe src={candidateMapUrl} title="Vista previa del mapa pegado" loading="lazy" referrerPolicy="no-referrer-when-downgrade" /></div> : null}
+          <label className="miniweb-map-confirm"><input type="checkbox" checked={mapAddressConfirmed} onChange={(event) => setMapAddressConfirmed(event.target.checked)} disabled={!canEdit || miniwebPending || miniwebUnknown || !candidateMapUrl} /> Confirmo que este mapa muestra la dirección guardada.</label>
+          <div className="miniweb-map-actions">
+            <button type="button" className="fi-btn fi-btn-secondary" disabled={!canEdit || miniwebPending || miniwebUnknown || !candidateMapUrl || !mapAddressConfirmed || !savedAddress.trim() || c.direccion !== savedAddress} onClick={() => saveMap()}>Confirmar mapa</button>
+            {mapUrl ? <button type="button" className="fi-btn fi-ghost" disabled={!canEdit || miniwebPending || miniwebUnknown} onClick={() => saveMap(true)}>Quitar mapa</button> : null}
+          </div>
+          <p className="muted">Podés completar el mapa después. La dirección y las reservas funcionan igual.</p>
+          {miniwebMessage ? <p role="status" className="muted">{miniwebMessage}</p> : null}
         </Row>
         <Row label="Ciudad / Provincia">
           <div className="cfg-grid-2">
@@ -1945,6 +2062,7 @@ interface ConfiguracionProps {
   orgSlug: string;
   initialConsultorio: ConsultorioData;
   initialPublicPreview: PublicLandingViewData | null;
+  initialMiniwebLayout: PublicLandingLayout;
   initialServicios: ServicioCfg[];
   initialDias: Record<DiaSemanaId, DiaHorarios>;
   initialHorariosContext: HorariosContext;
@@ -1977,6 +2095,8 @@ interface ConfiguracionProps {
   esColegiado: boolean;
   /** M62 · perfil público propio (foto/bio/matrícula visible); null si no aplica. */
   initialPerfilPublico: PerfilPublicoData | null;
+  ownMemberId: string;
+  initialMiniwebConsent: boolean;
   /** M64 · opt-in al directorio público (toggle "Presencia online"). */
   initialListarEnDirectorio: boolean;
   /** Estado real de la suscripción MP de la org (getActiveContext) — card de Integraciones. */
@@ -2007,6 +2127,7 @@ export function Configuracion({
   orgSlug,
   initialConsultorio,
   initialPublicPreview,
+  initialMiniwebLayout,
   initialServicios,
   initialDias,
   initialHorariosContext,
@@ -2026,6 +2147,8 @@ export function Configuracion({
   equipoSelf,
   esColegiado,
   initialPerfilPublico,
+  ownMemberId,
+  initialMiniwebConsent,
   initialListarEnDirectorio,
   suscripcionEstado,
   whatsappConfigured,
@@ -2224,7 +2347,9 @@ export function Configuracion({
         <fieldset className="cfg-pane" disabled={isSaving || availability.contextChanged || saveUncertain} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
           {seccion === "cuenta"        ? <SecCuenta c={consultorio} set={setC} showVinculaciones={showVinculaciones} showAuditLog={canEdit} /> : null}
           {seccion === "perfil-publico" && initialPerfilPublico ? (
-            <SecPerfilPublico initial={initialPerfilPublico} matricula={consultorio.matricula} />
+            <SecPerfilPublico initial={initialPerfilPublico} matricula={consultorio.matricula}
+              isClinic={orgTipo === "CLINICA"} orgSlug={orgSlug} memberId={ownMemberId}
+              initialConsent={initialMiniwebConsent} />
           ) : null}
           {seccion === "consultorio"   ? (
             <SecConsultorio
@@ -2243,6 +2368,8 @@ export function Configuracion({
               logoUrl={currentLogoUrl}
               onLogoChange={setCurrentLogoUrl}
               publicPreview={initialPublicPreview}
+              initialMiniwebLayout={initialMiniwebLayout}
+              savedAddress={consultorioSnap.direccion}
               openSection={setSeccion}
               hasPerfilPublico={esColegiado && initialPerfilPublico != null}
               canManageTeam={canManageTeam}

@@ -21,6 +21,7 @@ import { err, mapSupabaseError, ok, type Result } from "@/lib/db/errors";
 import { buildBookingIdentity } from "@/lib/db/pedidos";
 import { createHash } from "node:crypto";
 import { resolveProfesionalPublico } from "@/lib/db/profesional-destino";
+import { personalPageEnabledForOrg } from "@/lib/db/miniweb-public";
 import {
   AvailabilityDbError,
   getSlotsDisponibles,
@@ -49,6 +50,7 @@ const slotsInput = z.object({
    * resuelve el único colegiado — firma aditiva, back-compat total.
    */
   profesionalId: z.string().uuid().optional(),
+  personalPageMemberId: z.string().uuid().optional(),
   diasAdelante: z.number().int().min(1).max(60).default(14),
 });
 
@@ -68,13 +70,19 @@ export async function fetchSlotsPublico(
   const service = createSupabaseServiceClient();
   const { data: org } = await service
     .from("organization")
-    .select("id, opt_out_public_listing, slot_margen_min")
+    .select("id, tipo, opt_out_public_listing, slot_margen_min")
     .eq("slug", parsed.data.orgSlug)
     .is("deleted_at", null)
     .maybeSingle();
 
   if (!org || org.opt_out_public_listing) {
     return err("not_found", "Consultorio no disponible.");
+  }
+  if (parsed.data.personalPageMemberId &&
+      (parsed.data.profesionalId !== parsed.data.personalPageMemberId ||
+        !await personalPageEnabledForOrg(service, { organizationId: org.id,
+          organizationTipo: org.tipo, memberId: parsed.data.personalPageMemberId }))) {
+    return err("not_found", "Página personal no disponible.");
   }
 
   // Servicio + profesional en paralelo: ambas queries dependen solo de org.id
@@ -138,6 +146,7 @@ const createPedidoInput = z.object({
   servicioId: z.string().uuid(),
   /** CLINICA-4 · mismo contrato que fetchSlotsPublico (ver slotsInput). */
   profesionalId: z.string().uuid().optional(),
+  personalPageMemberId: z.string().uuid().optional(),
   inicio: z.string().datetime({ offset: true }),
   nombre: z.string().min(2).max(80),
   telefono: z.string().min(6).max(30),
@@ -161,15 +170,21 @@ export async function createPedidoPublico(input:z.infer<typeof createPedidoInput
   const ip=await clientIp(),rl=await limitByIp("book.create",ip,5);
   if(!rl.ok)return err("validation",`Demasiados intentos, probá en ${rl.resetIn}s.`);
   const service=createSupabaseServiceClient();
-  const hash=createHash("sha256").update(JSON.stringify({org:d.orgSlug,service:d.servicioId,professional:d.profesionalId??null,inicio:new Date(d.inicio).toISOString(),nombre:d.nombre,telefono:d.telefono,email:d.email??null,motivo:d.motivo??null,consent:d.consentVersion})).digest("hex");
+  // Preserve the exact legacy receipt identity when no personal-page marker is sent.
+  const hash=createHash("sha256").update(JSON.stringify({org:d.orgSlug,service:d.servicioId,professional:d.profesionalId??null,
+    ...(d.personalPageMemberId?{personalPage:d.personalPageMemberId}:{}),inicio:new Date(d.inicio).toISOString(),
+    nombre:d.nombre,telefono:d.telefono,email:d.email??null,motivo:d.motivo??null,consent:d.consentVersion})).digest("hex");
   // A durable receipt is recoverable without spending a one-use captcha again.
   const previous=await service.rpc("public_booking_receipt",{p_slug:d.orgSlug,p_operation:d.operacionId,p_hash:hash});
   if(previous.error){const mapped=mapSupabaseError(previous.error);return err(mapped.code,mapped.message);}
   if(previous.data)return publicBookingResult(previous.data);
   if(!await verifyTurnstile(d.captchaToken,ip))return err("validation","Captcha inválido o expirado. Volvé a verificarlo e intentá nuevamente.");
-  const {data:org,error:orgError}=await service.from("organization").select("id,opt_out_public_listing").eq("slug",d.orgSlug).is("deleted_at",null).maybeSingle();
+  const {data:org,error:orgError}=await service.from("organization").select("id,tipo,opt_out_public_listing").eq("slug",d.orgSlug).is("deleted_at",null).maybeSingle();
   if(orgError)return err("db_error","No pudimos verificar el consultorio.");
   if(!org||org.opt_out_public_listing)return err("not_found","Consultorio no encontrado.");
+  if(d.personalPageMemberId && (d.profesionalId!==d.personalPageMemberId ||
+    !await personalPageEnabledForOrg(service,{organizationId:org.id,organizationTipo:org.tipo,memberId:d.personalPageMemberId})))
+    return err("not_found","Página personal no disponible.");
   const professional=await resolveProfesionalPublico(service,{organizationId:org.id,profesionalId:d.profesionalId??null});
   if(!professional.ok)return professional;
   const {data,error}=await service.rpc("submit_public_booking",{p_slug:d.orgSlug,p_operation:d.operacionId,p_hash:hash,p_profesional:professional.data,p_servicio:d.servicioId,p_inicio:d.inicio,

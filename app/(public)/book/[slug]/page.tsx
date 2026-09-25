@@ -60,6 +60,9 @@ interface OrgPublicRow {
   bio: string | null;
   telefono_publico: string | null;
   direccion_completa: string | null;
+  miniweb_layout: "perfil" | "consultorio" | null;
+  maps_embed_url: string | null;
+  maps_confirmed_address: string | null;
   instagram_handle: string | null;
   especialidad: string | null;
   auto_confirmar_reservas: boolean;
@@ -75,7 +78,7 @@ const getOrgPublica = cache(async (slug: string): Promise<OrgPublicRow | null> =
   const { data: org } = await service
     .from("organization")
     .select(
-      "id, slug, tipo, nombre, ciudad, provincia, acento_hex, rubro, opt_out_public_listing, logo_url, card_mood, bio, telefono_publico, direccion_completa, instagram_handle, especialidad, auto_confirmar_reservas",
+      "id, slug, tipo, nombre, ciudad, provincia, acento_hex, rubro, opt_out_public_listing, logo_url, card_mood, bio, telefono_publico, direccion_completa, miniweb_layout, maps_embed_url, maps_confirmed_address, instagram_handle, especialidad, auto_confirmar_reservas",
     )
     .eq("slug", slug)
     .is("deleted_at", null)
@@ -238,11 +241,14 @@ export default async function BookPage({ params }: PageProps) {
           bio: org.bio,
           telefonoPublico: org.telefono_publico,
           direccionCompleta: org.direccion_completa,
+          mapsEmbedUrl: org.maps_embed_url,
+          mapsConfirmedAddress: org.maps_confirmed_address,
           instagramHandle: org.instagram_handle,
           autoConfirmar: org.auto_confirmar_reservas,
         }}
         servicios={servicios ?? []}
         profesionales={profesionalesRes.ok ? profesionalesRes.data : []}
+        layout={org.miniweb_layout ?? (org.tipo === "CLINICA" ? "consultorio" : "perfil")}
       />
     </>
   );

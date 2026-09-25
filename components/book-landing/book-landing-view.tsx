@@ -9,6 +9,7 @@ import { Motif } from "@/components/book-landing/motifs";
 import { StickyBookCta } from "@/components/book-landing/sticky-book-cta";
 import { FolioMark } from "@/components/folio-mark";
 import { resolveBookLandingContent } from "@/lib/book-landing/content";
+import { normalizeGoogleMapsEmbedUrl } from "@/lib/book-landing/map-embed";
 import { formatArs } from "@/lib/format/currency";
 const FOLIO_ACCENT = "#6255C5";
 
@@ -27,6 +28,8 @@ export interface PublicLandingOrg {
   bio?: string | null;
   telefonoPublico?: string | null;
   direccionCompleta?: string | null;
+  mapsEmbedUrl?: string | null;
+  mapsConfirmedAddress?: string | null;
   instagramHandle?: string | null;
   /** organization.auto_confirmar_reservas (M43) → nota del hero. */
   autoConfirmar?: boolean | null;
@@ -47,6 +50,7 @@ export interface PublicLandingProfessional {
   fotoUrl?: string | null;
   bioPublica?: string | null;
   matricula?: string | null;
+  personalPageEnabled?: boolean;
 }
 
 export interface PublicLandingViewData {
@@ -58,17 +62,22 @@ export interface PublicLandingViewData {
   servicios: PublicLandingService[];
 }
 
+/** Presentational choice only. Publication settings belong to a later release. */
+export type PublicLandingLayout = "perfil" | "consultorio";
+
 export function BookLandingView({
   data,
   mode,
   booking,
   serviceAction,
+  layout,
 }: {
   data: PublicLandingViewData;
   mode: "published" | "preview";
   booking: ReactNode;
   /** Optional action island for each service; defaults to an ordinary anchor. */
   serviceAction?: (service: PublicLandingService) => ReactNode;
+  layout?: PublicLandingLayout;
 }) {
   const { org, servicios, profesionales } = data;
   // El color propio del consultorio sigue guardado; esta página usa la marca Folio.
@@ -76,12 +85,16 @@ export function BookLandingView({
   const content = resolveBookLandingContent(org.especialidad, org.rubro);
   const lugar = [org.ciudad, org.provincia].filter(Boolean).join(", ");
   const esClinica = org.tipo === "CLINICA";
+  const disposition = layout ?? (esClinica ? "consultorio" : "perfil");
   const tieneEquipoParaReservar = !esClinica || profesionales.length > 0;
   const puedeReservar = servicios.length > 0 && tieneEquipoParaReservar;
   const tieneContacto = Boolean(lugar || org.direccionCompleta || org.telefonoPublico || org.instagramHandle);
+  const mapEmbedUrl = org.direccionCompleta && org.mapsConfirmedAddress === org.direccionCompleta
+    ? normalizeGoogleMapsEmbedUrl(org.mapsEmbedUrl) : null;
   // El plan, no la cantidad de profesionales cargados, decide quién firma la
   // página. Una Clínica con un solo integrante conserva su identidad de equipo.
-  const profesionalSolo = !esClinica ? data.profesional : null;
+  const profesionalSolo = data.profesional ?? null;
+  const paginaPersonal = esClinica && Boolean(data.profesional);
   const nombreProfesional = profesionalSolo?.displayName?.trim() && profesionalSolo.displayName !== "Profesional"
     ? profesionalSolo.displayName.trim()
     : null;
@@ -92,10 +105,11 @@ export function BookLandingView({
   const bioProfesional = profesionalIdentificado?.bioPublica?.trim() || null;
   const bioConsultorio = org.bio?.trim() || null;
   const mostrarBioConsultorio = bioConsultorio && bioConsultorio !== bioProfesional ? bioConsultorio : null;
-  const tienePresentacion = Boolean(bioProfesional || mostrarBioConsultorio);
-  const heroDescription = puedeReservar
+  const heroDescription = bioProfesional || bioConsultorio || (puedeReservar
     ? (esClinica ? "Conocé nuestros servicios y encontrá un horario disponible." : "Conocé los servicios y elegí un horario disponible.")
-    : (esClinica ? "Conocé nuestro espacio y los servicios del consultorio." : "Conocé el consultorio y sus datos de contacto.");
+    : (esClinica ? "Conocé nuestro espacio y los servicios del consultorio." : "Conocé el consultorio y sus datos de contacto."));
+  const mostrarLogoConsultorio = disposition === "consultorio" && Boolean(org.logoUrl);
+  const mostrarRetrato = disposition === "perfil" && Boolean(heroFotoProfesional);
   const ContentTag = mode === "published" ? "main" : "div";
 
   return (
@@ -103,6 +117,7 @@ export function BookLandingView({
       className="bl-root"
       data-mode={mode}
       data-kind={esClinica ? "clinic" : "solo"}
+      data-layout={disposition}
     >
       {/* La marca del consultorio acompaña al profesional sin competir con su retrato. */}
       <header className="bl-header">
@@ -124,7 +139,7 @@ export function BookLandingView({
           {bioProfesional ? <a href="#sobre">Sobre mí</a> : null}
           {mostrarBioConsultorio ? <a href={bioProfesional ? "#consultorio" : "#sobre"}>Consultorio</a> : null}
           <a href="#servicios">Servicios</a>
-          {esClinica && profesionales.length > 0 ? <a href="#equipo">Equipo</a> : null}
+          {esClinica && !paginaPersonal && profesionales.length > 0 ? <a href="#equipo">Equipo</a> : null}
           {tieneContacto ? <a href="#contacto">Contacto</a> : null}
         </nav>
         {mode === "published" && puedeReservar ? (
@@ -136,8 +151,12 @@ export function BookLandingView({
 
       <ContentTag className="bl-main">
         {/* Identity first: the clinic remains a clinic even with one professional. */}
-        <section className={`bl-hero${heroFotoProfesional ? " bl-hero-has-photo" : ""}`}>
+        <section id={bioProfesional || bioConsultorio ? "sobre" : undefined} className={`bl-hero${mostrarRetrato ? " bl-hero-has-visual" : ""}`}>
           <div className="bl-hero-text">
+            {mostrarLogoConsultorio && org.logoUrl ? (
+              <PublicImage src={org.logoUrl} alt={`Logo de ${org.nombre}`}
+                className="bl-practice-mark" width={80} height={80} priority mode={mode} />
+            ) : null}
             <div className="bl-eyebrow">
               <Motif motif={content.motif} size={18} className="bl-eyebrow-motif" />
               <span>{content.heroEyebrow}</span>
@@ -170,7 +189,7 @@ export function BookLandingView({
               </p>
             ) : null}
           </div>
-          {heroFotoProfesional ? (
+          {mostrarRetrato && heroFotoProfesional ? (
             <div className="bl-hero-figure bl-hero-figure-person">
               <div className="bl-portrait">
                 <PublicImage src={heroFotoProfesional} alt={`Retrato de ${heroNombre}`}
@@ -184,23 +203,16 @@ export function BookLandingView({
         {/* Barra sticky de reserva (solo mobile, aparece al pasar el hero). */}
         {mode === "published" && puedeReservar ? <StickyBookCta label={content.reservarCtaLabel} targetId="servicios" /> : null}
 
-        {(tienePresentacion || (esClinica && profesionales.length > 0)) ? (
+        {((bioProfesional && mostrarBioConsultorio) || (esClinica && !paginaPersonal && profesionales.length > 0)) ? (
           <div className="bl-details bl-story">
-            {bioProfesional ? (
-              <section id="sobre" className="bl-about" aria-label="Sobre el profesional">
-                <span className="bl-section-kicker">Presentación</span>
-                <h2 className="bl-section-title">Sobre {nombreProfesional}</h2>
-                <p className="bl-about-text">{bioProfesional}</p>
-              </section>
-            ) : null}
-            {mostrarBioConsultorio ? (
-              <section id={bioProfesional ? "consultorio" : "sobre"} className="bl-about" aria-label="Sobre el consultorio">
+            {bioProfesional && mostrarBioConsultorio ? (
+              <section id="consultorio" className="bl-about" aria-label="Sobre el consultorio">
                 <span className="bl-section-kicker">El consultorio</span>
                 <h2 className="bl-section-title">Sobre el consultorio</h2>
                 <p className="bl-about-text">{mostrarBioConsultorio}</p>
               </section>
             ) : null}
-            {esClinica && profesionales.length > 0 ? (
+            {esClinica && !paginaPersonal && profesionales.length > 0 ? (
               <section id="equipo" className="bl-team" aria-label="Profesionales que atienden en este consultorio">
                 <span className="bl-section-kicker">Personas</span>
                 <h2 className="bl-section-title">Nuestro equipo</h2>
@@ -212,6 +224,9 @@ export function BookLandingView({
                         <p className="bl-team-name">{p.displayName}</p>
                         {p.matricula ? <p className="bl-team-matricula fm-mono">M.P. {p.matricula}</p> : null}
                         {p.bioPublica ? <p className="bl-team-bio">{p.bioPublica}</p> : null}
+                        {mode === "published" && p.personalPageEnabled && org.slug ? (
+                          <a className="bl-team-personal-link" href={`/book/${encodeURIComponent(org.slug)}/p/${encodeURIComponent(p.id)}`}>Ver página personal →</a>
+                        ) : null}
                       </div>
                     </div>
                   ))}
@@ -254,7 +269,7 @@ export function BookLandingView({
             <section id="reservar" className="bl-book" aria-label={puedeReservar ? "Reservá tu turno" : "Estado de la reserva online"}>
               <div className="bl-book-head">
                 <span className="bl-section-kicker">{puedeReservar ? "Reserva" : "Próximamente"}</span>
-                <h3 className="bl-book-title">{puedeReservar ? "Tu turno empieza acá" : "Turnos online en preparación"}</h3>
+                <h3 className="bl-book-title">{puedeReservar ? "Elegí tu turno" : "Turnos online en preparación"}</h3>
               </div>
               <div className="bl-book-frame">{booking}</div>
               {puedeReservar ? <p className="bl-book-footnote">Elegí un horario, completá tus datos y revisá el estado de tu solicitud.</p> : null}
@@ -277,6 +292,8 @@ export function BookLandingView({
                     <li className="bl-location-row"><IconInstagram /><a href={`https://instagram.com/${org.instagramHandle.replace(/^@/, "")}`} target="_blank" rel="noopener noreferrer">@{org.instagramHandle.replace(/^@/, "")}</a></li>
                   ) : null}
                 </ul>
+                {mapEmbedUrl ? <iframe className="bl-location-map" src={mapEmbedUrl}
+                  title={`Mapa de ${org.nombre}`} loading="lazy" referrerPolicy="no-referrer-when-downgrade" /> : null}
               </section>
           </div>
         ) : null}
