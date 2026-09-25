@@ -24,7 +24,7 @@ Actualizado: 25/09/2026. Este es el registro breve del trabajo; [el tablero téc
 | **Validación profesional y piloto** · pendiente humano | Cinco especialidades y piloto de 14 días, con tres profesionales y cinco jornadas por persona. |
 | **Lanzamiento** · pendiente | Se cerrará cuando la versión publicada y la oferta comercial coincidan con lo demostrado. |
 
-**Última publicación comprobada:** [PR179 · base del llamador](https://github.com/OsoCordobes/FolioApp/pull/179), desde el 25/09 a las 05:59 (Copenhague). La mejora visible más reciente sigue siendo guardar servicios durante el onboarding, salir y volver sin perderlos. **Última cuota consultada:** 80% disponible; reserva de cierre: 15%.
+**Última publicación comprobada:** [PR179 · base del llamador](https://github.com/OsoCordobes/FolioApp/pull/179), desde el 25/09 a las 05:59 (Copenhague). La mejora visible más reciente sigue siendo guardar servicios durante el onboarding, salir y volver sin perderlos. **Última cuota consultada:** 79% disponible; reserva de cierre: 15%.
 
 **Forma de trabajo:** continuar mientras haya trabajo útil, cerrar cada paquete con evidencia y tomar el siguiente. La reanudación horaria es respaldo ante un corte, no una espera entre tareas.
 
