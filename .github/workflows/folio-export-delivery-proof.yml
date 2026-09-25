@@ -1,0 +1,78 @@
+name: Folio B06b3 synthetic HTTP delivery proof
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/folio-export-delivery-proof.yml
+      - scripts/testing/export-delivery-proof/**
+      - lib/patient/export-package-archive.ts
+      - lib/patient/export-package-browser.ts
+      - lib/patient/export-package-capacity.ts
+      - lib/patient/export-package-delivery.ts
+      - lib/patient/export-jobs-worker.ts
+      - lib/patient/clinical-archive.ts
+      - app/api/patient/export-package/route.ts
+      - app/archivo-clinico/page.tsx
+      - components/clinical-archive/archive.tsx
+      - components/clinical-archive/archive.module.css
+      - tests/unit/export-package-archive.test.ts
+      - tests/unit/export-package-browser.test.ts
+      - tests/unit/export-package-delivery.test.ts
+      - tests/unit/export-package-worker.test.ts
+      - docs/B06-EXPORT-PACKAGE.md
+      - package.json
+      - pnpm-lock.yaml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: folio-b06b3-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  export-delivery-proof:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.base.ref == 'master'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install locked application tools
+        run: pnpm install --frozen-lockfile
+      - name: Install PostgreSQL 17 client from PGDG
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq curl ca-certificates
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl --fail --silent --show-error -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          . /etc/os-release
+          printf 'Types: deb\nURIs: https://apt.postgresql.org/pub/repos/apt\nSuites: %s-pgdg\nComponents: main\nSigned-By: /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc\n' "$VERSION_CODENAME" | sudo tee /etc/apt/sources.list.d/pgdg.sources >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+          echo '/usr/lib/postgresql/17/bin' >> "$GITHUB_PATH"
+      - name: Fetch exact official Supabase Docker release
+        shell: bash
+        run: |
+          set -euo pipefail
+          upstream="$RUNNER_TEMP/supabase-upstream"
+          git clone --quiet --depth 1 --filter=blob:none --sparse --branch self-hosted/v0.8.1 https://github.com/supabase/supabase "$upstream"
+          git -C "$upstream" sparse-checkout set docker
+          test "$(git -C "$upstream" rev-parse HEAD)" = '8c7a4d9dbbaf8b552893822e89d7bf06f33f9220'
+          echo "C01_OFFICIAL_DOCKER=$upstream/docker" >> "$GITHUB_ENV"
+      - name: Install pinned Chromium for the isolated browser proof
+        run: pnpm exec playwright install chromium --with-deps
+      - name: Verify real Next routes, session, Storage and 50 MiB fragments
+        run: node --conditions=react-server --import tsx scripts/testing/export-delivery-proof/run.mjs

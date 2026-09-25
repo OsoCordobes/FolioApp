@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 import test from "node:test";
 import ts from "typescript";
+import { minimumPackageProgressCalls, PACKAGE_CAPACITY_MESSAGE,
+  PACKAGE_MAX_PROGRESS_CALLS } from "../../lib/patient/export-package-capacity";
 
 const jobId = "13600000-0000-4000-8000-000000000001";
 const entryId = "13600000-0000-4000-8000-000000000002";
@@ -14,8 +16,9 @@ const token = "13600000-0000-4000-8000-000000000007";
 const session = { userId: actor, memberId: member, organizationId: org };
 const hash = "a".repeat(64);
 
-function fixture(chunkCount = 2) {
-  let version = "v1", finishCalls = 0, reads = 0, builds = 0;
+function fixture(chunkCount = 2, sourcePlan: Array<{ kind: "document" | "signature" | "withdrawn_document";
+  sizeBytes: number | null }> | null = []) {
+  let version = "v1", finishCalls = 0, reads = 0, builds = 0, beginCalls = 0;
   const staged = new Map<number, string>();
   const job = { state: "leased", revision: 1, paciente_id: patient,
     source_fingerprint: "v1", actor_user_id: actor, actor_member_id: member,
@@ -60,14 +63,20 @@ function fixture(chunkCount = 2) {
       packageChunks: () => Array.from({ length: chunkCount }, (_, index) => new Uint8Array([index + 1])),
       sha256: () => hash };
     if (name === "./export-jobs-fingerprint") return { fingerprintExportPackage: (value: { version: string }) => value.version };
-    if (name === "./export-jobs") return { readExportPackageJob: async () => ({ ok: true, data: job }) };
-    if (name === "./export-jobs-sources") return { readPackageSourcePlan: async () => ({ ok: true, data: [] }) };
+    if (name === "./export-jobs") return { readExportPackageJob: async () => ({ ok: true, data: job }),
+      beginExportPackageJob: async () => { beginCalls++; return { ok: true, data: jobId }; } };
+    if (name === "./export-jobs-sources") return { readPackageSourcePlan: async () => sourcePlan === null
+      ? { ok: false, error: { code: "db_error", message: "Inventario ilegible" } }
+      : { ok: true, data: sourcePlan } };
+    if (name === "./export-package-capacity") return { PACKAGE_MAX_PROGRESS_CALLS,
+      PACKAGE_CAPACITY_MESSAGE, minimumPackageProgressCalls };
     if (name === "./export-jobs-storage") return { putVerifiedFragment: async (_: unknown, _j: string, _e: string, ordinal: number) =>
       ({ bytes: 1, sha256: hash, ordinal }) };
     if (name === "./export-jobs-storage-client") return { privateExportBucket: () => ({}) };
     throw Error(`Unexpected import ${name}`);
   } });
-  return { client, state: () => ({ finishCalls, reads, builds, staged: staged.size }),
+  return { client, state: () => ({ finishCalls, reads, builds, beginCalls, staged: staged.size }),
+    begin: () => exports.beginVerifiedExportPackage(client, session, patient, token),
     stage: (key: { kind: string; sourceId: string; sourceIndex: number }) =>
       exports.stageExportPackageEntry(client, session, jobId, token, 1, key),
     finish: () => exports.finishVerifiedExportPackage(client, session, jobId, token, 1) };
@@ -80,6 +89,33 @@ test("a changed source during inventory pagination prevents READY", async () => 
   assert.equal(f.state().reads, 1);
   assert.equal(f.state().builds, 2);
   assert.equal(f.state().finishCalls, 0);
+});
+
+test("mathematically impossible volume rejects before job creation or byte I/O", async () => {
+  const possible = Array.from({ length: 1764 }, () => ({ kind: "document" as const,
+    sizeBytes: 50 * 1024 * 1024 }));
+  assert.ok(minimumPackageProgressCalls(possible, 3 * 1024 * 1024)! <= PACKAGE_MAX_PROGRESS_CALLS);
+  const nearLimit = fixture(1, possible);
+  assert.equal((await nearLimit.begin() as { ok: boolean }).ok, true);
+  assert.equal(nearLimit.state().beginCalls, 1);
+  const sources = Array.from({ length: 1800 }, () => ({ kind: "document" as const,
+    sizeBytes: 50 * 1024 * 1024 }));
+  assert.ok(minimumPackageProgressCalls(sources, 3 * 1024 * 1024)! > PACKAGE_MAX_PROGRESS_CALLS);
+  const f = fixture(1, sources);
+  const result = await f.begin() as { ok: boolean; error: { code: string; message: string } };
+  assert.equal(result.ok, false);
+  assert.equal(result.error.code, "validation");
+  assert.equal(result.error.message, PACKAGE_CAPACITY_MESSAGE);
+  assert.equal(f.state().beginCalls, 0);
+  assert.equal(f.state().staged, 0);
+});
+
+test("unreadable plan remains uncertain and is never recategorized as capacity", async () => {
+  const f = fixture(1, null);
+  const result = await f.begin() as { ok: boolean; error: { code: string } };
+  assert.equal(result.ok, false);
+  assert.equal(result.error.code, "db_error");
+  assert.equal(f.state().beginCalls, 0);
 });
 
 test("one fragment per call resumes from registered fragments, and bad JSON index fails before IO", async () => {

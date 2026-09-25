@@ -27,7 +27,7 @@ export default async function ClinicalArchivePage() {
     </section>}
     <section style={{ marginTop: "var(--space-6)" }} aria-labelledby="archive-delivery-help">
       <h2 id="archive-delivery-help">Si necesitás otra entrega</h2>
-      <p>Para archivos adjuntos, historias que exceden la descarga disponible o acceso después de una baja, coordiná una entrega autorizada con soporte.</p>
+      <p>Si una entrega excede la descarga disponible o necesitás acceso después de una baja, coordiná una vía autorizada con soporte.</p>
       <p><a href={supportMailto("Coordinar una entrega de historias clínicas")}>Contactar a soporte</a>. En el primer mensaje no adjuntes historias ni datos de pacientes.</p>
     </section>
   </main>;

@@ -11,6 +11,7 @@ export interface ClinicalArchivePage {
   patients: Array<{ id: string; name: string }>;
   total: number;
   nextCursor: string | null;
+  scope: { userId: string; organizationId: string };
 }
 interface Dependencies {
   getSession: () => Promise<Result<ActiveSession>>;
@@ -39,7 +40,9 @@ export async function readClinicalArchive(input: unknown, dependencies: Dependen
       after.data.memberId !== actor.memberId || !canExportCompleteClinicalHistory(after.data.role, after.data.esColegiado)) {
       return err("forbidden", "Tu acceso cambió. Volvé a abrir el archivo clínico.");
     }
-    return ok({ patients: page.data.rows.map(row => ({ id: row.id, name: row.nombre })), total: page.data.total, nextCursor: page.data.nextCursor });
+    return ok({ patients: page.data.rows.map(row => ({ id: row.id, name: row.nombre })),
+      total: page.data.total, nextCursor: page.data.nextCursor,
+      scope: { userId: after.data.userId, organizationId: after.data.organizationId } });
   } catch {
     return err("network", "No pudimos consultar las historias. Volvé a intentar.");
   }
