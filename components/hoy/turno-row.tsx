@@ -196,7 +196,7 @@ export function TurnoRow({ turno, paciente, isNext, now, timezone, callerIdentit
       </div>
 
       <div className="fi-t-actions">
-        {isEnSala && !pending && callerIdentity ? <CallerControl turnoId={turno.id} identity={callerIdentity} /> : null}
+        {isEnSala && !pending && callerIdentity ? <CallerControl key={`${callerIdentity.userId}:${callerIdentity.organizationId}:${turno.id}`} turnoId={turno.id} identity={callerIdentity} /> : null}
         {cta ? (
           <button
             type="button"
