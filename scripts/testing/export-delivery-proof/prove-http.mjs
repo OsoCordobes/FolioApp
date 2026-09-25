@@ -114,8 +114,16 @@ export async function proveHttp({state,seed,mark,app,api}){
  assert.equal(changed.error,null,'source_revocation_unconfirmed');
  const revoked=await fetch(`${app}/api/patient/export-package/${jobId}/entries/${document.entry_id}/fragments/0?patientId=${patientId}&operationId=${operationId}`,
   {headers:{Cookie:session.header},redirect:'manual',cache:'no-store'});
- assert.ok([403,409,503].includes(revoked.status),'revoked_source_delivered');
- assert.equal((await revoked.arrayBuffer()).byteLength<4096,true,'revoked_response_not_bounded');
+ assert.equal(revoked.status,409,'revoked_source_not_conflict');
+ assert.match(revoked.headers.get('content-type')??'',/^application\/json/,'revoked_response_not_json');
+ for(const header of ['x-folio-fragment-sha256','x-folio-file-sha256','x-folio-fragment-count']){
+  assert.equal(revoked.headers.get(header),null,'revoked_fragment_header_present');
+ }
+ const deniedBytes=new Uint8Array(await revoked.arrayBuffer());
+ assert.ok(deniedBytes.byteLength>0&&deniedBytes.byteLength<4096,'revoked_response_not_bounded');
+ const denial=JSON.parse(new TextDecoder().decode(deniedBytes));
+ assert.equal(denial?.ok,false,'revoked_response_malformed');
+ assert.equal(denial?.error?.code,'conflict','revoked_response_unclassified');
  console.log(`b06b3_http_verified entries=4 document_fragments=17 max_progress_ms=${Math.max(...measurements)}`);
  console.log('b06b3_http_replay_and_source_revocation_verified');
  console.log(`b06b3_tar_verified bytes=${browser.archiveBytes} sha256=${browser.archiveSha256} seconds=${browser.elapsedSeconds} picker=opfs_adapter`);

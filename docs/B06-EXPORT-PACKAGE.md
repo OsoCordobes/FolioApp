@@ -157,7 +157,9 @@ usa `.bin`. Cada fragmento de hasta 3 MiB y cada archivo se cotejan con
 SHA-256. El inventario, autoridad y vencimiento se consultan otra vez antes
 de cerrar el archivo. Fallas y revocaciones abortan el escritor; el usuario
 debe revisar la carpeta elegida porque el navegador podría haber creado un
-archivo vacío o dejado un estado incierto. El JSON declara la fecha de
+archivo vacío o dejado un estado incierto. Si vence el tiempo de `close()`,
+el cierre puede seguir en curso y ni siquiera un `abort()` posterior acredita
+la conservación del archivo anterior. El JSON declara la fecha de
 preparación, no una instantánea transaccional global ni el estado actual.
 
 TAR no codifica un offset total de 32 bits como ZIP32: admite el inventario
@@ -167,15 +169,18 @@ por ventana fija de una hora y el trabajo vence a las 24 horas. Incluso sin
 latencia ni reintentos, una ventana que empezó antes del trabajo permite
 como máximo 25 ventanas tocadas: 1200 × 25 × 3 MiB ≈ 87,9 GiB de
 fragmentos por ruta. 10.000 documentos de 50 MiB exigirían unos 170.000
-fragmentos, muy
-por encima de ese techo. También pueden intervenir cuotas compartidas,
+fragmentos, muy por encima de ese techo. También pueden intervenir cuotas compartidas,
 latencia y vencimiento. B06 global queda abierto para ese caso: requiere
 presupuesto/capacidad explícitos y una ruta de trabajo largo comprobada;
 no se aumentan límites ni TTL por suposición. El ensayo hospedado de B06b3b
 usa un documento ficticio real de casi 50 MiB/17 fragmentos, rutas Next
 reales, navegador Chromium con escritor OPFS para sustituir sólo el diálogo
 nativo, y extracción TAR independiente. No acredita el selector nativo de
-otros navegadores ni volúmenes máximos.
+otros navegadores ni volúmenes máximos. El mismo ensayo conserva capturas
+sintéticas a 375 y 1440 px para revisar la vista; no contienen pacientes
+reales. La prueba del escritor OPFS interrumpe una segunda escritura tras
+bytes parciales y compara el SHA-256 anterior, sin afirmar custodia del TAR
+temporal del runner.
 
 Antes de crear un trabajo nuevo, el servidor calcula una **cota inferior**
 de solicitudes de avance: una para JSON, una por retirado y por firma, y

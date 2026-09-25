@@ -21,7 +21,9 @@ export default async function ClinicalArchivePage() {
     </div></header>
     <p>Este acceso sigue disponible cuando la suscripción está suspendida. Las historias conservan sus permisos de confidencialidad.</p>
     <p>La entrega de historias completas corresponde al titular del consultorio o a la dirección clínica habilitada. Para otros permisos de atención, coordiná la entrega con ese responsable.</p>
-    {result.ok ? <ClinicalArchive initialPage={result.data} /> : <section>
+    {result.ok ? <ClinicalArchive
+      key={`${result.data.scope.userId}:${result.data.scope.organizationId}`}
+      initialPage={result.data} /> : <section>
       <p role="alert">{result.error.message}</p>
       <a className="fi-btn" href="/archivo-clinico">Volver a intentar</a>
     </section>}

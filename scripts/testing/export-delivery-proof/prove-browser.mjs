@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {createHash,randomUUID} from 'node:crypto';
-import {open,rm} from 'node:fs/promises';
+import {mkdir,open} from 'node:fs/promises';
 import path from 'node:path';
 import {chromium} from '@playwright/test';
 
@@ -66,6 +66,12 @@ export async function proveBrowser({app,seed,operationId,cookies}){
   assert.equal(response?.status(),200,'archive_page_unavailable');
   await page.getByRole('button',{name:/Preparar o retomar entrega completa/}).first().click();
   await page.getByRole('button',{name:/Guardar historia y archivos/}).waitFor({timeout:45_000});
+  const captures=path.join(process.env.RUNNER_TEMP,'folio-b06b3-ui');
+  await mkdir(captures,{recursive:true});
+  await page.setViewportSize({width:375,height:812});
+  await page.screenshot({path:path.join(captures,'archive-375.png'),fullPage:true});
+  await page.setViewportSize({width:1440,height:900});
+  await page.screenshot({path:path.join(captures,'archive-1440.png'),fullPage:true});
   await page.getByRole('button',{name:/Guardar historia y archivos/}).click();
   await page.getByRole('status').getByText(/Historia y archivos guardados/).waitFor({timeout:10*60_000});
   const file=await page.evaluate(async()=>{
@@ -144,5 +150,5 @@ export async function proveBrowser({app,seed,operationId,cookies}){
   console.log('b06b3_browser_opfs_writable_abort_preserved_and_unsupported_verified');
   return {archiveBytes:file.size,archiveSha256:originalDigest,
    elapsedSeconds:Math.ceil((Date.now()-started)/1000)};
- }finally{await browser.close();await rm(archive,{force:true});}
+ }finally{await browser.close();}
 }

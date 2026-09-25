@@ -79,6 +79,39 @@ test("network failure in status does not submit another begin", async () => {
   } finally { globalThis.fetch = original; }
 });
 
+test("stalled progress or changed entry identity stops uncertain without finish or new begin", async () => {
+  for (const mode of ["stalled", "different_entry"] as const) {
+    mockStorage();
+    const original = globalThis.fetch;
+    const calls: string[] = [];
+    let progressCalls = 0;
+    globalThis.fetch = async input => {
+      const url = String(input);
+      calls.push(url);
+      if (url.endsWith("/claim")) return json({ lease: {
+        leaseToken: entryId, revision: 3,
+      } });
+      if (url.endsWith("/progress")) {
+        progressCalls++;
+        return json({ progress: {
+          entryId: mode === "different_entry" && progressCalls === 2 ? orgId : entryId,
+          complete: false, remainingFragments: mode === "stalled" ? 16 : 17 - progressCalls,
+        } });
+      }
+      if (url === "/api/patient/export-package") return json({ operation: operation("pending") }, 201);
+      throw Error("unexpected_request");
+    };
+    try {
+      await assert.rejects(prepareBrowserPackage(scope, patientId),
+        (error: unknown) => error instanceof BrowserPackageFailure && error.code === "unconfirmed");
+      assert.equal(calls.filter(url => url.endsWith("/progress")).length, 2);
+      assert.equal(calls.filter(url => url === "/api/patient/export-package").length, 1);
+      assert.equal(calls.some(url => url.endsWith("/finish")), false);
+      assert.ok(readSavedPackageOperation(scope, patientId));
+    } finally { globalThis.fetch = original; }
+  }
+});
+
 test("fragment request binds patient, operation, job, entry and ordinal and caps bytes", async () => {
   const original = globalThis.fetch;
   let requested = "";

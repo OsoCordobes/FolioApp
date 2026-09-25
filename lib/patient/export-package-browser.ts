@@ -77,15 +77,18 @@ async function routeError(response: Response): Promise<BrowserPackageFailure> {
   return new BrowserPackageFailure("unconfirmed");
 }
 
-async function request(url: string, body?: Record<string, unknown>) {
+async function request(url: string, body?: Record<string, unknown>, signal?: AbortSignal) {
+  if (signal?.aborted) throw new BrowserPackageFailure("auth");
   let response: Response;
   try {
     response = await fetch(url, { method: body ? "POST" : "GET",
       headers: body ? { "Content-Type": "application/json" } : undefined,
       body: body ? JSON.stringify(body) : undefined,
       credentials: "same-origin", redirect: "manual", cache: "no-store",
-      signal: AbortSignal.timeout(75_000) });
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(75_000)]) :
+        AbortSignal.timeout(75_000) });
   } catch { throw new BrowserPackageFailure("unconfirmed"); }
+  if (signal?.aborted) throw new BrowserPackageFailure("auth");
   if (response.type === "opaqueredirect" || response.redirected ||
       response.status >= 300 && response.status < 400 || !response.ok) {
     throw await routeError(response);
@@ -95,6 +98,7 @@ async function request(url: string, body?: Record<string, unknown>) {
   }
   try {
     const result: unknown = await response.json();
+    if (signal?.aborted) throw new BrowserPackageFailure("auth");
     if (!result || typeof result !== "object" || (result as { ok?: unknown }).ok !== true) {
       throw new BrowserPackageFailure("unconfirmed");
     }
@@ -131,14 +135,17 @@ export function discardSavedPackageOperation(scope: BrowserPackageScope, patient
   catch { throw new BrowserPackageFailure("unconfirmed"); }
 }
 
-export async function readPackageStatus(scope: BrowserPackageScope, patientId: string, operationId: string) {
-  const result = await request(`/api/patient/export-package/operations/${operationId}?patientId=${patientId}`);
+export async function readPackageStatus(scope: BrowserPackageScope, patientId: string, operationId: string,
+  signal?: AbortSignal) {
+  const result = await request(`/api/patient/export-package/operations/${operationId}?patientId=${patientId}`,
+    undefined, signal);
   if (!validOperation(result.operation, patientId, scope)) throw new BrowserPackageFailure("unconfirmed");
   return result.operation;
 }
 
-export async function beginPackage(scope: BrowserPackageScope, patientId: string, operationId: string) {
-  const result = await request("/api/patient/export-package", { patientId, operationId });
+export async function beginPackage(scope: BrowserPackageScope, patientId: string, operationId: string,
+  signal?: AbortSignal) {
+  const result = await request("/api/patient/export-package", { patientId, operationId }, signal);
   if (!validOperation(result.operation, patientId, scope)) throw new BrowserPackageFailure("unconfirmed");
   return result.operation;
 }
@@ -153,23 +160,28 @@ export async function prepareBrowserPackage(scope: BrowserPackageScope, patientI
   onProgress: (completed: number, total: number) => void = () => {},
   priorLease?: Lease,
   onLease: (lease: Lease) => void = () => {},
+  signal?: AbortSignal,
 ): Promise<{ bound: BrowserPackageBinding; lease?: Lease }> {
+  const active = () => { if (signal?.aborted) throw new BrowserPackageFailure("auth"); };
+  active();
   let operationId = readSavedPackageOperation(scope, patientId);
   let operation: BrowserPackageOperation;
   if (operationId) {
-    try { operation = await readPackageStatus(scope, patientId, operationId); }
+    try { operation = await readPackageStatus(scope, patientId, operationId, signal); }
     catch (error) {
       if (!(error instanceof BrowserPackageFailure) || error.code !== "missing") throw error;
       // A confirmed absent operation may be submitted again with its original ID.
-      operation = await beginPackage(scope, patientId, operationId);
+      active();
+      operation = await beginPackage(scope, patientId, operationId, signal);
     }
   }
   else {
     operationId = crypto.randomUUID();
     savePackageOperation(scope, patientId, operationId);
     // The same operationId is retained even if this request's response is lost.
-    operation = await beginPackage(scope, patientId, operationId);
+    operation = await beginPackage(scope, patientId, operationId, signal);
   }
+  active();
   let bound = binding(patientId, operationId, operation);
   if (operation.state === "failed" || operation.state === "expired" ||
       Date.parse(operation.expires_at) <= Date.now()) throw new BrowserPackageFailure("changed");
@@ -183,7 +195,7 @@ export async function prepareBrowserPackage(scope: BrowserPackageScope, patientI
       throw new BrowserPackageFailure("unconfirmed");
     }
     const result = await request(`/api/patient/export-package/${bound.jobId}/claim`,
-      { patientId, operationId, revision: operation.revision });
+      { patientId, operationId, revision: operation.revision }, signal);
     const value = result.lease as Record<string, unknown> | undefined;
     if (!value || !UUID.test(String(value.leaseToken)) ||
         !Number.isSafeInteger(value.revision) ||
@@ -193,35 +205,48 @@ export async function prepareBrowserPackage(scope: BrowserPackageScope, patientI
   onLease(lease);
   for (let sourceOrdinal = 0; sourceOrdinal < operation.expected_entries; sourceOrdinal++) {
     let complete = false;
+    let previousRemaining = 17;
+    let sourceEntryId: string | null = null;
+    let calls = 0;
     while (!complete) {
+      active();
+      if (++calls > 17) throw new BrowserPackageFailure("unconfirmed");
       const result = await request(`/api/patient/export-package/${bound.jobId}/progress`,
         { patientId, operationId, leaseToken: lease.leaseToken,
-          revision: lease.revision, sourceOrdinal });
+          revision: lease.revision, sourceOrdinal }, signal);
       const progress = result.progress as Record<string, unknown> | undefined;
       if (!progress || !UUID.test(String(progress.entryId)) ||
           typeof progress.complete !== "boolean" ||
           !Number.isSafeInteger(progress.remainingFragments) ||
           Number(progress.remainingFragments) < 0 || Number(progress.remainingFragments) > 17 ||
-          progress.complete === (Number(progress.remainingFragments) > 0)) {
+          progress.complete === (Number(progress.remainingFragments) > 0) ||
+          Number(progress.remainingFragments) >= previousRemaining ||
+          sourceEntryId !== null && sourceEntryId !== progress.entryId) {
         throw new BrowserPackageFailure("unconfirmed");
       }
+      previousRemaining = Number(progress.remainingFragments);
+      sourceEntryId = String(progress.entryId);
       complete = progress.complete;
     }
+    active();
     onProgress(sourceOrdinal + 1, operation.expected_entries);
   }
+  active();
   const finished = await request(`/api/patient/export-package/${bound.jobId}/finish`,
-    { patientId, operationId, leaseToken: lease.leaseToken, revision: lease.revision });
+    { patientId, operationId, leaseToken: lease.leaseToken, revision: lease.revision }, signal);
   if (finished.state !== "ready") throw new BrowserPackageFailure("unconfirmed");
-  operation = await readPackageStatus(scope, patientId, operationId);
+  operation = await readPackageStatus(scope, patientId, operationId, signal);
   bound = binding(patientId, operationId, operation);
   if (operation.state !== "ready") throw new BrowserPackageFailure("unconfirmed");
   return { bound, lease };
 }
 
-export function packageArchiveTransport(bound: BrowserPackageBinding): PackageArchiveTransport {
+export function packageArchiveTransport(bound: BrowserPackageBinding,
+  signal?: AbortSignal): PackageArchiveTransport {
   return {
     async page(offset: number, limit: number): Promise<PackageArchivePage> {
-      const result = await request(`/api/patient/export-package/${bound.jobId}/manifest?${boundQuery(bound)}&offset=${offset}&limit=${limit}`);
+      const result = await request(`/api/patient/export-package/${bound.jobId}/manifest?${boundQuery(bound)}&offset=${offset}&limit=${limit}`,
+        undefined, signal);
       const manifest = result.manifest;
       if (!manifest || typeof manifest !== "object" ||
           !Array.isArray((manifest as { entries?: unknown }).entries)) {
@@ -230,12 +255,15 @@ export function packageArchiveTransport(bound: BrowserPackageBinding): PackageAr
       return manifest as PackageArchivePage;
     },
     async fragment(entry: PackageArchiveEntry, ordinal: number): Promise<PackageArchiveFragment> {
+      if (signal?.aborted) throw new BrowserPackageFailure("auth");
       let response: Response;
       try {
         response = await fetch(`/api/patient/export-package/${bound.jobId}/entries/${entry.entry_id}/fragments/${ordinal}?${boundQuery(bound)}`,
           { credentials: "same-origin", redirect: "manual", cache: "no-store",
-            signal: AbortSignal.timeout(75_000) });
+            signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(75_000)]) :
+              AbortSignal.timeout(75_000) });
       } catch { throw new BrowserPackageFailure("unconfirmed"); }
+      if (signal?.aborted) throw new BrowserPackageFailure("auth");
       if (response.type === "opaqueredirect" || response.redirected ||
           response.status >= 300 && response.status < 400 || !response.ok) throw await routeError(response);
       if (response.headers.get("content-type") !== "application/octet-stream") {
@@ -251,6 +279,7 @@ export function packageArchiveTransport(bound: BrowserPackageBinding): PackageAr
         throw new BrowserPackageFailure("unconfirmed");
       }
       const bytes = new Uint8Array(await response.arrayBuffer());
+      if (signal?.aborted) throw new BrowserPackageFailure("auth");
       if (bytes.byteLength !== length) throw new BrowserPackageFailure("unconfirmed");
       return { bytes, sha256: hash, fileSha256: fileHash, totalFragments: count };
     },

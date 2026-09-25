@@ -50,33 +50,66 @@ export function ClinicalArchive({ initialPage }: { initialPage: ClinicalArchiveP
   const [packageReady, setPackageReady] = useState<Record<string, BrowserPackageBinding>>({});
   const [mayRestart, setMayRestart] = useState<string | null>(null);
   const activeScope = useRef(scopeKey);
+  const generation = useRef(0);
+  const mounted = useRef(false);
+  const controllers = useRef(new Set<AbortController>());
   activeScope.current = scopeKey;
   useEffect(() => {
+    const generationRef = generation;
+    mounted.current = true;
+    generationRef.current++;
+    const inFlight = controllers.current;
+    busy.current = false;
     leases.current = {};
     setPackageReady({});
     setMayRestart(null);
+    setPending(false);
+    setMessage("");
+    return () => {
+      mounted.current = false;
+      generationRef.current++;
+      for (const controller of inFlight) controller.abort();
+      inFlight.clear();
+      leases.current = {};
+      busy.current = false;
+    };
   }, [scopeKey]);
+  function beginTask() {
+    const startedScope = scopeKey;
+    const startedGeneration = generation.current;
+    const controller = new AbortController();
+    controllers.current.add(controller);
+    const active = () => mounted.current && generation.current === startedGeneration &&
+      activeScope.current === startedScope && !controller.signal.aborted;
+    return { signal: controller.signal, active, finish: () => {
+      controllers.current.delete(controller);
+      if (active()) { busy.current = false; setPending(false); }
+    } };
+  }
   const resultHeading = useRef<HTMLHeadingElement>(null);
   async function search(value: string, cursor: string | null = null) {
     if (busy.current) return;
+    const task = beginTask();
     busy.current = true; setPending(true); setMessage("");
     try {
       const result = await searchClinicalArchive({ query: value, cursor });
+      if (!task.active()) return;
       if (!result.ok) { setMessage(result.error.message); return; }
       setPage(result.data); setAppliedQuery(value);
       resultHeading.current?.focus();
-    } catch { setMessage("No pudimos completar la búsqueda. Tus resultados anteriores siguen aquí; volvé a intentar."); }
-    finally { busy.current = false; setPending(false); }
+    } catch { if (task.active()) setMessage("No pudimos completar la búsqueda. Tus resultados anteriores siguen aquí; volvé a intentar."); }
+    finally { task.finish(); }
   }
   function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); void search(query.trim()); }
   async function download(id: string, format: "pdf" | "json") {
     if (busy.current) return;
+    const task = beginTask();
     busy.current = true; setPending(true); setMessage("");
-    const controller = new AbortController();
-    const deadline = setTimeout(() => controller.abort(), 90000);
     try {
       const url = format === "pdf" ? `/api/pacientes/${id}/ficha-pdf` : `/api/patient/export?paciente=${id}`;
-      const response = await fetch(url, { cache: "no-store", redirect: "manual", signal: controller.signal });
+      const response = await fetch(url, { cache: "no-store", redirect: "manual",
+        signal: AbortSignal.any([task.signal, AbortSignal.timeout(90_000)]) });
+      if (!task.active()) return;
       if (response.type === "opaqueredirect" || (response.status >= 300 && response.status < 400)) {
         setMessage("Tu sesión necesita verificarse. Volvé a iniciar sesión antes de descargar la historia.");
         return;
@@ -91,6 +124,7 @@ export function ClinicalArchive({ initialPage }: { initialPage: ClinicalArchiveP
       const mime = format === "pdf" ? "application/pdf" : "application/json";
       if (!(response.headers.get("content-type") ?? "").toLowerCase().startsWith(mime)) throw Error("unexpected_document");
       const blob = await response.blob();
+      if (!task.active()) return;
       if (!blob.size) throw Error("empty_document");
       const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -98,29 +132,34 @@ export function ClinicalArchive({ initialPage }: { initialPage: ClinicalArchiveP
       document.body.appendChild(link); link.click(); link.remove();
       setTimeout(() => URL.revokeObjectURL(objectUrl), 30000);
       setMessage("Archivo preparado. Revisá las descargas de tu navegador.");
-    } catch { setMessage("La descarga se interrumpió. Podés volver a intentarla sin modificar la historia."); }
-    finally { clearTimeout(deadline); busy.current = false; setPending(false); }
+    } catch { if (task.active()) setMessage("La descarga se interrumpió. Podés volver a intentarla sin modificar la historia."); }
+    finally { task.finish(); }
   }
   async function preparePackage(patientId: string) {
     if (busy.current) return;
-    const startedScope = scopeKey;
-    const key = `${startedScope}:${patientId}`;
+    const task = beginTask();
+    const key = `${scopeKey}:${patientId}`;
     busy.current = true; setPending(true); setMessage("Verificando la entrega y sus permisos…");
     try {
       const prepared = await prepareBrowserPackage(scope, patientId, (done, total) => {
+        if (!task.active()) throw new BrowserPackageFailure("auth");
         setMessage(`Preparando archivos verificados: ${done} de ${total}.`);
-      }, leases.current[key], value => { leases.current[key] = value; });
-      if (activeScope.current !== startedScope) throw new BrowserPackageFailure("auth");
+      }, leases.current[key], value => {
+        if (!task.active()) throw new BrowserPackageFailure("auth");
+        leases.current[key] = value;
+      }, task.signal);
+      if (!task.active()) return;
       setPackageReady(current => ({ ...current, [key]: prepared.bound }));
       setMayRestart(null);
       setMessage("Entrega preparada. Elegí «Guardar historia y archivos»; se guardará un archivo TAR.");
     } catch (error) {
+      if (!task.active()) return;
       setPackageReady(current => { const next = { ...current }; delete next[key]; return next; });
       setMayRestart(error instanceof BrowserPackageFailure &&
         ["changed", "missing"].includes(error.code) ? key : null);
       setMessage(packageMessage(error));
     }
-    finally { busy.current = false; setPending(false); }
+    finally { task.finish(); }
   }
   function restartPackage(patientId: string) {
     if (busy.current) return;
@@ -134,35 +173,61 @@ export function ClinicalArchive({ initialPage }: { initialPage: ClinicalArchiveP
   async function savePackage(patientId: string) {
     const key = `${scopeKey}:${patientId}`;
     if (busy.current || !packageReady[key]) return;
+    const bound = packageReady[key];
     const browser = window as SafePicker;
     if (typeof browser.showSaveFilePicker !== "function" || !window.isSecureContext) {
       setMessage("Este navegador no ofrece guardado seguro de archivos grandes. Usá un navegador compatible o coordiná otra vía; tus PDF y JSON siguen disponibles.");
       return;
     }
-    // Calling the picker before any await preserves the browser's user gesture.
-    const selected = browser.showSaveFilePicker({ suggestedName: `folio-entrega-${patientId.slice(0, 8)}.tar`,
-      types: [{ description: "Paquete TAR de Folio", accept: { "application/x-tar": [".tar"] } }] });
+    const task = beginTask();
     busy.current = true; setPending(true); setMessage("Verificando la entrega antes de guardar…");
     let writable: FileSystemWritableFileStream | undefined;
+    let closeUncertain = false;
     try {
+      // The picker is still called before any await, preserving user activation.
+      const selected = browser.showSaveFilePicker({ suggestedName: `folio-entrega-${patientId.slice(0, 8)}.tar`,
+        types: [{ description: "Paquete TAR de Folio", accept: { "application/x-tar": [".tar"] } }] });
       const handle = await selected;
+      if (!task.active()) return;
       writable = await within(handle.createWritable({ keepExistingData: false }), 30_000);
+      if (!task.active()) {
+        try { await within(writable.abort(), 15_000); } catch { /* State is uncertain. */ }
+        return;
+      }
       const stream = writable;
       await writeVerifiedPackageArchive(
-        packageArchiveTransport(packageReady[key]), {
-          write: chunk => within(stream.write(new Uint8Array(chunk)), 30_000),
-          close: () => within(stream.close(), 30_000),
-          abort: () => within(stream.abort(), 15_000),
+        packageArchiveTransport(bound, task.signal), {
+          write: async chunk => {
+            if (!task.active()) throw new BrowserPackageFailure("auth");
+            await within(stream.write(new Uint8Array(chunk)), 30_000);
+            if (!task.active()) throw new BrowserPackageFailure("auth");
+          },
+          close: async () => {
+            if (!task.active()) throw new BrowserPackageFailure("auth");
+            try {
+              await within(stream.close(), 30_000);
+              if (!task.active()) throw new BrowserPackageFailure("auth");
+            } catch (error) { closeUncertain = true; throw error; }
+          },
+          abort: async () => {
+            try { await within(stream.abort(), 15_000); }
+            finally {
+              // A timed-out close can still commit later; abort cannot certify it.
+              if (closeUncertain) throw new BrowserPackageFailure("unconfirmed");
+            }
+          },
         }, ({ completedEntries, totalEntries }) => {
+          if (!task.active()) throw new BrowserPackageFailure("auth");
           setMessage(`Guardando archivos verificados: ${completedEntries} de ${totalEntries}.`);
         });
       writable = undefined;
-      setMessage("Historia y archivos guardados; revisá la carpeta elegida.");
+      if (task.active()) setMessage("Historia y archivos guardados; revisá la carpeta elegida.");
     } catch (error) {
+      if (!task.active()) return;
       if ((error as { name?: string })?.name === "AbortError" && !writable) {
         setMessage("No elegiste un archivo; la entrega preparada sigue disponible.");
       } else setMessage(packageMessage(error));
-    } finally { busy.current = false; setPending(false); }
+    } finally { task.finish(); }
   }
   return <section className={styles.archive} aria-busy={pending}>
     <form onSubmit={submit} className={styles.search} role="search">
@@ -172,7 +237,7 @@ export function ClinicalArchive({ initialPage }: { initialPage: ClinicalArchiveP
         <button className="fi-btn fi-btn-primary" type="submit" disabled={pending}>Buscar</button>
       </div>
     </form>
-    <p role="status" aria-live="polite">{pending ? "Preparando…" : message}</p>
+    <p role="status" aria-live="polite">{message || (pending ? "Preparando…" : "")}</p>
     <p className={styles.packageHint}>La entrega completa se guarda como archivo TAR y requiere un navegador con guardado seguro de archivos grandes.</p>
     <h2 ref={resultHeading} tabIndex={-1}>{page.total} {page.total === 1 ? "paciente" : "pacientes"}{appliedQuery ? " en la búsqueda" : page.total === 1 ? " disponible" : " disponibles"}</h2>
     {page.patients.length === 0 ? <p>No encontramos pacientes con esa búsqueda. Probá con el nombre y apellido completos, el DNI o el teléfono.</p> :

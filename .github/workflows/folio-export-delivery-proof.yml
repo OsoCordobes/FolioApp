@@ -76,3 +76,11 @@ jobs:
         run: pnpm exec playwright install chromium --with-deps
       - name: Verify real Next routes, session, Storage and 50 MiB fragments
         run: node --conditions=react-server --import tsx scripts/testing/export-delivery-proof/run.mjs
+      - name: Attach synthetic archive UI captures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: folio-b06b3-ui-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/folio-b06b3-ui/*.png
+          if-no-files-found: ignore
+          retention-days: 7
