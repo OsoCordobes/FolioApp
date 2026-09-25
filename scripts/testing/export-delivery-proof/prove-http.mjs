@@ -4,7 +4,7 @@ import {createServerClient} from '@supabase/ssr';
 import {proveBrowser} from './prove-browser.mjs';
 
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SAFE_ROUTE_CODES=new Set(['auth_required','mfa_required','no_org','forbidden',
  'validation','conflict','not_found','network','db_error','capacity','rate_limited']);
 
