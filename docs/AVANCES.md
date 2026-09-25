@@ -2,7 +2,7 @@
 
 Actualizado: 25/09/2026. Este es el registro breve del trabajo; [el tablero técnico](LAUNCH-BOARD.md) conserva el detalle y los antecedentes. Cada fila cambia sólo ante un resultado o bloqueo real.
 
-**Equipo comprobado:** A · dirección, revisión y publicación. C · construye la base de la entrega completa de archivos. D · investiga el ensayo de acceso y prepara el guardado seguro de servicios. Los dos subagentes trabajan en paralelo.
+**Equipo comprobado:** A · dirección, revisión y publicación. C · incorpora los archivos a la exportación reanudable. D · investiga el ensayo de acceso y prepara el guardado seguro de servicios. Los dos subagentes trabajan en paralelo.
 
 **Publicado** = disponible en Folio. **Probado** = pasó sus controles, todavía sin publicar. **En curso** = falta comprobarlo. Las pruebas parciales no cierran un checkpoint completo.
 
@@ -19,12 +19,12 @@ Actualizado: 25/09/2026. Este es el registro breve del trabajo; [el tablero téc
 | **Google Calendar** · prueba externa pendiente | Debemos demostrar reservas reflejadas en Google, ocupación externa y cambios sin duplicados. |
 | **Correo y comunicaciones** · prueba externa pendiente | La entrega global sigue desactivada; falta comprobar recepción y reintentos en buzones controlados. |
 | **Pagos y suscripciones** · prueba externa pendiente | Los cobros ficticios previos no prueban Mercado Pago real; faltan los recorridos comerciales ofrecidos. |
-| **Portal y exportación** · corrección publicada; adjuntos en construcción | [PR173 publicada](https://github.com/OsoCordobes/FolioApp/pull/173): aviso ante datos ilegibles. C · revisión A; [PR176](https://github.com/OsoCordobes/FolioApp/pull/176) prepara entregas reanudables, todavía sin descarga completa. |
+| **Portal y exportación** · base publicada; archivos en construcción | [PR173](https://github.com/OsoCordobes/FolioApp/pull/173) avisa ante datos ilegibles. C · revisión A; [PR176 publicada](https://github.com/OsoCordobes/FolioApp/pull/176) prepara entregas privadas reanudables; la descarga completa sigue en construcción. |
 | **Continuidad y soporte** · pendiente | Faltan custodia externa, alertas, responsables y procedimiento de ayuda comprobados. |
 | **Validación profesional y piloto** · pendiente humano | Cinco especialidades y piloto de 14 días, con tres profesionales y cinco jornadas por persona. |
 | **Lanzamiento** · pendiente | Se cerrará cuando la versión publicada y la oferta comercial coincidan con lo demostrado. |
 
-**Última publicación comprobada:** [PR174 · protección de descargas](https://github.com/OsoCordobes/FolioApp/pull/174), disponible desde el 25/09 a las 03:08 (Copenhague). Conserva la nueva miniweb, recepción, recuperación y corrección de exportación. **Última cuota consultada:** 89% disponible; reserva de cierre: 15%.
+**Última publicación comprobada:** [PR176 · base para exportar archivos](https://github.com/OsoCordobes/FolioApp/pull/176), disponible desde el 25/09 a las 03:45 (Copenhague). Es preparación interna; conserva las mejoras visibles de miniweb y recepción. **Última cuota consultada:** 87% disponible; reserva de cierre: 15%.
 
 **Forma de trabajo:** continuar mientras haya trabajo útil, cerrar cada paquete con evidencia y tomar el siguiente. La reanudación horaria es respaldo ante un corte, no una espera entre tareas.
 
