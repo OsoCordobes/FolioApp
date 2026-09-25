@@ -4,6 +4,7 @@ import {createHash,randomUUID} from 'node:crypto';
 import {mkdir,open} from 'node:fs/promises';
 import path from 'node:path';
 import {chromium} from '@playwright/test';
+import {guardBrowserContext,LOCAL_BROWSER_ARGS} from '../browser-network.mjs';
 
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 
@@ -35,10 +36,11 @@ async function hashOpfsFile(page){
  * Only the native picker dialog is substituted; no product route is mocked. */
 export async function proveBrowser({app,seed,operationId,cookies}){
  const started=Date.now();
- const browser=await chromium.launch({headless:true});
+ const browser=await chromium.launch({headless:true,args:LOCAL_BROWSER_ARGS});
  const archive=path.join(process.env.RUNNER_TEMP,`folio-synthetic-${randomUUID()}.tar`);
  try{
-  const context=await browser.newContext({acceptDownloads:false});
+  const context=await browser.newContext({acceptDownloads:false,serviceWorkers:'block'});
+  await guardBrowserContext(context);
   await context.addCookies(cookies.map(({name,value})=>({name,value,url:app})));
   const page=await context.newPage();
   await page.addInitScript(({patientId,userId,orgId,operationId})=>{
@@ -66,9 +68,13 @@ export async function proveBrowser({app,seed,operationId,cookies}){
   assert.equal(response?.status(),200,'archive_page_unavailable');
   await page.getByRole('button',{name:/Preparar o retomar entrega completa/}).first().click();
   await page.getByRole('button',{name:/Guardar historia y archivos/}).waitFor({timeout:45_000});
+  await page.getByRole('button',{name:'Solo esenciales'}).click();
+  await page.getByRole('dialog',{name:'Cookies y privacidad'}).waitFor({state:'hidden'});
   const captures=path.join(process.env.RUNNER_TEMP,'folio-b06b3-ui');
   await mkdir(captures,{recursive:true});
   await page.setViewportSize({width:375,height:812});
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,
+   'archive_mobile_overflow');
   await page.screenshot({path:path.join(captures,'archive-375.png'),fullPage:true});
   await page.setViewportSize({width:1440,height:900});
   await page.screenshot({path:path.join(captures,'archive-1440.png'),fullPage:true});
@@ -134,7 +140,8 @@ export async function proveBrowser({app,seed,operationId,cookies}){
   assert.equal(preserved.size,file.size,'interruption_replaced_prior_file_size');
   assert.equal(preserved.sha256,originalDigest,'interruption_replaced_prior_file_hash');
   await context.close();
-  const unsupported=await browser.newContext();
+  const unsupported=await browser.newContext({serviceWorkers:'block'});
+  await guardBrowserContext(unsupported);
   await unsupported.addCookies(cookies.map(({name,value})=>({name,value,url:app})));
   const missing=await unsupported.newPage();
   await missing.addInitScript(({patientId,userId,orgId,operationId})=>{

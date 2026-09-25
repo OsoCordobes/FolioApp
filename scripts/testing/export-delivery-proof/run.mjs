@@ -178,8 +178,9 @@ async function fixture(state,mark){
  assert.equal(claims.aal,'aal2','auth_not_aal2');
  const org=randomUUID(),member=randomUUID(),patient=randomUUID(),identity=randomUUID();
  const document=randomUUID(),withdrawn=randomUUID(),consent=randomUUID(),template=randomUUID();
- const file=pdf('synthetic-document',50*1024*1024-1024),signature=pdf('synthetic-signature');
- assert.ok(file.length>49*1024*1024&&file.length<=50*1024*1024,'document_not_50mib');
+ const file=pdf('synthetic-document',50*1024*1024-pdf('synthetic-document').length);
+ const signature=pdf('synthetic-signature');
+ assert.equal(file.length,50*1024*1024,'document_not_50mib');
  const documentPath=`documentos-clinicos/${org}/${patient}/${document}.pdf`;
  const withdrawnPath=`documentos-clinicos/${org}/${patient}/${withdrawn}.pdf`;
  const signaturePath=`consentimientos-firmados/${org}/${patient}/${consent}.pdf`;
