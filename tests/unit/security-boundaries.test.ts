@@ -25,9 +25,10 @@ function scenario(role = "OWNER", completed = false, deleted: string | null = nu
   const events: string[] = [];
   const additionalCandidates: unknown[] = [];
   const readiness = { services: [] as unknown[], hours: [] as unknown[] };
+  const progressFailure = { enabled: false };
   const rpcCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
   const user = { id: "user", email: "owner@example.test", email_confirmed_at: "2026-01-01" as string | null };
-  const organization = { id: "org", slug: "consultorio", onboarding_completed: completed, deleted_at: deleted };
+  const organization = { id: "org", slug: "consultorio", onboarding_completed: completed, onboarding_step_max: 1, deleted_at: deleted };
   const member = { id: "member", organization_id: "org", role, deleted_at: null,
     es_colegiado: false, accepted_at: null as string | null, invited_by_id: null as string | null };
   const session = { ok: true, data: { userId: user.id, organizationId: "org", memberId: "member", role } };
@@ -47,6 +48,11 @@ function scenario(role = "OWNER", completed = false, deleted: string | null = nu
       for (const method of ["insert", "update", "delete"]) query[method] = (values?: Record<string, unknown>) => { writes.push(table); if (method === "update") update = values; return query; };
       query.single = query.maybeSingle = () => { single = true; return query; };
       query.then = (fn: (value: unknown) => unknown) => {
+        if (table === "organization" && update?.onboarding_step_max !== undefined) {
+          const step = Number(update.onboarding_step_max);
+          if (progressFailure.enabled) return Promise.resolve({ data: null, error: { message: "synthetic progress failure" } }).then(fn);
+          if (organization.onboarding_step_max >= step) return Promise.resolve({ data: null, error: null }).then(fn);
+        }
         if (table === "organization" && update) Object.assign(organization, update);
         return Promise.resolve({ data: table === "member" ? member : table === "organization" ? single ? organization : candidateEmail ? [organization] : [] : table === "servicio" ? readiness.services : table === "disponibilidad_profesional" ? readiness.hours : table === "paciente_identidad" && candidateEmail ? [{ id: "identity", organization_id: "org", email_hash: candidateEmail, dni_hash: "123", telefono_hash: null, paciente: { id: "patient", cuenta_id: null, pseudonimizado_en: null, deleted_at: null } }, ...additionalCandidates] : [], error: null }).then(fn);
       };
@@ -64,7 +70,7 @@ function scenario(role = "OWNER", completed = false, deleted: string | null = nu
     "@/lib/security/turnstile": { verifyTurnstile: async () => true },
     "@/lib/db/audit": { writeAuditEntry: async () => undefined },
   };
-  return { writes, events, additionalCandidates, user, rpcCalls, member, organization, readiness, loadActions: () => load("app/(public)/onboarding/actions.ts", overrides), loadLinkage: () => load("lib/portal/link-actions.ts", overrides) };
+  return { writes, events, additionalCandidates, user, rpcCalls, member, organization, readiness, progressFailure, loadActions: () => load("app/(public)/onboarding/actions.ts", overrides), loadLinkage: () => load("lib/portal/link-actions.ts", overrides) };
 }
 
 test("a treating clinic owner is publicly ready only with accepted membership, active service and schedule", async () => {
@@ -107,6 +113,34 @@ test("active owner can continue the wizard", async () => {
   const s = scenario();
   assert.equal((await s.loadActions().updateOnboardingStep(4, { acento: "#777777" })).ok, true);
   assert.ok(s.writes.includes("organization"));
+});
+test("Step 3 saves its slug and advances the resume checkpoint", async () => {
+  const s = scenario();
+  const result = await s.loadActions().updateOnboardingStep(3, {
+    consultorioNombre: "Consultorio Sintético", ciudad: "Alta Gracia", especialidad: "cardiologia",
+  }) as { ok: boolean; slug?: string };
+  assert.equal(result.ok, true);
+  assert.equal(result.slug, "consultorio");
+  assert.equal(s.organization.onboarding_step_max, 3);
+});
+test("Step 3 never reports success when the resume checkpoint write fails", async () => {
+  const s = scenario();
+  s.progressFailure.enabled = true;
+  const result = await s.loadActions().updateOnboardingStep(3, {
+    consultorioNombre: "Consultorio Sintético", ciudad: "Alta Gracia", especialidad: "cardiologia",
+  });
+  assert.equal(result.ok, false);
+  assert.equal(s.organization.onboarding_step_max, 1);
+});
+test("retrying Step 3 preserves a later resume checkpoint", async () => {
+  const s = scenario();
+  s.organization.onboarding_step_max = 4;
+  const result = await s.loadActions().updateOnboardingStep(3, {
+    consultorioNombre: "Consultorio Sintético", ciudad: "Alta Gracia", especialidad: "cardiologia",
+  }) as { ok: boolean; slug?: string };
+  assert.equal(result.ok, true);
+  assert.equal(result.slug, "consultorio");
+  assert.equal(s.organization.onboarding_step_max, 4);
 });
 test("unverified Auth identity cannot run portal linkage", async () => {
   const s = scenario();

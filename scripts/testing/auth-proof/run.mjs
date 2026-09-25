@@ -129,6 +129,18 @@ async function main(){
   const files=(await readdir(folder)).filter(name=>/^\d{14}_.+\.sql$/.test(name)).sort();
   assert.ok(files.length>=124,'incomplete migration set');
   for(const file of files)await must('psql',['-X','-v','ON_ERROR_STOP=1','-h','127.0.0.1','-p','55422','-U','postgres','-d','postgres','-f',path.join(folder,file)],{env:{...env,PGPASSWORD:password},timeout:120_000});
+  // PostgREST started before Folio's schema existed. Explicitly reload its
+  // cache and wait until a newly migrated RPC is visible before opening UI.
+  await must('psql',['-X','-v','ON_ERROR_STOP=1','-h','127.0.0.1','-p','55422','-U','postgres','-d','postgres','-c',"NOTIFY pgrst, 'reload schema'"],{env:{...env,PGPASSWORD:password}});
+  let schemaReady=false;
+  for(let i=0;i<30;i++){
+   try{
+    const response=await fetch(`${api}/rest/v1/rpc/mfa_access_status`,{method:'POST',headers:{apikey:service,Authorization:`Bearer ${service}`,'Content-Type':'application/json'},body:'{}',signal:AbortSignal.timeout(2000)});
+    if(response.ok){schemaReady=true;break;}
+   }catch{}
+   await delay(1000);
+  }
+  assert.equal(schemaReady,true,'postgrest_schema_cache_not_ready');
   // The fresh migration defaults to preparation-off. Assert the actual policy,
   // rather than changing it or claiming an MFA challenge was exercised.
   const mfaPolicy=(await must('psql',['-X','-t','-A','-h','127.0.0.1','-p','55422','-U','postgres','-d','postgres','-c',"SELECT application_ready::int, (staff_enforce_after IS NULL)::int FROM folio_mfa_private.policy WHERE singleton"],{env:{...env,PGPASSWORD:password}})).trim();
