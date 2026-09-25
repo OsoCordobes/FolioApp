@@ -101,7 +101,7 @@ async function fixture(state){
  const org=randomUUID(),member=randomUUID(),patient=randomUUID(),identity=randomUUID(),servicio=randomUUID(),turno=randomUUID();
  process.env.FOLIO_ENC_KEY=Buffer.alloc(32,37).toString('base64');
  process.env.FOLIO_ENC_HMAC_KEY=Buffer.alloc(32,71).toString('base64');
- const module=await import('../../../lib/crypto.ts');const crypto=module.default??module;
+ const cryptoModule=await import('../../../lib/crypto.ts');const crypto=cryptoModule.default??cryptoModule;
  const encrypted=crypto.encryptColumn('Paciente sintético');
  const cipher=Buffer.from(encrypted.slice(2),'hex');
  await withPg(state.dbPassword,async db=>{
