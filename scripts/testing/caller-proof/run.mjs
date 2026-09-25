@@ -9,6 +9,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {Client} from 'pg';
 import {createClient} from '@supabase/supabase-js';
+import {createServerClient} from '@supabase/ssr';
 import {totp} from '../clinical-config.mjs';
 import {openLoopbackBridge,validateBridgeTarget,waitForBridgeTarget} from '../../recovery/ci-loopback-bridge.mjs';
 
@@ -118,6 +119,7 @@ async function fixture(state){
  const enrollmentOtpAt=Date.now();
  const verified=await actor.auth.mfa.verify({factorId:enrolled.data.id,challengeId:challenge.data.id,code:totp(enrolled.data.totp.secret,enrollmentOtpAt)});
  assert.equal(verified.error,null,'factor_verify_failed');
+ assert.ok(verified.data?.access_token&&verified.data?.refresh_token,'verified_session_missing');
  const org=randomUUID(),member=randomUUID(),patient=randomUUID(),identity=randomUUID(),servicio=randomUUID(),turno=randomUUID();
  process.env.FOLIO_ENC_KEY=Buffer.alloc(32,37).toString('base64');
  process.env.FOLIO_ENC_HMAC_KEY=Buffer.alloc(32,71).toString('base64');
@@ -138,7 +140,33 @@ async function fixture(state){
    await db.query('COMMIT');
   }catch(error){await db.query('ROLLBACK');throw error;}
  });
- await writeFile(fixtureFile,JSON.stringify({email,password,totpSecret:enrolled.data.totp.secret,enrollmentOtpWindow:Math.floor(enrollmentOtpAt/30000),databaseUrl:`postgresql://postgres:${state.dbPassword}@127.0.0.1:55422/postgres`,turnoId:turno}),{flag:'wx',mode:0o600});
+ let cookies=[];
+ const seeded=createServerClient(api,state.anonKey,{cookies:{
+  getAll:()=>cookies,
+  setAll:values=>{cookies=values.map(({name,value,options})=>({name,value,options}));},
+ }});
+ const session=await seeded.auth.setSession({access_token:verified.data.access_token,refresh_token:verified.data.refresh_token});
+ assert.equal(session.error,null,'session_cookie_unavailable');
+ const {data:identityCheck,error:identityError}=await seeded.auth.getUser();
+ assert.equal(identityError,null,'verified_identity_failed');
+ assert.equal(identityCheck.user?.id,user,'verified_identity_mismatch');
+ const {data:mfa,error:mfaError}=await seeded.rpc('mfa_access_status');
+ assert.equal(mfaError,null,'verified_mfa_status_failed');
+ assert.equal(mfa?.required,true,'mfa_not_required');
+ assert.equal(mfa?.isStaff,true,'mfa_not_staff');
+ assert.equal(mfa?.hasVerifiedFactor,true,'mfa_factor_missing');
+ assert.equal(mfa?.sessionValid,true,'mfa_session_invalid');
+ assert.equal(mfa?.allowed,true,'mfa_access_denied');
+ assert.ok(cookies.length>0,'session_cookie_missing');
+ console.log('caller_proof_session:identity=matched required=1 staff=1 factor=1 allowed=1 valid=1');
+ const browserCookies=cookies.map(({name,value,options})=>{
+  const sameSite={lax:'Lax',strict:'Strict',none:'None'}[String(options?.sameSite??'').toLowerCase()];
+  return {name,value,domain:'localhost',path:options?.path??'/',
+   ...(typeof options?.httpOnly==='boolean'?{httpOnly:options.httpOnly}:{}),
+   ...(typeof options?.secure==='boolean'?{secure:options.secure}:{}),
+   ...(sameSite?{sameSite}:{})};
+ });
+ await writeFile(fixtureFile,JSON.stringify({browserCookies,userId:user,databaseUrl:`postgresql://postgres:${state.dbPassword}@127.0.0.1:55422/postgres`,turnoId:turno}),{flag:'wx',mode:0o600});
 }
 async function main(){
  assert.equal(process.env.GITHUB_ACTIONS,'true');assert.equal(process.env.RUNNER_ENVIRONMENT,'github-hosted');assert.equal(process.env.RUNNER_OS,'Linux');assert.equal(process.platform,'linux');
@@ -165,19 +193,13 @@ async function main(){
   stage='browser';const browserEnv={...env,E2E_BASE_URL:'http://localhost:4430',FOLIO_TEST_SUPABASE_URL:api,FOLIO_TEST_SUPABASE_ANON_KEY:state.anonKey,FOLIO_TEST_SUPABASE_SERVICE_KEY:state.serviceKey,FOLIO_TEST_DATABASE_URL:`postgresql://postgres:${dbPassword}@127.0.0.1:55422/postgres`,FOLIO_TEST_CLINICAL:'1'};
   const result=await run('pnpm',['test:e2e','--','tests/e2e/caller-screen.spec.ts','--trace=off'],{env:browserEnv,timeout:900000,limit:2000000});
   const markers=[...result.output.matchAll(/caller_proof_stage:([a-z0-9_]+)(?: visible_11s=([0-9]+) hidden_6s=0)?/g)].map(match=>({stage:match[1],visible:match[2]}));
-  const mfaDiagnostic=result.output.match(/caller_proof_mfa_diagnostic:path=(mfa|hoy|other) alert=(validation|session|session_check|rate|factor_list|factor_missing|challenge|otp|policy_read|policy|network|none|unknown) form=([01]) outside=([01]) announcer=([01]) button=(pending|ready|missing) post=(none|pending|complete|failed) status=(none|2xx|3xx|4xx|5xx)/);
-  if(mfaDiagnostic)console.log(`caller_proof_mfa_diagnostic:path=${mfaDiagnostic[1]} alert=${mfaDiagnostic[2]} form=${mfaDiagnostic[3]} outside=${mfaDiagnostic[4]} announcer=${mfaDiagnostic[5]} button=${mfaDiagnostic[6]} post=${mfaDiagnostic[7]} status=${mfaDiagnostic[8]}`);
-  const mfaRead=result.output.match(/caller_proof_mfa_read_probe:cookie=(missing|chunk_gap|invalid|valid) auth=(none|config|transport|valid|format|unauthorized|http_other) same=([01]) aal=(none|aal1|aal2|other|invalid) rpc=(none|ok|unauthorized|forbidden|server|http_other|transport) shape=(none|valid|invalid) required=(none|[01]) staff=(none|[01]) factor=(none|[01]) allowed=(none|[01]) session=(none|[01]) rpc_code=(none|42501|42883|42P01|42703|PGRST202|PGRST301|PGRST302|PGRST303|other)/);
-  if(mfaRead)console.log(`caller_proof_mfa_read_probe:cookie=${mfaRead[1]} auth=${mfaRead[2]} same=${mfaRead[3]} aal=${mfaRead[4]} rpc=${mfaRead[5]} shape=${mfaRead[6]} required=${mfaRead[7]} staff=${mfaRead[8]} factor=${mfaRead[9]} allowed=${mfaRead[10]} session=${mfaRead[11]} rpc_code=${mfaRead[12]}`);
-  const mfaPreflight=result.output.match(/caller_proof_mfa_preflight:same_window=([01])/);
-  if(mfaPreflight)console.log(`caller_proof_mfa_preflight:same_window=${mfaPreflight[1]}`);
   for(const item of markers)if(['pair_issued','screen_paired','called_on_screen','lost_response_reused','visit_unchanged','polling_bounded','reconnect_silent','revoked_after_reload'].includes(item.stage))
    console.log(`caller_proof_stage:${item.stage}${item.visible?` visible_11s=${item.visible} hidden_6s=0`:''}`);
   const counts=result.output.split(/\r?\n/).filter(line=>/^\s*\d+ (?:passed|failed|skipped)\b/.test(line));
   for(const line of counts.slice(-3))console.log(line.trim());
   if(result.code!==0){
    const lines=[...result.output.matchAll(/caller-screen\.spec\.ts:(\d+)(?::\d+)?/g)].map(m=>Number(m[1])).filter(n=>n>0&&n<1000);
-   const kind=result.output.includes('TimeoutError')?'timeout':result.output.includes('AssertionError')?'assertion':result.output.includes('locator')?'locator':'unknown';
+   const kind=/strict mode violation/i.test(result.output)?'strict':/Test timeout.*exceeded|test timeout of \d+ms/i.test(result.output)?'test_timeout':/(?:Timeout:?|Timed out)\s*\d+ms|expect\([^\n]+\).*timeout/i.test(result.output)?'expect_timeout':/Target closed|browser has been closed/i.test(result.output)?'target_closed':/AssertionError|expect\([^\n]+\) failed/i.test(result.output)?'assertion':'other';
    console.log(`caller_proof_diagnostic:last_stage=${markers.at(-1)?.stage??'none'} spec_lines=${[...new Set(lines)].slice(-3).join(',')||'unknown'} kind=${kind}`);
    throw Error('caller_browser_failed');
   }
