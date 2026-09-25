@@ -8,6 +8,7 @@ on:
       - tests/e2e/caller-screen.spec.ts
       - tests/unit/caller-screen-http.test.ts
       - tests/unit/caller-rpc-result.test.ts
+      - tests/unit/caller-pending-call.test.ts
       - app/api/caller/**
       - app/(public)/pantalla/**
       - app/(app)/configuracion/pantallas/**

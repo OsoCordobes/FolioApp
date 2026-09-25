@@ -34,7 +34,11 @@ async function staffRpc<T>(name: string, params: Record<string, unknown>, schema
   try {
     const max = name === "caller_create_pair" ? 30 : name === "caller_revoke_screen" ? 120 : 240;
     const limited = await limitByKey(`caller.staff.${name}`, `${session.data.organizationId}:${session.data.userId}`, max);
-    if (!limited.ok) return err("forbidden", "Esperá un momento antes de repetir esta acción.");
+    if (!limited.ok) {
+      const result = err("forbidden", "Esperá un momento antes de repetir esta acción.");
+      if (!result.ok && mutation) result.error.mutationOutcome = "review_required";
+      return result;
+    }
     const supabase = await createSupabaseServerClient();
     const { data, error } = await supabase.rpc(name, { p_org: session.data.organizationId, ...params });
     if (error) return callerError(error.code, mutation);

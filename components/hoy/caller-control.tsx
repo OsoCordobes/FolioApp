@@ -3,9 +3,9 @@
 import { useEffect, useState } from "react";
 
 import { callWaitingCodeAction, issueCallerCodeAction } from "@/app/(app)/hoy/caller-actions";
+import { pendingAfterAttempt, type PendingCall } from "@/lib/caller/pending-call";
 
 type Destination = "RECEPCION" | "CONSULTORIO";
-type PendingCall = { operationId: string; destination: Destination; room: number | null };
 
 export function CallerControl({ turnoId, identity }: { turnoId: string; identity: { userId: string; organizationId: string } }) {
   const [open, setOpen] = useState(false);
@@ -53,15 +53,16 @@ export function CallerControl({ turnoId, identity }: { turnoId: string; identity
       const result = await callWaitingCodeAction({ turnoId, ...intent });
       if (result.ok) {
         setMessage(`${result.data.code} · ${result.data.destination}. Llamado confirmado.`);
-        setPendingCall(null);
+        setPendingCall(pendingAfterAttempt(intent, true));
         clearStoredIntent();
       } else {
         setMessage(result.error.message);
-        if (result.error.mutationOutcome !== "uncertain" && result.error.mutationOutcome !== "review_required") {
-          setPendingCall(null); clearStoredIntent();
-        }
+        setPendingCall(pendingAfterAttempt(intent, false));
       }
-    } catch { setMessage("No pudimos confirmar el llamado. Usá «Comprobar llamado» antes de emitir otro."); }
+    } catch {
+      setPendingCall(pendingAfterAttempt(intent, false));
+      setMessage("No pudimos confirmar el llamado. Usá «Comprobar llamado» antes de emitir otro.");
+    }
     finally { setBusy(false); }
   }
 
