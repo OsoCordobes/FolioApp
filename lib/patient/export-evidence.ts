@@ -4,6 +4,7 @@ import { clinicalObjectPath, CLINICAL_BUCKET } from "@/lib/storage/clinical-file
 import { firmaPathMatchesFicha } from "@/lib/db/portal-consentimientos";
 import type { createSupabaseServerClient } from "@/lib/supabase/server";
 import { readVerifiedClinicalCollection } from "./verified-collection";
+import { readRetiredDocumentMetadata } from "./export-retired-documents";
 
 type Supa = Awaited<ReturnType<typeof createSupabaseServerClient>>;
 type Row = { id: string } & Record<string, unknown>;
@@ -35,14 +36,26 @@ function identitySnapshot(value: unknown, role: "patient" | "representative"): u
 export async function readClinicalEvidence(client: Supa, organizationId: string, pacienteId: string): Promise<Result<ClinicalEvidenceInventory>> {
   const read = (table: string) => readVerifiedClinicalCollection<Row>((from, to) => client.from(table).select("*", { count: "exact" })
     .eq("organization_id", organizationId).eq("paciente_id", pacienteId).order("id", { ascending: true }).range(from, to));
-  const [documents, consents, assessments] = await Promise.all([read("documento_clinico"), read("consentimiento"), read("consentimiento_evaluacion")]);
-  if (documents.error || consents.error || assessments.error) return err("db_error", "No se pudo verificar todo el inventario de documentos y consentimientos.");
+  const [documents, retired, consents, assessments] = await Promise.all([
+    read("documento_clinico"), readRetiredDocumentMetadata(client, organizationId, pacienteId),
+    read("consentimiento"), read("consentimiento_evaluacion"),
+  ]);
+  if (documents.error || !retired.ok || consents.error || assessments.error) return err("db_error", "No se pudo verificar todo el inventario de documentos y consentimientos.");
   try {
-    for (const row of [...documents.data, ...consents.data, ...assessments.data]) {
+    if (documents.data.length + retired.data.rows.length !== retired.data.allTotal ||
+        documents.data.some(row => row.deleted_at !== null) ||
+        new Set([...documents.data, ...retired.data.rows].map(row => row.id)).size !== retired.data.allTotal) {
+      throw new Error("document_inventory_changed");
+    }
+    for (const row of [...documents.data, ...retired.data.rows, ...consents.data, ...assessments.data]) {
       if (row.organization_id !== organizationId || row.paciente_id !== pacienteId) throw new Error("invalid_evidence_scope");
     }
-    const documentos = documents.data.map(r => {
-      if (r.storage_bucket !== CLINICAL_BUCKET || !clinicalObjectPath(String(r.storage_path), organizationId, pacienteId)) throw new Error("invalid_document_scope");
+    const documentos = [...documents.data, ...retired.data.rows].sort((a, b) => String(a.id).localeCompare(String(b.id))).map(r => {
+      if (r.deleted_at == null) {
+        const active = r as Row;
+        if (active.storage_bucket !== CLINICAL_BUCKET ||
+            !clinicalObjectPath(String(active.storage_path), organizationId, pacienteId)) throw new Error("invalid_document_scope");
+      }
       return { id: r.id, sesion_id: nullable(r.sesion_id), tipo: nullable(r.tipo), mime_type: nullable(r.mime_type),
         tamanio_bytes: nullable(r.tamanio_bytes), content_sha256: nullable(r.content_sha256), fecha_estudio: nullable(r.fecha_estudio),
         descripcion: decryptClinicalExportField(r.descripcion_cifrado), subido_por_id: nullable(r.subido_por_id),

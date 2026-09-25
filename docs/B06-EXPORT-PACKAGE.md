@@ -50,3 +50,53 @@ El JSON v2, la exportación del portal y la UI siguen intactos. Este contrato
 no promete una instantánea transaccional global, disponibilidad de archivos
 retirados ni restauración acreditada. B06b2 tendrá que comparar el
 fingerprint al final y fallar sin paquete parcial si cambian las fuentes.
+
+## Tramo de bytes (B06b2 / M137, candidato)
+
+El servidor vuelve a leer bajo RLS el JSON profesional y el inventario fuente.
+Su fingerprint v1 normaliza sólo `exported_at` y los dos tiempos de lectura del
+manifiesto; las fechas clínicas, estados, hashes, paths privados de fuentes
+activas y metadatos restantes siguen determinando la huella. Un retirado no
+aporta path al fingerprint porque nunca se permite leer sus bytes. El JSON congelado usa el tiempo
+persistido de la entrada, de modo que un reintento no produce bytes distintos.
+El ledger recibe una entrada JSON, cada documento y cada firma; un documento
+retirado conserva su entrada de inventario con cero fragmentos y nunca se lee
+del Storage original.
+
+Cada operación procesa a lo sumo un fragmento de 3 MiB de una sola fuente.
+El origen se valida por tamaño, tipo real y hash registrado cuando existe:
+hasta 50 MiB para documento legado y 10 MiB para firma. Un hash calculado de
+firma legada se conserva como **calculado en la entrega**, no como hash
+histórico. El upload privado tiene `upsert=false`, timeout de 15 segundos y
+lectura de vuelta obligatoria; una respuesta perdida sólo permite reanudar si
+los bytes del objeto existente coinciden. El RPC de fragmentos exige lease y
+revisión actuales y rechaza cambiar un ordinal ya registrado. Un lease vencido
+se reclama con nuevo token; los fragmentos verificados sobreviven y el token
+anterior no puede continuar.
+
+Antes de `READY`, el finalizador coteja el conjunto exacto de entradas, sus
+fragmentos contiguos, el fingerprint releído tras paginar el ledger y la
+autoridad vigente. No relee todos los bytes en una sola petición: cada
+fragmento ya fue releído antes de registrar/verificar su entrada, y ningún
+camino de la aplicación modifica esos objetos. La futura lectura de B06b3
+volverá a comprobar el hash de cada fragmento y la autorización antes y
+después de entregarlo como archivo reconstruido. Hasta entonces, este tramo
+no crea rutas de descarga ni anuncia una entrega completa al paciente.
+
+La limpieza sigue siendo privada y explícita, sin cron. Sólo reclama trabajos
+vencidos al menos cinco minutos antes. Para cada entrada, enumera únicamente
+el prefijo derivado de job/entrada, borra sus objetos y exige dos escaneos
+vacíos separados por un minuto; si un upload tardío aparece entre ambos,
+reinicia la ventana. La confirmación global requiere que todas las entradas
+hayan pasado ese control bajo el token de limpieza vigente. Nunca se borran
+los originales. Cada llamada procesa como máximo una entrada, porque sus
+operaciones Storage tienen tiempos de espera propios.
+
+M138 completa el inventario de retirados sin ampliar la lectura ordinaria de
+`documento_clinico`: una RPC autenticada entrega sólo metadatos clínicos
+acotados, nunca bucket, path, URL ni bytes. Respeta la política MFA vigente,
+el alcance por paciente y la caja fuerte incluso para OWNER. Dos lecturas
+paginadas verifican filas y conteos; el builder y el plan unen esas filas con
+los documentos activos leídos bajo RLS, sin duplicados y con total exacto.
+Una revocación o cambio observable aborta sin paquete parcial. La descarga
+original de un documento retirado permanece cerrada.
