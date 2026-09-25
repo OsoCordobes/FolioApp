@@ -166,15 +166,21 @@ END $$;
 RESET ROLE;
 SELECT pg_temp.m142_login(3);
 SET LOCAL ROLE authenticated;
-DO $$ BEGIN
+DO $$ DECLARE result jsonb;
+BEGIN
  IF (public.read_adult_attestation(pg_temp.m142_id(10),pg_temp.m142_id(32))->>'attested')::boolean IS DISTINCT FROM true THEN
   RAISE EXCEPTION 'M142 assigned professional unexpectedly denied';
+ END IF;
+ result:=public.attest_adult_dob(pg_temp.m142_id(10),pg_temp.m142_id(32),
+   pg_temp.m142_id(31),1,0,'1990-01-01','1990-01-01','DECLARACION_PACIENTE');
+ IF result->>'status' IS DISTINCT FROM 'attested' THEN
+  RAISE EXCEPTION 'M142 assigned professional could not attest';
  END IF;
 END $$;
 RESET ROLE;
 SELECT pg_temp.m142_login(1);
 DO $$ BEGIN
- IF (SELECT count(*) FROM folio_adult_private.attestation WHERE paciente_id=pg_temp.m142_id(32))<>1 THEN
+ IF (SELECT count(*) FROM folio_adult_private.attestation WHERE paciente_id=pg_temp.m142_id(32))<>2 THEN
   RAISE EXCEPTION 'M142 stale CAS wrote another event';
  END IF;
  PERFORM pg_temp.m142_expect($q$UPDATE folio_adult_private.attestation SET source_code='DECLARACION_PACIENTE'$q$,'42501');
@@ -234,6 +240,7 @@ UPDATE public.paciente SET caja_fuerte_profesional=NULL WHERE id=pg_temp.m142_id
 UPDATE public.member SET deleted_at=now() WHERE id=pg_temp.m142_id(11);
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.m142_expect($q$SELECT public.read_adult_attestation(pg_temp.m142_id(10),pg_temp.m142_id(32))$q$,'42501');
+SELECT pg_temp.m142_expect($q$SELECT public.attest_adult_dob(pg_temp.m142_id(10),pg_temp.m142_id(32),pg_temp.m142_id(31),3,2,'1990-01-01','1990-01-01','DOCUMENTO_EXHIBIDO')$q$,'42501');
 RESET ROLE;
 UPDATE public.member SET deleted_at=NULL WHERE id=pg_temp.m142_id(11);
 UPDATE public.member SET accepted_at=NULL,invited_by_id=pg_temp.m142_id(2)
@@ -245,16 +252,19 @@ UPDATE public.member SET accepted_at=now(),invited_by_id=NULL WHERE id=pg_temp.m
 UPDATE public.organization SET deleted_at=now() WHERE id=pg_temp.m142_id(10);
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.m142_expect($q$SELECT public.read_adult_attestation(pg_temp.m142_id(10),pg_temp.m142_id(32))$q$,'42501');
+SELECT pg_temp.m142_expect($q$SELECT public.attest_adult_dob(pg_temp.m142_id(10),pg_temp.m142_id(32),pg_temp.m142_id(31),3,2,'1990-01-01','1990-01-01','DOCUMENTO_EXHIBIDO')$q$,'42501');
 RESET ROLE;
 UPDATE public.organization SET deleted_at=NULL WHERE id=pg_temp.m142_id(10);
 UPDATE public.paciente SET deleted_at=now() WHERE id=pg_temp.m142_id(32);
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.m142_expect($q$SELECT public.read_adult_attestation(pg_temp.m142_id(10),pg_temp.m142_id(32))$q$,'42501');
+SELECT pg_temp.m142_expect($q$SELECT public.attest_adult_dob(pg_temp.m142_id(10),pg_temp.m142_id(32),pg_temp.m142_id(31),3,2,'1990-01-01','1990-01-01','DOCUMENTO_EXHIBIDO')$q$,'42501');
 RESET ROLE;
 UPDATE public.paciente SET deleted_at=NULL WHERE id=pg_temp.m142_id(32);
 UPDATE public.paciente_identidad SET deleted_at=now() WHERE id=pg_temp.m142_id(31);
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.m142_expect($q$SELECT public.read_adult_attestation(pg_temp.m142_id(10),pg_temp.m142_id(32))$q$,'55000');
+SELECT pg_temp.m142_expect($q$SELECT public.attest_adult_dob(pg_temp.m142_id(10),pg_temp.m142_id(32),pg_temp.m142_id(31),3,2,'1990-01-01','1990-01-01','DOCUMENTO_EXHIBIDO')$q$,'55000');
 RESET ROLE;
 UPDATE public.paciente_identidad SET deleted_at=NULL WHERE id=pg_temp.m142_id(31);
 UPDATE public.paciente SET identidad_id=NULL WHERE id=pg_temp.m142_id(32);
