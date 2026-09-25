@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
 import { callWaitingCodeAction, issueCallerCodeAction } from "@/app/(app)/hoy/caller-actions";
 import { pendingAfterAttempt, type PendingCall } from "@/lib/caller/pending-call";
@@ -15,8 +15,16 @@ export function CallerControl({ turnoId, identity }: { turnoId: string; identity
   const [pendingCall, setPendingCall] = useState<PendingCall | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
   const storageKey = `folio.caller.pending.v1:${identity.userId}:${identity.organizationId}:${turnoId}`;
   const clearStoredIntent = () => { try { sessionStorage.removeItem(storageKey); } catch { /* Confirmed DB result remains authoritative. */ } };
+
+  useEffect(() => { if (open) closeRef.current?.focus(); }, [open]);
+  function closePanel() { setOpen(false); toggleRef.current?.focus(); }
+  function panelKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); closePanel(); }
+  }
 
   useEffect(() => {
     try {
@@ -67,8 +75,9 @@ export function CallerControl({ turnoId, identity }: { turnoId: string; identity
   }
 
   return <div className="caller-control" onClick={event => event.stopPropagation()}>
-    <button type="button" className="caller-control-toggle" aria-label="Código de espera y llamado" aria-expanded={open} onClick={() => setOpen(value => !value)}>Llamar</button>
-    {open ? <div className="caller-control-panel" aria-label="Código de espera y llamado">
+    <button ref={toggleRef} type="button" className="caller-control-toggle" aria-label="Código de espera y llamado" aria-expanded={open} onClick={() => setOpen(value => !value)}>Llamar</button>
+    {open ? <div className="caller-control-panel" role="group" aria-label="Código de espera y llamado" onKeyDown={panelKeyDown}>
+      <div className="caller-control-panel-head"><strong>Llamado</strong><button ref={closeRef} type="button" onClick={closePanel} aria-label="Cerrar panel de llamado">Cerrar</button></div>
       {code ? <div className="caller-control-code"><span>Código de espera</span><strong>{code}</strong></div>
         : <button type="button" className="fi-btn fi-btn-secondary" disabled={busy} onClick={() => void issue()}>{busy ? "Comprobando…" : "Entregar código"}</button>}
       {code ? <div className="caller-control-destination">

@@ -103,9 +103,17 @@ test("reception code, screen pairing, revocation and unchanged clinical state", 
   expect(panel).not.toBeNull();
   expect(panel!.x).toBeGreaterThanOrEqual(0);
   expect(panel!.x + panel!.width).toBeLessThanOrEqual(376);
+  await expect(row.getByRole("button", { name: "Cerrar panel de llamado" })).toBeVisible();
   await page.screenshot({ path: "test-results/caller-hoy-375.png", fullPage: true });
+  await page.keyboard.press("Escape");
+  await expect(row.locator(".caller-control-panel")).toHaveCount(0);
+  await expect(row.getByRole("button", { name: "Código de espera y llamado" })).toBeFocused();
+  await row.getByRole("button", { name: "Código de espera y llamado" }).click();
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.screenshot({ path: "test-results/caller-hoy-1440.png", fullPage: true });
+  await row.getByRole("button", { name: "Cerrar panel de llamado" }).click();
+  await expect(row.getByRole("button", { name: "Código de espera y llamado" })).toBeFocused();
+  await row.getByRole("button", { name: "Código de espera y llamado" }).click();
   let lostResponse = false;
   const hoyActionPath = /\/hoy(?:\?.*)?$/;
   await page.route(hoyActionPath, async route => {
