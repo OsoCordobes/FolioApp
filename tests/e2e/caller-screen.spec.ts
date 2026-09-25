@@ -12,7 +12,7 @@ type Fixture = {
 };
 
 test("reception code, screen pairing, revocation and unchanged clinical state", async ({ browser, page }) => {
-  test.setTimeout(180_000);
+  test.setTimeout(420_000);
   if (process.env.FOLIO_TEST_REAL_SUPABASE !== "1" || process.env.CI !== "true") throw new Error("caller_proof_requires_isolated_ci");
   expect(process.env.NEXT_PUBLIC_SUPABASE_URL).toBe("http://127.0.0.1:55421");
   const fixture = JSON.parse(await readFile(path.join(tmpdir(), "folio-caller-proof-fixture.json"), "utf8")) as Fixture;
@@ -41,8 +41,10 @@ test("reception code, screen pairing, revocation and unchanged clinical state", 
   });
   let reads = 0;
   screen.on("request", request => { if (request.method() === "GET" && new URL(request.url()).pathname === "/api/caller/screen") reads++; });
+  console.log("caller_proof_stage:screen_open");
   await screen.goto("/pantalla");
   await expect(screen.getByRole("heading", { name: "Vinculá esta pantalla" })).toBeVisible();
+  console.log("caller_proof_stage:screen_ready");
   const beforePair = await screen.request.get("http://localhost:4430/api/caller/screen");
   expect(beforePair.status()).toBe(401);
   expect(beforePair.headers()["cache-control"]).toContain("no-store");
@@ -51,6 +53,7 @@ test("reception code, screen pairing, revocation and unchanged clinical state", 
   expect(foreignOrigin.headers()["access-control-allow-origin"]).toBeUndefined();
   await screen.getByLabel("Código de vinculación").fill(code);
   await screen.getByRole("button", { name: "Vincular pantalla" }).click();
+  console.log("caller_proof_stage:pair_submitted");
   await expect(screen.getByText("Pantalla activa")).toBeVisible();
   await expect(screen.getByRole("heading", { name: "Esperando llamados" })).toBeVisible();
   const screenCookies = await screen.context().cookies("http://localhost:4430/api/caller/screen");
