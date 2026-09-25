@@ -44,6 +44,7 @@ interface DashboardProps {
   timezone: string;
   /** Org activa — habilita el live update (polling / realtime tras flag). */
   organizationId?: string;
+  callerUserId?: string;
   agendaRevision?: string | null;
   /**
    * Modo clínica: colegiados para el selector de profesional. Lista vacía
@@ -92,7 +93,7 @@ function overlayPending(current: Turno, pending: PendingTransition): Turno {
   };
 }
 
-export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fechaAnio, nowIso, timezone, organizationId, agendaRevision = null, profesionales = [], profActivo = null, primerosPasos = null, canRegistrarCobro = true }: DashboardProps) {
+export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fechaAnio, nowIso, timezone, organizationId, callerUserId, agendaRevision = null, profesionales = [], profActivo = null, primerosPasos = null, canRegistrarCobro = true }: DashboardProps) {
   const router = useRouter();
   const toast = useToast();
   const [turnos, setTurnos] = useState<Turno[]>(initialTurnos);
@@ -334,6 +335,7 @@ export function Dashboard({ initialTurnos, pacientes, fechaIso, fechaLarga, fech
             now={now}
             timezone={timezone}
             canRegistrarCobro={canRegistrarCobro}
+            callerIdentity={callerUserId && organizationId ? { userId: callerUserId, organizationId } : undefined}
             pendingIds={closeFor ? new Set([...pendingIds, closeFor.turno.id]) : pendingIds}
             onCloseTurno={(id) => openClose(id, "CLOSE")}
             onReviewCobro={(id) => openClose(id, "RESOLVE")}

@@ -28,6 +28,7 @@ import { useLiveTimer } from "@/lib/use-live-timer";
 import type { EstadoTurno, Paciente, Turno } from "@/lib/types";
 
 import type { CobroCierreActionInput } from "@/app/(app)/hoy/actions";
+import { CallerControl } from "@/components/hoy/caller-control";
 
 type CtaKind = "primary" | "secondary" | "primary-brass";
 
@@ -48,6 +49,7 @@ interface TurnoRowProps {
   timezone?: string;
   /** Financial capability is used by the Dashboard-owned recovery dialog. */
   canRegistrarCobro?: boolean;
+  callerIdentity?: { userId: string; organizationId: string };
   onCloseTurno?: (id: string) => void;
   pending?: boolean;
   onTransition: (id: string, to: EstadoTurno, extra?: Partial<Turno>, cobro?: CobroCierreActionInput) => boolean | void;
@@ -56,7 +58,7 @@ interface TurnoRowProps {
   onReagendar?: (id: string) => void;
 }
 
-export function TurnoRow({ turno, paciente, isNext, now, timezone, onCloseTurno, pending = false, onTransition, onOpenFicha, onReagendar }: TurnoRowProps) {
+export function TurnoRow({ turno, paciente, isNext, now, timezone, callerIdentity, onCloseTurno, pending = false, onTransition, onOpenFicha, onReagendar }: TurnoRowProps) {
   const conf = STATE_CONF[turno.estado as keyof typeof STATE_CONF] ?? STATE_CONF.agendado;
   const isAtendiendo = turno.estado === "atendiendo";
   const isEnSala = turno.estado === "en_sala";
@@ -194,6 +196,7 @@ export function TurnoRow({ turno, paciente, isNext, now, timezone, onCloseTurno,
       </div>
 
       <div className="fi-t-actions">
+        {isEnSala && !pending && callerIdentity ? <CallerControl turnoId={turno.id} identity={callerIdentity} /> : null}
         {cta ? (
           <button
             type="button"
