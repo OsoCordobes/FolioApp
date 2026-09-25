@@ -1,5 +1,7 @@
 # Folio: estado de implementación al 19 de septiembre de 2026
 
+Este documento conserva el checkpoint histórico del 19/09. Para el estado vigente, las publicaciones posteriores y el ensayo de recuperación C01 aprobado el 25/09, consultar [LAUNCH-BOARD.md](LAUNCH-BOARD.md); la vista breve está en [AVANCES.md](AVANCES.md). Las pendientes de este registro no deben reabrirse sin contrastarlas con ese tablero.
+
 Este documento distingue lo publicado, la preparación comprobada y las condiciones que faltan para vender con pacientes reales. No acredita todavía el piloto ni la capacidad de 200 profesionales.
 
 ## Observaciones históricas de publicación

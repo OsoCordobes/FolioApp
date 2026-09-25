@@ -8,7 +8,7 @@ Actualizado: 25/09/2026. Este es el registro breve del trabajo; [el tablero téc
 
 | Checkpoint | Resultado, responsable y prueba |
 |---|---|
-| **Ingreso y onboarding** · publicado parcial | Ya se publicó la elección Solo/Clínica y la vuelta al inicio; siguen pendientes los recorridos completos con cuentas. A/B · [publicación PR166](https://github.com/OsoCordobes/FolioApp/pull/166). |
+| **Ingreso y onboarding** · ampliando pruebas | Solo/Clínica y vuelta al inicio publicados; D construye la prueba completa con correo y cuentas aislados. A/B · [publicación PR166](https://github.com/OsoCordobes/FolioApp/pull/166). |
 | **Permisos de Clínica** · paquete publicado | Pedidos y motivos clínicos protegidos según el rol. B · integración A y revisión C. [Publicación comprobada](https://github.com/OsoCordobes/FolioApp/pull/170); otros ámbitos de privacidad siguen pendientes. |
 | **Recuperación completa** · ensayo aprobado e integrado | Datos, archivos, contraseña y segundo factor recuperados con datos ficticios. C · revisión A. [Prueba aprobada](https://github.com/OsoCordobes/FolioApp/actions/runs/36073216478), [entrega integrada](https://github.com/OsoCordobes/FolioApp/pull/167); custodia externa pendiente. |
 | **Miniweb profesional** · publicada | Dos disposiciones, mapa confirmado, editor y enlace individual con permiso propio. D · revisión A. [Publicación verificada](https://github.com/OsoCordobes/FolioApp/pull/171) y [prueba del permiso](https://github.com/OsoCordobes/FolioApp/actions/runs/36076159519). |
@@ -19,7 +19,7 @@ Actualizado: 25/09/2026. Este es el registro breve del trabajo; [el tablero téc
 | **Google Calendar** · prueba externa pendiente | Debemos demostrar reservas reflejadas en Google, ocupación externa y cambios sin duplicados. |
 | **Correo y comunicaciones** · prueba externa pendiente | La entrega global sigue desactivada; falta comprobar recepción y reintentos en buzones controlados. |
 | **Pagos y suscripciones** · prueba externa pendiente | Los cobros ficticios previos no prueban Mercado Pago real; faltan los recorridos comerciales ofrecidos. |
-| **Portal y exportación** · corrección en curso | C detectó una posible entrega incompleta cuando un dato no puede leerse y archivos todavía entregados como referencias. C corrige primero la entrega incompleta; la inclusión de archivos será otro paquete. |
+| **Portal y exportación** · corrección probada | La entrega incompleta fue reproducida y corregida: ahora falla con aviso si un dato no puede leerse. C · revisión A y 17 controles aprobados; [publicación en preparación](https://github.com/OsoCordobes/FolioApp/pull/173). Archivos completos siguen aparte. |
 | **Continuidad y soporte** · pendiente | Faltan custodia externa, alertas, responsables y procedimiento de ayuda comprobados. |
 | **Validación profesional y piloto** · pendiente humano | Cinco especialidades y piloto de 14 días, con tres profesionales y cinco jornadas por persona. |
 | **Lanzamiento** · pendiente | Se cerrará cuando la versión publicada y la oferta comercial coincidan con lo demostrado. |
