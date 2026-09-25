@@ -7,13 +7,26 @@ on:
       - scripts/testing/auth-proof/**
       - tests/e2e/auth-mail-onboarding.spec.ts
       - app/(public)/login/**
+      - app/(public)/forgot/**
       - app/(public)/onboarding/**
       - app/(public)/reset-password/**
+      - app/(public)/seguridad/mfa/**
       - app/api/auth/**
       - components/auth/**
       - components/onboarding/**
       - lib/auth/**
       - lib/db/onboarding-resume.ts
+      - lib/security/turnstile.ts
+      - lib/security/rate-limit.ts
+      - lib/supabase/**
+      - scripts/recovery/ci-compose.yml
+      - scripts/recovery/ci-loopback-bridge.mjs
+      - scripts/testing/app-config.mjs
+      - scripts/testing/app-bootstrap.mjs
+      - scripts/testing/isolation-policy.mjs
+      - scripts/testing/browser-network.mjs
+      - scripts/testing/run-browser.mjs
+      - tests/fixtures/local-test.ts
       - supabase/migrations/**
 
 permissions:

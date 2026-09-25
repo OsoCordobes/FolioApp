@@ -127,7 +127,7 @@ async function main(){
   await waitApi(anon);
   const folder=path.join(repo,'supabase/migrations');
   const files=(await readdir(folder)).filter(name=>/^\d{14}_.+\.sql$/.test(name)).sort();
-  assert.ok(files.length>=124,'incomplete migration set');
+  assert.ok(files.length>=125,'incomplete migration set');
   for(const file of files)await must('psql',['-X','-v','ON_ERROR_STOP=1','-h','127.0.0.1','-p','55422','-U','postgres','-d','postgres','-f',path.join(folder,file)],{env:{...env,PGPASSWORD:password},timeout:120_000});
   // PostgREST started before Folio's schema existed. Explicitly reload its
   // cache and wait until a newly migrated RPC is visible before opening UI.
