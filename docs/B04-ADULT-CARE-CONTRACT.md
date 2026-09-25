@@ -6,6 +6,16 @@ Nota de continuidad del 25/09: producción llegó a `987202afa3ae170061e0e121c09
 
 ## Decisión de A para avanzar sin bloquear el desarrollo
 
+### Primer paquete B04a: fundamento de verificación, sin exigirlo todavía
+
+Preparado el 25/09 sobre master `3c56a334d10911fc2f2c9c8269277bd883949e02`; volver a comprobar la base al asignar. Sólo migración aditiva, especificaciones SQL y documentación propias: revisiones monotónicas de fecha y vínculo, constancias privadas inmutables y RPC de lectura/atestación con comparación de versiones. No incluir todavía triggers que bloqueen inicios/notas, cambios de booking, interfaz, backfill ni activación. El resto de este contrato describe el checkpoint completo, no la autorización para ampliar B04a.
+
+A fija para el ensayo que quien atestigua sea OWNER, DIRECTOR o PROFESIONAL, en todos los casos `es_colegiado`, miembro vigente y aceptado, con alcance clínico sobre ese paciente y acceso a su caja fuerte. ASISTENTE puede conservar su permiso demográfico anterior, pero no atestigua. La revisión clínica humana de fuentes y resolución de discrepancias sigue pendiente antes de exigirlo en atención real.
+
+La atestación exige explícitamente `allowed`, `hasVerifiedFactor` y `sessionValid` de `mfa_access_status()` verdaderos, además del usuario actual autenticado. A contrastó M101/M138/M139: `folio_mfa_private.assert_access()` por sí sola sólo obedece a la política global y puede permitir primer factor si la preparación está apagada; no satisface esta condición más fuerte. Prueba negativa obligatoria con política global apagada y sin segundo factor.
+
+Aceptación de B04a: replay completo normal, negativa de lectura/escritura directa de constancias, roles/caja fuerte/organización revocados, comparación de versiones obsoletas, DOB y vínculo A→B→A, cambios demográficos ajenos que preservan la revisión y rechazo de revisiones manipuladas. Registrar por separado cualquier carrera real aún pendiente; no presentar una prueba secuencial como prueba de concurrencia. Revisión independiente A antes de publicar; ninguna migración nueva está reservada por este texto.
+
 Se puede construir y probar el control con datos ficticios sin esperar una decisión humana. La preparación productiva será aditiva y la exigencia para nuevas atenciones tendrá activación separada, con lectura posterior; nunca se activará por instalar una migración. Las historias y consultas ya iniciadas deben conservarse según el contrato de abajo.
 
 Para la prueba se utilizará una atestación explícita por un miembro con permiso clínico sobre la ficha y condición profesional acreditada en Folio; recepción no atestigua. Se registrará que el profesional comprobó la fecha y cuál fue la fuente, sin copiar documentos de identidad ni afirmar verificación material por software. El criterio provisional del 29/2 será el 1/3 en año no bisiesto y se cubrirá con pruebas de frontera. Son decisiones para diseñar y ensayar, no conclusiones jurídicas ni aprobación clínica del piloto.
