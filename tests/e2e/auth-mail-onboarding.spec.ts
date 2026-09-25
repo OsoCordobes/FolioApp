@@ -117,7 +117,22 @@ async function oneMode(browser:Browser,tipo:'INDEPENDIENTE'|'CLINICA'){
  await page.getByRole('radio',{name:tipo==='CLINICA'?/Clínica/:/Profesional independiente/}).check();
  if(tipo==='CLINICA')await page.getByRole('radio',{name:'No, administro la clínica'}).check();
  await page.getByRole('button',{name:'Seguir con esta opción'}).click();
- await expect(page.getByRole('heading',{name:'Confirmemos que sos vos.'})).toBeVisible();
+ try{
+  await expect(page.getByRole('heading',{name:'Confirmemos que sos vos.'})).toBeVisible();
+ }catch{
+  const choice=await page.getByRole('heading',{name:'¿Cómo vas a usar Folio?'}).isVisible();
+  const registration=await page.getByRole('heading',{name:'Empezá creando tu cuenta.'}).isVisible();
+  const consent=await page.getByRole('heading',{name:'Confirmemos que sos vos.'}).isVisible();
+  const route=new URL(page.url()).pathname;
+  const path=['/onboarding','/login','/seguridad/mfa','/api/auth/callback'].includes(route)?route:'other';
+  const cookies=await page.context().cookies(APP);
+  const authCookie=cookies.some(cookie=>cookie.name.startsWith('sb-')&&/-auth-token(?:\.\d+)?$/.test(cookie.name));
+  const pkceCookie=cookies.some(cookie=>cookie.name.startsWith('sb-')&&cookie.name.endsWith('-auth-token-code-verifier'));
+  const selected=choice&&await page.getByRole('radio',{name:/Profesional independiente/}).isChecked();
+  const continueEnabled=choice&&await page.getByRole('button',{name:'Seguir con esta opción'}).isEnabled();
+  console.log(`auth_proof_ui_diagnostic:path=${path} choice=${choice?1:0} registration=${registration?1:0} consent=${consent?1:0} auth_cookie=${authCookie?1:0} pkce_cookie=${pkceCookie?1:0} selected=${selected?1:0} continue_enabled=${continueEnabled?1:0}`);
+  throw Error('auth_proof_consent_screen_missing');
+ }
  await page.locator('input[type="checkbox"]').first().check();
  await page.getByRole('button',{name:'Continuar',exact:true}).click();
  await expect(page.getByRole('heading',{name:'¿Cómo te llamás?'})).toBeVisible({timeout:30_000});
