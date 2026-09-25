@@ -626,8 +626,8 @@ export async function updateOnboardingStep(
             .from("organization")
             .update(orgPatch)
             .eq("id", orgId)
-          .select("slug")
-          .single();
+            .select("slug")
+            .single();
           if (error) return { ok: false, error: error.message };
           savedSlug = updated.slug as string;
         }
