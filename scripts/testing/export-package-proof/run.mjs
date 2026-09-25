@@ -22,6 +22,9 @@ const random=bytes=>randomBytes(bytes).toString('base64url');
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const options={auth:{autoRefreshToken:false,persistSession:false,detectSessionInUrl:false}};
+const STAGES=new Set(['pull','services','migrations','user_create','totp','fixture_db',
+ 'source_upload','builder','source_plan','begin','entry_fragment','finish',
+ 'reconstruction','revocation','complete']);
 
 function jwt(secret,role){
  const encode=value=>Buffer.from(JSON.stringify(value)).toString('base64url');
@@ -91,16 +94,18 @@ async function reloadRest(password,env,key){
  }
  throw Error('postgrest_schema_unavailable');
 }
-const pdf=label=>Buffer.from(`%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R /Proof (${label}) >>\nendobj\nstartxref\n0\n%%EOF\n`);
-async function fixture(state){
+const pdf=(label,padding=0)=>Buffer.from(`%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R /Proof (${label}) >>\n%${'x'.repeat(padding)}\nendobj\nstartxref\n0\n%%EOF\n`);
+async function fixture(state,mark){
  const service=createClient(api,state.serviceKey,options);
  const actor=createClient(api,state.anonKey,options);
  const email=`folio-b06-${randomUUID()}@example.test`,password=`B06-${random(24)}!`;
+ mark('user_create');
  const created=await service.auth.admin.createUser({email,password,email_confirm:true});
  assert.equal(created.error,null,'auth_user_create_failed');
  const user=created.data.user.id;
  const login=await actor.auth.signInWithPassword({email,password});
  assert.equal(login.error,null,'auth_password_failed');
+ mark('totp');
  const enrolled=await actor.auth.mfa.enroll({factorType:'totp',friendlyName:'B06 synthetic'});
  assert.equal(enrolled.error,null,'auth_totp_enroll_failed');
  const challenge=await actor.auth.mfa.challenge({factorId:enrolled.data.id});
@@ -111,7 +116,8 @@ async function fixture(state){
  assert.equal(claims.aal,'aal2','auth_not_aal2');
  const org=randomUUID(),member=randomUUID(),patient=randomUUID(),identity=randomUUID();
  const document=randomUUID(),withdrawn=randomUUID(),consent=randomUUID(),template=randomUUID();
- const file=pdf('synthetic-document'),signature=pdf('synthetic-signature');
+ const file=pdf('synthetic-document',3*1024*1024+100),signature=pdf('synthetic-signature');
+ assert.ok(file.length>3*1024*1024&&file.length<4*1024*1024,'document_not_two_fragments');
  const documentPath=`documentos-clinicos/${org}/${patient}/${document}.pdf`;
  const withdrawnPath=`documentos-clinicos/${org}/${patient}/${withdrawn}.pdf`;
  const signaturePath=`consentimientos-firmados/${org}/${patient}/${consent}.pdf`;
@@ -120,6 +126,7 @@ async function fixture(state){
  const encrypted=crypto.encryptColumn('Paciente ficticio B06');
  assert.match(encrypted,/^\\x[0-9a-f]+$/);
  const cipher=Buffer.from(encrypted.slice(2),'hex');
+ mark('fixture_db');
  await withPg(state.dbPassword,async db=>{
   await db.query('BEGIN');
   try{
@@ -135,6 +142,7 @@ async function fixture(state){
    await db.query('COMMIT');
   }catch(error){await db.query('ROLLBACK');throw error;}
  });
+ mark('source_upload');
  for(const [bucket,fullPath,bytes] of [
   ['documentos-clinicos',documentPath,file],['consentimientos-firmados',signaturePath,signature],
  ]){
@@ -145,7 +153,7 @@ async function fixture(state){
  return {service,actor,user,org,member,patient,document,withdrawn,consent,file,signature,withdrawnPath};
 }
 
-async function prove(state,seed){
+async function prove(state,seed,mark){
  const load=async name=>{const loaded=await import(name);return loaded.default??loaded;};
  const {buildPatientExport}=await load('../../../lib/patient/export-builder.ts');
  const {readPackageSourcePlan}=await load('../../../lib/patient/export-jobs-sources.ts');
@@ -153,6 +161,7 @@ async function prove(state,seed){
  const {frozenPackageJson,packageChunks,packageFragmentPath,sha256}=await load('../../../lib/patient/export-jobs-chunks.ts');
  const {putVerifiedFragment}=await load('../../../lib/patient/export-jobs-storage.ts');
  const {inspectClinicalFile}=await load('../../../lib/storage/clinical-files.ts');
+ mark('builder');
  const scope=await seed.actor.from('paciente_completo').select('id,organization_id').eq('id',seed.patient).eq('organization_id',seed.org).maybeSingle();
  assert.equal(scope.error,null,'rls_scope_failed');
  assert.equal(scope.data?.id,seed.patient,'rls_patient_missing');
@@ -160,10 +169,12 @@ async function prove(state,seed){
   organizationId:seed.org,organizationNombre:'Consultorio sintético B06',pacienteId:seed.patient});
  assert.equal(built.ok,true,'clinical_export_failed');
  const exported=built.data;
+ mark('source_plan');
  const plan=await readPackageSourcePlan(seed.actor,seed.org,seed.patient,exported);
  assert.equal(plan.ok,true,'source_plan_failed');
  assert.deepEqual(plan.data.map(item=>item.kind).sort(),['document','signature','withdrawn_document']);
  const fingerprint=fingerprintExportPackage(exported,plan.data);
+ mark('begin');
  const requested=randomUUID();
  const args={p_actor:seed.user,p_member:seed.member,p_org:seed.org,p_patient:seed.patient,
   p_idempotency:requested,p_fingerprint:fingerprint,p_expected_entries:plan.data.length+1};
@@ -193,6 +204,7 @@ async function prove(state,seed){
  };
  const expected=new Map();
  const keys=[{kind:'json',sourceId:seed.patient,sourceIndex:0},...plan.data];
+ mark('entry_fragment');
  for(const key of keys){
   const source=key.kind==='json'?null:key;
   let bytes=null;
@@ -223,6 +235,7 @@ async function prove(state,seed){
    continue;
   }
   const chunks=packageChunks(bytes);
+  if(key.kind==='document')assert.equal(chunks.length,2,'document_fragment_boundary_not_exercised');
   for(const [ordinal,chunk] of chunks.entries()){
    const verified=await putVerifiedFragment(store,job,entry.entry_id,ordinal,chunk);
    const fragmentArgs={p_id:job,p_actor:seed.user,p_token:lease,p_revision:revision,
@@ -247,11 +260,13 @@ async function prove(state,seed){
  assert.equal(inventory.length,4,'incomplete_inventory');
  const contracts=inventory.map(entry=>({kind:entry.kind,source_id:entry.source_id,source_index:entry.source_index,
   expected_fragments:entry.expected_fragments,source_hash_kind:entry.source_hash_kind,source_sha256:entry.source_sha256}));
+ mark('finish');
  assert.equal(await rpc(seed.service,'export_package_finish',{
   p_id:job,p_actor:seed.user,p_token:lease,p_revision:revision,p_fingerprint:fingerprint,p_expected:contracts,
  }),true);
  const ready=await rpc(seed.service,'export_package_read',{p_id:job,p_actor:seed.user});
  assert.equal(ready[0].state,'ready');
+ mark('reconstruction');
  for(const entry of inventory){
   const key=`${entry.kind}:${entry.source_id}:${entry.source_index}`;
   const original=expected.get(key);
@@ -274,6 +289,7 @@ async function prove(state,seed){
  const after=await seed.actor.from('paciente_completo').select('id').eq('id',seed.patient).maybeSingle();
  assert.equal(after.error,null,'final_rls_check_failed');
  assert.equal(after.data?.id,seed.patient,'final_authority_missing');
+ mark('revocation');
  const blockedId=await rpc(seed.service,'export_package_begin',{...args,p_idempotency:randomUUID()});
  const blockedLease=await rpc(seed.service,'export_package_claim',{p_id:blockedId,p_actor:seed.user,p_revision:0});
  assert.equal(blockedLease.length,1);
@@ -324,15 +340,16 @@ async function main(){
   assert.ok(files.some(name=>name.endsWith('_M137_export_package_bytes.sql')),'M137_missing');
   for(const file of files)await must('psql',['-X','-v','ON_ERROR_STOP=1','-h','127.0.0.1','-p',String(dbPort),'-U','postgres','-d','postgres','-f',path.join(folder,file)],{env:{...env,PGPASSWORD:dbPassword},timeout:120000});
   await reloadRest(dbPassword,env,state.serviceKey);
-  stage='fixture';const seed=await fixture(state);
-  stage='package';await prove(state,seed);
+  const mark=value=>{assert.ok(STAGES.has(value));stage=value;};
+  stage='user_create';const seed=await fixture(state,mark);
+  stage='builder';await prove(state,seed,mark);
   stage='complete';
   if(process.env.GITHUB_STEP_SUMMARY){
    const {appendFile}=await import('node:fs/promises');
    await appendFile(process.env.GITHUB_STEP_SUMMARY,`## B06b2 synthetic package proof\n\n- Exact head: ${(await must('git',['rev-parse','HEAD'])).trim()}\n- Migrations in fresh PostgreSQL 17: ${files.length}\n- Auth AAL2, RLS, private S3 Storage and SQL ledger: verified\n- JSON, document and signature bytes reassembled with SHA-256: verified\n- Withdrawn document: inventory only; no source read\n- Lost-response replay: same job, entry and bytes\n- Revocation before continuation: blocked\n- Next request/session wrapper and user delivery: B06b3 pending\n`,{flag:'a'});
   }
  }catch{
-  console.error(`b06b2_${stage}_failed`); // Never emit raw HTTP, SQL, Storage or Auth bodies.
+  console.error(`b06b2_${STAGES.has(stage)?stage:'unclassified'}_failed`); // No raw HTTP, SQL, Storage or Auth bodies.
   process.exitCode=1;
  }finally{
   await apiBridge?.close();await dbBridge?.close();
