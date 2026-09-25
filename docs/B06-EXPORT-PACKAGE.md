@@ -55,8 +55,9 @@ fingerprint al final y fallar sin paquete parcial si cambian las fuentes.
 
 El servidor vuelve a leer bajo RLS el JSON profesional y el inventario fuente.
 Su fingerprint v1 normaliza sólo `exported_at` y los dos tiempos de lectura del
-manifiesto; las fechas clínicas, estados, hashes, paths privados y metadatos
-restantes siguen determinando la huella. El JSON congelado usa el tiempo
+manifiesto; las fechas clínicas, estados, hashes, paths privados de fuentes
+activas y metadatos restantes siguen determinando la huella. Un retirado no
+aporta path al fingerprint porque nunca se permite leer sus bytes. El JSON congelado usa el tiempo
 persistido de la entrada, de modo que un reintento no produce bytes distintos.
 El ledger recibe una entrada JSON, cada documento y cada firma; un documento
 retirado conserva su entrada de inventario con cero fragmentos y nunca se lee
@@ -88,4 +89,14 @@ el prefijo derivado de job/entrada, borra sus objetos y exige dos escaneos
 vacíos separados por un minuto; si un upload tardío aparece entre ambos,
 reinicia la ventana. La confirmación global requiere que todas las entradas
 hayan pasado ese control bajo el token de limpieza vigente. Nunca se borran
-los originales.
+los originales. Cada llamada procesa como máximo una entrada, porque sus
+operaciones Storage tienen tiempos de espera propios.
+
+M138 completa el inventario de retirados sin ampliar la lectura ordinaria de
+`documento_clinico`: una RPC autenticada entrega sólo metadatos clínicos
+acotados, nunca bucket, path, URL ni bytes. Respeta la política MFA vigente,
+el alcance por paciente y la caja fuerte incluso para OWNER. Dos lecturas
+paginadas verifican filas y conteos; el builder y el plan unen esas filas con
+los documentos activos leídos bajo RLS, sin duplicados y con total exacto.
+Una revocación o cambio observable aborta sin paquete parcial. La descarga
+original de un documento retirado permanece cerrada.

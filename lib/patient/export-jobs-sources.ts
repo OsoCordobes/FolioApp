@@ -5,6 +5,7 @@ import { firmaPathMatchesFicha } from "@/lib/db/portal-consentimientos";
 import { CLINICAL_BUCKET, CLINICAL_LEGACY_MAX_BYTES, clinicalObjectPath } from "@/lib/storage/clinical-files";
 import type { createSupabaseServerClient } from "@/lib/supabase/server";
 import { readVerifiedClinicalCollection } from "./verified-collection";
+import { readRetiredDocumentMetadata } from "./export-retired-documents";
 import type { PackageSourceFingerprint } from "./export-jobs-fingerprint";
 
 type Client = Awaited<ReturnType<typeof createSupabaseServerClient>>;
@@ -71,12 +72,18 @@ export async function readPackageSourcePlan(
     const documents = await read("documento_clinico",
       "id,organization_id,paciente_id,storage_bucket,storage_path,deleted_at,tamanio_bytes,content_sha256,mime_type");
     if (documents.error || !documents.data) throw new Error("document_read_failed");
+    const retired = await readRetiredDocumentMetadata(client, organizationId, pacienteId);
+    if (!retired.ok || documents.data.length + retired.data.rows.length !== retired.data.allTotal ||
+        documents.data.some(row => row.deleted_at !== null) ||
+        new Set([...documents.data, ...retired.data.rows].map(row => row.id)).size !== retired.data.allTotal) {
+      throw new Error("document_inventory_changed");
+    }
     const consents = await read("consentimiento",
       "id,organization_id,paciente_id,firma_storage_path,participantes,revocado_en");
     if (consents.error || !consents.data) throw new Error("consent_read_failed");
     const publicDocuments = uniqueById(publicEvidence.documents);
     const publicConsents = uniqueById(publicEvidence.consents);
-    if (documents.data.length !== publicDocuments.size || consents.data.length !== publicConsents.size) {
+    if (retired.data.allTotal !== publicDocuments.size || consents.data.length !== publicConsents.size) {
       throw new Error("incomplete_inventory");
     }
     const sources: PackageSource[] = [];
@@ -103,6 +110,19 @@ export async function readPackageSourcePlan(
         sourceId: row.id, sourceIndex: 0, storageBucket: CLINICAL_BUCKET,
         storagePath, deletedAt, sizeBytes: size as number, recordedSha256: recorded as string | null,
         mimeType: row.mime_type });
+    }
+    for (const row of retired.data.rows) {
+      const item = publicDocuments.get(row.id);
+      const recorded = row.content_sha256;
+      if (!item || item.deleted_at !== row.deleted_at || item.content_sha256 !== recorded ||
+          item.tamanio_bytes !== row.tamanio_bytes || item.mime_type !== row.mime_type ||
+          item.bytes_incluidos !== false || item.download_url !== null ||
+          item.disponibilidad !== "retirado_sin_descarga") {
+        throw new Error("retired_document_inventory_mismatch");
+      }
+      sources.push({ kind: "withdrawn_document", sourceId: row.id, sourceIndex: 0,
+        storageBucket: null, storagePath: null, deletedAt: row.deleted_at,
+        sizeBytes: row.tamanio_bytes, recordedSha256: recorded, mimeType: row.mime_type });
     }
     for (const row of consents.data) {
       assertScope(row, organizationId, pacienteId);

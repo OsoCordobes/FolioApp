@@ -6,7 +6,10 @@ on:
       - .github/workflows/folio-export-package-proof.yml
       - scripts/testing/export-package-proof/**
       - lib/patient/export-jobs*
+      - lib/patient/export-retired-documents.ts
+      - lib/patient/export-evidence.ts
       - supabase/migrations/*_M137_export_package_bytes.sql
+      - supabase/migrations/*_M138_retired_document_export_metadata.sql
 
 permissions:
   contents: read

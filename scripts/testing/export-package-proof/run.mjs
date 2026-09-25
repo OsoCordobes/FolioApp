@@ -139,6 +139,9 @@ async function fixture(state,mark){
    await db.query("INSERT INTO public.documento_clinico(id,organization_id,paciente_id,tipo,storage_path,mime_type,tamanio_bytes,subido_por_id,content_sha256) VALUES($1,$2,$3,'INFORME_EXTERNO',$4,'application/pdf',$5,$6,$7)",[document,org,patient,documentPath,file.length,member,sha(file)]);
    await db.query("INSERT INTO public.documento_clinico(id,organization_id,paciente_id,tipo,storage_path,mime_type,tamanio_bytes,subido_por_id,deleted_at) VALUES($1,$2,$3,'INFORME_EXTERNO',$4,'application/pdf',$5,$6,now())",[withdrawn,org,patient,withdrawnPath,file.length,member]);
    await db.query("INSERT INTO public.consentimiento(id,organization_id,paciente_id,plantilla_id,tipo,firma_storage_path) VALUES($1,$2,$3,$4,'GENERAL',$5)",[consent,org,patient,template,signaturePath]);
+   // Only this disposable database enables the staff MFA policy. The actor's
+   // real TOTP session must satisfy M138; no production flag is touched.
+   await db.query('UPDATE folio_mfa_private.policy SET application_ready=true,staff_enforce_after=now() WHERE singleton');
    await db.query('COMMIT');
   }catch(error){await db.query('ROLLBACK');throw error;}
  });
@@ -338,6 +341,7 @@ async function main(){
   const folder=path.join(repo,'supabase/migrations');
   const files=(await readdir(folder)).filter(name=>/^\d{14}_.+\.sql$/.test(name)).sort();
   assert.ok(files.some(name=>name.endsWith('_M137_export_package_bytes.sql')),'M137_missing');
+  assert.ok(files.some(name=>name.endsWith('_M138_retired_document_export_metadata.sql')),'M138_missing');
   for(const file of files)await must('psql',['-X','-v','ON_ERROR_STOP=1','-h','127.0.0.1','-p',String(dbPort),'-U','postgres','-d','postgres','-f',path.join(folder,file)],{env:{...env,PGPASSWORD:dbPassword},timeout:120000});
   await reloadRest(dbPassword,env,state.serviceKey);
   const mark=value=>{assert.ok(STAGES.has(value));stage=value;};

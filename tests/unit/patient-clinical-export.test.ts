@@ -10,7 +10,10 @@ process.env.FOLIO_ENC_HMAC_KEY = Buffer.alloc(32, 8).toString("base64");
 
 function client(failSessionPage = false, patientFields: Record<string, unknown> = {}, perOrgPatient: Record<string, Record<string, unknown>> = {}) {
   const sessions = Array.from({ length: 1201 }, (_, i) => ({ id: `s${i}`, paciente_id: "p", organization_id: "org", turno_id: `t${i}`, created_at: "2026-09-08", locked_at: null, locked_by_id: null, eva_antes: 8, eva_despues: 2, tool_id: null, vertebras_json: [] }));
-  return { from(table: string) {
+  return { rpc: async (name: string) => {
+    assert.equal(name, "export_retired_document_metadata");
+    return { data: { total: 0, all_total: 0, rows: [] }, error: null };
+  }, from(table: string) {
     let from = 0, to = 999999, head = false, organizationId = "org", patientId = "p";
     const rows = table === "paciente_completo" ? [{ id: "p", organization_id: "org", ...patientFields }] : table === "sesion" ? sessions : [];
     const query = {

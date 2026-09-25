@@ -24,8 +24,8 @@ function canonical(value: unknown): string {
 
 const sourceKey = (s: PackageSourceFingerprint) => `${s.kind}:${s.sourceId}:${s.sourceIndex}`;
 
-/** Only three builder-generated timestamps are excluded. Clinical timestamps,
- * source paths and recorded hashes remain part of the fingerprint. */
+/** Only three builder-generated timestamps are excluded. Active source paths,
+ * withdrawn metadata (without a path) and recorded hashes remain in the digest. */
 export function fingerprintExportPackage(
   clinicalExport: Record<string, unknown>, sources: PackageSourceFingerprint[],
 ): string {

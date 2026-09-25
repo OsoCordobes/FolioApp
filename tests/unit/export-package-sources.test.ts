@@ -35,9 +35,10 @@ const publicExport = {
   },
 };
 
-function fixture(options: { rows?: Record<string, Record<string, unknown>[]>; lateFailure?: string } = {}) {
+function fixture(options: { rows?: Record<string, Record<string, unknown>[]>; retired?: Record<string, unknown>[]; lateFailure?: string } = {}) {
   const rows: Record<string, Record<string, unknown>[]> = options.rows ??
-    { documento_clinico: [document, withdrawn], consentimiento: [consent, legacy] };
+    { documento_clinico: [document], consentimiento: [consent, legacy] };
+  const retired = options.retired ?? [withdrawn];
   const calls: string[] = [];
   const exports: Record<string, (...args: unknown[]) => Promise<unknown>> = {};
   const js = ts.transpileModule(readFileSync("lib/patient/export-jobs-sources.ts", "utf8"), {
@@ -67,6 +68,9 @@ function fixture(options: { rows?: Record<string, Record<string, unknown>[]>; la
         return first;
       },
     };
+    if (name === "./export-retired-documents") return { readRetiredDocumentMetadata: async () => ({
+      ok: true, data: { rows: retired, allTotal: (rows.documento_clinico?.length ?? 0) + retired.length },
+    }) };
     throw Error(`Unexpected import ${name}`);
   } });
   const client = { from(table: string) {
@@ -90,6 +94,8 @@ test("source plan matches every public item, keeps withdrawn inventory-only and 
   assert.equal(result.data.length, 5);
   const retired = result.data.find(s => s.kind === "withdrawn_document");
   assert.equal(retired?.sourceId, withdrawn.id);
+  assert.equal(retired?.storagePath, null);
+  assert.equal(retired?.storageBucket, null);
   const signatures = result.data.filter(s => s.kind === "signature" && s.sourceId === consent.id);
   assert.deepEqual(Array.from(signatures, s => s.sourceIndex), [0, 1]);
   const old = result.data.find(s => s.kind === "signature" && s.sourceId === legacy.id);
@@ -110,10 +116,11 @@ test("missing public item, cross-tenant path, changed participant or status fail
   changed.historia_clinica.documentos.pop();
   const cases = [
     fixture(),
-    fixture({ rows: { documento_clinico: [{ ...document, storage_path: `documentos-clinicos/${id(999)}/${patient}/one.pdf` }, withdrawn], consentimiento: [consent, legacy] } }),
-    fixture({ rows: { documento_clinico: [document, withdrawn], consentimiento: [{ ...consent, participantes: [consent.participantes[0]] }, legacy] } }),
-    fixture({ rows: { documento_clinico: [document, withdrawn], consentimiento: [{ ...consent, participantes: [{ ...consent.participantes[0], rol: "REPRESENTANTE" }, consent.participantes[1]] }, legacy] } }),
+    fixture({ rows: { documento_clinico: [{ ...document, storage_path: `documentos-clinicos/${id(999)}/${patient}/one.pdf` }], consentimiento: [consent, legacy] } }),
+    fixture({ rows: { documento_clinico: [document], consentimiento: [{ ...consent, participantes: [consent.participantes[0]] }, legacy] } }),
+    fixture({ rows: { documento_clinico: [document], consentimiento: [{ ...consent, participantes: [{ ...consent.participantes[0], rol: "REPRESENTANTE" }, consent.participantes[1]] }, legacy] } }),
     fixture({ rows: { documento_clinico: [document, { ...withdrawn, deleted_at: null }], consentimiento: [consent, legacy] } }),
+    fixture({ retired: [{ ...withdrawn, content_sha256: "f".repeat(64) }] }),
   ];
   assert.equal((await cases[0].run(changed) as { ok: boolean }).ok, false);
   for (const f of cases.slice(1)) assert.equal((await f.run() as { ok: boolean }).ok, false);
