@@ -17,6 +17,7 @@ import type { PacientesById, Turno, TurnoSemana } from "@/lib/types";
 export const PREVIEW_DATE = "2026-09-10";
 export const PREVIEW_NOW = "2026-09-10T10:15:00-03:00";
 export const PREVIEW_ORG = "folio-test-experience-org";
+const MINIWEB_PREVIEW_PORTRAIT = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="470" viewBox="0 0 400 470"><rect width="400" height="470" fill="#e8e1db"/><circle cx="200" cy="170" r="82" fill="#b59283"/><path d="M50 470q25-180 150-180t150 180" fill="#fffaf4"/><path d="M118 158q-5-95 82-95t82 95q-30-35-82-35t-82 35" fill="#362c2a"/></svg>')}`;
 export const organization = {
   nombre: "Consultorio del Parque",
   rubro: "Kinesiología",
@@ -200,10 +201,11 @@ export const configuration: ComponentProps<typeof Configuracion> = {
   },
   initialPublicPreview: {
     org: { tipo: "INDEPENDIENTE", nombre: organization.nombre, slug: organization.slug, acentoHex: "#8A6722", especialidad: "kinesiologia", ciudad: "Córdoba", provincia: "Córdoba", logoUrl: null },
-    profesional: { id: "folio-test-member", displayName: "Valentina Costa", matricula: null },
+    profesional: { id: "folio-test-member", displayName: "Valentina Costa", fotoUrl: MINIWEB_PREVIEW_PORTRAIT, matricula: null },
     profesionales: [],
     servicios: [{ id: "folio-test-service-1", nombre: "Seguimiento", duracion_min: 45, precio_cents: 2500000 }],
   },
+  initialMiniwebLayout: "perfil",
   initialServicios: [{ id: "folio-test-service-1", nombre: "Seguimiento", dur: 45, precio: 25000, paraNuevos: false, activo: true }],
   initialDias: {
     lun: { on: true, franjas: [["08:30", "17:00"]] }, mar: { on: true, franjas: [["08:30", "17:00"]] },
@@ -216,6 +218,7 @@ export const configuration: ComponentProps<typeof Configuracion> = {
   montoActualCents: 5000000, montoClinicaCents: 10000000, canManageTeam: false, isOwner: false,
   equipoMembers: [], equipoInvitations: [], equipoSelf: null, esColegiado: true,
   initialPerfilPublico: null, initialListarEnDirectorio: false, suscripcionEstado: null,
+  ownMemberId: "folio-test-member", initialMiniwebConsent: false,
   whatsappConfigured: false, showVinculaciones: false, logoUrl: null, showImportarPacientes: false,
 };
 

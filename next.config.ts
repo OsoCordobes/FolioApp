@@ -63,7 +63,7 @@ const CSP_DIRECTIVES = [
   // `connect-src` incluye los hosts de Google Fonts porque `<link rel="preconnect">`
   // cuenta como conexión bajo CSP L3 estricto (warning sino).
   `connect-src 'self' ${SUPABASE_HTTP} ${SUPABASE_WS} https://*.sentry.io https://*.ingest.sentry.io https://*.posthog.com https://app.posthog.com https://api.mercadopago.com https://fonts.googleapis.com https://fonts.gstatic.com`,
-  `frame-src 'self' https://challenges.cloudflare.com https://www.mercadopago.com https://www.mercadopago.com.ar`,
+  `frame-src 'self' https://challenges.cloudflare.com https://www.mercadopago.com https://www.mercadopago.com.ar https://www.google.com`,
   `form-action 'self' https://www.mercadopago.com https://www.mercadopago.com.ar`,
   `frame-ancestors 'none'`,
   `base-uri 'self'`,

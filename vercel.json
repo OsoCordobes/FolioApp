@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "git": { "deploymentEnabled": { "codex/market-ready": false, "codex/launch-reliability": false, "codex/launch-manager": false, "codex/launch-next-checkpoint": false, "codex/launch-profile-editor": false, "codex/launch-restore-proof": false, "codex/launch-clinic-permissions": false } },
+  "git": { "deploymentEnabled": { "codex/market-ready": false, "codex/launch-reliability": false, "codex/launch-manager": false, "codex/launch-next-checkpoint": false, "codex/launch-profile-editor": false, "codex/launch-restore-proof": false, "codex/launch-clinic-permissions": false, "codex/launch-miniweb-quality": false } },
   "regions": ["gru1"],
   "crons": [
     {
