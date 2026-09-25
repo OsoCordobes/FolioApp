@@ -2,7 +2,7 @@
 
 Actualizado: 25/09/2026. Este es el registro breve del trabajo; [el tablero técnico](LAUNCH-BOARD.md) conserva el detalle y los antecedentes. Cada fila cambia sólo ante un resultado o bloqueo real.
 
-**Equipo comprobado:** A · dirección, revisión y publicación. C · termina la exportación de archivos y prepara su descarga. D · construye el llamador de recepción. Los dos subagentes trabajan en paralelo. La revisión independiente también acotó los próximos paquetes de edad y ficha del paciente.
+**Equipo comprobado:** A · dirección, revisión y publicación de la exportación entregada por C. Dos subagentes trabajan en paralelo: D termina el llamador; B04 prepara la constancia de verificación de edad. La revisión independiente también acotó la ficha del paciente.
 
 **Cómo verlo:** este archivo sigue siendo el registro vigente y su apertura en el panel lateral quedó encolada. La vista web local4420 se apagó con la interrupción; su reinicio fue rechazado por la política de ejecución. El trabajo y la evidencia quedaron conservados.
 
@@ -15,7 +15,7 @@ Actualizado: 25/09/2026. Este es el registro breve del trabajo; [el tablero téc
 | **Recuperación completa** · ensayo aprobado e integrado | Datos, archivos, contraseña y segundo factor recuperados con datos ficticios. C · revisión A. [Prueba aprobada](https://github.com/OsoCordobes/FolioApp/actions/runs/36073216478), [entrega integrada](https://github.com/OsoCordobes/FolioApp/pull/167); custodia externa pendiente. |
 | **Miniweb profesional** · publicada | Dos disposiciones, mapa confirmado, editor y enlace individual con permiso propio. D · revisión A. [Publicación verificada](https://github.com/OsoCordobes/FolioApp/pull/171) y [prueba del permiso](https://github.com/OsoCordobes/FolioApp/actions/runs/36076159519). |
 | **Trabajo de recepción** · publicada | Agenda publicada con el alcance de Asistente y Coordinador. C · revisión A; [entrega](https://github.com/OsoCordobes/FolioApp/pull/172). [Prueba aprobada, sin omisiones](https://github.com/OsoCordobes/FolioApp/actions/runs/36076854795). |
-| **Atención adulta** · pendiente | Contrato preparado; faltan decisiones clínicas e implementación de la verificación para nuevas atenciones. |
+| **Atención adulta** · base en construcción | B04 · revisión A; prepara registro protegido de quién comprobó la edad. No activa bloqueos ni cambia historias; criterio clínico y recorrido completo pendientes. |
 | **Ficha completada por el paciente** · contrato preparado | A · [alcance preparado](B09-PATIENT-FORM-CONTRACT.md): enlace o QR, datos aportados y revisión sin sobrescribir antecedentes. Preguntas clínicas pendientes de aprobación profesional. |
 | **Llamador de recepción** · base publicada; pantalla en prueba | D · revisión A; [PR179 publicada](https://github.com/OsoCordobes/FolioApp/pull/179) prepara permisos, códigos y revocación. [Pantalla y controles](https://github.com/OsoCordobes/FolioApp/pull/181): la prueba alcanzó el emparejamiento y detectó un problema móvil, ya corregido. [Ensayo de recepción en curso](https://github.com/OsoCordobes/FolioApp/actions/runs/36120097482) con sesión real verificada; corrigiendo obstáculos de la prueba antes de publicar. |
 | **Google Calendar** · prueba externa pendiente | Debemos demostrar reservas reflejadas en Google, ocupación externa y cambios sin duplicados. |

@@ -1,6 +1,6 @@
 # B04 · Contrato de diseño para atención de adultos
 
-Estado: contrato habilitado por A para preparar implementación y pruebas aisladas cuando se libere un escritor. Sin migración reservada, código, ejecución ni activación productiva. Diseño inicial sobre `2bdb60870caf8556f24a25db49e5ec1564b36003`; ahora se conserva en la copia del manager.
+Estado: B04a asignado a `b04_adult_attestation`, Sol High, en copia aislada `C:/Users/amiun/.codex/worktrees/folio-adult-attestation/folio-app`, rama `codex/launch-adult-attestation`, base `3c56a334d10911fc2f2c9c8269277bd883949e02`. M142 reservada por A el25/09 para este paquete; M141 pertenece al llamador y sigue pendiente de publicación. Sin ejecución ni activación productiva. Las referencias a ausencia de reserva abajo describen la preparación anterior; esta asignación gobierna. Diseño inicial sobre `2bdb60870caf8556f24a25db49e5ec1564b36003` conservado.
 
 Nota de continuidad del 25/09: producción llegó a `987202afa3ae170061e0e121c09fedb911a7ffac`. A comparó M96, M106, M120 y los escritores `sesiones.ts`, `notas-clinicas.ts` y `clinical-write-context.ts` con la base del diseño: no cambiaron. Esto conserva la relevancia del análisis; no reemplaza la revisión de todas las rutas durante implementación. M128 ya fue utilizada para otro checkpoint; no reserva números ni autoriza activación.
 
