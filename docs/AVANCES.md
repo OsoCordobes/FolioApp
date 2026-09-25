@@ -2,7 +2,9 @@
 
 Actualizado: 25/09/2026. Este es el registro breve del trabajo; [el tablero técnico](LAUNCH-BOARD.md) conserva el detalle y los antecedentes. Cada fila cambia sólo ante un resultado o bloqueo real.
 
-**Equipo comprobado:** A · dirección, revisión y publicación. C · termina la exportación de archivos y prepara su descarga. D · construye el llamador de recepción. Los dos subagentes trabajan en paralelo.
+**Equipo comprobado:** A · dirección, revisión y publicación. C · termina la exportación de archivos y prepara su descarga. D · construye el llamador de recepción. Los dos subagentes trabajan en paralelo. Una revisión independiente adicional cerró tres ajustes del contrato de verificación de edad.
+
+**Cómo verlo:** este archivo está abierto en el panel lateral y sigue siendo el registro vigente. La vista web local4420 se apagó con la interrupción; su reinicio fue rechazado por la política de ejecución. El trabajo y la evidencia quedaron conservados.
 
 **Publicado** = disponible en Folio. **Probado** = pasó sus controles, todavía sin publicar. **En curso** = falta comprobarlo. Las pruebas parciales no cierran un checkpoint completo.
 

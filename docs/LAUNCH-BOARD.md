@@ -1,6 +1,6 @@
 # Folio — tablero único de lanzamiento
 
-Actualizado el 25/09/2026. A dirige, revisa y publica. [AVANCES.md](AVANCES.md) es la vista breve para el titular, servida en `http://127.0.0.1:4420/`; cada fila cambia sólo ante un resultado significativo.
+Actualizado el 25/09/2026. A dirige, revisa y publica. [AVANCES.md](AVANCES.md) es la vista breve para el titular, abierta en el panel lateral; cada fila cambia sólo ante un resultado significativo. La vista web4420 quedó apagada tras la interrupción y el reinicio de su proceso fue rechazado por política de ejecución. No impide actualizar el archivo ni continuar implementación.
 
 El [historial íntegro anterior](LAUNCH-BOARD-HISTORY-20260925.md) se conservó sin alterar. Copia exacta fuera de Git: `C:/Users/amiun/Documents/Codex/folio-manager-evidence/launch-board-history-exact-20260925.md`, SHA256 `4E44550C8530E6C5B65E2AA4D8B81D85437DF342AA53F35356FD32BC7001C49C`. Contiene diagnósticos, fallos, autorizaciones, publicaciones y planes sustituidos. Este archivo gobierna el estado vigente; las fechas y estados históricos no vuelven a abrir trabajo ya cerrado.
 
