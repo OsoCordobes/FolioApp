@@ -17,7 +17,8 @@ const job = (overrides: Record<string, unknown> = {}) => ({
   expires_at: new Date(Date.now() + 60000).toISOString(), ...overrides,
 });
 
-function fixture(options: { authorized?: boolean; denyOnRevalidation?: number; rpcError?: boolean; rpcThrows?: boolean } = {}) {
+function fixture(options: { authorized?: boolean; denyOnRevalidation?: number; rpcError?: boolean;
+  rpcThrows?: boolean; emptyRead?: boolean; malformedRead?: boolean } = {}) {
   const calls: string[] = [];
   let revalidations = 0;
   const exports: Record<string, (...args: unknown[]) => Promise<unknown>> = {};
@@ -48,7 +49,9 @@ function fixture(options: { authorized?: boolean; denyOnRevalidation?: number; r
             if (options.rpcThrows) throw Error("SECRET endpoint bucket path");
             return { data: method === "export_package_begin" ? id(100)
               : method === "export_package_claim" ? [{ lease_token: id(501), revision: 1 }]
-                : [job()],
+                : options.emptyRead && method === "export_package_read" ? []
+                  : options.malformedRead && method === "export_package_read" ? { job_id: id(100) }
+                    : [job()],
               error: options.rpcError ? { message: "SECRET endpoint bucket path" } : null };
           },
         }),
@@ -143,4 +146,23 @@ test("MFA loss after claim does not return the acquired lease", async () => {
   assert.equal(result.error.code, "mfa_required");
   assert.equal(result.data, undefined);
   assert.deepEqual(f.calls, ["export_package_read", "revalidate", "export_package_claim", "revalidate"]);
+});
+
+test("read distinguishes confirmed absence from an uncertain service error", async () => {
+  const failed = fixture({ rpcError: true });
+  const uncertain = await failed.exports.readExportPackageJob(null, session(), id(100)) as
+    { ok: boolean; error: { code: string; message: string } };
+  assert.equal(uncertain.ok, false);
+  assert.equal(uncertain.error.code, "db_error");
+  assert.doesNotMatch(JSON.stringify(uncertain), /SECRET|endpoint|bucket/i);
+  const absent = fixture({ emptyRead: true });
+  const missing = await absent.exports.readExportPackageJob(null, session(), id(100)) as
+    { ok: boolean; error: { code: string } };
+  assert.equal(missing.ok, false);
+  assert.equal(missing.error.code, "not_found");
+  const malformed = fixture({ malformedRead: true });
+  const uncertainShape = await malformed.exports.readExportPackageJob(null, session(), id(100)) as
+    { ok: boolean; error: { code: string } };
+  assert.equal(uncertainShape.ok, false);
+  assert.equal(uncertainShape.error.code, "db_error");
 });
