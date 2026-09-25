@@ -52,7 +52,7 @@
 .fi-block-rows:has(.caller-control-panel) { overflow:visible; }
 .caller-control-toggle { min-height:39px; padding:8px 10px; border:1px solid var(--line); border-radius:var(--r-sm); background:var(--surface); color:var(--accent-2); cursor:pointer; font-size:12px; font-weight:650; white-space:nowrap; }
 .caller-control-toggle:hover { border-color:var(--accent); }
-.caller-control-panel { position:absolute; z-index:30; right:0; top:calc(100% + 8px); width:min(320px,calc(100vw - 32px)); background:var(--surface); border:1px solid var(--line); border-radius:var(--r-md); box-shadow:var(--shadow-2); padding:18px; display:grid; gap:13px; }
+.caller-control-panel { position:fixed; z-index:30; right:16px; bottom:max(calc(16px + env(safe-area-inset-bottom)), var(--fi-consent-h, 0px)); width:min(320px,calc(100vw - 32px)); max-height:calc(100dvh - max(calc(16px + env(safe-area-inset-bottom)), var(--fi-consent-h, 0px)) - 16px); overflow-y:auto; background:var(--surface); border:1px solid var(--line); border-radius:var(--r-md); box-shadow:var(--shadow-2); padding:18px; display:grid; gap:13px; }
 .caller-control-panel-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
 .caller-control-panel-head strong { color:var(--ink); font-size:13px; }
 .caller-control-panel-head button { min-height:40px; min-width:48px; display:inline-flex; align-items:center; justify-content:center; border:0; background:transparent; color:var(--accent-2); font-size:12px; font-weight:650; padding:8px; cursor:pointer; }

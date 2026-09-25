@@ -166,27 +166,46 @@ test("reception code, screen pairing, revocation and unchanged clinical state", 
     expect(cookieBox).not.toBeNull();
     expect(panel!.y + panel!.height).toBeLessThanOrEqual(cookieBox!.y);
   }
+  await row.getByRole("button", { name: "Llamar código" }).click({ trial: true, timeout: 5_000 });
   await page.screenshot({ path: "test-results/caller-hoy-375.png", fullPage: true });
   await page.keyboard.press("Escape");
   await expect(row.locator(".caller-control-panel")).toHaveCount(0);
   await expect(row.getByRole("button", { name: "Código de espera y llamado" })).toBeFocused();
   await row.getByRole("button", { name: "Código de espera y llamado" }).click();
   await page.setViewportSize({ width: 1440, height: 900 });
+  const desktopPanel = await row.locator(".caller-control-panel").boundingBox();
+  expect(desktopPanel).not.toBeNull();
+  expect(desktopPanel!.x).toBeGreaterThanOrEqual(0);
+  expect(desktopPanel!.y).toBeGreaterThanOrEqual(0);
+  expect(desktopPanel!.x + desktopPanel!.width).toBeLessThanOrEqual(1441);
+  expect(desktopPanel!.y + desktopPanel!.height).toBeLessThanOrEqual(900);
+  if (await cookie.isVisible()) {
+    const cookieBox = await cookie.boundingBox();
+    expect(cookieBox).not.toBeNull();
+    expect(desktopPanel!.y + desktopPanel!.height).toBeLessThanOrEqual(cookieBox!.y);
+  }
+  await row.getByRole("button", { name: "Llamar código" }).click({ trial: true, timeout: 5_000 });
   await page.screenshot({ path: "test-results/caller-hoy-1440.png", fullPage: true });
   await row.getByRole("button", { name: "Cerrar panel de llamado" }).click();
   await expect(row.getByRole("button", { name: "Código de espera y llamado" })).toBeFocused();
   await row.getByRole("button", { name: "Código de espera y llamado" }).click();
+  await row.getByRole("button", { name: "Llamar código" }).click({ trial: true, timeout: 5_000 });
+  timedStage("call_click_actionable");
   let lostResponse = false;
   const hoyActionPath = /\/hoy(?:\?.*)?$/;
   await page.route(hoyActionPath, async route => {
     if (!lostResponse && route.request().method() === "POST" && route.request().headers()["next-action"]) {
-      const committed = await route.fetch();
+      timedStage("call_post_observed");
+      const committed = await route.fetch({ timeout: 30_000 });
       expect(committed.ok()).toBe(true);
+      timedStage("call_post_committed");
       lostResponse = true;
       await route.abort("failed");
     } else await route.continue();
   });
-  await row.getByRole("button", { name: "Llamar código" }).click();
+  timedStage("call_click_started");
+  await row.getByRole("button", { name: "Llamar código" }).click({ timeout: 30_000 });
+  timedStage("call_click_returned");
   await expect(row.getByRole("status")).toContainText("Comprobar llamado");
   expect(lostResponse).toBe(true);
   await page.unroute(hoyActionPath);
