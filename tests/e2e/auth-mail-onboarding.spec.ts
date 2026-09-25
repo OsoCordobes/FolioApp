@@ -5,7 +5,7 @@ import {randomUUID} from 'node:crypto';
 import {createClient} from '@supabase/supabase-js';
 import {expect,test,type Browser,type Page} from '../fixtures/local-test';
 
-const APP='http://127.0.0.1:4430';
+const APP='http://localhost:4430';
 const MAIL='http://127.0.0.1:55424';
 const API='http://127.0.0.1:55421';
 const OLD_PASSWORD='SyntheticProof123!';

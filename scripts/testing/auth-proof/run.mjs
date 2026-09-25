@@ -145,7 +145,9 @@ async function main(){
   // rather than changing it or claiming an MFA challenge was exercised.
   const mfaPolicy=(await must('psql',['-X','-t','-A','-h','127.0.0.1','-p','55422','-U','postgres','-d','postgres','-c',"SELECT application_ready::int, (staff_enforce_after IS NULL)::int FROM folio_mfa_private.policy WHERE singleton"],{env:{...env,PGPASSWORD:password}})).trim();
   assert.equal(mfaPolicy,'0|1','unexpected MFA policy: proof cannot bypass or silently omit the gate');
-  const browserEnv={...env,E2E_BASE_URL:'http://127.0.0.1:4430',FOLIO_TEST_SUPABASE_URL:api,FOLIO_TEST_SUPABASE_ANON_KEY:anon,FOLIO_TEST_SUPABASE_SERVICE_KEY:service,FOLIO_TEST_DATABASE_URL:`postgresql://postgres:${password}@127.0.0.1:55422/postgres`};
+  // Next.js canonicalizes loopback request URLs to localhost before its Auth
+  // callback redirects. Keep the app, Auth site URL, and browser on one host.
+  const browserEnv={...env,E2E_BASE_URL:'http://localhost:4430',FOLIO_TEST_SUPABASE_URL:api,FOLIO_TEST_SUPABASE_ANON_KEY:anon,FOLIO_TEST_SUPABASE_SERVICE_KEY:service,FOLIO_TEST_DATABASE_URL:`postgresql://postgres:${password}@127.0.0.1:55422/postgres`};
   const result=await run('pnpm',['test:e2e','--','tests/e2e/auth-mail-onboarding.spec.ts'],{env:browserEnv,limit:2_000_000,timeout:900_000});
   // Report only synthetic stage markers and Playwright's aggregate counts;
   // never print a failed action's raw URL, email body, password, or token.
