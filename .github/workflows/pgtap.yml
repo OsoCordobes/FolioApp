@@ -98,6 +98,31 @@ jobs:
             echo "::endgroup::"
           done
 
+      - name: Set up Node for M142 concurrency spec
+        if: hashFiles('tests/concurrency/M142_adult_attestation.mjs') != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Set up locked pnpm
+        if: hashFiles('tests/concurrency/M142_adult_attestation.mjs') != ''
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+          run_install: false
+
+      - name: Install locked test dependencies
+        if: hashFiles('tests/concurrency/M142_adult_attestation.mjs') != ''
+        timeout-minutes: 8
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Run M142 real PostgreSQL row-lock races
+        if: hashFiles('tests/concurrency/M142_adult_attestation.mjs') != ''
+        timeout-minutes: 3
+        env:
+          FOLIO_M142_SYNTHETIC: '1'
+        run: node tests/concurrency/M142_adult_attestation.mjs
+
       - name: Summary
         if: always()
         run: |
