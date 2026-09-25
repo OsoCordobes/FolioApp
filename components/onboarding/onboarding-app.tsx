@@ -55,7 +55,7 @@ import { Step1Consent } from "@/components/onboarding/step1-consent";
 import { Step1Registro } from "@/components/onboarding/step1-registro";
 import { Step1Choice } from "@/components/onboarding/step1-choice";
 import { parseOnboardingIntent } from "@/lib/onboarding/intent";
-import { OnboardingServicesDraft, parseStoredServicesCommand, storeServicesCommand } from "@/lib/onboarding/services-draft";
+import { OnboardingServicesDraft, beginServicesFlight, parseStoredServicesCommand, storeServicesCommand } from "@/lib/onboarding/services-draft";
 import { TIPOS_CANONICOS_VALIDOS } from "@/lib/onboarding/templates";
 // ONBOARDING_INITIAL es un literal de data; OnboardingDataState es un type.
 // Ambos quedan en el initial bundle (no son pesados — solo constants/types).
@@ -146,6 +146,8 @@ interface OnboardingAppProps {
    * password de Supabase). En su lugar, Step 1 pide solo consent y captcha.
    */
   authedEmail?: string;
+  /** Identidad Auth verificada en el servidor; sólo particiona el intento local. */
+  authedUserId?: string;
   /**
    * Precio del plan Solo en centavos ARS. Lo lee el server component
    * (app/(public)/onboarding/page.tsx) de MP_PLAN_PRICE_CENTS — fuente
@@ -179,6 +181,7 @@ export function OnboardingApp({
   organizationId,
   initialSlug,
   authedEmail,
+  authedUserId,
   soloPriceCents,
   clinicPriceCents,
   clinicSeatPriceCents,
@@ -195,6 +198,7 @@ export function OnboardingApp({
   const [data, setData] = useState<OnboardingDataState>(ONBOARDING_INITIAL);
   const [orgId, setOrgId] = useState<string | undefined>(organizationId);
   const [orgSlug, setOrgSlug] = useState<string | undefined>(initialSlug);
+  const [ownerUserId, setOwnerUserId] = useState<string | undefined>(authedUserId);
   const [finishing, startTransition] = useTransition();
   const [signingUp, startSignupTransition] = useTransition();
   const signupInFlightRef = useRef(false);
@@ -329,7 +333,6 @@ export function OnboardingApp({
   const [servicesStatus, setServicesStatus] = useState<"loading" | "ready" | "error" | "uncertain" | "conflict">("loading");
   const [servicesMessage, setServicesMessage] = useState<string | null>(null);
   const [persistedServices, setPersistedServices] = useState(false);
-  const servicesOwner = (authedEmail ?? data.email).trim().toLowerCase();
 
   useEffect(() => {
     if (stepIdx !== 6 || !orgId || recoverableDraft) return;
@@ -348,7 +351,7 @@ export function OnboardingApp({
         return;
       }
       let pending = null;
-      try { pending = parseStoredServicesCommand(sessionStorage.getItem(servicesKey(orgId)), orgId, servicesOwner); }
+      try { pending = parseStoredServicesCommand(sessionStorage.getItem(servicesKey(orgId)), orgId, ownerUserId ?? ""); }
       catch { /* el guardado nuevo exige almacenamiento disponible */ }
       const draft = new OnboardingServicesDraft(orgId, result.data, pending ?? undefined);
       if (!pending && result.data.servicios.length === 0 && data.ownerTratante !== false && data.servicios.length > 0) {
@@ -378,7 +381,7 @@ export function OnboardingApp({
     return () => { cancelled = true; };
     // Se lee una vez por entrada al Paso 6; las ediciones posteriores no deben disparar otra lectura.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stepIdx, orgId, synthetic, servicesOwner, recoverableDraft]);
+  }, [stepIdx, orgId, synthetic, ownerUserId, recoverableDraft]);
   useEffect(() => {
     if (!orgId) return;
     let cancelled = false;
@@ -445,7 +448,7 @@ export function OnboardingApp({
   const persistServices = useCallback((allowRetry = false): Promise<boolean> => {
     if (servicesFlightRef.current) return servicesFlightRef.current;
     const draft = servicesRef.current;
-    if (!draft || draft.organizationId !== orgId || !servicesOwner || servicesStatus === "loading" || servicesStatus === "error") return Promise.resolve(false);
+    if (!draft || draft.organizationId !== orgId || !ownerUserId || servicesStatus === "loading" || servicesStatus === "error") return Promise.resolve(false);
     if (draft.conflict) {
       setServicesStatus("conflict");
       setServicesMessage("Los servicios cambiaron. Cargá los guardados antes de continuar.");
@@ -457,7 +460,7 @@ export function OnboardingApp({
     const command = draft.begin(crypto.randomUUID(), { retry: allowRetry, force: !servicesProgressSavedRef.current });
     if (!command) return Promise.resolve(false);
     if (!prior) {
-      try { sessionStorage.setItem(servicesKey(command.organizationId), storeServicesCommand(command, servicesOwner)); }
+      try { sessionStorage.setItem(servicesKey(command.organizationId), storeServicesCommand(command, ownerUserId)); }
       catch {
         draft.finish({ ok: false, uncertain: false, conflict: false });
         setSaveState({ status: "error", message: "No pudimos preparar el guardado. Habilitá almacenamiento del navegador y reintentá." });
@@ -465,7 +468,7 @@ export function OnboardingApp({
       }
     }
     setSaveState({ status: "saving" });
-    const flight = (async () => {
+    return beginServicesFlight(servicesFlightRef, async () => {
       try {
         const result = synthetic
           ? { ok: true as const, data: { revision: command.revision + 1, servicios: command.servicios } }
@@ -502,11 +505,9 @@ export function OnboardingApp({
         setServicesMessage("No pudimos confirmar el guardado. Verificá el mismo cambio antes de editar.");
         setSaveState({ status: "error", message: "Verificar guardado" });
         return false;
-      } finally { servicesFlightRef.current = null; }
-    })();
-    servicesFlightRef.current = flight;
-    return flight;
-  }, [orgId, servicesOwner, servicesStatus, synthetic]);
+      }
+    });
+  }, [orgId, ownerUserId, servicesStatus, synthetic]);
 
   // ─── Auto-save por step (debounce 800ms) ─────────────────────────────────
 
@@ -769,6 +770,7 @@ export function OnboardingApp({
         }
         setError(null);
         if (result.organizationId) setOrgId(result.organizationId);
+        if (result.userId) setOwnerUserId(result.userId);
         if (result.slug) setOrgSlug(result.slug);
         if (result.tipo) setData((prev) => ({ ...prev, tipo: result.tipo!, ownerTratante: result.ownerTratante ?? prev.ownerTratante }));
         try { sessionStorage.removeItem(INTENT_KEY); } catch { /* disabled storage */ }

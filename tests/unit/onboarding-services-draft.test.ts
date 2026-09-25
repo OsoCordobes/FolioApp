@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { OnboardingServicesDraft, parseStoredServicesCommand, storeServicesCommand } from "../../lib/onboarding/services-draft";
+import { OnboardingServicesDraft, beginServicesFlight, parseStoredServicesCommand, storeServicesCommand } from "../../lib/onboarding/services-draft";
 
 const org = "00000000-0000-4000-8000-000000000010";
 const item = { id: "00000000-0000-4000-8000-000000000020", nombre: "Consulta sintética", dur: 30, precioCents: 1000, tipoCanonico: "CONSULTA_INICIAL" as const };
@@ -45,10 +45,23 @@ test("conflicto exige lectura nueva antes de un ID de operación nuevo", () => {
 
 test("el reintento restaurado acepta sólo el comando propio e íntegro", () => {
   const command = { organizationId: org, revision: 4, operacionId: "00000000-0000-4000-8000-000000000030", servicios: [item] };
-  const own = "owner@example.test";
+  const own = "00000000-0000-4000-8000-000000000040";
   assert.deepEqual(parseStoredServicesCommand(storeServicesCommand(command, own), org, own), command);
-  assert.equal(parseStoredServicesCommand(storeServicesCommand(command, own), org, "other@example.test"), null);
+  assert.equal(parseStoredServicesCommand(storeServicesCommand(command, own), org, "00000000-0000-4000-8000-000000000041"), null);
   assert.equal(parseStoredServicesCommand(storeServicesCommand({ ...command, organizationId: "00000000-0000-4000-8000-000000000011" }, own), org, own), null);
   assert.equal(parseStoredServicesCommand(storeServicesCommand({ ...command, servicios: [item, item] }, own), org, own), null);
   assert.equal(parseStoredServicesCommand("{", org, own), null);
+});
+
+test("dos guardados sintéticos sucesivos limpian el vuelo tras cada respuesta inmediata", async () => {
+  const flight: { current: Promise<number> | null } = { current: null };
+  let writes = 0;
+  const first = beginServicesFlight(flight, () => ++writes);
+  assert.equal(beginServicesFlight(flight, () => ++writes), first);
+  assert.equal(await first, 1);
+  await Promise.resolve();
+  assert.equal(flight.current, null);
+  assert.equal(await beginServicesFlight(flight, () => ++writes), 2);
+  await Promise.resolve();
+  assert.equal(flight.current, null);
 });

@@ -73,6 +73,7 @@ export interface OnboardingBootstrapResult {
   tipo?: "INDEPENDIENTE" | "CLINICA";
   ownerTratante?: boolean;
   existingAccount?: boolean;
+  userId?: string;
 }
 
 const bootstrapChoiceSchema = z.object({
@@ -296,7 +297,7 @@ export async function signUpAndInitOrganization(
 
   return { ok: true, organizationId: result.organization_id, slug: result.slug,
     tipo: result.tipo, ownerTratante: result.owner_tratante,
-    existingAccount: !result.created };
+    existingAccount: !result.created, userId };
 }
 
 /**
@@ -385,7 +386,7 @@ export async function bootstrapOrgForAuthenticatedUser(
 
   return { ok: true, organizationId: result.organization_id, slug: result.slug,
     tipo: result.tipo, ownerTratante: result.owner_tratante,
-    existingAccount: !result.created };
+    existingAccount: !result.created, userId: user.id };
 }
 
 // Helper interno: pickea un slug libre buscando un sufijo numérico si está tomado.

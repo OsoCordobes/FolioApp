@@ -42,6 +42,7 @@ export function OnboardingFlowFixture({ soloPriceCents, clinicPriceCents, clinic
     organizationId={ORG_ID}
     initialSlug="folio-test-onboarding-flow"
     authedEmail="titular@example.test"
+    authedUserId="00000000-0000-4000-8000-000000000002"
     soloPriceCents={soloPriceCents}
     clinicPriceCents={clinicPriceCents}
     clinicSeatPriceCents={clinicSeatPriceCents}

@@ -4,13 +4,13 @@ import { TIPOS_CANONICOS_VALIDOS } from "@/lib/onboarding/templates";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Session storage contains only the exact command that may be verified again. */
-export function parseStoredServicesCommand(raw: string | null, organizationId: string, ownerEmail: string): OnboardingServicesCommand | null {
+export function parseStoredServicesCommand(raw: string | null, organizationId: string, ownerUserId: string): OnboardingServicesCommand | null {
   if (!raw) return null;
   try {
     const value: unknown = JSON.parse(raw);
     if (!value || typeof value !== "object") return null;
     const envelope = value as Record<string, unknown>;
-    if (!ownerEmail || envelope.ownerEmail !== ownerEmail.trim().toLowerCase()) return null;
+    if (!UUID.test(ownerUserId) || envelope.ownerUserId !== ownerUserId) return null;
     const command = envelope.command as Record<string, unknown> | null;
     if (!command || typeof command !== "object") return null;
     if (command.organizationId !== organizationId || !UUID.test(organizationId)
@@ -34,8 +34,18 @@ export function parseStoredServicesCommand(raw: string | null, organizationId: s
   } catch { return null; }
 }
 
-export function storeServicesCommand(command: OnboardingServicesCommand, ownerEmail: string): string {
-  return JSON.stringify({ ownerEmail: ownerEmail.trim().toLowerCase(), command });
+export function storeServicesCommand(command: OnboardingServicesCommand, ownerUserId: string): string {
+  return JSON.stringify({ ownerUserId, command });
+}
+
+/** The work starts after the flight is visible, including synchronous fixture responses. */
+export function beginServicesFlight<T>(ref: { current: Promise<T> | null }, work: () => Promise<T> | T): Promise<T> {
+  if (ref.current) return ref.current;
+  const flight = Promise.resolve().then(work);
+  ref.current = flight;
+  const clear = () => { if (ref.current === flight) ref.current = null; };
+  void flight.then(clear, clear);
+  return flight;
 }
 
 /** A full catalog and one immutable write intent for Step 6. */
