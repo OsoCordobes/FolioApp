@@ -26,11 +26,13 @@ async function mailAction(email:string,kind:'signup'|'recovery',afterId?:string)
  if(!/^folio-proof-[a-z0-9-]+$/.test(mailbox))throw Error('auth_proof_mailbox_invalid');
  const endpoint=`${MAIL}/api/v1/mailbox/${mailbox}`;
  const until=Date.now()+45_000;
+ let messagesSeen=0,urlsSeen=0,originSeen=false,pathSeen=false,typeSeen=false;
  while(Date.now()<until){
   const listing=await fetch(endpoint,{signal:AbortSignal.timeout(3000)});
   if(!listing.ok)throw Error('auth_proof_mailbox_unavailable');
   const messages=await listing.json() as Array<{id:string}>;
   if(!Array.isArray(messages))throw Error('auth_proof_mailbox_shape');
+  messagesSeen=Math.max(messagesSeen,Math.min(9,messages.length));
   for(const item of [...messages].reverse()){
    if(!/^[a-zA-Z0-9-]+$/.test(item.id)||item.id===afterId)continue;
    const response=await fetch(`${endpoint}/${item.id}`,{signal:AbortSignal.timeout(3000)});
@@ -38,10 +40,15 @@ async function mailAction(email:string,kind:'signup'|'recovery',afterId?:string)
    const message=await response.json() as {body?:{text?:string;html?:string}};
    const body=`${message.body?.text??''}\n${message.body?.html??''}`.replace(/&amp;/g,'&');
    const candidates=body.match(/https?:\/\/[^\s<>"']+/g)??[];
+   urlsSeen=Math.max(urlsSeen,Math.min(9,candidates.length));
    for(const candidate of candidates){
     let action:URL;try{action=new URL(candidate);}catch{continue;}
-    if(action.origin!==API||action.pathname!=='/auth/v1/verify')continue;
+    if(action.origin!==API)continue;
+    originSeen=true;
+    if(action.pathname!=='/auth/v1/verify')continue;
+    pathSeen=true;
     if(action.searchParams.get('type')!==kind)continue;
+    typeSeen=true;
     if(!action.searchParams.has('token')&&!action.searchParams.has('token_hash'))continue;
     const redirect=action.searchParams.get('redirect_to');
     if(redirect && ![`${APP}/api/auth/callback`,`${APP}/reset-password`].includes(redirect))throw Error('auth_proof_redirect_mismatch');
@@ -50,6 +57,7 @@ async function mailAction(email:string,kind:'signup'|'recovery',afterId?:string)
   }
   await new Promise(resolve=>setTimeout(resolve,700));
  }
+ console.log(`auth_proof_mail_diagnostic:kind=${kind} messages=${messagesSeen} urls=${urlsSeen} origin=${originSeen?1:0} path=${pathSeen?1:0} type=${typeSeen?1:0}`);
  throw Error(`auth_proof_${kind}_mail_missing`);
 }
 

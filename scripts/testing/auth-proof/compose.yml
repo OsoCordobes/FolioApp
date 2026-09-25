@@ -8,6 +8,8 @@ services:
       GOTRUE_SITE_URL: http://127.0.0.1:4430
       GOTRUE_URI_ALLOW_LIST: http://127.0.0.1:4430/api/auth/callback,http://127.0.0.1:4430/reset-password
       GOTRUE_MAILER_AUTOCONFIRM: "false"
+      GOTRUE_MAILER_URLPATHS_CONFIRMATION: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_RECOVERY: /auth/v1/verify
       GOTRUE_SMTP_ADMIN_EMAIL: auth-proof@example.test
       GOTRUE_SMTP_HOST: inbucket
       GOTRUE_SMTP_PORT: "2500"

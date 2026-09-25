@@ -160,6 +160,8 @@ async function main(){
    .map(match=>match[1]).filter(stage=>allowedStages.has(stage));
   const counts=result.output.split(/\r?\n/).filter(line=>/^\s*\d+ (?:passed|failed|skipped)\b/.test(line));
   for(const stage of stages.slice(-30))console.log(`auth_proof_stage:${stage}`);
+  const mailDiagnostics=[...result.output.matchAll(/auth_proof_mail_diagnostic:kind=(?:signup|recovery) messages=[0-9] urls=[0-9] origin=[01] path=[01] type=[01]/g)];
+  for(const diagnostic of mailDiagnostics.slice(-2))console.log(diagnostic[0]);
   for(const count of counts.slice(-3))console.log(cleanOutput(count));
   if(result.code!==0){
    // The browser's raw report can contain one-use mail links and credentials.
@@ -168,7 +170,8 @@ async function main(){
    const lines=[...result.output.matchAll(/auth-mail-onboarding\.spec\.ts:(\d+)(?::\d+)?/g)]
     .map(match=>Number(match[1])).filter(line=>line>0&&line<1000);
    const allowedErrors=new Set([
-    'auth_proof_mail_missing','auth_proof_mailbox_unavailable','auth_proof_message_unavailable',
+    'auth_proof_signup_mail_missing','auth_proof_recovery_mail_missing',
+    'auth_proof_mailbox_unavailable','auth_proof_message_unavailable',
     'auth_proof_redirect_mismatch','auth_proof_mailbox_invalid','auth_proof_mailbox_shape',
     'auth_proof_requires_dedicated_local_auth','auth_proof_local_target_mismatch',
     'auth_proof_turnstile_must_use_existing_development_path','auth_proof_local_read_key_missing',
