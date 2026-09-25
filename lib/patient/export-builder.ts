@@ -367,7 +367,7 @@ export async function buildPatientExport(
     sesiones_registradas: historiaClinica?.sesiones.length ?? sesionesCount ?? 0,
   };
 
-  if (historiaClinica && unreadablePatientField) {
+  if (unreadablePatientField) {
     return err("db_error", "No se pudo descifrar parte de la ficha. No se generó un archivo incompleto.");
   }
 
