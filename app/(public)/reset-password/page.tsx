@@ -8,11 +8,10 @@ import { ResetPasswordForm } from "./reset-password-form";
  * Folio · /reset-password
  *
  * Landing for the Supabase password-recovery email link. Supabase appends
- * its `code` or `token_hash` + `type=recovery` to the redirectTo URL after
+ * a PKCE `code` to the redirectTo URL after
  * the user clicks the email. Here we render a client form that:
- *   1. Exchanges the code for a session (via the helper inside
- *      ResetPasswordForm) — this is what Supabase's @supabase/ssr does
- *      under the hood; we let supabase-js handle it.
+ *   1. Lets @supabase/ssr exchange the code once and validates the resulting
+ *      recovery session before showing the form.
  *   2. Lets the user pick a new password.
  *   3. Calls supabase.auth.updateUser({ password }) server-side.
  *   4. Redirects to /hoy on success.
