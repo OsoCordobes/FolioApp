@@ -1,4 +1,5 @@
--- B04a synthetic authorization and revision checks. Transaction is rolled back.
+-- B04a synthetic authorization and revision checks after M142 + M143 replay.
+-- Transaction is rolled back.
 BEGIN;
 CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS
 $$ SELECT nullif(current_setting('test.m142_uid',true),'')::uuid $$;
@@ -326,6 +327,10 @@ SELECT pg_temp.m142_expect($q$SELECT public.read_adult_attestation(pg_temp.m142_
 SELECT pg_temp.m142_expect($q$SELECT public.attest_adult_dob(pg_temp.m142_id(10),pg_temp.m142_id(32),pg_temp.m142_id(31),3,2,'1990-01-01','1990-01-01','DOCUMENTO_EXHIBIDO')$q$,'42501');
 RESET ROLE;
 UPDATE public.organization SET deleted_at=NULL WHERE id=pg_temp.m142_id(10);
+-- M37 cascades organization soft-delete to members and intentionally does not
+-- reverse it when the organization is restored. Restore this synthetic cohort.
+UPDATE public.member SET deleted_at=NULL
+ WHERE organization_id=pg_temp.m142_id(10);
 UPDATE public.paciente SET deleted_at=now() WHERE id=pg_temp.m142_id(32);
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.m142_expect($q$SELECT public.read_adult_attestation(pg_temp.m142_id(10),pg_temp.m142_id(32))$q$,'42501');
