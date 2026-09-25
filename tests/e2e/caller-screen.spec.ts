@@ -13,6 +13,9 @@ type Fixture = {
 
 test("reception code, screen pairing, revocation and unchanged clinical state", async ({ browser, page }) => {
   test.setTimeout(420_000);
+  const startedAt = Date.now();
+  const timedStage = (stage: string) => console.log(`caller_proof_stage:${stage} elapsed_ms=${Date.now() - startedAt}`);
+  timedStage("test_started");
   if (process.env.FOLIO_TEST_REAL_SUPABASE !== "1" || process.env.CI !== "true") throw new Error("caller_proof_requires_isolated_ci");
   expect(process.env.NEXT_PUBLIC_SUPABASE_URL).toBe("http://127.0.0.1:55421");
   const fixture = JSON.parse(await readFile(path.join(tmpdir(), "folio-caller-proof-fixture.json"), "utf8")) as Fixture;
@@ -25,12 +28,16 @@ test("reception code, screen pairing, revocation and unchanged clinical state", 
   await expect(page.getByRole("link", { name: "Pantallas" })).toBeVisible();
   await page.getByRole("link", { name: "Pantallas" }).click();
   await expect(page.getByRole("heading", { name: "Pantallas de espera" })).toBeVisible();
+  timedStage("settings_loaded");
+  timedStage("pair_requested");
   await page.getByRole("button", { name: "Generar código de vinculación" }).click();
   const code = (await page.locator(".caller-settings-code strong").textContent())?.trim() ?? "";
   expect(code).toMatch(/^[a-f0-9]{16}$/);
-  console.log("caller_proof_stage:pair_issued");
+  timedStage("pair_issued");
 
+  timedStage("screen_context_requested");
   const screen = await browser.newPage();
+  timedStage("screen_context_created");
   await screen.addInitScript(() => {
     const start = OscillatorNode.prototype.start;
     OscillatorNode.prototype.start = function (...args) {
@@ -39,12 +46,13 @@ test("reception code, screen pairing, revocation and unchanged clinical state", 
       return start.apply(this, args);
     };
   });
+  timedStage("screen_script_ready");
   let reads = 0;
   screen.on("request", request => { if (request.method() === "GET" && new URL(request.url()).pathname === "/api/caller/screen") reads++; });
-  console.log("caller_proof_stage:screen_open");
+  timedStage("screen_open");
   await screen.goto("/pantalla");
   await expect(screen.getByRole("heading", { name: "Vinculá esta pantalla" })).toBeVisible();
-  console.log("caller_proof_stage:screen_ready");
+  timedStage("screen_ready");
   const beforePair = await screen.request.get("http://localhost:4430/api/caller/screen");
   expect(beforePair.status()).toBe(401);
   expect(beforePair.headers()["cache-control"]).toContain("no-store");
@@ -52,14 +60,15 @@ test("reception code, screen pairing, revocation and unchanged clinical state", 
   expect(foreignOrigin.status()).toBe(403);
   expect(foreignOrigin.headers()["access-control-allow-origin"]).toBeUndefined();
   await screen.getByLabel("Código de vinculación").fill(code);
+  timedStage("screen_pair_requested");
   await screen.getByRole("button", { name: "Vincular pantalla" }).click();
-  console.log("caller_proof_stage:pair_submitted");
+  timedStage("pair_submitted");
   await expect(screen.getByText("Pantalla activa")).toBeVisible();
   await expect(screen.getByRole("heading", { name: "Esperando llamados" })).toBeVisible();
   const screenCookies = await screen.context().cookies("http://localhost:4430/api/caller/screen");
   expect(screenCookies.some(cookie => cookie.name === "folio.caller_screen" && cookie.httpOnly && cookie.path === "/api/caller/screen")).toBe(true);
   expect(screenCookies.some(cookie => /auth-token/.test(cookie.name))).toBe(false);
-  console.log("caller_proof_stage:screen_paired");
+  timedStage("screen_paired");
 
   await mkdir("test-results", { recursive: true });
   await page.reload();
