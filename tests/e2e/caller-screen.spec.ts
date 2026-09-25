@@ -103,6 +103,21 @@ test("reception code, screen pairing, revocation and unchanged clinical state", 
   await page.getByRole("button", { name: "Ingresar a Folio" }).click();
   await page.waitForURL(/\/seguridad\/mfa|\/hoy/);
   if (new URL(page.url()).pathname === "/seguridad/mfa") {
+    let postRequest: import("@playwright/test").Request | null = null;
+    let postState = "none", postStatus = "none";
+    page.on("request", request => {
+      if (request.method() === "POST" && new URL(request.url()).pathname === "/seguridad/mfa") {
+        postRequest = request; postState = "pending";
+      }
+    });
+    page.on("response", response => {
+      if (response.request() === postRequest) {
+        const status = response.status();
+        postStatus = status >= 500 ? "5xx" : status >= 400 ? "4xx" : status >= 300 ? "3xx" : "2xx";
+      }
+    });
+    page.on("requestfinished", request => { if (request === postRequest) postState = "complete"; });
+    page.on("requestfailed", request => { if (request === postRequest) postState = "failed"; });
     const sameWindow = Math.floor(Date.now() / 30_000) <= fixture.enrollmentOtpWindow;
     console.log(`caller_proof_mfa_preflight:same_window=${sameWindow ? 1 : 0}`);
     // The setup ceremony already consumed its OTP. Use a fresh time step,
@@ -113,14 +128,26 @@ test("reception code, screen pairing, revocation and unchanged clinical state", 
     }
     await page.getByLabel("Código de seis números").fill(totp(fixture.totpSecret));
     await page.getByRole("button", { name: "Verificar código" }).click();
+    // First Server Action compilation in dev can outlast Playwright's short
+    // assertion timeout. Observe the POST to completion before checking UI.
+    await expect.poll(() => postState, { timeout: 30_000 }).toMatch(/^(complete|failed)$/).catch(() => {});
     try {
-      await expect(page.getByRole("heading", { name: "Verificación completada" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Verificación completada" })).toBeVisible({ timeout: 10_000 });
     } catch (error) {
-      const alert = (await page.getByRole("alert").first().textContent({ timeout: 500 }).catch(() => null)) ?? "";
+      const formAlerts = page.locator(".au-form-inner p[role='alert']");
+      const formCount = await formAlerts.count();
+      const allCount = await page.getByRole("alert").count();
+      const alert = (await formAlerts.first().textContent({ timeout: 500 }).catch(() => null)) ?? "";
       const kind = mfaAlertKind(alert);
       const pathname = new URL(page.url()).pathname;
-      console.log(`caller_proof_mfa_diagnostic:path=${pathname === "/seguridad/mfa" ? "mfa" : pathname === "/hoy" ? "hoy" : "other"} alert=${kind}`);
-      if (kind === "policy_read") console.log(`caller_proof_mfa_read_probe:${await browserMfaReadProbe(page, fixture.email)}`);
+      const button = await page.getByRole("button", { name: "Verificando…" }).count() > 0 ? "pending"
+        : await page.getByRole("button", { name: "Verificar código" }).count() > 0 ? "ready" : "missing";
+      const routeAnnouncer = await page.locator("next-route-announcer").count() > 0;
+      console.log(`caller_proof_mfa_diagnostic:path=${pathname === "/seguridad/mfa" ? "mfa" : pathname === "/hoy" ? "hoy" : "other"} alert=${kind} form=${formCount > 0 ? 1 : 0} outside=${allCount > formCount ? 1 : 0} announcer=${routeAnnouncer ? 1 : 0} button=${button} post=${postState} status=${postStatus}`);
+      await page.screenshot({ path: "test-results/caller-mfa-failure.png", fullPage: false,
+        mask: [page.locator("input"), page.locator("img"), page.locator("details"), page.locator("canvas"), page.locator("nextjs-portal")],
+        maskColor: "#1d1d1d", timeout: 5_000 }).catch(() => {});
+      console.log(`caller_proof_mfa_read_probe:${await browserMfaReadProbe(page, fixture.email)}`);
       throw error;
     }
     await page.getByRole("link", { name: "Continuar" }).first().click();
