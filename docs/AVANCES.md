@@ -2,7 +2,7 @@
 
 Actualizado: 25/09/2026. Este es el registro breve del trabajo; [el tablero técnico](LAUNCH-BOARD.md) conserva el detalle y los antecedentes. Cada fila cambia sólo ante un resultado o bloqueo real.
 
-**Equipo comprobado:** A · dirección, revisión y publicación. C · comprueba archivos de exportación. D · prepara el llamador mientras se prueba el guardado de servicios. Los dos subagentes trabajan en paralelo.
+**Equipo comprobado:** A · dirección, revisión y publicación. C · termina la exportación de archivos y prepara su descarga. D · construye el llamador de recepción. Los dos subagentes trabajan en paralelo.
 
 **Publicado** = disponible en Folio. **Probado** = pasó sus controles, todavía sin publicar. **En curso** = falta comprobarlo. Las pruebas parciales no cierran un checkpoint completo.
 
@@ -19,7 +19,7 @@ Actualizado: 25/09/2026. Este es el registro breve del trabajo; [el tablero téc
 | **Google Calendar** · prueba externa pendiente | Debemos demostrar reservas reflejadas en Google, ocupación externa y cambios sin duplicados. |
 | **Correo y comunicaciones** · prueba externa pendiente | La entrega global sigue desactivada; falta comprobar recepción y reintentos en buzones controlados. |
 | **Pagos y suscripciones** · prueba externa pendiente | Los cobros ficticios previos no prueban Mercado Pago real; faltan los recorridos comerciales ofrecidos. |
-| **Portal y exportación** · base publicada; archivos en pruebas | [PR173](https://github.com/OsoCordobes/FolioApp/pull/173) avisa ante datos ilegibles. C · revisión A; [PR176 publicada](https://github.com/OsoCordobes/FolioApp/pull/176), [PR178](https://github.com/OsoCordobes/FolioApp/pull/178) comprueba archivos reanudables; la descarga completa sigue en construcción. |
+| **Portal y exportación** · archivos comprobados; descarga en construcción | C · revisión A; [prueba aprobada](https://github.com/OsoCordobes/FolioApp/actions/runs/36090170105): archivos reconstruidos, reintentos sin duplicación y revocación de acceso. [PR178](https://github.com/OsoCordobes/FolioApp/pull/178) pendiente de publicación; todavía falta el botón de descarga completa. |
 | **Continuidad y soporte** · pendiente | Faltan custodia externa, alertas, responsables y procedimiento de ayuda comprobados. |
 | **Validación profesional y piloto** · pendiente humano | Cinco especialidades y piloto de 14 días, con tres profesionales y cinco jornadas por persona. |
 | **Lanzamiento** · pendiente | Se cerrará cuando la versión publicada y la oferta comercial coincidan con lo demostrado. |
