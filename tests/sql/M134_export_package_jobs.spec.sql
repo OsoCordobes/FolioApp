@@ -4,10 +4,10 @@ INSERT INTO auth.users(id,email) VALUES
  ('13400000-0000-4000-8000-000000000001','owner-a-m134@spec.invalid'),
  ('13400000-0000-4000-8000-000000000002','owner-b-m134@spec.invalid'),
  ('13400000-0000-4000-8000-000000000003','staff-m134@spec.invalid');
-INSERT INTO public.profile(id,email) VALUES
- ('13400000-0000-4000-8000-000000000001','owner-a-m134@spec.invalid'),
- ('13400000-0000-4000-8000-000000000002','owner-b-m134@spec.invalid'),
- ('13400000-0000-4000-8000-000000000003','staff-m134@spec.invalid');
+INSERT INTO public.profile(id,email,consent_pii_signed_at,consent_pii_text_version) VALUES
+ ('13400000-0000-4000-8000-000000000001','owner-a-m134@spec.invalid',now(),'v1'),
+ ('13400000-0000-4000-8000-000000000002','owner-b-m134@spec.invalid',now(),'v1'),
+ ('13400000-0000-4000-8000-000000000003','staff-m134@spec.invalid',now(),'v1');
 INSERT INTO public.organization(id,slug,nombre,tipo) VALUES
  ('13400000-0000-4000-8000-000000000010','m134-org-a','M134 A','CLINICA'),
  ('13400000-0000-4000-8000-000000000020','m134-org-b','M134 B','CLINICA');
