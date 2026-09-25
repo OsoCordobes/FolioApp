@@ -18,8 +18,9 @@ import { revalidatePath } from "next/cache";
  */
 
 import { getActiveContext } from "@/lib/db/active-context";
+import { verifyMfaSession } from "@/lib/auth/mfa-access";
 import { writeAuditEntry } from "@/lib/db/audit";
-import { createSupabaseServiceClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient, createSupabaseServiceClient } from "@/lib/supabase/server";
 import {
   PHOTO_BUCKET,
   PHOTO_EXT_BY_MIME,
@@ -32,6 +33,7 @@ import {
 export interface PerfilPublicoActionResult {
   ok: boolean;
   error?: string;
+  uncertain?: boolean;
 }
 
 export interface UploadPhotoResult extends PerfilPublicoActionResult {
@@ -196,5 +198,46 @@ export async function setMostrarMatricula(mostrar: boolean): Promise<PerfilPubli
 
   revalidatePublicProfile(ctx.data.organization.slug);
 
+  return { ok: true };
+}
+
+/** Only the professional can publish or revoke their own Clinic page. */
+export async function setOwnMiniwebConsent(enabled: boolean): Promise<PerfilPublicoActionResult> {
+  if (typeof enabled !== "boolean") return { ok: false, error: "Opción inválida." };
+  const client = await createSupabaseServerClient();
+  const mfa = await verifyMfaSession(client);
+  if (!mfa.ok) return { ok: false, error: mfa.error.message };
+  const ctx = await getActiveContext();
+  if (!ctx.ok || ctx.data.session.userId !== mfa.data.user.id ||
+      ctx.data.organization.tipo !== "CLINICA" || !ctx.data.session.esColegiado) {
+    return { ok: false, error: "Esta página personal no está disponible para tu cuenta." };
+  }
+  if (enabled && ctx.data.organization.optOutPublicListing) {
+    return { ok: false, error: "El enlace público del consultorio debe estar habilitado primero." };
+  }
+  const memberId = ctx.data.session.memberId;
+  const organizationId = ctx.data.organization.id;
+  const { data: existing, error: readError } = await client.from("member_miniweb_consent")
+    .select("enabled").eq("id", memberId).eq("organization_id", organizationId).maybeSingle();
+  if (readError) return { ok: false, error: "No pudimos leer el estado actual. Recargá la página." };
+  if ((existing?.enabled ?? false) === enabled) return { ok: true };
+  const write = existing
+    ? await client.from("member_miniweb_consent").update({ enabled })
+      .eq("id", memberId).eq("organization_id", organizationId)
+    : await client.from("member_miniweb_consent").insert({ id: memberId, organization_id: organizationId, enabled: true });
+  // UPDATE can affect zero rows without an error; read back even on apparent success.
+  const { data: current, error: confirmError } = await client.from("member_miniweb_consent")
+    .select("enabled").eq("id", memberId).eq("organization_id", organizationId).maybeSingle();
+  if (confirmError) {
+    return { ok: false, uncertain: true, error: "No pudimos confirmar si cambió la publicación. Recargá la página para verificarlo." };
+  }
+  if (current?.enabled !== enabled) {
+    return { ok: false, error: write.error
+      ? "No pudimos guardar el cambio. Recargá la página."
+      : "No pudimos confirmar el cambio. Recargá la página." };
+  }
+  revalidatePath(`/book/${ctx.data.organization.slug}/p/${memberId}`);
+  revalidatePath(`/book/${ctx.data.organization.slug}`);
+  revalidatePath("/configuracion");
   return { ok: true };
 }

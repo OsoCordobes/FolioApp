@@ -106,6 +106,12 @@ export default async function ConfiguracionPage({
   // best-effort: si el count falla, asumimos 1 (solo el titular) para no romper
   // la página — el monto real lo re-computa el action al confirmar.
   const supabase = await createSupabaseServerClient();
+  let ownMiniwebConsent = false;
+  if (data.data.tipo === "CLINICA" && ctx.data.session.esColegiado) {
+    const { data: consent } = await supabase.from("member_miniweb_consent")
+      .select("enabled").eq("id", ctx.data.session.memberId).maybeSingle();
+    ownMiniwebConsent = consent?.enabled === true;
+  }
   const { count: membersCount } = await supabase
     .from("member")
     .select("id", { count: "exact", head: true })
@@ -120,6 +126,7 @@ export default async function ConfiguracionPage({
       orgSlug={ctx.data.organization.slug}
       initialConsultorio={data.data.consultorio}
       initialPublicPreview={data.data.publicPreview}
+      initialMiniwebLayout={data.data.miniwebLayout}
       initialServicios={data.data.servicios}
       initialDias={data.data.dias}
       initialHorariosContext={data.data.horariosContext}
@@ -140,6 +147,8 @@ export default async function ConfiguracionPage({
       equipoSelf={equipoSelf}
       esColegiado={ctx.data.session.esColegiado}
       initialPerfilPublico={perfilPublico}
+      ownMemberId={ctx.data.session.memberId}
+      initialMiniwebConsent={ownMiniwebConsent}
       initialListarEnDirectorio={listarEnDirectorio}
       suscripcionEstado={ctx.data.subscription.estado}
       whatsappConfigured={whatsappConfigured}

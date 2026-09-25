@@ -1,14 +1,15 @@
 "use client";
 
-import { BookLandingView, type PublicLandingViewData } from "@/components/book-landing/book-landing-view";
+import { BookLandingView, type PublicLandingLayout, type PublicLandingViewData } from "@/components/book-landing/book-landing-view";
 
 /** Inert draft preview: same public composition, no booking action or network call. */
-export function BookLandingPreview({ data }: { data: PublicLandingViewData }) {
+export function BookLandingPreview({ data, layout }: { data: PublicLandingViewData; layout?: PublicLandingLayout }) {
   const sinEquipoClinico = data.org.tipo === "CLINICA" && data.profesionales.length === 0;
   return (
     <BookLandingView
       data={data}
       mode="preview"
+      layout={layout}
       booking={(
         <div className="bl-preview-booking">
           <p>{sinEquipoClinico
