@@ -168,6 +168,8 @@ async function main(){
   for(const diagnostic of uiDiagnostics.slice(-2))console.log(diagnostic[0]);
   const sessionDiagnostics=[...result.output.matchAll(/auth_proof_session_diagnostic:verify=[01] callback=[01] onboarding=[01] callback_status=(?:none|redirect|ok|other) callback_to=(?:none|onboarding|login|mfa|hoy|reset|other) cookie_kind=(?:missing|chunk_gap|empty|decode_failed|token_missing|config_missing|auth_rejected|auth_missing|auth_unavailable|valid) auth_valid=[01] same_user=[01] reload_choice=[01] reload_registration=[01] reload_consent=[01] reload_error=[01] reload_cookie_kind=(?:missing|chunk_gap|empty|decode_failed|token_missing|config_missing|auth_rejected|auth_missing|auth_unavailable|valid) reload_auth_valid=[01] reload_same_user=[01]/g)];
   for(const diagnostic of sessionDiagnostics.slice(-2))console.log(diagnostic[0]);
+  const resetDiagnostics=[...result.output.matchAll(/auth_proof_reset_diagnostic:origin=(?:app|other_loopback|other) form=[01] checking=[01] invalid=[01] code=[01] error=[01] token_hash=[01] fragment_access=[01] cookie_kind=(?:missing|chunk_gap|empty|decode_failed|token_missing|config_missing|auth_rejected|auth_missing|auth_unavailable|valid) auth_valid=[01] same_user=[01]/g)];
+  for(const diagnostic of resetDiagnostics.slice(-1))console.log(diagnostic[0]);
   for(const count of counts.slice(-3))console.log(cleanOutput(count));
   if(result.code!==0){
    // The browser's raw report can contain one-use mail links and credentials.
@@ -182,6 +184,7 @@ async function main(){
     'auth_proof_requires_dedicated_local_auth','auth_proof_local_target_mismatch',
     'auth_proof_turnstile_must_use_existing_development_path','auth_proof_local_read_key_missing',
     'auth_proof_consent_screen_missing',
+    'auth_proof_reset_form_missing',
    ]);
    const detected=[...result.output.matchAll(/auth_proof_[a-z0-9_]+(?=\b)/gi)]
     .map(match=>match[0]).find(value=>allowedErrors.has(value))??'';

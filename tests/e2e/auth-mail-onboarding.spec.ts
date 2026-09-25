@@ -253,6 +253,19 @@ test('B01/B02 · email real local, dos modalidades, reanudación y recuperación
  console.log('auth_proof_stage:recovery_mail_captured');
  await openAction(page,reset.url);
  await page.waitForURL(/\/reset-password(?:\?|$)/,{timeout:30_000});
+ try{
+  await expect(page.getByRole('heading',{name:'Elegí una nueva contraseña.'})).toBeVisible({timeout:30_000});
+ }catch{
+  const target=new URL(page.url());
+  const form=await page.getByRole('heading',{name:'Elegí una nueva contraseña.'}).isVisible();
+  const checking=await page.getByRole('heading',{name:'Verificando el enlace…'}).isVisible();
+  const invalid=await page.getByRole('heading',{name:'Necesitás un enlace nuevo.'}).isVisible();
+  const session=await verifyBrowserAuthCookie(page,solo.email);
+  const origin=target.origin===APP?'app':target.hostname==='127.0.0.1'&&target.port==='4430'?'other_loopback':'other';
+  const fragment=new URLSearchParams(target.hash.replace(/^#/,''));
+  console.log(`auth_proof_reset_diagnostic:origin=${origin} form=${form?1:0} checking=${checking?1:0} invalid=${invalid?1:0} code=${target.searchParams.has('code')?1:0} error=${target.searchParams.has('error')?1:0} token_hash=${target.searchParams.has('token_hash')?1:0} fragment_access=${fragment.has('access_token')?1:0} cookie_kind=${session.kind} auth_valid=${session.valid?1:0} same_user=${session.same?1:0}`);
+  throw Error('auth_proof_reset_form_missing');
+ }
  await page.locator('input[type="password"]').first().fill(NEW_PASSWORD);
  await page.locator('input[type="password"]').nth(1).fill(NEW_PASSWORD);
  await page.getByRole('button',{name:/guardar|cambiar|restablecer/i}).click();
