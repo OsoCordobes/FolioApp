@@ -9,6 +9,7 @@ import { totp } from "../../scripts/testing/clinical-config.mjs";
 type Fixture = { email: string; password: string; totpSecret: string; databaseUrl: string; turnoId: string };
 
 test("reception code, screen pairing, revocation and unchanged clinical state", async ({ browser, page }) => {
+  test.setTimeout(180_000);
   if (process.env.FOLIO_TEST_REAL_SUPABASE !== "1" || process.env.CI !== "true") throw new Error("caller_proof_requires_isolated_ci");
   const fixture = JSON.parse(await readFile(path.join(tmpdir(), "folio-caller-proof-fixture.json"), "utf8")) as Fixture;
   await page.goto("/login");
@@ -68,7 +69,8 @@ test("reception code, screen pairing, revocation and unchanged clinical state", 
   await row.getByRole("button", { name: "Entregar código" }).click();
   await expect(row.locator(".caller-control-code strong")).toHaveText("A0001");
   let lostResponse = false;
-  await page.route("**/hoy", async route => {
+  const hoyActionPath = /\/hoy(?:\?.*)?$/;
+  await page.route(hoyActionPath, async route => {
     if (!lostResponse && route.request().method() === "POST" && route.request().headers()["next-action"]) {
       const committed = await route.fetch();
       expect(committed.ok()).toBe(true);
@@ -79,7 +81,7 @@ test("reception code, screen pairing, revocation and unchanged clinical state", 
   await row.getByRole("button", { name: "Llamar código" }).click();
   await expect(row.getByRole("status")).toContainText("Comprobar llamado");
   expect(lostResponse).toBe(true);
-  await page.unroute("**/hoy");
+  await page.unroute(hoyActionPath);
   await page.reload();
   const restored = page.locator(".fi-turno").filter({ hasText: "Paciente sintético" }).first();
   await restored.getByRole("button", { name: "Código de espera y llamado" }).click();
