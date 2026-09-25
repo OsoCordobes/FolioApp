@@ -66,7 +66,7 @@ export interface OnboardingDataState {
   franjas: [string, string][];
   slotMin: number;
   servicios: Array<{
-    id: number;
+    id: string;
     nombre: string;
     dur: number;
     precio: number;
@@ -116,6 +116,8 @@ interface StepProps {
   savedAccent?: string;
   orgId?: string;
   orgSlug?: string;
+  persistedServices?: boolean;
+  servicesLocked?: boolean;
   direction?: "forward" | "back";
   /**
    * Precio del plan en centavos ARS. Derivado server-side de
@@ -155,14 +157,9 @@ function templateToStateServicios(
   }));
 }
 
-// IDs sintéticos para las filas de servicios (solo key de React en el wizard).
-// Contador monotónico en vez de Date.now(): dos cargas de template en el mismo
-// milisegundo (efecto de rubro + efecto de especialidad) producían ids
-// colisionados → warning "duplicate key". Arranca alto para no chocar con los
-// ids chicos hardcodeados de ONBOARDING_INITIAL.
-let servicioIdCounter = 1_000_000;
-function nextServicioId(): number {
-  return servicioIdCounter++;
+// El mismo ID sirve como key local y como identidad estable del servicio en DB.
+function nextServicioId(): string {
+  return crypto.randomUUID();
 }
 
 // ─── Step 2 · Profesional (con validación inline) ───────────────────────────
@@ -585,12 +582,13 @@ export function Step5Horarios({ data, set, next, back, skip, orgSlug }: StepProp
 
 // ─── Step 6 · Servicios ─────────────────────────────────────────────────────
 
-export function Step6Servicios({ data, set, next, back, skip, orgSlug }: StepProps) {
+export function Step6Servicios({ data, set, next, back, skip, orgSlug, persistedServices, servicesLocked = false }: StepProps) {
   // Precarga del template por especialidad (M50 · Fase C): si el user no editó
   // sus servicios a mano (defaults iniciales o template conocido), al entrar al
   // step los reemplazamos por el set de su especialidad. Cubre el caso en que
   // eligió especialidad en Step 3 sin tocar servicios, y el resume desde DB.
   useEffect(() => {
+    if (persistedServices) return;
     const tplServicios = getEspecialidadServicios(data.especialidad);
     const tplSig = tplServicios.map((s) => s.nombre).join("|");
     const curSig = data.servicios.map((s) => s.nombre).join("|");
@@ -613,14 +611,15 @@ export function Step6Servicios({ data, set, next, back, skip, orgSlug }: StepPro
     data.servicios.every((s) => s.nombre.trim() && s.dur > 0 && s.precio >= 0);
 
   return (
-    <StepShell stepIdx={6} compactFlow={data.ownerTratante === false} back={back} next={next} skip={skip}
+    <StepShell stepIdx={6} compactFlow={data.ownerTratante === false} back={back} next={next} skip={skip} canSkip={data.ownerTratante === false}
       headline="¿Qué servicios ofrecés?"
       sub={data.ownerTratante === false ? "Podés preparar servicios de la clínica ahora o más tarde. Para ofrecer turnos necesitás profesionales aceptados y horarios configurados." : "Los pacientes ven esta lista al reservar. Editable después en Configuración."}
-      nextDisabled={!canContinue}
+      nextDisabled={!canContinue || servicesLocked}
       previewData={previewDataFor(data)}
       slug={orgSlug}
     >
-      <div className="onb-servicios">
+      <fieldset className="onb-servicios" disabled={servicesLocked} style={{ border: 0, padding: 0, minWidth: 0 }}>
+        <legend className="sr-only">Servicios del consultorio</legend>
         {data.servicios.map((s, i) => (
           <div key={s.id} className="onb-servicio-row">
             <input className="onb-serv-name" type="text" value={s.nombre} aria-label={`Nombre del servicio ${i + 1}`}
@@ -646,7 +645,7 @@ export function Step6Servicios({ data, set, next, back, skip, orgSlug }: StepPro
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
           Agregar servicio
         </button>
-      </div>
+      </fieldset>
     </StepShell>
   );
 }
