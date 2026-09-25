@@ -28,6 +28,18 @@ export async function GET(request:Request,{params}:{params:Promise<{id:string}>}
   const bytes=new Uint8Array(await file.arrayBuffer());const type=inspectClinicalFile(bytes,50*1024*1024);
   if(!type.ok||!["image/png","application/pdf"].includes(type.data.mime))return failure(422);
   if(evidence?.sha256&&createHash("sha256").update(bytes).digest("hex")!==evidence.sha256)return failure(422);
+  const currentSession=await verifyMfaSession(client);
+  if(!currentSession.ok)return failure(currentSession.error.code==="auth_required"?401:403);
+  if(currentSession.data.user.id!==session.data.user.id)return failure(403);
+  const {data:current,error:currentError}=await client.from("consentimiento").select("organization_id,paciente_id,firma_storage_path,participantes").eq("id",id).maybeSingle();
+  if(currentError)return failure(503);if(!current)return failure(404);
+  const {data:currentPatient,error:currentPatientError}=await client.from("paciente").select("id").eq("id",current.paciente_id).eq("organization_id",current.organization_id).is("deleted_at",null).is("pseudonimizado_en",null).maybeSingle();
+  if(currentPatientError)return failure(503);if(!currentPatient)return failure(404);
+  const currentEvidence=Array.isArray(current.participantes)?current.participantes[index]:null;
+  const currentPath=currentEvidence?.path??(index===0?current.firma_storage_path:null);
+  if(current.organization_id!==row.organization_id||current.paciente_id!==row.paciente_id||
+    currentPath!==path||(currentEvidence?.sha256??null)!==(evidence?.sha256??null)||
+    typeof currentPath!=="string"||!firmaPathMatchesFicha(currentPath,current.organization_id,current.paciente_id))return failure(404);
   return new Response(bytes,{headers:{...privateHeaders,"Content-Type":type.data.mime,"Content-Disposition":`${type.data.mime==="image/png"?"inline":"attachment"}; filename="evidencia-consentimiento.${type.data.extension}"`}});
   } catch { return failure(503); }
 }
