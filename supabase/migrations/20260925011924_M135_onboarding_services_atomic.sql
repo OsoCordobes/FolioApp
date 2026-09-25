@@ -128,6 +128,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE actor uuid; org_row public.organization%ROWTYPE; prior folio_onboarding_services_private.receipt%ROWTYPE;
         digest text; next_revision bigint; next_step smallint; result jsonb;
         normalized_services jsonb; row_count int; written_count int; owner_treating boolean;
+        required_step smallint;
 BEGIN
   actor:=folio_onboarding_services_private.assert_owner(p_org);
   IF p_expected_revision IS NULL OR p_expected_revision<0 OR p_operation IS NULL
@@ -206,8 +207,8 @@ BEGIN
     RETURN prior.result;
   END IF;
   -- A clinic administrator skips availability: Step 4 goes straight to 6.
-  IF org_row.onboarding_completed OR org_row.onboarding_step_max <
-      CASE WHEN org_row.tipo='CLINICA' AND owner_treating IS FALSE THEN 4 ELSE 5 END THEN
+  required_step:=CASE WHEN org_row.tipo='CLINICA' AND owner_treating IS FALSE THEN 4 ELSE 5 END;
+  IF org_row.onboarding_completed OR org_row.onboarding_step_max < required_step THEN
     RAISE EXCEPTION USING ERRCODE='42501', MESSAGE='Onboarding service step unavailable';
   END IF;
   IF org_row.tipo='INDEPENDIENTE' AND row_count=0 THEN
