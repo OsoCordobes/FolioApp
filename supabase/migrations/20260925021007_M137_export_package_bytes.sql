@@ -310,7 +310,9 @@ DECLARE v_job folio_export_private.job;
 BEGIN
   PERFORM folio_export_private.assert_server();
   SELECT * INTO v_job FROM folio_export_private.job WHERE id=p_id FOR UPDATE;
-  IF NOT FOUND OR v_job.state<>'expired' OR v_job.cleaned_at IS NOT NULL
+  IF p_id IS NULL OR p_token IS NULL OR p_revision IS NULL OR NOT FOUND
+    OR v_job.state<>'expired' OR v_job.cleaned_at IS NOT NULL
+    OR v_job.cleanup_token IS NULL OR v_job.cleanup_until IS NULL
     OR v_job.cleanup_token IS DISTINCT FROM p_token
     OR v_job.revision IS DISTINCT FROM p_revision OR v_job.cleanup_until<=now() THEN
     RAISE EXCEPTION USING ERRCODE='42501', MESSAGE='export_cleanup_lease_invalid';

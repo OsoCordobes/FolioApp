@@ -39,22 +39,22 @@ BEGIN
  IF t IS NULL OR r<>1 THEN RAISE EXCEPTION 'claim failed'; END IF;
  SELECT q.entry_id INTO e_json FROM public.export_package_entry_register(j,
    '13600000-0000-4000-8000-000000000001',t,r,'json',
-   '13600000-0000-4000-8000-000000000101',0,1,'not_applicable',NULL) q;
+   '13600000-0000-4000-8000-000000000101',0::smallint,1,'not_applicable',NULL) q;
  SELECT q.entry_id INTO e_doc FROM public.export_package_entry_register(j,
    '13600000-0000-4000-8000-000000000001',t,r,'document',
-   '13600000-0000-4000-8000-000000000301',0,2,'recorded',repeat('b',64)) q;
+   '13600000-0000-4000-8000-000000000301',0::smallint,2,'recorded',repeat('b',64)) q;
  SELECT q.entry_id INTO e_retired FROM public.export_package_entry_register(j,
    '13600000-0000-4000-8000-000000000001',t,r,'withdrawn_document',
-   '13600000-0000-4000-8000-000000000302',0,0,'not_recorded',NULL) q;
+   '13600000-0000-4000-8000-000000000302',0::smallint,0,'not_recorded',NULL) q;
  IF e_json IS NULL OR e_doc IS NULL OR e_retired IS NULL OR
    e_json IS DISTINCT FROM (SELECT q.entry_id FROM public.export_package_entry_register(j,
      '13600000-0000-4000-8000-000000000001',t,r,'json',
-     '13600000-0000-4000-8000-000000000101',0,1,'not_applicable',NULL) q)
+     '13600000-0000-4000-8000-000000000101',0::smallint,1,'not_applicable',NULL) q)
  THEN RAISE EXCEPTION 'entry replay failed'; END IF;
  BEGIN
    PERFORM public.export_package_entry_register(j,
      '13600000-0000-4000-8000-000000000001',t,r,'json',
-     '13600000-0000-4000-8000-000000000101',0,2,'not_applicable',NULL);
+     '13600000-0000-4000-8000-000000000101',0::smallint,2,'not_applicable',NULL);
    RAISE EXCEPTION 'changed entry replay accepted';
  EXCEPTION WHEN invalid_parameter_value THEN NULL; END;
  IF NOT public.export_package_fragment_register(j,
@@ -156,6 +156,18 @@ BEGIN
  THEN RAISE EXCEPTION 'old unleased cleanup confirmed job with entries'; END IF;
  SELECT d.revision INTO r FROM public.export_package_cleanup_due(1) d WHERE d.job_id=j;
  IF r IS NULL THEN RAISE EXCEPTION 'cleanup grace not satisfied'; END IF;
+ BEGIN
+   PERFORM public.export_package_cleanup_renew(j,NULL,r);
+   RAISE EXCEPTION 'NULL token renewed unclaimed cleanup';
+ EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+ BEGIN
+   PERFORM public.export_package_cleanup_entry_read(j,NULL,r);
+   RAISE EXCEPTION 'NULL token read unclaimed cleanup';
+ EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+ BEGIN
+   PERFORM public.export_package_cleanup_confirm(j,NULL,r);
+   RAISE EXCEPTION 'NULL token confirmed unclaimed cleanup';
+ EXCEPTION WHEN insufficient_privilege THEN NULL; END;
  SELECT c.cleanup_token,c.revision INTO t,r FROM public.export_package_cleanup_claim(j,r) c;
  IF t IS NULL THEN RAISE EXCEPTION 'cleanup claim failed'; END IF;
  IF public.export_package_cleanup_confirm(j,t,r)
@@ -211,7 +223,7 @@ DO $$ BEGIN
      current_setting('test.m137_revoked_job')::uuid,
      '13600000-0000-4000-8000-000000000001',
      current_setting('test.m137_revoked_token')::uuid,1,'json',
-     '13600000-0000-4000-8000-000000000101',0,1,'not_applicable',NULL);
+     '13600000-0000-4000-8000-000000000101',0::smallint,1,'not_applicable',NULL);
    RAISE EXCEPTION 'revoked actor registered entry';
  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
 END $$;
