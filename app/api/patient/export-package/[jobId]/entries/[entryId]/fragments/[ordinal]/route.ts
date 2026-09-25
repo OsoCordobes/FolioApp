@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { writeAuditEntry } from "@/lib/db/audit";
 import { readPackageFragment } from "@/lib/patient/export-package-delivery";
-import { invalidPackageRequest, packageContext, packageFailure, packageHeaders,
+import { exactPackageQuery, invalidPackageRequest, packageContext, packageFailure, packageHeaders,
   unavailablePackage, UUID } from "@/lib/patient/export-package-delivery-http";
 
 export const runtime = "nodejs";
@@ -16,7 +16,8 @@ export async function GET(request: Request, { params }: {
     const query = new URL(request.url).searchParams;
     const patientId = query.get("patientId") ?? "";
     const operationId = query.get("operationId") ?? "";
-    if (!UUID.test(jobId) || !UUID.test(entryId) || !UUID.test(patientId) ||
+    if (!exactPackageQuery(query, ["patientId", "operationId"]) ||
+        !UUID.test(jobId) || !UUID.test(entryId) || !UUID.test(patientId) ||
         !UUID.test(operationId) || !/^(0|[1-9]\d{0,3})$/.test(ordinal)) return invalidPackageRequest();
     const context = await packageContext();
     if (!context.ok) return packageFailure(context.error);

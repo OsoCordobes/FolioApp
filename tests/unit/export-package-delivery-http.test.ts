@@ -43,3 +43,13 @@ test("error response removes raw diagnostic detail and is never cacheable", () =
   assert.equal(response.options.headers["Cache-Control"], "private, no-store");
   assert.doesNotMatch(JSON.stringify(response.value), /SECRET|bucket|SQL/);
 });
+
+test("GET query rejects a lease token, duplicates and extra fields", () => {
+  const exact = exports.exactPackageQuery as (query: URLSearchParams, keys: string[]) => boolean;
+  assert.equal(exact(new URLSearchParams("patientId=p&operationId=o"),
+    ["patientId", "operationId"]), true);
+  assert.equal(exact(new URLSearchParams("patientId=p&operationId=o&leaseToken=secret"),
+    ["patientId", "operationId"]), false);
+  assert.equal(exact(new URLSearchParams("patientId=p&patientId=q&operationId=o"),
+    ["patientId", "operationId"]), false);
+});

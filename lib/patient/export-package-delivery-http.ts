@@ -7,6 +7,11 @@ import type { FolioError, Result } from "@/lib/db/errors";
 
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const RESPONSE_HEADERS = { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" };
+export function exactPackageQuery(query: URLSearchParams, keys: string[]) {
+  const actual = [...query.keys()];
+  return actual.length === keys.length && actual.every(key => keys.includes(key)) &&
+    new Set(actual).size === actual.length;
+}
 
 export function packageJson(data: unknown, status = 200) {
   return NextResponse.json(data, { status, headers: RESPONSE_HEADERS });

@@ -1,5 +1,5 @@
 import { readPackageOperation } from "@/lib/patient/export-package-delivery";
-import { invalidPackageRequest, packageContext, packageFailure, packageJson,
+import { exactPackageQuery, invalidPackageRequest, packageContext, packageFailure, packageJson,
   packageResult, unavailablePackage, UUID } from "@/lib/patient/export-package-delivery-http";
 
 export const runtime = "nodejs";
@@ -9,8 +9,10 @@ export async function GET(request: Request,
   { params }: { params: Promise<{ operationId: string }> }) {
   try {
     const { operationId } = await params;
-    const patientId = new URL(request.url).searchParams.get("patientId") ?? "";
-    if (!UUID.test(operationId) || !UUID.test(patientId)) return invalidPackageRequest();
+    const query = new URL(request.url).searchParams;
+    const patientId = query.get("patientId") ?? "";
+    if (!exactPackageQuery(query, ["patientId"]) ||
+        !UUID.test(operationId) || !UUID.test(patientId)) return invalidPackageRequest();
     const context = await packageContext();
     if (!context.ok) return packageFailure(context.error);
     const status = await readPackageOperation(context.data.client, context.data.session,

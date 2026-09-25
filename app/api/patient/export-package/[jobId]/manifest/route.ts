@@ -1,5 +1,5 @@
 import { readPackageManifestPage } from "@/lib/patient/export-package-delivery";
-import { invalidPackageRequest, packageContext, packageFailure, packageJson,
+import { exactPackageQuery, invalidPackageRequest, packageContext, packageFailure, packageJson,
   packageResult, unavailablePackage, UUID } from "@/lib/patient/export-package-delivery-http";
 
 export const runtime = "nodejs";
@@ -14,7 +14,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ jobI
     const operationId = query.get("operationId") ?? "";
     const offset = query.get("offset") ?? "";
     const limit = query.get("limit") ?? "";
-    if (!UUID.test(jobId) || !UUID.test(patientId) || !UUID.test(operationId) ||
+    if (!exactPackageQuery(query, ["patientId", "operationId", "offset", "limit"]) ||
+        !UUID.test(jobId) || !UUID.test(patientId) || !UUID.test(operationId) ||
         !/^(0|[1-9]\d{0,3})$/.test(offset) || !/^([1-9]|[1-4]\d|50)$/.test(limit)) return invalidPackageRequest();
     const context = await packageContext();
     if (!context.ok) return packageFailure(context.error);
