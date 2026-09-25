@@ -58,6 +58,7 @@ export interface OnboardingResumeState {
     franjas?: [string, string][];
     slotMin?: number;
     servicios?: Array<{
+      id: string;
       nombre: string;
       dur: number;
       precio: number;
@@ -261,11 +262,12 @@ export async function getOnboardingResumeState(
   if (resumeStep >= 6) {
     const { data: servs } = await service
       .from("servicio")
-      .select("nombre, duracion_min, precio_cents, tipo_canonico")
+      .select("id, nombre, duracion_min, precio_cents, tipo_canonico")
       .eq("organization_id", org.id)
       .is("deleted_at", null);
     if (servs && servs.length > 0) {
       servicios = servs.map((s) => ({
+        id: s.id as string,
         nombre: s.nombre as string,
         dur: s.duracion_min as number,
         precio: (s.precio_cents as number) / 100,

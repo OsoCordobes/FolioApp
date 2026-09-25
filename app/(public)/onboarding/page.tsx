@@ -110,6 +110,7 @@ export default async function OnboardingPage() {
           organizationId={organizationId}
           initialSlug={initialSlug}
           authedEmail={authedEmail}
+          authedUserId={user?.id}
           soloPriceCents={computeMonthlyPriceCents("INDEPENDIENTE", 1)}
           clinicPriceCents={computeMonthlyPriceCents("CLINICA", 1)}
           clinicSeatPriceCents={resolveClinicSeatPriceCents()}
