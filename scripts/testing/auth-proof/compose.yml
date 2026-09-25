@@ -5,8 +5,8 @@ services:
     depends_on:
       inbucket: {condition: service_started}
     environment:
-      GOTRUE_SITE_URL: http://127.0.0.1:4430
-      GOTRUE_URI_ALLOW_LIST: http://127.0.0.1:4430/api/auth/callback,http://127.0.0.1:4430/reset-password
+      GOTRUE_SITE_URL: http://localhost:4430
+      GOTRUE_URI_ALLOW_LIST: http://localhost:4430/api/auth/callback,http://localhost:4430/reset-password
       GOTRUE_MAILER_AUTOCONFIRM: "false"
       GOTRUE_MAILER_URLPATHS_CONFIRMATION: /auth/v1/verify
       GOTRUE_MAILER_URLPATHS_RECOVERY: /auth/v1/verify
