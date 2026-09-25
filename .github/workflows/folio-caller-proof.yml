@@ -102,11 +102,11 @@ jobs:
             test-results/caller-hoy-1440.png
           if-no-files-found: ignore
           retention-days: 7
-      - name: Preserve masked synthetic MFA diagnostic on failure
+      - name: Preserve masked synthetic caller diagnostic on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: caller-mfa-diagnostic
-          path: test-results/caller-mfa-failure.png
+          name: caller-pair-diagnostic
+          path: test-results/caller-pair-failure.png
           if-no-files-found: ignore
           retention-days: 7

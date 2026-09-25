@@ -11,6 +11,7 @@ import {Client} from 'pg';
 import {createClient} from '@supabase/supabase-js';
 import {createServerClient} from '@supabase/ssr';
 import {totp} from '../clinical-config.mjs';
+import {parseCallerProofOutput} from './markers.ts';
 import {openLoopbackBridge,validateBridgeTarget,waitForBridgeTarget} from '../../recovery/ci-loopback-bridge.mjs';
 
 const repo=path.resolve(fileURLToPath(new URL('../../../',import.meta.url)));
@@ -191,10 +192,11 @@ async function main(){
   stage='migrations';const count=await prepareSchema(dbPassword,env,state.serviceKey);
   stage='auth';await fixture(state);
   stage='browser';const browserEnv={...env,E2E_BASE_URL:'http://localhost:4430',FOLIO_TEST_SUPABASE_URL:api,FOLIO_TEST_SUPABASE_ANON_KEY:state.anonKey,FOLIO_TEST_SUPABASE_SERVICE_KEY:state.serviceKey,FOLIO_TEST_DATABASE_URL:`postgresql://postgres:${dbPassword}@127.0.0.1:55422/postgres`,FOLIO_TEST_CLINICAL:'1'};
-  const result=await run('pnpm',['test:e2e','--','tests/e2e/caller-screen.spec.ts','--trace=off'],{env:browserEnv,timeout:900000,limit:2000000});
-  const markers=[...result.output.matchAll(/caller_proof_stage:([a-z0-9_]+)(?: elapsed_ms=([0-9]+))?(?: visible_11s=([0-9]+) hidden_6s=0)?/g)].map(match=>({stage:match[1],elapsed:match[2],visible:match[3]}));
-  for(const item of markers)if(['test_started','settings_loaded','pair_requested','pair_issued','screen_context_requested','screen_context_created','screen_script_ready','screen_open','screen_ready','screen_pair_requested','pair_submitted','screen_paired','called_on_screen','lost_response_reused','visit_unchanged','polling_bounded','reconnect_silent','revoked_after_reload'].includes(item.stage))
-   console.log(`caller_proof_stage:${item.stage}${item.elapsed?` elapsed_ms=${item.elapsed}`:''}${item.visible?` visible_11s=${item.visible} hidden_6s=0`:''}`);
+  const result=await run('pnpm',['test:e2e','--','tests/e2e/caller-screen.spec.ts','--trace=off','--reporter=list'],{env:browserEnv,timeout:900000,limit:2000000});
+  const {stages:markers,diagnostics}=parseCallerProofOutput(result.output);
+  for(const item of markers)if(['test_started','settings_loaded','pair_requested','pair_click_returned','pair_issued','screen_context_requested','screen_context_created','screen_script_ready','screen_open','screen_ready','screen_pair_requested','pair_submitted','screen_paired','called_on_screen','lost_response_reused','visit_unchanged','polling_bounded','reconnect_silent','revoked_after_reload'].includes(item.stage))
+   console.log(`caller_proof_stage:${item.stage} elapsed_ms=${item.elapsedMs}${item.visible11s!==undefined?` visible_11s=${item.visible11s} hidden_6s=0`:''}`);
+  for(const item of diagnostics)console.log(`caller_proof_pair_diagnostic:action=${item.action} status=${item.status} button=${item.button} message=${item.message} code=${item.code}`);
   const counts=result.output.split(/\r?\n/).filter(line=>/^\s*\d+ (?:passed|failed|skipped)\b/.test(line));
   for(const line of counts.slice(-3))console.log(line.trim());
   if(result.code!==0){
@@ -206,7 +208,7 @@ async function main(){
   if(/\bskipped\b|\bskip\b/i.test(result.output)||!/\b1 passed\b/.test(result.output))throw Error('caller_browser_missing_pass');
   for(const required of ['pair_issued','screen_paired','called_on_screen','lost_response_reused','visit_unchanged','polling_bounded','reconnect_silent','revoked_after_reload'])
    assert.ok(markers.some(item=>item.stage===required),'caller_stage_missing');
-  stage='complete';console.log(`caller_proof_pass:migrations=${count} polls_11s=${markers.find(item=>item.stage==='polling_bounded')?.visible} hidden_6s=0`);
+  stage='complete';console.log(`caller_proof_pass:migrations=${count} polls_11s=${markers.find(item=>item.stage==='polling_bounded')?.visible11s} hidden_6s=0`);
  }catch{
   if(stage==='services')console.error(`caller_proof_services_diagnostic:${await finiteServicesDiagnostic(env,servicesStep)}`);
   console.error(`caller_proof_${stages.has(stage)?stage:'unclassified'}_failed`);

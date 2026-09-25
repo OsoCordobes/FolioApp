@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { Client } from "pg";
 
+import { DIAGNOSTIC_PREFIX, STAGE_PREFIX } from "../../scripts/testing/caller-proof/markers";
+
 type Fixture = {
   browserCookies: { name: string; value: string; domain: string; path: string; httpOnly?: boolean; secure?: boolean; sameSite?: "Lax" | "Strict" | "None" }[];
   userId: string;
@@ -11,10 +13,36 @@ type Fixture = {
   turnoId: string;
 };
 
+function pairMessageKind(message: string) {
+  const labels: Record<string, string> = {
+    "Ingresá este código en la pantalla. Vence en cinco minutos y se usa una sola vez.": "issued",
+    "El código ya se emitió. Generá uno nuevo.": "already_issued",
+    "No tenés permiso para esta acción.": "permission",
+    "Error obteniendo membresía.": "membership",
+    "No tenés acceso a ninguna organización todavía.": "membership",
+    "No estás autenticado.": "mfa_session",
+    "Volvé a iniciar sesión.": "mfa_session",
+    "Completá la verificación en dos pasos para continuar.": "mfa_session",
+    "No pudimos verificar la seguridad de tu sesión. Reintentá.": "mfa_session",
+    "No pudimos confirmar el guardado. Revisá el estado antes de volver a intentar.": "uncertain_write",
+    "No pudimos confirmar la respuesta. Comprobá la misma operación antes de emitir otra.": "uncertain_write",
+    "No pudimos confirmar la vinculación. Generá un código nuevo; el anterior quedará invalidado.": "uncertain_write",
+    "Se interrumpió la conexión. Revisá el estado antes de volver a intentar.": "network",
+    "No pudimos leer la pantalla.": "network",
+    "Operación inválida.": "validation",
+    "Revisá los datos del llamado.": "validation",
+    "Esta operación corresponde a otro llamado. Actualizá la vista.": "validation",
+    "Primero entregá un código de espera.": "validation",
+    "Esperá un momento antes de repetir esta acción.": "rate_limit",
+  };
+  return labels[message.trim()] ?? (message ? "unmapped" : "none");
+}
+
 test("reception code, screen pairing, revocation and unchanged clinical state", async ({ browser, page }) => {
   test.setTimeout(420_000);
   const startedAt = Date.now();
-  const timedStage = (stage: string) => console.log(`caller_proof_stage:${stage} elapsed_ms=${Date.now() - startedAt}`);
+  const timedStage = (stage: string, extra: Record<string, number> = {}) =>
+    console.log(`${STAGE_PREFIX}${JSON.stringify({ stage, elapsedMs: Date.now() - startedAt, ...extra })}`);
   timedStage("test_started");
   if (process.env.FOLIO_TEST_REAL_SUPABASE !== "1" || process.env.CI !== "true") throw new Error("caller_proof_requires_isolated_ci");
   expect(process.env.NEXT_PUBLIC_SUPABASE_URL).toBe("http://127.0.0.1:55421");
@@ -29,10 +57,44 @@ test("reception code, screen pairing, revocation and unchanged clinical state", 
   await page.getByRole("link", { name: "Pantallas" }).click();
   await expect(page.getByRole("heading", { name: "Pantallas de espera" })).toBeVisible();
   timedStage("settings_loaded");
+  let pairRequest: import("@playwright/test").Request | null = null;
+  let pairAction: "none" | "pending" | "complete" | "failed" = "none";
+  let pairStatus: "none" | "2xx" | "3xx" | "4xx" | "5xx" = "none";
+  page.on("request", request => {
+    if (!pairRequest && request.method() === "POST" && request.headers()["next-action"] &&
+        new URL(request.url()).pathname === "/configuracion/pantallas") {
+      pairRequest = request;
+      pairAction = "pending";
+    }
+  });
+  page.on("response", response => {
+    if (response.request() !== pairRequest) return;
+    const status = response.status();
+    pairStatus = status >= 500 ? "5xx" : status >= 400 ? "4xx" : status >= 300 ? "3xx" : "2xx";
+  });
+  page.on("requestfinished", request => { if (request === pairRequest) pairAction = "complete"; });
+  page.on("requestfailed", request => { if (request === pairRequest) pairAction = "failed"; });
   timedStage("pair_requested");
-  await page.getByRole("button", { name: "Generar código de vinculación" }).click();
-  const code = (await page.locator(".caller-settings-code strong").textContent())?.trim() ?? "";
-  expect(code).toMatch(/^[a-f0-9]{16}$/);
+  const pairButton = page.getByRole("button", { name: "Generar código de vinculación" });
+  const pairingControl = page.locator(".caller-settings-card").first().locator("button").first();
+  const codeLabel = page.locator(".caller-settings-code strong");
+  try {
+    await pairButton.click({ timeout: 30_000 });
+    timedStage("pair_click_returned");
+    await expect(codeLabel).toBeVisible({ timeout: 30_000 });
+  } catch (error) {
+    const button = await pairingControl.count() > 0 ? await pairingControl.isEnabled() ? "enabled" : "disabled" : "missing";
+    const message = (await page.locator(".caller-settings-message[role='status']").first().textContent({ timeout: 500 }).catch(() => null)) ?? "";
+    const code = await codeLabel.isVisible().catch(() => false) ? "present" : "absent";
+    console.log(`${DIAGNOSTIC_PREFIX}${JSON.stringify({ kind: "pair", action: pairAction, status: pairStatus, button, message: pairMessageKind(message), code })}`);
+    await mkdir("test-results", { recursive: true });
+    await page.screenshot({ path: "test-results/caller-pair-failure.png", fullPage: false,
+      mask: [page.locator(".caller-settings-code"), page.locator("strong"), page.locator("input"), page.locator("img"), page.locator("canvas"), page.locator("details"), page.locator("nextjs-portal")],
+      maskColor: "#1d1d1d", timeout: 5_000 }).catch(() => {});
+    throw error;
+  }
+  const code = (await codeLabel.textContent({ timeout: 5_000 }))?.trim() ?? "";
+  if (!/^[a-f0-9]{16}$/.test(code)) throw new Error("pair_code_format_invalid");
   timedStage("pair_issued");
 
   timedStage("screen_context_requested");
@@ -137,7 +199,7 @@ test("reception code, screen pairing, revocation and unchanged clinical state", 
   await screen.screenshot({ path: "test-results/caller-screen-375.png", fullPage: true });
   await screen.setViewportSize({ width: 1440, height: 900 });
   await screen.screenshot({ path: "test-results/caller-screen-1440.png", fullPage: true });
-  console.log("caller_proof_stage:called_on_screen");
+  timedStage("called_on_screen");
 
   const db = new Client({ connectionString: fixture.databaseUrl });
   await db.connect();
@@ -147,8 +209,8 @@ test("reception code, screen pairing, revocation and unchanged clinical state", 
     const calls = await db.query("SELECT count(*)::int AS count FROM folio_caller_private.call_event WHERE turno_id=$1", [fixture.turnoId]);
     expect(calls.rows[0]?.count).toBe(1);
   } finally { await db.end(); }
-  console.log("caller_proof_stage:lost_response_reused");
-  console.log("caller_proof_stage:visit_unchanged");
+  timedStage("lost_response_reused");
+  timedStage("visit_unchanged");
 
   // Five-second visible cadence; hidden windows make no requests. Resuming
   // clears stale pixels and reconnects once without replaying an old call.
@@ -163,7 +225,7 @@ test("reception code, screen pairing, revocation and unchanged clinical state", 
   expect(reads).toBe(hiddenBefore);
   await screen.evaluate(() => { Object.defineProperty(document, "hidden", { configurable: true, get: () => false }); document.dispatchEvent(new Event("visibilitychange")); });
   await expect(screen.locator(".caller-call-list li").first()).toContainText("A0001");
-  console.log(`caller_proof_stage:polling_bounded visible_11s=${visibleReads} hidden_6s=0`);
+  timedStage("polling_bounded", { visible11s: visibleReads, hidden6s: 0 });
 
   await screen.getByRole("button", { name: "Activar sonido" }).click();
   await expect(screen.getByRole("button", { name: "Sonido activado" })).toBeVisible();
@@ -181,7 +243,7 @@ test("reception code, screen pairing, revocation and unchanged clinical state", 
   await expect(screen.locator(".caller-call-list li").first()).toContainText("A0001");
   expect(await screen.evaluate(() => (window as Window & { __folioCallerToneCount?: number }).__folioCallerToneCount ?? 0)).toBe(tonesBefore);
   await screen.unroute("**/api/caller/screen*");
-  console.log("caller_proof_stage:reconnect_silent");
+  timedStage("reconnect_silent");
 
   await page.goto("/configuracion/pantallas");
   await expect(page.locator(".caller-settings-list li").filter({ hasText: "Activa" }).first().getByText("Activa", { exact: true })).toBeVisible();
@@ -190,6 +252,6 @@ test("reception code, screen pairing, revocation and unchanged clinical state", 
   await expect(page.locator(".caller-settings-list li").filter({ hasText: "Desconectada" }).first().getByText("Desconectada", { exact: true })).toBeVisible();
   await screen.bringToFront();
   await expect(screen.getByRole("heading", { name: "Vinculá esta pantalla" })).toBeVisible();
-  console.log("caller_proof_stage:revoked_after_reload");
+  timedStage("revoked_after_reload");
   await screen.close();
 });
