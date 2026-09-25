@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { createCallerPairAction, listCallerScreensAction, revokeCallerScreenAction } from "@/app/(app)/configuracion/pantallas/actions";
 import type { listCallerScreens } from "@/lib/db/caller";
@@ -18,7 +18,10 @@ export function CallerScreensPanel({ initial }: { initial: InventoryResult }) {
   const [pairCode, setPairCode] = useState<string | null>(null);
   const [pairExpires, setPairExpires] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [ready, setReady] = useState(false);
   const [message, setMessage] = useState(initial.ok ? "" : initial.error.message);
+
+  useEffect(() => { setReady(true); }, []);
 
   async function reload() {
     const result = await listCallerScreensAction(null);
@@ -64,7 +67,7 @@ export function CallerScreensPanel({ initial }: { initial: InventoryResult }) {
     <section className="caller-settings-card" aria-labelledby="caller-link-title">
       <h2 id="caller-link-title">Vincular una pantalla</h2>
       <p>En el televisor o monitor, abrí{" "}<a href="/pantalla" target="_blank" rel="noopener noreferrer">folio · Pantalla de espera ↗</a>. Después generá el código temporal acá.</p>
-      <button type="button" className="fi-btn fi-btn-primary" disabled={busy} onClick={() => void createPair()}>{busy ? "Preparando…" : "Generar código de vinculación"}</button>
+      <button type="button" className="fi-btn fi-btn-primary" disabled={!ready || busy} onClick={() => void createPair()}>{busy ? "Preparando…" : "Generar código de vinculación"}</button>
       {pairCode ? <div className="caller-settings-code" role="status"><span>Código temporal</span><strong>{pairCode}</strong>
         {pairExpires ? <small>Vence a las {new Date(pairExpires).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}</small> : null}
       </div> : null}
@@ -74,9 +77,9 @@ export function CallerScreensPanel({ initial }: { initial: InventoryResult }) {
       {screens.length ? <ul className="caller-settings-list">{screens.map(screen => <li key={screen.screenId}>
         <div><strong>Pantalla del {new Date(screen.createdAt).toLocaleString("es-AR", { dateStyle: "medium", timeStyle: "short" })}</strong>
           <span>{statusLabel[screen.status]}</span></div>
-        {screen.status !== "revocada" ? <button type="button" className="fi-btn fi-btn-secondary" disabled={busy} onClick={() => void revoke(screen)}>Desconectar</button> : null}
+        {screen.status !== "revocada" ? <button type="button" className="fi-btn fi-btn-secondary" disabled={!ready || busy} onClick={() => void revoke(screen)}>Desconectar</button> : null}
       </li>)}</ul> : <p>Por ahora no hay pantallas para este consultorio.</p>}
-      {nextCursor !== null ? <button type="button" className="fi-btn fi-btn-secondary" disabled={busy} onClick={() => void loadMore()}>Ver más</button> : null}
+      {nextCursor !== null ? <button type="button" className="fi-btn fi-btn-secondary" disabled={!ready || busy} onClick={() => void loadMore()}>Ver más</button> : null}
     </section>
     {message ? <p role="status" className="caller-settings-message">{message}</p> : null}
   </div>;

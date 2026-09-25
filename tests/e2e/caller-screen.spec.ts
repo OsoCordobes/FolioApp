@@ -49,6 +49,14 @@ test("reception code, screen pairing, revocation and unchanged clinical state", 
   const fixture = JSON.parse(await readFile(path.join(tmpdir(), "folio-caller-proof-fixture.json"), "utf8")) as Fixture;
   expect(fixture.userId).toMatch(/^[0-9a-f-]{36}$/i);
   expect(fixture.browserCookies.length).toBeGreaterThan(0);
+  const beforeHydration = await browser.newContext({ javaScriptEnabled: false });
+  try {
+    await beforeHydration.addCookies(fixture.browserCookies);
+    const serverPage = await beforeHydration.newPage();
+    await serverPage.goto("http://localhost:4430/configuracion/pantallas");
+    await expect(serverPage.getByRole("button", { name: "Generar código de vinculación" })).toBeDisabled();
+  } finally { await beforeHydration.close(); }
+  timedStage("ssr_control_disabled");
   await page.context().addCookies(fixture.browserCookies);
   const staffScreen = await page.request.get("http://localhost:4430/api/caller/screen");
   expect(staffScreen.status()).toBe(401);
@@ -58,14 +66,16 @@ test("reception code, screen pairing, revocation and unchanged clinical state", 
   await expect(page.getByRole("heading", { name: "Pantallas de espera" })).toBeVisible();
   timedStage("settings_loaded");
   let pairRequest: import("@playwright/test").Request | null = null;
+  let pairActionId: string | null = null;
+  let pairActionCount = 0;
   let pairAction: "none" | "pending" | "complete" | "failed" = "none";
   let pairStatus: "none" | "2xx" | "3xx" | "4xx" | "5xx" = "none";
   page.on("request", request => {
-    if (!pairRequest && request.method() === "POST" && request.headers()["next-action"] &&
-        new URL(request.url()).pathname === "/configuracion/pantallas") {
-      pairRequest = request;
-      pairAction = "pending";
-    }
+    const actionId = request.headers()["next-action"];
+    if (request.method() !== "POST" || !actionId ||
+        new URL(request.url()).pathname !== "/configuracion/pantallas") return;
+    if (!pairActionId) { pairRequest = request; pairActionId = actionId; pairAction = "pending"; }
+    if (actionId === pairActionId) pairActionCount++;
   });
   page.on("response", response => {
     if (response.request() !== pairRequest) return;
@@ -95,6 +105,9 @@ test("reception code, screen pairing, revocation and unchanged clinical state", 
   }
   const code = (await codeLabel.textContent({ timeout: 5_000 }))?.trim() ?? "";
   if (!/^[a-f0-9]{16}$/.test(code)) throw new Error("pair_code_format_invalid");
+  expect(pairActionCount).toBe(1);
+  expect(pairStatus).toBe("2xx");
+  await expect.poll(() => pairAction, { timeout: 5_000 }).toBe("complete");
   timedStage("pair_issued");
 
   timedStage("screen_context_requested");
