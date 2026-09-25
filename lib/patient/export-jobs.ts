@@ -92,8 +92,14 @@ export async function readExportPackageJob(
     const { data, error } = await createSupabaseServiceClient().rpc("export_package_read", {
       p_id: jobId, p_actor: session.userId,
     });
-    const job = Array.isArray(data) && data.length === 1 ? data[0] as ExportJobIdentity : null;
-    if (error || !job) return err("not_found", "No se encontró una entrega vigente.");
+    if (error || !Array.isArray(data)) {
+      return err("db_error", "No se pudo confirmar el estado de la entrega. Consultá antes de reintentar.");
+    }
+    if (data.length === 0) return err("not_found", "No se encontró una entrega vigente.");
+    const job = data.length === 1 ? data[0] as ExportJobIdentity : null;
+    if (!job || !UUID.test(job.job_id) || job.job_id !== jobId) {
+      return err("db_error", "La respuesta del estado no fue verificable. Consultá antes de reintentar.");
+    }
     const authorized = await authorizeExportPackageJob(client, session, job);
     return authorized.ok ? ok(job) : authorized;
   } catch {
