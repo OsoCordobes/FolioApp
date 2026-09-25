@@ -188,7 +188,7 @@ async function main(){
     'auth_proof_reset_form_missing',
     'services_proof_committed_response_missing',
    ]);
-   const detected=[...result.output.matchAll(/auth_proof_[a-z0-9_]+(?=\b)/gi)]
+   const detected=[...result.output.matchAll(/(?:auth|services)_proof_[a-z0-9_]+(?=\b)/gi)]
     .map(match=>match[0]).find(value=>allowedErrors.has(value))??'';
    const knownError=allowedErrors.has(detected)?detected:
     (result.output.includes('TimeoutError')?'timeout':
