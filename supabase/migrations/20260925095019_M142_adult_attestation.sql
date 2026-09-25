@@ -71,7 +71,8 @@ CREATE TABLE folio_adult_private.attestation (
   identidad_id uuid NOT NULL,
   dob_revision bigint NOT NULL CHECK (dob_revision>=0),
   identity_link_revision bigint NOT NULL CHECK (identity_link_revision>=0),
-  verified_by_member_id uuid NOT NULL,
+  verified_by_member_id uuid NOT NULL CONSTRAINT adult_attestation_author_fk
+    REFERENCES public.member(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
   attested_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   source_code text NOT NULL CHECK (source_code IN
     ('DOCUMENTO_EXHIBIDO','DECLARACION_PACIENTE','OTRA_FUENTE_REVISADA')),
@@ -80,6 +81,8 @@ CREATE TABLE folio_adult_private.attestation (
 );
 CREATE INDEX adult_attestation_current_idx ON folio_adult_private.attestation
   (organization_id,paciente_id,identidad_id,identity_link_revision,dob_revision,attested_at DESC,id DESC);
+CREATE INDEX adult_attestation_author_idx ON folio_adult_private.attestation
+  (verified_by_member_id);
 ALTER TABLE folio_adult_private.attestation ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON ALL TABLES IN SCHEMA folio_adult_private FROM PUBLIC,anon,authenticated,service_role;
 REVOKE ALL ON ALL SEQUENCES IN SCHEMA folio_adult_private FROM PUBLIC,anon,authenticated,service_role;

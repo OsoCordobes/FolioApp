@@ -187,6 +187,25 @@ DO $$ BEGIN
  PERFORM pg_temp.m142_expect($q$DELETE FROM folio_adult_private.attestation$q$,'42501');
 END $$;
 
+-- The verifying member's row key and attribution are retained too. This
+-- synthetic OWNER has no other referencing rows that could mask the new FK.
+SELECT pg_temp.m142_expect($q$UPDATE public.member SET id=pg_temp.m142_id(18)
+ WHERE id=pg_temp.m142_id(11)$q$,'23503');
+SELECT pg_temp.m142_expect($q$DELETE FROM public.member WHERE id=pg_temp.m142_id(11)$q$,'23503');
+DO $$ BEGIN
+ IF NOT EXISTS(SELECT 1 FROM pg_constraint
+   WHERE conname='adult_attestation_author_fk'
+    AND conrelid='folio_adult_private.attestation'::regclass
+    AND confrelid='public.member'::regclass
+    AND confupdtype='r' AND confdeltype='r')
+  OR NOT EXISTS(SELECT 1 FROM public.member WHERE id=pg_temp.m142_id(11)
+    AND profile_id=pg_temp.m142_id(1))
+  OR (SELECT count(*) FROM folio_adult_private.attestation
+    WHERE verified_by_member_id=pg_temp.m142_id(11))<>1 THEN
+  RAISE EXCEPTION 'M142 verifying member attribution was reassigned';
+ END IF;
+END $$;
+
 -- The event must keep the patient row key from being renamed and recreated.
 -- Existing patient rows have no visit children in this fixture, so this
 -- specifically exercises the new restrictive FK.
@@ -284,6 +303,12 @@ SELECT pg_temp.m142_expect($q$SELECT public.read_adult_attestation(pg_temp.m142_
 RESET ROLE;
 UPDATE public.paciente SET caja_fuerte_profesional=NULL WHERE id=pg_temp.m142_id(32);
 UPDATE public.member SET deleted_at=now() WHERE id=pg_temp.m142_id(11);
+DO $$ BEGIN
+ IF (SELECT count(*) FROM folio_adult_private.attestation
+   WHERE verified_by_member_id=pg_temp.m142_id(11))<1 THEN
+  RAISE EXCEPTION 'M142 member soft-delete removed historical author';
+ END IF;
+END $$;
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.m142_expect($q$SELECT public.read_adult_attestation(pg_temp.m142_id(10),pg_temp.m142_id(32))$q$,'42501');
 SELECT pg_temp.m142_expect($q$SELECT public.attest_adult_dob(pg_temp.m142_id(10),pg_temp.m142_id(32),pg_temp.m142_id(31),3,2,'1990-01-01','1990-01-01','DOCUMENTO_EXHIBIDO')$q$,'42501');
