@@ -2,6 +2,8 @@
 
 Estado: diseño para revisión de A, D y Launch Manager. Sin migración reservada, código, ejecución ni despliegue. Base clínica inspeccionada: candidato `2bdb60870caf8556f24a25db49e5ec1564b36003`; este documento vive en el worktree B y no modifica ese candidato.
 
+Nota de continuidad del 25/09: se conserva ese diseño histórico. El documento está ahora en la copia del manager; producción llegó a `22f4e034991cc467b748e9a2534872e3bedcb492`. M128 ya fue utilizada y publicada para otro checkpoint. Este contrato no reserva números ni autoriza activación: antes de implementarlo hay que confirmar las decisiones clínicas señaladas y contrastar las rutas con la base vigente.
+
 ## Regla de producto y límite comprobable
 
 `docs/LAUNCH-BOARD.md` exige edad verificada de al menos 18 años antes de una atención nueva, conserva historias y correcciones históricas autorizadas, y limita el formulario público a una declaración explícita sin cambiar la identidad. La fecha de nacimiento sola no prueba verificación: `paciente_identidad.fecha_nacimiento` no tiene constancia vigente. La declaración pública tampoco la prueba.
@@ -58,7 +60,7 @@ En `/book/[slug]`, comunicar el alcance adulto y recoger declaración afirmativa
 | Booking | Declaración, contrato de acción e idempotencia de recibo | Baja-media; independencia funcional parcial. |
 | Integración y evidencia | Ajustar fixtures sintéticos y pruebas de carrera, zona, navegador y gates del repo | Alta; puerta obligatoria de aceptación. |
 
-No hay estimación calibrada de tiempo, cuota o ciclos Codex. El camino crítico es contrato DB → migración y specs → staff/notas → pruebas integradas; booking puede prepararse en paralelo una vez fijado su contrato. M128 sólo se reserva tras acordar ownership y contrato con A/D; no aplicar ni activar en producción desde este documento.
+No hay estimación calibrada de tiempo, cuota o ciclos Codex. El camino crítico es contrato DB → migración y specs → staff/notas → pruebas integradas; booking puede prepararse en paralelo una vez fijado su contrato. La referencia original a reservar M128 quedó superada: se elegirá el siguiente número y timestamp disponibles al asignar implementación. No aplicar ni activar en producción desde este documento.
 
 Matriz mínima de pruebas:
 
