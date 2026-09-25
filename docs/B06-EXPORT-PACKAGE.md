@@ -100,3 +100,32 @@ paginadas verifican filas y conteos; el builder y el plan unen esas filas con
 los documentos activos leídos bajo RLS, sin duplicados y con total exacto.
 Una revocación o cambio observable aborta sin paquete parcial. La descarga
 original de un documento retirado permanece cerrada.
+
+## Adaptador HTTP interno (B06b3a / M140, candidato)
+
+Las rutas profesionales aceptan paciente e identificador de operación, nunca
+fingerprint, cantidad esperada, bucket o path. M140 permite recuperar el job
+por la misma operación y el mismo actor, organización y paciente; el resultado
+no contiene lease. Una creación con respuesta incierta se consulta por esa
+operación, sin generar otra intención automáticamente. El claim usa revisión
+CAS. Su token se usa sólo en el cuerpo de peticiones de avance y finalización
+y se mantiene en memoria del cliente: si se pierde la respuesta del claim,
+se consulta el estado, se espera a que venza el lease y se reclama de forma
+explícita con la revisión actual. No se roba un lease vigente ni se guarda el
+token en URL, cookie o log.
+
+El manifiesto READY se pagina de a lo sumo 50 entradas y declara el total
+exacto, tamaño y SHA-256 calculado de cada archivo. Distingue el hash de
+origen registrado del calculado durante preparación, y lista retirados sin
+bytes. La fecha de captura del JSON indica preparación del paquete, **no**
+estado clínico actual ni snapshot transaccional global. Antes y después de
+cada página o fragmento, el servidor comprueba el inventario actual bajo RLS
+y su fingerprint; un retiro, cambio de alcance o pérdida de MFA obliga a
+preparar una operación nueva. Cada fragmento privado se deriva del ledger,
+se relee con límite de 3 MiB, se compara por tamaño y SHA-256 y sólo se
+devuelve si READY, TTL y autoridad siguen vigentes después de Storage.
+
+Este tramo expone una API interna, no una entrega completa al usuario. B06b3b
+debe reconstruir archivos ordinarios y ofrecer un camino verificable para
+obtener el conjunto completo sin guardar parciales; la UI y su prueba HTTP
+con navegador todavía no forman parte de B06b3a.
