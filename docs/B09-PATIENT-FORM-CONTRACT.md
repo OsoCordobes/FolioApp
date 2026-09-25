@@ -2,6 +2,20 @@
 
 Contrato de continuación de B09, 25/09/2026. Diseño de A, todavía sin implementación ni migración reservada. Mantiene el alcance de `LAUNCH-BOARD.md`; no autoriza mensajes ni uso clínico real.
 
+## Primer paquete B09a: invitación y aporte administrativo
+
+Revisión independiente del 25/09 sobre master `3c56a334d10911fc2f2c9c8269277bd883949e02`. Preparar únicamente el fundamento privado, las credenciales y sesiones limitadas, los aportes administrativos cifrados e inmutables y su recibo idempotente. Sin interfaz, incorporación a la ficha, envíos ni preguntas clínicas. Depende de la revisión monotónica del vínculo paciente/identidad de B04a: no duplicarla ni reservar una migración hasta fijar esa base.
+
+Matriz fijada por A para implementación aislada: OWNER/DIRECTOR pueden emitir, revocar y revisar datos administrativos dentro de su organización; PROFESIONAL sólo para turnos/pacientes de su alcance vigente; ASISTENTE/COORDINADOR sólo dentro del alcance de recepción vigente del turno. No extender con esto el permiso de editar identidad de COORDINADOR. Cualquier contenido clínico futuro seguirá separado y exigirá permiso clínico/caja fuerte. Comprobar membresía aceptada y activa, paciente/organización activos y JWT aal2 con factor y sesión vigentes; bloquear las filas que sostienen esa autorización hasta commit, incluida la membresía. Revalidar ante cada lectura o mutación; una autorización al emitir no autoriza revisar para siempre.
+
+Invitación y sesión guardan sólo hash de sus secretos; relación privada con organización, turno, paciente, identidad y revisión monotónica del vínculo. La sesión intercambiada nunca vence después de la invitación. Para el ensayo: invitación válida por 24 horas, reemisión explícita revoca la anterior y sus sesiones. No prolongar vigencia por abrir o enviar. Invalidar ante cancelación, baja, cambio de vínculo/paciente/organización o fecha del turno. M119 reprograma marcando el anterior REAGENDADO y creando otro: el nuevo turno necesita nueva invitación, sin traslado de credenciales. Emisión no equivale a identidad verificada del portador.
+
+Revisar invitación/sesión y estado del turno, paciente e identidad bajo un orden de bloqueos consistente con M119 y B04a antes de aceptar el aporte. Pruebas con conexiones concurrentes deben demostrar revocación y reprogramación; una secuencia de llamadas no acredita esa carrera. Mantener tablas privadas sin acceso directo por API, RPC con search_path fijo, privilegios mínimos y rechazo de UPDATE/DELETE ordinarios sobre aportes.
+
+Un recibo atómico único por invitación y operación vincula versión de cuestionario y huella del contenido. Repetir la misma operación y contenido devuelve el mismo recibo; contenido distinto devuelve conflicto sin segundo aporte. La consulta pública recupera sólo confirmación mínima de su propia operación: nunca respuestas anteriores, datos de ficha ni listas de presentaciones. Diferenciar fallo confirmado de resultado incierto. Reutilizar cifrado probado; no guardar texto personal sin cifrar en la tabla, auditoría o recibo. Límites de campos/tamaño y cuestionario administrativo versionado deben quedar explícitos en el paquete; las preguntas clínicas permanecen fuera.
+
+Cierre de B09a: replay completo, negativos directos de permisos, sesiones vencidas/revocadas, organización/turno ajenos, identidad A→B→A, repetición de operación, contenido distinto, carreras reales de revocación/reprogramación y preservación de antecedentes. La incorporación administrativa con comparación de valores vigentes es B09b y exige su propia revisión. No llamar completo al checkpoint por publicar este fundamento.
+
 ## Resultado esperado
 
 El paciente recibe un enlace o QR correspondiente a su turno, completa los datos desde el teléfono y el personal autorizado los revisa dentro de Folio. No necesita crear una cuenta. La falta de formulario no impide atenderlo.
