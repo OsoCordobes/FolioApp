@@ -60,7 +60,7 @@ test("reception code, screen pairing, revocation and unchanged clinical state", 
 
   await mkdir("test-results", { recursive: true });
   await page.reload();
-  await expect(page.getByText("Activa", { exact: true })).toBeVisible();
+  await expect(page.locator(".caller-settings-list li").filter({ hasText: "Activa" }).first().getByText("Activa", { exact: true })).toBeVisible();
   await page.setViewportSize({ width: 375, height: 812 });
   await page.screenshot({ path: "test-results/caller-settings-375.png", fullPage: true });
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -172,10 +172,10 @@ test("reception code, screen pairing, revocation and unchanged clinical state", 
   console.log("caller_proof_stage:reconnect_silent");
 
   await page.goto("/configuracion/pantallas");
-  await expect(page.getByText("Activa", { exact: true })).toBeVisible();
+  await expect(page.locator(".caller-settings-list li").filter({ hasText: "Activa" }).first().getByText("Activa", { exact: true })).toBeVisible();
   page.once("dialog", dialog => void dialog.accept());
   await page.getByRole("button", { name: "Desconectar" }).first().click();
-  await expect(page.getByText("Desconectada", { exact: true })).toBeVisible();
+  await expect(page.locator(".caller-settings-list li").filter({ hasText: "Desconectada" }).first().getByText("Desconectada", { exact: true })).toBeVisible();
   await screen.bringToFront();
   await expect(screen.getByRole("heading", { name: "Vinculá esta pantalla" })).toBeVisible();
   console.log("caller_proof_stage:revoked_after_reload");
