@@ -8,7 +8,7 @@ Actualizado: 25/09/2026. Este es el registro breve del trabajo; [el tablero téc
 
 | Checkpoint | Resultado, responsable y prueba |
 |---|---|
-| **Ingreso y onboarding** · corrección probada, ensayo completo en curso | [PR175](https://github.com/OsoCordobes/FolioApp/pull/175): avance guardado corregido; localizado un cambio de dirección que rompía la sesión en el ensayo. D · revisión A; [PR177](https://github.com/OsoCordobes/FolioApp/pull/177) protege el catálogo al guardar servicios. |
+| **Ingreso y onboarding** · registro y regreso comprobados; recuperación en curso | [PR175](https://github.com/OsoCordobes/FolioApp/pull/175): registro, confirmación y regreso a Solo/Clínica aprobados dentro del ensayo; falta cerrar recuperación de contraseña. D · revisión A; [PR177](https://github.com/OsoCordobes/FolioApp/pull/177) ya aprobó la prueba de guardado atómico de servicios en base de datos. |
 | **Permisos de Clínica** · dos paquetes publicados | Pedidos y motivos protegidos según el rol: [PR170](https://github.com/OsoCordobes/FolioApp/pull/170). C · revisión A; [PR174 publicada](https://github.com/OsoCordobes/FolioApp/pull/174) impide entregar una firma si se revoca el acceso durante su descarga. |
 | **Recuperación completa** · ensayo aprobado e integrado | Datos, archivos, contraseña y segundo factor recuperados con datos ficticios. C · revisión A. [Prueba aprobada](https://github.com/OsoCordobes/FolioApp/actions/runs/36073216478), [entrega integrada](https://github.com/OsoCordobes/FolioApp/pull/167); custodia externa pendiente. |
 | **Miniweb profesional** · publicada | Dos disposiciones, mapa confirmado, editor y enlace individual con permiso propio. D · revisión A. [Publicación verificada](https://github.com/OsoCordobes/FolioApp/pull/171) y [prueba del permiso](https://github.com/OsoCordobes/FolioApp/actions/runs/36076159519). |
@@ -24,7 +24,7 @@ Actualizado: 25/09/2026. Este es el registro breve del trabajo; [el tablero téc
 | **Validación profesional y piloto** · pendiente humano | Cinco especialidades y piloto de 14 días, con tres profesionales y cinco jornadas por persona. |
 | **Lanzamiento** · pendiente | Se cerrará cuando la versión publicada y la oferta comercial coincidan con lo demostrado. |
 
-**Última publicación comprobada:** [PR176 · base para exportar archivos](https://github.com/OsoCordobes/FolioApp/pull/176), disponible desde el 25/09 a las 03:45 (Copenhague). Es preparación interna; conserva las mejoras visibles de miniweb y recepción. **Última cuota consultada:** 87% disponible; reserva de cierre: 15%.
+**Última publicación comprobada:** [PR176 · base para exportar archivos](https://github.com/OsoCordobes/FolioApp/pull/176), disponible desde el 25/09 a las 03:45 (Copenhague). Es preparación interna; conserva las mejoras visibles de miniweb y recepción. **Última cuota consultada:** 85% disponible; reserva de cierre: 15%.
 
 **Forma de trabajo:** continuar mientras haya trabajo útil, cerrar cada paquete con evidencia y tomar el siguiente. La reanudación horaria es respaldo ante un corte, no una espera entre tareas.
 
