@@ -119,6 +119,72 @@ async function persistedOrganization(email:string,tipo:'INDEPENDIENTE'|'CLINICA'
  expect(organization.error).toBeNull();
  expect(organization.data).toMatchObject({tipo,nombre:name,ciudad:'Alta Gracia'});
  expect(Number(organization.data!.onboarding_step_max)).toBeGreaterThanOrEqual(3);
+ return member.data!.organization_id as string;
+}
+
+async function storedService(organizationId:string,name:string){
+ const service=createClient(API,process.env.SUPABASE_SERVICE_ROLE_KEY!,{auth:{persistSession:false,autoRefreshToken:false}});
+ const row=await service.from('servicio').select('id,nombre').eq('organization_id',organizationId).eq('nombre',name).is('deleted_at',null).maybeSingle();
+ expect(row.error).toBeNull();
+ return row.data?.id as string|undefined;
+}
+async function servicesRevision(organizationId:string){
+ const service=createClient(API,process.env.SUPABASE_SERVICE_ROLE_KEY!,{auth:{persistSession:false,autoRefreshToken:false}});
+ const row=await service.from('organization').select('onboarding_services_revision').eq('id',organizationId).single();
+ expect(row.error).toBeNull();
+ return Number(row.data!.onboarding_services_revision);
+}
+
+async function serviceStep(page:Page,tipo:'INDEPENDIENTE'|'CLINICA',organizationId:string){
+ const isClinic=tipo==='CLINICA';
+ const original=isClinic?'Servicio sintético clínica':'Servicio sintético Solo';
+ const changed='Servicio sintético actualizado';
+ await page.getByRole('button',{name:'Continuar',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'Tu página en Folio'})).toBeVisible();
+ await page.getByRole('button',{name:'Continuar',exact:true}).click();
+ if(!isClinic){
+  await expect(page.getByRole('heading',{name:'¿Cuándo atendés?'})).toBeVisible();
+  await page.getByRole('button',{name:'Continuar',exact:true}).click();
+ }
+ await expect(page.getByRole('heading',{name:'¿Qué servicios ofrecés?'})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Agregar servicio'})).toBeEnabled();
+ if(isClinic)await page.getByRole('button',{name:'Agregar servicio'}).click();
+ else if(await page.getByRole('textbox',{name:'Nombre del servicio 1'}).count()===0)
+  await page.getByRole('button',{name:'Agregar servicio'}).click();
+ await page.getByRole('textbox',{name:'Nombre del servicio 1'}).fill(original);
+ await expect.poll(()=>storedService(organizationId,original),{timeout:30_000}).not.toBeUndefined();
+ const id=await storedService(organizationId,original);
+ const initialRevision=await servicesRevision(organizationId);
+ if(!isClinic){
+  let intercepted=false;
+  await page.route('**/onboarding**',async route=>{
+   if(intercepted||route.request().method()!=='POST'){await route.continue();return;}
+   intercepted=true;
+   const response=await route.fetch();
+   if(!response.ok())throw Error('services_proof_committed_response_missing');
+   await route.abort('failed');
+  });
+  await page.getByRole('textbox',{name:'Nombre del servicio 1'}).fill(changed);
+  await expect(page.getByRole('button',{name:'Verificar guardado'})).toBeVisible({timeout:30_000});
+  expect(intercepted).toBe(true);
+  await expect.poll(()=>storedService(organizationId,changed),{timeout:30_000}).toBe(id);
+  expect(await servicesRevision(organizationId)).toBe(initialRevision+1);
+  await page.unroute('**/onboarding**');
+ }
+ await page.reload();
+ const useStored=page.getByRole('button',{name:'Usar la versión guardada'});
+ await expect.poll(async()=>await useStored.isVisible()||await page.getByRole('heading',{name:'¿Qué servicios ofrecés?'}).isVisible()).toBe(true);
+ if(await useStored.isVisible())await useStored.click();
+ await expect(page.getByRole('heading',{name:'¿Qué servicios ofrecés?'})).toBeVisible();
+ if(!isClinic){
+  await expect(page.getByRole('button',{name:'Verificar guardado'})).toBeVisible();
+  await page.getByRole('button',{name:'Verificar guardado'}).click();
+  await expect(page.getByText(/Guardado (recién|hace)/)).toBeVisible();
+ }
+ await expect(page.getByRole('textbox',{name:'Nombre del servicio 1'})).toHaveValue(isClinic?original:changed);
+ expect(await storedService(organizationId,isClinic?original:changed)).toBe(id);
+ expect(await servicesRevision(organizationId)).toBe(isClinic?initialRevision:initialRevision+1);
+ console.log(`auth_proof_stage:${isClinic?'clinica_service_reopened':'independiente_service_recovered'}`);
 }
 
 async function oneMode(browser:Browser,tipo:'INDEPENDIENTE'|'CLINICA'){
@@ -214,7 +280,7 @@ async function oneMode(browser:Browser,tipo:'INDEPENDIENTE'|'CLINICA'){
  await page.getByRole('radiogroup',{name:'Especialidad del consultorio'}).getByRole('radio',{name:/cardiolog/i}).click();
  await page.getByRole('button',{name:'Continuar',exact:true}).click();
  await expect(page.getByRole('heading',{name:'Tu página en Folio'})).toBeVisible();
- await persistedOrganization(email,tipo,practice);
+ const organizationId=await persistedOrganization(email,tipo,practice);
  console.log(`auth_proof_stage:${tipo.toLowerCase()}_db_saved`);
  await logout(page);
  await context.close();
@@ -231,13 +297,16 @@ async function oneMode(browser:Browser,tipo:'INDEPENDIENTE'|'CLINICA'){
  await expect(again.getByRole('heading',{name:'¿Cómo te llamás?'})).toBeVisible();
  await expect(again.getByLabel(/^apellido$/i)).toHaveValue('Sintético');
  console.log(`auth_proof_stage:${tipo.toLowerCase()}_fresh_context_resumed`);
+ await again.getByRole('button',{name:'Continuar',exact:true}).click();
+ await expect(again.getByRole('heading',{name:tipo==='CLINICA'?'¿Dónde está tu clínica?':'¿Dónde está tu consultorio?'})).toBeVisible();
+ await serviceStep(again,tipo,organizationId);
  await resumed.close();
  return {email,lastMailId:confirmation.id};
 }
 
-test('B01/B02 · email real local, dos modalidades, reanudación y recuperación',async({browser})=>{
+test('B01/B02 · acceso y servicios Solo/Clínica, reanudación y recuperación',async({browser})=>{
  requireLocalRuntime();
- test.setTimeout(480_000);
+ test.setTimeout(600_000);
  const solo=await oneMode(browser,'INDEPENDIENTE');
  await oneMode(browser,'CLINICA');
 
@@ -253,6 +322,19 @@ test('B01/B02 · email real local, dos modalidades, reanudación y recuperación
  console.log('auth_proof_stage:recovery_mail_captured');
  await openAction(page,reset.url);
  await page.waitForURL(/\/reset-password(?:\?|$)/,{timeout:30_000});
+ try{
+  await expect(page.getByRole('heading',{name:'Elegí una nueva contraseña.'})).toBeVisible({timeout:30_000});
+ }catch{
+  const target=new URL(page.url());
+  const form=await page.getByRole('heading',{name:'Elegí una nueva contraseña.'}).isVisible();
+  const checking=await page.getByRole('heading',{name:'Verificando el enlace…'}).isVisible();
+  const invalid=await page.getByRole('heading',{name:'Necesitás un enlace nuevo.'}).isVisible();
+  const session=await verifyBrowserAuthCookie(page,solo.email);
+  const origin=target.origin===APP?'app':target.hostname==='127.0.0.1'&&target.port==='4430'?'other_loopback':'other';
+  const fragment=new URLSearchParams(target.hash.replace(/^#/,''));
+  console.log(`auth_proof_reset_diagnostic:origin=${origin} form=${form?1:0} checking=${checking?1:0} invalid=${invalid?1:0} code=${target.searchParams.has('code')?1:0} error=${target.searchParams.has('error')?1:0} token_hash=${target.searchParams.has('token_hash')?1:0} fragment_access=${fragment.has('access_token')?1:0} cookie_kind=${session.kind} auth_valid=${session.valid?1:0} same_user=${session.same?1:0}`);
+  throw Error('auth_proof_reset_form_missing');
+ }
  await page.locator('input[type="password"]').first().fill(NEW_PASSWORD);
  await page.locator('input[type="password"]').nth(1).fill(NEW_PASSWORD);
  await page.getByRole('button',{name:/guardar|cambiar|restablecer/i}).click();
@@ -269,7 +351,7 @@ test('B01/B02 · email real local, dos modalidades, reanudación y recuperación
  await finalPage.locator('input[type="password"]').fill(NEW_PASSWORD);
  await finalPage.getByRole('button',{name:'Ingresar a Folio'}).click();
  await finalPage.waitForURL(/\/onboarding(?:\?|$)/,{timeout:30_000});
- await expect(finalPage.getByRole('heading',{name:'¿Dónde está tu consultorio?'})).toBeVisible();
+ await expect(finalPage.getByRole('heading',{name:'¿Qué servicios ofrecés?'})).toBeVisible();
  console.log('auth_proof_stage:old_password_rejected_new_login_resumed');
  await finalContext.close();
 });
