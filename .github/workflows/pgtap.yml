@@ -68,6 +68,11 @@ jobs:
               # the fix. This assertion passes only when the old leak exists.
               psql -X -v ON_ERROR_STOP=1 -f tests/migrations/M128_pedido_before.sql
             fi
+            if [[ "$f" == *"_M132_member_identity_immutable.sql" ]]; then
+              # Prove the M130 opt-in can be forged by an Auth identity swap
+              # before M132 closes that path. Synthetic rows are rolled back.
+              psql -X -v ON_ERROR_STOP=1 -f tests/migrations/M132_member_identity_before.sql
+            fi
             # The runner owns each migration transaction. Specs below retain
             # their own boundaries, including M91's transaction-local checks.
             psql --single-transaction -X -v ON_ERROR_STOP=1 -f "$f" || {

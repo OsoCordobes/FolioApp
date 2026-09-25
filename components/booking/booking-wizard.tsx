@@ -102,6 +102,7 @@ export function BookingWizard({
   profesionales = [],
   fetchSlotsAction = fetchSlotsPublico,
   serviceCatalogOutside = false,
+  fixedProfessionalId,
 }: {
   org: OrgPublic;
   servicios: ServicioPublic[];
@@ -111,6 +112,8 @@ export function BookingWizard({
   fetchSlotsAction?: typeof fetchSlotsPublico;
   /** The published landing owns the only visible service list. */
   serviceCatalogOutside?: boolean;
+  /** Personal Clinic page: preserve this professional through service changes. */
+  fixedProfessionalId?: string;
 }) {
   const [vista, setVista] = useState<Vista>("servicio");
   const [servicioId, setServicioId] = useState<string>(servicios[0]?.id ?? "");
@@ -120,7 +123,8 @@ export function BookingWizard({
   // con 0–1 NO se manda nada y el server resuelve el default (flujo Solo
   // idéntico al histórico, ni un paso ni un byte extra).
   const multiProf = esMultiProfesional(profesionales);
-  const [profesionalSelId, setProfesionalSelId] = useState<string | null>(null);
+  const [profesionalSelId, setProfesionalSelId] = useState<string | null>(fixedProfessionalId ?? null);
+  const professionalForAction = fixedProfessionalId ?? profesionalIdParaActions(multiProf, profesionalSelId);
   const profesionalSelNombre = nombreProfesionalSeleccionado(profesionales, profesionalSelId);
   const [slots, setSlots] = useState<Slot[]>([]);
   const [slotPicked, setSlotPicked] = useState<Slot | null>(null);
@@ -155,16 +159,16 @@ export function BookingWizard({
     lastExternalSelection.current = externalSelection.sequence;
     if (pending || submissionUncertain || submissionRef.current.inFlight || vista === "ok") return;
     if (!servicios.some((service) => service.id === externalSelection.serviceId)) return;
-    const plan = planServiceEntry({ serviceId: servicioId, vista, slots }, externalSelection.serviceId, multiProf);
+    const plan = planServiceEntry({ serviceId: servicioId, vista, slots }, externalSelection.serviceId, multiProf && !fixedProfessionalId);
     if (!plan) return;
     setServicioId(plan.serviceId);
-    setProfesionalSelId(null);
+    setProfesionalSelId(fixedProfessionalId ?? null);
     setSlots([...plan.slots]);
     setSlotPicked(null);
     setCaptchaToken(null);
     setErr(null);
     setVista(plan.vista);
-  }, [externalSelection, multiProf, pending, servicioId, servicios, slots, submissionUncertain, vista]);
+  }, [externalSelection, fixedProfessionalId, multiProf, pending, servicioId, servicios, slots, submissionUncertain, vista]);
 
   const setEntryBlocked = bookingEntry?.setBlocked;
   useEffect(() => {
@@ -238,7 +242,8 @@ export function BookingWizard({
       const result = await fetchSlotsAction({
         orgSlug: org.slug,
         servicioId,
-        profesionalId: profesionalIdParaActions(multiProf, profesionalSelId),
+        profesionalId: professionalForAction,
+        personalPageMemberId: fixedProfessionalId,
         diasAdelante: 14,
       });
       if (cancelled) return;
@@ -250,7 +255,7 @@ export function BookingWizard({
       setSlots(result.data);
     });
     return () => { cancelled = true; };
-  }, [vista, servicioId, org.slug, multiProf, profesionalSelId, fetchSlotsAction]);
+  }, [vista, servicioId, org.slug, multiProf, profesionalSelId, professionalForAction, fixedProfessionalId, fetchSlotsAction]);
 
   // ─── Render ──────────────────────────────────────────────────────────
   // El chrome de página (hero, header sticky, "atienden acá", powered-by) lo
@@ -289,7 +294,7 @@ export function BookingWizard({
                   type="button"
                   onClick={() => {
                     setServicioId(s.id);
-                    setVista(pasoTrasServicio(multiProf));
+                    setVista(pasoTrasServicio(multiProf && !fixedProfessionalId));
                   }}
                   className="bk-servicio"
                 >
@@ -351,11 +356,11 @@ export function BookingWizard({
 
         {vista === "slot" ? (
           <section>
-            {serviceCatalogOutside && !multiProf ? (
+            {serviceCatalogOutside && (!multiProf || fixedProfessionalId) ? (
               <a href="#servicios" className="bk-back" onClick={() => setVista("servicio")}>← Cambiar servicio</a>
             ) : (
-              <button type="button" className="bk-back" onClick={() => setVista(pasoPrevioASlot(multiProf))}>
-                {multiProf ? "← Cambiar profesional" : "← Cambiar servicio"}
+              <button type="button" className="bk-back" onClick={() => setVista(pasoPrevioASlot(multiProf && !fixedProfessionalId))}>
+                {multiProf && !fixedProfessionalId ? "← Cambiar profesional" : "← Cambiar servicio"}
               </button>
             )}
             <h2
@@ -510,7 +515,7 @@ export function BookingWizard({
                   setErr("Esperá unos segundos a que el captcha verifique.");
                   return;
                 }
-                const attempt=submissionRef.current.begin({orgSlug:org.slug,servicioId,profesionalId:profesionalIdParaActions(multiProf,profesionalSelId),inicio:slotPicked.inicio,nombre,telefono,email:email||undefined,motivo:motivo||undefined,consentAccepted,consentVersion:PRIVACY_VERSION},()=>crypto.randomUUID());
+                const attempt=submissionRef.current.begin({orgSlug:org.slug,servicioId,profesionalId:professionalForAction,personalPageMemberId:fixedProfessionalId,inicio:slotPicked.inicio,nombre,telefono,email:email||undefined,motivo:motivo||undefined,consentAccepted,consentVersion:PRIVACY_VERSION},()=>crypto.randomUUID());
                 if(!attempt)return;
                 startTransition(async()=>{
                   try{

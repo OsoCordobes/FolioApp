@@ -358,6 +358,8 @@ export interface ProfesionalPerfilPublico {
   bioPublica: string | null;
   /** profile.matricula SOLO si member.mostrar_matricula; si no, null. */
   matricula: string | null;
+  /** Explicit, revocable consent for the new personal Clinic link. */
+  personalPageEnabled?: boolean;
 }
 
 export async function listProfesionalesPublico(
@@ -367,7 +369,7 @@ export async function listProfesionalesPublico(
 
   const { data, error } = await service
     .from("member")
-    .select("id, profile_id, foto_publica_url, bio_publica, mostrar_matricula")
+    .select("id, profile_id, foto_publica_url, bio_publica, mostrar_matricula, accepted_at, invited_by_id")
     .eq("organization_id", organizationId)
     .eq("es_colegiado", true)
     .is("deleted_at", null)
@@ -384,8 +386,16 @@ export async function listProfesionalesPublico(
     foto_publica_url: string | null;
     bio_publica: string | null;
     mostrar_matricula: boolean;
+    accepted_at: string | null;
+    invited_by_id: string | null;
   }>;
   if (rows.length === 0) return ok([]);
+
+  // Consent lookup fails closed without hiding the existing organization team.
+  const { data: consentRows, error: consentError } = await service.from("member_miniweb_consent")
+    .select("id").eq("organization_id", organizationId).eq("enabled", true)
+    .in("id", rows.map((row) => row.id));
+  const consented = new Set<string>(consentError ? [] : (consentRows ?? []).map((row: { id: string }) => row.id));
 
   // PII de display + matrícula vía service client ANGOSTO (ver header del módulo).
   const profilesById = new Map<string, { displayName: string; matricula: string | null }>();
@@ -421,6 +431,7 @@ export async function listProfesionalesPublico(
         bioPublica: m.bio_publica,
         // Opt-in: la matrícula cruza a lo público SOLO si el pro lo activó.
         matricula: m.mostrar_matricula ? (p?.matricula ?? null) : null,
+        personalPageEnabled: consented.has(m.id) && (m.accepted_at !== null || m.invited_by_id === null),
       };
     }),
   );
