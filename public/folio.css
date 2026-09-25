@@ -14067,9 +14067,9 @@ input:focus { outline: none; }
   align-items: center;
   gap: 12px;
   padding: 10px 16px;
-  background: var(--surface-soft, #fff7e0);
-  border-bottom: 1px solid var(--accent-warm, #d8b766);
-  color: var(--ink-2, #6b5a2e);
+  background: var(--accent-soft);
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-2);
   font-size: 13px;
 }
 .fi-gcal-nudge-icon { display: flex; flex: none; }
