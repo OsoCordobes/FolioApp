@@ -8,7 +8,7 @@ Actualizado: 25/09/2026. Este es el registro breve del trabajo; [el tablero téc
 
 | Checkpoint | Resultado, responsable y prueba |
 |---|---|
-| **Ingreso y onboarding** · corrección probada, ensayo completo en curso | Avance guardado corregido; [PR175 en pruebas](https://github.com/OsoCordobes/FolioApp/pull/175). D · revisión A; se investiga el retorno tras confirmar correo y se corrige el guardado del catálogo de servicios. |
+| **Ingreso y onboarding** · corrección probada, ensayo completo en curso | [PR175](https://github.com/OsoCordobes/FolioApp/pull/175): avance guardado corregido; localizado un cambio de dirección que rompía la sesión en el ensayo. D · revisión A; [PR177](https://github.com/OsoCordobes/FolioApp/pull/177) protege el catálogo al guardar servicios. |
 | **Permisos de Clínica** · dos paquetes publicados | Pedidos y motivos protegidos según el rol: [PR170](https://github.com/OsoCordobes/FolioApp/pull/170). C · revisión A; [PR174 publicada](https://github.com/OsoCordobes/FolioApp/pull/174) impide entregar una firma si se revoca el acceso durante su descarga. |
 | **Recuperación completa** · ensayo aprobado e integrado | Datos, archivos, contraseña y segundo factor recuperados con datos ficticios. C · revisión A. [Prueba aprobada](https://github.com/OsoCordobes/FolioApp/actions/runs/36073216478), [entrega integrada](https://github.com/OsoCordobes/FolioApp/pull/167); custodia externa pendiente. |
 | **Miniweb profesional** · publicada | Dos disposiciones, mapa confirmado, editor y enlace individual con permiso propio. D · revisión A. [Publicación verificada](https://github.com/OsoCordobes/FolioApp/pull/171) y [prueba del permiso](https://github.com/OsoCordobes/FolioApp/actions/runs/36076159519). |
