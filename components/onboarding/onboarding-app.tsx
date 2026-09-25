@@ -336,13 +336,18 @@ export function OnboardingApp({
 
   useEffect(() => {
     if (stepIdx !== 6 || !orgId || recoverableDraft) return;
+    if (!ownerUserId) {
+      setServicesStatus("error");
+      setServicesMessage("No pudimos confirmar la cuenta activa. Volvé a cargar para continuar.");
+      return;
+    }
     let cancelled = false;
     servicesRef.current = null;
     setServicesStatus("loading");
     setServicesMessage(null);
     const read = synthetic
       ? Promise.resolve({ ok: true as const, data: { revision: 0, servicios: servicesForCommand(data.servicios) } })
-      : readOnboardingServices(orgId);
+      : readOnboardingServices(orgId, ownerUserId);
     void read.then((result) => {
       if (cancelled) return;
       if (!result.ok) {
@@ -472,7 +477,7 @@ export function OnboardingApp({
       try {
         const result = synthetic
           ? { ok: true as const, data: { revision: command.revision + 1, servicios: command.servicios } }
-          : await saveOnboardingServices(command);
+          : await saveOnboardingServices(command, ownerUserId);
         if (result.ok) {
           draft.finish({ ok: true, data: result.data });
           try { sessionStorage.removeItem(servicesKey(command.organizationId)); } catch { /* no cambia el recibo */ }

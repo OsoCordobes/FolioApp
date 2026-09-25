@@ -516,11 +516,12 @@ export type OnboardingServicesSnapshot = z.infer<typeof onboardingServicesSnapsh
 export type OnboardingServicesCommand = z.infer<typeof onboardingServicesCommandSchema>;
 
 /** Current full catalog; no omission can be interpreted before this read. */
-export async function readOnboardingServices(organizationId: string): Promise<Result<OnboardingServicesSnapshot>> {
-  if (!z.string().uuid().safeParse(organizationId).success) return err("validation", "Consultorio inválido.");
+export async function readOnboardingServices(organizationId: string, expectedUserId: string): Promise<Result<OnboardingServicesSnapshot>> {
+  if (!z.string().uuid().safeParse(organizationId).success || !z.string().uuid().safeParse(expectedUserId).success)
+    return err("validation", "Volvé a cargar el consultorio.");
   const session = await getActiveSession(); if (!session.ok) return session;
-  if (session.data.organizationId !== organizationId || session.data.role !== "OWNER")
-    return err("forbidden", "Cambió el consultorio activo. Volvé a cargar la página.");
+  if (session.data.organizationId !== organizationId || session.data.userId !== expectedUserId || session.data.role !== "OWNER")
+    return err("forbidden", "Cambió la cuenta o el consultorio activo. Volvé a cargar la página.");
   try {
     const client = await createSupabaseServerClient();
     const { data, error } = await client.rpc("read_onboarding_services", { p_org: organizationId });
@@ -531,12 +532,12 @@ export async function readOnboardingServices(organizationId: string): Promise<Re
 }
 
 /** One exact command is replayed on an uncertain transport response. */
-export async function saveOnboardingServices(input: OnboardingServicesCommand): Promise<Result<OnboardingServicesSnapshot>> {
+export async function saveOnboardingServices(input: OnboardingServicesCommand, expectedUserId: string): Promise<Result<OnboardingServicesSnapshot>> {
   const parsed = onboardingServicesCommandSchema.safeParse(input);
-  if (!parsed.success) return err("validation", "Revisá los servicios antes de guardar.");
+  if (!parsed.success || !z.string().uuid().safeParse(expectedUserId).success) return err("validation", "Revisá los servicios antes de guardar.");
   const session = await getActiveSession(); if (!session.ok) return session;
-  if (session.data.organizationId !== parsed.data.organizationId || session.data.role !== "OWNER")
-    return err("forbidden", "Cambió el consultorio activo. Volvé a cargar la página.");
+  if (session.data.organizationId !== parsed.data.organizationId || session.data.userId !== expectedUserId || session.data.role !== "OWNER")
+    return err("forbidden", "Cambió la cuenta o el consultorio activo. Volvé a cargar la página.");
   try {
     const client = await createSupabaseServerClient();
     const { data, error } = await client.rpc("save_onboarding_services", {
