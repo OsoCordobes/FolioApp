@@ -14061,6 +14061,59 @@ input:focus { outline: none; }
   }
 }
 
+/* Hoy · aviso de Google Calendar. Los controles no reducen el ancho del texto en móvil. */
+.fi-gcal-nudge-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--accent-soft);
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.fi-gcal-nudge-icon { display: flex; flex: none; }
+.fi-gcal-nudge-copy { flex: 1; min-width: 0; line-height: 1.4; overflow-wrap: anywhere; }
+.fi-gcal-nudge-error { display: block; color: var(--red); }
+.fi-gcal-nudge-cta { flex: none; min-height: 40px; }
+.fi-gcal-nudge-dismiss {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 18px;
+  line-height: 1;
+}
+@media (max-width: 767px) {
+  .fi-gcal-nudge-banner {
+    display: grid;
+    grid-template-columns: 16px minmax(0, 1fr) 44px;
+    column-gap: 10px;
+    row-gap: 8px;
+    align-items: start;
+  }
+  .fi-gcal-nudge-icon { grid-column: 1; grid-row: 1; margin-top: 2px; }
+  .fi-gcal-nudge-copy { grid-column: 2; grid-row: 1; }
+  .fi-gcal-nudge-cta {
+    grid-column: 2 / -1;
+    grid-row: 2;
+    justify-self: start;
+    min-height: 44px;
+  }
+  .fi-app .fi-gcal-nudge-banner .fi-gcal-nudge-cta { min-height: 44px; }
+  .fi-gcal-nudge-dismiss {
+    grid-column: 3;
+    grid-row: 1;
+    width: 44px;
+    height: 44px;
+  }
+}
+
 /* ── Demo 7 · fl-bport · mini-card del portal del paciente (estática) ────── */
 .fl-bport {
   justify-content: center;
