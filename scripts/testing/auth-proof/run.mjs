@@ -149,10 +149,39 @@ async function main(){
   const result=await run('pnpm',['test:e2e','--','tests/e2e/auth-mail-onboarding.spec.ts'],{env:browserEnv,limit:2_000_000,timeout:900_000});
   // Report only synthetic stage markers and Playwright's aggregate counts;
   // never print a failed action's raw URL, email body, password, or token.
-  const report=result.output.split(/\r?\n/).filter(line=>
-   /^auth_proof_stage:/.test(line)||/^\s*\d+ (?:passed|failed|skipped)\b/.test(line));
-  for(const line of report.slice(-30))console.log(cleanOutput(line));
-  if(result.code!==0)throw Error(`auth_proof_browser_failed:${result.code}`);
+  const allowedStages=new Set([
+   'independiente_signup_mail_captured','independiente_confirmed_and_bootstrapped',
+   'independiente_db_saved','independiente_fresh_context_resumed',
+   'clinica_signup_mail_captured','clinica_confirmed_and_bootstrapped',
+   'clinica_db_saved','clinica_fresh_context_resumed',
+   'recovery_mail_captured','password_updated','old_password_rejected_new_login_resumed',
+  ]);
+  const stages=[...result.output.matchAll(/auth_proof_stage:([a-z0-9_]+)/g)]
+   .map(match=>match[1]).filter(stage=>allowedStages.has(stage));
+  const counts=result.output.split(/\r?\n/).filter(line=>/^\s*\d+ (?:passed|failed|skipped)\b/.test(line));
+  for(const stage of stages.slice(-30))console.log(`auth_proof_stage:${stage}`);
+  for(const count of counts.slice(-3))console.log(cleanOutput(count));
+  if(result.code!==0){
+   // The browser's raw report can contain one-use mail links and credentials.
+   // Only the last reached synthetic stage, test source line, and error class
+   // leave this process; enough to target the next correction safely.
+   const lines=[...result.output.matchAll(/auth-mail-onboarding\.spec\.ts:(\d+)(?::\d+)?/g)]
+    .map(match=>Number(match[1])).filter(line=>line>0&&line<1000);
+   const allowedErrors=new Set([
+    'auth_proof_mail_missing','auth_proof_mailbox_unavailable','auth_proof_message_unavailable',
+    'auth_proof_redirect_mismatch','auth_proof_mailbox_invalid','auth_proof_mailbox_shape',
+    'auth_proof_requires_dedicated_local_auth','auth_proof_local_target_mismatch',
+    'auth_proof_turnstile_must_use_existing_development_path','auth_proof_local_read_key_missing',
+   ]);
+   const detected=[...result.output.matchAll(/auth_proof_[a-z0-9_]+(?=\b)/gi)]
+    .map(match=>match[0]).find(value=>allowedErrors.has(value))??'';
+   const knownError=allowedErrors.has(detected)?detected:
+    (result.output.includes('TimeoutError')?'timeout':
+     result.output.includes('AssertionError')?'assertion':
+     result.output.includes('locator')?'locator':'unknown');
+   console.log(`auth_proof_diagnostic:last_stage=${stages.at(-1)??'none'} spec_lines=${[...new Set(lines)].slice(-3).join(',')||'unknown'} kind=${knownError}`);
+   throw Error(`auth_proof_browser_failed:${result.code}`);
+  }
   if(/\bskipped\b|\bskip\b/i.test(result.output))throw Error('auth_proof_skipped_test');
   if(!/\b1 passed\b/.test(result.output))throw Error('auth_proof_pass_count_missing');
   console.log(`auth_proof_pass: migrations=${files.length} modes=2 confirmation=2 reset=1 mailbox=local mfa=fresh_policy_unenforced`);
