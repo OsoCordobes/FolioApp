@@ -25,7 +25,9 @@ import { resolveAgendaProfesional, type ProfesionalLite } from "@/lib/agenda/pro
 import { capabilitiesFor } from "@/lib/auth/capabilities";
 import { getActiveContext } from "@/lib/db/active-context";
 import { readAgendaRevision } from "@/lib/db/agenda-revision";
+import { readCompleteCollection } from "@/lib/db/complete-collection";
 import { getActiveSession } from "@/lib/db/session";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   formatMonthLabel,
   getCalendarioMes,
@@ -79,8 +81,17 @@ export default async function CalendarioPage({ searchParams }: PageProps) {
   if (!profsRes.ok) {
     safeLog("warn", "app.app.calendario.page.L71", { error: profsRes.error });
   }
-  const profesionales: ProfesionalLite[] = profsRes.ok ? profsRes.data : [];
+  let profesionales: ProfesionalLite[] = profsRes.ok ? profsRes.data : [];
   const caps = capabilitiesFor(ctx.data.session.role, ctx.data.session.esColegiado);
+  if (caps.isReception) {
+    const supabase = await createSupabaseServerClient();
+    const scopeRes = await readCompleteCollection<{ id: string }>((from, to) => supabase
+      .rpc("agenda_recepcion_profesionales", { p_org: ctx.data.organization.id, p_fecha: weekStartIso }, { count: "exact" })
+      .order("id", { ascending: true }).range(from, to));
+    if (scopeRes.error) throw new Error("No se pudo verificar el alcance del calendario.");
+    const allowedIds = new Set(scopeRes.data.map((p) => p.id));
+    profesionales = profesionales.filter((p) => allowedIds.has(p.id));
+  }
   const { selectorVisible, profesionalIdEfectivo, mostrarAtribucion } = resolveAgendaProfesional({
     actsAcrossProfessionals: caps.actsAcrossProfessionals,
     sessionMemberId: ctx.data.session.memberId,

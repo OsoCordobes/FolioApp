@@ -113,9 +113,12 @@ test("clinical request reasons use scoped RPC batches and fail closed on a later
  const failed=await broken.load("lib/db/calendario.ts").getCalendarioSemana(week);
  assert.equal(failed.ok,false);assert.equal(JSON.stringify(failed).includes("SECRET"),false);
  assert.deepEqual(broken.rpcCalls.map(c=>(c.args.p_ids as string[]).length),[500,500]);
- const reception=fixture(data,undefined,false,"ASISTENTE");
+ const reception=fixture({...data,agenda_recepcion_pedidos:pedido},undefined,false,"ASISTENTE");
  const receptionResult=await reception.load("lib/db/calendario.ts").getCalendarioSemana(week);
- assert.equal(receptionResult.ok,true);assert.ok(receptionResult.data.pedidos.every((p:any)=>p.motivo===""));assert.equal(reception.rpcCalls.length,0);
+ assert.equal(receptionResult.ok,true);assert.equal(receptionResult.data.pedidos.length,1001);
+ assert.ok(receptionResult.data.pedidos.every((p:any)=>p.motivo===""));
+ assert.ok(reception.rpcCalls.every(c=>c.name!=="pedido_motivos_clinicos"));
+ assert.ok(reception.calls.every(c=>c.table!=="pedido"));
 });
 test("monthly projection preserves telemedicine",async()=>{
  const f=fixture({turno_extendido:[row(1)]});assert.equal((await f.load("lib/db/calendario.ts").getCalendarioMes(month)).data.turnos[0].modalidad,"telemedicina");
@@ -214,4 +217,87 @@ test("Hoy ASISTENTE still verifies the complete current payment after its operat
  assert.equal(result.ok,true);assert.equal(result.data.turnos[0].cobro.id,id);assert.equal(result.data.turnos[0].cobro.estado,"pagado");assert.equal(result.data.turnos[0].cobro.updatedAt,pago.updated_at);
  assert.ok(f.calls.every(call=>["agenda_recepcion_dia","pago"].includes(call.table)));assert.equal(f.serviceCreated,0);
  const missing=fixture({agenda_recepcion_dia:[turno],pago:[]},undefined,false,"ASISTENTE");assert.equal((await missing.load("lib/db/hoy.ts").getDashboardHoy(day)).ok,false);
+});
+for(const role of ["ASISTENTE","COORDINADOR"] as const){
+ for(const [method,input,desde,hasta] of [
+  ["getCalendarioSemana",week,"2026-09-07","2026-09-13"],
+  ["getCalendarioMes",month,"2026-08-31","2026-10-04"],
+ ] as const)test(`${method} ${role} reads a complete scoped reception range`,async()=>{
+  const rows=Array.from({length:1001},(_,i)=>({
+   id:`turno-${String(i).padStart(5,"0")}`,organization_id:org,paciente_id:patient,
+   profesional_id:"member",inicio:"2026-09-08T13:00:00Z",duracion_min:30,
+   estado:"CONFIRMADO",origen:"MANUAL",servicio_nombre:"Consulta",modalidad:"telemedicina",
+  }));
+  const f=fixture({agenda_recepcion_rango:rows},undefined,false,role);
+  const result=await f.load("lib/db/calendario.ts")[method]({...input,profesionalId:"member"});
+  assert.equal(result.ok,true);assert.equal(result.data.turnos.length,1001);
+  assert.ok(result.data.turnos.every((turno:any)=>turno.notaReserva===null&&turno.modalidad==="telemedicina"));
+  const turnosRpc=f.rpcCalls.filter(call=>call.name==="agenda_recepcion_rango");
+  assert.equal(turnosRpc.length,3);
+  assert.ok(turnosRpc.every(call=>call.count==="exact"&&call.args.p_org===org&&call.args.p_desde===desde&&call.args.p_hasta===hasta&&call.args.p_profesional==="member"));
+  if(method==="getCalendarioSemana")assert.ok(f.rpcCalls.some(call=>call.name==="agenda_recepcion_pedidos"&&call.count==="exact"&&call.args.p_org===org&&call.args.p_fecha===desde&&call.args.p_profesional==="member"));
+  assert.ok(f.calls.filter(call=>call.table==="agenda_recepcion_rango").every(call=>call.orders.join(",")==="inicio,id"&&!call.service));
+  assert.ok(f.calls.every(call=>call.table!=="turno_extendido"&&call.table!=="pago"&&call.table!=="sesion"));
+  assert.equal(f.serviceCreated,0);
+ });
+ for(const [method,input] of [["getCalendarioSemana",week],["getCalendarioMes",month]] as const)test(`${method} ${role} refuses a denied or incomplete reception range`,async()=>{
+  for(const lateFailure of [false,true]){
+   const f=fixture({agenda_recepcion_rango:Array.from({length:1001},(_,i)=>row(i))},call=>call.table==="agenda_recepcion_rango"&&(!lateFailure||call.from>0),false,role);
+   const result=await f.load("lib/db/calendario.ts")[method](input);
+   assert.equal(result.ok,false);
+   assert.equal(JSON.stringify(result).includes("SECRET"),false);
+   assert.ok(f.calls.every(call=>call.table!=="turno_extendido"&&call.table!=="pago"&&call.table!=="sesion"));
+   assert.equal(f.serviceCreated,0);
+  }
+ });
+}
+
+for(const role of ["ASISTENTE","COORDINADOR"] as const)test(`calendar ${role} keeps the request inbox scoped and its price redacted by the RPC`,async()=>{
+ const request={id:"request-1",organization_id:org,canal:"WEB",estado:"PENDIENTE",nombre_cifrado:null,telefono_cifrado:null,email_cifrado:null,
+  paciente_id:null,profesional_id:"member",fecha_propuesta:"2026-09-08T13:00:00Z",duracion_min:30,servicio_id:null,
+  precio_cents:role==="ASISTENTE"?12500:null,recibido_ts:"2026-09-08T12:00:00Z",confirmado_ts:null};
+ const f=fixture({agenda_recepcion_pedidos:[request]},undefined,false,role);
+ const result=await f.load("lib/db/calendario.ts").getCalendarioSemana(week);
+ assert.equal(result.ok,true);assert.equal(result.data.pedidos.length,1);
+ assert.equal(result.data.pedidos[0].precio,role==="ASISTENTE"?125:null);
+ assert.equal(result.data.pedidos[0].motivo,"");
+ assert.ok(f.calls.every(call=>!["pedido","turno_extendido","bloqueo","disponibilidad_profesional"].includes(call.table)));
+ const broken=fixture({agenda_recepcion_pedidos:[request]},call=>call.table==="agenda_recepcion_pedidos",false,role);
+ assert.equal((await broken.load("lib/db/calendario.ts").getCalendarioSemana(week)).ok,false);
+});
+
+for(const role of ["ASISTENTE","COORDINADOR"] as const)test(`calendar ${role} reads every scoped request page or fails closed on a later page`,async()=>{
+ const requests=Array.from({length:1001},(_,i)=>({
+  id:`request-${String(i).padStart(5,"0")}`,canal:"WEB",estado:"PENDIENTE",nombre_cifrado:null,telefono_cifrado:null,email_cifrado:null,
+  paciente_id:null,profesional_id:i%2===0?"member":null,fecha_propuesta:"2026-09-08T13:00:00Z",duracion_min:30,servicio_id:null,
+  precio_cents:role==="ASISTENTE"?12500:null,recibido_ts:"2026-09-08T12:00:00Z",confirmado_ts:null,
+ }));
+ const input={...week,profesionalId:"member"};
+ const f=fixture({agenda_recepcion_pedidos:requests},undefined,false,role);
+ const complete=await f.load("lib/db/calendario.ts").getCalendarioSemana(input);
+ assert.equal(complete.ok,true);assert.equal(complete.data.pedidos.length,1001);
+ const calls=f.rpcCalls.filter(call=>call.name==="agenda_recepcion_pedidos");
+ assert.equal(calls.length,3);assert.ok(calls.every(call=>call.count==="exact"&&call.args.p_org===org&&call.args.p_profesional==="member"));
+ assert.ok(f.calls.filter(call=>call.table==="agenda_recepcion_pedidos").every(call=>call.orders.join(",")==="recibido_ts,id"&&!call.service));
+ const failed=fixture({agenda_recepcion_pedidos:requests},call=>call.table==="agenda_recepcion_pedidos"&&call.from>0,false,role);
+ const result=await failed.load("lib/db/calendario.ts").getCalendarioSemana(input);
+ assert.equal(result.ok,false);assert.equal(JSON.stringify(result).includes("SECRET"),false);
+ assert.ok(failed.calls.every(call=>call.table!=="pedido"&&call.table!=="turno_extendido"));
+});
+
+for(const role of ["ASISTENTE","COORDINADOR"] as const)test(`calendar ${role} uses scoped block and availability projections`,async()=>{
+ const block={id:"block-1",inicio:"2026-09-08T13:00:00Z",duracion_min:30,titulo:null,origen:"manual"};
+ const availability={id:"availability-1",dia_semana:2,hora_inicio:"09:00",hora_fin:"12:00",vigencia_desde:"2026-01-01",vigencia_hasta:null};
+ const f=fixture({agenda_recepcion_bloqueos:[block],agenda_recepcion_disponibilidad:[availability]},undefined,false,role);
+ const result=await f.load("lib/db/calendario.ts").getCalendarioSemana({...week,profesionalId:"member"});
+ assert.equal(result.ok,true);assert.equal(result.data.bloqueos.length,1);
+ assert.equal(result.data.bloqueos[0].titulo,"Ocupado");
+ for(const name of ["agenda_recepcion_bloqueos","agenda_recepcion_disponibilidad"]){
+  assert.ok(f.rpcCalls.some(call=>call.name===name&&call.count==="exact"&&call.args.p_org===org&&call.args.p_fecha===week.weekStartIso&&call.args.p_profesional==="member"));
+ }
+ assert.ok(f.calls.every(call=>!["bloqueo","disponibilidad_profesional","turno_extendido"].includes(call.table)));
+ for(const name of ["agenda_recepcion_bloqueos","agenda_recepcion_disponibilidad"]){
+  const denied=fixture({[name]:[name==="agenda_recepcion_bloqueos"?block:availability]},call=>call.table===name,false,role);
+  assert.equal((await denied.load("lib/db/calendario.ts").getCalendarioSemana(week)).ok,false);
+ }
 });

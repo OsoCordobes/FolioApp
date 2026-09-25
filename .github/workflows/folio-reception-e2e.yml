@@ -1,0 +1,40 @@
+name: B03 reception calendar (ephemeral Supabase)
+
+on:
+  pull_request:
+    branches: [master, codex/launch-miniweb-quality]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: b03-reception-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  reception-e2e:
+    if: github.head_ref == 'codex/launch-reception' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install locked app dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Install fixed Supabase CLI
+        uses: supabase/setup-cli@v2
+        with:
+          version: 2.99.0
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Run two-role reception calendar proof
+        run: node scripts/testing/run-reception-ci.mjs

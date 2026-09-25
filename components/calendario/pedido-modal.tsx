@@ -286,7 +286,7 @@ export function PedidoModal({
               </dd>
             </>
           ) : null}
-          {pedido.precio > 0 ? (
+          {pedido.precio != null && pedido.precio > 0 ? (
             <>
               <dt style={{ color: "var(--ink-3)" }}>Precio</dt>
               <dd style={{ margin: 0 }} className="fm-mono">
