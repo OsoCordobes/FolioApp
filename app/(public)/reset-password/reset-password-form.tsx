@@ -1,17 +1,17 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { resolveRecoveryLink } from "@/lib/auth/recovery-link";
 
 /**
  * Folio · /reset-password · client form.
  *
  * Workflow:
- *   1. URL params from Supabase: ?code=... (PKCE) or ?token_hash=...&type=recovery.
- *   2. On mount we let @supabase/ssr exchange the code for a session
- *      automatically (the helper does this when the page loads).
+ *   1. Supabase redirects with a PKCE ?code=... link.
+ *   2. On mount @supabase/ssr exchanges the code for a session once.
  *   3. User types new password + confirm. Submit calls
  *      supabase.auth.updateUser({ password }).
  *   4. On success, router.push("/hoy").
@@ -22,7 +22,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export function ResetPasswordForm() {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const initialHrefRef = useRef<string | null>(null);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [err, setErr] = useState<string | null>(null);
@@ -31,50 +31,20 @@ export function ResetPasswordForm() {
   const [exchanging, setExchanging] = useState(true);
   const [pending, startTransition] = useTransition();
 
-  // El link de recuperación de Supabase trae un `code` (PKCE) que tenemos que
-  // intercambiar manualmente por una sesión en el cliente. Sin ese exchange
-  // explícito, `updateUser({ password })` tira "Auth session missing".
-  // detectSessionInUrl=true en @supabase/ssr cubre el caso del hash fragment,
-  // pero el code-param requiere exchangeCodeForSession explícito.
   useEffect(() => {
+    initialHrefRef.current ??= window.location.href;
+    let cancelled = false;
     const supabase = createSupabaseBrowserClient();
-    const code = searchParams.get("code");
-    const errorParam =
-      searchParams.get("error_description") ?? searchParams.get("error");
-
-    if (errorParam) {
-      setExchangeError(decodeURIComponent(errorParam));
-      setExchanging(false);
-      return;
-    }
-
-    if (!code) {
-      // Tal vez el link viene como hash fragment (#access_token=...). En ese
-      // caso @supabase/ssr ya hizo el work via detectSessionInUrl; verificamos
-      // que haya sesión antes de mostrar el form.
-      supabase.auth.getSession().then(({ data }) => {
-        if (!data.session) {
-          setExchangeError(
-            "Link inválido o expirado. Pedí uno nuevo desde el login.",
-          );
-        }
+    void resolveRecoveryLink(supabase.auth, initialHrefRef.current, () => window.location.href)
+      .then((valid) => {
+        if (cancelled) return;
+        if (!valid) setExchangeError("Link inválido o expirado. Pedí uno nuevo desde el login.");
         setExchanging(false);
       });
-      return;
-    }
-
-    let cancelled = false;
-    supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
-      if (cancelled) return;
-      if (error) {
-        setExchangeError(error.message);
-      }
-      setExchanging(false);
-    });
     return () => {
       cancelled = true;
     };
-  }, [searchParams]);
+  }, []);
 
   const onSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
