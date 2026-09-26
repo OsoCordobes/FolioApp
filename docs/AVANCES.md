@@ -2,9 +2,9 @@
 
 Actualizado: 26/09/2026. Este es el registro breve del trabajo; [el tablero técnico](LAUNCH-BOARD.md) conserva el detalle y los antecedentes. Cada fila cambia sólo ante un resultado o bloqueo real.
 
-**Equipo comprobado:** A completó la actualización de instrucciones solicitada, con dos agentes de revisión independientes. No hay escritores de aplicación activos durante esta revisión. Los trabajos de ficha y revocación quedaron preservados en PR186 y PR185; sus controles pendientes fallaron y deben investigarse antes de publicar.
+**Equipo comprobado:** A dirige e integra. `intake_sql_repair` prepara las pruebas automáticas de la corrección de cancelación, ya revisada; `access_proof_repair` mejoró el diagnóstico de ingreso y `intake_cancel_review` lo revisa de forma independiente. Copias y archivos separados; no hay dos agentes cambiando lo mismo.
 
-**Cómo verlo:** este archivo sigue siendo el registro vigente y su apertura en el panel lateral quedó encolada. La vista web local4420 se apagó con la interrupción; su reinicio fue rechazado por la política de ejecución. El trabajo y la evidencia quedaron conservados.
+**Cómo verlo:** [panel de avances](http://127.0.0.1:4420/) recuperado y comprobado el26/09:16 checkpoints, lectura del registro y actualización cada minuto. Funciona en esta computadora mientras el proceso esté activo; este archivo y la copia en Git conservan el avance aunque se cierre el panel.
 
 **Publicado** = disponible en Folio. **Probado** = pasó sus controles, todavía sin publicar. **En curso** = falta comprobarlo. Las pruebas parciales no cierran un checkpoint completo.
 
@@ -17,7 +17,7 @@ Actualizado: 26/09/2026. Este es el registro breve del trabajo; [el tablero téc
 | **Miniweb profesional** · publicada | Dos disposiciones, mapa confirmado, editor y enlace individual con permiso propio. D · revisión A. [Publicación verificada](https://github.com/OsoCordobes/FolioApp/pull/171) y [prueba del permiso](https://github.com/OsoCordobes/FolioApp/actions/runs/36076159519). |
 | **Trabajo de recepción** · publicada | Agenda publicada con el alcance de Asistente y Coordinador. C · revisión A; [entrega](https://github.com/OsoCordobes/FolioApp/pull/172). [Prueba aprobada, sin omisiones](https://github.com/OsoCordobes/FolioApp/actions/runs/36076854795). |
 | **Atención adulta** · base publicada; refuerzo en curso | [PR183 publicada](https://github.com/OsoCordobes/FolioApp/pull/183), con [pruebas aprobadas](https://github.com/OsoCordobes/FolioApp/actions/runs/36125833441). B04-R investiga y corrige un caso adicional de permiso revocado durante la operación. Interfaz y criterio profesional pendientes; no activa bloqueos clínicos. |
-| **Ficha completada por el paciente** · en curso | Agente B09 · [alcance acordado](B09-PATIENT-FORM-CONTRACT.md): enlace revocable y datos aportados protegidos, sin sobrescribir antecedentes. Primero la base y después el formulario; preguntas clínicas pendientes de aprobación profesional. |
+| **Ficha completada por el paciente** · corrección revisada | B09 corrigió la interferencia que impedía cancelar un turno; revisión independiente aprobada y prueba automática pendiente. [Fallo conservado](https://github.com/OsoCordobes/FolioApp/actions/runs/36130483281). Primero la base segura; después el formulario y las preguntas aprobadas por profesionales. |
 | **Llamador de recepción** · publicado | D · revisión A; [PR181 publicada](https://github.com/OsoCordobes/FolioApp/pull/181). Pantalla con código y destino, sin nombres; llamar conserva el turno en sala. [Prueba completa](https://github.com/OsoCordobes/FolioApp/actions/runs/36124468806): vinculación, respuesta perdida sin duplicar, reconexión y revocación; móvil y escritorio revisados. |
 | **Google Calendar** · prueba externa pendiente | [Ensayo definido](C05-GOOGLE-PROOF-CONTRACT.md): reserva, cambios, ocupación externa y reintentos. [PR184 publicada](https://github.com/OsoCordobes/FolioApp/pull/184) mejora el aviso en celular; eso no acredita la integración. |
 | **Correo y comunicaciones** · prueba externa pendiente | La entrega global sigue desactivada; falta comprobar recepción y reintentos en buzones controlados. |
@@ -27,7 +27,7 @@ Actualizado: 26/09/2026. Este es el registro breve del trabajo; [el tablero téc
 | **Validación profesional y piloto** · pendiente humano | Cinco especialidades y piloto de 14 días, con tres profesionales y cinco jornadas por persona. |
 | **Lanzamiento** · pendiente | Se cerrará cuando la versión publicada y la oferta comercial coincidan con lo demostrado. |
 
-**Última publicación comprobada:** [PR184 · aviso móvil](https://github.com/OsoCordobes/FolioApp/pull/184), master `abefca8`; [control posterior aprobado](https://github.com/OsoCordobes/FolioApp/actions/runs/36129962703). Para probar mejoras visibles: Configuración → Pantallas de espera, luego Hoy → Llamar; y Mis datos y solicitudes → Archivo clínico para guardar historia y archivos. **Cuota consultada el 26/09:** 100% disponible al inicio de esta revisión; no es una lectura en tiempo real. Reserva de cierre: 15%.
+**Última publicación comprobada:** [PR184 · aviso móvil](https://github.com/OsoCordobes/FolioApp/pull/184), master `abefca8`; [control posterior aprobado](https://github.com/OsoCordobes/FolioApp/actions/runs/36129962703). Cierre documental reconciliado el26/09 sin repetir la publicación. Para probar mejoras visibles: Configuración → Pantallas de espera, luego Hoy → Llamar; y Mis datos y solicitudes → Archivo clínico para guardar historia y archivos. **Cuota consultada el 26/09:** 99% disponible; no es una lectura en tiempo real. Reserva de cierre: 15%.
 
 **Forma de trabajo:** continuar mientras haya trabajo útil, cerrar cada paquete con evidencia y tomar el siguiente. La reanudación horaria es respaldo ante un corte, no una espera entre tareas.
 

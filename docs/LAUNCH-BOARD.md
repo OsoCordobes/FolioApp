@@ -1,18 +1,21 @@
 # Folio — tablero único de lanzamiento
 
-Actualizado el 26/09/2026. A dirige, revisa y publica. [AVANCES.md](AVANCES.md) es la vista breve para el titular, disponible como archivo; su apertura en el panel lateral quedó encolada; cada fila cambia sólo ante un resultado significativo. La vista web4420 quedó apagada tras la interrupción y el reinicio de su proceso fue rechazado por política de ejecución. No impide actualizar el archivo ni continuar implementación.
+Actualizado el 26/09/2026. A dirige, revisa y publica. [AVANCES.md](AVANCES.md) es la vista breve para el titular. La vista web4420 se recuperó por pedido explícito del titular:PID26832,127.0.0.1,HTTP200 y16 filas verificadas; tab del navegador abierto. El rechazo previo de reinicio se conserva como antecedente, ya no como bloqueo vigente.
 
 ## Continuación vigente · 26/09
 
 - Por pedido del titular se priorizó actualizar instrucciones/configuración antes de continuar la app. Completado con dos revisores: [informe](AGENT-SETUP-20260926.md). Astra Ultra predeterminado; guía canónica en AGENTS.md; no se modificaron permisos, código, migraciones ni producción.
-- Git verificado en Escritorio: master `abefca815821f789c6c1a7a63a52309c9f8c63cb`, PR184 integrada; App del squash36129962703 SUCCESS. La evidencia de publicación reunida en la sesión anterior sigue conservada; completar su informe final al retomar, sin republicar ni repetir smoke.
+- Git verificado en Escritorio: master `abefca815821f789c6c1a7a63a52309c9f8c63cb`, PR184 integrada; App del squash36129962703 y SQL36129962698 SUCCESS. Cierre reconciliado el26/09 sin republicar ni repetir smoke: `folio-b10-evidence/pr184-publication-final-abefca8.json`, SHA256 `F9C438B9BFC3BFF339DC6A70ACEFDA35E43F6D3F6A7D18706954FCF56F07D9E2`. Vercel `dpl_8hU62Dev275m5o9StLgjm3ZQ1Vxm` READY, master/gru1, raíz y www;2385 unidades y recuperación100 PASS+15 SKIP/0 FAIL, build PASS. Producción sigue en135 versiones hasta M143.
 - PR185 candidata `4e477127b7816cd67f1a81a9db61e07ace6a57a3`: App/SQL SUCCESS; acceso36130367495 FAILURE y Preview SKIPPED. PR186 candidata `6b47025936a36bae58d0f0d4a2610c50aa2004d3`: App/Preview SUCCESS; acceso36130483165 y SQL36130483281 FAILURE. Leer las causas antes de repetir; no integrar ni tratar SKIPPED como aprobado. No se aplicó M144/M145 durante esta revisión de configuración.
-- No hay escritores de aplicación activos durante este paquete. Las copias de ambos candidatos están preservadas. Primero investigar los fallos, luego asignar paquetes de corrección independientes. Cuota al comienzo:0% usado/100% disponible; reserva15%.
+- Reanudado por el titular: dos escritores, `intake_sql_repair` en PR186 y `access_proof_repair` en PR185 (tests/runner B01; no SQL). SHA inicial de cada uno arriba. Cuota al retomar:1% usado/99% disponible; reserva15%.
+- RED real PR186: M144 replay y su spec pasan; M84_portal_turno_self_service.spec.sql:200 falla porque `turno_intake_revision_guard` agrega NEW.intake_revision antes del guard portal que rechaza modificar cualquier campo adicional. M146 reservada exclusivamente para reparar interacción:20260926190000_M146_patient_intake_portal_cancel.sql. Debe conservar cancelación autorizada, rechazo de cambios adicionales y revocación irreversible de ficha; no editar M144 ya aplicada a Preview. Log completo folio-b09-evidence/pr186-sql-36130483281-original.log.
+- M146 implementada y revisión independiente `intake_cancel_review` aprobada: rename del trigger, sin cambiar función/grants;59 líneas de regresión sobre portal autenticado, cambios prohibidos, cancelación, revisión, token invalidado y resurrección rechazada. Autorizado commit/push para comprobar CI; no equivale todavía a GREEN ni a instalación productiva.
+- Fallos B01 distintos: PR185 llega al guardado inicial de servicio Solo; PR186 falla en Docker antes de migraciones/navegador. Registros originales preservados en folio-b01-evidence. `access_proof_repair` preparó diagnósticos acotados sin credenciales; typecheck/lint/prueba unitaria PASS, revisión independiente en curso antes de un único CI instrumentado. Preview185 sigue sin rama asociada; no llamar PASS a SKIPPED.
 - Las secciones del 25/09 siguientes se conservan como último detalle de ejecución, **sustituidas por esta cabecera para estado de equipo/publicación**. No relanzar agentes ni repetir operaciones tomando aquellas fechas como estado vivo.
 
 El [historial íntegro anterior](LAUNCH-BOARD-HISTORY-20260925.md) se conservó sin alterar. Copia exacta fuera de Git: `C:/Users/amiun/Documents/Codex/folio-manager-evidence/launch-board-history-exact-20260925.md`, SHA256 `4E44550C8530E6C5B65E2AA4D8B81D85437DF342AA53F35356FD32BC7001C49C`. Contiene diagnósticos, fallos, autorizaciones, publicaciones y planes sustituidos. Este archivo gobierna el estado vigente; las fechas y estados históricos no vuelven a abrir trabajo ya cerrado.
 
-## Estado de publicación
+## Publicaciones anteriores · detalle preservado del25/09
 
 - **Master y Escritorio:** `c0fdf6312e9e9b60bd19dbc7b7d7cd1129ee56fa`, squash PR183 del 25/09 a 10:58:02 UTC. Árbol `b3c9e86852dec43ee50159110e26825810d8a972`, idéntico al candidato `eff59f9d7fd24cc4806258eeab0d55734169b393`. Escritorio tracked limpio; archivos ajenos conservados.
 - **Producción:** Vercel `dpl_5Sp9P6pRN9WHowbyU4hit8VyFpCQ`, READY 11:00:21.480 UTC, Git/master/gru1, raíz y www. HTTP11:04:29: health/login/pantalla200, configuración anónima307 al ingreso y API sin credencial401/no-store. Sin fixture autenticado productivo.
@@ -23,7 +26,7 @@ El [historial íntegro anterior](LAUNCH-BOARD-HISTORY-20260925.md) se conservó 
 - **PR181 cerrada:** llamador publicado, seis vistas375/1440 revisadas, ensayo completo36124468806 PASS y App/SQL del squash PASS. Final `folio-b10-evidence/pr181-publication-final-24ab4a0.json`, SHA256 `41BDA5DB2FC6127E61AA98EEEFAE17158234BD599128D34A78C73BD0E4A3628E`. Llamar conserva EN_SALA; pantalla sin nombres; revocación y respuesta perdida probadas. No repetir por rutina.
 - **PR182 cerrada:** descarga profesional de historia y archivos, candidato7237212/squash457a613. Final `folio-b06-evidence/pr182-publication-final-457a613.json`, SHA256 `1E5187BBBD14AD1C59F2DA8ECDD588C61C4A75476FF2B72C4CFFC41B607D4BD7`. Ensayo HTTP50MiB aprobado; portal, selector nativo e inventario máximo pendientes.
 
-## Equipo y siguiente integración
+## Asignaciones anteriores · sustituidas por continuación vigente
 
 Máximo dos escritores, copias aisladas, implementación Sol High y dirección/revisión A. Base de ambos paquetes: `c0fdf6312e9e9b60bd19dbc7b7d7cd1129ee56fa`. Los agentes anteriores de exportación, llamador y B04a terminaron; sus copias permanecen congeladas.
 
@@ -70,13 +73,13 @@ Selección por riesgo, dependencia, utilidad y esfuerzo restante. Terminar, comp
 
 ## Cuota, autonomía y continuidad
 
-Última lectura real, 25/09 a 11:10 UTC:33% usado /67% disponible; reserva15%. Reinicio informado por la herramienta:01/10/2026 21:27:44 UTC, cero créditos. No presumir reinicio el sábado 26/09. No atribuir consumo exacto a cada agente ni convertir cuota en horas garantizadas.
+Última lectura real, 26/09:1% usado /99% disponible; reserva15%. Reinicio informado por la herramienta:03/10/2026 18:18:15 UTC, cero créditos. La lectura previa del25/09 fue33% usado; se conserva como antecedente, no como saldo vigente. No atribuir consumo exacto a cada agente ni convertir cuota en horas garantizadas.
 
 Al llegar a85% usado, no abrir implementación nueva: cerrar paquetes revisables, preservar evidencia y dejar continuación. La calidad y los criterios gobiernan el cierre; no consumir cuota artificialmente ni repetir pruebas verdes sin cambio, fallo o duda concreta. El titular autorizó continuar autónomamente mientras duerme; pedir sólo decisiones indispensables y seguir con trabajo independiente.
 
 Heartbeat `folio-manager-por-checkpoints`: respaldo horario silencioso ante interrupciones, no ritmo de trabajo. No terminar el turno para esperar su próxima activación mientras haya trabajo útil autorizado. Verificar cuota/cupo/agentes antes de reanudar; no duplicar escritores. No modificar el recordatorio de copia semanal. Este tablero, las copias y la evidencia permiten relevo de manager si hace falta.
 
-Entrega al titular: qué mejoró, evidencia breve, dónde probarlo y qué falta. Al detenerse, cuatro o cinco párrafos sencillos con la razón real y pasos concretos en la aplicación. El archivo AVANCES.md es el registro disponible; el panel web4420 sigue apagado por el rechazo de ejecución documentado arriba.
+Entrega al titular: qué mejoró, evidencia breve, dónde probarlo y qué falta. Al detenerse, cuatro o cinco párrafos sencillos con la razón real y pasos concretos en la aplicación. AVANCES.md conserva el registro; el panel web4420 volvió a funcionar el26/09 por pedido explícito del titular.
 
 ## Disciplina operativa y checkpoint que no se repite
 
