@@ -1206,6 +1206,7 @@ export function Calendario({
         const pac = pacientes[selectedTurno.pacienteId] ?? mesPacientes[selectedTurno.pacienteId];
         return (
           <TurnoDetalleModal
+            turnoId={selectedTurno.id}
             pacienteNombre={pac?.nombre ?? "Paciente"}
             pacienteId={selectedTurno.pacienteId}
             fecha={selectedTurno.fecha}

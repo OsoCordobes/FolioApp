@@ -30,6 +30,7 @@ import {
   decideRouteGate,
   entryDestination,
   isCallerScreenPath,
+  isPatientIntakePath,
   portalDestination,
   portalLoginDestination,
 } from "@/lib/auth/route-decision";
@@ -42,7 +43,7 @@ import {
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  if (isCallerScreenPath(pathname)) {
+  if (isCallerScreenPath(pathname) || isPatientIntakePath(pathname)) {
     // Screen auth is a separate, cookie-scoped credential checked by its API.
     // Do not refresh a coincident staff session or run staff MFA for this path.
     const headers = new Headers(request.headers);

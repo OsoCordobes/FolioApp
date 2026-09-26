@@ -23,6 +23,12 @@ export function isCallerScreenPath(pathname: string): boolean {
   return (CALLER_SCREEN_PATHS as readonly string[]).includes(pathname);
 }
 
+/** Patient contribution has its own narrow cookie and never inherits staff auth. */
+export function isPatientIntakePath(pathname: string): boolean {
+  return pathname === "/aporte" || pathname === "/api/patient-intake/exchange" ||
+    pathname === "/api/patient-intake/submit" || pathname === "/api/patient-intake/status";
+}
+
 /** Rutas públicas exactas (sin sesión, pasan). */
 export const PUBLIC_PATHS = [
   "/",                      // landing de marketing
@@ -41,6 +47,10 @@ export const PUBLIC_PATHS = [
   "/portal/login",          // login del portal del paciente (P3) — magic-link, sin sesión
   "/cuenta-error",          // salida del ping-pong /hoy ↔ /onboarding: el usuario TIENE sesión pero su contexto de app no resuelve, así que no puede pasar por un gate que dependa de ese contexto
   ...CALLER_SCREEN_PATHS,   // pantalla con credencial propia, sin acceso staff
+  "/aporte",                // aporte con credencial propia, sin cuenta
+  "/api/patient-intake/exchange",
+  "/api/patient-intake/submit",
+  "/api/patient-intake/status",
 ] as const;
 
 /** Prefijos públicos. */

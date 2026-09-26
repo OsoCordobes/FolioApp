@@ -6,8 +6,8 @@
  * Triggereado por click en una cal-turno del Calendario (semana o mes). Muestra
  * la info ya RESUELTA del turno — fecha/hora, servicio, estado (con su punto de
  * color), origen, profesional, teléfono — más la nota de reserva (motivo del
- * booking, M56) cuando el rol tiene acceso clínico. Sin acciones de estado: solo
- * información + "Ver ficha" + "Cerrar". Las acciones (Reagendar/Cancelar) las
+ * booking, M56) cuando el rol tiene acceso clínico. Incluye el aporte
+ * administrativo manual B09; las acciones de estado (Reagendar/Cancelar) las
  * dueña otro workstream a través del menú ⋮.
  *
  * Clona la estructura de pedido-modal.tsx (role="dialog" aria-modal, useModalA11y,
@@ -23,6 +23,7 @@ import { useRef } from "react";
 import { TURNO_STATE_CONF } from "@/lib/turno-states";
 import type { EstadoTurno, OrigenTurno } from "@/lib/types";
 import { useModalA11y } from "@/lib/use-modal-a11y";
+import { PatientIntakeControl } from "./patient-intake-control";
 
 // Etiqueta legible del origen del turno (mismo universo que OrigenTurno).
 const ORIGEN_LABEL: Record<OrigenTurno, string> = {
@@ -35,6 +36,7 @@ const ORIGEN_LABEL: Record<OrigenTurno, string> = {
 };
 
 export interface TurnoDetalleModalProps {
+  turnoId: string;
   /** Nombre del paciente (ya desencriptado server-side). */
   pacienteNombre: string;
   /** id del paciente — destino del "Ver ficha". */
@@ -72,6 +74,7 @@ export interface TurnoDetalleModalProps {
 }
 
 export function TurnoDetalleModal({
+  turnoId,
   pacienteNombre,
   pacienteId,
   fecha,
@@ -122,6 +125,8 @@ export function TurnoDetalleModal({
           borderRadius: 10,
           maxWidth: 480,
           width: "100%",
+          maxHeight: "min(90svh, 900px)",
+          overflowY: "auto",
           padding: "20px 22px",
           boxShadow: "0 24px 80px rgba(0,0,0,0.18)",
         }}
@@ -227,6 +232,8 @@ export function TurnoDetalleModal({
             Sin nota de reserva.
           </p>
         )}
+
+        {estado !== "cancelado" && estado !== "reagendado" ? <PatientIntakeControl turnoId={turnoId} /> : null}
 
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <button type="button" className="fi-btn fi-btn-ghost" onClick={onClose}>
