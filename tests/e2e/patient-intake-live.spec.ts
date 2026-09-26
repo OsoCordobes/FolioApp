@@ -3,9 +3,9 @@ import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Client } from "pg";
-import QRCode from "qrcode";
 import { test, expect } from "../fixtures/local-test";
 import { interceptDiagnostic, interceptErrorKind, isIssueActionPayload, waitForIntercept } from "../../scripts/testing/patient-intake-proof/browser-diagnostics.mjs";
+import { qrContainsExactUrl } from "./patient-intake-qr";
 
 type Fixture = {
   browserCookies: { name: string; value: string; domain: string; path: string; httpOnly?: boolean; secure?: boolean; sameSite?: "Lax" | "Strict" | "None" }[];
@@ -101,11 +101,22 @@ test("B09: enlace v2, formulario real, conciliación y revocación", async ({ pa
 
     const image = control.getByRole("img", { name: "Código QR local del enlace para este turno" });
     await expect(image).toHaveAttribute("src", /^data:image\/png;base64,/);
-    const colors = await page.evaluate(() => {
-      const style = getComputedStyle(document.documentElement);
-      return { dark: style.getPropertyValue("--accent").trim() || "#6255C5", light: style.getPropertyValue("--surface").trim() || "#FFFFFF" };
+    // Browser Canvas and Node pngjs can encode the same QR into different PNG bytes.
+    // Read pixels from the image actually shown; neither pixels nor decoded URL enter an assertion payload.
+    const qr = await image.evaluate(async element => {
+      const img = element as HTMLImageElement;
+      await img.decode();
+      const width = img.naturalWidth, height = img.naturalHeight;
+      const canvas = document.createElement("canvas");
+      canvas.width = width; canvas.height = height;
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      if (!context) throw new Error("intake_proof_qr_canvas_unavailable");
+      context.drawImage(img, 0, 0);
+      return { width, height, data: Array.from(context.getImageData(0, 0, width, height).data) };
     });
-    expect(await image.getAttribute("src")).toBe(await QRCode.toDataURL(url, { margin: 2, width: 224, errorCorrectionLevel: "M", color: colors }));
+    expect(qr.width).toBe(224);
+    expect(qr.height).toBe(224);
+    expect(qrContainsExactUrl(qr, url)).toBe(true);
     stage("qr_local");
     const invitation = await db.query("SELECT token_hash,revoked_at FROM folio_intake_private.invitation WHERE turno_id=$1", [fixture.turnoId]);
     expect(invitation.rows).toHaveLength(1);
@@ -197,7 +208,7 @@ test("B09: enlace v2, formulario real, conciliación y revocación", async ({ pa
     let sentAfterRevoke = false;
     await revoked.route("**/api/patient-intake/submit", route => { sentAfterRevoke = true; return route.continue(); });
     await revoked.getByRole("button", { name: "Enviar datos" }).click();
-    await expect(revoked.getByText(/Tus datos no se enviaron desde esta pestaña/)).toBeVisible({ timeout: 30_000 });
+    await expect(revoked.getByText("No pudimos comprobar el enlace antes de enviar. Tus datos siguen en esta pantalla.")).toBeVisible({ timeout: 30_000 });
     await expect(revoked.getByRole("textbox", { name: "Nombre", exact: true })).toHaveValue("Carla Sintética");
     expect(sentAfterRevoke).toBe(false);
     submitted = await db.query("SELECT id FROM folio_intake_private.submission WHERE invitation_id=(SELECT id FROM folio_intake_private.invitation WHERE turno_id=$1)", [fixture.turnoId]);
