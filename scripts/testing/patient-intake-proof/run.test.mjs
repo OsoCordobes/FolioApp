@@ -1,7 +1,18 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {randomUUID} from 'node:crypto';
-import {assistantScopeList,authDiagnostic,servicesStatus} from './run.mjs';
+import {assistantScopeList,authDiagnostic,browserResult,servicesStatus} from './run.mjs';
+
+test('browser diagnostics keep only closed intercept fields',()=>{
+ const output='intake_proof_stage:initial_fence\n'
+  +'intake_proof_issue_diagnostic:phase=fetch http=none rows=0 kind=terminal_timeout\n'
+  +'intake_proof_submit_diagnostic:phase=db_done http=200 rows=1 kind=none\n'
+  +'intake_proof_issue_diagnostic:phase=secret http=200 rows=1 kind=token=private\n';
+ const parsed=browserResult(output);
+ assert.deepEqual(parsed.markers,['initial_fence']);
+ assert.deepEqual(parsed.intercepts,{issue:'phase=fetch http=none rows=0 kind=terminal_timeout',submit:'phase=db_done http=200 rows=1 kind=none'});
+ assert.doesNotMatch(JSON.stringify(parsed),/secret|private/);
+});
 
 test('scoped assistant has a nonempty professional list excluding the visit owner',()=>{
  const assigned=randomUUID(),visitOwner=randomUUID();

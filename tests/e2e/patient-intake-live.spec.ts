@@ -5,6 +5,7 @@ import path from "node:path";
 import { Client } from "pg";
 import QRCode from "qrcode";
 import { test, expect } from "../fixtures/local-test";
+import { interceptDiagnostic, interceptErrorKind, isIssueActionPayload, waitForIntercept } from "../../scripts/testing/patient-intake-proof/browser-diagnostics.mjs";
 
 type Fixture = {
   browserCookies: { name: string; value: string; domain: string; path: string; httpOnly?: boolean; secure?: boolean; sameSite?: "Lax" | "Strict" | "None" }[];
@@ -45,23 +46,45 @@ test("B09: enlace v2, formulario real, conciliación y revocación", async ({ pa
     const actionUrl = /^http:\/\/localhost:4430\/calendario(?:\?|$)/;
     let intercepted = false;
     let committedIssue: { responseStatus: number; rows: { invitation_id: string; token_hash: string; operation_id: string; generation: string }[] } = { responseStatus: 0, rows: [] };
+    let issuePhase = "not_seen", issueStatus = 0, issueRows = 0;
+    type InterceptResult = { phase: string; status: number; rows: number; kind: string };
+    let resolveIssue!: (result: InterceptResult) => void;
+    const issueTerminal = new Promise<InterceptResult>(resolve => { resolveIssue = resolve; });
     const loseIssueResponse = async (route: import("@playwright/test").Route) => {
       const request = route.request();
       if (intercepted || request.method() !== "POST" || !request.headers()["next-action"]) return route.continue();
+      let payload: unknown;
+      try { payload = request.postDataJSON(); }
+      catch { issuePhase = "payload"; return route.continue(); }
+      if (!isIssueActionPayload(payload, fixture.turnoId)) { issuePhase = "other_action_seen"; return route.continue(); }
       intercepted = true;
+      let kind = "none";
       try {
+        issuePhase = "fetch";
         const response = await route.fetch({ timeout: 30_000 });
+        issueStatus = response.status();issuePhase = "response";
+        issuePhase = "db_read";
         const committed = await db.query("SELECT i.id AS invitation_id,i.token_hash,o.operation_id,o.result_generation::text AS generation FROM folio_intake_private.invitation i JOIN folio_intake_private.link_operation o ON o.invitation_id=i.id AND o.kind='ISSUE' WHERE i.turno_id=$1", [fixture.turnoId]);
         committedIssue = { responseStatus: response.status(), rows: committed.rows };
-      } finally { await route.abort("failed"); } // The real issue committed; only its browser response is lost.
+        issueRows = committed.rows.length;issuePhase = "db_done";
+      } catch (error) { kind = interceptErrorKind(error); }
+      finally {
+        try { await route.abort("failed"); if (kind === "none") issuePhase = "abort_done"; }
+        catch { if (kind === "none") kind = "abort"; }
+        resolveIssue({ phase: issuePhase, status: issueStatus, rows: issueRows, kind });
+      } // The real issue committed; only its browser response is lost.
     };
     await page.route(actionUrl, loseIssueResponse);
     await confirmIssue.click();
-    await expect(control.getByRole("button", { name: "Comprobar resultado" })).toBeVisible({ timeout: 30_000 });
-    await expect(control.getByRole("button", { name: "Reintentar sin duplicar" })).toBeVisible();
+    const issueResult = await waitForIntercept(issueTerminal, 35_000, () => ({ phase: issuePhase, status: issueStatus, rows: issueRows, kind: "terminal_timeout" }));
+    console.log(`intake_proof_issue_diagnostic:${interceptDiagnostic(issueResult.phase, issueResult.status, issueResult.rows, issueResult.kind)}`);
     expect(intercepted).toBe(true);
+    expect(issueResult.kind).toBe("none");
+    expect(issueResult.phase).toBe("abort_done");
     expect(committedIssue.responseStatus).toBe(200);
     expect(committedIssue.rows).toHaveLength(1);
+    await expect(control.getByRole("button", { name: "Comprobar resultado" })).toBeVisible({ timeout: 30_000 });
+    await expect(control.getByRole("button", { name: "Reintentar sin duplicar" })).toBeVisible();
     stage("staff_issue_response_lost");
     await page.unroute(actionUrl, loseIssueResponse);
     await control.getByRole("button", { name: "Comprobar resultado" }).click();
@@ -124,17 +147,38 @@ test("B09: enlace v2, formulario real, conciliación y revocación", async ({ pa
 
     const lost = await openPublic();
     await lost.getByRole("textbox", { name: "Nombre", exact: true }).fill("Berta Sintética");
-    let lostOperation: string | null = null, committed = false;
+    let lostOperation: string | null = null, submitPhase = "not_seen", submitStatus = 0, submitRows = 0;
+    let resolveSubmit!: (result: InterceptResult) => void;
+    const submitTerminal = new Promise<InterceptResult>(resolve => { resolveSubmit = resolve; });
     await lost.route("**/api/patient-intake/submit", async route => {
-      lostOperation = route.request().postDataJSON().operationId;
-      const response = await route.fetch({ timeout: 30_000 });
-      expect(response.status()).toBe(200);
-      committed = true;
-      await route.abort("failed"); // The real POST committed; only its browser response is lost.
+      let kind = "none";
+      try {
+        submitPhase = "payload";
+        const payload = route.request().postDataJSON();
+        if (typeof payload?.operationId !== "string" || !/^[0-9a-f-]{36}$/i.test(payload.operationId)) { kind = "payload"; return; }
+        lostOperation = payload.operationId;
+        submitPhase = "fetch";
+        const response = await route.fetch({ timeout: 30_000 });
+        submitStatus = response.status();submitPhase = "response";
+        submitPhase = "db_read";
+        const committed = await db.query("SELECT id FROM folio_intake_private.submission WHERE operation_id=$1", [lostOperation]);
+        submitRows = committed.rows.length;submitPhase = "db_done";
+      } catch (error) { kind = interceptErrorKind(error); }
+      finally {
+        try { await route.abort("failed"); if (kind === "none") submitPhase = "abort_done"; }
+        catch { if (kind === "none") kind = "abort"; }
+        resolveSubmit({ phase: submitPhase, status: submitStatus, rows: submitRows, kind });
+      } // The real POST committed; only its browser response is lost.
     });
     await lost.getByRole("button", { name: "Enviar datos" }).click();
+    const submitResult = await waitForIntercept(submitTerminal, 35_000, () => ({ phase: submitPhase, status: submitStatus, rows: submitRows, kind: "terminal_timeout" }));
+    console.log(`intake_proof_submit_diagnostic:${interceptDiagnostic(submitResult.phase, submitResult.status, submitResult.rows, submitResult.kind)}`);
+    expect(submitResult.kind).toBe("none");
+    expect(submitResult.phase).toBe("abort_done");
+    expect(submitResult.status).toBe(200);
+    expect(submitResult.rows).toBe(1);
     await expect(lost.getByRole("button", { name: "Consultar estado de este envío" })).toBeVisible({ timeout: 30_000 });
-    expect(committed).toBe(true);expect(lostOperation).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(lostOperation).toMatch(/^[0-9a-f-]{36}$/i);
     submitted = await db.query("SELECT id FROM folio_intake_private.submission WHERE operation_id=$1", [lostOperation]);
     expect(submitted.rows).toHaveLength(1);
     stage("lost_response_committed");

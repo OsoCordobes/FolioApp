@@ -319,11 +319,14 @@ async function checkRoles(state,seed){
   assert.deepEqual(counts,{invitations:0,sessions:0,submissions:0,events:0,link_states:0,link_operations:0});
  });
 }
-function browserResult(output){
+export function browserResult(output){
  const markers=[...output.matchAll(/^intake_proof_stage:([a-z_]+)$/gm)].map(m=>m[1]).filter(x=>browserStages.has(x));
  const lines=[...output.matchAll(/patient-intake-live\.spec\.ts:(\d+)(?::\d+)?/g)].map(m=>Number(m[1])).filter(n=>n>0&&n<1000);
  const kind=/strict mode violation/i.test(output)?'strict':/Test timeout.*exceeded|test timeout of \d+ms/i.test(output)?'test_timeout':/TimeoutError|Timed out/i.test(output)?'expect_timeout':/Target closed/i.test(output)?'target_closed':/AssertionError|expect\([^\n]+\) failed/i.test(output)?'assertion':'other';
- return {markers,lines:[...new Set(lines)].slice(0,3),kind};
+ const intercepts={issue:'none',submit:'none'};
+ for(const match of output.matchAll(/^intake_proof_(issue|submit)_diagnostic:(phase=(?:not_seen|other_action_seen|payload|fetch|response|db_read|db_done|abort_done|other) http=(?:none|[1-5][0-9]{2}) rows=(?:none|[012]) kind=(?:none|timeout|network|database|abort|payload|terminal_timeout|other))$/gm))
+  intercepts[match[1]]=match[2];
+ return {markers,lines:[...new Set(lines)].slice(0,3),kind,intercepts};
 }
 async function main(){
  let stage='guard',servicesStep='none',authStep='none',authStatus,dbBridge,apiBridge,env,started=false,migrations=0,markers=[],failure=null,diagnostic=null;
@@ -353,7 +356,11 @@ async function main(){
   stage='browser';const browserEnv={...env,E2E_BASE_URL:'http://localhost:4430',FOLIO_TEST_SUPABASE_URL:api,FOLIO_TEST_SUPABASE_ANON_KEY:state.anonKey,FOLIO_TEST_SUPABASE_SERVICE_KEY:state.serviceKey,FOLIO_TEST_DATABASE_URL:`postgresql://postgres:${dbPassword}@127.0.0.1:55422/postgres`,FOLIO_TEST_CLINICAL:'1'};
   const result=await run('pnpm',['test:e2e','--','tests/e2e/patient-intake-live.spec.ts','--trace=off','--reporter=dot'],{env:browserEnv,timeout:900000});
   const parsed=browserResult(result.output);markers=parsed.markers;
-  if(result.code!==0){console.log(`intake_proof_diagnostic:last_stage=${markers.at(-1)??'none'} spec_lines=${parsed.lines.join(',')||'unknown'} kind=${parsed.kind}`);throw Error('browser_failed');}
+  if(result.code!==0){
+   diagnostic=`last_stage=${markers.at(-1)??'none'} spec_lines=${parsed.lines.join(',')||'unknown'} kind=${parsed.kind} issue=[${parsed.intercepts.issue}] submit=[${parsed.intercepts.submit}]`;
+   console.log(`intake_proof_diagnostic:${diagnostic}`);
+   throw Error('browser_failed');
+  }
   if(/\bskipped\b|\bskip\b/i.test(result.output)||!/\b1 passed\b/.test(result.output))throw Error('browser_pass_missing');
   for(const required of browserStages)assert.ok(markers.includes(required),'browser_stage_missing');
   stage='complete';for(const item of markers)console.log(`intake_proof_stage:${item}`);
