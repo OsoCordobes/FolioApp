@@ -4,11 +4,11 @@ Actualizado el 26/09/2026. A dirige, revisa y publica. [AVANCES.md](AVANCES.md) 
 
 ## Continuación vigente · 26/09
 
-**Corte vigente 20:07 UTC:** PR187 cerrada: App squash36267562515 PASS (20:01:29), SQL36267562720 PASS y despliegue READY `dpl_DrA4BhnYTer4DEjSkt4Ga9fn68SW`, master/Escritorio `d567eb3d3fb27f1e3868b068a08859ed6d065faf`. Evidencia `folio-agent-setup-20260926/pr187-publication-final-d567eb3.json`, SHA256 `1a59a45dc336475cba6f8a752b06dee8ef968173cc8ad2c9e0349b6fc17c15f1`. PR185/186 también cerradas; producción conserva 138 versiones. No repetir publicaciones ni M144/M145/M146.
+**Corte vigente 20:17 UTC:** PR187 cerrada: App squash36267562515 PASS (20:01:29), SQL36267562720 PASS y despliegue READY `dpl_DrA4BhnYTer4DEjSkt4Ga9fn68SW`, master/Escritorio `d567eb3d3fb27f1e3868b068a08859ed6d065faf`. Evidencia `folio-agent-setup-20260926/pr187-publication-final-d567eb3.json`, SHA256 `1a59a45dc336475cba6f8a752b06dee8ef968173cc8ad2c9e0349b6fc17c15f1`. PR185/186 también cerradas; producción conserva 138 versiones. No repetir publicaciones ni M144/M145/M146.
 
-- **Dos escritores:** `patient_form_delivery` adapta el formulario/QR a M147 desde su corte local `1df6e63` en folio-clinic-permissions; también resuelve estados fuera de orden y guardas después de tareas asíncronas. `access_proof_repair` corrige cuatro hallazgos de la revisión A en su ensayo integrado (folio-adult-revocation, base `8635691`). Propiedad y límites de cada paquete conservados en el corte anterior; sin DB/Docker local, proveedores, commit/push ni publicación hasta revisión.
-- M147 está implementada en folio-launch-patient-intake-foundation, base `8fd377c`, aún sin commit ni aplicación. `intake_sql_repair` cerró la corrección de pruebas para comprobar las mutaciones directamente tras revocaciones; `intake_cancel_review` revisa ese delta. No hay defecto SQL pendiente identificado, pero replay y carreras reales siguen sin ejecutar. La UI, M147 y el ensayo se integrarán en un único candidato para comprobarlos juntos.
-- Última cuota real 19:57 UTC: 5% usado / 95% disponible; reserva 15%. Panel 4420 activo y registro persistente. Ningún bloqueo humano para estos paquetes.
+- **Dos escritores:** `access_proof_repair` adapta ensayo a UI M147 y respuesta staff realmente perdida (folio-adult-revocation, base `8635691`); sus cuatro hallazgos anteriores fueron corregidos y revisados. `intake_sql_repair` prepara sólo archivos externos nuevos apply-b09-m147.mjs, pruebas y launcher, sin conexión ni ejecución; pines candidato/Preview pendientes y cierre fail-closed. Preservación 138→139 debe incluir todas las tablas previas del esquema intake y las revisiones ya existentes. `intake_cancel_review` prepara diseño de incorporación administrativa en lectura; A revisa e integra.
+- M147 revisada y commit local `99bf590267adffa762f72a8983de60a38ad49b4b` en folio-launch-patient-intake-foundation, sin push/aplicación. Corrección de negativas directas aprobada por intake_cancel_review; replay y carreras reales pendientes de CI conjunto. UI M147 terminada en diff por patient_form_delivery:17 unidades+4 navegadores sintéticos/typecheck/lint PASS. **Revisión A detectó P1 nuevo:** propuestas visibles no se limpian al perder/cambiar ámbito de sesión y una respuesta antigua puede repoblarlas; además conciliación automática not_recorded puede retroceder UI ya confirmada. Informe `folio-b09-evidence/form-independent-review.md`; corregir antes de integrar, con prueba de respuesta retenida. Autor liberó cupo, no reiniciar como tercer escritor.
+- Última cuota real 26/09: 7% usado / 93% disponible; reserva 15%. Panel 4420 activo y registro persistente. Ningún bloqueo humano para estos paquetes.
 
 ### Corte 19:57 · preservado
 
@@ -109,7 +109,7 @@ Selección por riesgo, dependencia, utilidad y esfuerzo restante. Terminar, comp
 
 ## Cuota, autonomía y continuidad
 
-Última lectura real, 26/09 19:57 UTC:5% usado /95% disponible; reserva15%. Reinicio informado por la herramienta:03/10/2026 18:18:15 UTC, cero créditos. Las lecturas anteriores se conservan como antecedentes. No atribuir consumo exacto a cada agente ni convertir cuota en horas garantizadas.
+Última lectura real, 26/09:7% usado /93% disponible; reserva15%. Reinicio informado por la herramienta:03/10/2026 18:18:15 UTC, cero créditos. Las lecturas anteriores se conservan como antecedentes. No atribuir consumo exacto a cada agente ni convertir cuota en horas garantizadas.
 
 Al llegar a85% usado, no abrir implementación nueva: cerrar paquetes revisables, preservar evidencia y dejar continuación. La calidad y los criterios gobiernan el cierre; no consumir cuota artificialmente ni repetir pruebas verdes sin cambio, fallo o duda concreta. El titular autorizó continuar autónomamente mientras duerme; pedir sólo decisiones indispensables y seguir con trabajo independiente.
 

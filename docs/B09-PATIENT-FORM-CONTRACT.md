@@ -57,6 +57,12 @@ Los esquemas existentes en `lib/especialidades/*/intake.ts` no acreditan aprobac
 
 ## Paquetes y cierre
 
+### Diseño siguiente preparado · 26/09
+
+Revisión de `intake_cancel_review` sobre master `d567eb3`: `C:/Users/amiun/Documents/Codex/folio-b09-evidence/incorporation-design-review.md`. Incorporación administrativa selectiva mediante preparación privada del servidor y commit autenticado; el navegador elige claves de la propuesta, nunca aporta valores/ciphertext para atribuirlos al paciente. Una revisión administrativa monotónica protege contra cambios simultáneos y A→B→A; recibo y procedencia se guardan junto con el cambio. Deben adaptarse también los editores actuales de contacto/cobertura staff y contacto portal, para que una pestaña vieja no sobrescriba la incorporación después. Mantener permisos existentes, índices de búsqueda, revisiones de fecha/vínculo y omisión=conservar.
+
+Decisión de implementación conservadora de A: rechazar combinaciones incompatibles de tipo/número de documento o cobertura y pedir revisión explícita; no completar ni borrar dependientes omitidos como si el paciente los hubiera aportado. No requiere inventar criterio clínico ni ampliar roles. Fijar nombres y migración sólo tras publicar formulario/M147; aún no asignado escritor. La prueba debe incluir datos no seleccionados intactos, conflictos staff/portal, revocación, cancelación contra commit y respuesta perdida con una sola aplicación.
+
 1. Invitación, aporte administrativo y revisión con conflictos: enlace manual/QR, credencial revocable, presentación inmutable y permisos comprobados intentando acceso directo. Sin correo automático.
 2. Motivo y preguntas aprobadas por especialidad: respuestas separadas, revisión clínica y procedencia preservada. «No sé» y «Prefiero no responder» cuando corresponda; campos no pertinentes ocultos.
 3. Comunicación el día del turno: depende de la entrega de correo comprobada en buzones controlados; evitar duplicados y permitir enlace manual mientras tanto.
