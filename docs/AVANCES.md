@@ -2,7 +2,7 @@
 
 Actualizado: 26/09/2026. Este es el registro breve del trabajo; [el tablero técnico](LAUNCH-BOARD.md) conserva el detalle y los antecedentes. Cada fila cambia sólo ante un resultado o bloqueo real.
 
-**Equipo comprobado:** A integra y comprueba. `intake_ci_diagnostics` revisa cómo el ensayo espera una respuesta perdida; un revisor investiga el nuevo fallo de acceso, sin editar. Por pedido del titular se solicitó otro chat dedicado a la landing con vista en vivo; su copia está preparada, arranque de chat pendiente de confirmar. M148 queda guardada y pausada para conservar como máximo dos escritores.
+**Equipo comprobado:** A integra y comprueba. «Folio — Landing premium en vivo» está activo y fijado; trabaja en el rediseño con revisión visual. `access_failure_readback` prepara un diagnóstico acotado del fallo al guardar servicios; la corrección de la prueba de respuesta perdida ya pasó nueve pruebas focales y revisión A. M148 queda guardada y pausada: dos escritores, copias separadas.
 
 **Regla de evidencia:** cada encargo tiene una razón, alcance y condición de cierre. Al terminar deja el cambio, una prueba verificable y sus límites; A contrasta el resultado antes de marcarlo terminado. Un fallo se conserva y sólo se repite la prueba cuando hay información o una corrección nueva.
 
@@ -13,7 +13,7 @@ Actualizado: 26/09/2026. Este es el registro breve del trabajo; [el tablero téc
 | Checkpoint | Resultado, responsable y prueba |
 |---|---|
 | **Forma de trabajo** · actualizada e integrada | Astra Ultra predeterminado, guía única y procesos duplicados desactivados de forma reversible. Dos revisores y A; [informe](AGENT-SETUP-20260926.md) y [guía integrada](https://github.com/OsoCordobes/FolioApp/pull/187) para futuras sesiones. |
-| **Landing de Folio** · nueva prioridad visual | Solicitado chat dedicado con copia aislada: diseño propio, identidad violeta, versión navegable y revisión móvil/escritorio. Arranque y vista en vivo todavía pendientes; no hay una nueva landing terminada. |
+| **Landing de Folio** · rediseño en curso | Chat dedicado activo, identidad violeta y dirección «Espacio para atender». [Vista en vivo](http://127.0.0.1:4440/) comprobada: muestra el trabajo conforme se construye; revisión final móvil/escritorio pendiente. |
 | **Ingreso y onboarding** · acceso y servicios publicados | [PR175](https://github.com/OsoCordobes/FolioApp/pull/175): registro y recuperación. D · revisión A; [PR177 publicada](https://github.com/OsoCordobes/FolioApp/pull/177): servicios conservados al volver y ante respuesta perdida, [prueba Solo/Clínica](https://github.com/OsoCordobes/FolioApp/actions/runs/36088410093). |
 | **Permisos de Clínica** · dos paquetes publicados | Pedidos y motivos protegidos según el rol: [PR170](https://github.com/OsoCordobes/FolioApp/pull/170). C · revisión A; [PR174 publicada](https://github.com/OsoCordobes/FolioApp/pull/174) impide entregar una firma si se revoca el acceso durante su descarga. |
 | **Recuperación completa** · ensayo aprobado e integrado | Datos, archivos, contraseña y segundo factor recuperados con datos ficticios. C · revisión A. [Prueba aprobada](https://github.com/OsoCordobes/FolioApp/actions/runs/36073216478), [entrega integrada](https://github.com/OsoCordobes/FolioApp/pull/167); custodia externa pendiente. |
