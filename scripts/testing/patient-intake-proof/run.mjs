@@ -12,6 +12,7 @@ import {createClient} from '@supabase/supabase-js';
 import {createServerClient} from '@supabase/ssr';
 import {totp} from '../clinical-config.mjs';
 import {openLoopbackBridge,validateBridgeTarget,waitForBridgeTarget} from '../../recovery/ci-loopback-bridge.mjs';
+import {dockerFailureKind} from '../auth-proof/diagnostics.mjs';
 
 const repo=path.resolve(fileURLToPath(new URL('../../../',import.meta.url)));
 const compose=path.join(repo,'scripts/recovery/ci-compose.yml');
@@ -25,6 +26,50 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const options={auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}};
 const stages=new Set(['guard','pull','services','migrations','auth','fixture','roles','browser','complete','teardown']);
 const browserStages=new Set(['initial_fence','staff_issue_response_lost','staff_issue_reconciled','issued','qr_local','token_hash_bound','exchanged','submitted','reviewed','lost_response_committed','lost_response_reconciled','revoked','old_link_rejected','data_preserved','staff_data_cleared_after_revocation']);
+const serviceNames=['db','auth','rest','storage','minio','minio-createbucket','api-gw'];
+
+// Docker output can contain credentials. Only these fixed service names and
+// bounded Compose status fields may leave the proof runner.
+export function servicesStatus(output){
+ let rows;
+ try{
+  const value=JSON.parse(output.trim());rows=Array.isArray(value)?value:[value];
+ }catch{
+  try{rows=output.trim().split(/\r?\n/).filter(Boolean).flatMap(line=>{
+   const value=JSON.parse(line);return Array.isArray(value)?value:[value];
+  });}catch{return 'ps=unavailable';}
+ }
+ if(!Array.isArray(rows)||rows.some(row=>!row||typeof row!=='object'))return 'ps=unavailable';
+ return serviceNames.map(name=>{
+  const row=rows.find(item=>item.Service===name);
+  if(!row)return `${name}=missing`;
+  const state=String(row.State??'').toLowerCase();
+  const health=String(row.Health??'').toLowerCase();
+  const exit=typeof row.ExitCode==='number'?row.ExitCode:
+   typeof row.ExitCode==='string'&&/^\d{1,3}$/.test(row.ExitCode)?Number(row.ExitCode):NaN;
+  const safeState=['running','exited','restarting','created','paused','dead'].includes(state)?state:'other';
+  const safeHealth=['healthy','unhealthy','starting'].includes(health)?health:'none';
+  const safeExit=Number.isInteger(exit)&&exit>=0&&exit<=255?exit:'other';
+  return `${name}=${safeState}_${safeHealth}_exit${safeExit}`;
+ }).join(' ');
+}
+
+async function finiteServicesDiagnostic(env,step){
+ try{
+  const result=await run('docker',['compose','-p',project,'-f',compose,'ps','--all','--format','json'],{env,timeout:10000,limit:100000});
+  return `step=${step} ${result.code===0?servicesStatus(result.output):'ps=unavailable'}`;
+ }catch{return `step=${step} ps=unavailable`;}
+}
+
+function servicesFailureKind(error){
+ if(error?.diagnosticKind)return error.diagnosticKind;
+ if(error?.message==='child_timeout')return 'timeout';
+ if(error?.message==='child_output_limit')return 'output_limit';
+ if(error?.message==='child_spawn_failed')return 'spawn';
+ if(error?.message==='c01_bridge_direct_route_unavailable')return 'bridge_route';
+ if(error instanceof assert.AssertionError)return 'assertion';
+ return 'other';
+}
 
 function token(secret,role){
  const part=value=>Buffer.from(JSON.stringify(value)).toString('base64url');
@@ -45,7 +90,16 @@ function run(program,args,{env=process.env,timeout=180000,limit=2000000}={}){
  });
 }
 async function must(program,args,settings){const result=await run(program,args,settings);if(result.code!==0)throw Error('child_failed');return result.output;}
-const docker=(args,env)=>must('docker',args,{env,timeout:300000});
+const docker=async(args,env)=>{
+ const result=await run('docker',args,{env,timeout:300000});
+ if(result.code!==0){
+  const error=Error('docker_failed');
+  error.diagnosticKind=dockerFailureKind(result.output);
+  error.diagnosticExit=Number.isInteger(result.code)&&result.code>=0&&result.code<=255?result.code:'other';
+  throw error;
+ }
+ return result.output;
+};
 const dc=(args,env)=>docker(['compose','-p',project,'-f',compose,...args],env);
 async function bridge(service,localPort,remotePort,env){
  const id=(await dc(['ps','-q',service],env)).trim();assert.match(id,/^[a-f0-9]{64}$/);
@@ -186,7 +240,7 @@ function browserResult(output){
  return {markers,lines:[...new Set(lines)].slice(0,3),kind};
 }
 async function main(){
- let stage='guard',dbBridge,apiBridge,env,started=false,migrations=0,markers=[],failure=null;
+ let stage='guard',servicesStep='none',dbBridge,apiBridge,env,started=false,migrations=0,markers=[],failure=null;
  const sourceSha=(await must('git',['rev-parse','HEAD'])).trim();assert.match(sourceSha,/^[a-f0-9]{40}$/);
  try{
   assert.equal(process.env.GITHUB_ACTIONS,'true');assert.equal(process.env.RUNNER_ENVIRONMENT,'github-hosted');
@@ -201,10 +255,11 @@ async function main(){
   assert.equal((await dc(['ps','-q'],env)).trim(),'','project_not_fresh');
   assert.equal((await docker(['volume','ls','-q','--filter',`label=com.docker.compose.project=${project}`],env)).trim(),'','volumes_not_fresh');
   stage='pull';await dc(['pull','db','auth','rest','storage','api-gw','minio','minio-createbucket'],env);
-  stage='services';started=true;await dc(['up','-d','--wait'],env);
-  assert.equal((await docker(['network','inspect',`${project}_default`,'--format','{{.Internal}}'],env)).trim(),'true');
-  dbBridge=await bridge('db',55422,5432,env);apiBridge=await bridge('api-gw',55421,8000,env);
-  await waitApi(state.anonKey);
+  stage='services';started=true;servicesStep='compose_up';await dc(['up','-d','--wait'],env);
+  servicesStep='network';assert.equal((await docker(['network','inspect',`${project}_default`,'--format','{{.Internal}}'],env)).trim(),'true');
+  servicesStep='db_bridge';dbBridge=await bridge('db',55422,5432,env);
+  servicesStep='api_bridge';apiBridge=await bridge('api-gw',55421,8000,env);
+  servicesStep='api_ready';await waitApi(state.anonKey);
   stage='migrations';migrations=await prepareSchema(dbPassword,env,state.serviceKey);
   stage='auth';const seed=await fixture(state);
   stage='roles';await checkRoles(state,seed);
@@ -216,7 +271,13 @@ async function main(){
   for(const required of browserStages)assert.ok(markers.includes(required),'browser_stage_missing');
   stage='complete';for(const item of markers)console.log(`intake_proof_stage:${item}`);
   console.log(`intake_proof_pass:migrations=${migrations} cases=${browserStages.size+3} real_auth=1 real_db=1`);
- }catch{failure=stages.has(stage)?stage:'unclassified';process.exitCode=1;console.error(`intake_proof_${failure}_failed`);}
+ }catch(error){
+  failure=stages.has(stage)?stage:'unclassified';process.exitCode=1;
+  if(failure==='services'){
+   console.error(`intake_proof_services_diagnostic:kind=${servicesFailureKind(error)} exit=${error?.diagnosticExit??'none'} ${await finiteServicesDiagnostic(env,servicesStep)}`);
+  }
+  console.error(`intake_proof_${failure}_failed`);
+ }
  finally{
   await unlink(fixtureFile).catch(()=>{});
   await apiBridge?.close().catch(()=>{process.exitCode=1;});await dbBridge?.close().catch(()=>{process.exitCode=1;});
@@ -225,4 +286,5 @@ async function main(){
   await writeFile(evidenceFile,JSON.stringify({sourceSha,migrations,stages:[...new Set(markers)],ok:!process.exitCode,failure},null,2)+'\n',{mode:0o600});
  }
 }
-main().catch(()=>{console.error('intake_proof_guard_failed');process.exitCode=1;});
+if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url))
+ main().catch(()=>{console.error('intake_proof_guard_failed');process.exitCode=1;});

@@ -15,9 +15,16 @@ test('bridge accepts only the exact internal Compose target',()=>{
  assert.deepEqual(validateBridgeTarget(metadata()),{address:'172.30.0.3',port:5432});
  assert.deepEqual(validateBridgeTarget(metadata('folio_export_bytes_proof')),{address:'172.30.0.3',port:5432});
  assert.deepEqual(validateBridgeTarget(metadata('folio_caller_proof')),{address:'172.30.0.3',port:5432});
- for(const rejected of ['folio_export_bytes_proof_extra','folio_export_bytes','folio_c01_source_extra','folio_caller_proof_extra','prefix_folio_caller_proof']){
+ assert.deepEqual(validateBridgeTarget(metadata('folio_intake_proof')),{address:'172.30.0.3',port:5432});
+ for(const rejected of ['folio_export_bytes_proof_extra','folio_export_bytes','folio_c01_source_extra','folio_caller_proof_extra','prefix_folio_caller_proof','folio_intake_proof_extra','prefix_folio_intake_proof']){
   assert.throws(()=>validateBridgeTarget(metadata(rejected)));
  }
+ const intakeWrongLabel=metadata('folio_intake_proof');
+ intakeWrongLabel.labels['com.docker.compose.project']='folio_caller_proof';
+ assert.throws(()=>validateBridgeTarget(intakeWrongLabel));
+ const intakeExternal=metadata('folio_intake_proof');
+ intakeExternal.network.Internal=false;
+ assert.throws(()=>validateBridgeTarget(intakeExternal));
  for(const mutate of [
   x=>{x.labels['com.docker.compose.project']='other';},
   x=>{x.network.Internal=false;},
