@@ -27,7 +27,9 @@ Reiniciar Codex permite cargar el conjunto actualizado de plugins y skills. El v
 
 Ultra queda disponible para dirección y trabajo difícil; las tareas delegadas seguirán usando el modelo y esfuerzo apropiados. No se cambiaron los límites del servicio ni se prometió ejecución ininterrumpida. Tampoco se afirma una mejora porcentual de velocidad, calidad o consumo sin medirla.
 
-Las instrucciones están guardadas en el Escritorio y en la rama del manager para su siguiente integración documental. No se publicó una nueva versión de Folio por esta revisión. PR185 y PR186 siguen abiertas con controles fallidos que deben investigarse antes de integrarlas; no se volvieron a ejecutar ni se aplicaron sus migraciones durante esta tarea.
+Al cerrar la revisión inicial, las instrucciones quedaron en el Escritorio y en la rama del manager; PR185/186 seguían abiertas con fallos. Ese corte histórico fue superado al continuar el lanzamiento: ambas PR se corrigieron, comprobaron y publicaron por separado, con evidencia en el tablero.
+
+La guía común se integró después mediante [PR187](https://github.com/OsoCordobes/FolioApp/pull/187), el26/09 a19:52:38UTC: candidato39740e5 y squash d567eb3 comparten árbol c5859fca8c83305fce68f8f4048eb190ac5eec69. Revisión independiente, referencias y CI del candidato aprobadas. Sólo AGENTS.md/CLAUDE.md; sin código, cambios adicionales de permisos o configuración. La copia del Escritorio quedó actualizada tras preservar sus guías locales en AGENTS.desktop-before-pr187.md y CLAUDE.desktop-before-pr187.md. El control automático posterior se registra en el tablero.
 
 ## Evidencia y reversión
 

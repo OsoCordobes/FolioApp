@@ -5,7 +5,7 @@ Folio is a medical-practice SaaS for Argentina. Protect medical/personal data an
 ## Work and continuity
 
 - Complete the authorized result: implement, verify and deliver. Resolve ordinary reversible decisions; ask only for material missing decisions, access or authorization. Continue independent work when one package is blocked.
-- For launch work, use the current `docs/LAUNCH-BOARD.md` and update `docs/AVANCES.md` briefly on real progress or blockers. The manager checkout may have the newer board. Verify relevant live state before relying on a dated checkpoint; read other documents only as needed.
+- For launch work, use the current `docs/LAUNCH-BOARD.md` and update `docs/AVANCES.md` briefly on real progress or blockers. The active manager maintains these on branch `codex/launch-checkpoints` in its isolated checkout; use that copy when absent or stale here. Verify relevant live state before relying on a dated checkpoint; read other documents only as needed.
 - Delegate independent packages with a base commit, result, owned files, dependencies, allowed environment, proof and stopping condition. At most two implementation writers in isolated checkouts; other agents can inspect/review. Consequential changes need independent review.
 - Choose models/effort for the task, not maximum effort for every helper. Preserve the user's current quota reserve (15% for this launch plan). Keep continuation/evidence after interruptions; do not repeat completed work or wait for an hourly reminder while useful work remains.
 - Report in simple Spanish: improvement, brief proof, where to try it and what remains. Distinguish a finished package from a finished launch.
