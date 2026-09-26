@@ -6,7 +6,7 @@ Actualizado: 26/09/2026. Este es el registro breve del trabajo; [el tablero téc
 
 **Regla de evidencia:** cada encargo tiene una razón, alcance y condición de cierre. Al terminar deja el cambio, una prueba verificable y sus límites; A contrasta el resultado antes de marcarlo terminado. Un fallo se conserva y sólo se repite la prueba cuando hay información o una corrección nueva.
 
-**Cómo verlo:** [panel de avances](http://127.0.0.1:4420/) recuperado y comprobado el26/09:17 checkpoints, lectura del registro y actualización cada minuto. Funciona en esta computadora mientras el proceso esté activo; este archivo y la copia en Git conservan el avance aunque se cierre el panel.
+**Cómo verlo:** [panel de avances](http://127.0.0.1:4420/) con19 checkpoints, lectura del registro y actualización cada minuto. Funciona en esta computadora mientras el proceso esté activo; este archivo y la copia en Git conservan el avance aunque se cierre el panel.
 
 **Publicado** = disponible en Folio. **Probado** = pasó sus controles, todavía sin publicar. **En curso** = falta comprobarlo. Las pruebas parciales no cierran un checkpoint completo.
 
@@ -27,6 +27,8 @@ Actualizado: 26/09/2026. Este es el registro breve del trabajo; [el tablero téc
 | **Pagos y suscripciones** · prueba externa pendiente | Los cobros ficticios previos no prueban Mercado Pago real; faltan los recorridos comerciales ofrecidos. |
 | **Portal y exportación** · descarga profesional publicada | C · revisión A; [PR182 publicada](https://github.com/OsoCordobes/FolioApp/pull/182). Historia y archivos juntos; [ensayo exacto de50MiB aprobado](https://github.com/OsoCordobes/FolioApp/actions/runs/36120282745), incluidos corte de descarga y revocación. Portal del paciente e historias excepcionalmente grandes siguen pendientes. |
 | **Continuidad y soporte** · pendiente | Faltan custodia externa, alertas, responsables y procedimiento de ayuda comprobados. |
+| **Legal, privacidad y cookies** · agregado al plan | Chat dedicado solicitado: revisará textos, datos tratados, proveedores y controles reales de cookies con fuentes oficiales. Entregará hallazgos y decisiones que requieran al titular o asesoría; todavía no acredita cumplimiento. |
+| **SEO y rendimiento** · agregado al plan | El mismo chat revisará visibilidad en buscadores, enlaces y velocidad, coordinado con la nueva landing. Cada corrección tendrá medición o prueba concreta; no cambia el diseño en paralelo. |
 | **Validación profesional y piloto** · pendiente humano | Cinco especialidades y piloto de 14 días, con tres profesionales y cinco jornadas por persona. |
 | **Lanzamiento** · pendiente | Se cerrará cuando la versión publicada y la oferta comercial coincidan con lo demostrado. |
 
