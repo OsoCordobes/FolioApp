@@ -24,7 +24,7 @@ const random=bytes=>randomBytes(bytes).toString('base64url');
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const options={auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}};
 const stages=new Set(['guard','pull','services','migrations','auth','fixture','roles','browser','complete','teardown']);
-const browserStages=new Set(['initial_fence','staff_issue_response_lost','staff_issue_reconciled','issued','qr_local','token_hash_bound','exchanged','submitted','reviewed','lost_response_committed','lost_response_reconciled','revoked','old_link_rejected','data_preserved']);
+const browserStages=new Set(['initial_fence','staff_issue_response_lost','staff_issue_reconciled','issued','qr_local','token_hash_bound','exchanged','submitted','reviewed','lost_response_committed','lost_response_reconciled','revoked','old_link_rejected','data_preserved','staff_data_cleared_after_revocation']);
 
 function token(secret,role){
  const part=value=>Buffer.from(JSON.stringify(value)).toString('base64url');

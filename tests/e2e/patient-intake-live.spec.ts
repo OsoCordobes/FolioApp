@@ -169,6 +169,17 @@ test("B09: enlace v2, formulario real, conciliación y revocación", async ({ pa
     const events = await db.query("SELECT count(*)::int AS n FROM folio_intake_private.event WHERE kind='SUBMISSION_RECEIVED' AND invitation_id=(SELECT id FROM folio_intake_private.invitation WHERE turno_id=$1)", [fixture.turnoId]);
     expect(events.rows[0].n).toBe(2);
     stage("data_preserved");
+
+    // End with a real authority revocation, after the unchanged-data comparison.
+    // Only the disposable fixture's exact staff session is expired.
+    await expect(control.getByText("Ana Sintética", { exact: true })).toBeVisible();
+    const expired = await db.query("UPDATE auth.sessions SET not_after=clock_timestamp()-interval '1 minute' WHERE id=(SELECT actor_session_id FROM folio_intake_private.link_operation WHERE turno_id=$1 AND kind='ISSUE') RETURNING id", [fixture.turnoId]);
+    expect(expired.rowCount).toBe(1);
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    // Revalidation can clear the control or redirect to verify access; neither
+    // outcome may retain proposals read under the previous authorization.
+    await expect(page.getByText("Ana Sintética", { exact: true })).toHaveCount(0, { timeout: 30_000 });
+    stage("staff_data_cleared_after_revocation");
   } finally {
     for (const context of publicContexts) await context.close().catch(() => {});
     await db.end();
