@@ -4,6 +4,13 @@ Actualizado el 26/09/2026. A dirige, revisa y publica. [AVANCES.md](AVANCES.md) 
 
 ## Continuación vigente · 26/09
 
+**Corte vigente 21:15 UTC · PR188:** candidato `96f86ad7464056dea79d2dd17629a27121fffece`, árbol `a2d4d8cf3b4f31c60fc0afb79e156076a8310743`, limpio y push confirmado. Corrección7307bb6 de intake_ci_diagnostics revisada por A: M02 exige LISTA_PROFESIONALES no vacía; el fixture ahora crea un cuarto profesional real en orgA para delimitar al asistente, sin dar acceso al dueño del turno ni mezclar al actor de orgB. Cinco unidades puras/sintaxis/diffcheck PASS. Diagnóstico seguro por suboperación preservado en artifact; no atribuir al log antiguo la causa exacta que no registró. Nuevo CI automático pendiente, no rerun ciego. `folio-b09-evidence/proof-independent-review.md` conserva revisión y límites.
+
+- Único escritor: `intake_incorporation_contract` (Sol High) implementa **M148 reservada exclusivamente** en folio-miniweb-quality/codex/intake-incorporation, base06715ce. Motivo: aceptar campos elegidos sin sobrescribir ni atribuir cambios inventados al paciente. Contrato45líneas revisado A, incluye cancelación durable incluso antes de preparación, primer patch ganador, CAS y límites de ciphertext. Propiedad M148, pruebas SQL/concurrencia propias, paso focal pgtap.yml y contrato. Sin app/UI, otras migraciones, DB/Docker local, conexiones, push ni aplicación. Cierre de esta asignación: diff preparado y revisión independiente antes del único ensayo hospedado; CI no equivale a producción. Comprobar compatibilidad de admin_revision con guard del portal, no reabrir permisos globales. PR188 debe cerrarse antes de publicar esta base; sincronizar entonces.
+- Producción138 y masterd567eb3 sin cambios; M147 y M148 no aplicadas. Pines M147 aún bloqueados. El agente de diagnóstico terminó y liberó cupo. No otros escritores activos.
+
+### Corte 21:08 · preservado
+
 **Corte vigente 21:08 UTC · PR188:** candidato `06715ce3ad25aac2b56296b12b0337c62f3f570d`, árbol `d6cda95651d51507db3135a606a4ddf7b29e80ba`. A revisó e integró allowlist exacta del proyecto efímero y diagnóstico acotado;7 pruebas puras PASS. App36271396094, SQL36271396123, acceso36271396070, recuperación36271396071, exportación36271396107, llamador36271396072 y Preview PASS; B03 SKIPPED por condición. No publicar todavía.
 
 - B09 run36271396095 ahora supera servicios y139 migraciones, falla en `auth` antes de navegador. Evidencia `folio-b09-evidence/run-36271396095/patient-intake-proof-summary.json` y log original conservado. Esto confirma avance del ensayo, no completa el recorrido ni acredita retrospectivamente la causa exacta del fallo anterior.
