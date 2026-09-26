@@ -3,7 +3,8 @@
  * fixtures. Mail bodies/action URLs and passwords are never logged. */
 import {randomUUID} from 'node:crypto';
 import {createClient} from '@supabase/supabase-js';
-import {expect,test,type Browser,type Page} from '../fixtures/local-test';
+import {expect,test,type Browser,type Page,type Request} from '../fixtures/local-test';
+import {actionHttpKind,actionOutcomeKind,serviceAlertKind,type ActionOutcome} from './auth-proof-diagnostics';
 
 const APP='http://localhost:4430';
 const MAIL='http://127.0.0.1:55424';
@@ -144,6 +145,26 @@ async function diagnosticWithin<T>(work:(signal:AbortSignal)=>PromiseLike<T>,fal
  ]).finally(()=>{if(timer)clearTimeout(timer);});
 }
 
+function watchOnboardingActions(page:Page){
+ // Next server-action IDs and RSC bodies are opaque and may carry private data.
+ // On this step, count only same-origin onboarding POSTs bearing an action header.
+ const outcomes=new Map<Request,ActionOutcome>();
+ const isAction=(request:Request)=>{
+  const url=new URL(request.url());
+  return url.origin===APP&&url.pathname==='/onboarding'&&request.method()==='POST'&&Boolean(request.headers()['next-action']);
+ };
+ const onRequest=(request:Request)=>{if(isAction(request))outcomes.set(request,'pending');};
+ const onResponse=(response:import('@playwright/test').Response)=>{
+  if(outcomes.has(response.request()))outcomes.set(response.request(),actionHttpKind(response.status()));
+ };
+ const onFailed=(request:Request)=>{if(outcomes.has(request))outcomes.set(request,'network_failed');};
+ page.on('request',onRequest);page.on('response',onResponse);page.on('requestfailed',onFailed);
+ return {
+  snapshot:()=>({posts:Math.min(9,outcomes.size),result:actionOutcomeKind([...outcomes.values()])}),
+  stop:()=>{page.off('request',onRequest);page.off('response',onResponse);page.off('requestfailed',onFailed);},
+ };
+}
+
 async function serviceStep(page:Page,tipo:'INDEPENDIENTE'|'CLINICA',organizationId:string){
  const isClinic=tipo==='CLINICA';
  const original=isClinic?'Servicio sintético clínica':'Servicio sintético Solo';
@@ -157,33 +178,37 @@ async function serviceStep(page:Page,tipo:'INDEPENDIENTE'|'CLINICA',organization
  }
  await expect(page.getByRole('heading',{name:'¿Qué servicios ofrecés?'})).toBeVisible();
  await expect(page.getByRole('button',{name:'Agregar servicio'})).toBeEnabled();
- if(isClinic)await page.getByRole('button',{name:'Agregar servicio'}).click();
- else if(await page.getByRole('textbox',{name:'Nombre del servicio 1'}).count()===0)
-  await page.getByRole('button',{name:'Agregar servicio'}).click();
- const nameField=page.getByRole('textbox',{name:'Nombre del servicio 1'});
- await nameField.fill(original);
- try {
-  await expect.poll(()=>storedService(organizationId,original),{timeout:30_000}).not.toBeUndefined();
- } catch {
-  const db=await diagnosticWithin(signal=>{
-   const service=createClient(API,process.env.SUPABASE_SERVICE_ROLE_KEY!,{auth:{persistSession:false,autoRefreshToken:false}});
-   return Promise.all([
-    service.from('servicio').select('id',{head:true,count:'exact'}).eq('organization_id',organizationId).is('deleted_at',null).abortSignal(signal),
-    service.from('organization').select('onboarding_services_revision').eq('id',organizationId).abortSignal(signal).maybeSingle(),
+  if(isClinic)await page.getByRole('button',{name:'Agregar servicio'}).click();
+  else if(await page.getByRole('textbox',{name:'Nombre del servicio 1'}).count()===0)
+   await page.getByRole('button',{name:'Agregar servicio'}).click();
+  const nameField=page.getByRole('textbox',{name:'Nombre del servicio 1'});
+  const actions=watchOnboardingActions(page);
+  await nameField.fill(original);
+  try {
+   await expect.poll(()=>storedService(organizationId,original),{timeout:30_000}).not.toBeUndefined();
+  } catch {
+   const db=await diagnosticWithin(signal=>{
+    const service=createClient(API,process.env.SUPABASE_SERVICE_ROLE_KEY!,{auth:{persistSession:false,autoRefreshToken:false}});
+    return Promise.all([
+     service.from('servicio').select('id',{head:true,count:'exact'}).eq('organization_id',organizationId).is('deleted_at',null).abortSignal(signal),
+     service.from('organization').select('onboarding_services_revision,onboarding_step_max').eq('id',organizationId).abortSignal(signal).maybeSingle(),
+    ]);
+   },null);
+   const [catalog,organization]=db??[null,null];
+   const dbOk=!!catalog&&!catalog.error&&!!organization&&!organization.error&&!!organization.data;
+   const revision=dbOk?Number(organization.data!.onboarding_services_revision):NaN;
+   const stepMax=dbOk?Number(organization.data!.onboarding_step_max):NaN;
+   const [nameMatch,fieldEnabled,alerts,verify]=await Promise.all([
+    diagnosticWithin(()=>nameField.inputValue({timeout:2500}).then(value=>value===original),false),
+    diagnosticWithin(()=>nameField.isEnabled({timeout:2500}),false),
+    diagnosticWithin(()=>page.getByRole('alert').allTextContents(),[] as string[]),
+    diagnosticWithin(()=>page.getByRole('button',{name:'Verificar guardado'}).isVisible({timeout:2500}),false),
    ]);
-  },null);
-  const [catalog,organization]=db??[null,null];
-  const dbOk=!!catalog&&!catalog.error&&!!organization&&!organization.error&&!!organization.data;
-  const revision=dbOk?Number(organization.data!.onboarding_services_revision):NaN;
-  const [nameMatch,fieldEnabled,alert,verify]=await Promise.all([
-   diagnosticWithin(()=>nameField.inputValue({timeout:2500}).then(value=>value===original),false),
-   diagnosticWithin(()=>nameField.isEnabled({timeout:2500}),false),
-   diagnosticWithin(()=>page.getByRole('alert').count().then(count=>count>0),false),
-   diagnosticWithin(()=>page.getByRole('button',{name:'Verificar guardado'}).isVisible({timeout:2500}),false),
-  ]);
-  console.log(`services_proof_diagnostic:phase=initial_save db_ok=${dbOk?1:0} active_count=${dbOk?catalog!.count??'unknown':'unknown'} revision=${Number.isSafeInteger(revision)?revision:'unknown'} name_match=${nameMatch?1:0} field_enabled=${fieldEnabled?1:0} alert=${alert?1:0} verify=${verify?1:0}`);
-  throw Error('services_proof_initial_save_missing');
- }
+   const action=actions.snapshot();actions.stop();
+   console.log(`services_proof_diagnostic:phase=initial_save db_ok=${dbOk?1:0} active_count=${dbOk?catalog!.count??'unknown':'unknown'} revision=${Number.isSafeInteger(revision)?revision:'unknown'} step_max=${Number.isSafeInteger(stepMax)?stepMax:'unknown'} name_match=${nameMatch?1:0} field_enabled=${fieldEnabled?1:0} alert=${alerts.length?1:0} alert_kind=${serviceAlertKind(alerts)} verify=${verify?1:0} action_posts=${action.posts} action_result=${action.result}`);
+   throw Error('services_proof_initial_save_missing');
+  }
+  actions.stop();
  const id=await storedService(organizationId,original);
  const initialRevision=await servicesRevision(organizationId);
  if(!isClinic){

@@ -179,7 +179,7 @@ async function main(){
   for(const diagnostic of sessionDiagnostics.slice(-2))console.log(diagnostic[0]);
   const resetDiagnostics=[...result.output.matchAll(/auth_proof_reset_diagnostic:origin=(?:app|other_loopback|other) form=[01] checking=[01] invalid=[01] code=[01] error=[01] token_hash=[01] fragment_access=[01] cookie_kind=(?:missing|chunk_gap|empty|decode_failed|token_missing|config_missing|auth_rejected|auth_missing|auth_unavailable|valid) auth_valid=[01] same_user=[01]/g)];
   for(const diagnostic of resetDiagnostics.slice(-1))console.log(diagnostic[0]);
-  const serviceDiagnostics=[...result.output.matchAll(/services_proof_diagnostic:phase=initial_save db_ok=[01] active_count=(?:unknown|[0-9]+) revision=(?:unknown|[0-9]+) name_match=[01] field_enabled=[01] alert=[01] verify=[01]/g)];
+  const serviceDiagnostics=[...result.output.matchAll(/services_proof_diagnostic:phase=initial_save db_ok=[01] active_count=(?:unknown|[0-9]+) revision=(?:unknown|[0-9]+) step_max=(?:unknown|[0-9]+) name_match=[01] field_enabled=[01] alert=[01] alert_kind=(?:none|validation|forbidden|auth_required|db_error|conflict|uncertain|read_error|storage|other) verify=[01] action_posts=[0-9] action_result=(?:none|pending|http_2xx|http_4xx|http_5xx|http_other|network_failed|mixed)/g)];
   for(const diagnostic of serviceDiagnostics.slice(-1))console.log(diagnostic[0]);
   for(const count of counts.slice(-3))console.log(cleanOutput(count));
   if(result.code!==0){
