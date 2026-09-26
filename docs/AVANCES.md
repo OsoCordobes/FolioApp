@@ -2,7 +2,7 @@
 
 Actualizado: 26/09/2026. Este es el registro breve del trabajo; [el tablero técnico](LAUNCH-BOARD.md) conserva el detalle y los antecedentes. Cada fila cambia sólo ante un resultado o bloqueo real.
 
-**Equipo comprobado:** **B** dirige producto y acceso; **C**, continuidad, proveedores y soporte; **D**, calidad y piloto; el chat de **landing**, diseño. Los tres primeros están reactivados y trabajando con entregas concretas. El área **legal/privacidad/SEO/rendimiento** está en preparación. **A** dirige prioridades, recursos y aceptación; B se encarga de la integración técnica. Dos frentes modifican la aplicación, los demás revisan y preparan decisiones.
+**Equipo comprobado:** **B** dirige producto y acceso; **C**, continuidad, proveedores y soporte; **D**, calidad y piloto; el chat de **landing**, diseño. El nuevo chat de **legal/privacidad/SEO/rendimiento** también está activo y fijado. **A** dirige prioridades, recursos y aceptación; B se encarga de la integración técnica. Dos frentes modifican la aplicación, los demás revisan y preparan decisiones.
 
 **Regla de evidencia:** cada encargo tiene una razón, alcance y condición de cierre. Al terminar deja el cambio, una prueba verificable y sus límites; A contrasta el resultado antes de marcarlo terminado. Un fallo se conserva y sólo se repite la prueba cuando hay información o una corrección nueva.
 
@@ -27,7 +27,7 @@ Actualizado: 26/09/2026. Este es el registro breve del trabajo; [el tablero téc
 | **Pagos y suscripciones** · prueba externa pendiente | Los cobros ficticios previos no prueban Mercado Pago real; faltan los recorridos comerciales ofrecidos. |
 | **Portal y exportación** · descarga profesional publicada | C · revisión A; [PR182 publicada](https://github.com/OsoCordobes/FolioApp/pull/182). Historia y archivos juntos; [ensayo exacto de50MiB aprobado](https://github.com/OsoCordobes/FolioApp/actions/runs/36120282745), incluidos corte de descarga y revocación. Portal del paciente e historias excepcionalmente grandes siguen pendientes. |
 | **Continuidad y soporte** · pendiente | Faltan custodia externa, alertas, responsables y procedimiento de ayuda comprobados. |
-| **Legal, privacidad y cookies** · agregado al plan | Chat dedicado solicitado: revisará textos, datos tratados, proveedores y controles reales de cookies con fuentes oficiales. Entregará hallazgos y decisiones que requieran al titular o asesoría; todavía no acredita cumplimiento. |
+| **Legal, privacidad y cookies** · revisión en curso | Chat dedicado activo y fijado: contrasta textos, datos tratados, proveedores y cookies con fuentes oficiales. Entregará hallazgos y decisiones que requieran al titular o asesoría; todavía no acredita cumplimiento. |
 | **SEO y rendimiento** · agregado al plan | El mismo chat revisará visibilidad en buscadores, enlaces y velocidad, coordinado con la nueva landing. Cada corrección tendrá medición o prueba concreta; no cambia el diseño en paralelo. |
 | **Validación profesional y piloto** · pendiente humano | Cinco especialidades y piloto de 14 días, con tres profesionales y cinco jornadas por persona. |
 | **Lanzamiento** · pendiente | Se cerrará cuando la versión publicada y la oferta comercial coincidan con lo demostrado. |
