@@ -4,6 +4,14 @@ Actualizado el 26/09/2026. A dirige, revisa y publica. [AVANCES.md](AVANCES.md) 
 
 ## Continuación vigente · 26/09
 
+**Corte vigente 21:53 UTC:** PR188 candidato `e4c1418ff0beaa5c8970c4d0b2956f1baa388b48`, árbol `64443389ed1df62287234cf8e112e8d70e6f51ee`, push confirmado. El ensayo398 run36273798216 ya confirma emisión REAL perdida y conciliada (HTTP200/1fila); falla en comparación binaria de PNG (Canvas frente a pngjs). Deltae00dc31 revisado A decodifica píxeles del QR real con jsqr1.4.0 dev-only y exige URL exacta sin imprimir token; conserva tamaño/dataURL/hash/DB. Revisor independiente detectó además texto inexistente en expectativa posterior de revocación; corregido al texto real del preflight, sin alterar producto/ausencia de POST/dosfilas. Typecheck+unidadQR PASS, nueva CI automática pendiente.
+
+- CI398: App36273798227, SQL36273798202, Access36273798231, recuperación36273798223, exportación36273798226 y llamador36273798207 PASS; B03SKIPPED. Fallo Access previo no queda explicado retrospectivamente; diagnóstico añadido sigue disponible. No publicar PR188 hasta GREEN completo y catálogo final.
+- Landing4440 ya muestra portada nueva «Hacé espacio para atender»; A recargó y vio captura real. Build transitorio resuelto. Autor revisa editorial/390/1440; A señaló esquina de tarjeta cubriendo fecha en ancho858. Sigue sin publicar. Cursor `a6adfb71-73a4-4e62-8404-97827aa29ce8:12`.
+- M148 reanudada como segundo escritor, intake_incorporation_contract; sincronizar desdee4c sin perder contrato/borrador. Revisión independiente detectó P1 de replayprepare que devolvía fuente de paciente anterior tras reasignar turno: `folio-b09-evidence/m148-draft-independent-review.md`. Corregir ambos caminos y probar; completar SQL/carreras/pasoCI únicamente. Sin app/UI, DB/Docker/conexión/push/aplicación; revisión A+independiente antes de CI. M147 sigue NO productiva, producción138 sin cambios.
+
+### Corte 21:43 · preservado
+
 **Corte vigente 21:43 UTC:** PR188 candidato `398b5a0ea948cf3479988076a2b5ff91b5c60b99`, árbol `202341937a15232fa5f17d0a592b0b104b800a7c`, push confirmado. Integra11266c (sincronización real de respuesta perdida) yb9b9a17 (diagnóstico Access). A revisó ambos; typecheck y9+2 unidades focales PASS. CI nuevo automático pendiente: no se hizo rerun sin cambios. Diagnóstico Access registra categorías cerradas de alerta/HTTP, step_max e invocaciones; no modifica lógica ni plazos y no puede atribuir inequívocamente cada POST a saveOnboardingServices. Evidencia y límites en `folio-b09-evidence/proof-independent-review.md`. No publicar todavía; producción138, M147/M148 intactas.
 
 - Landing: chat dedicado continúa escribiendo la versión coherente en4440. A observó transitoriamente import de premium.css aún ausente y lo notificó al autor, sin declarar la vista terminada. Cursor `a6adfb71-73a4-4e62-8404-97827aa29ce8:3`. Esperar entrega visual antes de juzgar el trabajo intermedio.
