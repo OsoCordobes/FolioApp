@@ -9,6 +9,7 @@ import net from 'node:net';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {openLoopbackBridge,validateBridgeTarget,waitForBridgeTarget} from '../../recovery/ci-loopback-bridge.mjs';
+import {dockerFailureKind} from './diagnostics.mjs';
 
 const repo=path.resolve(fileURLToPath(new URL('../../../',import.meta.url)));
 const compose=path.join(repo,'scripts/recovery/ci-compose.yml');
@@ -49,7 +50,14 @@ async function must(program,args,options){
  if(result.code!==0)throw Error(`command_failed:${path.basename(program)}:${result.code}`);
  return result.output;
 }
-const docker=(args,env)=>must('docker',args,{env,timeout:300_000});
+const docker=async(args,env)=>{
+ const result=await run('docker',args,{env,timeout:300_000});
+ if(result.code!==0){
+  const phase=args[0]==='compose' ? args.find(arg=>['pull','up','ps','down'].includes(arg)) : args[0];
+  throw Error(`command_failed:docker:${result.code}:phase=${phase??'unknown'} kind=${dockerFailureKind(result.output)}`);
+ }
+ return result.output;
+};
 const dc=(args,env)=>docker(['compose','-p',project,'-f',compose,'-f',overlay,...args],env);
 async function inspect(name,env){
  const id=(await dc(['ps','-q',name],env)).trim();
@@ -171,6 +179,8 @@ async function main(){
   for(const diagnostic of sessionDiagnostics.slice(-2))console.log(diagnostic[0]);
   const resetDiagnostics=[...result.output.matchAll(/auth_proof_reset_diagnostic:origin=(?:app|other_loopback|other) form=[01] checking=[01] invalid=[01] code=[01] error=[01] token_hash=[01] fragment_access=[01] cookie_kind=(?:missing|chunk_gap|empty|decode_failed|token_missing|config_missing|auth_rejected|auth_missing|auth_unavailable|valid) auth_valid=[01] same_user=[01]/g)];
   for(const diagnostic of resetDiagnostics.slice(-1))console.log(diagnostic[0]);
+  const serviceDiagnostics=[...result.output.matchAll(/services_proof_diagnostic:phase=initial_save db_ok=[01] active_count=(?:unknown|[0-9]+) revision=(?:unknown|[0-9]+) name_match=[01] field_enabled=[01] alert=[01] verify=[01]/g)];
+  for(const diagnostic of serviceDiagnostics.slice(-1))console.log(diagnostic[0]);
   for(const count of counts.slice(-3))console.log(cleanOutput(count));
   if(result.code!==0){
    // The browser's raw report can contain one-use mail links and credentials.
@@ -186,7 +196,7 @@ async function main(){
     'auth_proof_turnstile_must_use_existing_development_path','auth_proof_local_read_key_missing',
     'auth_proof_consent_screen_missing',
     'auth_proof_reset_form_missing',
-    'services_proof_committed_response_missing',
+    'services_proof_committed_response_missing','services_proof_initial_save_missing',
    ]);
    const detected=[...result.output.matchAll(/(?:auth|services)_proof_[a-z0-9_]+(?=\b)/gi)]
     .map(match=>match[0]).find(value=>allowedErrors.has(value))??'';
