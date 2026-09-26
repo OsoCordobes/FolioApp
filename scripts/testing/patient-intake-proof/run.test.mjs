@@ -1,6 +1,25 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {servicesStatus} from './run.mjs';
+import {randomUUID} from 'node:crypto';
+import {assistantScopeList,authDiagnostic,servicesStatus} from './run.mjs';
+
+test('scoped assistant has a nonempty professional list excluding the visit owner',()=>{
+ const assigned=randomUUID(),visitOwner=randomUUID();
+ assert.deepEqual(assistantScopeList(assigned,visitOwner),[assigned]);
+ assert.throws(()=>assistantScopeList(visitOwner,visitOwner));
+ assert.throws(()=>assistantScopeList('not-a-member',visitOwner));
+});
+
+test('auth failures expose only fixed steps, bounded status and allowlisted SQLSTATE',()=>{
+ const dbError=Object.assign(Error('password=private patient=private'),{code:'23514'});
+ assert.equal(authDiagnostic('db_member_assistant',undefined,dbError),
+  'step=db_member_assistant kind=database http=none sqlstate=23514');
+ const authError=Object.assign(Error('token=private'),{code:'private',name:'AuthApiError'});
+ assert.equal(authDiagnostic('owner-a_verify',422,authError),
+  'step=owner-a_verify kind=auth_api http=422 sqlstate=other');
+ const unknown=authDiagnostic('secret-step',999,Error('token=private'));
+ assert.equal(unknown,'step=other kind=other http=none sqlstate=none');
+});
 
 test('reports only fixed services and bounded Compose fields',()=>{
  const output=[

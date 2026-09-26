@@ -27,6 +27,39 @@ const options={auth:{persistSession:false,autoRefreshToken:false,detectSessionIn
 const stages=new Set(['guard','pull','services','migrations','auth','fixture','roles','browser','complete','teardown']);
 const browserStages=new Set(['initial_fence','staff_issue_response_lost','staff_issue_reconciled','issued','qr_local','token_hash_bound','exchanged','submitted','reviewed','lost_response_committed','lost_response_reconciled','revoked','old_link_rejected','data_preserved','staff_data_cleared_after_revocation']);
 const serviceNames=['db','auth','rest','storage','minio','minio-createbucket','api-gw'];
+const authSteps=new Set([
+ ...['owner-a','owner-b','assistant-a'].flatMap(actor=>['create','login','aal1','enroll','challenge','verify','aal2','claims'].map(step=>`${actor}_${step}`)),
+ 'fixture_init','scoped-professional_create','fixture_crypto','db_connect','db_begin',
+ 'db_profile_owner','db_profile_foreign','db_profile_assistant','db_profile_scoped',
+ 'db_organization_owner','db_organization_foreign','db_member_owner','db_member_foreign','db_member_scoped','db_member_assistant',
+ 'db_identity','db_patient','db_service','db_turno','db_policy','db_commit',
+ 'mfa_rpc','mfa_required','mfa_staff','mfa_factor','mfa_session','mfa_allowed',
+ 'session_client','session_cookie','cookie_shape','fixture_write','fingerprint_key',
+]);
+const sqlstates=new Set(['22P02','22001','22007','22023','23502','23503','23505','23514','42501','42703','42P01','42883','P0001','P0002']);
+
+// Auth responses and thrown errors may contain credentials or user data.
+// Emit only a fixed operation, fixed error class, bounded HTTP status and
+// allowlisted SQLSTATE. No response body, auth error text or query detail.
+export function authDiagnostic(step,status,error){
+ const safeStep=authSteps.has(step)?step:'other';
+ const safeStatus=Number.isInteger(status)&&status>=100&&status<=599?status:'none';
+ const sqlstate=error?.code===undefined?'none':sqlstates.has(error.code)?error.code:'other';
+ const kind=error instanceof assert.AssertionError?'assertion':
+  sqlstate!=='none'&&sqlstate!=='other'?'database':
+  error?.name==='AuthApiError'?'auth_api':
+  error?.name==='TimeoutError'||error?.name==='AbortError'?'timeout':'other';
+ return `step=${safeStep} kind=${kind} http=${safeStatus} sqlstate=${sqlstate}`;
+}
+
+// A scoped assistant needs a real, different professional in the same org.
+// M02 rejects an empty LISTA_PROFESIONALES, and the target visit must remain out of scope.
+export function assistantScopeList(assignedProfessionalId,visitProfessionalId){
+ assert.match(assignedProfessionalId,/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+ assert.match(visitProfessionalId,/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+ assert.notEqual(assignedProfessionalId,visitProfessionalId);
+ return [assignedProfessionalId];
+}
 
 // Docker output can contain credentials. Only these fixed service names and
 // bounded Compose status fields may leave the proof runner.
@@ -148,18 +181,31 @@ async function prepareSchema(password,env,serviceKey){
  });
  return files.length;
 }
-async function createActor(service,anonKey,label){
+async function createActor(service,anonKey,label,mark){
  const email=`intake-${label}-${randomUUID()}@example.test`,password=`Intake-${random(24)}!`;
- const created=await service.auth.admin.createUser({email,password,email_confirm:true});assert.equal(created.error,null,'user_create_failed');
+ mark(`${label}_create`);
+ const created=await service.auth.admin.createUser({email,password,email_confirm:true});mark(`${label}_create`,created.error?.status);
+ assert.equal(created.error,null,'user_create_failed');
  const actor=createClient(api,anonKey,options);
- const login=await actor.auth.signInWithPassword({email,password});assert.equal(login.error,null,'login_failed');
+ mark(`${label}_login`);
+ const login=await actor.auth.signInWithPassword({email,password});mark(`${label}_login`,login.error?.status);
+ assert.equal(login.error,null,'login_failed');
+ mark(`${label}_aal1`);
  const aal1=login.data.session?.access_token;assert.ok(aal1,'aal1_session_missing');
- const enrolled=await actor.auth.mfa.enroll({factorType:'totp',friendlyName:`Synthetic intake ${label}`});assert.equal(enrolled.error,null,'factor_enroll_failed');
- const challenge=await actor.auth.mfa.challenge({factorId:enrolled.data.id});assert.equal(challenge.error,null,'factor_challenge_failed');
+ mark(`${label}_enroll`);
+ const enrolled=await actor.auth.mfa.enroll({factorType:'totp',friendlyName:`Synthetic intake ${label}`});mark(`${label}_enroll`,enrolled.error?.status);
+ assert.equal(enrolled.error,null,'factor_enroll_failed');
+ mark(`${label}_challenge`);
+ const challenge=await actor.auth.mfa.challenge({factorId:enrolled.data.id});mark(`${label}_challenge`,challenge.error?.status);
+ assert.equal(challenge.error,null,'factor_challenge_failed');
+ mark(`${label}_verify`);
  const verified=await actor.auth.mfa.verify({factorId:enrolled.data.id,challengeId:challenge.data.id,code:totp(enrolled.data.totp.secret)});
+ mark(`${label}_verify`,verified.error?.status);
  assert.equal(verified.error,null,'factor_verify_failed');
+ mark(`${label}_aal2`);
  const aal2=verified.data?.access_token,refresh=verified.data?.refresh_token;
  assert.ok(aal2&&refresh,'aal2_session_missing');
+ mark(`${label}_claims`);
  const claims=JSON.parse(Buffer.from(aal2.split('.')[1],'base64url').toString());assert.equal(claims.aal,'aal2');
  return {id:created.data.user.id,email,aal1,aal2,refresh};
 }
@@ -167,45 +213,85 @@ async function rpc(key,jwt,name,args){
  const response=await fetch(`${api}/rest/v1/rpc/${name}`,{method:'POST',headers:{apikey:key,Authorization:`Bearer ${jwt}`,'Content-Type':'application/json'},body:JSON.stringify(args),signal:AbortSignal.timeout(10000)});
  return {status:response.status,body:await response.json()};
 }
-async function fixture(state){
+async function fixture(state,mark){
+ mark('fixture_init');
  const service=createClient(api,state.serviceKey,options);
- const owner=await createActor(service,state.anonKey,'owner-a');
- const foreign=await createActor(service,state.anonKey,'owner-b');
- const assistant=await createActor(service,state.anonKey,'assistant-a');
- const org=randomUUID(),otherOrg=randomUUID(),member=randomUUID(),foreignMember=randomUUID(),assistantMember=randomUUID();
+ const owner=await createActor(service,state.anonKey,'owner-a',mark);
+ const foreign=await createActor(service,state.anonKey,'owner-b',mark);
+ const assistant=await createActor(service,state.anonKey,'assistant-a',mark);
+ mark('scoped-professional_create');
+ const scopedEmail=`intake-scoped-professional-${randomUUID()}@example.test`;
+ const scopedUser=await service.auth.admin.createUser({email:scopedEmail,password:`Intake-${random(24)}!`,email_confirm:true});
+ mark('scoped-professional_create',scopedUser.error?.status);
+ assert.equal(scopedUser.error,null,'scoped_professional_create_failed');
+ const scopedProfessional={id:scopedUser.data.user.id,email:scopedEmail};
+ const org=randomUUID(),otherOrg=randomUUID(),member=randomUUID(),foreignMember=randomUUID(),scopedMember=randomUUID(),assistantMember=randomUUID();
  const identity=randomUUID(),patient=randomUUID(),servicio=randomUUID(),turno=randomUUID();
  process.env.FOLIO_ENC_KEY=Buffer.alloc(32,37).toString('base64');
  process.env.FOLIO_ENC_HMAC_KEY=Buffer.alloc(32,71).toString('base64');
+ mark('fixture_crypto');
  const cryptoModule=await import('../../../lib/crypto.ts');const crypto=cryptoModule.default??cryptoModule;
  const encrypted=crypto.encryptColumn('Paciente sintético B09');const cipher=Buffer.from(encrypted.slice(2),'hex');
+ mark('db_connect');
  await withPg(state.dbPassword,async db=>{
+  mark('db_begin');
   await db.query('BEGIN');
   try{
-   for(const actor of [owner,foreign,assistant])await db.query('INSERT INTO public.profile(id,email,nombre_cifrado,apellido_cifrado,consent_pii_signed_at,consent_pii_text_version) VALUES($1,$2,$3,$3,now(),$4)',[actor.id,actor.email,cipher,'intake.synthetic.v1']);
-   for(const [id,slug] of [[org,'a'],[otherOrg,'b']])await db.query("INSERT INTO public.organization(id,slug,nombre,timezone,especialidad,tipo,onboarding_completed,onboarding_step_max,is_internal_account,is_synthetic,opt_out_analytics,opt_out_public_listing) VALUES($1,$2,'Consultorio sintético B09','America/Argentina/Cordoba','quiropraxia','INDEPENDIENTE',true,9,true,true,true,true)",[id,`folio-test-intake-${slug}-${randomUUID().slice(0,12)}`]);
+   for(const [actorName,actor] of [['owner',owner],['foreign',foreign],['assistant',assistant],['scoped',scopedProfessional]]){
+    mark(`db_profile_${actorName}`);
+    await db.query('INSERT INTO public.profile(id,email,nombre_cifrado,apellido_cifrado,consent_pii_signed_at,consent_pii_text_version) VALUES($1,$2,$3,$3,now(),$4)',[actor.id,actor.email,cipher,'intake.synthetic.v1']);
+   }
+   for(const [orgName,id,slug] of [['owner',org,'a'],['foreign',otherOrg,'b']]){
+    mark(`db_organization_${orgName}`);
+    await db.query("INSERT INTO public.organization(id,slug,nombre,timezone,especialidad,tipo,onboarding_completed,onboarding_step_max,is_internal_account,is_synthetic,opt_out_analytics,opt_out_public_listing) VALUES($1,$2,'Consultorio sintético B09','America/Argentina/Cordoba','quiropraxia','INDEPENDIENTE',true,9,true,true,true,true)",[id,`folio-test-intake-${slug}-${randomUUID().slice(0,12)}`]);
+   }
+   mark('db_member_owner');
    await db.query("INSERT INTO public.member(id,organization_id,profile_id,role,accepted_at,es_colegiado,especialidad,alcance,profesionales_gestionados) VALUES($1,$2,$3,'OWNER',now(),true,'quiropraxia','TODOS','{}')",[member,org,owner.id]);
+   mark('db_member_foreign');
    await db.query("INSERT INTO public.member(id,organization_id,profile_id,role,accepted_at,es_colegiado,especialidad,alcance,profesionales_gestionados) VALUES($1,$2,$3,'OWNER',now(),true,'quiropraxia','TODOS','{}')",[foreignMember,otherOrg,foreign.id]);
-   await db.query("INSERT INTO public.member(id,organization_id,profile_id,role,accepted_at,es_colegiado,especialidad,alcance,profesionales_gestionados) VALUES($1,$2,$3,'ASISTENTE',now(),false,'quiropraxia','LISTA_PROFESIONALES','{}')",[assistantMember,org,assistant.id]);
+   mark('db_member_scoped');
+   await db.query("INSERT INTO public.member(id,organization_id,profile_id,role,accepted_at,es_colegiado,especialidad,alcance,profesionales_gestionados) VALUES($1,$2,$3,'PROFESIONAL',now(),true,'quiropraxia','TODOS','{}')",[scopedMember,org,scopedProfessional.id]);
+   mark('db_member_assistant');
+   const assistantScope=assistantScopeList(scopedMember,member);
+   await db.query("INSERT INTO public.member(id,organization_id,profile_id,role,accepted_at,es_colegiado,especialidad,alcance,profesionales_gestionados) VALUES($1,$2,$3,'ASISTENTE',now(),false,'quiropraxia','LISTA_PROFESIONALES',$4::text[])",[assistantMember,org,assistant.id,assistantScope]);
+   mark('db_identity');
    await db.query('INSERT INTO public.paciente_identidad(id,organization_id,nombre_cifrado,apellido_cifrado,telefono_cifrado) VALUES($1,$2,$3,$3,$3)',[identity,org,cipher]);
+   mark('db_patient');
    await db.query('INSERT INTO public.paciente(id,organization_id,identidad_id,profesional_principal_id) VALUES($1,$2,$3,$4)',[patient,org,identity,member]);
+   mark('db_service');
    await db.query("INSERT INTO public.servicio(id,organization_id,nombre,tipo_canonico,duracion_min,precio_cents) VALUES($1,$2,'Consulta sintética',enum_first(null::public.tipo_servicio_canonico),30,1000)",[servicio,org]);
+   mark('db_turno');
    await db.query("INSERT INTO public.turno(id,organization_id,paciente_id,servicio_id,profesional_id,inicio,duracion_min,precio_cents,estado) VALUES($1,$2,$3,$4,$5,((timezone('America/Argentina/Cordoba',clock_timestamp())::date)::timestamp+interval '12 hours') AT TIME ZONE 'America/Argentina/Cordoba',30,1000,'EN_SALA')",[turno,org,patient,servicio,member]);
+   mark('db_policy');
    await db.query('UPDATE folio_mfa_private.policy SET application_ready=true,staff_enforce_after=now() WHERE singleton');
+   mark('db_commit');
    await db.query('COMMIT');
   }catch(error){await db.query('ROLLBACK');throw error;}
  });
+ mark('mfa_rpc');
  const checked=await rpc(state.anonKey,owner.aal2,'mfa_access_status',{});
- assert.equal(checked.status,200);assert.equal(checked.body?.required,true);assert.equal(checked.body?.isStaff,true);
- assert.equal(checked.body?.hasVerifiedFactor,true);assert.equal(checked.body?.sessionValid,true);assert.equal(checked.body?.allowed,true);
+ mark('mfa_rpc',checked.status);
+ assert.equal(checked.status,200);
+ mark('mfa_required',checked.status);assert.equal(checked.body?.required,true);
+ mark('mfa_staff',checked.status);assert.equal(checked.body?.isStaff,true);
+ mark('mfa_factor',checked.status);assert.equal(checked.body?.hasVerifiedFactor,true);
+ mark('mfa_session',checked.status);assert.equal(checked.body?.sessionValid,true);
+ mark('mfa_allowed',checked.status);assert.equal(checked.body?.allowed,true);
  let cookies=[];
+ mark('session_client');
  const seeded=createServerClient(api,state.anonKey,{cookies:{getAll:()=>cookies,setAll:values=>{cookies=values.map(({name,value,options})=>({name,value,options}));}}});
- const session=await seeded.auth.setSession({access_token:owner.aal2,refresh_token:owner.refresh});assert.equal(session.error,null);
+ mark('session_cookie');
+ const session=await seeded.auth.setSession({access_token:owner.aal2,refresh_token:owner.refresh});mark('session_cookie',session.error?.status);
+ assert.equal(session.error,null);
+ mark('cookie_shape');
  const browserCookies=cookies.map(({name,value,options})=>{
   const sameSite={lax:'Lax',strict:'Strict',none:'None'}[String(options?.sameSite??'').toLowerCase()];
   return {name,value,domain:'localhost',path:options?.path??'/',...(typeof options?.httpOnly==='boolean'?{httpOnly:options.httpOnly}:{}),...(typeof options?.secure==='boolean'?{secure:options.secure}:{}),...(sameSite?{sameSite}:{})};
  });
  assert.ok(browserCookies.length>0,'staff_cookie_missing');
+ mark('fixture_write');
  await writeFile(fixtureFile,JSON.stringify({browserCookies,databaseUrl:`postgresql://postgres:${state.dbPassword}@127.0.0.1:55422/postgres`,turnoId:turno}),{flag:'wx',mode:0o600});
+ mark('fingerprint_key');
  const keyCipher=crypto.encryptColumn(randomBytes(32).toString('base64'));
  assert.ok(keyCipher,'fingerprint_key_missing');
  return {org,turno,owner,foreign,assistant,keyCipher};
@@ -240,7 +326,8 @@ function browserResult(output){
  return {markers,lines:[...new Set(lines)].slice(0,3),kind};
 }
 async function main(){
- let stage='guard',servicesStep='none',dbBridge,apiBridge,env,started=false,migrations=0,markers=[],failure=null;
+ let stage='guard',servicesStep='none',authStep='none',authStatus,dbBridge,apiBridge,env,started=false,migrations=0,markers=[],failure=null,diagnostic=null;
+ const markAuth=(step,status)=>{authStep=step;authStatus=status;};
  const sourceSha=(await must('git',['rev-parse','HEAD'])).trim();assert.match(sourceSha,/^[a-f0-9]{40}$/);
  try{
   assert.equal(process.env.GITHUB_ACTIONS,'true');assert.equal(process.env.RUNNER_ENVIRONMENT,'github-hosted');
@@ -261,7 +348,7 @@ async function main(){
   servicesStep='api_bridge';apiBridge=await bridge('api-gw',55421,8000,env);
   servicesStep='api_ready';await waitApi(state.anonKey);
   stage='migrations';migrations=await prepareSchema(dbPassword,env,state.serviceKey);
-  stage='auth';const seed=await fixture(state);
+  stage='auth';const seed=await fixture(state,markAuth);
   stage='roles';await checkRoles(state,seed);
   stage='browser';const browserEnv={...env,E2E_BASE_URL:'http://localhost:4430',FOLIO_TEST_SUPABASE_URL:api,FOLIO_TEST_SUPABASE_ANON_KEY:state.anonKey,FOLIO_TEST_SUPABASE_SERVICE_KEY:state.serviceKey,FOLIO_TEST_DATABASE_URL:`postgresql://postgres:${dbPassword}@127.0.0.1:55422/postgres`,FOLIO_TEST_CLINICAL:'1'};
   const result=await run('pnpm',['test:e2e','--','tests/e2e/patient-intake-live.spec.ts','--trace=off','--reporter=dot'],{env:browserEnv,timeout:900000});
@@ -274,7 +361,12 @@ async function main(){
  }catch(error){
   failure=stages.has(stage)?stage:'unclassified';process.exitCode=1;
   if(failure==='services'){
-   console.error(`intake_proof_services_diagnostic:kind=${servicesFailureKind(error)} exit=${error?.diagnosticExit??'none'} ${await finiteServicesDiagnostic(env,servicesStep)}`);
+   diagnostic=`kind=${servicesFailureKind(error)} exit=${error?.diagnosticExit??'none'} ${await finiteServicesDiagnostic(env,servicesStep)}`;
+   console.error(`intake_proof_services_diagnostic:${diagnostic}`);
+  }
+  if(failure==='auth'){
+   diagnostic=authDiagnostic(authStep,authStatus,error);
+   console.error(`intake_proof_auth_diagnostic:${diagnostic}`);
   }
   console.error(`intake_proof_${failure}_failed`);
  }
@@ -283,7 +375,7 @@ async function main(){
   await apiBridge?.close().catch(()=>{process.exitCode=1;});await dbBridge?.close().catch(()=>{process.exitCode=1;});
   if(started)try{await dc(['down','-v'],env);}catch{failure='teardown';process.exitCode=1;console.error('intake_proof_teardown_failed');}
   await mkdir(path.dirname(evidenceFile),{recursive:true});
-  await writeFile(evidenceFile,JSON.stringify({sourceSha,migrations,stages:[...new Set(markers)],ok:!process.exitCode,failure},null,2)+'\n',{mode:0o600});
+  await writeFile(evidenceFile,JSON.stringify({sourceSha,migrations,stages:[...new Set(markers)],ok:!process.exitCode,failure,diagnostic},null,2)+'\n',{mode:0o600});
  }
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url))
