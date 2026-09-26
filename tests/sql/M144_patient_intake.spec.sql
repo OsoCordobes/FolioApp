@@ -373,4 +373,63 @@ BEGIN
  IF jsonb_array_length(proposals)<1 THEN RAISE EXCEPTION 'M144 close hid received proposal'; END IF;
 END $$;
 RESET ROLE;
+
+-- Portal cancellation must pass M84/M91's full-row guard before M144 advances
+-- the intake revision. This exercises the real RLS and BEFORE triggers.
+INSERT INTO auth.users(id,email) VALUES(pg_temp.m144_id(7),'m144-portal@synthetic.invalid');
+INSERT INTO public.paciente_cuenta(id,auth_user_id,email)
+ VALUES(pg_temp.m144_id(70),pg_temp.m144_id(7),'m144-portal@synthetic.invalid');
+UPDATE public.paciente SET cuenta_id=pg_temp.m144_id(70) WHERE id=pg_temp.m144_id(33);
+INSERT INTO public.turno(id,organization_id,paciente_id,servicio_id,profesional_id,inicio,duracion_min,precio_cents,estado)
+ VALUES(pg_temp.m144_id(63),pg_temp.m144_id(10),pg_temp.m144_id(33),pg_temp.m144_id(51),
+  pg_temp.m144_id(12),now()+interval '7 days',30,0,'CONFIRMADO');
+SELECT pg_temp.m144_login(1);
+SET LOCAL ROLE authenticated;
+DO $$ DECLARE issued jsonb;
+BEGIN
+ issued:=public.patient_intake_issue(pg_temp.m144_id(10),pg_temp.m144_id(63),decode(repeat('f1',60),'hex'));
+ PERFORM set_config('test.m144_portal_invitation',issued::text,true);
+END $$;
+RESET ROLE;
+GRANT SELECT, UPDATE ON public.turno TO authenticated;
+GRANT SELECT ON public.paciente,public.member TO authenticated;
+SELECT pg_temp.m144_login(7);
+SET LOCAL ROLE authenticated;
+DO $$ DECLARE blocked boolean:=false;
+BEGIN
+ BEGIN
+  UPDATE public.turno SET estado='CANCELADO',deleted_at=now() WHERE id=pg_temp.m144_id(63);
+ EXCEPTION WHEN insufficient_privilege THEN
+  IF SQLERRM NOT LIKE 'portal: sólo se puede cambiar el estado%' THEN RAISE; END IF;
+  blocked:=true;
+ END;
+ IF NOT blocked THEN RAISE EXCEPTION 'M144 portal tampering was allowed'; END IF;
+END $$;
+DO $$ DECLARE changed integer;
+BEGIN
+ UPDATE public.turno SET estado='CANCELADO' WHERE id=pg_temp.m144_id(63);
+ GET DIAGNOSTICS changed=ROW_COUNT;
+ IF changed<>1 THEN RAISE EXCEPTION 'M144 portal cancellation did not update the visit'; END IF;
+END $$;
+RESET ROLE;
+DO $$ BEGIN
+ IF NOT EXISTS(SELECT 1 FROM public.turno WHERE id=pg_temp.m144_id(63)
+  AND estado='CANCELADO' AND deleted_at IS NULL AND intake_revision=1) THEN
+  RAISE EXCEPTION 'M144 portal cancellation did not advance intake revision';
+ END IF;
+ IF NOT EXISTS(SELECT 1 FROM folio_intake_private.invitation
+  WHERE turno_id=pg_temp.m144_id(63) AND turno_intake_revision=0) THEN
+  RAISE EXCEPTION 'M144 portal invitation revision fixture changed';
+ END IF;
+END $$;
+SET LOCAL ROLE service_role;
+DO $$ DECLARE token text;
+BEGIN
+ token:=encode(sha256(decode((current_setting('test.m144_portal_invitation',true)::jsonb)->>'token','hex')),'hex');
+ PERFORM pg_temp.m144_expect(format('SELECT public.patient_intake_exchange(%L)',token),'55000');
+END $$;
+RESET ROLE;
+-- State resurrection is also rejected by the existing M09 transition guard.
+SELECT pg_temp.m144_login(1);
+SELECT pg_temp.m144_expect($q$UPDATE public.turno SET estado='CONFIRMADO' WHERE id=pg_temp.m144_id(63)$q$,'P0001');
 ROLLBACK;
