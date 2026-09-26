@@ -47,6 +47,28 @@ async function beginPatient() {
   await patient.query("SELECT set_config('request.jwt.claim.role','service_role',true)");
   await patient.query('SET LOCAL ROLE service_role');
 }
+async function issueWithState(org,turno,state) {
+  const token=randomUUID().replaceAll('-','')+randomUUID().replaceAll('-','');
+  const issued=(await staff.query(`SELECT public.patient_intake_issue_v2($1,$2,$3,$4,$5,$6,decode(repeat('aa',60),'hex')) result`,
+    [org,turno,randomUUID(),state.generation,state.contextHash,hash(token)])).rows[0].result;
+  assert.equal(issued.status,'issued');
+  return {...issued,token};
+}
+async function issueLink(org,turno) {
+  const state=(await staff.query('SELECT public.patient_intake_link_state($1,$2) result',[org,turno])).rows[0].result;
+  return issueWithState(org,turno,state);
+}
+async function captureState(org,turno,user=ids.user,session=ids.authSession) {
+  await beginStaff(user,session);
+  const state=(await staff.query('SELECT public.patient_intake_link_state($1,$2) result',[org,turno])).rows[0].result;
+  await staff.query('COMMIT'); // release every authority/context lock before the competing change
+  return state;
+}
+async function revokeLink(org,turno) {
+  const state=(await staff.query('SELECT public.patient_intake_link_state($1,$2) result',[org,turno])).rows[0].result;
+  return (await staff.query('SELECT public.patient_intake_revoke_v2($1,$2,$3,$4,$5) result',
+    [org,turno,randomUUID(),state.generation,state.contextHash])).rows[0].result;
+}
 async function blocked(promise,label,waiterPid=patientPid) {
   let finished=false;
   promise.then(()=>{finished=true;},()=>{finished=true;});
@@ -106,11 +128,11 @@ try {
 
   // Professional scope supplied only by a historical visit must be retained
   // until commit; cancelling that visit first removes the authorization.
+  const historicalState=await captureState(ids.org,ids.professionalTurno,ids.professionalUser,ids.professionalSession);
   await admin.query('BEGIN');
   await admin.query("UPDATE public.turno SET estado='CANCELADO' WHERE id=$1",[ids.historicalTurno]);
   await beginStaff(ids.professionalUser,ids.professionalSession);
-  const historicalWait=staff.query(`SELECT public.patient_intake_issue($1,$2,decode(repeat('aa',60),'hex'))`,
-    [ids.org,ids.professionalTurno]);
+  const historicalWait=issueWithState(ids.org,ids.professionalTurno,historicalState);
   await blocked(historicalWait,'issue after historical scope cancellation',staffPid);
   await admin.query('COMMIT');
   await assert.rejects(historicalWait,error=>error.code==='42501');
@@ -118,33 +140,33 @@ try {
 
   // Authentication rows are locked until the staff RPC commits. A factor
   // revocation that commits first must be observed after the wait.
+  const factorState=await captureState(ids.org,ids.turno);
   await admin.query('BEGIN');
   await admin.query("UPDATE auth.mfa_factors SET status='unverified' WHERE id=$1",[ids.factor]);
   await beginStaff();
-  const factorWait=staff.query(`SELECT public.patient_intake_issue($1,$2,decode(repeat('aa',60),'hex'))`,
-    [ids.org,ids.turno]);
+  const factorWait=issueWithState(ids.org,ids.turno,factorState);
   await blocked(factorWait,'issue after factor revocation',staffPid);
   await admin.query('COMMIT');
   await assert.rejects(factorWait,error=>error.code==='42501');
   await staff.query('ROLLBACK');
   await admin.query("UPDATE auth.mfa_factors SET status='verified' WHERE id=$1",[ids.factor]);
 
+  const sessionState=await captureState(ids.org,ids.turno);
   await admin.query('BEGIN');
   await admin.query("UPDATE auth.sessions SET not_after=now()-interval '1 hour' WHERE id=$1",[ids.authSession]);
   await beginStaff();
-  const sessionWait=staff.query(`SELECT public.patient_intake_issue($1,$2,decode(repeat('aa',60),'hex'))`,
-    [ids.org,ids.turno]);
+  const sessionWait=issueWithState(ids.org,ids.turno,sessionState);
   await blocked(sessionWait,'issue after Auth session revocation',staffPid);
   await admin.query('COMMIT');
   await assert.rejects(sessionWait,error=>error.code==='42501');
   await staff.query('ROLLBACK');
   await admin.query('UPDATE auth.sessions SET not_after=NULL WHERE id=$1',[ids.authSession]);
 
+  const memberState=await captureState(ids.org,ids.turno);
   await admin.query('BEGIN');
   await admin.query('UPDATE public.member SET deleted_at=now() WHERE id=$1',[ids.member]);
   await beginStaff();
-  const memberWait=staff.query(`SELECT public.patient_intake_issue($1,$2,decode(repeat('aa',60),'hex'))`,
-    [ids.org,ids.turno]);
+  const memberWait=issueWithState(ids.org,ids.turno,memberState);
   await blocked(memberWait,'issue after membership revocation',staffPid);
   await admin.query('COMMIT');
   await assert.rejects(memberWait,error=>error.code==='42501');
@@ -153,8 +175,7 @@ try {
 
   async function issueAndExchange() {
     await beginStaff();
-    const issued=(await staff.query(`SELECT public.patient_intake_issue($1,$2,decode(repeat('aa',60),'hex')) result`,
-      [ids.org,ids.turno])).rows[0].result;
+    const issued=await issueLink(ids.org,ids.turno);
     await staff.query('COMMIT');
     await beginPatient();
     const exchanged=(await patient.query('SELECT public.patient_intake_exchange($1) result',
@@ -166,8 +187,7 @@ try {
   // Revoke commits while submit is waiting on the same visit/invitation.
   const oldSession=await issueAndExchange();
   await beginStaff();
-  const revoked=(await staff.query('SELECT public.patient_intake_revoke($1,$2) result',
-    [ids.org,ids.turno])).rows[0].result;
+  const revoked=await revokeLink(ids.org,ids.turno);
   assert.equal(revoked.revoked,true);
   await beginPatient();
   const afterRevoke=submit(oldSession,randomUUID());
