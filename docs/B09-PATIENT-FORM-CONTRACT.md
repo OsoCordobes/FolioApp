@@ -1,5 +1,7 @@
 # Ficha completada por el paciente
 
+**Estado vigente 26/09:** el fundamento M144 y la compatibilidad portal M146 ya están publicados y comprobados en PR186. El formulario y QR siguen aislados. La revisión detectó que revocar sin una generación durable no impide que una emisión demorada llegue después; por eso M147 reemplaza la emisión/revocación anterior antes de publicar la interfaz. El diseño revisado exige generación/contexto previos, operación estable, recibo ligado al actor y sesión, y reconciliación sin repetir con otra operación. Una recarga pierde el token: se confirma una revocación que invalida solicitudes anteriores antes de emitir otro. `not_recorded` no demuestra que una petición demorada no llegará. Contrato detallado `docs/B09-INTAKE-LINK-RECOVERY.md` en rama `codex/intake-link-recovery`; implementación y prueba real conjunta pendientes. Las referencias anteriores siguientes se conservan como antecedentes; no autorizan usar las RPC legacy ni reaplicar la base.
+
 Contrato de continuación de B09, 25/09/2026. B09a asignado a `patient_intake_foundation`, Sol High, desde master `c0fdf6312e9e9b60bd19dbc7b7d7cd1129ee56fa`; reserva exclusiva `20260925111500_M144_patient_intake_foundation.sql`. Copia nueva aislada, rama `codex/launch-patient-intake-foundation`. Mantiene el alcance de `LAUNCH-BOARD.md`; no autoriza mensajes ni uso clínico real.
 
 ## Primer paquete B09a: invitación y aporte administrativo

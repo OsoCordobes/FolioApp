@@ -4,6 +4,14 @@ Actualizado el 26/09/2026. A dirige, revisa y publica. [AVANCES.md](AVANCES.md) 
 
 ## Continuación vigente · 26/09
 
+**Corte vigente 20:07 UTC:** PR187 cerrada: App squash36267562515 PASS (20:01:29), SQL36267562720 PASS y despliegue READY `dpl_DrA4BhnYTer4DEjSkt4Ga9fn68SW`, master/Escritorio `d567eb3d3fb27f1e3868b068a08859ed6d065faf`. Evidencia `folio-agent-setup-20260926/pr187-publication-final-d567eb3.json`, SHA256 `1a59a45dc336475cba6f8a752b06dee8ef968173cc8ad2c9e0349b6fc17c15f1`. PR185/186 también cerradas; producción conserva 138 versiones. No repetir publicaciones ni M144/M145/M146.
+
+- **Dos escritores:** `patient_form_delivery` adapta el formulario/QR a M147 desde su corte local `1df6e63` en folio-clinic-permissions; también resuelve estados fuera de orden y guardas después de tareas asíncronas. `access_proof_repair` corrige cuatro hallazgos de la revisión A en su ensayo integrado (folio-adult-revocation, base `8635691`). Propiedad y límites de cada paquete conservados en el corte anterior; sin DB/Docker local, proveedores, commit/push ni publicación hasta revisión.
+- M147 está implementada en folio-launch-patient-intake-foundation, base `8fd377c`, aún sin commit ni aplicación. `intake_sql_repair` cerró la corrección de pruebas para comprobar las mutaciones directamente tras revocaciones; `intake_cancel_review` revisa ese delta. No hay defecto SQL pendiente identificado, pero replay y carreras reales siguen sin ejecutar. La UI, M147 y el ensayo se integrarán en un único candidato para comprobarlos juntos.
+- Última cuota real 19:57 UTC: 5% usado / 95% disponible; reserva 15%. Panel 4420 activo y registro persistente. Ningún bloqueo humano para estos paquetes.
+
+### Corte 19:57 · preservado
+
 **Corte vigente19:57UTC:** PR186 cerrada: App squash36266875921 y SQL36266875978 PASS,2388 unidades, recuperación100PASS+15SKIP/0FAIL y buildPASS. Vercel dpl_9mjX2eC5hmmYnKDie3zBCfNeXGXj READY/master/gru1/ambos dominios; HTTP19:46:54 health/login200,Hoy307,www308. Informe `folio-b09-evidence/pr186-publication-final-8fd377c.json`, SHA256 `37b8d98b4b16c4f148edfc27d8806863e0fffb1a5d73456e52521e4469146b1f`. M144/M146 ya138 versiones, no reaplicar.
 
 - PR187 de guías integrada19:52:38: candidato39740e50cb45ba7c3f97b107474d6a7a031f0182, squash/master/Escritorio `d567eb3d3fb27f1e3868b068a08859ed6d065faf`, árbol idéntico c5859fca8c83305fce68f8f4048eb190ac5eec69. App/SQL candidato PASS; squash36267562515/36267562720 pendientes. Vercel dpl_DrA4BhnYTer4DEjSkt4Ga9fn68SW READY. Sólo AGENTS/CLAUDE; cambios locales originales respaldados en folio-agent-setup-20260926 antes del fast-forward, archivos ajenos conservados.
@@ -78,9 +86,9 @@ Selección por riesgo, dependencia, utilidad y esfuerzo restante. Terminar, comp
 | Permisos y privacidad · B05 | PR170/174 publicadas; alcance global aún requiere revisión final | Roles, organizaciones, acceso directo, archivos, consentimiento y revocación respetan el alcance autorizado. |
 | Ingreso y onboarding · B01/B02 | PR175/177 publicadas y probadas | Registro, confirmación, recuperación y Solo/Clínica sin reparación manual; salir, volver y completar después. |
 | Recepción · B03 | PR172 publicada y ensayo36076854795 PASS sin omisiones | Agenda y llegada para Asistente/Coordinador según alcance; operaciones administrativas no inician atención. |
-| Atención adulta · B04 | Base privada PR183 publicada; B04-R investiga revocación simultánea. Interfaz, criterio clínico y activación pendientes | Proteger nuevas atenciones; conservar historias, consultas iniciadas y correcciones autorizadas. Activación separada de instalación. |
+| Atención adulta · B04 | Base PR183 y refuerzo de revocación PR185 publicados y comprobados. Interfaz, criterio clínico y activación pendientes | Proteger nuevas atenciones; conservar historias, consultas iniciadas y correcciones autorizadas. Activación separada de instalación. |
 | Miniweb profesional · D06 | PR171 publicada y revisada en móvil/escritorio | Plantilla Folio, dos disposiciones, dirección/mapa confirmado, servicios/reserva; página de clínica y enlace individual con permiso propio. Editor sencillo y completar después. |
-| Ficha del paciente · B09 | B09a en implementación aislada; M144 reservada | Enlace/QR, datos/motivo y 5–10 preguntas aprobadas por especialidad. Personal autorizado revisa e incorpora sin reescribir ni sobrescribir silenciosamente. |
+| Ficha del paciente · B09 | Base M144/M146 publicada por PR186. Formulario/QR, recuperación de enlaces M147 y ensayo integrado en revisión aislada | Enlace/QR, datos/motivo y 5–10 preguntas aprobadas por especialidad. Personal autorizado revisa e incorpora sin reescribir ni sobrescribir silenciosamente. |
 | Llamador · B10 | PR179/181 publicadas; recorrido completo y revisión visual aprobados | Código/destino sin datos personales, pantalla limitada/revocable, estado de conexión y reconexión silenciosa; llamar no inicia consulta. |
 | Google Calendar · C05 | Evidencia externa pendiente | Folio gestiona turnos y los refleja; eventos externos bloquean horarios. Cambios y reintentos no duplican. |
 | Correo · C03 | Entrega global desactivada; evidencia pendiente | Buzones controlados, errores visibles, entrega/reintentos sin duplicados, enlace de ficha el día del turno. |
@@ -101,7 +109,7 @@ Selección por riesgo, dependencia, utilidad y esfuerzo restante. Terminar, comp
 
 ## Cuota, autonomía y continuidad
 
-Última lectura real, 26/09:1% usado /99% disponible; reserva15%. Reinicio informado por la herramienta:03/10/2026 18:18:15 UTC, cero créditos. La lectura previa del25/09 fue33% usado; se conserva como antecedente, no como saldo vigente. No atribuir consumo exacto a cada agente ni convertir cuota en horas garantizadas.
+Última lectura real, 26/09 19:57 UTC:5% usado /95% disponible; reserva15%. Reinicio informado por la herramienta:03/10/2026 18:18:15 UTC, cero créditos. Las lecturas anteriores se conservan como antecedentes. No atribuir consumo exacto a cada agente ni convertir cuota en horas garantizadas.
 
 Al llegar a85% usado, no abrir implementación nueva: cerrar paquetes revisables, preservar evidencia y dejar continuación. La calidad y los criterios gobiernan el cierre; no consumir cuota artificialmente ni repetir pruebas verdes sin cambio, fallo o duda concreta. El titular autorizó continuar autónomamente mientras duerme; pedir sólo decisiones indispensables y seguir con trabajo independiente.
 
@@ -113,7 +121,7 @@ Entrega al titular: qué mejoró, evidencia breve, dónde probarlo y qué falta.
 
 - PR165 cerrada: master `c5c5fed53f5b72dbebb604c1812b25c54a5d23b7`, candidato `58f534bb9bb735965b2b6c177fd849c3eec5d775`, árboles iguales. Ensayo `hosted-smoke-evidence/2026-09-19T17-53-48.159Z-d7d715794d6c45b6.json` aprobado; fallo final-off anterior preservado. No repetir su recorrido ni reactivar M106/M120/M121 ni cambiar sus motivos históricos. No se ejecutó RED del componente anterior.
 - Master autodespliega; Supabase Git aplica pendientes. Migración aditiva antes del código; cierre/enforcement en publicación separada cuando exige código nuevo. PR170 demostró que juntar expansión y cierre puede anticipar el cierre: no repetir esa secuencia. M129 conserva sus cinco sentencias canónicas.
-- Producción135 versiones a M143, incluidas M125/M126/M127/M128/M129/M130/M132/M133/M134/M135/M136/M137/M138. Los borradores no aplicados siguen conservados en el historial; los IDs no reemplazan las versiones canónicas. Releer ledger antes de cualquier nueva instalación.
+- Producción138 versiones tras M144/M145/M146. Los borradores no aplicados siguen conservados en el historial; los IDs no reemplazan las versiones canónicas. M147 aún no aplicada. Releer ledger antes de cualquier nueva instalación.
 - No iniciar/resetear/prunear Docker local ni borrar bases, volúmenes, worktrees, fixtures, respaldos, informes o archivos ajenos. Usar entornos efímeros autorizados y datos sintéticos para pruebas. No repetir una escritura cuyo resultado es incierto: primero lectura nueva.
 - No envíos, compras, cargos reales, activación Google ni cambios ciegos en MFA/consentimiento/adjuntos/población/disponibilidad. La entrega global de correo sigue apagada. Preparar las acciones sensibles externas para autorización concreta; no inferirlas de un ensayo local.
 - Mantener el par Upstash reparado; el sobre original contiene el par viejo y no debe restaurarse encima. DPAPI depende del perfil Windows y no acredita custodia portable externa. Nunca imprimir secretos. Preservar `.env.local` antes de herramientas que puedan escribir configuración.

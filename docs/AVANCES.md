@@ -2,7 +2,7 @@
 
 Actualizado: 26/09/2026. Este es el registro breve del trabajo; [el tablero técnico](LAUNCH-BOARD.md) conserva el detalle y los antecedentes. Cada fila cambia sólo ante un resultado o bloqueo real.
 
-**Equipo comprobado:** A dirige e integra. `intake_sql_repair` construye la recuperación segura de enlaces; `access_proof_repair` arma la prueba completa. `intake_cancel_review` revisa y `patient_form_delivery` dejó listo su corte visual para conectar el nuevo protocolo. Dos escritores, copias y archivos separados.
+**Equipo comprobado:** A dirige e integra. `patient_form_delivery` conecta el formulario con la recuperación segura de enlaces; `access_proof_repair` completa la prueba del recorrido. `intake_cancel_review` revisa la protección de datos preparada por `intake_sql_repair`. Dos escritores, copias y archivos separados.
 
 **Cómo verlo:** [panel de avances](http://127.0.0.1:4420/) recuperado y comprobado el26/09:16 checkpoints, lectura del registro y actualización cada minuto. Funciona en esta computadora mientras el proceso esté activo; este archivo y la copia en Git conservan el avance aunque se cierre el panel.
 
@@ -27,7 +27,7 @@ Actualizado: 26/09/2026. Este es el registro breve del trabajo; [el tablero téc
 | **Validación profesional y piloto** · pendiente humano | Cinco especialidades y piloto de 14 días, con tres profesionales y cinco jornadas por persona. |
 | **Lanzamiento** · pendiente | Se cerrará cuando la versión publicada y la oferta comercial coincidan con lo demostrado. |
 
-**Última mejora de aplicación comprobada:** [PR186 · base privada de la ficha](https://github.com/OsoCordobes/FolioApp/pull/186), también aprobó su control posterior; todavía no habilita el formulario. Para probar mejoras visibles anteriores: Configuración → Pantallas de espera, luego Hoy → Llamar; y Mis datos y solicitudes → Archivo clínico para guardar historia y archivos. **Cuota consultada el 26/09:** 96% disponible; no es una lectura en tiempo real. Reserva de cierre: 15%.
+**Última mejora de aplicación comprobada:** [PR186 · base privada de la ficha](https://github.com/OsoCordobes/FolioApp/pull/186), también aprobó su control posterior; todavía no habilita el formulario. Las guías compartidas de [PR187](https://github.com/OsoCordobes/FolioApp/pull/187) también quedaron publicadas y comprobadas. Para probar mejoras visibles anteriores: Configuración → Pantallas de espera, luego Hoy → Llamar; y Mis datos y solicitudes → Archivo clínico para guardar historia y archivos. **Cuota consultada el 26/09, 19:57 UTC:** 95% disponible; no es una lectura en tiempo real. Reserva de cierre: 15%.
 
 **Forma de trabajo:** continuar mientras haya trabajo útil, cerrar cada paquete con evidencia y tomar el siguiente. La reanudación horaria es respaldo ante un corte, no una espera entre tareas.
 
