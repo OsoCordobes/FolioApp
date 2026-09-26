@@ -2,7 +2,7 @@
 
 Actualizado: 26/09/2026. Este es el registro breve del trabajo; [el tablero técnico](LAUNCH-BOARD.md) conserva el detalle y los antecedentes. Cada fila cambia sólo ante un resultado o bloqueo real.
 
-**Equipo comprobado:** el formulario y QR aprobaron el recorrido completo. La publicación espera resolver un fallo intermitente de guardado de servicios detectado en otro control; un agente lo investiga. El chat de landing añade las microanimaciones y el fondo discreto pedidos allí por el titular. La incorporación de campos queda preservada y pausada.
+**Equipo comprobado:** **B** dirige producto y acceso; **C**, continuidad, proveedores y soporte; **D**, calidad y piloto; el chat de **landing**, diseño. Los tres primeros están reactivados y trabajando con entregas concretas. El área **legal/privacidad/SEO/rendimiento** está en preparación. **A** dirige prioridades, recursos y aceptación; B se encarga de la integración técnica. Dos frentes modifican la aplicación, los demás revisan y preparan decisiones.
 
 **Regla de evidencia:** cada encargo tiene una razón, alcance y condición de cierre. Al terminar deja el cambio, una prueba verificable y sus límites; A contrasta el resultado antes de marcarlo terminado. Un fallo se conserva y sólo se repite la prueba cuando hay información o una corrección nueva.
 
