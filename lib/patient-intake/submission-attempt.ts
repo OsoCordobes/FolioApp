@@ -20,3 +20,9 @@ export function reconcileAttempt(attempt: SubmissionAttempt, status: unknown): S
   if (data.status === "not_received") return { ...attempt, phase: "not_received" };
   return { ...attempt, phase: "uncertain" };
 }
+
+/** Ignore delayed responses from another operation and never downgrade a receipt. */
+export function mergeAttemptForOperation(current: SubmissionAttempt | null, operationId: string, status: unknown): SubmissionAttempt | null {
+  if (!current || current.operationId !== operationId) return current;
+  return reconcileAttempt(current, status);
+}

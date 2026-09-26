@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { newSubmissionAttempt, reconcileAttempt, type SubmissionAttempt } from "@/lib/patient-intake/submission-attempt";
+import { mergeAttemptForOperation, newSubmissionAttempt, reconcileAttempt, type SubmissionAttempt } from "@/lib/patient-intake/submission-attempt";
 import { postIntakeJson } from "@/lib/patient-intake/browser-http";
 import styles from "./patient-form.module.css";
 
@@ -42,6 +42,15 @@ export function PatientForm() {
   const [message, setMessage] = useState("");
   const opened = useRef(false);
   const initialSubmissionStarted = useRef(false);
+  const attemptRef = useRef<SubmissionAttempt | null>(null);
+  const statusBusy = useRef(false);
+
+  function applyAttemptStatus(operationId: string, result: unknown): SubmissionAttempt | null {
+    const next = mergeAttemptForOperation(attemptRef.current, operationId, result);
+    attemptRef.current = next;
+    setAttempt(current => mergeAttemptForOperation(current, operationId, result));
+    return next;
+  }
 
   useEffect(() => {
     if (opened.current) return;
@@ -73,42 +82,52 @@ export function PatientForm() {
       if (checked.phase !== "not_received") { initialSubmissionStarted.current = false; setMessage("No pudimos comprobar el enlace antes de enviar. Conservamos tus respuestas; consultá con el consultorio."); return; }
     } catch { initialSubmissionStarted.current = false; setMessage("No pudimos comprobar el enlace antes de enviar. Tus datos siguen en esta pantalla."); return; }
     finally { setPreflighting(false); }
-    setAttempt(next); setMessage("");
+    attemptRef.current = next; setAttempt(next); setMessage("");
     try {
       const receipt = await postIntakeJson("submit", { marker, operationId: next.operationId, answers: next.answers });
-      setAttempt(reconcileAttempt(next, receipt));
+      applyAttemptStatus(next.operationId, receipt);
     } catch (error) {
-      if (error instanceof Error && error.message === "invalid_answers") { initialSubmissionStarted.current = false; setAttempt(null); setMessage("Revisá los datos antes de enviar."); return; }
-      setAttempt({ ...next, phase: "uncertain" });
+      if (error instanceof Error && error.message === "invalid_answers") { initialSubmissionStarted.current = false; attemptRef.current = null; setAttempt(null); setMessage("Revisá los datos antes de enviar."); return; }
+      applyAttemptStatus(next.operationId, { status: "uncertain" });
       setMessage("No pudimos confirmar la recepción. Conservamos tus respuestas en esta pestaña; consultá el estado antes de hacer otro envío.");
     }
   }
 
   async function checkStatus() {
-    if (!attempt || !marker || preflighting) return;
+    const current = attemptRef.current;
+    if (!current || !marker || statusBusy.current) return;
+    statusBusy.current = true; setPreflighting(true);
     try {
-      const result = await postIntakeJson("status", { marker, operationId: attempt.operationId });
-      const next = reconcileAttempt(attempt, result);
-      setAttempt(next);
-      setMessage(next.phase === "not_received"
+      const result = await postIntakeJson("status", { marker, operationId: current.operationId });
+      const next = applyAttemptStatus(current.operationId, result);
+      setMessage(next?.phase === "not_received"
         ? "Este envío todavía no figura recibido. Podés volver a enviar exactamente los mismos datos; no los cambies hasta que quede confirmado."
-        : next.phase === "received" ? "El consultorio recibió tu aporte." : "No pudimos confirmar la recepción. Consultá con el consultorio antes de repetir.");
-    } catch { setAttempt({ ...attempt, phase: "uncertain" }); setMessage("No pudimos confirmar la recepción. Consultá con el consultorio antes de repetir."); }
+        : next?.phase === "received" ? "El consultorio recibió tu aporte." : "No pudimos confirmar la recepción. Consultá con el consultorio antes de repetir.");
+    } catch {
+      const next = applyAttemptStatus(current.operationId, { status: "uncertain" });
+      setMessage(next?.phase === "received" ? "El consultorio recibió tu aporte." : "No pudimos confirmar la recepción. Consultá con el consultorio antes de repetir.");
+    } finally { statusBusy.current = false; setPreflighting(false); }
   }
 
   async function retrySame() {
-    if (!attempt || attempt.phase !== "not_received" || !marker || preflighting) return;
+    const current = attemptRef.current;
+    if (!current || current.phase !== "not_received" || !marker || statusBusy.current) return;
+    statusBusy.current = true;
     setPreflighting(true);
     try {
-      const status = reconcileAttempt(attempt, await postIntakeJson("status", { marker, operationId: attempt.operationId }));
-      if (status.phase === "received") { setAttempt(status); setMessage("El consultorio recibió tu aporte."); return; }
-      if (status.phase !== "not_received") { setAttempt({ ...attempt, phase: "uncertain" }); setMessage("No pudimos comprobar el enlace antes de reenviar."); return; }
-    } catch { setAttempt({ ...attempt, phase: "uncertain" }); setMessage("No pudimos comprobar el enlace antes de reenviar."); return; }
-    finally { setPreflighting(false); }
-    const sending = { ...attempt, phase: "sending" as const };
-    setAttempt(sending); setMessage("");
-    try { setAttempt(reconcileAttempt(sending, await postIntakeJson("submit", { marker, operationId: attempt.operationId, answers: attempt.answers }))); }
-    catch { setAttempt({ ...sending, phase: "uncertain" }); setMessage("No pudimos confirmar la recepción. Revisá el estado antes de repetir."); }
+      const status = applyAttemptStatus(current.operationId, await postIntakeJson("status", { marker, operationId: current.operationId }));
+      if (status?.phase === "received") { setMessage("El consultorio recibió tu aporte."); return; }
+      if (status?.phase !== "not_received") { applyAttemptStatus(current.operationId, { status: "uncertain" }); setMessage("No pudimos comprobar el enlace antes de reenviar."); return; }
+      const sending = { ...status, phase: "sending" as const };
+      attemptRef.current = sending;
+      setAttempt(previous => previous?.operationId === sending.operationId && previous.phase !== "received" ? sending : previous);
+      setMessage("");
+      const receipt = await postIntakeJson("submit", { marker, operationId: sending.operationId, answers: sending.answers });
+      applyAttemptStatus(sending.operationId, receipt);
+    } catch {
+      const next = applyAttemptStatus(current.operationId, { status: "uncertain" });
+      setMessage(next?.phase === "received" ? "El consultorio recibió tu aporte." : "No pudimos confirmar la recepción. Revisá el estado antes de repetir.");
+    } finally { statusBusy.current = false; setPreflighting(false); }
   }
 
   return <main className={`${styles.page} ph-no-capture ph-no-capture-recording`} data-sensitive>
@@ -139,6 +158,7 @@ export function PatientForm() {
           </form> : null}
         </> : null}
       </article>
+      <nav className={styles.legal} aria-label="Información legal"><a href="/privacidad" target="_blank" rel="noopener noreferrer">Privacidad</a><a href="/cookies" target="_blank" rel="noopener noreferrer">Cookies</a></nav>
     </div>
   </main>;
 }

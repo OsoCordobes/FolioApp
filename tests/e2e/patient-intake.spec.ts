@@ -28,6 +28,9 @@ test("desktop: fragment disappears, keyboard form keeps its draft after a lost r
   await page.goto(`/aporte#token=${tokenA}`);
   await expect(page).toHaveURL(/\/aporte$/);
   await expect(page.getByRole("heading", { name: "Compartí tus datos con el consultorio" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Cookies y privacidad" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Privacidad" })).toHaveAttribute("href", "/privacidad");
+  await expect(page.getByRole("link", { name: "Cookies" })).toHaveAttribute("href", "/cookies");
   await page.keyboard.press("Tab");
   await expect(page.locator(":focus")).toBeVisible();
   await page.getByRole("textbox", { name: "Nombre", exact: true }).fill("Ana");

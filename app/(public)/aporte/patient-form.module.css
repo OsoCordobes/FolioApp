@@ -22,4 +22,7 @@
 .alert,.success { border-radius: 10px; padding: 15px 16px; line-height: 1.5; margin: 15px 0; }
 .alert { background: var(--amber-soft); color: var(--amber); border: 1px solid var(--line); }
 .success { display: flex; flex-direction: column; gap: 4px; background: var(--green-soft); color: var(--green); border: 1px solid var(--line); }
+.legal { display: flex; gap: 18px; justify-content: center; padding: 20px 0 0; font-size: 13px; }
+.legal a { color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; }
+.legal a:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 @media (max-width: 560px) { .page { padding: 22px 12px 40px; }.brand { margin-bottom: 20px; }.card { border-radius: 16px; }.grid { grid-template-columns: 1fr; gap: 14px; } .primary,.secondary { width: 100%; margin: 0 0 10px; } }
