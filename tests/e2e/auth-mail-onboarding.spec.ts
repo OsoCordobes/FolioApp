@@ -135,6 +135,15 @@ async function servicesRevision(organizationId:string){
  return Number(row.data!.onboarding_services_revision);
 }
 
+async function diagnosticWithin<T>(work:(signal:AbortSignal)=>PromiseLike<T>,fallback:T):Promise<T>{
+ const controller=new AbortController();
+ let timer:ReturnType<typeof setTimeout>|undefined;
+ return Promise.race([
+  Promise.resolve().then(()=>work(controller.signal)).catch(()=>fallback),
+  new Promise<T>(resolve=>{timer=setTimeout(()=>{controller.abort();resolve(fallback);},3000);}),
+ ]).finally(()=>{if(timer)clearTimeout(timer);});
+}
+
 async function serviceStep(page:Page,tipo:'INDEPENDIENTE'|'CLINICA',organizationId:string){
  const isClinic=tipo==='CLINICA';
  const original=isClinic?'Servicio sintético clínica':'Servicio sintético Solo';
@@ -151,8 +160,30 @@ async function serviceStep(page:Page,tipo:'INDEPENDIENTE'|'CLINICA',organization
  if(isClinic)await page.getByRole('button',{name:'Agregar servicio'}).click();
  else if(await page.getByRole('textbox',{name:'Nombre del servicio 1'}).count()===0)
   await page.getByRole('button',{name:'Agregar servicio'}).click();
- await page.getByRole('textbox',{name:'Nombre del servicio 1'}).fill(original);
- await expect.poll(()=>storedService(organizationId,original),{timeout:30_000}).not.toBeUndefined();
+ const nameField=page.getByRole('textbox',{name:'Nombre del servicio 1'});
+ await nameField.fill(original);
+ try {
+  await expect.poll(()=>storedService(organizationId,original),{timeout:30_000}).not.toBeUndefined();
+ } catch {
+  const db=await diagnosticWithin(signal=>{
+   const service=createClient(API,process.env.SUPABASE_SERVICE_ROLE_KEY!,{auth:{persistSession:false,autoRefreshToken:false}});
+   return Promise.all([
+    service.from('servicio').select('id',{head:true,count:'exact'}).eq('organization_id',organizationId).is('deleted_at',null).abortSignal(signal),
+    service.from('organization').select('onboarding_services_revision').eq('id',organizationId).abortSignal(signal).maybeSingle(),
+   ]);
+  },null);
+  const [catalog,organization]=db??[null,null];
+  const dbOk=!!catalog&&!catalog.error&&!!organization&&!organization.error&&!!organization.data;
+  const revision=dbOk?Number(organization.data!.onboarding_services_revision):NaN;
+  const [nameMatch,fieldEnabled,alert,verify]=await Promise.all([
+   diagnosticWithin(()=>nameField.inputValue({timeout:2500}).then(value=>value===original),false),
+   diagnosticWithin(()=>nameField.isEnabled({timeout:2500}),false),
+   diagnosticWithin(()=>page.getByRole('alert').count().then(count=>count>0),false),
+   diagnosticWithin(()=>page.getByRole('button',{name:'Verificar guardado'}).isVisible({timeout:2500}),false),
+  ]);
+  console.log(`services_proof_diagnostic:phase=initial_save db_ok=${dbOk?1:0} active_count=${dbOk?catalog!.count??'unknown':'unknown'} revision=${Number.isSafeInteger(revision)?revision:'unknown'} name_match=${nameMatch?1:0} field_enabled=${fieldEnabled?1:0} alert=${alert?1:0} verify=${verify?1:0}`);
+  throw Error('services_proof_initial_save_missing');
+ }
  const id=await storedService(organizationId,original);
  const initialRevision=await servicesRevision(organizationId);
  if(!isClinic){
