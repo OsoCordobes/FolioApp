@@ -24,6 +24,14 @@ Cierre de B09a: replay completo, negativos directos de permisos, sesiones vencid
 
 ## Resultado esperado
 
+### Siguiente corte preparado ·26/09
+
+Desde PR186 `3b99fe010ace47192060ec4fcefe49f8d910e669`, revisión de arquitectura sólo lectura por `intake_cancel_review`: emisión/revocación manual y QR local, formulario administrativo y consulta de propuestas por personal autorizado. Sin correo, preguntas clínicas ni incorporación automática. Asignar escritor después de cerrar la base y fijar master actualizado.
+
+Propiedad propuesta: helpers nuevos `lib/patient-intake/{http,staff,public-service,submission-attempt}.ts`; rutas `app/api/patient-intake/{exchange,submit,status}`; página pública `/aporte` y componente en detalle del turno. Coordinar cambios puntuales en middleware/decisión de rutas; conservar políticas de caller. Credencial inicial en fragmento retirado inmediatamente, sin analítica; cookie propia HttpOnly/Secure/Strict con plazo del servidor, Origin exacto y límites reales de cuerpo/intentos.
+
+Obligatorio antes de implementar: vincular el borrador a un marcador opaco de sesión comprobado por servidor para impedir que otra pestaña sustituya la cookie y envíe datos al turno equivocado. No reintentar automáticamente emisión con respuesta perdida: M144 no recupera el token original; una reemisión explícita revoca el enlace anterior. En envío, conservar operación/contenido en memoria y reconciliar estado; error, revocación o vencimiento no equivalen a «no recibido». Staff deriva organización de sesión y usa RPC autenticada; servicio público dedicado service-only, cifrado/huellas sólo en servidor. Prueba final real emisión→aporte→consulta, negativa entre organizaciones, dos pestañas, revocación y respuesta perdida; incorporación con conflicto será otro paquete.
+
 El paciente recibe un enlace o QR correspondiente a su turno, completa los datos desde el teléfono y el personal autorizado los revisa dentro de Folio. No necesita crear una cuenta. La falta de formulario no impide atenderlo.
 
 La primera parte recoge datos personales, contacto y cobertura. La segunda recoge motivo y preguntas de la especialidad aprobadas por un profesional competente. Se presentan por separado: recepción puede revisar lo administrativo; el contenido clínico exige acceso clínico a esa ficha. Una omisión nunca significa «No».
