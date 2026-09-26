@@ -1,6 +1,14 @@
 # Folio — tablero único de lanzamiento
 
-Actualizado el 25/09/2026. A dirige, revisa y publica. [AVANCES.md](AVANCES.md) es la vista breve para el titular, disponible como archivo; su apertura en el panel lateral quedó encolada; cada fila cambia sólo ante un resultado significativo. La vista web4420 quedó apagada tras la interrupción y el reinicio de su proceso fue rechazado por política de ejecución. No impide actualizar el archivo ni continuar implementación.
+Actualizado el 26/09/2026. A dirige, revisa y publica. [AVANCES.md](AVANCES.md) es la vista breve para el titular, disponible como archivo; su apertura en el panel lateral quedó encolada; cada fila cambia sólo ante un resultado significativo. La vista web4420 quedó apagada tras la interrupción y el reinicio de su proceso fue rechazado por política de ejecución. No impide actualizar el archivo ni continuar implementación.
+
+## Continuación vigente · 26/09
+
+- Por pedido del titular se priorizó actualizar instrucciones/configuración antes de continuar la app. Completado con dos revisores: [informe](AGENT-SETUP-20260926.md). Astra Ultra predeterminado; guía canónica en AGENTS.md; no se modificaron permisos, código, migraciones ni producción.
+- Git verificado en Escritorio: master `abefca815821f789c6c1a7a63a52309c9f8c63cb`, PR184 integrada; App del squash36129962703 SUCCESS. La evidencia de publicación reunida en la sesión anterior sigue conservada; completar su informe final al retomar, sin republicar ni repetir smoke.
+- PR185 candidata `4e477127b7816cd67f1a81a9db61e07ace6a57a3`: App/SQL SUCCESS; acceso36130367495 FAILURE y Preview SKIPPED. PR186 candidata `6b47025936a36bae58d0f0d4a2610c50aa2004d3`: App/Preview SUCCESS; acceso36130483165 y SQL36130483281 FAILURE. Leer las causas antes de repetir; no integrar ni tratar SKIPPED como aprobado. No se aplicó M144/M145 durante esta revisión de configuración.
+- No hay escritores de aplicación activos durante este paquete. Las copias de ambos candidatos están preservadas. Primero investigar los fallos, luego asignar paquetes de corrección independientes. Cuota al comienzo:0% usado/100% disponible; reserva15%.
+- Las secciones del 25/09 siguientes se conservan como último detalle de ejecución, **sustituidas por esta cabecera para estado de equipo/publicación**. No relanzar agentes ni repetir operaciones tomando aquellas fechas como estado vivo.
 
 El [historial íntegro anterior](LAUNCH-BOARD-HISTORY-20260925.md) se conservó sin alterar. Copia exacta fuera de Git: `C:/Users/amiun/Documents/Codex/folio-manager-evidence/launch-board-history-exact-20260925.md`, SHA256 `4E44550C8530E6C5B65E2AA4D8B81D85437DF342AA53F35356FD32BC7001C49C`. Contiene diagnósticos, fallos, autorizaciones, publicaciones y planes sustituidos. Este archivo gobierna el estado vigente; las fechas y estados históricos no vuelven a abrir trabajo ya cerrado.
 
