@@ -1,6 +1,6 @@
 # Folio · avances comprobables
 
-Actualizado: 29/09/2026. Se retoma el trabajo guardado tras la interrupción del 26/09. [El tablero técnico](LAUNCH-BOARD.md) conserva el detalle y los antecedentes. Cada fila cambia sólo ante un resultado o bloqueo real.
+Actualizado: 30/09/2026, horario de Copenhague. [El tablero técnico](LAUNCH-BOARD.md) conserva el detalle y los antecedentes. Cada fila cambia sólo ante un resultado o bloqueo real.
 
 **Equipo comprobado:** **B** prepara la incorporación de datos del paciente; **C**, recuperación de las copias; **D**, revisión independiente. **Legal** terminó sus candidatos técnicos y conserva decisiones de publicación pendientes; la **landing** espera tu valoración con una versión probada. **A** dirige prioridades, recursos y aceptación. Se conserva el límite de dos escritores y cada entrega tiene evidencia.
 
@@ -12,7 +12,7 @@ Actualizado: 29/09/2026. Se retoma el trabajo guardado tras la interrupción del
 
 | Checkpoint | Resultado, responsable y prueba |
 |---|---|
-| **Forma de trabajo** · guía integrada y revisada | La [guía integrada](https://github.com/OsoCordobes/FolioApp/pull/187) superó la revisión solicitada: clara y vigente, sin cambios necesarios. [Informe](AGENT-SETUP-20260926.md) con rúbrica, evidencia y límites; las responsabilidades por área permanecen en el tablero. |
+| **Forma de trabajo** · guía revisada y prueba aislada publicada | La [guía](https://github.com/OsoCordobes/FolioApp/pull/187) superó la auditoría solicitada. [PR189 publicada](https://github.com/OsoCordobes/FolioApp/pull/189) permite ensayos de datos por versión exacta, sin crear un entorno pago; CI y despliegue comprobados. |
 | **Landing de Folio** · nueva propuesta lista para revisar | Probá http://127.0.0.1:4441/: agenda más legible y paso de historia a cobro. Diseño cerró revisión independiente y cinco tamaños de pantalla; la anterior sigue en /v1/. Es portada y demo local, sin publicar. |
 | **Ingreso y onboarding** · acceso y servicios publicados | [PR175](https://github.com/OsoCordobes/FolioApp/pull/175): registro y recuperación. D · revisión A; [PR177 publicada](https://github.com/OsoCordobes/FolioApp/pull/177): servicios conservados al volver y ante respuesta perdida, [prueba Solo/Clínica](https://github.com/OsoCordobes/FolioApp/actions/runs/36088410093). |
 | **Permisos de Clínica** · dos paquetes publicados | Pedidos y motivos protegidos según el rol: [PR170](https://github.com/OsoCordobes/FolioApp/pull/170). C · revisión A; [PR174 publicada](https://github.com/OsoCordobes/FolioApp/pull/174) impide entregar una firma si se revoca el acceso durante su descarga. |
