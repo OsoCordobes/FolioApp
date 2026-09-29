@@ -137,6 +137,13 @@ jobs:
           FOLIO_M147_SYNTHETIC: '1'
         run: node tests/concurrency/M147_patient_intake_link_recovery.mjs
 
+      - name: Run M148 real PostgreSQL incorporation races
+        if: hashFiles('tests/concurrency/M148_patient_intake_incorporation.mjs') != ''
+        timeout-minutes: 3
+        env:
+          FOLIO_M148_SYNTHETIC: '1'
+        run: node tests/concurrency/M148_patient_intake_incorporation.mjs
+
       - name: Summary
         if: always()
         run: |
