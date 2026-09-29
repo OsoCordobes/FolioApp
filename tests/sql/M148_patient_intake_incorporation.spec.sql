@@ -42,9 +42,12 @@ DO $$ BEGIN
  END IF;
 END $$;
 
--- Supabase grants table DML to authenticated and lets RLS/guards constrain rows
--- and columns. The vanilla PG16 bootstrap does not install those platform grants.
+-- Supabase grants schema/table access to authenticated and lets RLS/guards
+-- constrain rows and columns. The vanilla PG16 bootstrap omits those grants;
+-- paciente RLS also references member and auth.uid() directly.
+GRANT USAGE ON SCHEMA public, auth TO authenticated;
 GRANT SELECT, UPDATE ON public.paciente_identidad TO authenticated;
+GRANT SELECT ON public.paciente, public.member TO authenticated;
 
 INSERT INTO auth.users(id,email) SELECT pg_temp.m148_id(n),'m148-'||n||'@synthetic.invalid'
   FROM generate_series(1,4) n;
