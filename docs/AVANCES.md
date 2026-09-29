@@ -2,7 +2,7 @@
 
 Actualizado: 30/09/2026, horario de Copenhague. [El tablero técnico](LAUNCH-BOARD.md) conserva el detalle y los antecedentes. Cada fila cambia sólo ante un resultado o bloqueo real.
 
-**Equipo comprobado:** **B** prepara la incorporación de datos; **C**, recuperación de copias; **D**, revisión independiente. **Legal/SEO** busca cerrar su entrega sin esperar a la ficha; **Landing** prepara la página completa y toma el próximo cupo libre. B, Legal/SEO y Landing usan **Sol6.1 High** desde la actualización autorizada. **A** dirige prioridades y aceptación; dos escritores como máximo y evidencia por entrega.
+**Equipo comprobado:** **B** prepara la incorporación de datos; **Landing** construye la página completa; **C** ejecuta un diagnóstico de copias ya revisado; **D** verifica de forma independiente. **Legal/SEO** prepara una entrega separada de la ficha. B, Legal/SEO y Landing usan **Sol6.1 High**. **A** dirige prioridades y aceptación; dos escritores como máximo y evidencia por entrega.
 
 **Regla de evidencia:** cada encargo tiene una razón, alcance y condición de cierre. Al terminar deja el cambio, una prueba verificable y sus límites; A contrasta el resultado antes de marcarlo terminado. Un fallo se conserva y sólo se repite la prueba cuando hay información o una corrección nueva.
 
@@ -13,7 +13,7 @@ Actualizado: 30/09/2026, horario de Copenhague. [El tablero técnico](LAUNCH-BOA
 | Checkpoint | Resultado, responsable y prueba |
 |---|---|
 | **Forma de trabajo** · guía revisada y prueba aislada publicada | La [guía](https://github.com/OsoCordobes/FolioApp/pull/187) superó la auditoría solicitada. [PR189 publicada](https://github.com/OsoCordobes/FolioApp/pull/189) permite ensayos de datos por versión exacta, sin crear un entorno pago; CI y despliegue comprobados. |
-| **Landing de Folio** · propuesta visual y próxima página completa | Dirección A en http://127.0.0.1:4441/: portada/demo revisadas en cinco tamaños. Diseño preparó ampliar recorridos, primeros pasos y preguntas frecuentes; comienza en el próximo cupo libre. Propuesta local, todavía sin publicar ni aceptación visual final. |
+| **Landing de Folio** · página completa en desarrollo | Diseño amplía A de http://127.0.0.1:4441/ con recorridos, primeros pasos, preguntas frecuentes y cierre. Base visual anterior preservada; entrega requiere revisión móvil/escritorio e independiente. Propuesta local, todavía sin publicar ni aceptación visual final. |
 | **Ingreso y onboarding** · acceso y servicios publicados | [PR175](https://github.com/OsoCordobes/FolioApp/pull/175): registro y recuperación. D · revisión A; [PR177 publicada](https://github.com/OsoCordobes/FolioApp/pull/177): servicios conservados al volver y ante respuesta perdida, [prueba Solo/Clínica](https://github.com/OsoCordobes/FolioApp/actions/runs/36088410093). |
 | **Permisos de Clínica** · dos paquetes publicados | Pedidos y motivos protegidos según el rol: [PR170](https://github.com/OsoCordobes/FolioApp/pull/170). C · revisión A; [PR174 publicada](https://github.com/OsoCordobes/FolioApp/pull/174) impide entregar una firma si se revoca el acceso durante su descarga. |
 | **Recuperación completa** · ensayo aprobado e integrado | Datos, archivos, contraseña y segundo factor recuperados con datos ficticios. C · revisión A. [Prueba aprobada](https://github.com/OsoCordobes/FolioApp/actions/runs/36073216478), [entrega integrada](https://github.com/OsoCordobes/FolioApp/pull/167); custodia externa pendiente. |
