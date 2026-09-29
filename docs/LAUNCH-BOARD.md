@@ -4,6 +4,12 @@ Actualizado el 29/09/2026, 19:04 UTC (21:04 local). A dirige prioridades, recurs
 
 ## Continuación vigente · 29/09
 
+**Entregas posteriores de esta ejecución:** Access `f689832d1dd4a8a9e77954daa07c2a528fcfa729` aprobado por D tras corregir reinicio de contadores. B integró B06 en `56a15725dc6229a26368b26f8e58963a3252847e`, checkout limpio y único push de PR188 confirmado. CI nueva: Access36617046601, B0636617046523, App36617046620, B0936617046461, caller36617046804, recovery36617046713 y SQL36617046539; pendientes al despacho. No publicar hasta resultados y preflight final.
+
+Legal cerró [la propuesta exacta](LEGAL-COPY-PROPOSAL.md), aceptada sólo como borrador interno: fuentes y sustituciones sustentadas, dependencias técnicas y decisiones humanas separadas. Sus dos informes y la [hoja del piloto](D-CALIDAD-PILOTO.md) se preservaron idénticos en esta rama; originales intactos. SHA256 de inventario `4c58d2f70466a60c28f24cc7c8b79a14cb64466ff589fb9e4b5faba7f188b194`, propuesta `535248a1999b09e326d04a78e5bbbd3863c0abeab821d188082cd89f8d0c4605`, piloto `1b36169ca9caaeacbfa69589410f8c6c7ad5c3ac70afeb2a4c0547e4c8b69ec4`. No más investigación legal por ahora; preferencias/mapa e indexación esperan cupo.
+
+C delimitó por metadatos un fallo operativo antes del volcado, en la verificación de PostgreSQL: última copia válida informada del 19/09. Tras cerrar su hoja tiene autorizado preflight local inocuo del ejecutable, sin conexiones/captura/Docker/cambios de tareas/credenciales. Preparar corrección y revisión D antes de decidir un único CatchUp. La automatización horaria del manager figura **PAUSED** en su archivo; no se cambió esa preferencia ni se presume reanudación automática. La ejecución y coordinación actuales siguen activas.
+
 La aplicación y los chats quedaron interrumpidos el 26/09. Lectura fresca del 29/09: Escritorio/master local d567eb3, PR188 abierta en e4c1418 con los mismos fallos Access/B06, sin merge. No hubo nuevas publicaciones comprobadas en ese intervalo. Cuota **26% usada, 74% disponible**, reserva 15%. Las cinco áreas fueron reanudadas y wait_threads confirmó las cinco activas; no se duplicaron chats.
 
 - B cerró Access `34973b50ed5d943eb5ded5eabb2c307f10bdc99b` sobre e4c, cinco archivos y checkout limpio; sus 5 pruebas, lint y typecheck se conservaron sin repetir. Revisión D en curso antes de integrar B06 y hacer el único push informado. D señala un posible descarte del diagnóstico por delta negativo tras recarga; B debe resolver el dictamen, no inferir causa del fallo original. D ya aprobó B06: no repetirlo.
