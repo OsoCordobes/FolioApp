@@ -1,8 +1,37 @@
 # Folio — tablero único de lanzamiento
 
-Actualizado el 26/09/2026. A dirige, revisa y publica. [AVANCES.md](AVANCES.md) es la vista breve para el titular. La vista web4420 se recuperó por pedido explícito del titular:PID26832,127.0.0.1,HTTP200 y16 filas verificadas; tab del navegador abierto. El rechazo previo de reinicio se conserva como antecedente, ya no como bloqueo vigente.
+Actualizado el 29/09/2026, 19:04 UTC (21:04 local). A dirige prioridades, recursos y aceptación; B coordina integración técnica y la publicación con las áreas responsables. [AVANCES.md](AVANCES.md) es la vista breve para el titular. Panel http://127.0.0.1:4420/ con 19 checkpoints; recuperación actual registrada abajo. Los cortes anteriores se preservan como antecedentes.
 
-## Continuación vigente · 26/09
+## Continuación vigente · 29/09
+
+La aplicación y los chats quedaron interrumpidos el 26/09. Lectura fresca del 29/09: Escritorio/master local d567eb3, PR188 abierta en e4c1418 con los mismos fallos Access/B06, sin merge. No hubo nuevas publicaciones comprobadas en ese intervalo. Cuota **26% usada, 74% disponible**, reserva 15%. Las cinco áreas fueron reanudadas y wait_threads confirmó las cinco activas; no se duplicaron chats.
+
+- B cerró Access `34973b50ed5d943eb5ded5eabb2c307f10bdc99b` sobre e4c, cinco archivos y checkout limpio; sus 5 pruebas, lint y typecheck se conservaron sin repetir. Revisión D en curso antes de integrar B06 y hacer el único push informado. D señala un posible descarte del diagnóstico por delta negativo tras recarga; B debe resolver el dictamen, no inferir causa del fallo original. D ya aprobó B06: no repetirlo.
+- Landing conserva la ampliación visual pedida directamente por el titular y la investigación de diez referencias ya realizada. Vista 4440 recuperada por su responsable; continúa revisión móvil/escritorio y correcciones concretas de espacio en tablet/foco. Todavía sin aceptación final ni publicación.
+- C retoma su página de continuidad y contrasta sólo metadatos de respaldo: otro recordatorio informó última copia verificada del 19/09. Ese dato necesita lectura actual; no implica autorización para capturas o manipular claves/datos.
+- Legal retoma únicamente la propuesta de textos exactos, sin modificar aplicación ni documentos legales publicados. El inventario de 11 hallazgos ya está aceptado.
+- Auditoría solicitada de instrucciones **cerrada**: guía 90/100 según rúbrica, ningún cambio necesario; Flow Next sin almacén que auditar. [Informe y límites](AGENT-SETUP-20260926.md#revisión-focal-solicitada-claudemd-y-flow-next). No se cambió configuración ni se repitieron pruebas de producto.
+- Panel 4420 recuperado mediante el servidor existente, proceso oculto PID23840: HTTP200, 19 filas y contenidos nuevos de instrucciones/legal confirmados. Se ajustó el encabezado del registro al que reconoce su pie para mostrar también publicación y cuota; no se modificó el programa ni la aplicación.
+
+### Corte preservado · 26/09, 22:42 UTC
+
+**Estado actual · 22:42 UTC:** se recuperaron las ejecuciones interrumpidas de B, C y D sin repetir sus entregas. **Dos escritores de aplicación: B y Landing.** C liberó el cupo después de entregar B06; D revisa de forma independiente. Legal terminó el inventario y prepara textos concretos; no escribe aplicación. Cuota consultada en esta reanudación: **16% usada, 84% disponible**, reserva 15%.
+
+| Área | Resultado y siguiente paquete autorizado |
+|---|---|
+| B · Producto y acceso | Retoma el parser Access en el diff congelado desde e4c1418. Debe conservar el diagnóstico nuevo, probarlo, obtener revisión D e integrar con B06 en PR188 mediante un único push informado. Nada se publica con controles fallidos. |
+| C · Continuidad y proveedores | Entregó B06 `604bd7185f3a0c708ad9ea904ce6baa862c4752a`, checkout limpio. Ahora sólo prepara una página de evidencia y faltantes operativos para custodia, proveedores y soporte, reutilizando el informe legal. |
+| D · Calidad | Aprueba B06 sin blockers: árbol `133aa712952ba950dd05a4cfc0d37d0940a1794e`, SHA256 del diff `137c0d3318b5cfcd23fbac06c736afec7406bb84cca841c40c38f2dcf466fbe7`. Leyó los cuatro archivos; el autor aportó 3 pruebas focales, lint, parseo y typecheck PASS. Conserva plazos/assertions y limita el log a códigos cerrados. Revisión Access siguiente; no repite el piloto documental. |
+| Landing · Diseño | Sigue la ampliación visual pedida directamente por el titular en su chat: portada, demostración y composición, además de movimiento discreto. Vista 4440 en desarrollo; esperar candidato y revisión visual final. |
+| Legal, privacidad, SEO y rendimiento | Informe de 11 hallazgos entregado y aceptado como investigación: [reporte](C:/Users/amiun/.codex/worktrees/ae38/folio-app/docs/LAUNCH-LEGAL-SEO-PERFORMANCE.md). Correcciones y validación material pendientes; prepara `docs/LEGAL-COPY-PROPOSAL.md`, con textos sustentados y decisiones humanas separadas. Preferencias/mapa e indexación esperan cupo. |
+
+**Límites actuales:** PR188 sigue sin publicar; B09 aprobado no cierra Access ni el fallo B06. El commit de diagnóstico B06 permite obtener evidencia nueva, no demuestra por sí solo la causa. M147/M148 no aplicadas en producción; no repetir publicaciones ni operadores previos. El inventario legal no acredita cumplimiento ni habilita purgas, correo, cargos o Google.
+
+**Auditoría de instrucciones solicitada, estado de ese corte:** se aplicó claude-md-improver sobre la guía real y flow-next-audit sobre su ámbito. Escritorio continuaba en d567eb3; `.flow/memory/` ausente en Escritorio y manager. La revisión independiente terminó después sin cambios recomendados; resultado cerrado en el corte del 29/09 y en el informe enlazado arriba.
+
+### Antecedentes de coordinación · hasta 22:24 UTC
+
+Las asignaciones y cifras siguientes son cortes históricos. El estado y la propiedad de archivos vigentes son los de la tabla superior.
 
 **Primeras entregas del esquema por áreas:** B detectó P1 antes de gastar CI: Access emite formato nuevo pero run.mjs conserva regex vieja y perdería todo el diagnóstico. B tiene autoridad para corregir parser/prueba focal después de que C libere el cupo, y coordinar revisión con D antes de un solo candidato conjunto. A no implementa ese cambio. D entregó `f12d/folio-app/docs/D-CALIDAD-PILOTO.md`; tras precisar50MiB como tamaño probado, incorporación dependiente deM148 y decisiones humanas pendientes, A acepta la preparación documental, no habilita el piloto. No repetir ese inventario. C continúa diagnóstico B06 y landing su versión premium.
 

@@ -45,3 +45,24 @@ Para revertir, comparar primero el estado con el manifiesto y restaurar únicame
 ## Referencias
 
 La revisión sigue la recomendación de quitar instrucciones redundantes y precisar cuándo aplica cada skill: [Rethinking skills and prompts for GPT-6 Astra](https://developers.openai.com/blog/rethinking-skills-and-prompts-for-gpt-6-astra). Los ajustes se contrastaron con la [referencia de configuración](https://learn.chatgpt.com/docs/config-file/config-reference), el manual oficial actualizado y el catálogo local del modelo.
+
+## Revisión focal solicitada: CLAUDE.md y Flow Next
+
+Revisión realizada el 26/09 y registrada tras la interrupción el 29/09/2026. Base comprobada en ambas fechas: `d567eb3d3fb27f1e3868b068a08859ed6d065faf`. Se usaron [claude-md-improver](C:/Users/amiun/.codex/plugins/cache/claude-plugins-official/claude-md-management/1.0.0/skills/claude-md-improver/SKILL.md) y [flow-next-audit](C:/Users/amiun/.codex/plugins/cache/flow-next-marketplace/flow-next/6.1.1/codex/skills/flow-next-audit/SKILL.md), invocadas por el titular. Alcance: instrucciones y memoria propia de Flow Next; no otra auditoría de producto ni configuración de plugins.
+
+**Informe de calidad previo a cualquier cambio:** el revisor independiente `claude_guidance_audit` encontró un único `CLAUDE.md` propio en el repositorio, sin overrides locales, de ancestros ni `~/.claude/CLAUDE.md`. Sus tres líneas remiten a `AGENTS.md`, de 35 líneas. Se evaluó el conjunto delegado, no se penalizó el enlace por evitar duplicaciones.
+
+| Criterio | Puntuación | Evidencia |
+|---|---:|---|
+| Comandos y flujos | 15/20 | AGENTS.md:15 remite a package.json:5; AGENTS.md:22 delimita las verificaciones. No necesita copiar todos los scripts. |
+| Arquitectura | 15/20 | Tecnologías, estilos y acceso a datos identificados; suficiente para una guía breve, no un mapa exhaustivo. |
+| Patrones no evidentes | 15/15 | Result/SQLSTATE, RLS, migraciones inmutables, aislamiento y conciliación de escrituras inciertas. |
+| Concisión | 15/15 | Una guía canónica y un enlace, sin dos instrucciones paralelas. |
+| Vigencia | 15/15 | Comandos, tecnologías y referencias contrastados con el repositorio actual. |
+| Accionabilidad | 15/15 | Delegación, prueba, revisión y límites de publicación concretos. |
+
+**Resultado: 90/100 (A), cero archivos que requieren cambios, diff propuesto: ninguno.** Es una valoración de la documentación según la rúbrica de la skill, no una medida del rendimiento del modelo. No se modificaron CLAUDE.md ni AGENTS.md ni se ejecutaron pruebas de aplicación para esta revisión.
+
+La dirección por áreas y las asignaciones cambiantes pertenecen al [tablero activo](LAUNCH-BOARD.md), que ya las recoge. La copia del tablero en el Escritorio aún conserva el corte del 21/09: se aplica el desvío al checkout del manager previsto en AGENTS.md:8. Se corrigió la presentación del tablero activo para distinguir el estado actual de los antecedentes conservados.
+
+**Flow Next:** `.flow/memory/` no existe en el Escritorio ni en el checkout del manager. Se aplicó la salida limpia prevista por el preámbulo de la skill: cero entradas auditadas, cero modificadas y cero eliminadas; no hubo clasificación ni revisión de glosario posterior. No se inicializó un almacén sólo para auditarlo ni se modificaron las memorias nativas de Codex. No quedan decisiones de esta auditoría pendientes del titular.
