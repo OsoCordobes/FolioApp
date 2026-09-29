@@ -1,6 +1,6 @@
 # Folio — tablero único de lanzamiento
 
-Actualizado: 29/09/2026, 20:59 UTC. Esta página es el estado operativo vigente. [AVANCES.md](AVANCES.md) es la vista breve del titular; panel http://127.0.0.1:4420/.
+Actualizado: 29/09/2026, 21:05 UTC. Esta página es el estado operativo vigente. [AVANCES.md](AVANCES.md) es la vista breve del titular; panel http://127.0.0.1:4420/.
 
 El historial anterior se conserva íntegro en [LAUNCH-BOARD-HISTORY-20260929-2050.md](LAUNCH-BOARD-HISTORY-20260929-2050.md), SHA256 f725a510211fce532871057d83063ad800f7ea419c1ebd537f2070fa93c767a0. Sus cortes fechados son antecedentes, no asignaciones actuales.
 
@@ -18,7 +18,7 @@ La automatización folio-manager-por-checkpoints figura PAUSED; no se cambió es
 
 | Área | Estado comprobado / próximo paso |
 |---|---|
-| B · Producto | PR188 candidato56a15725 con toda CI/revisión aprobadas, publicación retenida hasta copia nueva autenticada. M148 candidato8759fb6 completo en fuente/revisado, sin SQL ejecutado; B está libre, sin polling ni nuevas pruebas. |
+| B · Producto | PR188 candidato56a15725 con toda CI/revisión aprobadas, publicación retenida hasta copia nueva autenticada. M148 candidato8759fb6 completo en fuente/revisado, sin SQL ejecutado. Segundo escritor autorizado para preparar sólo la prueba autenticada S1 en checkout libre, sin tocar esos candidatos ni la previewL4. |
 | C · Continuidad | Runtime PostgreSQL autocontenido preparado y probe programado de ambas versiones PASS. Prepara Plan/Inspect/retención y propuesta de Update + CatchUp; todavía no autorizado ni ejecutado para este runtime. |
 | D · Calidad | Validó independientemente runtime y recibo del probe. Revisará sólo delta/plan de instalación y recibo de captura cuando existan. |
 | Legal/SEO | S1/P1/L4 preparados, pruebas y revisiones cerradas. Preview4410 lista; publicación de P1/L4 retenida por preaviso de Privacidad§8 y decisiones del titular/asesoría. Sin escritor activo. |
@@ -56,6 +56,7 @@ Node check/lint/SQL estático/YAML/diff PASS. Esto es **cobertura en fuente, no 
 ## Legal, diseño y vistas para probar
 
 - S1 indexación: `d122db0b1112b1e1b6c3fbe391e6819bf3ece651`, base d567, separado. Noindex de accesos/áreas privadas y login fuera de sitemap. Dos pruebas sintéticas, typecheck/lint/revisión PASS. Al integrar trasPR188, comprobar HTML autenticado de /hoy y /portal; no hay overrides descendientes conocidos, pero la prueba actual sólo acredita páginas públicas/redirecciones.
+- S1 preparación siguiente21:05: B puede añadir comprobaciones robots de /hoy y /portal en fixtures existentes desde d122, aislado y sin conexión/DB/Docker/env/push/CI. Usar checkout libre; ae38 está ocupado por4410. No afirmar HTML autenticado probado a partir de mocks. Cierre de este paquete: pruebas preparadas/revisión y dependencia explícita del ensayo real; si requiere ámbito ajeno, informar en lugar de ampliar.
 - P1 preferencias/mapa: `f8a0e5c2093f3130fc25ea1ef9fc0be36250e43f`; cinco e2e, cuatro unidades, móvil/escritorio/revisión PASS. Revocación/DNT/sincronía y mapa por acción; si almacenamiento no admite escritura/borrado, revocación dura sólo esa pestaña y se advierte. Sin proveedor real probado.
 - L4: `8333569854702a33933034e2bce5cebb164582d3`, árbol `0f3f55cf32c6a24979f67bc47fec8f1dc6aba452`, padreP1. Dos writes onboarding registran PRIVACY_VERSION; M126 COALESCE conserva constancias previas. Seis blobs old/new verificados. Medición navegador/servidor explicadas por separado; exports etiquetan política vigente al generar, no aceptación histórica. Cuatro páginas/dos altas/tipos/lint y revisiónD PASS.
 - Publicación legal RETENIDA: Privacidad§8 conserva aviso30d; no inventar envío ni eliminar obligación. Titular/asesoría deben resolver vigencia/aviso y datos responsables. Pregunta asíncrona enviada al titular sobre persona/empresa, país y asesoría; pendiente, no bloquea desarrollo independiente. [Propuesta](LEGAL-COPY-PROPOSAL.md) e [inventario](LAUNCH-LEGAL-SEO-PERFORMANCE.md) son borradores; su texto PostHog anterior se corrige en L4, no tratarlo como publicado.
