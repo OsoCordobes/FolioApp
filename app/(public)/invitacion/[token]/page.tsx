@@ -25,7 +25,10 @@ import { InvitationAuth, InvitationDecision, type InvitationPreview } from "./in
  */
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Invitación al equipo" };
+export const metadata = {
+  title: "Invitación al equipo",
+  robots: { index: false, follow: false },
+};
 
 // Token = randomBytes(32).toString("base64url") → 43 chars [A-Za-z0-9_-].
 // Guard barato contra paths basura antes de tocar la DB.
