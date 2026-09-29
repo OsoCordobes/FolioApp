@@ -59,6 +59,10 @@ Node check/lint/SQL estático/YAML/diff PASS. Esto es **cobertura en fuente, no 
 
 A ajustó la dependencia operativa21:43UTC: B puede preparar un ensayo sintético sobre base56a antes de publicar PR188 si demuestra aislamiento; esperar el respaldo no debe impedir esta preparación. Revisor independiente de A examina SQL/cobertura final. No se autorizó aplicar/ejecutar aún; ningún ensayo habilita producción ni edición de una migración ya aplicada.
 
+Revisión final independiente `m148-pre-hosted-review-8759fb6.md`, SHA256 `0ade2161c0235b5b61cec5d7e08f170990342379593ad6e26679ad3806dc31eb`: aprobado para primer ensayo PG16 aislado, sin P1/P2 estático; no acredita ejecución ni Preview. Para evitar crear una rama Supabase paga por abrir PR M148, B preparó una vía manual reutilizable del workflow SQL.
+
+**CI manual autorizada por A, pendiente de recibo:** candidato `b4033d3f236f69aed283e97068a54f7f085c6ad6`, árbol `4d24aa2db10659a20fdd9b5b7f668b9d64529012`, padre d567; checkout d05, rama codex/pgtap-manual-dispatch. Único archivo pgtap.yml: workflow_dispatch, expected_sha obligatorio, contents:read, sin credenciales persistidas y guard SHA antes de SQL. Revisión independiente aprobada. A autoriza push/PR/CI/squash si SHA exacto/checks aprobados/Supabase SKIPPED y no crea rama; verificar árbol/despliegue. Sólo CI, sin DB ni cambio de aplicación; no libera PR188/M147. Operación `m148-pgtap-dispatch-operation-b4033d3.md` (los ejemplos PowerShell necesitan sustituir continuaciones Bash). Después B prepara commit operativo M148+workflow; **push de tag y dispatch NO autorizados** hasta revisar SHA concreto. No ejecutar el plan obsoleto contra un SHA mal escrito.
+
 ## Legal, diseño y vistas para probar
 
 - S1 indexación: `d122db0b1112b1e1b6c3fbe391e6819bf3ece651`, base d567, separado. Noindex de accesos/áreas privadas y login fuera de sitemap. Dos pruebas sintéticas, typecheck/lint/revisión PASS. Al integrar trasPR188, comprobar HTML autenticado de /hoy y /portal; no hay overrides descendientes conocidos, pero la prueba actual sólo acredita páginas públicas/redirecciones.
