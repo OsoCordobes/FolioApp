@@ -62,6 +62,9 @@ export function pageRouteKind(url: string, appOrigin: string): 'onboarding' | 'a
 export type TimerCounts = {scheduled: number; fired: number; cancelled: number};
 export function timerDelta(before: TimerCounts | null, after: TimerCounts | null): TimerCounts | null {
   if (!before || !after) return null;
+  const values=[before.scheduled,before.fired,before.cancelled,after.scheduled,after.fired,after.cancelled];
+  if (values.some(value=>!Number.isSafeInteger(value)||value<0)) return null;
+  if (after.scheduled<before.scheduled||after.fired<before.fired||after.cancelled<before.cancelled) return null;
   return {scheduled: after.scheduled - before.scheduled, fired: after.fired - before.fired, cancelled: after.cancelled - before.cancelled};
 }
 

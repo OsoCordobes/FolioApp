@@ -7,6 +7,8 @@ const validServiceDiagnostic='services_proof_diagnostic:phase=initial_save db_ok
 
 test('runner extraction retains only the complete closed service diagnostic', () => {
   assert.deepEqual(extractServiceProofDiagnostics(`ignored\n${validServiceDiagnostic}\nignored`), [validServiceDiagnostic]);
+  const resetTimerDiagnostic=validServiceDiagnostic.replace('timers800_after_fill_delta_scheduled_fired_cancelled=1,0,1', 'timers800_after_fill_delta_scheduled_fired_cancelled=unknown');
+  assert.deepEqual(extractServiceProofDiagnostics(resetTimerDiagnostic), [resetTimerDiagnostic]);
   assert.deepEqual(extractServiceProofDiagnostics(validServiceDiagnostic.replace('alert_global=none', 'alert_global=arbitrary')), []);
   assert.deepEqual(extractServiceProofDiagnostics(`${validServiceDiagnostic} detail=patient@example.test`), []);
 });
@@ -53,4 +55,6 @@ test('request and route classes keep URLs and query values out of diagnostics', 
 test('timer deltas report only bounded counts and preserve unavailable state', () => {
   assert.deepEqual(timerDelta({scheduled:4,fired:2,cancelled:1},{scheduled:6,fired:2,cancelled:3}),{scheduled:2,fired:0,cancelled:2});
   assert.equal(timerDelta(null,{scheduled:1,fired:1,cancelled:0}),null);
+  assert.equal(timerDelta({scheduled:4,fired:2,cancelled:1},{scheduled:1,fired:0,cancelled:0}),null);
+  assert.equal(timerDelta({scheduled:1,fired:1,cancelled:0},{scheduled:Number.NaN,fired:1,cancelled:0}),null);
 });
