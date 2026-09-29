@@ -521,6 +521,7 @@ BEGIN
         (jsonb_typeof(value)='string' AND (length(value#>>'{}') NOT BETWEEN 1 AND 120)) THEN RETURN false; END IF;
     ELSIF field='cobertura_plan' THEN
       IF jsonb_typeof(value)<>'string' OR length(value#>>'{}') NOT BETWEEN 1 AND 40 THEN RETURN false; END IF;
+    END IF;
   END LOOP;
   IF (p_patch ? 'nombre_cifrado' OR p_patch ? 'apellido_cifrado')
     AND NOT p_patch ? 'nombre_hash' THEN RETURN false; END IF;
