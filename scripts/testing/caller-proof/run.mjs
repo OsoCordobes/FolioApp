@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
 import {createHmac,randomBytes,randomUUID} from 'node:crypto';
-import {readdir,writeFile,unlink} from 'node:fs/promises';
+import {access,readdir,writeFile,unlink} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -12,14 +12,18 @@ import {createClient} from '@supabase/supabase-js';
 import {createServerClient} from '@supabase/ssr';
 import {totp} from '../clinical-config.mjs';
 import callerMarkers from './markers.ts';
+import s1Contract from './s1-contract.ts';
 import {openLoopbackBridge,validateBridgeTarget,waitForBridgeTarget} from '../../recovery/ci-loopback-bridge.mjs';
 
 const repo=path.resolve(fileURLToPath(new URL('../../../',import.meta.url)));
 const compose=path.join(repo,'scripts/recovery/ci-compose.yml');
-const project='folio_caller_proof';
+const s1=process.argv.includes('--s1');
+const {S1_FIXTURE_NAME,S1_SPECS,s1Result}=s1Contract;
+const project=s1?'folio_s1_indexing_proof':'folio_caller_proof';
+const prefix=s1?'s1_proof':'caller_proof';
 const upstreamCommit='8c7a4d9dbbaf8b552893822e89d7bf06f33f9220';
 const api='http://127.0.0.1:55421';
-const fixtureFile=path.join(tmpdir(),'folio-caller-proof-fixture.json');
+const fixtureFile=path.join(tmpdir(),s1?S1_FIXTURE_NAME:'folio-caller-proof-fixture.json');
 const random=bytes=>randomBytes(bytes).toString('base64url');
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const options={auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}};
@@ -91,18 +95,18 @@ async function prepareSchema(password,env,serviceKey){
  });
  const folder=path.join(repo,'supabase/migrations');
  const files=(await readdir(folder)).filter(name=>/^\d{14}_.+\.sql$/.test(name)).sort();
- for(const suffix of ['_M139_reception_caller.sql','_M141_caller_screen_list.sql'])assert.ok(files.some(name=>name.endsWith(suffix)),'caller_migration_missing');
+ if(!s1)for(const suffix of ['_M139_reception_caller.sql','_M141_caller_screen_list.sql'])assert.ok(files.some(name=>name.endsWith(suffix)),'caller_migration_missing');
  for(const file of files)await must('psql',['-X','-v','ON_ERROR_STOP=1','-h','127.0.0.1','-p','55422','-U','postgres','-d','postgres','-f',path.join(folder,file)],{env:{...env,PGPASSWORD:password},timeout:120000});
  await must('psql',['-X','-v','ON_ERROR_STOP=1','-h','127.0.0.1','-p','55422','-U','postgres','-d','postgres','-c',"NOTIFY pgrst, 'reload schema'"],{env:{...env,PGPASSWORD:password}});
  let ready=false;
  for(let i=0;i<30;i++){
   try{
-   const response=await fetch(`${api}/rest/v1/rpc/caller_pair`,{method:'POST',headers:{apikey:serviceKey,Authorization:`Bearer ${serviceKey}`,'Content-Type':'application/json'},body:JSON.stringify({p_code:'0'.repeat(16)}),signal:AbortSignal.timeout(2000)});
+   const response=await fetch(`${api}/rest/v1/rpc/${s1?'mfa_access_status':'caller_pair'}`,{method:'POST',headers:{apikey:serviceKey,Authorization:`Bearer ${serviceKey}`,'Content-Type':'application/json'},body:JSON.stringify(s1?{}:{p_code:'0'.repeat(16)}),signal:AbortSignal.timeout(2000)});
    const data=await response.json();if(data?.code!=='PGRST202'){ready=true;break;}
   }catch{}await delay(1000);
  }
  assert.equal(ready,true,'postgrest_schema_cache_not_ready');
- await withPg(password,async db=>{
+ if(!s1)await withPg(password,async db=>{
   const {rows}=await db.query("SELECT has_function_privilege('anon','public.caller_pair(text)','EXECUTE') AS pair_anon,has_function_privilege('anon','public.caller_call(uuid,uuid,uuid,text,integer)','EXECUTE') AS call_anon,has_table_privilege('authenticated','folio_caller_private.screen','SELECT') AS private_read,has_column_privilege('authenticated','public.pedido','motivo_cifrado','SELECT') AS pedido_motivo");
   assert.deepEqual(rows[0],{pair_anon:true,call_anon:false,private_read:false,pedido_motivo:false});
  });
@@ -111,17 +115,17 @@ async function prepareSchema(password,env,serviceKey){
 async function fixture(state){
  const service=createClient(api,state.serviceKey,options);
  const actor=createClient(api,state.anonKey,options);
- const email=`caller-${randomUUID()}@example.test`,password=`Caller-${random(24)}!`;
+ const email=`${s1?'s1':'caller'}-${randomUUID()}@example.test`,password=`${s1?'S1':'Caller'}-${random(24)}!`;
  const created=await service.auth.admin.createUser({email,password,email_confirm:true});assert.equal(created.error,null,'user_create_failed');
  const user=created.data.user.id;
  const login=await actor.auth.signInWithPassword({email,password});assert.equal(login.error,null,'login_failed');
- const enrolled=await actor.auth.mfa.enroll({factorType:'totp',friendlyName:'Synthetic caller'});assert.equal(enrolled.error,null,'factor_enroll_failed');
+ const enrolled=await actor.auth.mfa.enroll({factorType:'totp',friendlyName:s1?'Synthetic S1':'Synthetic caller'});assert.equal(enrolled.error,null,'factor_enroll_failed');
  const challenge=await actor.auth.mfa.challenge({factorId:enrolled.data.id});assert.equal(challenge.error,null,'factor_challenge_failed');
  const enrollmentOtpAt=Date.now();
  const verified=await actor.auth.mfa.verify({factorId:enrolled.data.id,challengeId:challenge.data.id,code:totp(enrolled.data.totp.secret,enrollmentOtpAt)});
  assert.equal(verified.error,null,'factor_verify_failed');
  assert.ok(verified.data?.access_token&&verified.data?.refresh_token,'verified_session_missing');
- const org=randomUUID(),member=randomUUID(),patient=randomUUID(),identity=randomUUID(),servicio=randomUUID(),turno=randomUUID();
+ const org=randomUUID(),member=randomUUID(),portalAccount=randomUUID(),patient=randomUUID(),identity=randomUUID(),servicio=randomUUID(),turno=randomUUID();
  process.env.FOLIO_ENC_KEY=Buffer.alloc(32,37).toString('base64');
  process.env.FOLIO_ENC_HMAC_KEY=Buffer.alloc(32,71).toString('base64');
  const cryptoModule=await import('../../../lib/crypto.ts');const crypto=cryptoModule.default??cryptoModule;
@@ -133,10 +137,14 @@ async function fixture(state){
    await db.query('INSERT INTO public.profile(id,email,nombre_cifrado,apellido_cifrado,consent_pii_signed_at,consent_pii_text_version) VALUES($1,$2,$3,$3,now(),$4)',[user,email,cipher,'caller.synthetic.v1']);
    await db.query("INSERT INTO public.organization(id,slug,nombre,timezone,especialidad,tipo,onboarding_completed,onboarding_step_max,is_internal_account,is_synthetic,opt_out_analytics,opt_out_public_listing) VALUES($1,$2,'Recepción sintética','America/Argentina/Cordoba','quiropraxia','INDEPENDIENTE',true,9,true,true,true,true)",[org,`folio-test-caller-${randomUUID().slice(0,12)}`]);
    await db.query("INSERT INTO public.member(id,organization_id,profile_id,role,accepted_at,es_colegiado,especialidad,alcance,profesionales_gestionados) VALUES($1,$2,$3,'OWNER',now(),true,'quiropraxia','TODOS','{}')",[member,org,user]);
+   if(s1){
+    await db.query('INSERT INTO public.paciente_cuenta(id,auth_user_id,email,email_verificado_en) VALUES($1,$2,$3,now())',[portalAccount,user,email]);
+   }else{
    await db.query('INSERT INTO public.paciente_identidad(id,organization_id,nombre_cifrado,apellido_cifrado,telefono_cifrado) VALUES($1,$2,$3,$3,$3)',[identity,org,cipher]);
    await db.query('INSERT INTO public.paciente(id,organization_id,identidad_id,profesional_principal_id) VALUES($1,$2,$3,$4)',[patient,org,identity,member]);
    await db.query("INSERT INTO public.servicio(id,organization_id,nombre,tipo_canonico,duracion_min,precio_cents) VALUES($1,$2,'Consulta sintética',enum_first(null::public.tipo_servicio_canonico),30,1000)",[servicio,org]);
    await db.query("INSERT INTO public.turno(id,organization_id,paciente_id,servicio_id,profesional_id,inicio,duracion_min,precio_cents,estado) VALUES($1,$2,$3,$4,$5,((timezone('America/Argentina/Cordoba',clock_timestamp())::date)::timestamp+interval '12 hours') AT TIME ZONE 'America/Argentina/Cordoba',30,1000,'EN_SALA')",[turno,org,patient,servicio,member]);
+   }
    await db.query('UPDATE folio_mfa_private.policy SET application_ready=true,staff_enforce_after=now() WHERE singleton');
    await db.query('COMMIT');
   }catch(error){await db.query('ROLLBACK');throw error;}
@@ -159,7 +167,7 @@ async function fixture(state){
  assert.equal(mfa?.sessionValid,true,'mfa_session_invalid');
  assert.equal(mfa?.allowed,true,'mfa_access_denied');
  assert.ok(cookies.length>0,'session_cookie_missing');
- console.log('caller_proof_session:identity=matched required=1 staff=1 factor=1 allowed=1 valid=1');
+ console.log(`${prefix}_session:identity=matched required=1 staff=1 factor=1 allowed=1 valid=1`);
  const browserCookies=cookies.map(({name,value,options})=>{
   const sameSite={lax:'Lax',strict:'Strict',none:'None'}[String(options?.sameSite??'').toLowerCase()];
   return {name,value,domain:'localhost',path:options?.path??'/',
@@ -167,18 +175,23 @@ async function fixture(state){
    ...(typeof options?.secure==='boolean'?{secure:options.secure}:{}),
    ...(sameSite?{sameSite}:{})};
  });
- await writeFile(fixtureFile,JSON.stringify({browserCookies,userId:user,databaseUrl:`postgresql://postgres:${state.dbPassword}@127.0.0.1:55422/postgres`,turnoId:turno}),{flag:'wx',mode:0o600});
+ const identities=s1?{mode:'s1',memberId:member,organizationId:org,portalAccountId:portalAccount}:{turnoId:turno};
+ await writeFile(fixtureFile,JSON.stringify({browserCookies,userId:user,databaseUrl:`postgresql://postgres:${state.dbPassword}@127.0.0.1:55422/postgres`,...identities}),{flag:'wx',mode:0o600});
+ state.fixtureOwned=true;
+ if(s1)state.s1Actor={memberId:member,userId:user,organizationId:org};
 }
 async function main(){
+ assert.deepEqual(process.argv.slice(2),s1?['--s1']:[],'proof_mode_invalid');
  assert.equal(process.env.GITHUB_ACTIONS,'true');assert.equal(process.env.RUNNER_ENVIRONMENT,'github-hosted');assert.equal(process.env.RUNNER_OS,'Linux');assert.equal(process.platform,'linux');
  const official=path.resolve(process.env.C01_OFFICIAL_DOCKER??'');
  assert.ok(process.env.RUNNER_TEMP&&official.startsWith(path.resolve(process.env.RUNNER_TEMP)+path.sep));
  assert.equal((await must('git',['-C',path.dirname(official),'rev-parse','HEAD'])).trim(),upstreamCommit);
  assert.equal((await must('psql',['--version'])).match(/\b(\d+)\./)?.[1],'17');
+ try{await access(fixtureFile);throw Error('fixture_not_fresh');}catch(error){if(error.code!=='ENOENT')throw error;}
  const secret=random(48),dbPassword=random(32);
  const state={dbPassword,anonKey:token(secret,'anon'),serviceKey:token(secret,'service_role')};
  const env={...process.env,C01_OFFICIAL_DOCKER:official,C01_DB_PASSWORD:dbPassword,C01_JWT_SECRET:secret,C01_ANON_KEY:state.anonKey,C01_SERVICE_KEY:state.serviceKey,
-  C01_DASHBOARD_PASSWORD:random(18),C01_APP_DATABASE:'postgres',C01_CRON_DATABASE:'postgres',C01_S3_BUCKET:'caller-proof-synthetic',C01_MINIO_USER:random(18),C01_MINIO_PASSWORD:random(36)};
+  C01_DASHBOARD_PASSWORD:random(18),C01_APP_DATABASE:'postgres',C01_CRON_DATABASE:'postgres',C01_S3_BUCKET:s1?'s1-indexing-synthetic':'caller-proof-synthetic',C01_MINIO_USER:random(18),C01_MINIO_PASSWORD:random(36)};
  assert.equal((await dc(['ps','-q'],env)).trim(),'','project_not_fresh');
  assert.equal((await docker(['volume','ls','-q','--filter',`label=com.docker.compose.project=${project}`],env)).trim(),'','volumes_not_fresh');
  let stage='pull',servicesStep='none',dbBridge=null,apiBridge=null;
@@ -191,8 +204,16 @@ async function main(){
   servicesStep='api_ready';await waitApi(state.anonKey);
   stage='migrations';const count=await prepareSchema(dbPassword,env,state.serviceKey);
   stage='auth';await fixture(state);
-  stage='browser';const browserEnv={...env,E2E_BASE_URL:'http://localhost:4430',FOLIO_TEST_SUPABASE_URL:api,FOLIO_TEST_SUPABASE_ANON_KEY:state.anonKey,FOLIO_TEST_SUPABASE_SERVICE_KEY:state.serviceKey,FOLIO_TEST_DATABASE_URL:`postgresql://postgres:${dbPassword}@127.0.0.1:55422/postgres`,FOLIO_TEST_CLINICAL:'1'};
-  const result=await run('pnpm',['test:e2e','--','tests/e2e/caller-screen.spec.ts','--trace=off','--reporter=list'],{env:browserEnv,timeout:900000,limit:2000000});
+  stage='browser';const browserEnv={...env,E2E_BASE_URL:'http://localhost:4430',FOLIO_TEST_SUPABASE_URL:api,FOLIO_TEST_SUPABASE_ANON_KEY:state.anonKey,FOLIO_TEST_SUPABASE_SERVICE_KEY:state.serviceKey,FOLIO_TEST_DATABASE_URL:`postgresql://postgres:${dbPassword}@127.0.0.1:55422/postgres`,FOLIO_TEST_CLINICAL:s1?'0':'1'};
+  const result=await run('pnpm',['test:e2e','--',...(s1?S1_SPECS:['tests/e2e/caller-screen.spec.ts']),'--trace=off','--reporter=list'],{env:browserEnv,timeout:900000,limit:2000000});
+  if(s1){
+   const receipt=s1Result(result.output);
+   for(const marker of receipt.markers)console.log(marker);
+   if(result.code!==0||!receipt.passed)throw Error('s1_browser_missing_pass');
+   stage='complete';state.s1Migrations=count;
+   console.log('s1_proof_browser_pass:tests=3 skipped=0');
+   return;
+  }
   const {stages:markers,diagnostics}=callerMarkers.parseCallerProofOutput(result.output);
   for(const item of markers)if(['test_started','settings_loaded','pair_requested','pair_click_returned','pair_issued','screen_context_requested','screen_context_created','screen_script_ready','screen_open','screen_ready','screen_pair_requested','pair_submitted','screen_paired','call_click_actionable','call_click_started','call_post_observed','call_post_committed','call_click_returned','called_on_screen','lost_response_reused','visit_unchanged','polling_bounded','reconnect_silent','revoked_after_reload'].includes(item.stage))
    console.log(`caller_proof_stage:${item.stage} elapsed_ms=${item.elapsedMs}${item.visible11s!==undefined?` visible_11s=${item.visible11s} hidden_6s=0`:''}`);
@@ -210,13 +231,27 @@ async function main(){
    assert.ok(markers.some(item=>item.stage===required),'caller_stage_missing');
   stage='complete';console.log(`caller_proof_pass:migrations=${count} polls_11s=${markers.find(item=>item.stage==='polling_bounded')?.visible11s} hidden_6s=0`);
  }catch{
-  if(stage==='services')console.error(`caller_proof_services_diagnostic:${await finiteServicesDiagnostic(env,servicesStep)}`);
-  console.error(`caller_proof_${stages.has(stage)?stage:'unclassified'}_failed`);
+  if(stage==='services')console.error(`${prefix}_services_diagnostic:${await finiteServicesDiagnostic(env,servicesStep)}`);
+  console.error(`${prefix}_${stages.has(stage)?stage:'unclassified'}_failed`);
   process.exitCode=1;
  }finally{
-  await unlink(fixtureFile).catch(()=>{});
+  if(s1&&state.s1Actor){
+   try{
+    await withPg(dbPassword,async db=>{
+     const {memberId,userId,organizationId}=state.s1Actor;
+     const owned=[memberId,userId,organizationId];
+     // Covers a killed/timed-out browser child without turning cleanup into PASS.
+     await db.query("UPDATE public.member SET deleted_at=NULL WHERE id=$1 AND profile_id=$2 AND organization_id=$3 AND role='OWNER' AND deleted_at IS NOT NULL",owned);
+     const restored=await db.query("SELECT id FROM public.member WHERE id=$1 AND profile_id=$2 AND organization_id=$3 AND role='OWNER' AND deleted_at IS NULL",owned);
+     assert.equal(restored.rowCount,1,'s1_cleanup_restore_failed');
+     console.log('s1_proof_cleanup:member=active owned=1');
+    });
+   }catch{console.error('s1_proof_cleanup_failed');process.exitCode=1;}
+  }
+  if(state.fixtureOwned)await unlink(fixtureFile).catch(()=>{process.exitCode=1;});
   await apiBridge?.close();await dbBridge?.close();
   await dc(['down','-v'],env).catch(()=>{process.exitCode=1;});
+  if(s1&&stage==='complete'&&process.exitCode!==1)console.log(`s1_proof_pass:tests=3 skipped=0 migrations=${state.s1Migrations} restored=1 cleanup=1`);
  }
 }
-main().catch(()=>{console.error('caller_proof_preflight_failed');process.exitCode=1;});
+main().catch(()=>{console.error(`${prefix}_preflight_failed`);process.exitCode=1;});
