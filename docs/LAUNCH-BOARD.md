@@ -18,9 +18,9 @@ La automatización folio-manager-por-checkpoints figura PAUSED; no se cambió es
 
 | Área | Estado comprobado / próximo paso |
 |---|---|
-| B · Producto | M149 aditiva corrige el defecto SQL del segundo ensayo; revisión independiente aprobada. Tercer ensayo aislado autorizado sobre9dc5791, resultado pendiente. PR188 sigue retenida por copia nueva y H3 contractual; S1 preparado sin prueba autenticada todavía. |
-| C · Continuidad | R4 v4 abortó antes de conectar por comparación de fechas equivalentes. V5 corrige únicamente esa guarda; revisión D aprobada y una ejecución autorizada, pendiente de recibo. No hay copia nueva confirmada. |
-| D · Calidad | Verificó fallo seguro v4 y delta v5. Comprobará recibo/limpieza/principal y límites de la señal; no auditoría genérica ni aumento de timeout. |
+| B · Producto | Tercer ensayo9dc5791 aplicó M149 y llegó a incorporación applied; falla posterior permission denied en modificación directa del fixture. B distingue contrato/arnés antes de corregir. No SQL PASS global ni inicio de servidor. PR188 sigue retenida por copia nueva/H3. |
+| C · Continuidad | R4 v5 conectó y avanzó por catálogo; timeout40s después del último anuncio reconocido. Análisis offline del orden pg_dump17.11 y stdio, sin conexión/captura nueva autorizada. No hay copia nueva confirmada. |
+| D · Calidad | Cerró R4 v5: recibo/limpieza/principal intactos comprobados. El anuncio observado no demuestra causa ni fase completada. Sin otra revisión genérica. |
 | Legal/SEO | S1/P1/L4 y preview4410 listos; publicación retenida por preaviso de Privacidad§8. Ficha de proveedores revela posible incompatibilidad del DPA Vercel con datos sensibles: bloqueo contractual del piloto clínico real hasta acreditar cobertura. Consulta redactada, no enviada. |
 | Diseño | Refinamiento A cerrado en4441, capturas de cinco tamaños y revisión independiente; defecto de estados ocultos en tablet corregido. A anterior/B/438 preservados. Espera valoración del titular; cupo liberado a B. |
 
@@ -54,6 +54,8 @@ Raíz privada: `C:/Users/amiun/folio-recovery/initial-20260908-182017`. Principa
 - **R4 v4 autorizada, pendiente de recibo:** una invocación WindowsPowerShell5.1 de `r4-pgdump-verbose-operator.ps1 -Mode Execute -ApprovedPlanSha256 181c8bac8e4ff6f73a83eb26c6e06efa6eb07f3299533176901255e89241cc3e`; operador `bbc31ffb8a6268b7f95b06c90075d41c8d83b892a7575edc52ed36557603483b`, Plan válido hasta22:48:47.567UTC. D aprobó v4 y prueba offline; versiones anteriores nunca ejecutadas. Una Start temporal, schema-only40s con verbose como único delta; sin filas, snapshot, observador, backup ni mutación principal. Stderr acotado262144bytes/cifrado, salida sólo tokens y conteos; última etapa reconocida anunciada no acredita fase actual ni causa. A acotó revisión y rechazó exigir catálogo exhaustivo. Vínculo de Plan añade trazabilidad: C/D confirmaron que v3 no tenía ruta demostrada para cambiar alcance; no registrar dos P1 de seguridad. Código congelado; si caduca/no se sabe resultado, reconciliar antes de nueva operación. Residuos propios se preservan según Plan.
 
 - **R4 v4 consumida sin conexión:** recibo `r4-pgdump-verbose-execute-v1.json`, SHA256 `9e94a53cc2afd829f23c7a0bfef9a5be4bb6c193babd8ca4f4ca326bfc73a93c`. Abortó `approved_plan_state_changed` antes de Register/Start: comparaba fechas ISO equivalentes como cadenas. D confirmó cero tarea/resultado/XML, principal Ready/CAS y mismos instantes. **Nueva autorización v5, pendiente:** operador `a8897eac4d6bf3b44d52835e24dbaeb2f79fb80f4102906ccbe8d0d376a6998a`, test `e999bf97ee49a8b105170d47f1c834b98754266e32ee4b93a3e2cab308fbb053`, Plan `02ed929de1d8616dedcd2c2026829df406232956d1162fde782d3444cb495584` válido hasta22:53:10UTC. D aprobó comparar DateTimeOffset invariant UTC y prueba equivalentes/distintos/inválidos; runner/wrapper/contract idénticos. Una invocación con ApprovedPlanSha256 exacto, mismo alcance R4, no retry. Reconciliaciónv4 `84bfd4c68e500453adab1eaea199025558349f4bcfdd3263182dc8758cdf506b`.
+
+- **R4 v5 consumida y cerrada:** `r4-pgdump-verbose-execute-v2.json`, hash `b6d2d5090fbfa182beb8d6507a8d7d0340f8707a34ebfbcdf61bacc1e54fb68a`; resultado `76efb42c251cf68538bd4e93db27bea321a243c2c509482cba1d7fecf68d4bf2`; XML `d53fc7becd990e255f202f923a88eefcc5412cdf2bce3b0d9e920b597fd7b23d`. D verificó una Start, temporal eliminada, principal Ready/CAS/LastRun intactos. Timeout40016ms/stdout0/stderr2088 cifrado sin truncar, 46 anuncios reconocidos y5 desconocidos. connected_catalog_bootstrap4.989s y último saving_database_definition19.214s acreditan conexión/progreso; no fase causal exacta. A autorizó sólo análisis OFFLINE de fuente oficial pg_dump17.11 y drenaje stdio: máximo2–3 hipótesis discriminables y una siguiente acción justificada. Sin nuevas conexiones/capturas/timeout mayor ni marco diagnóstico por inercia.
 
 ## M148: incorporación administrativa
 
@@ -97,6 +99,8 @@ Revisión final independiente `m148-pre-hosted-review-8759fb6.md`, SHA256 `0ade2
 - Refinamiento A recibido: `folio-directions/README.md` describe cambios, pruebas y límites; capturas `evidence/a-refined-{desktop,mobile,tablet,1024,320}.png`. Cinco tamaños sin desborde, teclado/foco/movimiento y revisión independiente; P2 de estados ocultos801–1100px corregido. A inspeccionó antes/después de escritorio y móvil. Versión anterior en4441/v1/ verificada por hash,4440 y438 intactos. Pregunta visual enviada al titular; no repetir investigación ni extender diseño sin nueva dirección. Cupo liberado a B.
 
 ## Coordinación y límites de seguridad
+
+Panel4420: comprobación posterior encontró conexión rechazada y PID anterior ausente. Reinicio con Start-Process Hidden rechazado por control automático sin razón específica; no se eludió. Documento AVANCES actualizado abierto con open_in_codex (queued) y conservado en Git como alternativa visible. No afirmar servidor activo hasta HTTP200 nuevo.
 
 | Chat | ID / ubicación |
 |---|---|
