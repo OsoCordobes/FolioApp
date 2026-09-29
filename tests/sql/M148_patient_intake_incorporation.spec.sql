@@ -43,15 +43,17 @@ DO $$ BEGIN
 END $$;
 
 INSERT INTO auth.users(id,email) SELECT pg_temp.m148_id(n),'m148-'||n||'@synthetic.invalid'
-  FROM generate_series(1,3) n;
+  FROM generate_series(1,4) n;
 INSERT INTO public.profile(id,email,consent_pii_signed_at,consent_pii_text_version)
   SELECT pg_temp.m148_id(n),'m148-'||n||'@synthetic.invalid',now(),'v1'
-  FROM generate_series(1,3) n;
+  FROM generate_series(1,4) n;
 INSERT INTO public.organization(id,slug,nombre) VALUES
-  (pg_temp.m148_id(10),'m148-org','M148 synthetic');
+  (pg_temp.m148_id(10),'m148-org','M148 synthetic'),
+  (pg_temp.m148_id(20),'m148-foreign-org','M148 foreign tenant');
 INSERT INTO public.member(id,organization_id,profile_id,role,es_colegiado,accepted_at) VALUES
   (pg_temp.m148_id(11),pg_temp.m148_id(10),pg_temp.m148_id(1),'OWNER',true,now()),
-  (pg_temp.m148_id(12),pg_temp.m148_id(10),pg_temp.m148_id(3),'COORDINADOR',false,now());
+  (pg_temp.m148_id(12),pg_temp.m148_id(10),pg_temp.m148_id(3),'COORDINADOR',false,now()),
+  (pg_temp.m148_id(13),pg_temp.m148_id(10),pg_temp.m148_id(4),'DIRECTOR',true,now());
 INSERT INTO public.paciente_cuenta(id,auth_user_id,email) VALUES
   (pg_temp.m148_id(21),pg_temp.m148_id(2),'m148-2@synthetic.invalid');
 INSERT INTO public.paciente_identidad(id,organization_id,nombre_cifrado,apellido_cifrado,telefono_cifrado)
@@ -67,10 +69,12 @@ INSERT INTO public.turno(id,organization_id,paciente_id,servicio_id,profesional_
     (pg_temp.m148_id(62),pg_temp.m148_id(10),pg_temp.m148_id(41),pg_temp.m148_id(51),pg_temp.m148_id(11),now()+interval '4 days',30,0);
 INSERT INTO auth.mfa_factors(id,user_id,status) VALUES
   (pg_temp.m148_id(801),pg_temp.m148_id(1),'verified'),
-  (pg_temp.m148_id(803),pg_temp.m148_id(3),'verified');
+  (pg_temp.m148_id(803),pg_temp.m148_id(3),'verified'),
+  (pg_temp.m148_id(804),pg_temp.m148_id(4),'verified');
 INSERT INTO auth.sessions(id,user_id,aal,factor_id) VALUES
   (pg_temp.m148_id(901),pg_temp.m148_id(1),'aal2',pg_temp.m148_id(801)),
-  (pg_temp.m148_id(903),pg_temp.m148_id(3),'aal2',pg_temp.m148_id(803));
+  (pg_temp.m148_id(903),pg_temp.m148_id(3),'aal2',pg_temp.m148_id(803)),
+  (pg_temp.m148_id(904),pg_temp.m148_id(4),'aal2',pg_temp.m148_id(804));
 INSERT INTO folio_intake_private.invitation
   (id,organization_id,turno_id,paciente_id,identidad_id,identity_link_revision,
    organization_intake_revision,paciente_intake_revision,identidad_intake_revision,
@@ -105,6 +109,16 @@ SET LOCAL ROLE authenticated;
 SELECT pg_temp.m148_expect($q$SELECT public.patient_intake_incorporation_snapshot(
   pg_temp.m148_id(10),pg_temp.m148_id(61),pg_temp.m148_id(151))$q$,'42501');
 RESET ROLE;
+
+-- A valid staff session cannot cross the tenant boundary or reuse another visit's receipt.
+SELECT pg_temp.m148_login(1);
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.m148_expect($q$SELECT public.patient_intake_incorporation_snapshot(
+  pg_temp.m148_id(20),pg_temp.m148_id(61),pg_temp.m148_id(151))$q$,'42501');
+SELECT pg_temp.m148_expect($q$SELECT public.patient_intake_incorporation_snapshot(
+  pg_temp.m148_id(10),pg_temp.m148_id(61),pg_temp.m148_id(152))$q$,'42501');
+RESET ROLE;
+
 SELECT pg_temp.m148_login(1);
 SET LOCAL ROLE authenticated;
 SELECT set_config('test.m148_snapshot',public.patient_intake_incorporation_snapshot(
@@ -120,6 +134,16 @@ DO $$ BEGIN
   OR NOT current_setting('test.m148_prepared',true)::jsonb ? 'sourceCipherBase64' THEN
   RAISE EXCEPTION 'M148 expected pending source for authorized editor'; END IF;
 END $$;
+
+-- An operation id is idempotent only for its original payload.
+SELECT public.patient_intake_incorporation_prepare(
+  pg_temp.m148_id(10),pg_temp.m148_id(61),pg_temp.m148_id(151),ARRAY['email'],
+  pg_temp.m148_id(31),0,current_setting('test.m148_snapshot',true)::jsonb->>'contextHash',
+  pg_temp.m148_id(186));
+SELECT pg_temp.m148_expect(format($q$SELECT public.patient_intake_incorporation_prepare(
+  %L::uuid,%L::uuid,%L::uuid,ARRAY['telefono'],%L::uuid,0,%L,%L::uuid)$q$,
+  pg_temp.m148_id(10),pg_temp.m148_id(61),pg_temp.m148_id(151),pg_temp.m148_id(31),
+  current_setting('test.m148_snapshot',true)::jsonb->>'contextHash',pg_temp.m148_id(186)),'40001');
 RESET ROLE;
 SELECT set_config('request.jwt.claim.role','service_role',true);
 SET LOCAL ROLE service_role;
@@ -318,4 +342,143 @@ DO $$ BEGIN
       <>decode(repeat('aa',64),'hex') THEN
   RAISE EXCEPTION 'M148 materialized revision conflict did not persist safely'; END IF;
 END $$;
+
+-- Private synthetic rows make both public expiration transitions deterministic.
+INSERT INTO folio_intake_private.incorporation_operation
+  (organization_id,operation_id,preparation_id,actor_member_id,actor_session_id,turno_id,
+   paciente_id,identidad_id,receipt_id,questionnaire_version,selected_keys,
+   expected_admin_revision,expected_context_hash,source_fingerprint,source_cipher,snapshot,
+   status,expires_at)
+VALUES
+  (pg_temp.m148_id(10),pg_temp.m148_id(187),pg_temp.m148_id(197),pg_temp.m148_id(11),
+   pg_temp.m148_id(901),pg_temp.m148_id(61),pg_temp.m148_id(41),pg_temp.m148_id(31),
+   pg_temp.m148_id(151),'admin.v1',ARRAY['email'],
+   (SELECT admin_revision FROM public.paciente_identidad WHERE id=pg_temp.m148_id(31)),
+   repeat('e',64),repeat('a',64),decode(repeat('aa',64),'hex'),'{}'::jsonb,
+   'pending',clock_timestamp()-interval '1 second');
+INSERT INTO folio_intake_private.incorporation_operation
+  (organization_id,operation_id,preparation_id,actor_member_id,actor_session_id,turno_id,
+   paciente_id,identidad_id,receipt_id,questionnaire_version,selected_keys,
+   expected_admin_revision,expected_context_hash,source_fingerprint,source_cipher,snapshot,
+   patch,changed_keys,status,expires_at)
+VALUES
+  (pg_temp.m148_id(10),pg_temp.m148_id(188),pg_temp.m148_id(198),pg_temp.m148_id(11),
+   pg_temp.m148_id(901),pg_temp.m148_id(61),pg_temp.m148_id(41),pg_temp.m148_id(31),
+   pg_temp.m148_id(151),'admin.v1',ARRAY['email'],
+   (SELECT admin_revision FROM public.paciente_identidad WHERE id=pg_temp.m148_id(31)),
+   repeat('f',64),repeat('a',64),decode(repeat('aa',64),'hex'),'{}'::jsonb,
+   jsonb_build_object('email_cifrado',encode(decode(repeat('66',32),'hex'),'base64'),
+     'email_hash',repeat('6',64)),ARRAY['email'],'materialized',clock_timestamp()-interval '1 second');
+SELECT set_config('request.jwt.claim.role','service_role',true);
+SET LOCAL ROLE service_role;
+SELECT set_config('test.m148_expired_materialize',public.patient_intake_incorporation_materialize(
+  pg_temp.m148_id(197),'{}'::jsonb,repeat('a',64))::text,true);
+RESET ROLE;
+SELECT pg_temp.m148_login(1);
+SET LOCAL ROLE authenticated;
+SELECT set_config('test.m148_expired_apply',public.patient_intake_incorporation_apply(
+  pg_temp.m148_id(10),pg_temp.m148_id(61),pg_temp.m148_id(198),pg_temp.m148_id(188))::text,true);
+RESET ROLE;
+DO $$ DECLARE materialize_result jsonb:=current_setting('test.m148_expired_materialize',true)::jsonb;
+  apply_result jsonb:=current_setting('test.m148_expired_apply',true)::jsonb;
+BEGIN
+ IF materialize_result->>'status'<>'cancelled' OR materialize_result->>'reason'<>'expired'
+  OR apply_result->>'status'<>'cancelled' OR apply_result->>'reason'<>'expired'
+  OR EXISTS (SELECT 1 FROM folio_intake_private.incorporation_operation
+      WHERE operation_id IN (pg_temp.m148_id(187),pg_temp.m148_id(188))
+        AND (status<>'cancelled' OR terminal_reason<>'expired' OR finished_at IS NULL))
+  OR EXISTS (SELECT 1 FROM folio_intake_private.incorporation_provenance
+      WHERE operation_id IN (pg_temp.m148_id(187),pg_temp.m148_id(188))) THEN
+  RAISE EXCEPTION 'M148 expiration did not close both public RPC paths safely'; END IF;
+END $$;
+
+-- Applying fechaNacimiento advances dob_revision and makes the old M142 event stale.
+SELECT set_config('test.m148_dob_before',
+  (SELECT dob_revision::text FROM public.paciente_identidad WHERE id=pg_temp.m148_id(31)),true);
+INSERT INTO folio_adult_private.attestation
+  (organization_id,paciente_id,identidad_id,dob_revision,identity_link_revision,
+   verified_by_member_id,source_code)
+SELECT p.organization_id,p.id,p.identidad_id,pi.dob_revision,p.identity_link_revision,
+  pg_temp.m148_id(11),'DOCUMENTO_EXHIBIDO'
+FROM public.paciente p JOIN public.paciente_identidad pi ON pi.id=p.identidad_id
+WHERE p.id=pg_temp.m148_id(41);
+SELECT pg_temp.m148_login(1);
+SET LOCAL ROLE authenticated;
+SELECT set_config('test.m148_dob_snapshot',public.patient_intake_incorporation_snapshot(
+  pg_temp.m148_id(10),pg_temp.m148_id(61),pg_temp.m148_id(151))::text,true);
+SELECT set_config('test.m148_dob_prepare',public.patient_intake_incorporation_prepare(
+  pg_temp.m148_id(10),pg_temp.m148_id(61),pg_temp.m148_id(151),ARRAY['fechaNacimiento'],
+  pg_temp.m148_id(31),(current_setting('test.m148_dob_snapshot',true)::jsonb->>'adminRevision')::bigint,
+  current_setting('test.m148_dob_snapshot',true)::jsonb->>'contextHash',pg_temp.m148_id(189))::text,true);
+RESET ROLE;
+SELECT set_config('request.jwt.claim.role','service_role',true);
+SET LOCAL ROLE service_role;
+SELECT public.patient_intake_incorporation_materialize(
+  (current_setting('test.m148_dob_prepare',true)::jsonb->>'preparationId')::uuid,
+  jsonb_build_object('fecha_nacimiento','1990-01-02'),repeat('a',64));
+RESET ROLE;
+SELECT pg_temp.m148_login(1);
+SET LOCAL ROLE authenticated;
+SELECT set_config('test.m148_dob_applied',public.patient_intake_incorporation_apply(
+  pg_temp.m148_id(10),pg_temp.m148_id(61),
+  (current_setting('test.m148_dob_prepare',true)::jsonb->>'preparationId')::uuid,
+  pg_temp.m148_id(189))::text,true);
+RESET ROLE;
+DO $$ BEGIN
+ IF current_setting('test.m148_dob_applied',true)::jsonb->>'status'<>'applied'
+  OR (SELECT fecha_nacimiento FROM public.paciente_identidad
+      WHERE id=pg_temp.m148_id(31))<>DATE '1990-01-02'
+  OR (SELECT dob_revision FROM public.paciente_identidad WHERE id=pg_temp.m148_id(31))
+      <>current_setting('test.m148_dob_before',true)::bigint+1
+  OR (SELECT count(*) FROM folio_adult_private.attestation WHERE paciente_id=pg_temp.m148_id(41))<>1
+  OR EXISTS (SELECT 1 FROM folio_adult_private.attestation a
+      JOIN public.paciente p ON p.id=a.paciente_id
+      JOIN public.paciente_identidad pi ON pi.id=p.identidad_id
+      WHERE a.paciente_id=pg_temp.m148_id(41) AND a.identidad_id=pi.id
+        AND a.identity_link_revision=p.identity_link_revision AND a.dob_revision=pi.dob_revision)
+  OR (SELECT count(*) FROM folio_intake_private.incorporation_provenance
+      WHERE operation_id=pg_temp.m148_id(189))<>1 THEN
+  RAISE EXCEPTION 'M148 fechaNacimiento did not invalidate M142 attestation exactly once'; END IF;
+END $$;
+
+-- A director can prepare while the patient is open, but a later foreign safe
+-- assignment must reject apply without consuming the materialized operation.
+SELECT pg_temp.m148_login(4);
+SET LOCAL ROLE authenticated;
+SELECT set_config('test.m148_safe_snapshot',public.patient_intake_incorporation_snapshot(
+  pg_temp.m148_id(10),pg_temp.m148_id(61),pg_temp.m148_id(151))::text,true);
+SELECT set_config('test.m148_safe_prepare',public.patient_intake_incorporation_prepare(
+  pg_temp.m148_id(10),pg_temp.m148_id(61),pg_temp.m148_id(151),ARRAY['cobertura.nombre'],
+  pg_temp.m148_id(31),(current_setting('test.m148_safe_snapshot',true)::jsonb->>'adminRevision')::bigint,
+  current_setting('test.m148_safe_snapshot',true)::jsonb->>'contextHash',pg_temp.m148_id(190))::text,true);
+RESET ROLE;
+SELECT set_config('request.jwt.claim.role','service_role',true);
+SET LOCAL ROLE service_role;
+SELECT public.patient_intake_incorporation_materialize(
+  (current_setting('test.m148_safe_prepare',true)::jsonb->>'preparationId')::uuid,
+  jsonb_build_object('cobertura_nombre','M148 safe proposal'),repeat('a',64));
+RESET ROLE;
+UPDATE public.paciente SET caja_fuerte_profesional=pg_temp.m148_id(11)
+  WHERE id=pg_temp.m148_id(41);
+SELECT pg_temp.m148_login(4);
+SET LOCAL ROLE authenticated;
+DO $$ BEGIN
+ BEGIN
+  PERFORM public.patient_intake_incorporation_apply(
+    pg_temp.m148_id(10),pg_temp.m148_id(61),
+    (current_setting('test.m148_safe_prepare',true)::jsonb->>'preparationId')::uuid,
+    pg_temp.m148_id(190));
+  RAISE EXCEPTION 'M148 foreign safe apply unexpectedly succeeded';
+ EXCEPTION WHEN SQLSTATE '42501' THEN NULL;
+ END;
+END $$;
+RESET ROLE;
+DO $$ BEGIN
+ IF (SELECT status FROM folio_intake_private.incorporation_operation
+      WHERE operation_id=pg_temp.m148_id(190))<>'materialized'
+  OR EXISTS (SELECT 1 FROM folio_intake_private.incorporation_provenance
+      WHERE operation_id=pg_temp.m148_id(190)) THEN
+  RAISE EXCEPTION 'M148 foreign safe rejection consumed the operation'; END IF;
+END $$;
+UPDATE public.paciente SET caja_fuerte_profesional=NULL WHERE id=pg_temp.m148_id(41);
 ROLLBACK;

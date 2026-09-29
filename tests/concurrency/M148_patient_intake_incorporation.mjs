@@ -26,8 +26,9 @@ const admin=await connect(),staff1=await connect(),staff2=await connect();
 const service=await connect(),barrier=await connect(),winner=await connect();
 const ids=Object.fromEntries([
  'user1','user2','org','member1','member2','identity','identityB','patient','patientB','service',
- 'turno1','turno2','factor1','factor2','session1','session2','invitation1','invitation2',
- 'intakeSession1','intakeSession2','receipt1','receipt2',
+ 'turno1','turno2','turno3','factor1','factor2','session1','session2',
+ 'invitation1','invitation2','invitation3','intakeSession1','intakeSession2','intakeSession3',
+ 'receipt1','receipt2','receipt3',
 ].map(key=>[key,randomUUID()]));
 const pids=new Map();
 for(const [name,client] of [['staff1',staff1],['staff2',staff2]]){
@@ -85,6 +86,17 @@ function assertNoSource(result,label){
  assert.equal(Object.hasOwn(result,'sourceCipherBase64'),false,`${label} exposed sourceCipherBase64`);
  assert.equal(Object.hasOwn(result,'current'),false,`${label} exposed current`);
 }
+async function assertUnconsumed(operation,expectedRevision,label){
+ const {rows:[stored]}=await admin.query(`SELECT io.status,pi.admin_revision,
+  (SELECT count(*)::int FROM folio_intake_private.incorporation_provenance ip
+    WHERE ip.operation_id=io.operation_id) provenance
+  FROM folio_intake_private.incorporation_operation io
+  JOIN public.paciente_identidad pi ON pi.id=$2 WHERE io.operation_id=$1`,
+ [operation,ids.identity]);
+ assert.equal(stored.status,'materialized',`${label} consumed the operation`);
+ assert.equal(Number(stored.admin_revision),expectedRevision,`${label} changed identity`);
+ assert.equal(stored.provenance,0,`${label} created provenance`);
+}
 
 try{
  await admin.query(`CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS
@@ -112,9 +124,10 @@ try{
   VALUES($1,$2,'M148 synthetic','CONSULTA_INICIAL',30,0)`,[ids.service,ids.org]);
  await admin.query(`INSERT INTO public.turno
   (id,organization_id,paciente_id,servicio_id,profesional_id,inicio,duracion_min,precio_cents)
-  VALUES($1,$3,$4,$5,$6,now()+interval '3 days',30,0),
-   ($2,$3,$4,$5,$7,now()+interval '4 days',30,0)`,
-  [ids.turno1,ids.turno2,ids.org,ids.patient,ids.service,ids.member1,ids.member2]);
+  VALUES($1,$4,$5,$6,$7,now()+interval '3 days',30,0),
+   ($2,$4,$5,$6,$8,now()+interval '4 days',30,0),
+   ($3,$4,$5,$6,$7,now()+interval '5 days',30,0)`,
+  [ids.turno1,ids.turno2,ids.turno3,ids.org,ids.patient,ids.service,ids.member1,ids.member2]);
  for(const [user,factor,session] of [[ids.user1,ids.factor1,ids.session1],[ids.user2,ids.factor2,ids.session2]]){
   await admin.query("INSERT INTO auth.mfa_factors(id,user_id,status) VALUES($1,$2,'verified')",[factor,user]);
   await admin.query("INSERT INTO auth.sessions(id,user_id,aal,factor_id) VALUES($1,$2,'aal2',$3)",
@@ -128,22 +141,27 @@ try{
   SELECT v.invitation_id,o.id,t.id,p.id,pi.id,p.identity_link_revision,
    o.intake_revision,p.intake_revision,pi.intake_revision,t.profesional_id,$1,
    t.inicio,t.intake_revision,v.token_hash,decode(repeat('aa',60),'hex'),clock_timestamp()+interval '1 hour'
-  FROM (VALUES($2::uuid,$3::uuid,repeat('1',64)),($4::uuid,$5::uuid,repeat('2',64)))
+  FROM (VALUES($2::uuid,$3::uuid,repeat('1',64)),($4::uuid,$5::uuid,repeat('2',64)),
+   ($6::uuid,$7::uuid,repeat('3',64)))
    v(invitation_id,turno_id,token_hash)
   JOIN public.turno t ON t.id=v.turno_id JOIN public.paciente p ON p.id=t.paciente_id
   JOIN public.paciente_identidad pi ON pi.id=p.identidad_id
   JOIN public.organization o ON o.id=t.organization_id`,
-  [ids.member1,ids.invitation1,ids.turno1,ids.invitation2,ids.turno2]);
+  [ids.member1,ids.invitation1,ids.turno1,ids.invitation2,ids.turno2,ids.invitation3,ids.turno3]);
  await admin.query(`INSERT INTO folio_intake_private.session(id,invitation_id,token_hash,expires_at)
   VALUES($1,$2,repeat('a',64),clock_timestamp()+interval '30 minutes'),
-   ($3,$4,repeat('b',64),clock_timestamp()+interval '30 minutes')`,
-  [ids.intakeSession1,ids.invitation1,ids.intakeSession2,ids.invitation2]);
+   ($3,$4,repeat('b',64),clock_timestamp()+interval '30 minutes'),
+   ($5,$6,repeat('c',64),clock_timestamp()+interval '30 minutes')`,
+  [ids.intakeSession1,ids.invitation1,ids.intakeSession2,ids.invitation2,
+   ids.intakeSession3,ids.invitation3]);
  await admin.query(`INSERT INTO folio_intake_private.submission
   (id,invitation_id,session_id,operation_id,questionnaire_version,content_fingerprint,answers_cifrado)
   VALUES($1,$2,$3,$4,'admin.v1',$5,decode(repeat('aa',64),'hex')),
-   ($6,$7,$8,$9,'admin.v1',$10,decode(repeat('bb',64),'hex'))`,
+   ($6,$7,$8,$9,'admin.v1',$10,decode(repeat('bb',64),'hex')),
+   ($11,$12,$13,$14,'admin.v1',$15,decode(repeat('cc',64),'hex'))`,
   [ids.receipt1,ids.invitation1,ids.intakeSession1,randomUUID(),fingerprint('a'),
-   ids.receipt2,ids.invitation2,ids.intakeSession2,randomUUID(),fingerprint('b')]);
+   ids.receipt2,ids.invitation2,ids.intakeSession2,randomUUID(),fingerprint('b'),
+   ids.receipt3,ids.invitation3,ids.intakeSession3,randomUUID(),fingerprint('c')]);
  await configureStaff(staff1);await configureStaff(staff2);await configureService();
 
  // A committed response may be lost. The same operation then converges on one
@@ -230,6 +248,8 @@ try{
  const revokedPrepared=await prepare(staff1,{turno:ids.turno1,receipt:ids.receipt1,
   keys:['cobertura.nombre'],operation:revokedOperation});
  await materialize(revokedPrepared,{cobertura_nombre:'M148 synthetic coverage'},fingerprint('a'));
+ const revokedRevision=Number((await admin.query(
+  'SELECT admin_revision FROM public.paciente_identidad WHERE id=$1',[ids.identity])).rows[0].admin_revision);
  await admin.query('BEGIN');
  await admin.query("UPDATE auth.sessions SET not_after=now()-interval '1 hour' WHERE id=$1",[ids.session1]);
  const revokedApply=apply(staff1,revokedPrepared,ids.turno1,revokedOperation);
@@ -237,9 +257,57 @@ try{
  await admin.query('COMMIT');
  await assert.rejects(revokedApply,error=>error.code==='42501');
  await admin.query('UPDATE auth.sessions SET not_after=NULL WHERE id=$1',[ids.session1]);
- const {rows:[revokedStored]}=await admin.query(
-  'SELECT status FROM folio_intake_private.incorporation_operation WHERE operation_id=$1',[revokedOperation]);
- assert.equal(revokedStored.status,'materialized');
+ await assertUnconsumed(revokedOperation,revokedRevision,'session revocation');
+
+ // Factor revocation commits while apply is waiting on the factor row.
+ const factorOperation=randomUUID();
+ const factorPrepared=await prepare(staff1,{turno:ids.turno1,receipt:ids.receipt1,
+  keys:['email'],operation:factorOperation});
+ await materialize(factorPrepared,
+  {email_cifrado:encrypted(0x41),email_hash:fingerprint('7')},fingerprint('a'));
+ const factorRevision=Number((await admin.query(
+  'SELECT admin_revision FROM public.paciente_identidad WHERE id=$1',[ids.identity])).rows[0].admin_revision);
+ await admin.query('BEGIN');
+ await admin.query("UPDATE auth.mfa_factors SET status='unverified' WHERE id=$1",[ids.factor1]);
+ const factorApply=apply(staff1,factorPrepared,ids.turno1,factorOperation);
+ await blocked(factorApply,pids.get('staff1'),'apply after factor revocation');
+ await admin.query('COMMIT');
+ await assert.rejects(factorApply,error=>error.code==='42501');
+ await admin.query("UPDATE auth.mfa_factors SET status='verified' WHERE id=$1",[ids.factor1]);
+ await assertUnconsumed(factorOperation,factorRevision,'factor revocation');
+
+ // Membership revocation commits while apply is waiting on the actor row.
+ const memberOperation=randomUUID();
+ const memberPrepared=await prepare(staff1,{turno:ids.turno1,receipt:ids.receipt1,
+  keys:['telefono'],operation:memberOperation});
+ await materialize(memberPrepared,
+  {telefono_cifrado:encrypted(0x42),telefono_hash:fingerprint('8')},fingerprint('a'));
+ const memberRevision=Number((await admin.query(
+  'SELECT admin_revision FROM public.paciente_identidad WHERE id=$1',[ids.identity])).rows[0].admin_revision);
+ await admin.query('BEGIN');
+ await admin.query('UPDATE public.member SET deleted_at=clock_timestamp() WHERE id=$1',[ids.member1]);
+ const memberApply=apply(staff1,memberPrepared,ids.turno1,memberOperation);
+ await blocked(memberApply,pids.get('staff1'),'apply after member revocation');
+ await admin.query('COMMIT');
+ await assert.rejects(memberApply,error=>error.code==='42501');
+ await admin.query('UPDATE public.member SET deleted_at=NULL WHERE id=$1',[ids.member1]);
+ await assertUnconsumed(memberOperation,memberRevision,'member revocation');
+
+ // A visit revocation commits while apply waits on the locked visit row. The
+ // dedicated third visit avoids weakening later race fixtures by restoring it.
+ const visitOperation=randomUUID();
+ const visitPrepared=await prepare(staff1,{turno:ids.turno3,receipt:ids.receipt3,
+  keys:['cobertura.nombre'],operation:visitOperation});
+ await materialize(visitPrepared,{cobertura_nombre:'M148 revoked visit'},fingerprint('c'));
+ const visitRevision=Number((await admin.query(
+  'SELECT admin_revision FROM public.paciente_identidad WHERE id=$1',[ids.identity])).rows[0].admin_revision);
+ await admin.query('BEGIN');
+ await admin.query('UPDATE public.turno SET deleted_at=clock_timestamp() WHERE id=$1',[ids.turno3]);
+ const visitApply=apply(staff1,visitPrepared,ids.turno3,visitOperation);
+ await blocked(visitApply,pids.get('staff1'),'apply after visit revocation');
+ await admin.query('COMMIT');
+ await assert.rejects(visitApply,error=>error.code==='55000');
+ await assertUnconsumed(visitOperation,visitRevision,'visit revocation');
 
  // Different professionals give the two visits distinct advisory keys. Both
  // operations target the same patient and identity, so one waits on that row;
@@ -309,7 +377,7 @@ try{
  await admin.query('DROP TRIGGER m148_test_pause_insert ON folio_intake_private.incorporation_operation');
  await admin.query('DROP FUNCTION folio_intake_private.m148_test_pause_insert()');
 
- process.stdout.write('M148 real races PASS: replay, apply/cancel, tombstone, revocation, same-patient CAS and guarded conflict readback\n');
+ process.stdout.write('M148 real races PASS: replay, apply/cancel, tombstone, session/factor/member/visit revocation, same-patient CAS and guarded conflict readback\n');
 }finally{
  try{await barrier.query('SELECT pg_advisory_unlock_all()');}catch{/* cleanup only */}
  for(const client of clients){
