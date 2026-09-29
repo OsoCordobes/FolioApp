@@ -1,173 +1,95 @@
-name: SQL tests (migrations + specs)
+# Operational wrapper for one S1 tag rehearsal only. Exclude from release.
+name: S1 authenticated private indexing proof
 
 on:
   workflow_dispatch:
     inputs:
       expected_sha:
-        description: Full commit SHA expected at checkout
+        description: Exact full SHA of the reviewed S1 operational tag commit
         required: true
         type: string
-  push:
-    branches: [master]
-  pull_request:
 
 permissions:
   contents: read
 
-# Cancel in-flight runs of the same ref when a new push lands.
 concurrency:
-  group: pgtap-${{ github.ref }}
-  cancel-in-progress: true
+  group: s1-auth-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  sql-specs:
-    runs-on: ubuntu-latest
-
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: folio_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
-
+  s1-proof:
+    if: github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/tags/s1-auth-')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
     env:
-      PGHOST: localhost
-      PGPORT: '5432'
-      PGUSER: postgres
-      PGPASSWORD: postgres
-      PGDATABASE: folio_test
-
+      CI: 'true'
     steps:
-      - name: Checkout
+      - name: Checkout exact dispatch commit
         uses: actions/checkout@v4
         with:
           persist-credentials: false
-
-      - name: Verify dispatched commit
-        if: github.event_name == 'workflow_dispatch'
+          ref: ${{ github.sha }}
+      - name: Verify dispatched tag and commit before services
         shell: bash
         env:
           EXPECTED_SHA: ${{ inputs.expected_sha }}
+          DISPATCH_SHA: ${{ github.sha }}
+          DISPATCH_REF: ${{ github.ref }}
         run: |
           set -euo pipefail
+          [[ "$DISPATCH_REF" == refs/tags/s1-auth-* ]]
           if [[ ! "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "::error::expected_sha must be a full lowercase hexadecimal SHA-1"
+            echo '::error::expected_sha must be a full lowercase hexadecimal SHA-1'
             exit 1
           fi
-
           actual_sha="$(git rev-parse HEAD)"
-          if [[ "$actual_sha" != "$EXPECTED_SHA" ]]; then
-            echo "::error::Checked out $actual_sha, expected $EXPECTED_SHA"
+          if [[ "$actual_sha" != "$DISPATCH_SHA" || "$actual_sha" != "$EXPECTED_SHA" ]]; then
+            echo '::error::Checkout, dispatched tag SHA and expected_sha must match'
             exit 1
           fi
-
-      - name: Install psql client + pgTAP
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client postgresql-16-pgtap
-
-      - name: Bootstrap Supabase-compatible roles + auth schema stubs
-        run: |
-          # Folio · stubs minimos para correr migrations de Supabase contra
-          # postgres vanilla. NO replica el comportamiento real de Supabase
-          # Auth — solo crea los simbolos que las migrations referencian.
-          # Esto es defensa contra drift de schema, NO un sustituto del
-          # test E2E con `supabase start`.
-          psql -X -v ON_ERROR_STOP=1 -f scripts/testing/supabase-stubs.sql
-
-      - name: Apply migrations in lexicographic order
-        run: |
-          # Replay every migration with PostgreSQL default function checks.
-          set -e
-          for f in supabase/migrations/*.sql; do
-            echo "::group::Applying $(basename "$f")"
-            if [[ "$f" == *"_M118_billing_authority.sql" ]]; then
-              psql -X -v ON_ERROR_STOP=1 -f tests/migrations/M118_ledger_transaction.sql
-            fi
-            if [[ "$f" == *"_M128_pedido_scoped_access.sql" ]]; then
-              # Reproduce the existing org-wide leak on synthetic roles before
-              # the fix. This assertion passes only when the old leak exists.
-              psql -X -v ON_ERROR_STOP=1 -f tests/migrations/M128_pedido_before.sql
-            fi
-            if [[ "$f" == *"_M132_member_identity_immutable.sql" ]]; then
-              # Prove the M130 opt-in can be forged by an Auth identity swap
-              # before M132 closes that path. Synthetic rows are rolled back.
-              psql -X -v ON_ERROR_STOP=1 -f tests/migrations/M132_member_identity_before.sql
-            fi
-            # The runner owns each migration transaction. Specs below retain
-            # their own boundaries, including M91's transaction-local checks.
-            psql --single-transaction -X -v ON_ERROR_STOP=1 -f "$f" || {
-              echo "::error file=$f::Migration failed"
-              exit 1
-            }
-            if [[ "$f" == *"_M128_pedido_scoped_access.sql" ]]; then
-              # Old app SELECT contract stays available during expand.
-              psql -X -v ON_ERROR_STOP=1 -f tests/migrations/M128_pedido_expand.sql
-            fi
-            echo "::endgroup::"
-          done
-
-      - name: Run SQL specs (tests/sql/*.spec.sql)
-        run: |
-          set -e
-          for f in tests/sql/*.spec.sql; do
-            echo "::group::Spec $(basename "$f")"
-            psql -v ON_ERROR_STOP=1 -f "$f" || {
-              echo "::error file=$f::Spec failed"
-              exit 1
-            }
-            echo "::endgroup::"
-          done
-
-      - name: Set up Node for M142 concurrency spec
-        if: hashFiles('tests/concurrency/M142_adult_attestation.mjs') != ''
-        uses: actions/setup-node@v4
+          echo "s1_dispatch_commit=$actual_sha"
+      - uses: pnpm/action-setup@v4
         with:
-          node-version: '22'
-
-      - name: Set up locked pnpm
-        if: hashFiles('tests/concurrency/M142_adult_attestation.mjs') != ''
-        uses: pnpm/action-setup@v4
+          version: 10
+      - uses: actions/setup-node@v4
         with:
-          version: 10.33.0
-          run_install: false
-
-      - name: Install locked test dependencies
-        if: hashFiles('tests/concurrency/M142_adult_attestation.mjs') != ''
-        timeout-minutes: 8
-        run: pnpm install --frozen-lockfile --ignore-scripts
-
-      - name: Run M142 real PostgreSQL row-lock races
-        if: hashFiles('tests/concurrency/M142_adult_attestation.mjs') != ''
-        timeout-minutes: 3
-        env:
-          FOLIO_M142_SYNTHETIC: '1'
-        run: node tests/concurrency/M142_adult_attestation.mjs
-
-      - name: Run M144 real PostgreSQL row-lock races
-        if: hashFiles('tests/concurrency/M144_patient_intake.mjs') != ''
-        timeout-minutes: 3
-        env:
-          FOLIO_M144_SYNTHETIC: '1'
-        run: node tests/concurrency/M144_patient_intake.mjs
-
-      - name: Summary
+          node-version: 22
+      - name: Install locked tools
+        run: pnpm install --frozen-lockfile
+      - name: Install PostgreSQL 17 client
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq curl ca-certificates
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl --fail --silent --show-error -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          . /etc/os-release
+          printf 'Types: deb\nURIs: https://apt.postgresql.org/pub/repos/apt\nSuites: %s-pgdg\nComponents: main\nSigned-By: /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc\n' "$VERSION_CODENAME" | sudo tee /etc/apt/sources.list.d/pgdg.sources >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+          echo '/usr/lib/postgresql/17/bin' >> "$GITHUB_PATH"
+      - name: Fetch exact official Supabase Docker release
+        shell: bash
+        run: |
+          set -euo pipefail
+          upstream="$RUNNER_TEMP/supabase-upstream"
+          git clone --quiet --depth 1 --filter=blob:none --sparse --branch self-hosted/v0.8.1 https://github.com/supabase/supabase "$upstream"
+          git -C "$upstream" sparse-checkout set docker
+          test "$(git -C "$upstream" rev-parse HEAD)" = '8c7a4d9dbbaf8b552893822e89d7bf06f33f9220'
+          echo "C01_OFFICIAL_DOCKER=$upstream/docker" >> "$GITHUB_ENV"
+      - name: Install isolated Chromium
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Run only the three S1 tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --conditions=react-server --import tsx scripts/testing/caller-proof/run.mjs --s1 2>&1 | tee "$RUNNER_TEMP/s1-proof.log"
+      - name: Preserve finite synthetic S1 receipt
         if: always()
-        run: |
-          echo "## SQL tests" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Migrations applied: $(ls supabase/migrations/*.sql | wc -l)" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Specs ejecutados: $(ls tests/sql/*.spec.sql | wc -l)" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "NOTA: este CI usa postgres:16 vanilla + stubs minimos de" >> "$GITHUB_STEP_SUMMARY"
-          echo "auth/storage. NO reemplaza un test E2E con \`supabase start\`," >> "$GITHUB_STEP_SUMMARY"
-          echo "que sigue siendo la fuente de verdad para RLS-with-JWT y" >> "$GITHUB_STEP_SUMMARY"
-          echo "storage policies." >> "$GITHUB_STEP_SUMMARY"
+        uses: actions/upload-artifact@v4
+        with:
+          name: s1-proof-receipt
+          path: ${{ runner.temp }}/s1-proof.log
+          if-no-files-found: ignore
+          retention-days: 7
