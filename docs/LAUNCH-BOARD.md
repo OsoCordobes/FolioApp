@@ -10,7 +10,7 @@ Lanzar Solo y Clínica, cinco especialidades, Google y portal para adultos. Paci
 
 Priorizar riesgo, dependencias, utilidad y esfuerzo restante. Terminar, comprobar, entregar y tomar el siguiente paquete útil, sin semanas rígidas ni repetir pruebas por rutina. Piloto final: 14 días, tres profesionales, al menos cinco jornadas por persona y sin problemas graves pendientes. No inventar decisiones clínicas ni legales.
 
-A dirige prioridades, presupuesto y aceptación; B coordina integración/publicación. Máximo dos escritores aislados, encargos con base, archivos propios, entorno, prueba y cierre. Revisiones independientes para cambios relevantes. Última lectura de cuota29/09 22:47UTC: 42% usada, 58% disponible; reserva15%. No atribuir consumo exacto a agentes.
+A dirige prioridades, presupuesto y aceptación; B coordina integración/publicación. Máximo dos escritores aislados, encargos con base, archivos propios, entorno, prueba y cierre. Revisiones independientes para cambios relevantes. Última lectura de cuota29/09 23:01UTC: 44% usada, 56% disponible; reserva15%. No atribuir consumo exacto a agentes. Titular autorizó Sol6.1; A actualizó B, Legal/SEO y Landing a gpt-6.1-sol High mediante herramientas de chat. C/D conservan su trabajo actual; no afirmar modelo no verificado.
 
 La automatización folio-manager-por-checkpoints figura PAUSED; no se cambió esa preferencia. La ejecución actual continúa directamente. No esperar recordatorios ni prometer ejecución ininterrumpida.
 
@@ -21,10 +21,12 @@ La automatización folio-manager-por-checkpoints figura PAUSED; no se cambió es
 | B · Producto | Fixture M148 corregido con grant sintético equivalente al contrato M86; revisión independiente aprobada. Cuarto ensayo b3fab46 autorizado; resultado pendiente. Migraciones M148/M149 intactas. Sin servidor nuevo ni publicación PR188/H3. |
 | C · Continuidad | Análisis offline explica que custom escribe al cierre; stdout0 no ubica el fallo. Prepara R5 plain --create conservando alcance/plazo40s, sin Execute autorizado todavía. Sin copia nueva confirmada. |
 | D · Calidad | Cerró R4 v5: recibo/limpieza/principal intactos comprobados. El anuncio observado no demuestra causa ni fase completada. Sin otra revisión genérica. |
-| Legal/SEO | S1/P1/L4 y preview4410 listos; publicación retenida por preaviso de Privacidad§8. Ficha de proveedores revela posible incompatibilidad del DPA Vercel con datos sensibles: bloqueo contractual del piloto clínico real hasta acreditar cobertura. Consulta redactada, no enviada. |
-| Diseño | Refinamiento A cerrado en4441, capturas de cinco tamaños y revisión independiente; defecto de estados ocultos en tablet corregido. A anterior/B/438 preservados. Espera valoración del titular; cupo liberado a B. |
+| Legal/SEO | Nuevo encargo sólo lectura: determinar camino mínimo para publicar S1 independiente de PR188, con prueba HTTP autenticada sintética en entorno existente sin Preview paga nueva. No repetir auditorías. P1/L4 siguen retenidos por preaviso; H3/consulta proveedor pendientes. |
+| Diseño | Plan de landing completa aceptable: extender A refinada con recorridos, primeros pasos, FAQ y CTA, preservando alternativas. Sólo propuesta local para valoración; sin promesas no acreditadas. Comienza al congelar C el operador R5 y liberar cupo. |
 
 No abrir otro escritor que choque con C o con la reanudación de B. Si el titular pide trabajo directo en otro chat, sincronizar alcance/cupo y preservar sus decisiones.
+
+Reasignación23:02UTC por petición de iniciativa del titular: B continúa ensayo exacto ya despachado (cambiar modelo no autoriza repetirlo). Legal prepara plan S1 sólo lectura, máximo una página y referencias, sin DB/push/PR/env ni checkout del preview4410. Landing prepara máximo8 líneas y luego extiende artefacto externo cuando C congele R5; reutiliza evidencia actual y revisión focal, sin otra investigación ni publicación. Se puede desarrollar propuesta provisional sin confundirla con aceptación creativa del titular.
 
 ## Publicación PR188 / M147
 
