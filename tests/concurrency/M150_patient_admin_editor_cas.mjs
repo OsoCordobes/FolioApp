@@ -83,9 +83,10 @@ async function rejectedWhileWaiting(client,actor,lock,mutation,restore,label){
 }
 let intakeSequence=0;
 async function newIntake(){
+  const sequence=++intakeSequence;
   const visit=randomUUID(),invitation=randomUUID(),intakeSession=randomUUID(),receipt=randomUUID(),operation=randomUUID();
   await admin.query(`INSERT INTO public.turno(id,organization_id,paciente_id,servicio_id,profesional_id,inicio,duracion_min,precio_cents)
-    VALUES($1,$2,$3,$4,$5,now()+interval '9 days'+($6::integer*interval '1 hour'),30,0)`,[visit,ids.org,ids.patient,ids.service,ids.memberOwner,++intakeSequence]);
+    VALUES($1,$2,$3,$4,$5,now()+interval '9 days'+($6::integer*interval '1 hour'),30,0)`,[visit,ids.org,ids.patient,ids.service,ids.memberOwner,sequence]);
   await admin.query(`INSERT INTO folio_intake_private.invitation
     (id,organization_id,turno_id,paciente_id,identidad_id,identity_link_revision,organization_intake_revision,
      paciente_intake_revision,identidad_intake_revision,profesional_id,issued_by_member_id,turno_inicio,turno_intake_revision,
@@ -103,7 +104,8 @@ async function newIntake(){
   const preparation=(await owner.query('SELECT public.patient_intake_incorporation_prepare($1,$2,$3,$4::text[],$5,$6,$7,$8) result',
     [ids.org,visit,receipt,['email'],state.identityId,state.adminRevision,state.contextHash,operation])).rows[0].result;
   assert.equal(preparation.status,'pending');
-  const patch={email_cifrado:Buffer.alloc(32,23).toString('base64'),email_hash:hash('e')};
+  const emailCiphertext=Buffer.alloc(32,23);emailCiphertext.writeUInt32BE(sequence,28);
+  const patch={email_cifrado:emailCiphertext.toString('base64'),email_hash:sequence.toString(16).padStart(64,'0')};
   const ready=(await service.query('SELECT public.patient_intake_incorporation_materialize($1,$2::jsonb,$3) result',
     [preparation.preparationId,JSON.stringify(patch),hash('a')])).rows[0].result;
   assert.equal(ready.status,'materialized');
