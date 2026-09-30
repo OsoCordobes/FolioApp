@@ -33,6 +33,47 @@ test('bridge accepts only the exact internal Compose target',()=>{
  }
 });
 
+test('S1 bridge accepts only its exact internal db and api-gw targets',()=>{
+ for(const selectedService of ['db','api-gw']){
+  const value=metadata('folio_s1_indexing_proof');
+  value.service=selectedService;
+  value.labels['com.docker.compose.service']=selectedService;
+  value.remotePort=selectedService==='db'?5432:8000;
+  assert.deepEqual(validateBridgeTarget(value),{address:'172.30.0.3',port:value.remotePort});
+ }
+});
+
+test('S1 bridge rejects lookalike names, URLs, hosted addresses and foreign metadata before I/O',()=>{
+ const s1Project='folio_s1_indexing_proof';
+ for(const rejected of [s1Project+'_extra','prefix_'+s1Project,'folio_s1','',
+  'http://127.0.0.1:55421','https://grkpayhxndztlfwxobnt.supabase.co']){
+  assert.throws(()=>validateBridgeTarget(metadata(rejected)));
+ }
+ for(const selectedService of ['db','api-gw']){
+  for(const mutate of [
+   x=>{x.labels['com.docker.compose.project']='folio_caller_proof';},
+   x=>{x.labels['com.docker.compose.service']='other';},
+   x=>{x.network.Labels['com.docker.compose.project']='other';},
+   x=>{x.network.Internal=false;},
+   x=>{x.networks.other={};},
+   x=>{x.networks[`${s1Project}_default`].NetworkID='c'.repeat(64);},
+   x=>{x.remotePort=443;},
+   ...['198.51.100.7','127.0.0.1','grkpayhxndztlfwxobnt.supabase.co',
+    'https://grkpayhxndztlfwxobnt.supabase.co','http://127.0.0.1:55421'].map(address=>x=>{
+     x.networks[`${s1Project}_default`].IPAddress=address;
+     x.network.Containers[containerId].IPv4Address=`${address}/16`;
+    }),
+  ]){
+   const value=metadata(s1Project);
+   value.service=selectedService;
+   value.labels['com.docker.compose.service']=selectedService;
+   value.remotePort=selectedService==='db'?5432:8000;
+   mutate(value);
+   assert.throws(()=>validateBridgeTarget(value));
+  }
+ }
+});
+
 test('bridge direct-route preflight succeeds only for a reachable TCP service',async()=>{
  const service=net.createServer(socket=>socket.end());
  await new Promise(resolve=>service.listen({host:'127.0.0.1',port:0},resolve));
