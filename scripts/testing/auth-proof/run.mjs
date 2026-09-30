@@ -181,6 +181,8 @@ async function main(){
   for(const diagnostic of resetDiagnostics.slice(-1))console.log(diagnostic[0]);
   const serviceDiagnostics=[...result.output.matchAll(/services_proof_diagnostic:phase=initial_save db_ok=[01] active_count=(?:unknown|[0-9]+) revision=(?:unknown|[0-9]+) name_match=[01] field_enabled=[01] alert=[01] verify=[01]/g)];
   for(const diagnostic of serviceDiagnostics.slice(-1))console.log(diagnostic[0]);
+  const serviceResponses=[...result.output.matchAll(/services_proof_response:phase=initial_save count=[0-9] http=(?:none|[1-5][0-9]{2}) result=(?:unknown|ok|rejected) code=(?:none|unknown|auth_required|mfa_required|no_org|forbidden|not_found|validation|conflict|transition_invalid|locked|db_error|network) outcome=(?:none|unknown|rejected|uncertain|review_required) revision=(?:unknown|0|[1-9][0-9]{0,15}) alert=(?:none|unknown|validation|forbidden|auth_required|db_error|account_changed|snapshot_read|owner_missing|conflict|uncertain|prepare_storage)(?=\r?\n|$)/g)];
+  for(const diagnostic of serviceResponses.slice(-9))console.log(diagnostic[0]);
   for(const count of counts.slice(-3))console.log(cleanOutput(count));
   if(result.code!==0){
    // The browser's raw report can contain one-use mail links and credentials.

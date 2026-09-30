@@ -54,7 +54,7 @@
 }
 @media (max-width: 1023px) { .fx-onboarding .onb-preview-expand { display: none; } }
 @media (max-width: 1023px) {
-  .fx-onboarding .onb-step4 .onb-mobile-preview-trigger { display: inline-flex; align-items: center; justify-content: space-between; align-self: flex-start; gap: 12px; min-height: 44px; padding: 8px 13px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--accent); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .fx-onboarding .onb-step4 .onb-mobile-preview-trigger { display: inline-flex; align-items: center; justify-content: space-between; align-self: flex-start; gap: 12px; min-height: 44px; padding: 8px 13px; border: 1px solid var(--line); border-radius: var(--control-radius); background: var(--surface); color: var(--accent); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
   .fx-onboarding .onb-step4 .onb-preview-fab { display: none; }
 }
 @media (max-width: 600px) { .fx-onboarding .onb-step4 .onb-shell-form { padding: 24px 18px 20px; } }

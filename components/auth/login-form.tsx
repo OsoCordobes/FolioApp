@@ -28,7 +28,7 @@ import {
   signInWithPassword,
 } from "@/app/(public)/login/actions";
 import { TurnstileChallenge } from "@/components/auth/turnstile-challenge";
-import { FolioMark } from "@/components/folio-mark";
+import { FolioBrand } from "@/components/folio-brand";
 import { MENSAJE_OAUTH_GENERICO, mensajeOauth } from "@/lib/auth/oauth-messages";
 import { safeRedirect } from "@/lib/security/safe-redirect";
 import { supportMailto } from "@/lib/support";
@@ -511,10 +511,7 @@ export function AuthForms({ initialVista = "login" }: { initialVista?: Vista }) 
 
   return (
     <main className="au-main fx-auth-main">
-      <Link className="fx-auth-brand fx-auth-form-brand" href="/" aria-label="Folio, volver al inicio">
-        <FolioMark size={29} />
-        <span>folio</span>
-      </Link>
+      <FolioBrand className="fx-auth-brand fx-auth-form-brand" />
       {vista === "login" ? (
         <Login
           setVista={switchVista}

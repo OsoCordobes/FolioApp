@@ -48,7 +48,7 @@ import {
 } from "@/app/(public)/onboarding/actions";
 import { CheckEmailPanel } from "@/components/auth/check-email-panel";
 import { SideArt } from "@/components/auth/side-art";
-import { FolioMark } from "@/components/folio-mark";
+import { FolioBrand } from "@/components/folio-brand";
 import { packDraft, unpackDraft } from "@/lib/onboarding/draft";
 import { validateFranjas } from "@/lib/onboarding/franjas";
 import { Step1Consent } from "@/components/onboarding/step1-consent";
@@ -863,10 +863,7 @@ export function OnboardingApp({
         <main className="au-main onb-step1-main">
           <div className="onb-step1-pane">
             <header className="onb-step1-head">
-              <Link className="onb-app-brand fx-auth-brand" href="/" aria-label="Folio, volver al inicio">
-                <FolioMark size={24} />
-                <span className="onb-brand-name">folio</span>
-              </Link>
+              <FolioBrand className="onb-app-brand fx-auth-brand" />
               <Link className="onb-home-link" href="/">← Volver al inicio</Link>
             </header>
             <div key={stepKey} className={`onb-anim onb-anim-${direction}`}>
@@ -915,10 +912,7 @@ export function OnboardingApp({
   return (
     <div className="onb-app fx-onboarding">
       <header className="onb-app-head">
-        <Link className="onb-app-brand fx-auth-brand" href="/" aria-label="Folio, volver al inicio">
-          <FolioMark size={24} />
-          <span className="onb-brand-name">folio</span>
-        </Link>
+        <FolioBrand className="onb-app-brand fx-auth-brand" />
         <Link className="onb-home-link" href="/">← Volver al inicio</Link>
         {stepIdx < ONB_TOTAL ? (
           <SaveIndicator state={stepIdx === 4 && data.acento !== savedAccentRef.current && saveState.status !== "saving" && saveState.status !== "error" ? { status: "unsaved" } : saveState} onRetry={retrySave} />

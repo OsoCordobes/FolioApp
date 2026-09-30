@@ -1,17 +1,13 @@
 "use client";
 
-import Link from "next/link";
-import { FolioMark } from "@/components/folio-mark";
+import { FolioBrand } from "@/components/folio-brand";
 
 /** An illustrative working day. Static so the form keeps the user's attention. */
 export function SideArt({ audience = "practice" }: { audience?: "practice" | "patient" } = {}) {
   const patient = audience === "patient";
   return (
     <aside className="fx-auth-art" aria-labelledby="fx-auth-art-heading">
-      <Link className="fx-auth-brand" href="/" aria-label="Folio, volver al inicio">
-        <FolioMark size={31} />
-        <span>folio</span>
-      </Link>
+      <FolioBrand className="fx-auth-brand" />
       <div className="fx-auth-art-content">
         <h2 id="fx-auth-art-heading">{patient ? <>Tu atención,<br />más cerca.</> : <>Tu consultorio.<br />Todo en su lugar.</>}</h2>
         <p>{patient ? "Ingresá al espacio que tu consultorio comparte con vos." : "La agenda y la historia de cada paciente, cerca cuando las necesitás."}</p>
