@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmdirSync, unlinkSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmdirSync, unlinkSync, writeFileSync } from "node:fs";
+import { link, rename, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { AUDIT_BARRIER_SQL, auditBarrierObserved, assertPortalFixture, PORTAL_EXPORT_MARKERS, PORTAL_EXPORT_SPEC,
-  portalExportResult, portalFailure, portalProofReceipt, addPortalFailure, PORTAL_EXPORT_FAILURE_PREFIX,
+  portalExportResult, portalFailure, portalProofReceipt, addPortalFailure, publishPortalReceipt, PORTAL_EXPORT_FAILURE_PREFIX,
   proofMode, proofSpecs, type PortalProofFixture } from "../../scripts/testing/caller-proof/portal-export-contract";
 import { validateBridgeTarget } from "../../scripts/recovery/ci-loopback-bridge.mjs";
 
@@ -109,5 +110,30 @@ test("durable primary HTTP failure survives secondary cleanup failure without ra
     assert.equal(readFileSync(file, "utf8").includes("cleanup-sensitive-canary"), false);
     for (let n = 0; n < 20; n++) receipt = addPortalFailure(receipt, Error("more"), { case: "runner", phase: "cleanup" });
     assert.equal(receipt.secondary.length, 12); assert.deepEqual(receipt.primary, failed);
+  } finally { unlinkSync(file); rmdirSync(folder); }
+});
+
+test("atomic receipt publication preserves the prior primary when a secondary write or rename fails", async () => {
+  const failed = portalFailure(new assert.AssertionError({ actual: 503, expected: 409 }), { case: "identity", phase: "response" });
+  const primary = portalProofReceipt(PORTAL_EXPORT_FAILURE_PREFIX + JSON.stringify(failed) + "\n1 failed", 1);
+  const updated = addPortalFailure(primary, Error("cleanup"), { case: "runner", phase: "cleanup" });
+  const folder = mkdtempSync(path.join(tmpdir(), "folio-portal-atomic-unit-"));
+  const file = path.join(folder, "receipt.json");
+  try {
+    await publishPortalReceipt(file, primary, false);
+    const before = readFileSync(file, "utf8");
+    for (const io of [
+      { link, rename, unlink, writeFile: async () => { throw Error("write_failed"); } },
+      { link, unlink, writeFile, rename: async () => { throw Error("rename_failed"); } },
+    ]) {
+      await assert.rejects(publishPortalReceipt(file, updated, true, io));
+      assert.equal(readFileSync(file, "utf8"), before);
+      assert.deepEqual(readdirSync(folder), ["receipt.json"]);
+    }
+    await assert.rejects(publishPortalReceipt(file, updated, false)); // Never replace an unowned receipt.
+    assert.equal(readFileSync(file, "utf8"), before);
+    await publishPortalReceipt(file, updated, true);
+    const final = JSON.parse(readFileSync(file, "utf8"));
+    assert.deepEqual(final.primary, failed); assert.equal(final.secondary[0].phase, "cleanup");
   } finally { unlinkSync(file); rmdirSync(folder); }
 });

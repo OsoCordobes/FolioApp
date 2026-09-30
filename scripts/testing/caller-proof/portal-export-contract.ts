@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import { link, rename, unlink, writeFile } from "node:fs/promises";
 
 export const PORTAL_EXPORT_FIXTURE_NAME = "folio-portal-export-proof-fixture.json";
 export const PORTAL_EXPORT_SPEC = "tests/e2e/portal-export-authenticated.spec.ts";
@@ -31,6 +33,15 @@ type Failure = FailureContext & { secondary: boolean; kind: "timeout" | "asserti
   line?: number; expected?: number | boolean; actual?: number | boolean; status?: number; barrierObserved?: false };
 export interface PortalProofReceipt { version: 1; passed: boolean; exitCode: number; markers: string[];
   primary: Failure | null; secondary: Failure[] }
+export async function publishPortalReceipt(file: string, receipt: PortalProofReceipt, owned: boolean,
+  io: Pick<typeof import("node:fs/promises"), "writeFile" | "rename" | "link" | "unlink"> = { writeFile, rename, link, unlink }) {
+  const temporary = `${file}.${randomUUID()}.tmp`; // Same directory/filesystem; only this temporary is owned here.
+  try {
+    await io.writeFile(temporary, JSON.stringify(receipt) + "\n", { flag: "wx", mode: 0o600 });
+    if (owned) await io.rename(temporary, file); // Atomic replacement; a failed write keeps the previous receipt.
+    else await io.link(temporary, file); // Atomic first publication, without overwriting an unowned destination.
+  } finally { await io.unlink(temporary).catch(() => undefined); }
+}
 const scalar = (value: unknown): value is number | boolean => typeof value === "boolean" ||
   (typeof value === "number" && Number.isSafeInteger(value) && Math.abs(value) <= 100_000);
 // Extract only finite fields. Never copy messages, assertion strings, SQL or source snippets.

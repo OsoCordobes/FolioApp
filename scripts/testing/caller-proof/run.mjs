@@ -18,7 +18,7 @@ import {openLoopbackBridge,validateBridgeTarget,waitForBridgeTarget} from '../..
 const repo=path.resolve(fileURLToPath(new URL('../../../',import.meta.url)));
 const compose=path.join(repo,'scripts/recovery/ci-compose.yml');
 const {proofMode,proofSpecs,PORTAL_EXPORT_FIXTURE_NAME,PORTAL_EXPORT_RECEIPT_NAME,portalExportResult,
- portalProofReceipt,addPortalFailure,assertPortalFixture}=portalContract;
+ portalProofReceipt,addPortalFailure,publishPortalReceipt,assertPortalFixture}=portalContract;
 const mode=proofMode(process.argv.slice(2));
 const portal=mode==='portal-export';
 const prefix=portal?'portal_export_proof':'caller_proof';
@@ -38,7 +38,7 @@ function retainFailure(state,error,phase){
 }
 async function preservePortalReceipt(state){
  try{
-  await writeFile(receiptFile,JSON.stringify(state.portalReceipt)+'\n',{flag:state.receiptOwned?'w':'wx',mode:0o600});
+  await publishPortalReceipt(receiptFile,state.portalReceipt,state.receiptOwned===true);
   state.receiptOwned=true;
  }catch(error){retainFailure(state,error,'receipt');console.error('portal_export_proof_receipt_failed');}
 }
