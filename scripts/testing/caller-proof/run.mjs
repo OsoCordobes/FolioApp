@@ -26,7 +26,7 @@ const project='folio_caller_proof';
 const upstreamCommit='8c7a4d9dbbaf8b552893822e89d7bf06f33f9220';
 const api='http://127.0.0.1:55421';
 const fixtureFile=path.join(tmpdir(),portal?PORTAL_EXPORT_FIXTURE_NAME:'folio-caller-proof-fixture.json');
-const receiptFile=path.join(tmpdir(),PORTAL_EXPORT_RECEIPT_NAME);
+const receiptFile=path.join(process.env.RUNNER_TEMP??tmpdir(),PORTAL_EXPORT_RECEIPT_NAME);
 const random=bytes=>randomBytes(bytes).toString('base64url');
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const options={auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}};

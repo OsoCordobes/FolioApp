@@ -67,6 +67,7 @@ test("runner and spec retain exclusive selection, hosted guards and deterministi
   assert.match(runner, /proofSpecs\(mode\)/);
   assert.match(runner, /RUNNER_ENVIRONMENT,'github-hosted'/);
   assert.match(runner, /state\.fixtureOwned/);
+  assert.match(runner, /path\.join\(process\.env\.RUNNER_TEMP\?\?tmpdir\(\),PORTAL_EXPORT_RECEIPT_NAME\)/);
   assert.ok(runner.indexOf("await preservePortalReceipt(state); // Durable") < runner.indexOf("portal_export_missing_pass"));
   const spec = readFileSync(PORTAL_EXPORT_SPEC, "utf8");
   assert.equal((spec.match(/^test\(/gm) ?? []).length, 3);
