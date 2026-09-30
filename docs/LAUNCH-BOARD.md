@@ -15,12 +15,12 @@ Automatización `folio-manager-por-checkpoints`: PAUSED, sin modificar esa prefe
 | Área | Estado y siguiente paso |
 |---|---|
 | B · Producto | Implementa M150/editores atómicos desdee0f3+CAS congelado en d05. Una migración/3RPC y mismos editores; aún sin ensayo SQL nuevo autorizado. A revisa candidato antes del ensayo hospedado. |
-| D · Experiencia | UI incorporación39c952a cerrada aislada. Portal41e8fc1 pasó29pruebas, pero revisión A detectó P2 por identidad oculta con vínculo estable. Corrección autorizada en mismos tres archivos; revisión de delta pendiente. |
+| D · Experiencia | Portal d6a5265 CERRADO local:35pruebas/revisiónPASS y P2 corregido. Prepara sólo propuesta de ensayo hospedado focal con Auth/RLS reales sintéticos, reutilizando S1/B10/tag. Sin implementación nueva ni publicación. UI39c952a sigue cerrada aislada. |
 | C · Continuidad | R8 instalado y reconciliado; cupo libre. No repetir captura ni comprobaciones por rutina. Próxima automática01:57 sólo se observará cuando ocurra durante trabajo útil. |
 | Legal/SEO | S1 hospedadoPASS; publicación preparada, bloqueada por lectura actual de filtro Supabase. P1/L4/H3 retenidos. Sin agentes esperando activamente. |
 | Landing | Diez pasadas cerradas, propuesta4441 revisada; valoración creativa del titular pendiente. Sin integración/publicación ni otra iteración por inercia. |
 
-Escritores actuales: **B y D**. C, Legal y Landing no tienen implementación abierta. Si el titular asigna trabajo directo en otro chat, sincronizar alcance/cupo y preservar esa decisión.
+Escritor actual: **B**, cerrando candidato y ensayo M150; D terminó código y prepara propuesta hospedada sólo en lectura. C, Legal y Landing no tienen implementación abierta. Si el titular asigna trabajo directo en otro chat, sincronizar alcance/cupo y preservar esa decisión.
 
 ## Producción y publicaciones
 
@@ -56,6 +56,8 @@ Autorizado sólo implementar: una migración/3RPC contacto staff, cobertura staf
 Archivos propios B: `lib/db/{paciente-ficha,pacientes,portal-perfil}.ts`, pacientes/actions, paciente-detalle/contacto-modal/cobertura-modal, portal/perfil actions/perfil-list, dosunits, unaSQLspec/unrunner. Sin APIe0f3/UI D/workflows/env. Pruebas locales focales/tipos/lint; preparar casos de reasignación/ABA/CAS/intake/revocación/M93 con barreras. A revisa candidato antes de **nuevo ensayo hospedado al SHA exacto**; SQL preparado no es PASS. Sin DB conectada/Docker local/push/PR/producción.
 
 ## D activo — descarga del portal
+
+**Paquete local cerrado d6a5265:** SHA `d6a52657ff38d906fb387200cf2f5bf931018792`, tree `42e518b502a44cc108ccd3a624dea4fc1ffa6f9a`, padre41e8, limpio. Helper ahora comprueba todas las identidades bajo mismo RLS en baseline/final, paginación/conteo/batches200/organización/no-borrado, sinPII ni elevación. RED del P2 sobre41e8 preservado200≠409;35PASS/tipos/lint final, sin hallazgos nuevos en revisión delta. Manifest `portal-export-authority-manifest-d6a5265.json` SHA532f7db3efd6634ed05388310517736ce8112268b3569c066a5b0d770e607f73; review `portal-export-authority-review-d6a5265.md` SHA81513f877ebb18316a6d4e7bba553efb4b7d919336c349b818251622a171961e. A contrastó8hashes, logs y Git; confirma exits0 del manifiesto que revisor aún no tenía. Sin prueba hospedada ni publicación. D autorizado sólo a proponer <=350palabras ensayo de ruta real/Auth/RLS en GitHub sintético con barrera determinista durante auditoría, reutilizando aislamiento/cleanup S1/B10 y tag; sin nueva implementación/DB/push todavía.
 
 Candidato inicial `41e8fc1f7f11f55cb14e26085b9d7b2b0dcae243`, tree `d4930a48ccea5c463991dab079cb8273852b1533`, basea60; rama/checkout `codex/portal-export-final-authority` / `portal-export-final-authority/folio-app`. 29pruebas controladas/tipos/lintPASS; manifest `portal-export-authority-manifest-41e8fc1.json` SHAffb9d69b648c196c33cf9b72b364f6ff5dbb6162acd8bf07f51240b3c73507ca. **No aceptado aún:** revisor fresco A hallóP2 por fuente: M71 oculta identidad con deleted_at aunque paciente/vínculo sigan visibles; M03/M86 permiten transición staff. El conjunto deIDs estable no basta. A autorizó verificar visibilidad real de identidad bajo RLS en captura/final y regresión durante auditoría, mismos tres archivos/sin política nueva. Conservar41e8 y fallo; no alegar incidenteDB. Revisar sólo delta nuevo, sin repetir auditoría amplia.
 
