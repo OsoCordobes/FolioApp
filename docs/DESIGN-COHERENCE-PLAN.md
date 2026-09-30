@@ -2,6 +2,10 @@
 
 Pedido del titular del 30/09, posterior al cierre. Base publicada: `36d6c8f62c81e315862c11197413919b6ec83574`. Alcance: sistema compartido y su aplicación visible a la landing, acceso y miniweb; sin modificar reglas clínicas, permisos, pagos, proveedores ni bases.
 
+**Estado final del 30/09:** [PR191 publicada en Folio](https://foliosalud.com/), revisión visual independiente y controles del candidato y master aprobados. Squash `6bfcaa13307fe6f52fac619368d082eeb685fe9a`, árbol idéntico al candidato final `7f9c202f`. Despliegue READY, ambos dominios y seis respuestas públicas comprobados por operador y contrastados por A. Los apartados siguientes conservan el plan y la secuencia de evidencia.
+
+**Límite abierto:** dos ensayos previos de servicios fallaron; el ensayo completo instrumentado final aprobó en Solo/Clínica con revisión1 durable. La causa de los fracasos anteriores sigue sin confirmarse. Se corrigió el diagnóstico de la prueba, no el producto. Este seguimiento no se oculta ni se confunde con la entrega visual o el lanzamiento completo.
+
 ## Resultado y límites
 
 Una presentación profesional y reconocible de Folio: jerarquía clara, demostraciones legibles, espacios y controles consistentes. Conservar la estructura completa de la landing que el titular prefirió, su contenido útil y la identidad clara/violeta. No repetir la propuesta corta rechazada ni sumar efectos decorativos para aparentar calidad.
@@ -50,4 +54,10 @@ Vista de revisión externa del candidato 4a14310b: https://folio-3zmphdujz-osoco
 
 La lectura independiente detectó un defecto del diagnóstico: el selector mezclaba el mensaje de `SaveIndicator` con el botón «Reintentar guardar». No explica el guardado. Se corrigió sólo spec/runner (+12/−8): mensaje propio, categoría cerrada `prepare_storage` y revisión numérica segura. El fixture con markup real reproduce el error del selector anterior y aprueba el nuevo; canarios, tipos y lint aprobados. Revisión independiente `publication/DIAGNOSTIC-V2-REVIEW.md`. Candidato `7f9c202f478bc0ece0c75507e4cfeff1c6bad4d8`, árbol `592bd7704f81f21adf4e356a0b333b8bbc45f67e`; siguiente CI automática será la única ejecución adicional autorizada para distinguir fallo local previo al envío de rechazo del guardado. No hay cambio visual ni de producto; no se asume una causa todavía.
 
-Cuota compartida: al cerrar la revisión visual, 61% usada; al corregir el diagnóstico, 65% usada/35% disponible. Saldo 62497,459246 y un reset sin cambios; estas lecturas no permiten atribuir consumo por agente.
+Cuota compartida: al cerrar la revisión visual, 61% usada; al corregir el diagnóstico, 65%; al finalizar la publicación, 67% usada/33% disponible. Saldo 62497,459246 y un reset sin cambios; estas lecturas no permiten atribuir consumo por agente.
+
+## Cierre y continuación
+
+La publicación quedó comprobada: CI del candidato app36752567695/access36752567750/SQL36752567740 y CI de master app36753991091/SQL36753991083 aprobados. Deployment Git `dpl_HUyjEygoESW6iLe4jCo6bVoPx23o`, READY/gru1/SHA exacto, canónico y www confirmados. A abrió la portada publicada y contrastó los originales: 94/94 hashes de evidencia coinciden. Recibo `publication/RECEIPT.md`, SHA256 `E481D071B51A9E920A59777FB29F903D20555838D539A61E631B083BF94C2472`.
+
+Se cierra esta pasada sin nuevas implementaciones ni automatización reactivada. Para revisión humana: portada en móvil/escritorio, pestañas del producto, especialidades e ingreso. En el siguiente ciclo, separar el seguimiento de los dos ensayos de servicios sin causa confirmada de los pendientes de lanzamiento ya registrados; no repetir publicación, migraciones ni pruebas aprobadas por rutina.
