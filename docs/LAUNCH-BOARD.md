@@ -1,6 +1,6 @@
 # Folio — tablero único de lanzamiento
 
-Actualizado: 30/09/2026, 02:07 UTC. Autoridad operativa: esta copia en `codex/launch-checkpoints`. [AVANCES](AVANCES.md) contiene los 19 checkpoints y la vista breve del titular. Las fechas de esta página son comprobaciones, no estado en tiempo real.
+Actualizado: 30/09/2026, 02:23 UTC. Autoridad operativa: esta copia en `codex/launch-checkpoints`. [AVANCES](AVANCES.md) contiene los 19 checkpoints y la vista breve del titular. Las fechas de esta página son comprobaciones, no estado en tiempo real.
 
 ## Objetivo y método
 
@@ -14,8 +14,8 @@ Automatización `folio-manager-por-checkpoints`: PAUSED, sin modificar esa prefe
 
 | Área | Estado y siguiente paso |
 |---|---|
-| B · Producto | M150 afdf847 aceptado; operativo59778dd revisado porA y único ensayoPG16 [36658244804](https://github.com/OsoCordobes/FolioApp/actions/runs/36658244804) despachado. Conservar resultado y diagnosticar antes de repetir; no certificaciónSQL aún. |
-| D · Experiencia | Portal d6a5265 CERRADO local:35pruebas/revisiónPASS. Harness7bc5ec9 revisado: únicoP2 por pérdida del diagnóstico ante fallo; corrección focal autorizada. Sin DB/dispatch todavía. UI39c952a sigue cerrada aislada. |
+| B · Producto | Primer ensayo36658244804 fallófixture23503; SQL/specs aprobados. Corrección2110355 revisada y operativo4e337b6 autorizado para un nuevo ensayo; M150inmutable, resultado global pendiente. |
+| D · Experiencia | Portal d6a5265 CERRADO local. Harness602c150 y operativoba2bf0c revisadosPASS; nueveunits y21hashes contrastados. A autorizó un ensayo hospedado aislado de tres casos; resultado pendiente. UI39c952a sigue cerrada aislada. |
 | C · Continuidad | R8 instalado y primera automática01:57 reconciliada: resultado0/not_due, cuatro copias intactas. Paquete cerrado; no repetir captura ni lecturas por rutina. |
 | Legal/SEO | S1 hospedadoPASS; publicación preparada, bloqueada por lectura actual de filtro Supabase. P1/L4/H3 retenidos. Sin agentes esperando activamente. |
 | Landing | Diez pasadas cerradas, propuesta4441 revisada; valoración creativa del titular pendiente. Sin integración/publicación ni otra iteración por inercia. |
@@ -57,9 +57,15 @@ Operativo `59778dd03f88bd3ea5ad002122839a37fe4c1616`, tree0107ff9f08d59b20415787
 
 Autorizado sólo implementar: una migración/3RPC contacto staff, cobertura staff, contacto portal; wrapper INVOKER mantiene DML bajo RLS, helper restringido de locks/autoridad sinPII/DML elevado. Ambas revisiones admin/identity_link textuales, snapshot coherente, MFA condicionalM101 y propiedad portal vigentes. Revisiones >2^53 sin Number; par email cifrado/hash, nullability y alcance conservados. Ante40P01 conservar borrador/rollback sin retry ciego; M93 invierte orden de locks: riesgo inferido a probar, no modificar su política aquí.
 
-Archivos propios B: `lib/db/{paciente-ficha,pacientes,portal-perfil}.ts`, pacientes/actions, paciente-detalle/contacto-modal/cobertura-modal, portal/perfil actions/perfil-list, dosunits, unaSQLspec/unrunner. Sin APIe0f3/UI D/workflows/env. Pruebas locales focales/tipos/lint; preparar casos de reasignación/ABA/CAS/intake/revocación/M93 con barreras. A revisa candidato antes de **nuevo ensayo hospedado al SHA exacto**; SQL preparado no es PASS. Sin DB conectada/Docker local/push/PR/producción.
+Archivos propios B de implementación: `lib/db/{paciente-ficha,pacientes,portal-perfil}.ts`, pacientes/actions, paciente-detalle/contacto-modal/cobertura-modal, portal/perfil actions/perfil-list, dosunits, unaSQLspec/unrunner. Sin APIe0f3/UI D/env. Implementación congelada; ensayos hospedados concretos son autorizaciones posteriores, descritas en esta sección. SinDockerlocal/PR/producción.
+
+**Resultado primer ensayo:**36658244804 terminófailure02:08:21UTC. Migraciones/specs y M142/M144/M147/M148PASS; M150falló23503 al DELETE de turnoCERRADO capturado porM120, FKclose_record. No prueba un defectoCAS; primeraMFA/M93 posteriores no ejecutadas, no inventar comprobaciones individuales. Original `m150-pg16-59778dd-attempt1/receipt.md`, logSHA55759a013e358e8751d4e9ee0c7a6ec639ce210d39e17508f598774b2078db4a, ZIP0d2231925a3f8fa41c606df583ff8fd1dcab9f962bffd8f335a3d6263b75b9ed. M150aplicada es inmutable.
+
+**Nuevo ensayo autorizado02:23:** P2`2110355eb4e9365d2b19e07d9be33eabb49bd63f`, tree1363298386176ceebbc7e469cd3fad26d8a5ce7f/padreafdf. Sólo runner33+/3−: reasignar profesional del testigo dentro deorg, predicado/RLS1→0,42501/identidad/revisiones/ledgerintactos yrestauraciónfinally. Baja lógica sola no revoca ese predicado; no modificar política. Review `m150-pre-hosted-review-2110355.md` SHA28257b54163d5bef519946dcf905e5e97611bab7602b230ca7245ef5b0588a83 PASSdelta. OperativoH2`4e337b69dde370b6fd908c6b8711472368e6cacc`, tree51acc85b4e15fe8c4dc212cd3733d401fdd96541/padreP2, mismo workflow+8líneas; A contrastó blobs H1/H2 yrunnerP2/H2. Tag nuevo m150-pg16-20260930-4e337b6 y único dispatch expected_sha=H2 autorizados, resultado todavía pendiente; conservar intento1 sin reejecutarlo.
 
 ## D activo — descarga del portal
+
+**Candidato aceptado para ejecución02:23:** release`602c15011203a35a577974e4ae94e03718f24458`, treedee67130960272b61a9cdb4253df55af1c9e2f87; hijo operativo`ba2bf0cc3f3b89336b4e6c96301fa0ab8b4608e0`, treebf75c70e75db0ad9e350df12d0eb8e70f9397307, sóloworkflow/nunca integrar. P2 cerrado: recibo finito/sanitizado y publicaciónatómicaRUNNER_TEMP, conservaerrorprimariofrenteawrite/rename/cleanupfail.9units/tipos/lint/sintaxisPASS/list3. Review `portal-export-proof-review-602c150-ba2bf0c.md` SHA6d86850300c1e242df55d413faae815eb3cba6c4094c4ac23319effd90155f8f PASS; Aleyóoriginales/verificó21hashes/clean/delta, manifestSHA9ac81c4cbbeb2f7b586cb1ef44dc35fd0f198d83cee645d7eaa4e5b5e2b45411. Única ejecución autorizada taganotado portal-export-ba2bf0cc3f3b-1→H y dispatchpgtapexpected_sha=H tras ausencia/baseline/readback. TrescasosGitHubefímero, sinPR/Preview/producción/localDocker; no reintentos inciertos. Reporte/ZIP/artifacts por conservar. Las restricciones de sólo implementación siguientes son antecedentes ya superados por esta autorización concreta.
 
 Harness congelado `7bc5ec9f8abf39bd4505a03fd8316208a666d6fc`, treeaef009a0a14fb645e5efb8698f5caa94efe01097/padred6a; cuatro archivos autorizados enportal-export-hosted-proof. Seisunits/tipos/lint/list3PASS preparatorios. Revisión independiente `portal-export-proof-review-7bc5ec9.md` SHAa063e2b5ebfe59dc4dd446fb31198825bcd03b80a695e57d886074fb59a85894: únicoP2, salida de fallo Playwright se pierde antes de cleanup. Autorizado conservar diagnóstico durable acotado/sanitizado y regresión que preserva errorprimario frente a fallocleanup; sin imprimirtokens/PHI/env. Producto/actor/barrera/aislamiento sin otrosP1/P2. Corregir release y wrapperhijo, revisar sólo delta antes de cualquier ejecución. NoDB/push/tag/dispatch.
 
