@@ -160,6 +160,7 @@ export default async function CalendarioPage({ searchParams }: PageProps) {
       profActivo={selectorVisible ? profesionalIdEfectivo : null}
       colegiados={profesionales}
       sessionMemberId={ctx.data.session.memberId}
+      capabilities={caps}
     />
   );
 }

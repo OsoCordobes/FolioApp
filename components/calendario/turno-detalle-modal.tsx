@@ -21,6 +21,7 @@ import Link from "next/link";
 import { useRef } from "react";
 
 import { TURNO_STATE_CONF } from "@/lib/turno-states";
+import type { Capabilities } from "@/lib/auth/capabilities";
 import type { EstadoTurno, OrigenTurno } from "@/lib/types";
 import { useModalA11y } from "@/lib/use-modal-a11y";
 import { PatientIntakeControl } from "./patient-intake-control";
@@ -37,6 +38,7 @@ const ORIGEN_LABEL: Record<OrigenTurno, string> = {
 
 export interface TurnoDetalleModalProps {
   turnoId: string;
+  capabilities?: Pick<Capabilities, "canReadAdmin" | "canManagePacienteContact">;
   /** Nombre del paciente (ya desencriptado server-side). */
   pacienteNombre: string;
   /** id del paciente — destino del "Ver ficha". */
@@ -75,6 +77,7 @@ export interface TurnoDetalleModalProps {
 
 export function TurnoDetalleModal({
   turnoId,
+  capabilities,
   pacienteNombre,
   pacienteId,
   fecha,
@@ -233,7 +236,7 @@ export function TurnoDetalleModal({
           </p>
         )}
 
-        {estado !== "cancelado" && estado !== "reagendado" ? <PatientIntakeControl turnoId={turnoId} /> : null}
+        {estado !== "cancelado" && estado !== "reagendado" ? <PatientIntakeControl turnoId={turnoId} incorporationEnabled={Boolean(capabilities?.canReadAdmin && capabilities.canManagePacienteContact)} /> : null}
 
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <button type="button" className="fi-btn fi-btn-ghost" onClick={onClose}>

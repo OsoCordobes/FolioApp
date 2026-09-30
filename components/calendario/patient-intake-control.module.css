@@ -17,3 +17,27 @@
 .proposal dl div { display: grid; grid-template-columns: 42% 1fr; gap: 8px; padding: 5px 0; border-top: 1px solid var(--line-soft); font-size: 13px; }
 .proposal dt { color: var(--ink-3); }.proposal dd { margin: 0; overflow-wrap: anywhere; }
 @media (max-width: 520px) { .actions button { flex: 1 1 145px; }.proposal dl div { grid-template-columns: 1fr; gap: 2px; } }
+
+.comparison { margin-top: 18px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); min-width: 0; }
+.comparison h4 { margin: 0 0 6px; font-size: 16px; color: var(--accent); }
+.comparison p { font-size: 13px; line-height: 1.55; }
+.origin { padding: 10px 12px; border-radius: 8px; background: var(--accent-soft); color: var(--ink); }
+.comparison fieldset { min-width: 0; padding: 0; margin: 16px 0; border: 0; }
+.comparison legend { padding: 0; margin-bottom: 10px; font-size: 13px; font-weight: 600; }
+.columnHead,.compareRow { display: grid; grid-template-columns: minmax(150px, 1.1fr) repeat(2, minmax(0, 1fr)); gap: 12px; }
+.columnHead { padding: 8px 10px; color: var(--ink-3); font-size: 12px; }
+.compareRow { padding: 12px 10px; border-top: 1px solid var(--line); font-size: 13px; line-height: 1.5; cursor: pointer; overflow-wrap: anywhere; }
+.compareRow:has(input:checked) { background: var(--accent-soft); }
+.compareRow:focus-within { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 6px; }
+.selectCell { display: flex; align-items: flex-start; gap: 8px; font-weight: 600; }
+.selectCell input { flex: 0 0 18px; width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--accent); }
+.valueCell { min-width: 0; white-space: pre-wrap; }
+.valueCell small { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.control button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+@media (max-width: 680px) {
+  .comparison { padding: 12px; }
+  .columnHead { display: none; }
+  .compareRow { grid-template-columns: 1fr; gap: 8px; padding: 14px 8px; }
+  .valueCell { padding-left: 26px; }
+  .valueCell small { display: block; position: static; width: auto; height: auto; margin: 0 0 2px; overflow: visible; clip-path: none; white-space: normal; color: var(--ink-3); font-size: 12px; }
+}

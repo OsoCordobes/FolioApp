@@ -36,6 +36,7 @@ import {
 import { contar } from "@/lib/format/plural";
 import { useAgendaAutoRefresh } from "@/lib/use-agenda-refresh";
 import type { MonthGridCell } from "@/lib/db/calendario";
+import type { Capabilities } from "@/lib/auth/capabilities";
 import type {
   Bloqueo,
   PacientesById,
@@ -1030,6 +1031,7 @@ interface CalendarioProps {
   colegiados?: ProfesionalLite[];
   /** member.id de la sesión — default del picker del PedidoModal. */
   sessionMemberId?: string | null;
+  capabilities?: Pick<Capabilities, "canReadAdmin" | "canManagePacienteContact">;
 }
 
 export function Calendario({
@@ -1065,6 +1067,7 @@ export function Calendario({
   profActivo = null,
   colegiados = [],
   sessionMemberId = null,
+  capabilities,
 }: CalendarioProps) {
   const router = useRouter();
   const [vista, setVista] = useState<Vista>(initialVista);
@@ -1206,6 +1209,7 @@ export function Calendario({
         const pac = pacientes[selectedTurno.pacienteId] ?? mesPacientes[selectedTurno.pacienteId];
         return (
           <TurnoDetalleModal
+            capabilities={capabilities}
             turnoId={selectedTurno.id}
             pacienteNombre={pac?.nombre ?? "Paciente"}
             pacienteId={selectedTurno.pacienteId}

@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
 import {createHash,createHmac,randomBytes,randomUUID} from 'node:crypto';
-import {readdir,writeFile,unlink,mkdir} from 'node:fs/promises';
+import {access,readdir,writeFile,unlink,mkdir} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -13,13 +13,19 @@ import {createServerClient} from '@supabase/ssr';
 import {totp} from '../clinical-config.mjs';
 import {openLoopbackBridge,validateBridgeTarget,waitForBridgeTarget} from '../../recovery/ci-loopback-bridge.mjs';
 import {dockerFailureKind} from '../auth-proof/diagnostics.mjs';
+import incorporationContract from './incorporation-contract.ts';
+export const {proofMode,proofSpec}=incorporationContract;
+const {assertHosted,assertFixture,ownedIdentity,restoreOwned,RESTORE_COLUMNS,browserReceipt,addFailure,publishReceipt,FIXTURE,RECEIPT}=incorporationContract;
+const mode=proofMode(process.argv.slice(2));
+const integration=mode==='incorporation';
 
 const repo=path.resolve(fileURLToPath(new URL('../../../',import.meta.url)));
 const compose=path.join(repo,'scripts/recovery/ci-compose.yml');
 const project='folio_intake_proof';
 const upstreamCommit='8c7a4d9dbbaf8b552893822e89d7bf06f33f9220';
 const api='http://127.0.0.1:55421';
-const fixtureFile=path.join(tmpdir(),'folio-patient-intake-proof-fixture.json');
+const fixtureFile=path.join(tmpdir(),integration?FIXTURE:'folio-patient-intake-proof-fixture.json');
+const receiptFile=path.join(process.env.RUNNER_TEMP??tmpdir(),RECEIPT);
 const evidenceFile=path.join(repo,'test-results/patient-intake-proof-summary.json');
 const random=bytes=>randomBytes(bytes).toString('base64url');
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -37,6 +43,10 @@ const authSteps=new Set([
  'session_client','session_cookie','cookie_shape','fixture_write','fingerprint_key',
 ]);
 const sqlstates=new Set(['22P02','22001','22007','22023','23502','23503','23505','23514','42501','42703','42P01','42883','P0001','P0002']);
+async function preserveIntegration(state){
+ try{await publishReceipt(receiptFile,state.receipt,state.receiptOwned===true);state.receiptOwned=true;}
+ catch(error){state.receipt=addFailure(state.receipt,error,{case:'runner',phase:'receipt'});process.exitCode=1;console.error('intake_incorporation_receipt_failed');}
+}
 
 // Auth responses and thrown errors may contain credentials or user data.
 // Emit only a fixed operation, fixed error class, bounded HTTP status and
@@ -143,7 +153,8 @@ async function bridge(service,localPort,remotePort,env){
  await waitForBridgeTarget(target);return openLoopbackBridge(target,localPort);
 }
 async function withPg(password,fn){
- const db=new Client({host:'127.0.0.1',port:55422,user:'postgres',password,database:'postgres',connectionTimeoutMillis:10000});
+ const db=new Client({host:'127.0.0.1',port:55422,user:'postgres',password,database:'postgres',connectionTimeoutMillis:10000,
+  ...(integration?{query_timeout:15000,statement_timeout:15000}:{})});
  await db.connect();try{return await fn(db);}finally{await db.end();}
 }
 async function waitApi(key){
@@ -165,6 +176,8 @@ async function prepareSchema(password,env,serviceKey){
  assert.equal(files.length,new Set(files.map(name=>name.slice(0,14))).size,'migration_versions_not_unique');
  for(const suffix of ['_M144_patient_intake_foundation.sql','_M145_adult_attestation_revocation.sql','_M146_patient_intake_portal_cancel.sql','_M147_patient_intake_link_recovery.sql'])
   assert.ok(files.some(name=>name.endsWith(suffix)),'intake_migration_missing');
+ if(integration)for(const suffix of ['_M148_patient_intake_incorporation.sql','_M149_patient_intake_patch_valid_qualified.sql','_M150_patient_admin_editor_cas.sql'])
+  assert.ok(files.some(name=>name.endsWith(suffix)),'incorporation_migration_missing');
  for(const file of files)await must('psql',['-X','-v','ON_ERROR_STOP=1','-h','127.0.0.1','-p','55422','-U','postgres','-d','postgres','-f',path.join(folder,file)],{env:{...env,PGPASSWORD:password},timeout:120000});
  await must('psql',['-X','-v','ON_ERROR_STOP=1','-h','127.0.0.1','-p','55422','-U','postgres','-d','postgres','-c',"NOTIFY pgrst, 'reload schema'"],{env:{...env,PGPASSWORD:password}});
  let ready=false;
@@ -212,6 +225,33 @@ async function createActor(service,anonKey,label,mark){
 async function rpc(key,jwt,name,args){
  const response=await fetch(`${api}/rest/v1/rpc/${name}`,{method:'POST',headers:{apikey:key,Authorization:`Bearer ${jwt}`,'Content-Type':'application/json'},body:JSON.stringify(args),signal:AbortSignal.timeout(10000)});
  return {status:response.status,body:await response.json()};
+}
+async function incorporationCases(state,scope,crypto,original,serviceId){
+ const encrypted=value=>Buffer.from(crypto.encryptColumn(value).slice(2),'hex');
+ const cases=['selection','lost','conflict'].map((kind,index)=>({kind,label:`Paciente sintético integración ${index+1}`,
+  ...(index===0?original:{patientId:randomUUID(),identityId:randomUUID(),turnoId:randomUUID()})}));
+ await withPg(state.dbPassword,async db=>{
+  await db.query('BEGIN');
+  try{
+   for(const [index,item] of cases.entries()){
+    const values=[item.identityId,scope.organizationId,encrypted(item.label),encrypted('Integración'),
+     encrypted('+5493510000011'),encrypted('original@example.test'),crypto.blindIndex(`${item.label} Integración`,scope.organizationId),
+     crypto.blindIndexPhone('+5493510000011',scope.organizationId),crypto.blindIndex('original@example.test',scope.organizationId)];
+    if(index===0){
+     const changed=await db.query("UPDATE public.paciente_identidad SET nombre_cifrado=$3,apellido_cifrado=$4,telefono_cifrado=$5,email_cifrado=$6,nombre_hash=$7,telefono_hash=$8,email_hash=$9,fecha_nacimiento='1980-01-01' WHERE id=$1 AND organization_id=$2 AND deleted_at IS NULL RETURNING id",values);
+     assert.equal(changed.rowCount,1,'owned_seed_missing');
+    }else{
+     await db.query("INSERT INTO public.paciente_identidad(id,organization_id,nombre_cifrado,apellido_cifrado,telefono_cifrado,email_cifrado,nombre_hash,telefono_hash,email_hash,fecha_nacimiento) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'1980-01-01')",values);
+     await db.query('INSERT INTO public.paciente(id,organization_id,identidad_id,profesional_principal_id) VALUES($1,$2,$3,$4)',[item.patientId,scope.organizationId,item.identityId,scope.memberId]);
+     await db.query("INSERT INTO public.turno(id,organization_id,paciente_id,servicio_id,profesional_id,inicio,duracion_min,precio_cents,estado) VALUES($1,$2,$3,$4,$5,((timezone('America/Argentina/Cordoba',clock_timestamp())::date)::timestamp+($6::int*interval '1 hour')) AT TIME ZONE 'America/Argentina/Cordoba',30,1000,'EN_SALA')",[item.turnoId,scope.organizationId,item.patientId,serviceId,scope.memberId,12+index]);
+    }
+    const current=await ownedIdentity(db,scope,item);
+    item.baseline=Object.fromEntries(RESTORE_COLUMNS.map(column=>[column,current[column]]));
+   }
+   await db.query('COMMIT');
+  }catch(error){await db.query('ROLLBACK');throw error;}
+ });
+ return {...scope,cases};
 }
 async function fixture(state,mark){
  mark('fixture_init');
@@ -268,6 +308,8 @@ async function fixture(state,mark){
    await db.query('COMMIT');
   }catch(error){await db.query('ROLLBACK');throw error;}
  });
+ if(integration)state.integrationScope=await incorporationCases(state,{organizationId:org,memberId:member,userId:owner.id},crypto,
+  {patientId:patient,identityId:identity,turnoId:turno},servicio);
  mark('mfa_rpc');
  const checked=await rpc(state.anonKey,owner.aal2,'mfa_access_status',{});
  mark('mfa_rpc',checked.status);
@@ -290,7 +332,10 @@ async function fixture(state,mark){
  });
  assert.ok(browserCookies.length>0,'staff_cookie_missing');
  mark('fixture_write');
- await writeFile(fixtureFile,JSON.stringify({browserCookies,databaseUrl:`postgresql://postgres:${state.dbPassword}@127.0.0.1:55422/postgres`,turnoId:turno}),{flag:'wx',mode:0o600});
+ const fixtureData={browserCookies,databaseUrl:`postgresql://postgres:${state.dbPassword}@127.0.0.1:55422/postgres`,
+  ...(integration?{mode:'incorporation',...state.integrationScope}:{turnoId:turno})};
+ if(integration)assertFixture(fixtureData);
+ await writeFile(fixtureFile,JSON.stringify(fixtureData),{flag:'wx',mode:0o600});state.fixtureOwned=true;
  mark('fingerprint_key');
  const keyCipher=crypto.encryptColumn(randomBytes(32).toString('base64'));
  assert.ok(keyCipher,'fingerprint_key_missing');
@@ -329,21 +374,25 @@ export function browserResult(output){
  return {markers,lines:[...new Set(lines)].slice(0,3),kind,intercepts};
 }
 async function main(){
- let stage='guard',servicesStep='none',authStep='none',authStatus,dbBridge,apiBridge,env,started=false,migrations=0,markers=[],failure=null,diagnostic=null;
+ let stage='guard',servicesStep='none',authStep='none',authStatus,dbBridge,apiBridge,env,state,started=false,migrations=0,markers=[],failure=null,diagnostic=null;
  const markAuth=(step,status)=>{authStep=step;authStatus=status;};
  const sourceSha=(await must('git',['rev-parse','HEAD'])).trim();assert.match(sourceSha,/^[a-f0-9]{40}$/);
  try{
-  assert.equal(process.env.GITHUB_ACTIONS,'true');assert.equal(process.env.RUNNER_ENVIRONMENT,'github-hosted');
-  assert.equal(process.env.GITHUB_EVENT_NAME,'pull_request');assert.equal(process.env.RUNNER_OS,'Linux');assert.equal(process.platform,'linux');
+  assertHosted(process.env,sourceSha,mode);
   const official=path.resolve(process.env.C01_OFFICIAL_DOCKER??'');
   assert.ok(process.env.RUNNER_TEMP&&official.startsWith(path.resolve(process.env.RUNNER_TEMP)+path.sep));
   assert.equal((await must('git',['-C',path.dirname(official),'rev-parse','HEAD'])).trim(),upstreamCommit);
   assert.equal((await must('psql',['--version'])).match(/\b(\d+)\./)?.[1],'17');
+  for(const file of integration?[fixtureFile,receiptFile]:[fixtureFile]){
+   try{await access(file);throw Error('proof_file_not_fresh');}catch(error){if(error.code!=='ENOENT')throw error;}
+  }
   const secret=random(48),dbPassword=random(32);
-  const state={dbPassword,anonKey:token(secret,'anon'),serviceKey:token(secret,'service_role')};
+  state={dbPassword,anonKey:token(secret,'anon'),serviceKey:token(secret,'service_role'),
+   receipt:{version:1,passed:false,exitCode:1,markers:[],primary:null,secondary:[]}};
   env={...process.env,C01_OFFICIAL_DOCKER:official,C01_DB_PASSWORD:dbPassword,C01_JWT_SECRET:secret,C01_ANON_KEY:state.anonKey,C01_SERVICE_KEY:state.serviceKey,C01_DASHBOARD_PASSWORD:random(18),C01_APP_DATABASE:'postgres',C01_CRON_DATABASE:'postgres',C01_S3_BUCKET:'intake-proof-synthetic',C01_MINIO_USER:random(18),C01_MINIO_PASSWORD:random(36)};
   assert.equal((await dc(['ps','-q'],env)).trim(),'','project_not_fresh');
   assert.equal((await docker(['volume','ls','-q','--filter',`label=com.docker.compose.project=${project}`],env)).trim(),'','volumes_not_fresh');
+  if(integration)assert.equal((await docker(['network','ls','-q','--filter',`label=com.docker.compose.project=${project}`],env)).trim(),'','networks_not_fresh');
   stage='pull';await dc(['pull','db','auth','rest','storage','api-gw','minio','minio-createbucket'],env);
   stage='services';started=true;servicesStep='compose_up';await dc(['up','-d','--wait'],env);
   servicesStep='network';assert.equal((await docker(['network','inspect',`${project}_default`,'--format','{{.Internal}}'],env)).trim(),'true');
@@ -353,8 +402,14 @@ async function main(){
   stage='migrations';migrations=await prepareSchema(dbPassword,env,state.serviceKey);
   stage='auth';const seed=await fixture(state,markAuth);
   stage='roles';await checkRoles(state,seed);
-  stage='browser';const browserEnv={...env,E2E_BASE_URL:'http://localhost:4430',FOLIO_TEST_SUPABASE_URL:api,FOLIO_TEST_SUPABASE_ANON_KEY:state.anonKey,FOLIO_TEST_SUPABASE_SERVICE_KEY:state.serviceKey,FOLIO_TEST_DATABASE_URL:`postgresql://postgres:${dbPassword}@127.0.0.1:55422/postgres`,FOLIO_TEST_CLINICAL:'1'};
-  const result=await run('pnpm',['test:e2e','--','tests/e2e/patient-intake-live.spec.ts','--trace=off','--reporter=dot'],{env:browserEnv,timeout:900000});
+  stage='browser';const browserEnv={...env,E2E_BASE_URL:'http://localhost:4430',FOLIO_TEST_SUPABASE_URL:api,FOLIO_TEST_SUPABASE_ANON_KEY:state.anonKey,FOLIO_TEST_SUPABASE_SERVICE_KEY:state.serviceKey,FOLIO_TEST_DATABASE_URL:`postgresql://postgres:${dbPassword}@127.0.0.1:55422/postgres`,FOLIO_TEST_CLINICAL:integration?'0':'1'};
+  const result=await run('pnpm',['test:e2e','--',proofSpec(mode),'--trace=off',`--reporter=${integration?'list':'dot'}`],{env:browserEnv,timeout:900000});
+  if(integration){
+   state.receipt=browserReceipt(result.output,result.code);await preserveIntegration(state);
+   for(const marker of state.receipt.markers)console.log(marker);
+   if(result.code!==0||!state.receipt.passed)throw Error('incorporation_pass_missing');
+   stage='complete';console.log('intake_incorporation_tests:passed=3 skipped=0');return;
+  }
   const parsed=browserResult(result.output);markers=parsed.markers;
   if(result.code!==0){
    diagnostic=`last_stage=${markers.at(-1)??'none'} spec_lines=${parsed.lines.join(',')||'unknown'} kind=${parsed.kind} issue=[${parsed.intercepts.issue}] submit=[${parsed.intercepts.submit}]`;
@@ -366,6 +421,7 @@ async function main(){
   stage='complete';for(const item of markers)console.log(`intake_proof_stage:${item}`);
   console.log(`intake_proof_pass:migrations=${migrations} cases=${browserStages.size+3} real_auth=1 real_db=1`);
  }catch(error){
+  if(integration&&state){state.receipt=addFailure(state.receipt,error,{case:'runner',phase:['services','migrations','auth','fixture','roles','browser'].includes(stage)?stage:'guard'});await preserveIntegration(state);}
   failure=stages.has(stage)?stage:'unclassified';process.exitCode=1;
   if(failure==='services'){
    diagnostic=`kind=${servicesFailureKind(error)} exit=${error?.diagnosticExit??'none'} ${await finiteServicesDiagnostic(env,servicesStep)}`;
@@ -378,9 +434,27 @@ async function main(){
   console.error(`intake_proof_${failure}_failed`);
  }
  finally{
-  await unlink(fixtureFile).catch(()=>{});
-  await apiBridge?.close().catch(()=>{process.exitCode=1;});await dbBridge?.close().catch(()=>{process.exitCode=1;});
-  if(started)try{await dc(['down','-v'],env);}catch{failure='teardown';process.exitCode=1;console.error('intake_proof_teardown_failed');}
+  const cleanupFailure=error=>{process.exitCode=1;if(integration&&state)state.receipt=addFailure(state.receipt,error,{case:'runner',phase:'cleanup'});};
+  if(integration&&state?.integrationScope){
+   try{
+    await withPg(state.dbPassword,async db=>{for(const item of state.integrationScope.cases)await restoreOwned(db,state.integrationScope,item);});
+    console.log('intake_incorporation_restore:owned=3 readback=1 revisions=preserved');
+   }catch(error){state.receipt=addFailure(state.receipt,error,{case:'runner',phase:'restore'});process.exitCode=1;}
+  }
+  if(integration&&state)await preserveIntegration(state);
+  if(state?.fixtureOwned)await unlink(fixtureFile).catch(cleanupFailure);
+  await apiBridge?.close().catch(cleanupFailure);await dbBridge?.close().catch(cleanupFailure);
+  if(started)try{await dc(['down','-v'],env);}catch(error){cleanupFailure(error);if(!failure)failure='teardown';console.error('intake_proof_teardown_failed');}
+  if(integration){
+   if(started)try{
+    assert.equal((await dc(['ps','-q'],env)).trim(),'');
+    for(const kind of ['volume','network'])assert.equal((await docker([kind,'ls','-q','--filter',`label=com.docker.compose.project=${project}`],env)).trim(),'');
+    console.log('intake_incorporation_cleanup:containers=0 volumes=0 networks=0');
+   }catch(error){cleanupFailure(error);}
+   if(state)await preserveIntegration(state);
+   if(stage==='complete'&&!process.exitCode)console.log(`intake_incorporation_pass:tests=3 skipped=0 migrations=${migrations} restored=3 cleanup=1`);
+   return;
+  }
   await mkdir(path.dirname(evidenceFile),{recursive:true});
   await writeFile(evidenceFile,JSON.stringify({sourceSha,migrations,stages:[...new Set(markers)],ok:!process.exitCode,failure,diagnostic},null,2)+'\n',{mode:0o600});
  }
