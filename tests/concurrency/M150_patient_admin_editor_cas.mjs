@@ -284,24 +284,41 @@ try{
     assert.equal((await admin.query('SELECT count(*)::int n FROM folio_mfa_private.protected_account WHERE user_id=$1',[ids.userEnrollment])).rows[0].n,0);
   }
 
-  // Model M93's real reversed lock order, then execute M93 itself. No trigger/policy change.
+  // M116 retired the historical M93 RPC. Its denied call must release this fixture's lock.
+  const retiredAcl=(await admin.query(`SELECT
+    has_function_privilege('authenticated','public.pseudonimizar_paciente(uuid,text,boolean)','EXECUTE') authenticated,
+    has_function_privilege('service_role','public.pseudonimizar_paciente(uuid,text,boolean)','EXECUTE') service,
+    has_function_privilege('anon','public.pseudonimizar_paciente(uuid,text,boolean)','EXECUTE') anon`)).rows[0];
+  assert.deepEqual(retiredAcl,{authenticated:false,service:false,anon:false});
+  const patientReadback=async()=>(await admin.query(`SELECT to_jsonb(p)-'identity_link_revision'-'intake_revision' patient,
+    p.identity_link_revision::text link,p.intake_revision::text intake FROM public.paciente p WHERE p.id=$1`,[ids.patient])).rows[0];
+  const retiredPatientBefore=await patientReadback(),retiredIdentityBefore=await identityReadback(),expectedCoverage=coverage();
   state=await snapshot();await barrier.query('BEGIN');
   await barrier.query('SELECT 1 FROM public.paciente_identidad WHERE id=$1 FOR UPDATE',[ids.identity]);
-  await owner.query('BEGIN');const casDeadlock=releaseOnError(owner,observed(invoke(owner,'coverage',actors.owner,state,coverage())));
-  await blocked(casDeadlock,owner,barrier,'M93 reversed lock order');
+  await owner.query('BEGIN');const casAfterRetired=releaseOnError(owner,observed(invoke(owner,'coverage',actors.owner,state,expectedCoverage)));
+  await blocked(casAfterRetired,owner,barrier,'retired RPC transaction before CAS');
   await configure(barrier,actors.director);
-  const pseudoDeadlock=releaseOnError(barrier,observed(barrier.query('SELECT public.pseudonimizar_paciente($1,$2,false) result',[ids.patient,'M150 synthetic deadlock'])));
-  const outcomes=await Promise.all([casDeadlock,pseudoDeadlock]);
-  assert.equal(outcomes.filter(result=>result.error?.code==='40P01').length,1,'one transaction must be aborted');
-  assert.equal(outcomes.filter(result=>result.value).length,1,'one transaction may complete');
-  // releaseOnError rolls back the victim immediately, releasing all earlier locks.
-  if(outcomes[0].error){await barrier.query('COMMIT');
-    assert.equal((await admin.query('SELECT count(*)::int n FROM public.paciente_identidad WHERE id=$1',[ids.identity])).rows[0].n,0);
-  }else{await owner.query('COMMIT');
-    assert.equal((await snapshot()).identity,ids.identity);assert.equal((await snapshot()).revision,(BigInt(state.revision)+1n).toString());
-    assert.equal((await admin.query('SELECT pseudonimizado_en IS NULL intact FROM public.paciente WHERE id=$1',[ids.patient])).rows[0].intact,true);
-  }
-  process.stdout.write('M150 hosted PG16 races PASS: relink both orders, ABA, portal UNIQUE case, cross-editor/intake CAS, authority waits and M93/first-factor victim rollback\n');
+  const retiredCall=releaseOnError(barrier,observed(barrier.query('SELECT public.pseudonimizar_paciente($1,$2,false) result',
+    [ids.patient,'M150 synthetic retired RPC']).then(result=>result.rows[0].result)));
+  const outcomes=await Promise.all([casAfterRetired,retiredCall]);
+  process.stdout.write(JSON.stringify({case:'M116 retirement versus CAS',outcomes:outcomes.map((result,index)=>({
+    actor:index===0?'cas':'retired_rpc',
+    errorCode:typeof result.error?.code==='string'&&/^[0-9A-Z]{5}$/.test(result.error.code)?result.error.code:result.error?'other':null,
+    status:['applied','unchanged','conflict'].includes(result.value?.status)?result.value.status:result.value?'other':null
+  }))})+'\n');
+  assert.equal(outcomes[1].error?.code,'42501','retired RPC must remain denied');
+  assert.equal(outcomes[0].error,undefined);assert.equal(outcomes[0].value?.status,'applied');
+  await owner.query('COMMIT');
+  assert.deepEqual(await patientReadback(),retiredPatientBefore);
+  const retiredIdentityAfter=await identityReadback();
+  const expectedIdentity={...retiredIdentityBefore.identity,...expectedCoverage};
+  const actualIdentity={...retiredIdentityAfter.identity};
+  delete expectedIdentity.updated_at;delete actualIdentity.updated_at;
+  assert.deepEqual(actualIdentity,expectedIdentity);
+  assert.equal(retiredIdentityAfter.revision,(BigInt(state.revision)+1n).toString());
+  assert.equal(retiredIdentityAfter.intake,retiredIdentityBefore.intake);
+  assert.equal((await snapshot()).identity,ids.identity);assert.equal((await snapshot()).link,state.link);
+  process.stdout.write('M150 hosted PG16 races PASS: relink both orders, ABA, portal UNIQUE case, cross-editor/intake CAS, authority waits, first-factor victim rollback and M116 retirement\n');
 }finally{
   for(const client of clients){try{await client.query('ROLLBACK');}catch{/* failed transaction cleanup */}}
   for(const client of clients){try{await client.end();}catch{/* closed connection */}}
