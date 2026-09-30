@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "@/public/folio.css";
+import "@/styles/design-system.css";
 import "@/styles/experience.css";
 import "@/styles/platform.css";
 import "@/styles/clinical-experience.css";

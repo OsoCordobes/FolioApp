@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { FolioMark } from "@/components/folio-mark";
+import { FolioBrand } from "@/components/folio-brand";
 import { LandingNavToggle } from "@/components/landing/landing-nav-toggle";
 import { LandingScrollspy } from "@/components/landing/landing-scrollspy";
 
@@ -9,7 +9,7 @@ export function LandingHeader() {
   return <header className="fl-header fx-header">
     <a className="fl-skip" href="#contenido">Saltar al contenido</a>
     <div className="fx-header-inner">
-      <Link className="fx-brand" href="/" aria-label="Folio — inicio"><FolioMark size={30} /><span>folio<span className="fx-brand-dot">.</span></span></Link>
+      <FolioBrand className="fx-brand" />
       <nav className="fx-nav" aria-label="Secciones principales">{NAV_LINKS.map((item) => <a className="fl-nav-link" href={item.href} key={item.href}>{item.label}</a>)}</nav>
       <div className="fx-header-actions"><Link href="/login" className="fx-login-link">Ingresar</Link><Link className="fi-btn fi-btn-primary" href="/onboarding" data-fl-cta="header">Probar Folio</Link></div>
       <LandingNavToggle />

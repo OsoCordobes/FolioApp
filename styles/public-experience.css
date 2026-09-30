@@ -8,21 +8,6 @@
 
 /* The public profile shares Folio's light identity, including inside app previews. */
 .bl-root {
-  --bg: #F5F5FA;
-  --surface: #FFFFFF;
-  --surface-2: #F0EFF8;
-  --surface-3: #E7E4F4;
-  --line: #DAD9E7;
-  --line-soft: #ECEBF2;
-  --ink: #292641;
-  --ink-2: #4B485F;
-  --ink-3: #69657D;
-  --ink-4: #79758A;
-  --accent: #6255C5;
-  --accent-2: #4E42AD;
-  --accent-soft: #EFECFC;
-  --accent-soft-2: #E2DDF7;
-  --on-accent: #FFFFFF;
   --bl-on-accent: #FFFFFF;
   background: var(--bg);
   color: var(--ink);
@@ -39,11 +24,11 @@
 .bl-hero::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 7px; background: var(--accent); }
 .bl-hero-text { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; max-width: 690px; animation: none; }
 .bl-eyebrow { margin-bottom: 18px; font-size: 12px; letter-spacing: .12em; color: var(--ink-2); }
-.bl-hero-title { max-width: 12ch; margin-bottom: 16px; font-size: clamp(2.65rem, 5.2vw, 5.15rem); font-weight: 750; line-height: 1.04; letter-spacing: -.06em; }
+.bl-hero-title { max-width: 12ch; margin-bottom: 16px; font-size: clamp(2.65rem, 5.2vw, 5.15rem); font-weight: 750; line-height: 1.04; letter-spacing: -.035em; }
 .bl-hero-practice { margin: -3px 0 15px; font-weight: 600; }
 .bl-hero-facts { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 15px; margin-bottom: 20px; }
 .bl-hero-sub, .bl-hero-matricula { margin: 0; font-size: 13px; color: var(--ink-2); }
-.bl-hero-matricula { display: inline-flex; align-items: center; min-height: 28px; padding: 4px 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); font-size: 12px; }
+.bl-hero-matricula { display: inline-flex; align-items: center; min-height: 28px; padding: 4px 9px; border: 1px solid var(--line); border-radius: var(--control-radius); background: var(--bg); font-size: 12px; }
 .bl-hero-value { max-width: 49ch; margin: 0 0 25px; font-size: clamp(16px, 1.6vw, 19px); line-height: 1.6; color: var(--ink-2); }
 .bl-hero-actions { margin-bottom: 0; }
 .bl-btn-lg { min-height: 52px; padding-inline: 23px; font-weight: 700; }
@@ -67,7 +52,7 @@
 .bl-clinic-art-mark .bl-hero-logo { width: 108px; height: 108px; border: 0; border-radius: 18px; box-shadow: none; }
 .bl-clinic-art-foot { display: flex; flex-direction: column; gap: 11px; padding-top: 26px; border-top: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line)); }
 .bl-clinic-art-foot > span:first-child { color: var(--ink-2); font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
-.bl-clinic-art-name { font-size: clamp(21px, 2.7vw, 30px); font-weight: 750; letter-spacing: -.05em; overflow-wrap: anywhere; }
+.bl-clinic-art-name { font-size: clamp(21px, 2.7vw, 30px); font-weight: 750; letter-spacing: -.035em; overflow-wrap: anywhere; }
 .bl-clinic-art-team { display: flex; flex-wrap: wrap; gap: 8px 16px; }
 .bl-clinic-art-person { display: flex; align-items: center; gap: 7px; max-width: 100%; font-size: 12px; font-weight: 650; }
 .bl-clinic-art-person > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -94,11 +79,11 @@
 .bl-services-empty { padding: 22px; border: 1px dashed var(--line); border-radius: 14px; color: var(--ink-2); }
 .bl-book { scroll-margin-top: 92px; padding: clamp(20px, 3vw, 34px); border: 1px solid var(--line); border-radius: 20px; background: var(--surface); }
 .bl-book-head { padding-bottom: 18px; border-bottom: 1px solid var(--line-soft); }
-.bl-book-title { margin: 0; font-family: var(--font-sans); font-size: clamp(22px, 2.6vw, 30px); font-weight: 750; letter-spacing: -.045em; }
+.bl-book-title { margin: 0; font-family: var(--font-sans); font-size: clamp(22px, 2.6vw, 30px); font-weight: 750; letter-spacing: -.035em; }
 .bl-book-frame { max-width: none; margin: 0; padding: 20px 0 0; border: 0; border-radius: 0; background: transparent; }
 .bl-book-footnote { margin: 18px 0 0; padding-top: 16px; border-top: 1px solid var(--line-soft); color: var(--ink-2); font-size: 12px; line-height: 1.6; }
 .bk-step-title { margin-bottom: 17px; font-size: 20px; }
-.bk-current-service { display: inline-flex; max-width: 100%; margin: 0 0 18px; padding: 7px 10px; border-radius: 8px; background: var(--accent-soft); color: var(--ink); font-size: 12px; font-weight: 650; line-height: 1.4; overflow-wrap: anywhere; }
+.bk-current-service { display: inline-flex; max-width: 100%; margin: 0 0 18px; padding: 7px 10px; border-radius: var(--control-radius); background: var(--accent-soft); color: var(--ink); font-size: 12px; font-weight: 650; line-height: 1.4; overflow-wrap: anywhere; }
 .bk-servicio { min-height: 62px; }
 .bl-root .bk-servicio:hover, .bl-root .bk-servicio:focus-visible { background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
 .bk-outside-service { margin: 0; color: var(--ink-2); font-size: 14px; line-height: 1.65; }
@@ -142,9 +127,9 @@
 .bl-hero:not(.bl-hero-has-photo) { display: block; }
 .bl-hero::before { display: none; }
 .bl-hero-text { max-width: 750px; }
-.bl-hero-title, .bl-root[data-mode="preview"] .bl-hero-title { max-width: 18ch; font-size: clamp(2.35rem, 4vw, 4rem); letter-spacing: -.05em; }
+.bl-hero-title, .bl-root[data-mode="preview"] .bl-hero-title { max-width: 18ch; font-size: clamp(2.35rem, 4vw, 4rem); letter-spacing: -.035em; }
 .bl-hero-value { max-width: 56ch; }
-.bl-portrait, .bl-root[data-mode="preview"] .bl-portrait { height: auto; max-width: 330px; aspect-ratio: 4 / 4.6; border-radius: 8px; background: var(--surface-2); }
+.bl-portrait, .bl-root[data-mode="preview"] .bl-portrait { height: auto; max-width: 330px; aspect-ratio: 4 / 4.6; border-radius: var(--control-radius); background: var(--surface-2); }
 .bl-portrait::after { display: none; }
 .bl-details { gap: 0 36px; }
 .bl-story { padding-top: 38px; padding-bottom: 12px; }
@@ -204,21 +189,6 @@
 .fx-invitation .au-form-head p { overflow-wrap: anywhere; }
 .fx-invitation .au-form-switch { margin-top: 0; }
 .dir-root {
-  --bg: #F5F5FA;
-  --surface: #FFFFFF;
-  --surface-2: #F0EFF8;
-  --surface-3: #E7E4F4;
-  --line: #DAD9E7;
-  --line-soft: #ECEBF2;
-  --ink: #292641;
-  --ink-2: #4B485F;
-  --ink-3: #69657D;
-  --ink-4: #79758A;
-  --accent: #6255C5;
-  --accent-2: #4E42AD;
-  --accent-soft: #EFECFC;
-  --accent-soft-2: #E2DDF7;
-  --on-accent: #FFFFFF;
   display: flex;
   flex-direction: column;
   min-height: 100svh;

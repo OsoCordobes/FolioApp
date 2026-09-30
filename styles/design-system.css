@@ -1,0 +1,97 @@
+/* Folio / Clínica clara. The shared language, followed by route-specific systems. */
+:root {
+  --font-sans: var(--font-folio), 'Segoe UI', Arial, sans-serif;
+  --bg: #F6F6F9;
+  --surface: #FFFFFF;
+  --surface-2: #F1F1F6;
+  --surface-3: #E8E7F0;
+  --line: #DAD9E7;
+  --line-soft: #ECEBF2;
+  --ink: #272833;
+  --ink-2: #50515F;
+  --ink-3: #686976;
+  --ink-4: #70717E;
+  --accent: #6255C5;
+  --on-accent: #FFFFFF;
+  --accent-2: #4E42AD;
+  --accent-soft: #EFECFC;
+  --accent-soft-2: #E2DDF7;
+  --green: #19725D;
+  --green-soft: #E5F2EC;
+  --red: #AF374D;
+  --red-soft: #FBE9EE;
+  --amber: #886012;
+  --amber-soft: #FBF1D9;
+  --slate: #3E6184;
+  --slate-soft: #E9F0F8;
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 20px;
+  --shadow-1: 0 1px 3px #29264106;
+  --shadow-2: 0 8px 28px #2926410C;
+  --shadow-hero: 0 18px 60px #40367812, 0 3px 12px #40367806;
+  --folio-violet: #6255C5;
+  --folio-violet-hover: #4E42AD;
+  --text-body: 1rem;
+  --text-small: .875rem;
+  --text-caption: .8125rem;
+  --leading-body: 1.7;
+  --control-height: 48px;
+  --control-radius: 8px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-section: clamp(56px, 6vw, 88px);
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
+  --dur-quick: 120ms;
+  --dur-snappy: 180ms;
+  --dur-moderate: 240ms;
+  --dur-deliberate: 320ms;
+}
+[data-theme="dark"] {
+  --on-accent: #241F39;
+  --bg: #191822; --surface: #22212D; --surface-2: #2C2A3A; --surface-3: #363348;
+  --ink: #F0EEF7; --ink-2: #D5D1E3; --ink-3: #B3AEC7; --ink-4: #A59DBD;
+  --accent: #B6A9FF; --accent-2: #CCBFFF; --accent-soft: #38314F; --accent-soft-2: #493E65;
+  --line: #413D51; --line-soft: #332F43;
+  --green: #8DDABF; --green-soft: #203C33; --red: #FF9CAF; --red-soft: #482934;
+  --amber: #EFC779; --amber-soft: #443C2A; --slate: #A0C3E9; --slate-soft: #29384A;
+}
+body { font-family: var(--font-sans); color: var(--ink); -webkit-font-smoothing: antialiased; }
+button, input, textarea, select { font-family: inherit; }
+button, a { -webkit-tap-highlight-color: transparent; }
+a, button, input, select, textarea, summary { scroll-margin-top: 100px; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+input::placeholder, textarea::placeholder { color: var(--ink-3); opacity: 1; }
+.fi-btn { min-height: var(--control-height); border-radius: var(--control-radius); padding: 10px 17px; font-size: var(--text-small); font-weight: 600; text-decoration: none; gap: 8px; transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease; }
+.fi-btn:hover { transform: none; }
+.fi-btn-primary, .fi-btn-primary-brass { background: var(--accent); border-color: var(--accent); color: var(--on-accent); box-shadow: none; }
+.fi-btn-primary:hover { background: var(--accent-2); }
+.fi-btn-secondary { background: var(--surface); border-color: var(--line); color: var(--ink); }
+.fi-btn:disabled { cursor: not-allowed; transform: none; }
+[data-theme="dark"] .fi-btn-primary, [data-theme="dark"] .fi-btn-primary-brass { color: var(--on-accent); }
+
+/* Public routes retain a light identity while workspace dark mode stays scoped. */
+:is(.fx-marketing, .bl-root, .dir-root) {
+  --bg: #F6F6F9; --surface: #FFF; --surface-2: #F1F1F6; --surface-3: #E8E7F0;
+  --line: #DAD9E7; --line-soft: #ECEBF2;
+  --ink: #272833; --ink-2: #50515F; --ink-3: #686976; --ink-4: #70717E;
+  --accent: var(--folio-violet); --accent-2: var(--folio-violet-hover);
+  --accent-soft: #EFECFC; --accent-soft-2: #E2DDF7; --on-accent: #FFF;
+  --green: #19725D; --green-soft: #E5F2EC; --amber: #886012; --amber-soft: #FBF1D9;
+}
+::selection { background: var(--accent-soft-2); color: var(--ink); }
+input, textarea { caret-color: var(--accent); }
+html { scrollbar-color: var(--line) var(--bg); }
+:is(input[type=checkbox], input[type=radio]) { accent-color: var(--accent); }
+:is(a, button, input, select, textarea, summary):focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+
+.folio-brand { display:inline-flex; align-items:center; gap:9px; color:var(--ink); text-decoration:none; }
+.folio-brand svg { flex:none; }
+.folio-brand .folio-brand-wordmark { font-family:var(--font-sans); font-size:30px; font-weight:750; letter-spacing:-.04em; line-height:1; color:var(--ink); }
+.folio-brand-dot { color:var(--accent); }
