@@ -139,7 +139,7 @@ async function servicesRevision(organizationId:string){
 const SERVICE_CODES=['auth_required','mfa_required','no_org','forbidden','not_found','validation','conflict','transition_invalid','locked','db_error','network'] as const;
 const SERVICE_OUTCOMES=['rejected','uncertain','review_required'] as const;
 function servicesActionCategory(body:string){
- const unknown={result:'unknown',code:'unknown',outcome:'unknown'};
+ const unknown={result:'unknown',code:'unknown',outcome:'unknown',revision:'unknown'};
  if(body.length>1_048_576)return unknown;
  const chunks=new Map<string,unknown>();
  for(const line of body.split('\n')){
@@ -151,12 +151,15 @@ function servicesActionCategory(body:string){
  if(typeof action==='string')action=chunks.get(/^\$@([0-9a-f]+)$/.exec(action)?.[1]??'');
  if(!action||typeof action!=='object'||Array.isArray(action))return unknown;
  const result=action as Record<string,unknown>;
- if(result.ok===true)return {result:'ok',code:'none',outcome:'none'};
+ if(result.ok===true){
+  const revision=result.data&&typeof result.data==='object'&&!Array.isArray(result.data)?(result.data as Record<string,unknown>).revision:undefined;
+  return {result:'ok',code:'none',outcome:'none',revision:typeof revision==='number'&&Number.isSafeInteger(revision)&&revision>=0?String(revision):'unknown'};
+ }
  if(result.ok!==false)return unknown;
  const error=result.error&&typeof result.error==='object'&&!Array.isArray(result.error)?result.error as Record<string,unknown>:{};
  const code=SERVICE_CODES.find(value=>value===error.code)??'unknown';
  const outcome=error.mutationOutcome===undefined?'none':SERVICE_OUTCOMES.find(value=>value===error.mutationOutcome)??'unknown';
- return {result:'rejected',code,outcome};
+ return {result:'rejected',code,outcome,revision:'unknown'};
 }
 function servicesAlertCategory(messages:string[]){
  const known:Record<string,string>={
@@ -169,6 +172,7 @@ function servicesAlertCategory(messages:string[]){
   'No pudimos confirmar la cuenta activa. Volvé a cargar para continuar.':'owner_missing',
   'Los servicios cambiaron. Cargá los guardados antes de continuar.':'conflict',
   'No pudimos confirmar el guardado. Verificá el mismo cambio antes de editar.':'uncertain',
+  'No pudimos preparar el guardado. Habilitá almacenamiento del navegador y reintentá.':'prepare_storage',
  };
  return messages.length?messages.map(value=>Object.hasOwn(known,value.trim())?known[value.trim()]:undefined).find(Boolean)??'unknown':'none';
 }
@@ -194,7 +198,7 @@ async function serviceStep(page:Page,tipo:'INDEPENDIENTE'|'CLINICA',organization
  }
  await expect(page.getByRole('heading',{name:'¿Qué servicios ofrecés?'})).toBeVisible();
  await expect(page.getByRole('button',{name:'Agregar servicio'})).toBeEnabled();
- const responses:Array<{http:string;result:string;code:string;outcome:string}>=[];
+ const responses:Array<{http:string;result:string;code:string;outcome:string;revision:string}>=[];
  const reads:Promise<void>[]=[];
  const observe=(response:import('@playwright/test').Response)=>{
   const request=response.request();
@@ -209,9 +213,9 @@ async function serviceStep(page:Page,tipo:'INDEPENDIENTE'|'CLINICA',organization
  const finishObservation=async()=>{
   page.off('response',observe);
   await Promise.all(reads);
-  const alert=servicesAlertCategory(await diagnosticWithin(()=>page.getByRole('alert').allTextContents(),[]));
-  if(!responses.length)console.log(`services_proof_response:phase=initial_save count=0 http=none result=unknown code=unknown outcome=unknown alert=${alert}`);
-  for(const [index,response] of responses.entries())console.log(`services_proof_response:phase=initial_save count=${index+1} http=${response.http} result=${response.result} code=${response.code} outcome=${response.outcome} alert=${alert}`);
+  const alert=servicesAlertCategory(await diagnosticWithin(()=>page.locator('[role="alert"] > span[title], p[role="alert"]').allTextContents(),[]));
+  if(!responses.length)console.log(`services_proof_response:phase=initial_save count=0 http=none result=unknown code=unknown outcome=unknown revision=unknown alert=${alert}`);
+  for(const [index,response] of responses.entries())console.log(`services_proof_response:phase=initial_save count=${index+1} http=${response.http} result=${response.result} code=${response.code} outcome=${response.outcome} revision=${response.revision} alert=${alert}`);
  };
  if(isClinic)await page.getByRole('button',{name:'Agregar servicio'}).click();
  else if(await page.getByRole('textbox',{name:'Nombre del servicio 1'}).count()===0)
