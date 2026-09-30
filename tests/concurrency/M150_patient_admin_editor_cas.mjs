@@ -220,9 +220,39 @@ try{
   // A supporting professional witness is held before patient/identity locks.
   await admin.query(`INSERT INTO public.turno(id,organization_id,paciente_id,servicio_id,profesional_id,inicio,duracion_min,precio_cents,estado)
     VALUES($1,$2,$3,$4,$5,now()+interval '20 days',30,0,'CERRADO')`,[ids.witness,ids.org,ids.patient,ids.service,ids.memberProfessional]);
-  await rejectedWhileWaiting(professional,actors.professional,{sql:'SELECT 1 FROM public.turno WHERE id=$1 FOR UPDATE',args:[ids.witness]},
-    {sql:'DELETE FROM public.turno WHERE id=$1',args:[ids.witness]},
-    {sql:'SELECT 1',args:[]},'professional witness removed during wait');
+  // Reassign the witness without deleting the closed visit or its M120 ledger.
+  const witnessReadback=async()=>(await admin.query(`SELECT t.id,t.organization_id,t.paciente_id,t.profesional_id,t.estado,
+    t.intake_revision::text intake_revision,
+    (t.organization_id=$2 AND t.paciente_id=$3 AND t.profesional_id=$4
+      AND t.estado IN ('EN_SALA','ATENDIENDO','CERRADO')) matches,
+    (SELECT to_jsonb(cr) FROM folio_close_private.close_record cr WHERE cr.turno_id=t.id) close_record
+    FROM public.turno t WHERE t.id=$1`,[ids.witness,ids.org,ids.patient,ids.memberProfessional])).rows[0];
+  const identityReadback=async()=>(await admin.query(`SELECT to_jsonb(pi)-'admin_revision'-'intake_revision' identity,
+    pi.admin_revision::text revision,pi.intake_revision::text intake FROM public.paciente_identidad pi WHERE pi.id=$1`,[ids.identity])).rows[0];
+  const professionalVisible=async()=>(await professional.query('SELECT id FROM public.paciente WHERE id=$1',[ids.patient])).rowCount;
+  const witnessBefore=await witnessReadback(),identityBefore=await identityReadback();
+  assert.equal(witnessBefore.matches,true);assert.equal(witnessBefore.estado,'CERRADO');assert.ok(witnessBefore.close_record);
+  assert.equal(await professionalVisible(),1);state=await snapshot();
+  await barrier.query('BEGIN');await barrier.query('SELECT 1 FROM public.turno WHERE id=$1 FOR UPDATE',[ids.witness]);
+  const witnessPending=observed(invoke(professional,'coverage',actors.professional,state,coverage()));
+  await blocked(witnessPending,professional,barrier,'professional witness reassigned during wait');
+  await barrier.query('UPDATE public.turno SET profesional_id=$1 WHERE id=$2',[ids.memberOwner,ids.witness]);
+  await barrier.query('COMMIT');
+  try{
+    assert.equal((await witnessPending).error?.code,'42501');
+    const revoked=await witnessReadback();
+    assert.equal(revoked.matches,false);assert.equal(revoked.profesional_id,ids.memberOwner);assert.equal(revoked.estado,'CERRADO');
+    assert.equal(revoked.intake_revision,(BigInt(witnessBefore.intake_revision)+1n).toString());
+    assert.deepEqual(revoked.close_record,witnessBefore.close_record);assert.equal(await professionalVisible(),0);
+    await assertIdentityUnchanged(state);assert.deepEqual(await identityReadback(),identityBefore);assert.deepEqual(await snapshot(),state);
+  }finally{
+    await admin.query('UPDATE public.turno SET profesional_id=$1 WHERE id=$2',[ids.memberProfessional,ids.witness]);
+  }
+  const restored=await witnessReadback();
+  assert.equal(restored.matches,true);assert.equal(restored.profesional_id,ids.memberProfessional);assert.equal(restored.estado,'CERRADO');
+  assert.equal(restored.intake_revision,(BigInt(witnessBefore.intake_revision)+2n).toString());
+  assert.deepEqual(restored.close_record,witnessBefore.close_record);assert.equal(await professionalVisible(),1);
+  assert.deepEqual(await identityReadback(),identityBefore);assert.deepEqual(await snapshot(),state);
 
   // First MFA verification can reverse auth.users -> factor via M101's FK insert.
   const enrollment=await connect();pid.set(enrollment,(await enrollment.query('SELECT pg_backend_pid() pid')).rows[0].pid);
