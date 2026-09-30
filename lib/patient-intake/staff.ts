@@ -3,13 +3,18 @@
 import { z } from "zod";
 import { createHash } from "node:crypto";
 import { decryptColumn } from "@/lib/crypto";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient, createSupabaseServiceClient } from "@/lib/supabase/server";
 import { getActiveSession } from "@/lib/db/session";
 import { err, ok } from "@/lib/db/errors";
 import { limitByKey } from "@/lib/security/rate-limit";
 import { readMfaStatus } from "@/lib/auth/mfa-access";
 import { newInvitationFingerprintKeyCipher } from "./admin-v1";
 import { runAssuredIntakeRpc } from "./staff-assurance";
+import {
+  incorporationComparison, incorporationFailure, incorporationOperationRequest,
+  incorporationPublicResult, incorporationReadRequest, incorporationRequest,
+  incorporationRpcError, runIncorporation,
+} from "./incorporation";
 
 const uuid = z.string().uuid();
 const hash = z.string().regex(/^[0-9a-f]{64}$/);
@@ -58,9 +63,11 @@ async function invoke(turnoId: string, name: string, extra: Record<string, unkno
     if (assured.kind === "unknown") return err("network", "No pudimos comprobar tu verificación en dos pasos. Reintentá.");
     if (assured.kind === "needs_mfa") return err("mfa_required", "Para compartir un formulario, completá la verificación en dos pasos.");
     const { data, error } = assured.result;
-    if (error) return staffError(error.code, mutation);
-    return ok({ value: data as unknown, scope });
+    if (error) return name.startsWith("patient_intake_incorporation_")
+      ? incorporationRpcError(error.code, mutation) : staffError(error.code, mutation);
+    return ok({ value: data as unknown, scope, organizationId: session.data.organizationId });
   } catch {
+    if (name.startsWith("patient_intake_incorporation_")) return incorporationFailure("network", mutation ? "uncertain" : undefined);
     const result = err("network", mutation
       ? "Se interrumpió la respuesta. No vuelvas a emitir hasta revisar el estado."
       : "No pudimos consultar los aportes.");
@@ -123,4 +130,45 @@ export async function reviewPatientIntake(turnoId: string, scope: string) {
         answers: JSON.parse(clear) as Record<string, unknown> };
     }));
   } catch { return err("db_error", "No pudimos descifrar los aportes."); }
+}
+
+export async function getPatientIntakeIncorporationSnapshot(turnoId: string, scope: string, receiptId: string) {
+  const parsed = incorporationReadRequest.safeParse({ turnoId, scope, receiptId });
+  if (!parsed.success) return incorporationFailure("validation");
+  const result = await invoke(turnoId, "patient_intake_incorporation_snapshot", { p_receipt: receiptId }, false, scope);
+  if (!result.ok) return result;
+  try {
+    const comparison = incorporationComparison(result.data.value);
+    if (comparison.receiptId !== receiptId) return incorporationFailure();
+    return ok(comparison);
+  } catch { return incorporationFailure(); }
+}
+
+export async function applyPatientIntakeIncorporation(input: unknown) {
+  const parsed = incorporationRequest.safeParse(input);
+  if (!parsed.success) return incorporationFailure("validation");
+  const { turnoId, scope } = parsed.data;
+  return runIncorporation(parsed.data, {
+    staff: (name, args, mutation) => invoke(turnoId, name, args, mutation, scope),
+    materialize: async (args) => {
+      try {
+        const { data, error } = await createSupabaseServiceClient().rpc("patient_intake_incorporation_materialize", args);
+        return error ? incorporationRpcError(error.code, true) : ok(data as unknown);
+      } catch { return incorporationFailure("network", "uncertain"); }
+    },
+  });
+}
+
+export async function patientIntakeIncorporationStatus(turnoId: string, scope: string, operationId: string) {
+  const parsed = incorporationOperationRequest.safeParse({ turnoId, scope, operationId });
+  if (!parsed.success) return incorporationFailure("validation");
+  const result = await invoke(turnoId, "patient_intake_incorporation_status", { p_operation: operationId }, false, scope);
+  return result.ok ? incorporationPublicResult(result.data.value, operationId) : result;
+}
+
+export async function cancelPatientIntakeIncorporation(turnoId: string, scope: string, operationId: string) {
+  const parsed = incorporationOperationRequest.safeParse({ turnoId, scope, operationId });
+  if (!parsed.success) return incorporationFailure("validation");
+  const result = await invoke(turnoId, "patient_intake_incorporation_cancel", { p_operation: operationId }, true, scope);
+  return result.ok ? incorporationPublicResult(result.data.value, operationId) : result;
 }
