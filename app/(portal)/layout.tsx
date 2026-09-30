@@ -11,6 +11,8 @@
  * profundidad. Sin sidebar de staff — el chrome del portal es liviano.
  */
 
+export const metadata = { robots: { index: false, follow: false } };
+
 export default function PortalShellLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
