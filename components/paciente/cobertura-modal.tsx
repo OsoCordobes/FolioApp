@@ -19,10 +19,11 @@
  */
 
 import { useRouter } from "next/navigation";
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 import { savePacienteCoberturaAction } from "@/app/(app)/pacientes/actions";
 import { OBRAS_SOCIALES_AR } from "@/lib/pacientes/cobertura";
+import type { AdminEditorSnapshot } from "@/lib/db/pacientes";
 import { useModalA11y } from "@/lib/use-modal-a11y";
 
 interface CoberturaPrefill {
@@ -33,12 +34,24 @@ interface CoberturaPrefill {
 
 interface CoberturaModalProps {
   pacienteId: string;
+  adminEditor: AdminEditorSnapshot;
   prefill: CoberturaPrefill;
   onClose: () => void;
 }
 
-export function CoberturaModal({ pacienteId, prefill, onClose }: CoberturaModalProps) {
+export function CoberturaModal({ pacienteId, adminEditor, prefill, onClose }: CoberturaModalProps) {
   const router = useRouter();
+  // Revision belongs to this draft. A refreshed prop must never upgrade it silently.
+  const [snapshot] = useState(adminEditor);
+  const [draftPatientId] = useState(pacienteId);
+  const [blocked, setBlocked] = useState(false);
+  const [revoked, setRevoked] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const live = useRef(false);
+  const currentScope = useRef(`${pacienteId}:${adminEditor.identidadId}:${adminEditor.editorScope}`);
+  currentScope.current = `${pacienteId}:${adminEditor.identidadId}:${adminEditor.editorScope}`;
+  const draftScope = `${draftPatientId}:${snapshot.identidadId}:${snapshot.editorScope}`;
+  useEffect(() => { live.current = true; return () => { live.current = false; }; }, []);
   const [nombre, setNombre] = useState(prefill.coberturaNombre ?? "");
   const [plan, setPlan] = useState(prefill.coberturaPlan ?? "");
   const [nroAfiliado, setNroAfiliado] = useState(prefill.coberturaNroAfiliado ?? "");
@@ -52,22 +65,53 @@ export function CoberturaModal({ pacienteId, prefill, onClose }: CoberturaModalP
 
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
+    if (pending || blocked || revoked || draftScope !== currentScope.current) return;
     setErr(null);
     startTransition(async () => {
+      try {
       const result = await savePacienteCoberturaAction({
         pacienteId,
+        ...snapshot,
         coberturaNombre: nombre.trim(),
         coberturaPlan: plan.trim(),
         coberturaNroAfiliado: nroAfiliado.trim(),
       });
+      if (!live.current || currentScope.current !== draftScope) return;
       if (!result.ok) {
+        if (["auth_required", "mfa_required", "no_org", "forbidden", "not_found"].includes(result.error.code)) {
+          setRevoked(true);
+          setNombre("");
+          setPlan("");
+          setNroAfiliado("");
+        } else if (result.error.code !== "validation") setBlocked(true);
         setErr(result.error.message);
         return;
       }
       onClose();
       // Refrescar la ficha para que la fila "Obra social" muestre lo guardado.
       router.refresh();
+      } catch {
+        if (!live.current || currentScope.current !== draftScope) return;
+        setBlocked(true);
+        setErr("No pudimos confirmar el guardado. Conservá tu borrador y revisá los datos actuales antes de volver a editar.");
+      }
     });
+  };
+
+  if (revoked || draftScope !== currentScope.current) return (
+    <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Edición no disponible" tabIndex={-1} className="a11y-modal-root">
+      <p role="alert">La edición ya no está disponible. Volvé a abrir la ficha con tu sesión actual.</p>
+      <button type="button" className="fi-btn fi-btn-secondary" onClick={onClose}>Cerrar</button>
+    </div>
+  );
+
+  const copyDraft = async () => {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify({ nombre, plan, nroAfiliado }, null, 2));
+      if (live.current && currentScope.current === draftScope) setCopied(true);
+    } catch {
+      if (live.current && currentScope.current === draftScope) setErr("No pudimos copiar el borrador. Conservá los datos antes de recargar.");
+    }
   };
 
   return (
@@ -123,8 +167,9 @@ export function CoberturaModal({ pacienteId, prefill, onClose }: CoberturaModalP
             type="text"
             list="cobertura-os-datalist"
             value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
+            onChange={(e) => { setNombre(e.target.value); setCopied(false); }}
             style={inputStyle}
+            disabled={pending}
             maxLength={120}
             placeholder="OSDE, Swiss Medical, PAMI…"
           />
@@ -139,8 +184,9 @@ export function CoberturaModal({ pacienteId, prefill, onClose }: CoberturaModalP
           <input
             type="text"
             value={plan}
-            onChange={(e) => setPlan(e.target.value)}
+            onChange={(e) => { setPlan(e.target.value); setCopied(false); }}
             style={inputStyle}
+            disabled={pending}
             maxLength={40}
           />
         </Field>
@@ -149,12 +195,19 @@ export function CoberturaModal({ pacienteId, prefill, onClose }: CoberturaModalP
           <input
             type="text"
             value={nroAfiliado}
-            onChange={(e) => setNroAfiliado(e.target.value)}
+            onChange={(e) => { setNroAfiliado(e.target.value); setCopied(false); }}
             style={inputStyle}
+            disabled={pending}
             maxLength={40}
           />
         </Field>
 
+        {blocked ? (
+          <div>
+            <button type="button" className="fi-btn fi-btn-secondary" disabled={pending} onClick={() => void copyDraft()}>Copiar borrador</button>
+            <button type="button" className="fi-btn fi-btn-ghost" disabled={pending || !copied} onClick={() => window.location.reload()}>Recargar datos para revisar</button>
+          </div>
+        ) : null}
         {err ? (
           <p role="alert" style={{ color: "var(--red)", fontSize: 13, marginTop: 8 }}>
             {err}
@@ -173,7 +226,7 @@ export function CoberturaModal({ pacienteId, prefill, onClose }: CoberturaModalP
           <button
             type="submit"
             className="fi-btn fi-btn-primary"
-            disabled={pending}
+            disabled={pending || blocked}
             aria-busy={pending}
           >
             {pending ? "Guardando…" : "Guardar cobertura"}

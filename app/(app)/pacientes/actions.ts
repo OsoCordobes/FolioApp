@@ -48,7 +48,7 @@ import {
 } from "@/lib/db/documentos";
 import { listRespuestasPaciente, saveRespuesta } from "@/lib/db/instrumentos";
 import { savePacienteIntakeAvanzado } from "@/lib/db/paciente-intake";
-import { createPaciente, updatePacienteCobertura } from "@/lib/db/pacientes";
+import { adminEditorShape, createPaciente, updatePacienteCobertura } from "@/lib/db/pacientes";
 import { savePlanTratamiento } from "@/lib/db/plan-tratamiento";
 import { getActiveSession } from "@/lib/db/session";
 import { addEnmienda, sesionPerteneceAPaciente, upsertSesion, readClinicalSessionRevision } from "@/lib/db/sesiones";
@@ -143,6 +143,7 @@ export async function createPacienteAction(
 // ─── Guardar cobertura desde la ficha (tab Información) — F7a, M89 ────────────
 
 const saveCoberturaSchema = z.object({
+  ...adminEditorShape,
   pacienteId: z.string().uuid(),
   // Tolerantes a "" (vaciar un campo = borrar el valor → NULL en DB).
   coberturaNombre: z.string().max(120).optional().or(z.literal("")),
@@ -166,6 +167,10 @@ export async function savePacienteCoberturaAction(
   }
 
   const result = await updatePacienteCobertura({
+    identidadId: parsed.data.identidadId,
+    adminRevision: parsed.data.adminRevision,
+    identityLinkRevision: parsed.data.identityLinkRevision,
+    editorScope: parsed.data.editorScope,
     pacienteId: parsed.data.pacienteId,
     coberturaNombre: parsed.data.coberturaNombre,
     coberturaPlan: parsed.data.coberturaPlan,

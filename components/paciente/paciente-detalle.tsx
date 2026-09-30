@@ -805,6 +805,8 @@ function TabInformacion() {
           <button
             type="button"
             className="pc-link pc-link--accion"
+            disabled={!paciente.adminEditor}
+            title={!paciente.adminEditor ? "Recargá la ficha para verificar los datos antes de editar." : undefined}
             onClick={() => setContactoOpen(true)}
           >
             Editar
@@ -836,6 +838,7 @@ function TabInformacion() {
                 <button
                   type="button"
                   className="pc-link"
+                  disabled={!paciente.adminEditor}
                   onClick={() => setCoberturaOpen(true)}
                   title="Editar la obra social / prepaga del paciente"
                 >
@@ -853,9 +856,11 @@ function TabInformacion() {
           </dd>
         </dl>
       </section>
-      {coberturaOpen && paciente.coberturaLeida ? (
+      {coberturaOpen && paciente.coberturaLeida && paciente.adminEditor ? (
         <CoberturaModal
+          key={`${paciente.id}:${paciente.adminEditor.editorScope}`}
           pacienteId={paciente.id}
+          adminEditor={paciente.adminEditor}
           prefill={{
             coberturaNombre: paciente.coberturaNombre,
             coberturaPlan: paciente.coberturaPlan,
@@ -864,9 +869,11 @@ function TabInformacion() {
           onClose={() => setCoberturaOpen(false)}
         />
       ) : null}
-      {contactoOpen ? (
+      {contactoOpen && paciente.adminEditor ? (
         <ContactoModal
+          key={`${paciente.id}:${paciente.adminEditor.editorScope}`}
           pacienteId={paciente.id}
+          adminEditor={paciente.adminEditor}
           prefill={{
             nombre: paciente.nombrePila,
             apellido: paciente.apellido,
@@ -1653,7 +1660,7 @@ function PacienteDetalleInner({ canExportCompleteHistory }: { canExportCompleteH
           el costo de mantener montados los otros 3 tabs es mínimo (Documentos
           además difiere su fetch hasta la primera apertura). */}
       <div {...panelProps("informacion")} hidden={tab !== "informacion"}>
-        <TabInformacion />
+        <TabInformacion key={`${paciente.id}:${paciente.adminEditor?.editorScope ?? "unavailable"}`} />
       </div>
       <div {...panelProps("plan")} hidden={tab !== "plan"}>
         <TabPlan />

@@ -23,9 +23,10 @@
  */
 
 import { useRouter } from "next/navigation";
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 import { updateContactoPacienteAction } from "@/app/(app)/pacientes/actions";
+import type { AdminEditorSnapshot } from "@/lib/db/pacientes";
 import { useModalA11y } from "@/lib/use-modal-a11y";
 
 interface ContactoPrefill {
@@ -38,14 +39,27 @@ interface ContactoPrefill {
 
 export function ContactoModal({
   pacienteId,
+  adminEditor,
   prefill,
   onClose,
 }: {
   pacienteId: string;
+  adminEditor: AdminEditorSnapshot;
   prefill: ContactoPrefill;
   onClose: () => void;
 }) {
   const router = useRouter();
+  // Revision belongs to this draft. A refreshed prop must never upgrade it silently.
+  const [snapshot] = useState(adminEditor);
+  const [draftPatientId] = useState(pacienteId);
+  const [blocked, setBlocked] = useState(false);
+  const [revoked, setRevoked] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const live = useRef(false);
+  const currentScope = useRef(`${pacienteId}:${adminEditor.identidadId}:${adminEditor.editorScope}`);
+  currentScope.current = `${pacienteId}:${adminEditor.identidadId}:${adminEditor.editorScope}`;
+  const draftScope = `${draftPatientId}:${snapshot.identidadId}:${snapshot.editorScope}`;
+  useEffect(() => { live.current = true; return () => { live.current = false; }; }, []);
   const [nombre, setNombre] = useState(prefill.nombre);
   const [apellido, setApellido] = useState(prefill.apellido);
   const [telefono, setTelefono] = useState(prefill.telefono);
@@ -59,23 +73,56 @@ export function ContactoModal({
 
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
+    if (pending || blocked || revoked || draftScope !== currentScope.current) return;
     setErr(null);
     startTransition(async () => {
+      try {
       const result = await updateContactoPacienteAction({
         pacienteId,
+        ...snapshot,
         nombre: nombre.trim(),
         apellido: apellido.trim(),
         telefono: telefono.trim(),
         email: email.trim(),
         ocupacion: ocupacion.trim(),
       });
+      if (!live.current || currentScope.current !== draftScope) return;
       if (!result.ok) {
+        if (["auth_required", "mfa_required", "no_org", "forbidden", "not_found"].includes(result.error.code)) {
+          setRevoked(true);
+          setNombre("");
+          setApellido("");
+          setTelefono("");
+          setEmail("");
+          setOcupacion("");
+        } else if (result.error.code !== "validation") setBlocked(true);
         setErr(result.error.message);
         return;
       }
       onClose();
       router.refresh();
+      } catch {
+        if (!live.current || currentScope.current !== draftScope) return;
+        setBlocked(true);
+        setErr("No pudimos confirmar el guardado. Conservá tu borrador y revisá los datos actuales antes de volver a editar.");
+      }
     });
+  };
+
+  if (revoked || draftScope !== currentScope.current) return (
+    <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Edición no disponible" tabIndex={-1} className="a11y-modal-root">
+      <p role="alert">La edición ya no está disponible. Volvé a abrir la ficha con tu sesión actual.</p>
+      <button type="button" className="fi-btn fi-btn-secondary" onClick={onClose}>Cerrar</button>
+    </div>
+  );
+
+  const copyDraft = async () => {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify({ nombre, apellido, telefono, email, ocupacion }, null, 2));
+      if (live.current && currentScope.current === draftScope) setCopied(true);
+    } catch {
+      if (live.current && currentScope.current === draftScope) setErr("No pudimos copiar el borrador. Conservá los datos antes de recargar.");
+    }
   };
 
   return (
@@ -128,8 +175,9 @@ export function ContactoModal({
           <input
             type="text"
             value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
+            onChange={(e) => { setNombre(e.target.value); setCopied(false); }}
             style={inputStyle}
+            disabled={pending}
             maxLength={120}
             required
           />
@@ -139,8 +187,9 @@ export function ContactoModal({
           <input
             type="text"
             value={apellido}
-            onChange={(e) => setApellido(e.target.value)}
+            onChange={(e) => { setApellido(e.target.value); setCopied(false); }}
             style={inputStyle}
+            disabled={pending}
             maxLength={120}
             required
           />
@@ -150,8 +199,9 @@ export function ContactoModal({
           <input
             type="tel"
             value={telefono}
-            onChange={(e) => setTelefono(e.target.value)}
+            onChange={(e) => { setTelefono(e.target.value); setCopied(false); }}
             style={inputStyle}
+            disabled={pending}
             maxLength={30}
             required
           />
@@ -161,8 +211,9 @@ export function ContactoModal({
           <input
             type="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => { setEmail(e.target.value); setCopied(false); }}
             style={inputStyle}
+            disabled={pending}
             maxLength={320}
           />
         </Field>
@@ -171,12 +222,19 @@ export function ContactoModal({
           <input
             type="text"
             value={ocupacion}
-            onChange={(e) => setOcupacion(e.target.value)}
+            onChange={(e) => { setOcupacion(e.target.value); setCopied(false); }}
             style={inputStyle}
+            disabled={pending}
             maxLength={120}
           />
         </Field>
 
+        {blocked ? (
+          <div>
+            <button type="button" className="fi-btn fi-btn-secondary" disabled={pending} onClick={() => void copyDraft()}>Copiar borrador</button>
+            <button type="button" className="fi-btn fi-btn-ghost" disabled={pending || !copied} onClick={() => window.location.reload()}>Recargar datos para revisar</button>
+          </div>
+        ) : null}
         {err ? (
           <p role="alert" style={{ color: "var(--red)", fontSize: 13, marginTop: 8 }}>
             {err}
@@ -187,7 +245,7 @@ export function ContactoModal({
           <button type="button" className="fi-btn fi-btn-ghost" onClick={onClose} disabled={pending}>
             Cancelar
           </button>
-          <button type="submit" className="fi-btn fi-btn-primary" disabled={pending} aria-busy={pending}>
+          <button type="submit" className="fi-btn fi-btn-primary" disabled={pending || blocked} aria-busy={pending}>
             {pending ? "Guardando…" : "Guardar contacto"}
           </button>
         </div>

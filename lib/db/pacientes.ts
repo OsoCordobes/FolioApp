@@ -10,6 +10,7 @@ import { safeLog } from "@/lib/observability/safe-log";
  */
 
 import { z } from "zod";
+import { createHash } from "node:crypto";
 
 import { capabilitiesFor } from "@/lib/auth/capabilities";
 import { blindIndex, blindIndexPhone, encryptColumn, tryDecrypt } from "@/lib/crypto";
@@ -24,6 +25,76 @@ import { resolveProfesionalDestino } from "./profesional-destino";
 import { getActiveSession } from "./session";
 
 // ─── Schemas Zod ────────────────────────────────────────────────────────
+
+/** PostgreSQL bigint stays decimal text across PostgREST and the browser. */
+export const adminRevisionSchema = z.string().max(19).regex(/^(0|[1-9][0-9]*)$/)
+  .refine(value => value.length < 19 || value <= "9223372036854775807");
+export const adminEditorShape = {
+  identidadId: z.string().uuid(),
+  adminRevision: adminRevisionSchema,
+  identityLinkRevision: adminRevisionSchema,
+  editorScope: z.string().regex(/^[0-9a-f]{64}$/),
+};
+export type AdminEditorSnapshot = { identidadId: string; adminRevision: string; identityLinkRevision: string; editorScope: string };
+
+/** Session was authenticated by the caller; bind its verified user to this JWT session. */
+export async function readAdminEditorScope(
+  client: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  userId: string,
+  binding: readonly string[],
+): Promise<Result<{ scope: string; sessionId: string }>> {
+  try {
+    const { data: { session }, error } = await client.auth.getSession();
+    if (error || !session) return err("auth_required", "Volvé a iniciar sesión.");
+    const parts = session.access_token.split(".");
+    if (parts.length !== 3) return err("auth_required", "Volvé a iniciar sesión.");
+    const claim = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
+    if (claim.sub !== userId || !z.string().uuid().safeParse(claim.session_id).success) {
+      return err("auth_required", "Volvé a iniciar sesión.");
+    }
+    return ok({ scope: createHash("sha256").update(JSON.stringify([userId, claim.session_id, ...binding])).digest("hex"), sessionId: claim.session_id });
+  } catch {
+    return err("network", "No pudimos comprobar tu sesión. Volvé a abrir la ficha.");
+  }
+}
+
+async function resolveStaffEditor(input: AdminEditorSnapshot & { pacienteId: string }) {
+  const session = await getActiveSession();
+  if (!session.ok) return session;
+  const client = await createSupabaseServerClient();
+  const scope = await readAdminEditorScope(client, session.data.userId,
+    ["staff", session.data.organizationId, session.data.memberId, session.data.role, input.pacienteId, input.identidadId]);
+  if (!scope.ok) return scope;
+  if (scope.data.scope !== input.editorScope) return err("forbidden", "Cambió tu sesión o consultorio. Volvé a abrir la ficha.");
+  return ok({ client, organizationId: session.data.organizationId, actorId: session.data.memberId,
+    actorRole: session.data.role, sessionId: scope.data.sessionId });
+}
+
+/** No response error may cause a blind retry: a lost transport may hide a committed write. */
+export function administrativeEditorResult(data: unknown, error: { code?: string; message: string } | null): Result<void> {
+  if (error) {
+    if (error.code === "22023") return err("validation", "Datos de edición inválidos. Revisá los campos antes de guardar.");
+    if (error.code === "40P01") {
+      const result = err("db_error", "La operación concurrente se canceló sin guardar. Conservá el borrador y revisá los datos actuales.");
+      if (!result.ok) result.error.mutationOutcome = "rejected";
+      return result;
+    }
+    const mapped = mapSupabaseError(error);
+    const result = err(mapped.code, mapped.message);
+    if (!result.ok) result.error.mutationOutcome = ["forbidden", "auth_required", "validation"].includes(mapped.code) ? "rejected" : "review_required";
+    return result;
+  }
+  const conflict = z.object({ status: z.literal("conflict") }).strict().safeParse(data);
+  if (conflict.success) return err("conflict", "Los datos o el vínculo cambiaron. Tu borrador se conserva; revisá la ficha actual antes de volver a editar.");
+  const success = z.object({ status: z.enum(["applied", "unchanged"]), adminRevision: adminRevisionSchema,
+    identityLinkRevision: adminRevisionSchema }).strict().safeParse(data);
+  if (!success.success) {
+    const result = err("db_error", "No pudimos confirmar el guardado. Conservá tu borrador y revisá los datos actuales.");
+    if (!result.ok) result.error.mutationOutcome = "review_required";
+    return result;
+  }
+  return ok(undefined);
+}
 
 const tipoDocSchema = z.enum(["DNI", "LE", "LC", "CI", "PASAPORTE"]);
 
@@ -449,6 +520,7 @@ export async function getPacienteCompleto(pacienteId: string): Promise<Result<Re
 // ─── Cobertura (obra social / prepaga) — F7a, M89 ────────────────────────────
 
 const updateCoberturaSchema = z.object({
+  ...adminEditorShape,
   pacienteId: z.string().uuid(),
   ...coberturaInputSchema.shape,
 });
@@ -473,24 +545,10 @@ export async function updatePacienteCobertura(
   if (!parsed.success) {
     return err("validation", "Datos de cobertura inválidos.", parsed.error.message);
   }
-  const session = await getActiveSession();
-  if (!session.ok) return session;
-
-  const supabase = await createSupabaseServerClient();
-
-  // Resolver la identidad del paciente dentro de la org activa (guard IDOR:
-  // un pacienteId de otra org no matchea y devuelve not_found).
-  const { data: dirRow, error: dirErr } = await supabase
-    .from("paciente_directorio_lite")
-    .select("identidad_id")
-    .eq("paciente_id", parsed.data.pacienteId)
-    .eq("organization_id", session.data.organizationId)
-    .is("deleted_at", null)
-    .maybeSingle();
-
-  if (dirErr) return err("db_error", "Error leyendo el paciente.", dirErr.message);
-  const identidadId = (dirRow as { identidad_id: string | null } | null)?.identidad_id ?? null;
-  if (!identidadId) return err("not_found", "Paciente no encontrado o sin permisos.");
+  const access = await resolveStaffEditor(parsed.data);
+  if (!access.ok) return access;
+  const { client: supabase, organizationId, actorId, actorRole, sessionId } = access.data;
+  const identidadId = parsed.data.identidadId;
 
   const cobertura = normalizarCobertura({
     nombre: parsed.data.coberturaNombre,
@@ -498,25 +556,16 @@ export async function updatePacienteCobertura(
     nroAfiliado: parsed.data.coberturaNroAfiliado,
   });
 
-  const { data: updated, error: updErr } = await supabase
-    .from("paciente_identidad")
-    .update({
-      cobertura_nombre: cobertura.nombre,
-      cobertura_plan: cobertura.plan,
-      cobertura_nro_afiliado_cifrado: encryptColumn(cobertura.nroAfiliado),
-    })
-    .eq("id", identidadId)
-    .eq("organization_id", session.data.organizationId)
-    .select("id");
-
-  if (updErr) {
-    const mapped = mapSupabaseError(updErr);
-    return err(mapped.code, mapped.message, updErr.message);
-  }
-  if (!updated || updated.length === 0) {
-    // RLS bloqueó el UPDATE (rol sin permiso de edición de identidad).
-    return err("forbidden", "Tu rol no permite editar la cobertura del paciente.");
-  }
+  const { data, error } = await supabase.rpc("patient_admin_coverage_cas", {
+    p_org: organizationId, p_patient: parsed.data.pacienteId, p_identity: identidadId,
+    p_admin_revision: parsed.data.adminRevision, p_link_revision: parsed.data.identityLinkRevision,
+    p_actor: actorId, p_actor_role: actorRole, p_session: sessionId, p_patch: { cobertura_nombre: cobertura.nombre, cobertura_plan: cobertura.plan,
+        cobertura_nro_afiliado_cifrado: encryptColumn(cobertura.nroAfiliado) },
+  });
+  const result = administrativeEditorResult(data, error);
+  if (!result.ok) return result;
+  const stillScoped = await resolveStaffEditor(parsed.data);
+  if (!stillScoped.ok) return stillScoped;
 
   return ok({ identidadId });
 }
@@ -524,6 +573,7 @@ export async function updatePacienteCobertura(
 // ─── Contacto (nombre, apellido, teléfono, email, ocupación) — B8 ────────────
 
 const updateContactoSchema = z.object({
+  ...adminEditorShape,
   pacienteId: z.string().uuid(),
   nombre: z.string().min(1).max(120),
   apellido: z.string().min(1).max(120),
@@ -550,7 +600,7 @@ export type UpdatePacienteContactoInput = z.infer<typeof updateContactoSchema>;
  * `dni_hash` NO se toca acá: el documento no se edita desde este modal.
  */
 export function buildContactoUpdatePayload(
-  input: Omit<UpdatePacienteContactoInput, "pacienteId">,
+  input: Pick<UpdatePacienteContactoInput, "nombre" | "apellido" | "telefono" | "email" | "ocupacion">,
   orgId: string,
 ): Record<string, unknown> {
   const nombre = input.nombre.trim();
@@ -566,7 +616,8 @@ export function buildContactoUpdatePayload(
     apellido_cifrado: encryptColumn(apellido),
     telefono_cifrado: encryptColumn(telefono),
     email_cifrado: encryptColumn(email || null),
-    ocupacion: ocupacion || null,
+    email_hash: email ? blindIndex(email.toLowerCase(), orgId) : null,
+    ocupacion_cifrado: encryptColumn(ocupacion || null),
     // Los dos índices ciegos, recalculados con la MISMA sal (la org) que usa el alta.
     nombre_hash: blindIndex(nombreFull, orgId),
     telefono_hash: blindIndexPhone(telefono, orgId),
@@ -587,38 +638,20 @@ export async function updatePacienteContacto(
   if (!parsed.success) {
     return err("validation", "Datos de contacto inválidos.", parsed.error.message);
   }
-  const session = await getActiveSession();
-  if (!session.ok) return session;
+  const access = await resolveStaffEditor(parsed.data);
+  if (!access.ok) return access;
+  const { client: supabase, organizationId, actorId, actorRole, sessionId } = access.data;
+  const identidadId = parsed.data.identidadId;
 
-  const supabase = await createSupabaseServerClient();
-
-  // Guard IDOR: un pacienteId de otra org no matchea acá y devuelve not_found.
-  const { data: dirRow, error: dirErr } = await supabase
-    .from("paciente_directorio_lite")
-    .select("identidad_id")
-    .eq("paciente_id", parsed.data.pacienteId)
-    .eq("organization_id", session.data.organizationId)
-    .is("deleted_at", null)
-    .maybeSingle();
-
-  if (dirErr) return err("db_error", "Error leyendo el paciente.", dirErr.message);
-  const identidadId = (dirRow as { identidad_id: string | null } | null)?.identidad_id ?? null;
-  if (!identidadId) return err("not_found", "Paciente no encontrado o sin permisos.");
-
-  const { data: updated, error: updErr } = await supabase
-    .from("paciente_identidad")
-    .update(buildContactoUpdatePayload(parsed.data, session.data.organizationId))
-    .eq("id", identidadId)
-    .eq("organization_id", session.data.organizationId)
-    .select("id");
-
-  if (updErr) {
-    const mapped = mapSupabaseError(updErr);
-    return err(mapped.code, mapped.message, updErr.message);
-  }
-  if (!updated || updated.length === 0) {
-    return err("forbidden", "Tu rol no permite editar los datos del paciente.");
-  }
+  const { data, error } = await supabase.rpc("patient_admin_contact_cas", {
+    p_org: organizationId, p_patient: parsed.data.pacienteId, p_identity: identidadId,
+    p_admin_revision: parsed.data.adminRevision, p_link_revision: parsed.data.identityLinkRevision,
+    p_actor: actorId, p_actor_role: actorRole, p_session: sessionId, p_patch: buildContactoUpdatePayload(parsed.data, organizationId),
+  });
+  const result = administrativeEditorResult(data, error);
+  if (!result.ok) return result;
+  const stillScoped = await resolveStaffEditor(parsed.data);
+  if (!stillScoped.ok) return stillScoped;
 
   return ok({ identidadId });
 }

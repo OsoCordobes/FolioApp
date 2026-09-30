@@ -10,7 +10,7 @@
  * maneja la interacción y refresca el segment tras cada cambio.
  */
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -34,7 +34,7 @@ export function PerfilList({ perfiles }: { perfiles: PortalPerfilView[] }) {
   return (
     <ul className="pt-org-list">
       {perfiles.map((p) => (
-        <li key={p.identidadId} className="pt-card">
+        <li key={`${p.pacienteId}:${p.identidadId}:${p.adminEditor?.editorScope ?? "unavailable"}`} className="pt-card">
           <PerfilCard perfil={p} />
         </li>
       ))}
@@ -44,6 +44,16 @@ export function PerfilList({ perfiles }: { perfiles: PortalPerfilView[] }) {
 
 function PerfilCard({ perfil }: { perfil: PortalPerfilView }) {
   const router = useRouter();
+  const [snapshot, setSnapshot] = useState(perfil.adminEditor);
+  const [blocked, setBlocked] = useState(false);
+  const [revoked, setRevoked] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const savedFrom = useRef<PortalPerfilView | null>(null);
+  const live = useRef(false);
+  const currentScope = useRef(perfil.adminEditor?.editorScope);
+  currentScope.current = perfil.adminEditor?.editorScope;
+  useEffect(() => { live.current = true; return () => { live.current = false; }; }, []);
   const [pending, startTransition] = useTransition();
   const [msg, setMsg] = useState<{ text: string; tone: "ok" | "err" } | null>(null);
 
@@ -55,17 +65,30 @@ function PerfilCard({ perfil }: { perfil: PortalPerfilView }) {
   const [provincia, setProvincia] = useState(perfil.domicilioProvincia ?? "");
   const [cp, setCp] = useState(perfil.domicilioCp ?? "");
 
+  // Only a confirmed save can replace its draft from a refreshed authoritative read.
+  useEffect(() => {
+    if (!saved || savedFrom.current === perfil || revoked || !perfil.adminEditor || currentScope.current !== snapshot?.editorScope) return;
+    setSnapshot(perfil.adminEditor);
+    setEmail(perfil.email ?? ""); setTelefono(perfil.telefono ?? "");
+    setCalle(perfil.domicilioCalle ?? ""); setNumero(perfil.domicilioNumero ?? "");
+    setCiudad(perfil.domicilioCiudad ?? ""); setProvincia(perfil.domicilioProvincia ?? ""); setCp(perfil.domicilioCp ?? "");
+    setBlocked(false); setSaved(false);
+  }, [perfil, saved, revoked, snapshot]);
+
   const nombreCompleto = [perfil.nombre, perfil.apellido].filter(Boolean).join(" ") || "Tu ficha";
 
   const guardar = () => {
+    if (pending || blocked || revoked || !snapshot || snapshot.editorScope !== currentScope.current) return;
     setMsg(null);
     if (!telefono.trim()) {
       setMsg({ text: "El teléfono no puede quedar vacío.", tone: "err" });
       return;
     }
     startTransition(async () => {
+      try {
       const res = await actualizarContactoAction({
-        identidadId: perfil.identidadId,
+        ...snapshot,
+        pacienteId: perfil.pacienteId,
         // Sólo contacto/domicilio: la server action + el data layer .strict()
         // rechazan cualquier otra clave; el nombre/documento nunca se envían.
         email: email.trim() || null,
@@ -76,13 +99,38 @@ function PerfilCard({ perfil }: { perfil: PortalPerfilView }) {
         domicilioProvincia: provincia.trim() || null,
         domicilioCp: cp.trim() || null,
       });
+      if (!live.current || currentScope.current !== snapshot.editorScope) return;
       if (!res.ok) {
+        if (["auth_required", "mfa_required", "no_org", "forbidden", "not_found"].includes(res.error.code)) {
+          setRevoked(true);
+          setEmail(""); setTelefono(""); setCalle(""); setNumero(""); setCiudad(""); setProvincia(""); setCp("");
+        } else if (res.error.code !== "validation") setBlocked(true);
         setMsg({ text: res.error.message, tone: "err" });
         return;
       }
+      savedFrom.current = perfil;
+      setSaved(true); setBlocked(true);
       setMsg({ text: "Datos actualizados.", tone: "ok" });
       router.refresh();
+      } catch {
+        if (!live.current || currentScope.current !== snapshot.editorScope) return;
+        setBlocked(true);
+        setMsg({ text: "No pudimos confirmar el guardado. Conservá tu borrador y revisá el perfil actual antes de volver a editar.", tone: "err" });
+      }
     });
+  };
+
+  if (revoked || snapshot?.editorScope !== perfil.adminEditor?.editorScope) return (
+    <p role="alert" className="pt-msg pt-msg-err">Esta edición ya no está disponible. Volvé a abrir el perfil con tu sesión actual.</p>
+  );
+
+  const copyDraft = async () => {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify({ email, telefono, calle, numero, ciudad, provincia, cp }, null, 2));
+      if (live.current && currentScope.current === snapshot?.editorScope) setCopied(true);
+    } catch {
+      if (live.current && currentScope.current === snapshot?.editorScope) setMsg({ text: "No pudimos copiar el borrador. Conservá los datos antes de recargar.", tone: "err" });
+    }
   };
 
   return (
@@ -111,8 +159,8 @@ function PerfilCard({ perfil }: { perfil: PortalPerfilView }) {
           type="tel"
           value={telefono}
           maxLength={30}
-          onChange={(e) => setTelefono(e.target.value)}
-          disabled={pending}
+          onChange={(e) => { setTelefono(e.target.value); setCopied(false); }}
+          disabled={pending || saved || !snapshot}
           required
         />
       </label>
@@ -124,8 +172,8 @@ function PerfilCard({ perfil }: { perfil: PortalPerfilView }) {
           value={email}
           maxLength={320}
           placeholder="tu@email.com"
-          onChange={(e) => setEmail(e.target.value)}
-          disabled={pending}
+          onChange={(e) => { setEmail(e.target.value); setCopied(false); }}
+          disabled={pending || saved || !snapshot}
         />
       </label>
 
@@ -136,8 +184,8 @@ function PerfilCard({ perfil }: { perfil: PortalPerfilView }) {
             type="text"
             value={calle}
             maxLength={120}
-            onChange={(e) => setCalle(e.target.value)}
-            disabled={pending}
+            onChange={(e) => { setCalle(e.target.value); setCopied(false); }}
+            disabled={pending || saved || !snapshot}
           />
         </label>
         <label className="au-field">
@@ -146,8 +194,8 @@ function PerfilCard({ perfil }: { perfil: PortalPerfilView }) {
             type="text"
             value={numero}
             maxLength={20}
-            onChange={(e) => setNumero(e.target.value)}
-            disabled={pending}
+            onChange={(e) => { setNumero(e.target.value); setCopied(false); }}
+            disabled={pending || saved || !snapshot}
           />
         </label>
       </div>
@@ -159,8 +207,8 @@ function PerfilCard({ perfil }: { perfil: PortalPerfilView }) {
             type="text"
             value={ciudad}
             maxLength={60}
-            onChange={(e) => setCiudad(e.target.value)}
-            disabled={pending}
+            onChange={(e) => { setCiudad(e.target.value); setCopied(false); }}
+            disabled={pending || saved || !snapshot}
           />
         </label>
         <label className="au-field">
@@ -169,8 +217,8 @@ function PerfilCard({ perfil }: { perfil: PortalPerfilView }) {
             type="text"
             value={provincia}
             maxLength={60}
-            onChange={(e) => setProvincia(e.target.value)}
-            disabled={pending}
+            onChange={(e) => { setProvincia(e.target.value); setCopied(false); }}
+            disabled={pending || saved || !snapshot}
           />
         </label>
         <label className="au-field">
@@ -179,16 +227,23 @@ function PerfilCard({ perfil }: { perfil: PortalPerfilView }) {
             type="text"
             value={cp}
             maxLength={15}
-            onChange={(e) => setCp(e.target.value)}
-            disabled={pending}
+            onChange={(e) => { setCp(e.target.value); setCopied(false); }}
+            disabled={pending || saved || !snapshot}
           />
         </label>
       </div>
 
-      <button type="submit" className="fi-btn fi-btn-primary au-submit" disabled={pending}>
+      <button type="submit" className="fi-btn fi-btn-primary au-submit" disabled={pending || !snapshot || blocked}>
         {pending ? "Guardando…" : "Guardar cambios"}
       </button>
 
+      {!snapshot ? <p role="alert" className="pt-msg pt-msg-err">No pudimos verificar los datos del perfil. Recargá la página antes de editar.</p> : null}
+      {blocked && !saved ? (
+        <div>
+          <button type="button" className="fi-btn fi-btn-secondary" disabled={pending} onClick={() => void copyDraft()}>Copiar borrador</button>
+          <button type="button" className="fi-btn fi-btn-ghost" disabled={pending || !copied} onClick={() => window.location.reload()}>Recargar datos para revisar</button>
+        </div>
+      ) : null}
       {msg ? (
         <p role="status" className={`pt-msg ${msg.tone === "err" ? "pt-msg-err" : "pt-msg-ok"}`}>
           {msg.text}

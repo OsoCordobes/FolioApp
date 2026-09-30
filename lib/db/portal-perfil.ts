@@ -36,6 +36,7 @@ import {
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import { err, mapSupabaseError, ok, type Result } from "./errors";
+import { administrativeEditorResult, adminRevisionSchema, adminEditorShape, readAdminEditorScope, type AdminEditorSnapshot } from "./pacientes";
 import { getPacienteSession } from "./paciente-session";
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -140,6 +141,7 @@ export interface PortalPerfilView {
   pacienteId: string;
   organizationId: string;
   organizacionNombre: string | null;
+  adminEditor?: AdminEditorSnapshot | null;
   /** Sólo lectura (identidad · el paciente no los edita desde el portal). */
   nombre: string | null;
   apellido: string | null;
@@ -156,6 +158,7 @@ export interface PortalPerfilView {
 
 interface IdentidadEmbed {
   id: string;
+  admin_revision: unknown;
   nombre_cifrado: Buffer | null;
   apellido_cifrado: Buffer | null;
   numero_doc_cifrado: Buffer | null;
@@ -195,9 +198,9 @@ export async function getPortalPerfiles(): Promise<Result<PortalPerfilView[]>> {
   const { data, error } = await supabase
     .from("paciente")
     .select(
-      "id, organization_id, identidad_id, " +
+      "id, organization_id, identidad_id, identity_link_revision::text, " +
         "paciente_identidad(" +
-        "id, nombre_cifrado, apellido_cifrado, numero_doc_cifrado, email_cifrado, " +
+        "id, admin_revision::text, nombre_cifrado, apellido_cifrado, numero_doc_cifrado, email_cifrado, " +
         "telefono_cifrado, domicilio_calle_cifrado, domicilio_numero_cifrado, " +
         "domicilio_ciudad, domicilio_provincia, domicilio_cp" +
         ")",
@@ -218,7 +221,16 @@ export async function getPortalPerfiles(): Promise<Result<PortalPerfilView[]>> {
     const identidad = id as unknown as IdentidadEmbed;
     const orgId = String(row.organization_id);
 
+    const editableCipher = ["email_cifrado", "telefono_cifrado", "domicilio_calle_cifrado", "domicilio_numero_cifrado"] as const;
+    const readable = editableCipher.every(field => identidad[field] == null || tryDecrypt(identidad[field], field) !== null)
+      && !!tryDecrypt(identidad.telefono_cifrado, "telefono");
+    const revision = adminRevisionSchema.safeParse(identidad.admin_revision);
+    const linkRevision = adminRevisionSchema.safeParse(row.identity_link_revision);
+    const scope = readable && revision.success && linkRevision.success ? await readAdminEditorScope(supabase, session.data.userId,
+      ["portal", session.data.cuentaId, orgId, String(row.id), identidad.id]) : null;
     perfiles.push({
+      adminEditor: readable && revision.success && linkRevision.success && scope?.ok
+        ? { identidadId: identidad.id, adminRevision: revision.data, identityLinkRevision: linkRevision.data, editorScope: scope.data.scope } : null,
       identidadId: String(identidad.id),
       pacienteId: String(row.id),
       organizationId: orgId,
@@ -255,7 +267,8 @@ export async function getPortalPerfiles(): Promise<Result<PortalPerfilView[]>> {
  * setea columnas de contacto, y el trigger-guard M86 es el cinturón a nivel DB. */
 const updateContactoSchema = z
   .object({
-    identidadId: z.string().uuid(),
+    ...adminEditorShape,
+    pacienteId: z.string().uuid(),
     email: z.string().email().max(320).nullable().optional(),
     telefono: z.string().min(6).max(30).nullable().optional(),
     domicilioCalle: z.string().max(120).nullable().optional(),
@@ -296,6 +309,20 @@ function normalizarOpcional(v: string | null | undefined): string | null | undef
  *
  * Sin campos presentes (todos undefined) → validation (nada para actualizar).
  */
+async function resolvePortalEditor(input: UpdatePortalContactoInput) {
+  const session = await getPacienteSession();
+  if (!session.ok) return session;
+  const client = await createSupabaseServerClient();
+  const ficha = session.data.pacientes.find(p => p.pacienteId === input.pacienteId);
+  if (!ficha) return err("not_found", "Esa ficha ya no está vinculada a tu cuenta.");
+  const orgId = ficha.organizationId;
+  const scope = await readAdminEditorScope(client, session.data.userId,
+    ["portal", session.data.cuentaId, orgId, input.pacienteId, input.identidadId]);
+  if (!scope.ok) return scope;
+  if (scope.data.scope !== input.editorScope) return err("forbidden", "Cambió tu sesión o ficha. Volvé a abrir el perfil.");
+  return ok({ client, orgId, actorId: session.data.cuentaId, sessionId: scope.data.sessionId });
+}
+
 export async function updatePortalContacto(
   input: UpdatePortalContactoInput,
 ): Promise<Result<{ identidadId: string }>> {
@@ -305,31 +332,9 @@ export async function updatePortalContacto(
   }
   const d = parsed.data;
 
-  const session = await getPacienteSession();
-  if (!session.ok) return session;
-
-  const supabase = await createSupabaseServerClient();
-
-  // Gate 1 (app · anti-IDOR): la identidad debe colgar de una ficha `paciente` de la
-  // sesión. Leemos la ficha por identidad_id bajo RLS (M71 sólo devuelve las del
-  // paciente) para obtener su organization_id (necesario para el salt de los hashes).
-  // Si la RLS no la devuelve → not_found (no revelamos existencia de fichas ajenas).
-  const { data: ficha, error: fichaErr } = await supabase
-    .from("paciente")
-    .select("id, organization_id, identidad_id")
-    .eq("identidad_id", d.identidadId)
-    .eq("cuenta_id", session.data.cuentaId)
-    .is("pseudonimizado_en", null)
-    .maybeSingle();
-
-  if (fichaErr) {
-    const mapped = mapSupabaseError(fichaErr);
-    return err(mapped.code, mapped.message, fichaErr.message);
-  }
-  if (!ficha) {
-    return err("not_found", "Esa ficha no está vinculada a tu cuenta.");
-  }
-  const orgId = String(ficha.organization_id);
+  const access = await resolvePortalEditor(d);
+  if (!access.ok) return access;
+  const { client: supabase, orgId, actorId, sessionId } = access.data;
 
   // 3. Construir el UPDATE con SÓLO columnas de contacto. Cada campo se incluye SÓLO
   //    si está presente en el input (undefined = "no tocar"; null/"" = "borrar").
@@ -373,35 +378,15 @@ export async function updatePortalContacto(
     return err("validation", "No hay ningún cambio para guardar.");
   }
 
-  // 4. UPDATE self-scoped bajo RLS (paciente_identidad_update_portal, M86) + el
-  //    trigger-guard. El .eq('id', ...) apunta a la identidad; la RLS ya restringe a
-  //    las del paciente. Si no es suya → 0 filas → conflict.
-  const { data: updated, error: updErr } = await supabase
-    .from("paciente_identidad")
-    .update(patch)
-    .eq("id", d.identidadId)
-    .is("deleted_at", null)
-    .select("id");
-
-  if (updErr) {
-    const mapped = mapSupabaseError(updErr);
-    // El trigger-guard RAISE con ERRCODE 42501 → mapSupabaseError lo mapea a
-    // 'forbidden'; lo enriquecemos para el portal.
-    if (mapped.code === "forbidden") {
-      return err(
-        "forbidden",
-        "No se pudo actualizar tu contacto. Sólo podés editar contacto y domicilio.",
-        updErr.message,
-      );
-    }
-    return err(mapped.code, mapped.message, updErr.message);
-  }
-  if (!updated || updated.length === 0) {
-    return err(
-      "conflict",
-      "No se pudo actualizar tu contacto. Actualizá la página e intentá de nuevo.",
-    );
-  }
+  const { data, error } = await supabase.rpc("patient_portal_contact_cas", {
+    p_org: orgId, p_patient: d.pacienteId, p_identity: d.identidadId,
+    p_admin_revision: d.adminRevision, p_link_revision: d.identityLinkRevision,
+    p_actor: actorId, p_actor_role: "PORTAL", p_session: sessionId, p_patch: patch,
+  });
+  const result = administrativeEditorResult(data, error);
+  if (!result.ok) return result;
+  const stillScoped = await resolvePortalEditor(d);
+  if (!stillScoped.ok) return stillScoped;
 
   return ok({ identidadId: d.identidadId });
 }

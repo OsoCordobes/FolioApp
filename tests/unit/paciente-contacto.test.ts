@@ -4,7 +4,7 @@ import "../../scripts/testing/unit-bootstrap.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { blindIndex, blindIndexPhone } from "../../lib/crypto";
+import { blindIndex, blindIndexPhone, decryptColumn } from "../../lib/crypto";
 import { buildContactoUpdatePayload } from "../../lib/db/pacientes";
 
 const ORG = "a1000000-0000-4000-8000-000000000001";
@@ -53,27 +53,34 @@ test("email y ocupación vacíos se guardan como NULL, no como cadena vacía", (
   // Una cadena vacía en una columna nullable hace que "sin email" y "email
   // borrado" se vean distinto en la base sin serlo.
   const p = buildContactoUpdatePayload({ ...base, email: "", ocupacion: "   " }, ORG);
-  assert.equal(p.ocupacion, null);
+  assert.equal(p.ocupacion_cifrado, null);
   // encryptColumn(null) devuelve null: no se cifra una cadena vacía.
   assert.equal(p.email_cifrado, null);
 });
 
 test("los campos de texto se guardan trimmeados", () => {
   const p = buildContactoUpdatePayload({ ...base, ocupacion: "  Kinesióloga  " }, ORG);
-  assert.equal(p.ocupacion, "Kinesióloga");
+  assert.equal(decryptColumn(p.ocupacion_cifrado as string), "Kinesióloga");
 });
 
 test("todas las columnas de PII salen cifradas, nunca en claro", () => {
   const p = buildContactoUpdatePayload(base, ORG);
   const serializado = JSON.stringify(p);
-  for (const claro of ["Ana", "Pérez", "555 1234", "ana@ejemplo.com"]) {
+  for (const claro of ["Ana", "Pérez", "555 1234", "ana@ejemplo.com", "Docente"]) {
     assert.equal(
       serializado.includes(claro),
       false,
       `"${claro}" no puede aparecer en claro en el payload`,
     );
   }
-  // La ocupación NO es PII sensible y va en claro a propósito (columna sin
-  // cifrar en el esquema) — este assert documenta esa decisión.
-  assert.equal(p.ocupacion, "Docente");
+  assert.equal(decryptColumn(p.ocupacion_cifrado as string), "Docente");
+});
+
+
+test("staff email updates recompute its blind index with the same org salt; clearing removes both", () => {
+  const value = buildContactoUpdatePayload({ ...base, email: "  Ana@Ejemplo.Com  " }, ORG);
+  assert.equal(value.email_hash, blindIndex("ana@ejemplo.com", ORG));
+  assert.equal(decryptColumn(value.email_cifrado as string), "Ana@Ejemplo.Com");
+  const cleared = buildContactoUpdatePayload({ ...base, email: "" }, ORG);
+  assert.equal(cleared.email_cifrado, null); assert.equal(cleared.email_hash, null);
 });

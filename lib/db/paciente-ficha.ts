@@ -43,11 +43,54 @@ import type { ToolHistorialEntry } from "@/lib/especialidades/types";
 import { cordobaDate, instrumentPopulationEligibility, hasInstrumentPayload, omitInstrumentFields } from "@/lib/instrumentos/population-policy";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
+import { adminRevisionSchema, readAdminEditorScope, type AdminEditorSnapshot } from "./pacientes";
+import { getActiveSession } from "./session";
+
 import { listDocumentosPaciente } from "./documentos";
 import { err, ok, type Result } from "./errors";
 import { readCompleteCollection } from "./complete-collection";
 import { readEnmiendas } from "./enmiendas";
 import type { EnmiendaClinica } from "@/lib/ficha/enmienda";
+
+/** Coherent read for both administrative editors; no usable revision on partial reads. */
+async function readAdministrativeEditor(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  pacienteId: string, organizationId: string, identidadId: string,
+) {
+  let coberturaNombre: string | null = null;
+  let coberturaPlan: string | null = null;
+  let coberturaNroAfiliado: string | null = null;
+  let coberturaLeida = false;
+  let adminEditor: AdminEditorSnapshot | null = null;
+  let contacto: { nombre: string; apellido: string; telefono: string; email: string; ocupacion: string } | null = null;
+    const { data: patient, error } = await supabase.from("paciente")
+      .select("id, identidad_id, identity_link_revision::text, paciente_identidad(id, admin_revision::text, nombre_cifrado, apellido_cifrado, telefono_cifrado, email_cifrado, ocupacion_cifrado, cobertura_nombre, cobertura_plan, cobertura_nro_afiliado_cifrado)")
+      .eq("id", pacienteId).eq("organization_id", organizationId).eq("identidad_id", identidadId)
+      .is("deleted_at", null).is("pseudonimizado_en", null).maybeSingle();
+    const embed = patient?.paciente_identidad;
+    const identity = Array.isArray(embed) ? embed[0] : embed;
+    if (!error && identity) {
+      const fields = ["nombre_cifrado", "apellido_cifrado", "telefono_cifrado", "email_cifrado", "ocupacion_cifrado", "cobertura_nro_afiliado_cifrado"] as const;
+      const clear = fields.map(field => tryDecrypt(identity[field], field));
+      const decoded = fields.every((field, index) => identity[field] == null || clear[index] !== null);
+      coberturaNombre = identity.cobertura_nombre ?? null;
+      coberturaPlan = identity.cobertura_plan ?? null;
+      coberturaNroAfiliado = clear[5];
+      coberturaLeida = identity.cobertura_nro_afiliado_cifrado == null || clear[5] !== null;
+      if (decoded && clear[0] && clear[1] && clear[2]) {
+        contacto = { nombre: clear[0], apellido: clear[1], telefono: clear[2], email: clear[3] ?? "", ocupacion: clear[4] ?? "" };
+        const revision = adminRevisionSchema.safeParse(identity.admin_revision);
+        const linkRevision = adminRevisionSchema.safeParse(patient?.identity_link_revision);
+        const session = await getActiveSession();
+        if (revision.success && linkRevision.success && session.ok && session.data.organizationId === organizationId) {
+          const scope = await readAdminEditorScope(supabase, session.data.userId,
+            ["staff", organizationId, session.data.memberId, session.data.role, pacienteId, identity.id]);
+          if (scope.ok) adminEditor = { identidadId: identity.id, adminRevision: revision.data, identityLinkRevision: linkRevision.data, editorScope: scope.data.scope };
+        }
+      }
+    }
+  return { coberturaNombre, coberturaPlan, coberturaNroAfiliado, coberturaLeida, adminEditor, contacto };
+}
 
 // ─── Shapes esperados por el componente (prototipo) ───────────────────────
 
@@ -94,6 +137,8 @@ export interface PacienteFichaInfo {
    * degradado y NO abre el editor (guardaría NULL sobre datos reales).
    */
   coberturaLeida: boolean;
+  /** Only a coherent, decrypted administrative read enables either editor. */
+  adminEditor?: AdminEditorSnapshot | null;
 }
 
 /**
@@ -639,56 +684,23 @@ export async function getPacienteFicha(
   const planDiagnostico = tryDecrypt(planRow?.diagnostico_cifrado, "plan.diagnostico");
   const planNotas = tryDecrypt(planRow?.notas_cifrado, "plan.notas");
 
-  const nombre = tryDecrypt(row.nombre_cifrado, "nombre");
-  const apellido = tryDecrypt(row.apellido_cifrado, "apellido");
-  const fullName = [nombre, apellido].filter(Boolean).join(" ").trim() || "Paciente sin nombre";
+  let nombre = tryDecrypt(row.nombre_cifrado, "nombre");
+  let apellido = tryDecrypt(row.apellido_cifrado, "apellido");
+  let fullName = [nombre, apellido].filter(Boolean).join(" ").trim() || "Paciente sin nombre";
   const motivo = tryDecrypt(row.motivo_consulta_cifrado, "motivo") ?? "";
   const notas = tryDecrypt(row.notas_importantes_cifrado, "notas") ?? "";
-  const tel = tryDecrypt(row.telefono_cifrado, "telefono") ?? "";
-  const email = tryDecrypt(row.email_cifrado, "email") ?? "";
+  let tel = tryDecrypt(row.telefono_cifrado, "telefono") ?? "";
+  let email = tryDecrypt(row.email_cifrado, "email") ?? "";
   // M59 · campos comunes de intake (PII).
-  const ocupacion = tryDecrypt(row.ocupacion_cifrado, "ocupacion") ?? "";
+  let ocupacion = tryDecrypt(row.ocupacion_cifrado, "ocupacion") ?? "";
   const recomendadoPor = tryDecrypt(row.recomendado_por_cifrado, "recomendado_por") ?? "";
 
-  // F7a (M89) · cobertura. La vista `paciente_completo` no expone las columnas
-  // nuevas (las vistas son append-only-por-migración): SELECT chico directo a
-  // paciente_identidad (RLS org-scoped). Best-effort: si falla, la ficha
-  // muestra "Particular" en vez de romperse. El nº de afiliado se descifra acá
-  // (mismo criterio que el resto de la PII de la ficha).
-  let coberturaNombre: string | null = null;
-  let coberturaPlan: string | null = null;
-  let coberturaNroAfiliado: string | null = null;
-  // false → el SELECT falló y los tres campos de arriba son "no sé", NO
-  // "particular". La UI lo usa para no ofrecer el modal de edición: prefillado
-  // en vacío, "Guardar cobertura" pisaría con NULL una cobertura real.
-  let coberturaLeida = true;
-  if (row.identidad_id) {
-    const { data: cobRow, error: cobErr } = await supabase
-      .from("paciente_identidad")
-      .select("cobertura_nombre, cobertura_plan, cobertura_nro_afiliado_cifrado")
-      .eq("id", row.identidad_id)
-      .eq("organization_id", organizationId)
-      .maybeSingle();
-    if (cobErr) {
-      // Degradamos la ficha, no la rompemos — pero con señal: una regresión de
-      // schema/RLS acá se vería como "Particular" en todas las fichas.
-      coberturaLeida = false;
-      safeLog("error", "lib.db.paciente.ficha.L672", { error: cobErr });
-      const { captureException } = await import("@sentry/nextjs");
-      captureException(new Error(`Cobertura ficha falló — ${cobErr.message}`), {
-        tags: { component: "paciente-ficha", op: "cobertura" },
-      });
-    }
-    if (cobRow) {
-      const c = cobRow as {
-        cobertura_nombre: string | null;
-        cobertura_plan: string | null;
-        cobertura_nro_afiliado_cifrado: string | null;
-      };
-      coberturaNombre = c.cobertura_nombre ?? null;
-      coberturaPlan = c.cobertura_plan ?? null;
-      coberturaNroAfiliado = tryDecrypt(c.cobertura_nro_afiliado_cifrado, "cobertura.nro_afiliado");
-    }
+  // Contact and revision come from one identity read, never from two different snapshots.
+  const administrative = row.identidad_id ? await readAdministrativeEditor(supabase, pacienteId, organizationId, row.identidad_id) : null;
+  const { coberturaNombre = null, coberturaPlan = null, coberturaNroAfiliado = null, coberturaLeida = false, adminEditor = null } = administrative ?? {};
+  if (administrative?.contacto) {
+    ({ nombre, apellido, telefono: tel, email, ocupacion } = administrative.contacto);
+    fullName = `${nombre} ${apellido}`;
   }
 
   const cerrados = turnos.filter((t) => t.estado === "CERRADO");
@@ -829,6 +841,7 @@ export async function getPacienteFicha(
     coberturaPlan,
     coberturaNroAfiliado,
     coberturaLeida,
+    adminEditor,
   };
 
   const proximoTurno = turnos.find((t) =>

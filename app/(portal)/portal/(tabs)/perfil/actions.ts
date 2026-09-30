@@ -17,10 +17,12 @@ import { z } from "zod";
 
 import type { Result } from "@/lib/db/errors";
 import { err } from "@/lib/db/errors";
+import { adminEditorShape } from "@/lib/db/pacientes";
 import { updatePortalContacto } from "@/lib/db/portal-perfil";
 
 const updateContactoInput = z.object({
-  identidadId: z.string().uuid(),
+  ...adminEditorShape,
+  pacienteId: z.string().uuid(),
   email: z.string().email().max(320).nullable().optional(),
   telefono: z.string().min(6).max(30).nullable().optional(),
   domicilioCalle: z.string().max(120).nullable().optional(),
@@ -28,7 +30,7 @@ const updateContactoInput = z.object({
   domicilioCiudad: z.string().max(60).nullable().optional(),
   domicilioProvincia: z.string().max(60).nullable().optional(),
   domicilioCp: z.string().max(15).nullable().optional(),
-});
+}).strict();
 
 export async function actualizarContactoAction(
   input: z.infer<typeof updateContactoInput>,
