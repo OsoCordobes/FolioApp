@@ -14,6 +14,11 @@ interface LinkRow {
   cuenta_id: string | null;
   pseudonimizado_en: string | null;
 }
+interface IdentityRow {
+  id: string;
+  organization_id: string;
+  deleted_at: string | null;
+}
 export interface PortalExportAuthority {
   readonly userId: string;
   readonly cuentaId: string;
@@ -23,6 +28,29 @@ export interface PortalExportAuthority {
 const changed = () => err("conflict", "El acceso a tus fichas cambió durante la descarga. Intentá nuevamente desde el portal.");
 const unavailable = () => err("network", "No se pudo verificar el acceso a tus fichas. Intentá nuevamente.");
 const nonempty = (value: unknown): value is string => typeof value === "string" && value.length > 0;
+
+/** M71 can hide an identity while its patient row and identidad_id stay visible.
+ * Confirm actual identity SELECT access under the same user RLS, in bounded
+ * batches with complete counted pagination. Never select PII or use service-role. */
+async function verifyVisibleIdentities(client: Client, links: PortalExportAuthority["links"]): Promise<Result<void>> {
+  const expected = new Map<string, string>();
+  for (const link of links) {
+    if (expected.has(link.identityId) && expected.get(link.identityId) !== link.organizationId) return changed();
+    expected.set(link.identityId, link.organizationId);
+  }
+  const ids = [...expected.keys()];
+  for (let start = 0; start < ids.length; start += 200) {
+    const batch = ids.slice(start, start + 200);
+    const requested = new Set(batch);
+    const result = await readCompleteCollection<IdentityRow>((from, to) => client.from("paciente_identidad")
+      .select("id, organization_id, deleted_at", { count: "exact" })
+      .in("id", batch).is("deleted_at", null).order("id", { ascending: true }).range(from, to));
+    if (result.error) return unavailable();
+    if (result.data.length !== batch.length || result.data.some(row => !requested.has(row.id) ||
+        row.organization_id !== expected.get(row.id) || row.deleted_at !== null)) return changed();
+  }
+  return ok(undefined);
+}
 
 /** User client only. Counted pagination prevents the session's unpaginated fan-out
  * from certifying a partial download. Only existing account-linked rows qualify. */
@@ -38,6 +66,8 @@ export async function capturePortalExportAuthority(client: Client, session: Pick
       row.cuenta_id !== session.cuentaId || row.pseudonimizado_en !== null)) return changed();
   const links = result.data.map(row => Object.freeze({ pacienteId: row.id, organizationId: row.organization_id, identityId: row.identidad_id! }))
     .sort((a, b) => a.pacienteId.localeCompare(b.pacienteId));
+  const visible = await verifyVisibleIdentities(client, links);
+  if (!visible.ok) return visible;
   return ok(Object.freeze({ userId: session.userId, cuentaId: session.cuentaId, links: Object.freeze(links) }));
 }
 
