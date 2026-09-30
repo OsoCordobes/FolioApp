@@ -7,10 +7,14 @@ import { createServerClient } from "@supabase/ssr";
 import type { Page } from "@playwright/test";
 import { expect, test } from "../fixtures/local-test";
 import { AUDIT_BARRIER_SQL, auditBarrierObserved, assertPortalFixture, PORTAL_EXPORT_FIXTURE_NAME,
-  PORTAL_EXPORT_MARKERS, type PortalProofFixture } from "../../scripts/testing/caller-proof/portal-export-contract";
+  PORTAL_EXPORT_MARKERS, PORTAL_EXPORT_FAILURE_PREFIX, portalFailure,
+  type PortalProofPhase, type PortalProofFixture } from "../../scripts/testing/caller-proof/portal-export-contract";
 
 const APP = "http://localhost:4430";
 const HIDDEN_AT = "2026-09-30T00:00:00Z";
+function diagnose(error: unknown, context: Parameters<typeof portalFailure>[1]) {
+  console.log(PORTAL_EXPORT_FAILURE_PREFIX + JSON.stringify(portalFailure(error, context)));
+}
 
 async function authenticated(page: Page) {
   assert.equal(process.env.CI, "true"); assert.equal(process.env.FOLIO_TEST_REAL_SUPABASE, "1");
@@ -73,11 +77,14 @@ async function ownedState(db: Client, fixture: PortalProofFixture) {
 
 async function barrierCase(page: Page, kind: "revoke" | "identity") {
   const { fixture, actor } = await authenticated(page);
-  await positive(page, fixture); // Warm the real route before taking the audit lock.
+  try { await positive(page, fixture); } // Warm the real route before taking the audit lock.
+  catch (error) { diagnose(error, { case: kind, phase: "positive" }); throw error; }
   const target = fixture.links[0];
   const db = new Client({ connectionString: fixture.databaseUrl, connectionTimeoutMillis: 10_000, query_timeout: 15_000 });
   await db.connect();
   let request: ReturnType<Page["request"]["get"]> | undefined;
+  let primaryFailed = false;
+  let phase: PortalProofPhase = "owned";
   try {
     await ownedState(db, fixture);
     try {
@@ -87,11 +94,13 @@ async function barrierCase(page: Page, kind: "revoke" | "identity") {
       let settled = false;
       request = page.request.get(`${APP}/api/portal/export`, { maxRedirects: 0, timeout: 20_000 });
       void request.then(() => { settled = true; }, () => { settled = true; });
+      phase = "barrier";
       await expect.poll(async () => {
         assert.equal(settled, false, "portal_request_completed_before_audit_barrier");
         const result = await db.query(AUDIT_BARRIER_SQL, [lockerPid]);
         return auditBarrierObserved(result.rows, lockerPid);
       }, { timeout: 10_000, intervals: [20, 50, 100], message: "real audit INSERT must be blocked by the owned PID" }).toBe(true);
+      phase = "mutation";
       if (kind === "revoke") {
         const changed = await db.query(`UPDATE public.paciente SET cuenta_id=NULL
           WHERE id=$1 AND organization_id=$2 AND identidad_id=$3 AND cuenta_id=$4 AND pseudonimizado_en IS NULL RETURNING id`,
@@ -103,6 +112,7 @@ async function barrierCase(page: Page, kind: "revoke" | "identity") {
         assert.equal(changed.rowCount, 1, "portal_owned_identity_missing");
       }
       await db.query("COMMIT"); // The change and barrier release become visible together.
+      phase = "response";
       const response = await request;
       assert.equal(response.status(), 409, "portal_revocation_status");
       assert.equal(response.headers()["content-disposition"], undefined); assert.equal(response.headers()["cache-control"], "no-store");
@@ -110,6 +120,7 @@ async function barrierCase(page: Page, kind: "revoke" | "identity") {
       for (const value of ["Paciente sintético", "organizaciones", "historia_clinica", fixture.userId, fixture.cuentaId,
         ...fixture.links.flatMap(link => Object.values(link))]) assert.equal(text.includes(value), false);
       assert.equal(JSON.parse(text).error.code, "conflict");
+      phase = "rls";
       const visiblePatient = await actor.from("paciente").select("id,identidad_id").eq("id", target.patientId);
       assert.equal(visiblePatient.error, null);
       if (kind === "identity") {
@@ -118,7 +129,10 @@ async function barrierCase(page: Page, kind: "revoke" | "identity") {
         assert.equal(hidden.error, null); assert.deepEqual(hidden.data, []);
       } else assert.deepEqual(visiblePatient.data, []);
       console.log(PORTAL_EXPORT_MARKERS[kind === "revoke" ? 2 : 4]);
+    } catch (error) {
+      primaryFailed = true; diagnose(error, { case: kind, phase }); throw error;
     } finally {
+      try {
       // On timeout/error, release the lock before awaiting any still-pending GET.
       await db.query("ROLLBACK");
       if (request) await request.catch(() => undefined);
@@ -131,20 +145,37 @@ async function barrierCase(page: Page, kind: "revoke" | "identity") {
       [target.patientId, target.organizationId, target.identityId, fixture.cuentaId]);
       assert.equal(restoredLink.rowCount, 1, "portal_link_restore_missing");
       await ownedState(db, fixture);
+      } catch (error) {
+        diagnose(error, { case: kind, phase: "restore", secondary: primaryFailed });
+        if (!primaryFailed) { primaryFailed = true; throw error; }
+      }
     }
-  } finally { await db.end(); }
-  await positive(page, fixture);
+  } catch (error) {
+    if (!primaryFailed) { primaryFailed = true; diagnose(error, { case: kind, phase }); }
+    throw error;
+  } finally {
+    try { await db.end(); } catch (error) {
+      diagnose(error, { case: kind, phase: "cleanup", secondary: primaryFailed });
+      if (!primaryFailed) throw error;
+    }
+  }
+  try { await positive(page, fixture); }
+  catch (error) { diagnose(error, { case: kind, phase: "positive" }); throw error; }
   console.log(PORTAL_EXPORT_MARKERS[kind === "revoke" ? 3 : 5]);
 }
 
 test("portal real Auth and RLS deliver only the linked multi-org JSON", async ({ page }) => {
   test.setTimeout(120_000);
-  const { fixture } = await authenticated(page); await positive(page, fixture);
-  console.log(PORTAL_EXPORT_MARKERS[1]);
+  try {
+    const { fixture } = await authenticated(page); await positive(page, fixture);
+    console.log(PORTAL_EXPORT_MARKERS[1]);
+  } catch (error) { diagnose(error, { case: "positive", phase: "positive" }); throw error; }
 });
 test("portal link revocation at the real audit barrier rejects the prepared JSON", async ({ page }) => {
-  test.setTimeout(120_000); await barrierCase(page, "revoke");
+  test.setTimeout(120_000);
+  try { await barrierCase(page, "revoke"); } catch (error) { diagnose(error, { case: "revoke", phase: "auth" }); throw error; }
 });
 test("portal identity hidden by RLS at the real audit barrier rejects unchanged IDs", async ({ page }) => {
-  test.setTimeout(120_000); await barrierCase(page, "identity");
+  test.setTimeout(120_000);
+  try { await barrierCase(page, "identity"); } catch (error) { diagnose(error, { case: "identity", phase: "auth" }); throw error; }
 });

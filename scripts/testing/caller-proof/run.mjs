@@ -17,7 +17,8 @@ import {openLoopbackBridge,validateBridgeTarget,waitForBridgeTarget} from '../..
 
 const repo=path.resolve(fileURLToPath(new URL('../../../',import.meta.url)));
 const compose=path.join(repo,'scripts/recovery/ci-compose.yml');
-const {proofMode,proofSpecs,PORTAL_EXPORT_FIXTURE_NAME,portalExportResult,assertPortalFixture}=portalContract;
+const {proofMode,proofSpecs,PORTAL_EXPORT_FIXTURE_NAME,PORTAL_EXPORT_RECEIPT_NAME,portalExportResult,
+ portalProofReceipt,addPortalFailure,assertPortalFixture}=portalContract;
 const mode=proofMode(process.argv.slice(2));
 const portal=mode==='portal-export';
 const prefix=portal?'portal_export_proof':'caller_proof';
@@ -25,11 +26,22 @@ const project='folio_caller_proof';
 const upstreamCommit='8c7a4d9dbbaf8b552893822e89d7bf06f33f9220';
 const api='http://127.0.0.1:55421';
 const fixtureFile=path.join(tmpdir(),portal?PORTAL_EXPORT_FIXTURE_NAME:'folio-caller-proof-fixture.json');
+const receiptFile=path.join(tmpdir(),PORTAL_EXPORT_RECEIPT_NAME);
 const random=bytes=>randomBytes(bytes).toString('base64url');
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const options={auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}};
 const stages=new Set(['pull','services','migrations','schema','auth','fixture','browser','complete']);
 const serviceNames=['db','auth','rest','storage','minio','minio-createbucket','api-gw'];
+function retainFailure(state,error,phase){
+ state.portalReceipt=addPortalFailure(state.portalReceipt,error,{case:'runner',phase});
+ state.portalReceipt.exitCode=1;process.exitCode=1;
+}
+async function preservePortalReceipt(state){
+ try{
+  await writeFile(receiptFile,JSON.stringify(state.portalReceipt)+'\n',{flag:state.receiptOwned?'w':'wx',mode:0o600});
+  state.receiptOwned=true;
+ }catch(error){retainFailure(state,error,'receipt');console.error('portal_export_proof_receipt_failed');}
+}
 
 async function finiteServicesDiagnostic(env,step){
  try{
@@ -204,8 +216,10 @@ async function main(){
  assert.equal((await must('git',['-C',path.dirname(official),'rev-parse','HEAD'])).trim(),upstreamCommit);
  assert.equal((await must('psql',['--version'])).match(/\b(\d+)\./)?.[1],'17');
  try{await access(fixtureFile);throw Error('fixture_not_fresh');}catch(error){if(error.code!=='ENOENT')throw error;}
+ if(portal)try{await access(receiptFile);throw Error('receipt_not_fresh');}catch(error){if(error.code!=='ENOENT')throw error;}
  const secret=random(48),dbPassword=random(32);
- const state={dbPassword,anonKey:token(secret,'anon'),serviceKey:token(secret,'service_role')};
+ const state={dbPassword,anonKey:token(secret,'anon'),serviceKey:token(secret,'service_role'),
+  portalReceipt:{version:1,passed:false,exitCode:1,markers:[],primary:null,secondary:[]}};
  const env={...process.env,C01_OFFICIAL_DOCKER:official,C01_DB_PASSWORD:dbPassword,C01_JWT_SECRET:secret,C01_ANON_KEY:state.anonKey,C01_SERVICE_KEY:state.serviceKey,
   C01_DASHBOARD_PASSWORD:random(18),C01_APP_DATABASE:'postgres',C01_CRON_DATABASE:'postgres',C01_S3_BUCKET:'caller-proof-synthetic',C01_MINIO_USER:random(18),C01_MINIO_PASSWORD:random(36)};
  assert.equal((await dc(['ps','-q'],env)).trim(),'','project_not_fresh');
@@ -224,8 +238,10 @@ async function main(){
   const result=await run('pnpm',['test:e2e','--',...proofSpecs(mode),'--trace=off','--reporter=list'],{env:browserEnv,timeout:900000,limit:2000000});
   if(portal){
    const receipt=portalExportResult(result.output);
+   state.portalReceipt=portalProofReceipt(result.output,result.code);
+   await preservePortalReceipt(state); // Durable finite evidence BEFORE throwing or deleting the backend.
    for(const marker of receipt.markers)console.log(marker);
-   if(result.code!==0||!receipt.passed)throw Error('portal_export_missing_pass');
+   if(result.code!==0||!receipt.passed||!state.portalReceipt.passed)throw Error('portal_export_missing_pass');
    stage='complete';state.portalMigrations=count;
    console.log('portal_export_proof_tests:passed=3 skipped=0');
    return;
@@ -246,7 +262,8 @@ async function main(){
   for(const required of ['pair_issued','screen_paired','called_on_screen','lost_response_reused','visit_unchanged','polling_bounded','reconnect_silent','revoked_after_reload'])
    assert.ok(markers.some(item=>item.stage===required),'caller_stage_missing');
   stage='complete';console.log(`caller_proof_pass:migrations=${count} polls_11s=${markers.find(item=>item.stage==='polling_bounded')?.visible11s} hidden_6s=0`);
- }catch{
+ }catch(error){
+  if(portal){retainFailure(state,error,stages.has(stage)?stage:'preflight');await preservePortalReceipt(state);}
   if(stage==='services')console.error(`${prefix}_services_diagnostic:${await finiteServicesDiagnostic(env,servicesStep)}`);
   console.error(`${prefix}_${stages.has(stage)?stage:'unclassified'}_failed`);
   process.exitCode=1;
@@ -269,18 +286,21 @@ async function main(){
      }
      console.log('portal_export_proof_restore:owned=2 identities=visible');
     });
-   }catch{console.error('portal_export_proof_restore_failed');process.exitCode=1;}
+   }catch(error){retainFailure(state,error,'restore');console.error('portal_export_proof_restore_failed');}
   }
-  if(state.fixtureOwned)await unlink(fixtureFile).catch(()=>{process.exitCode=1;});
-  await apiBridge?.close();await dbBridge?.close();
-  await dc(['down','-v'],env).catch(()=>{process.exitCode=1;});
+  if(portal)await preservePortalReceipt(state);
+  const cleanupFailure=error=>{if(portal)retainFailure(state,error,'cleanup');else process.exitCode=1;};
+  if(state.fixtureOwned)await unlink(fixtureFile).catch(cleanupFailure);
+  await apiBridge?.close().catch(cleanupFailure);await dbBridge?.close().catch(cleanupFailure);
+  await dc(['down','-v'],env).catch(cleanupFailure);
   if(portal){
    try{
     assert.equal((await dc(['ps','-q'],env)).trim(),'','portal_cleanup_containers_remaining');
     assert.equal((await docker(['volume','ls','-q','--filter',`label=com.docker.compose.project=${project}`],env)).trim(),'','portal_cleanup_volumes_remaining');
     assert.equal((await docker(['network','ls','-q','--filter',`label=com.docker.compose.project=${project}`],env)).trim(),'','portal_cleanup_network_remaining');
     console.log('portal_export_proof_cleanup:containers=0 volumes=0 networks=0');
-   }catch{console.error('portal_export_proof_cleanup_failed');process.exitCode=1;}
+   }catch(error){retainFailure(state,error,'cleanup');console.error('portal_export_proof_cleanup_failed');}
+   await preservePortalReceipt(state);
    if(stage==='complete'&&process.exitCode!==1)console.log(`portal_export_proof_pass:tests=3 skipped=0 migrations=${state.portalMigrations} restored=1 cleanup=1`);
   }
  }
