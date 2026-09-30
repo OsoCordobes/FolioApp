@@ -2,9 +2,9 @@
 
 Actualizado: 30/09/2026, horario de Copenhague. [El tablero técnico](LAUNCH-BOARD.md) conserva el detalle y los antecedentes. Cada fila cambia sólo ante un resultado o bloqueo real.
 
-**Equipo comprobado:** **B** aprobó el ensayo del guardado. **D** aprobó el portal y el ensayo completo de incorporación de la ficha, ambos contrastados por A. **C** cerró la corrección del respaldo automático. **D** prepara la publicación conjunta de privacidad; **Legal/SEO** revisa la integración y **Landing** integra la propuesta cinematográfica en una copia de la app para que puedas probarla. Su publicación sigue pendiente. D y Legal usan **Sol6.1 High**, Landing **Sol6.1 Ultra** y C **Sol6.1 Medium**. **A** dirige prioridades y aceptación; dos escritores como máximo y evidencia por entrega.
+**Tanda cerrada:** D integró privacidad, dos revisores la comprobaron y C la publicó; A contrastó controles, versión, dominios y evidencia. La propuesta de landing fue rechazada y se conservó la estructura publicada. B, C, D, Legal y Landing quedaron inactivos; no hay trabajo nuevo abierto.
 
-**Cierre solicitado ahora:** terminar privacidad, la vista real de la nueva landing y su verificación; avisarte antes de abrir trabajo nuevo. La siguiente propuesta priorizará lo que falta para atender a los primeros clientes. Preparar herramientas o escribir informes no se contará como una mejora visible del producto.
+**Cierre del30/09:** privacidad publicada; propuesta de landing descartada, sin contarla como mejora. La [propuesta del próximo ciclo](NEXT-LAUNCH-CYCLE.md) prioriza lo necesario para atender a los primeros clientes. Preparar herramientas o informes no cuenta como función entregada.
 
 **Regla de evidencia:** cada encargo tiene una razón, alcance y condición de cierre. Al terminar deja el cambio, una prueba verificable y sus límites; A contrasta el resultado antes de marcarlo terminado. Un fallo se conserva y sólo se repite la prueba cuando hay información o una corrección nueva.
 
@@ -15,7 +15,7 @@ Actualizado: 30/09/2026, horario de Copenhague. [El tablero técnico](LAUNCH-BOA
 | Checkpoint | Resultado, responsable y prueba |
 |---|---|
 | **Forma de trabajo** · guía revisada y prueba aislada publicada | La [guía](https://github.com/OsoCordobes/FolioApp/pull/187) superó la auditoría solicitada. [PR189 publicada](https://github.com/OsoCordobes/FolioApp/pull/189) permite ensayos de datos por versión exacta, sin crear un entorno pago; CI y despliegue comprobados. |
-| **Landing de Folio** · versión clara en integración local | Por tu corrección en el chat de diseño, vuelve a una base clara y clínica con la identidad de Folio; conserva el recorrido animado. Se integra en la app real con precios y enlaces reales. La propuesta anterior4441 queda como antecedente; la nueva vista y su revisión siguen pendientes. |
+| **Landing de Folio** · base publicada conservada | Por tu devolución se descartó la propuesta recortada. [La versión publicada](https://foliosalud.com/) conserva su estructura; el código local se restauró exactamente y la propuesta queda como antecedente. No hubo publicación del rediseño ni mejora visual aceptada en esta tanda. |
 | **Ingreso y onboarding** · acceso y servicios publicados | [PR175](https://github.com/OsoCordobes/FolioApp/pull/175): registro y recuperación. D · revisión A; [PR177 publicada](https://github.com/OsoCordobes/FolioApp/pull/177): servicios conservados al volver y ante respuesta perdida, [prueba Solo/Clínica](https://github.com/OsoCordobes/FolioApp/actions/runs/36088410093). |
 | **Permisos de Clínica** · dos paquetes publicados | Pedidos y motivos protegidos según el rol: [PR170](https://github.com/OsoCordobes/FolioApp/pull/170). C · revisión A; [PR174 publicada](https://github.com/OsoCordobes/FolioApp/pull/174) impide entregar una firma si se revoca el acceso durante su descarga. |
 | **Recuperación completa** · ensayo aprobado e integrado | Datos, archivos, contraseña y segundo factor recuperados con datos ficticios. C · revisión A. [Prueba aprobada](https://github.com/OsoCordobes/FolioApp/actions/runs/36073216478), [entrega integrada](https://github.com/OsoCordobes/FolioApp/pull/167); custodia externa pendiente. |
@@ -34,7 +34,7 @@ Actualizado: 30/09/2026, horario de Copenhague. [El tablero técnico](LAUNCH-BOA
 | **Validación profesional y piloto** · preparación lista, validación pendiente | D preparó la [hoja del piloto](https://github.com/OsoCordobes/FolioApp/blob/codex/launch-checkpoints/docs/D-CALIDAD-PILOTO.md), revisada por A. Define recorridos, responsables y decisiones pendientes; todavía no habilita el piloto ni acredita las cinco especialidades. |
 | **Lanzamiento** · pendiente | Se cerrará cuando la versión publicada y la oferta comercial coincidan con lo demostrado. |
 
-**Última publicación comprobada:** [PR190 · privacidad](https://github.com/OsoCordobes/FolioApp/pull/190), con controles y ambos dominios verificados. Para probar mejoras visibles anteriores: Configuración → Pantallas de espera, luego Hoy → Llamar; y Mis datos y solicitudes → Archivo clínico. La nueva landing sigue en revisión. [Propuesta del próximo ciclo](NEXT-LAUNCH-CYCLE.md): cerrar recorridos para primeros clientes sin abrir otra campaña de funciones.
+**Última publicación comprobada:** [PR190 · privacidad](https://github.com/OsoCordobes/FolioApp/pull/190), con controles del candidato y master, despliegue y ambos dominios verificados. Para revisar hoy: la landing publicada y, con una cuenta de prueba existente, el ingreso y descarga desde el portal. [Próximo ciclo propuesto](NEXT-LAUNCH-CYCLE.md): completar recorridos para primeros clientes. Cuota leída30/09 11:20UTC:41%disponible, un reset y62497,46créditos. Esta lectura es de la cuenta compartida, no consumo por agente.
 
 **Forma de trabajo:** continuar mientras haya trabajo útil, cerrar cada paquete con evidencia y tomar el siguiente. La reanudación horaria es respaldo ante un corte, no una espera entre tareas.
 
