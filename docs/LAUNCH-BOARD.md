@@ -1,6 +1,6 @@
 # Folio — tablero único de lanzamiento
 
-Actualizado: 30/09/2026, 01:14 UTC. Esta página es el estado operativo vigente. [AVANCES.md](AVANCES.md) es la vista breve del titular; el panel4420 está detenido y el registro permanece disponible como documento/Git.
+Actualizado: 30/09/2026, 01:09 UTC. Esta página es el estado operativo vigente. [AVANCES.md](AVANCES.md) es la vista breve del titular; el panel4420 está detenido y el registro permanece disponible como documento/Git.
 
 El historial anterior se conserva íntegro en [LAUNCH-BOARD-HISTORY-20260929-2050.md](LAUNCH-BOARD-HISTORY-20260929-2050.md), SHA256 f725a510211fce532871057d83063ad800f7ea419c1ebd537f2070fa93c767a0. Sus cortes fechados son antecedentes, no asignaciones actuales.
 
@@ -40,6 +40,10 @@ Reasignación23:02UTC por petición de iniciativa del titular: B continúa ensay
 - **Gate adicional H3:** tras el hallazgo contractual de Vercel, A no autoriza ampliar recolección clínica real con PR188 sólo por recuperar el respaldo. Hace falta acreditar cobertura aplicable o preparar por separado una entrega restringida técnicamente a ensayo sintético y revisarla. No implementar un bypass ni apagar/migrar producción por inferencia. PR189 sólo-CI y el ensayo PG16 de M148 continúan.
 
 ## Respaldo: hechos, artefactos y autorización
+
+**R8 UpdateOnly autorizado01:09UTC, pendiente de resultado:** A verificó siete hashes/Plan/revisión final y Execute nativo; autoriza UNA invocación PS5.1 `r8-runtime-timeout300-updateonly-operator.ps1 -Mode Execute`, SHA `84db6fafd35e9a0d0e799ec1b0bc5fdb1e5f870f5f3eb5eff63820f665765928`, Plan `9fecf94508daef2292cc749a7d1f7e914d1913c649ceea49e81d809d9f6ea379`, paquete `2b8db6544b549d1ec9f16547e5c619bef83b3c7496a17698e5e9c6ff748c8e30`. Pruebas puras semánticas6/baseline6/postUpdate5/status6/installer8, revisión46029084PASS tras corregir recibo que podía dar exit0 con deriva. Sólo principalCAS6408→runtime300 probado, Start0/captura0/statusmanual0; preservar XML/identidad/triggers/PT20M/IgnoreNew/cuatrocopias/138incompletos. Revalidación fresca obligatoria, ninguna guarda relajada ni retry. Salida/código/recibo y readback único necesarios; no confundir autorización con instalación. Próxima automática se deja ocurrir sola.
+
+**Automático00:57 cerrado:** recibo `r8-runtime-timeout300-automatic-reconciliation-v1.json` SHA `72c5253241e6ab29073769463bf2c2d60897a277f92ea209ded574d60c37039d`. Ready/LastResult0, CAS6408, lastRun00:57:11 y próxima01:57:10; status `efa26ed1bba3e0ade580598bbc5424ef6fb2ee473ea8c1f300e2714357763a5b` verification_attention/not_due, catchUpDue=false, backup nuevo y cuatrocopias/138incompletos intactos. Es resultado automático real con advertencia histórica legítima, no status manual ni nueva captura. A leyó/contrastó recibo; no repetir por rutina.
 
 **Siguiente paquete de C autorizado sólo para preparar:** derivar UpdateOnly mínimo de operadorR1 hacia manifest e63d36ca/launcher7a7c777d/capture48014864 ya probado, sin nuevo runtime/framework. Guardas semánticas SID/null/rutas/duración correctas, baseprincipalCAS6408, preservar XML/rollback/config/triggers/PT20M y cuatro copias. Pruebas puras UpdateOnly/Start0/discordancias/parsePS5.1; revisor independiente A. Dejar automática00:57 ocurrir sola, reconciliar una vez y usar baseline fresco. Ninguna actualización/registro/Start/Execute autorizada todavía; no escribir status ficticio ni reparar/reensayar wrapper consumido.
 
