@@ -173,6 +173,14 @@ jobs:
           FOLIO_M148_SYNTHETIC: '1'
         run: node tests/concurrency/M148_patient_intake_incorporation.mjs
 
+      - name: Run M150 real PostgreSQL administrative editor races
+        if: hashFiles('tests/concurrency/M150_patient_admin_editor_cas.mjs') != ''
+        timeout-minutes: 3
+        env:
+          FOLIO_M150_SYNTHETIC: '1'
+          FOLIO_M150_EXPECTED_SHA: ${{ inputs.expected_sha || github.sha }}
+        run: node tests/concurrency/M150_patient_admin_editor_cas.mjs
+
       - name: Summary
         if: always()
         run: |
