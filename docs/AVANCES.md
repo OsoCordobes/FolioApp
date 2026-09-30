@@ -2,7 +2,7 @@
 
 Actualizado: 30/09/2026, horario de Copenhague. [El tablero técnico](LAUNCH-BOARD.md) conserva el detalle y los antecedentes. Cada fila cambia sólo ante un resultado o bloqueo real.
 
-**Tanda cerrada:** D integró privacidad, dos revisores la comprobaron y C la publicó; A contrastó controles, versión, dominios y evidencia. La propuesta de landing fue rechazada y se conservó la estructura publicada. B, C, D, Legal y Landing quedaron inactivos; no hay trabajo nuevo abierto.
+**Ahora:** por pedido del titular, abrimos una pasada de coherencia visual sobre la versión publicada. Dos revisiones independientes identifican qué corregir; después se aplicará y comprobará en una copia aislada. [Plan y criterios](DESIGN-COHERENCE-PLAN.md). Todavía no se cuenta como mejora entregada.
 
 **Cierre del30/09:** privacidad publicada; propuesta de landing descartada, sin contarla como mejora. La [propuesta del próximo ciclo](NEXT-LAUNCH-CYCLE.md) prioriza lo necesario para atender a los primeros clientes. Preparar herramientas o informes no cuenta como función entregada.
 

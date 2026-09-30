@@ -10,7 +10,7 @@ A dirige prioridades, aceptación y presupuesto. Máximo dos escritores aislados
 
 Automatización `folio-manager-por-checkpoints`: PAUSED, sin modificar esa preferencia. Continuar directamente mientras haya trabajo útil; no esperar la hora ni prometer ejecución ininterrumpida.
 
-**Instrucción vigente del titular30/09:** cerrar la tanda en curso y avisar antes de abrir nuevos paquetes. Alcance de cierre: integración/publicación de privacidad tras revisión y CI; port local de landing con prueba visual y revisión; lectura de preparación Vercel. Después presentar un modo de trabajo centrado en primeros clientes con el reset y créditos disponibles. No ampliar campañas para gastar cuota. Esta instrucción reemplaza, para el corte actual, continuar indefinidamente de un paquete al siguiente.
+**Instrucción vigente del titular30/09, posterior al cierre:** abrir una pasada acotada de coherencia visual: criticar lo publicado, estudiar referencias profesionales y aplicar un sistema consistente a landing y superficies públicas. Mantener la estructura completa preferida, identidad violeta y comportamiento existente. Esta autorización reabre diseño, no los frentes clínicos ni los proveedores. [Plan y aceptación](DESIGN-COHERENCE-PLAN.md). El cierre anterior se conserva como antecedente.
 
 ## Equipo y siguiente acción
 
@@ -22,7 +22,7 @@ Automatización `folio-manager-por-checkpoints`: PAUSED, sin modificar esa prefe
 | Legal/SEO | S1 y runner70ee23PASS, Node22 cubierto por CI app/callerPASS. PR190 publicada. Inactivo; P1/L4/H3 siguen retenidos. |
 | Landing | CERRADO como propuesta descartada, sin mejora visual aceptada. Corrección humana final: conservar estructura publicada. c2011f4 restaurado tiene árbol íntegro4d24aa2 iguala60/diffvacío; b508f82 preservado y no integrable. Producción36d6 sigue intacta de marketing. Revisión independiente y A verificaron igualdad; servidor propio4452detenido. |
 
-No quedan escritores ni operadores activos en esta tanda. B/D/C/Legal/Landing quedaron inactivos tras sus cierres. [Propuesta del próximo ciclo](NEXT-LAUNCH-CYCLE.md) preparada para el titular; no se inició otro paquete. Automatización siguePAUSED.
+La tanda anterior terminó sin escritores activos. En la nueva pasada visual, A dirige y dos agentes independientes inspeccionan diseño y evidencia, sin modificar producto todavía. Implementación aislada desde master36d6c8f; máximo dos escritores, revisión independiente al terminar. [Propuesta del próximo ciclo](NEXT-LAUNCH-CYCLE.md) sigue pendiente fuera de esta pasada. Automatización sigue PAUSED.
 
 ## Producción y publicaciones
 
