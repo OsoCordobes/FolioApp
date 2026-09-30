@@ -20,9 +20,9 @@ Automatización `folio-manager-por-checkpoints`: PAUSED, sin modificar esa prefe
 | D · Experiencia | Integración cerrada70ee23ad:19rutas,8/8producto idéntico,48units+6bridge/tipos/lintPASS. Revisión independiente doblePASS; A contrastó19blobs/27hashes. Sin nueva implementación. |
 | C · Continuidad | PR190 publicada/verificada; cierre aceptado por A. R8 cerrado. Inactivo tras este cierre, sin nuevo paquete. |
 | Legal/SEO | S1 y runner70ee23PASS, Node22 cubierto por CI app/callerPASS. PR190 publicada. Inactivo; P1/L4/H3 siguen retenidos. |
-| Landing | CERRADO como propuesta descartada, sin mejora visual aceptada. Corrección humana final: conservar estructura publicada. c2011f4 restaurado tiene árbol íntegro4d24aa2 iguala60/diffvacío; b508f82 preservado y no integrable. Producción36d6 sigue intacta de marketing. Revisión independiente y A verificaron igualdad; servidor propio4452detenido. |
+| Diseño / Landing | PR191 candidato c49ec628, árbol fca93dd2: sistema coherente implementado, revisión independiente SHIP, tipos/lint/build y 12 E2E + 14 baselines calibradas aprobados. A contrastó 14/14 fuentes revisadas y nueve archivos protegidos. Vista4460. Publicación retenida por access-proof 36746380991 FAILURE; operador diagnostica, sin rerun ciego. Propuesta recortada anterior descartada y preservada. |
 
-La tanda anterior terminó sin escritores activos. En la nueva pasada visual, A dirige y dos agentes independientes inspeccionan diseño y evidencia, sin modificar producto todavía. Implementación aislada desde master36d6c8f; máximo dos escritores, revisión independiente al terminar. [Propuesta del próximo ciclo](NEXT-LAUNCH-CYCLE.md) sigue pendiente fuera de esta pasada. Automatización sigue PAUSED.
+La tanda anterior terminó sin escritores activos. En la nueva pasada visual, A dirige, las dos críticas y el escritor terminaron; la revisión independiente acepta el candidato y un operador separado cierra CI/publicación. Implementación aislada desde master36d6c8f; máximo dos escritores. [Propuesta del próximo ciclo](NEXT-LAUNCH-CYCLE.md) sigue pendiente fuera de esta pasada. Automatización sigue PAUSED.
 
 ## Producción y publicaciones
 

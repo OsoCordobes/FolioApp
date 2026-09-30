@@ -2,7 +2,7 @@
 
 Actualizado: 30/09/2026, horario de Copenhague. [El tablero técnico](LAUNCH-BOARD.md) conserva el detalle y los antecedentes. Cada fila cambia sólo ante un resultado o bloqueo real.
 
-**Ahora:** por pedido del titular, abrimos una pasada de coherencia visual sobre la versión publicada. Dos revisiones independientes identifican qué corregir; después se aplicará y comprobará en una copia aislada. [Plan y criterios](DESIGN-COHERENCE-PLAN.md). Todavía no se cuenta como mejora entregada.
+**Ahora:** sistema visual implementado en [PR191](https://github.com/OsoCordobes/FolioApp/pull/191): lectura, espacios, botones y marca coherentes. Revisión independiente aprobada en móvil/escritorio; [vista local](http://127.0.0.1:4460/). La publicación espera el diagnóstico de una prueba remota de acceso fallida. [Plan y evidencia](DESIGN-COHERENCE-PLAN.md).
 
 **Cierre del30/09:** privacidad publicada; propuesta de landing descartada, sin contarla como mejora. La [propuesta del próximo ciclo](NEXT-LAUNCH-CYCLE.md) prioriza lo necesario para atender a los primeros clientes. Preparar herramientas o informes no cuenta como función entregada.
 
@@ -15,7 +15,7 @@ Actualizado: 30/09/2026, horario de Copenhague. [El tablero técnico](LAUNCH-BOA
 | Checkpoint | Resultado, responsable y prueba |
 |---|---|
 | **Forma de trabajo** · guía revisada y prueba aislada publicada | La [guía](https://github.com/OsoCordobes/FolioApp/pull/187) superó la auditoría solicitada. [PR189 publicada](https://github.com/OsoCordobes/FolioApp/pull/189) permite ensayos de datos por versión exacta, sin crear un entorno pago; CI y despliegue comprobados. |
-| **Landing de Folio** · base publicada conservada | Por tu devolución se descartó la propuesta recortada. [La versión publicada](https://foliosalud.com/) conserva su estructura; el código local se restauró exactamente y la propuesta queda como antecedente. No hubo publicación del rediseño ni mejora visual aceptada en esta tanda. |
+| **Landing de Folio** · coherencia probada, pendiente de publicar | [PR191](https://github.com/OsoCordobes/FolioApp/pull/191) conserva la estructura completa y mejora lectura, jerarquía y controles. Escritor y revisor separados; 10 vistas públicas sin desbordamiento, teclado y movimiento reducido comprobados. Publicación retenida por un control remoto de acceso. La propuesta recortada anterior permanece descartada. |
 | **Ingreso y onboarding** · acceso y servicios publicados | [PR175](https://github.com/OsoCordobes/FolioApp/pull/175): registro y recuperación. D · revisión A; [PR177 publicada](https://github.com/OsoCordobes/FolioApp/pull/177): servicios conservados al volver y ante respuesta perdida, [prueba Solo/Clínica](https://github.com/OsoCordobes/FolioApp/actions/runs/36088410093). |
 | **Permisos de Clínica** · dos paquetes publicados | Pedidos y motivos protegidos según el rol: [PR170](https://github.com/OsoCordobes/FolioApp/pull/170). C · revisión A; [PR174 publicada](https://github.com/OsoCordobes/FolioApp/pull/174) impide entregar una firma si se revoca el acceso durante su descarga. |
 | **Recuperación completa** · ensayo aprobado e integrado | Datos, archivos, contraseña y segundo factor recuperados con datos ficticios. C · revisión A. [Prueba aprobada](https://github.com/OsoCordobes/FolioApp/actions/runs/36073216478), [entrega integrada](https://github.com/OsoCordobes/FolioApp/pull/167); custodia externa pendiente. |
