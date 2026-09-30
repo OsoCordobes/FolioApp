@@ -2,7 +2,7 @@
 
 Actualizado: 30/09/2026, horario de Copenhague. [El tablero técnico](LAUNCH-BOARD.md) conserva el detalle y los antecedentes. Cada fila cambia sólo ante un resultado o bloqueo real.
 
-**Ahora:** sistema visual implementado en [PR191](https://github.com/OsoCordobes/FolioApp/pull/191): lectura, espacios, botones y marca coherentes. Revisión independiente aprobada en móvil/escritorio; [vista local](http://127.0.0.1:4460/). La publicación espera el diagnóstico de una prueba remota de acceso fallida. [Plan y evidencia](DESIGN-COHERENCE-PLAN.md).
+**Ahora:** sistema visual implementado en [PR191](https://github.com/OsoCordobes/FolioApp/pull/191): lectura, espacios, botones y marca coherentes. Revisión independiente aprobada en móvil/escritorio; [ver la versión de prueba por internet](https://folio-3zmphdujz-osocordobes-projects.vercel.app) o [localmente](http://127.0.0.1:4460/). Publicación retenida: dos ensayos fallaron al comprobar el primer servicio del onboarding; la causa sigue en investigación y no se confunde con un defecto visual. [Plan y evidencia](DESIGN-COHERENCE-PLAN.md).
 
 **Cierre del30/09:** privacidad publicada; propuesta de landing descartada, sin contarla como mejora. La [propuesta del próximo ciclo](NEXT-LAUNCH-CYCLE.md) prioriza lo necesario para atender a los primeros clientes. Preparar herramientas o informes no cuenta como función entregada.
 
