@@ -1,12 +1,12 @@
 # Folio — tablero único de lanzamiento
 
-Actualizado: 30/09/2026, 01:19 UTC. Autoridad operativa: esta copia en `codex/launch-checkpoints`. [AVANCES](AVANCES.md) contiene los 19 checkpoints y la vista breve del titular. Las fechas de esta página son comprobaciones, no estado en tiempo real.
+Actualizado: 30/09/2026, 01:32 UTC. Autoridad operativa: esta copia en `codex/launch-checkpoints`. [AVANCES](AVANCES.md) contiene los 19 checkpoints y la vista breve del titular. Las fechas de esta página son comprobaciones, no estado en tiempo real.
 
 ## Objetivo y método
 
 Lanzar Solo y Clínica, cinco especialidades, Google y portal para adultos; pacientes nuevos primero. Menores, WhatsApp automático, agentes operativos y traslado histórico desde Coofit quedan después. Priorizar riesgo, dependencias, utilidad y esfuerzo restante; cerrar con evidencia y tomar el siguiente paquete útil, sin semanas rígidas ni repetir controles vigentes. Piloto final: 14 días, tres profesionales, al menos cinco jornadas por persona y sin problemas graves pendientes.
 
-A dirige prioridades, aceptación y presupuesto. Máximo dos escritores aislados; cada encargo fija base, archivos, dependencias, entorno, pruebas y cierre. Revisión independiente en cambios relevantes. B, D, Legal/SEO y Landing fueron actualizados a `gpt-6.1-sol` High por herramienta; no afirmar un modelo no verificado para C. Cuota 30/09 01:03UTC: 51% usada, 49% disponible, reserva15%; consumo compartido, no atribuible exactamente por agente. Al85% usado no abrir implementación, preservar/cerrar y pausar la automatización si estuviera activa.
+A dirige prioridades, aceptación y presupuesto. Máximo dos escritores aislados; cada encargo fija base, archivos, dependencias, entorno, pruebas y cierre. Revisión independiente en cambios relevantes. B, D, Legal/SEO y Landing fueron actualizados a `gpt-6.1-sol` High por herramienta; no afirmar un modelo no verificado para C. Cuota 30/09 01:28UTC: 52% usada, 48% disponible, reserva15%; consumo compartido, no atribuible exactamente por agente. Al85% usado no abrir implementación, preservar/cerrar y pausar la automatización si estuviera activa.
 
 Automatización `folio-manager-por-checkpoints`: PAUSED, sin modificar esa preferencia. Continuar directamente mientras haya trabajo útil; no esperar la hora ni prometer ejecución ininterrumpida.
 
@@ -15,7 +15,7 @@ Automatización `folio-manager-por-checkpoints`: PAUSED, sin modificar esa prefe
 | Área | Estado y siguiente paso |
 |---|---|
 | B · Producto | Implementa M150/editores atómicos desdee0f3+CAS congelado en d05. Una migración/3RPC y mismos editores; aún sin ensayo SQL nuevo autorizado. A revisa candidato antes del ensayo hospedado. |
-| D · Experiencia | UI incorporación39c952a cerrada aislada. Ahora implementa revalidación final de descarga portal desdea60 en copia nueva, tres archivos. A asigna revisión al congelar. |
+| D · Experiencia | UI incorporación39c952a cerrada aislada. Portal41e8fc1 pasó29pruebas, pero revisión A detectó P2 por identidad oculta con vínculo estable. Corrección autorizada en mismos tres archivos; revisión de delta pendiente. |
 | C · Continuidad | R8 instalado y reconciliado; cupo libre. No repetir captura ni comprobaciones por rutina. Próxima automática01:57 sólo se observará cuando ocurra durante trabajo útil. |
 | Legal/SEO | S1 hospedadoPASS; publicación preparada, bloqueada por lectura actual de filtro Supabase. P1/L4/H3 retenidos. Sin agentes esperando activamente. |
 | Landing | Diez pasadas cerradas, propuesta4441 revisada; valoración creativa del titular pendiente. Sin integración/publicación ni otra iteración por inercia. |
@@ -57,6 +57,8 @@ Archivos propios B: `lib/db/{paciente-ficha,pacientes,portal-perfil}.ts`, pacien
 
 ## D activo — descarga del portal
 
+Candidato inicial `41e8fc1f7f11f55cb14e26085b9d7b2b0dcae243`, tree `d4930a48ccea5c463991dab079cb8273852b1533`, basea60; rama/checkout `codex/portal-export-final-authority` / `portal-export-final-authority/folio-app`. 29pruebas controladas/tipos/lintPASS; manifest `portal-export-authority-manifest-41e8fc1.json` SHAffb9d69b648c196c33cf9b72b364f6ff5dbb6162acd8bf07f51240b3c73507ca. **No aceptado aún:** revisor fresco A hallóP2 por fuente: M71 oculta identidad con deleted_at aunque paciente/vínculo sigan visibles; M03/M86 permiten transición staff. El conjunto deIDs estable no basta. A autorizó verificar visibilidad real de identidad bajo RLS en captura/final y regresión durante auditoría, mismos tres archivos/sin política nueva. Conservar41e8 y fallo; no alegar incidenteDB. Revisar sólo delta nuevo, sin repetir auditoría amplia.
+
 Base autorizada `a60f86a16aefa23fc56b5920c567f92adae4c368`, copia nueva aislada sinM148, conservarUI39. Hallazgo fuente: ruta ensambla/audita y devuelve sin revalidación final de cuenta/vínculos. No incidente observado ni prueba concurrente todavía.
 
 Sólo `app/api/portal/export/route.ts`, nuevo `lib/patient/portal-export-authorization.ts`, nuevo `tests/unit/portal-export-route.test.ts`. Capturar conjunto completo bajo RLS (usuario/cuenta/paciente/org/identidad), ensamblar/serializar, auditar, revalidar Auth/política MFA ACTUAL y conjunto antes de devolver. Deriva rechaza sin datos ni attachment. Sin ampliar historia/binarios/URLs/menores ni imponer MFA clínica staff. Handler real con fronteras controladas: multi-org positivo; sesión/cuenta/revinculación/identidad durante auditoría; errores sinPII/no-store/SOAP ausente. Tipos/lint y revisión independiente A cuando congele. Sin SQL/DB/Docker/proveedores/push/PR. Lecturas sucesivas no prometen atomicidad global ni revocación retroactiva de bytes.
@@ -75,7 +77,7 @@ Sólo `app/api/portal/export/route.ts`, nuevo `lib/patient/portal-export-authori
 |---|---|
 | B — Acceso y producto de Folio | 01a0bb34-d7b9-7841-b45c-1889b0b987dd · d05; PR188 en folio-adult-revocation |
 | C — Continuidad y proveedores de Folio | 01a0bb34-d802-7852-82c5-126c0af7e654 · ede1 |
-| D — Experiencia y verificación de Folio | 01a0bb34-d7b9-7841-b45c-189d01589d14 · UI m148-intake-comparison-ui; nuevo checkout portal pendiente de recibo |
+| D — Experiencia y verificación de Folio | 01a0bb34-d7b9-7841-b45c-189d01589d14 · UI m148-intake-comparison-ui; portal en portal-export-final-authority |
 | Folio — Landing premium en vivo | 01a0df9c-b1cd-7682-b37b-f0d670f7516e ·64d2 |
 | Folio — Legal, privacidad, SEO y rendimiento | 01a0dfc7-8b7d-73f1-9321-2ce5d9a59371 · S1 s1-authenticated-indexing; legal ae38 |
 
