@@ -81,10 +81,11 @@ async function rejectedWhileWaiting(client,actor,lock,mutation,restore,label){
   const result=await pending;assert.equal(result.error?.code,'42501',label);await assertIdentityUnchanged(state);
   await admin.query(restore.sql,restore.args);
 }
+let intakeSequence=0;
 async function newIntake(){
   const visit=randomUUID(),invitation=randomUUID(),intakeSession=randomUUID(),receipt=randomUUID(),operation=randomUUID();
   await admin.query(`INSERT INTO public.turno(id,organization_id,paciente_id,servicio_id,profesional_id,inicio,duracion_min,precio_cents)
-    VALUES($1,$2,$3,$4,$5,now()+interval '9 days',30,0)`,[visit,ids.org,ids.patient,ids.service,ids.memberOwner]);
+    VALUES($1,$2,$3,$4,$5,now()+interval '9 days'+($6::integer*interval '1 hour'),30,0)`,[visit,ids.org,ids.patient,ids.service,ids.memberOwner,++intakeSequence]);
   await admin.query(`INSERT INTO folio_intake_private.invitation
     (id,organization_id,turno_id,paciente_id,identidad_id,identity_link_revision,organization_intake_revision,
      paciente_intake_revision,identidad_intake_revision,profesional_id,issued_by_member_id,turno_inicio,turno_intake_revision,
@@ -185,6 +186,17 @@ try{
   intake=await newIntake();state=await snapshot();await director.query('BEGIN');assert.equal((await invoke(director,'coverage',actors.director,state,coverage())).status,'applied');
   const intakeAfter=observed(intake.apply());await blocked(intakeAfter,owner,director,'direct editor before intake');await director.query('COMMIT');
   assert.equal((await intakeAfter).value?.status,'conflict');
+  assert.equal((await admin.query('SELECT count(*)::int n FROM folio_intake_private.incorporation_provenance WHERE operation_id=$1',[intake.operation])).rows[0].n,0);
+
+  // Portal and intake also share admin_revision, even for email versus address edits.
+  intake=await newIntake();state=await snapshot();await owner.query('BEGIN');assert.equal((await intake.apply()).status,'applied');
+  const portalAfter=observed(invoke(portal,'portal',actors.portal,state,portalPatch()));
+  await blocked(portalAfter,portal,owner,'intake before portal');await owner.query('COMMIT');
+  assert.equal((await portalAfter).value?.status,'conflict');
+  intake=await newIntake();state=await snapshot();await portal.query('BEGIN');assert.equal((await invoke(portal,'portal',actors.portal,state,portalPatch())).status,'applied');
+  const intakeAfterPortal=observed(intake.apply());
+  await blocked(intakeAfterPortal,owner,portal,'portal before intake');await portal.query('COMMIT');
+  assert.equal((await intakeAfterPortal).value?.status,'conflict');
   assert.equal((await admin.query('SELECT count(*)::int n FROM folio_intake_private.incorporation_provenance WHERE operation_id=$1',[intake.operation])).rows[0].n,0);
 
   await rejectedWhileWaiting(owner,actors.owner,{sql:'SELECT 1 FROM auth.sessions WHERE id=$1 FOR UPDATE',args:[ids.sessionOwner]},
