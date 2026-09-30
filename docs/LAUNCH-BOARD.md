@@ -10,15 +10,17 @@ A dirige prioridades, aceptación y presupuesto. Máximo dos escritores aislados
 
 Automatización `folio-manager-por-checkpoints`: PAUSED, sin modificar esa preferencia. Continuar directamente mientras haya trabajo útil; no esperar la hora ni prometer ejecución ininterrumpida.
 
+**Instrucción vigente del titular30/09:** cerrar la tanda en curso y avisar antes de abrir nuevos paquetes. Alcance de cierre: integración/publicación de privacidad tras revisión y CI; port local de landing con prueba visual y revisión; lectura de preparación Vercel. Después presentar un modo de trabajo centrado en primeros clientes con el reset y créditos disponibles. No ampliar campañas para gastar cuota. Esta instrucción reemplaza, para el corte actual, continuar indefinidamente de un paquete al siguiente.
+
 ## Equipo y siguiente acción
 
 | Área | Estado y siguiente paso |
 |---|---|
 | B · Producto | M150 CERRADO en PG16: run36660859199/P79b5c8f, revisiones y evidencia contrastada porA. Fallos1/2preservados. Backend congelado; disponible sólo ante incompatibilidad concreta de D. |
-| D · Experiencia | Portal CERRADO hospedado:36659983882,3casos/0SKIP/restauración/cleanup;62hashes contrastados. UI/CAS007cff6 CERRADO hospedado:36667282792,3PASS/0SKIP/restauración/cleanup contrastados por A. Candidato congelado, sin publicar. |
-| C · Continuidad | R8 instalado y primera automática01:57 reconciliada: resultado0/not_due, cuatro copias intactas. Paquete cerrado; no repetir captura ni lecturas por rutina. |
-| Legal/SEO | S1 hospedadoPASS; publicación preparada, bloqueada por lectura actual de filtro Supabase. P1/L4/H3 retenidos. Sin agentes esperando activamente. |
-| Landing | Diez pasadas cerradas, propuesta4441 revisada; valoración creativa del titular pendiente. Sin integración/publicación ni otra iteración por inercia. |
+| D · Experiencia | Integra S1+portal desdea60 enprivacy-release;19rutas, producto idéntico y único solaperun.mjs. Congelar/revisar antes dePR. Portal y UI/CAS hospedados cerrados; intake sigue sinpublicar. |
+| C · Continuidad | R8 cerrado. CLI59.16.0 ya instalada y funcional; recibofed7be6d contrastado porA. Prepara sólo lectura de autenticación/proyecto/deployment para futura publicación, sinlogin/env/deploy. |
+| Legal/SEO | Revisor independiente S1/CI del conjunto deD. FiltroSupabase ya comprobado:AutomaticbranchingOFF. CI habitual no ejecuta modosS1/portal; revisar delta delrunner antes de decidir prueba focal. P1/L4/H3 retenidos. |
+| Landing | Port provisional aNext/React desdea60 enlanding-cinematic-integration. Mantener diseño, precios/metadata/consentimiento reales; preview y revisión antes de cierre. Sinpublicación niotra campaña. |
 
 Escritores de implementación: **D** (integración aislada S1+portal) y **Landing** (port cinematográfico local), ambos desde mastera60 y encheckouts separados, sin SQL/intake/wrappers. Legal es revisor independiente S1/CI; A coordina y revisa frontera portal/harness. C verifica/instala únicamente CLI Vercel oficial si falta, sin login/env/deploy. B conserva congelado el paquete clínico. No repetir ensayos cerrados. Si el titular asigna trabajo directo en otro chat, sincronizar alcance/cupo y preservar esa decisión.
 

@@ -2,7 +2,9 @@
 
 Actualizado: 30/09/2026, horario de Copenhague. [El tablero técnico](LAUNCH-BOARD.md) conserva el detalle y los antecedentes. Cada fila cambia sólo ante un resultado o bloqueo real.
 
-**Equipo comprobado:** **B** aprobó el ensayo del guardado. **D** aprobó el portal y el ensayo completo de incorporación de la ficha, ambos contrastados por A. **C** cerró la corrección del respaldo automático. Las entregas aceptadas tienen revisión independiente y comprobación de A. **D** prepara la publicación conjunta de privacidad; **Legal/SEO** revisa la integración y **Landing** integra la propuesta cinematográfica en una copia de la app para que puedas probarla; su publicación sigue pendiente. B, D, Legal/SEO y Landing usan **Sol6.1 High**. **A** dirige prioridades y aceptación; dos escritores como máximo y evidencia por entrega.
+**Equipo comprobado:** **B** aprobó el ensayo del guardado. **D** aprobó el portal y el ensayo completo de incorporación de la ficha, ambos contrastados por A. **C** cerró la corrección del respaldo automático. **D** prepara la publicación conjunta de privacidad; **Legal/SEO** revisa la integración y **Landing** integra la propuesta cinematográfica en una copia de la app para que puedas probarla. Su publicación sigue pendiente. D y Legal usan **Sol6.1 High**, Landing **Sol6.1 Ultra** y C **Sol6.1 Medium**. **A** dirige prioridades y aceptación; dos escritores como máximo y evidencia por entrega.
+
+**Cierre solicitado ahora:** terminar privacidad, la vista real de la nueva landing y su verificación; avisarte antes de abrir trabajo nuevo. La siguiente propuesta priorizará lo que falta para atender a los primeros clientes. Preparar herramientas o escribir informes no se contará como una mejora visible del producto.
 
 **Regla de evidencia:** cada encargo tiene una razón, alcance y condición de cierre. Al terminar deja el cambio, una prueba verificable y sus límites; A contrasta el resultado antes de marcarlo terminado. Un fallo se conserva y sólo se repite la prueba cuando hay información o una corrección nueva.
 
