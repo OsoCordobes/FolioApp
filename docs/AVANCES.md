@@ -4,6 +4,8 @@ Actualizado: 01/10/2026, horario de Copenhague. [El tablero técnico](LAUNCH-BOA
 
 Esta copia en master es una fotografía del corte01/10. El [tablero activo del manager](https://github.com/OsoCordobes/FolioApp/blob/codex/launch-checkpoints/docs/LAUNCH-BOARD.md) conserva la coordinación posterior; el [mapa de ramas](BRANCH-STATUS.md) explica qué está integrado y qué sigue retenido.
 
+**Cómo probar lo publicado:** [guía de prueba con datos ficticios](GUIA-PRUEBA-FOLIO.md), para Solo y Clínica. Requiere un espacio preparado por el titular sin conexiones activas a Google ni proveedores de eventos, comunicaciones o cobros; no habilita pacientes reales ni el piloto clínico.
+
 **Ahora:** [PR191 publicada en Folio](https://foliosalud.com/): lectura, espacios, botones y marca coherentes en landing, ingreso, onboarding y miniweb. Revisión independiente aprobada en móvil/escritorio; versión publicada y ambos dominios comprobados. [Plan y evidencia](DESIGN-COHERENCE-PLAN.md).
 
 **Continuación01/10:** las4ramas reales de GitHub quedaron reconciliadas. El diagnóstico de onboarding aprobó6casos con componentes reales y reloj controlado, sin reproducir un defecto ni realizar un arreglo; es evidencia sintética/en memoria, sin DB. Seguimos midiendo la carga de la landing y preparando la guía de prueba y custodia externa. `market-ready` ya tiene su código integrado; PR188 sigue retenida por cobertura contractual pendiente. El titular confirmó el01/10 que todavía no recibió respuesta de Vercel. Ningún diagnóstico se cuenta como mejora publicada.
