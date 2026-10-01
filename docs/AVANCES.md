@@ -10,9 +10,9 @@ Actualizado: 01/10/2026, horario de Copenhague. [El tablero técnico](LAUNCH-BOA
 
 **Portada publicada:** [PR194](https://github.com/OsoCordobes/FolioApp/pull/194) evita cargar una hoja innecesaria: 21,8 KB menos de CSS descomprimido, sin cambiar el diseño. Comparaciones visuales, revisión, controles automáticos y archivos publicados comprobados. No se afirma una mejora de velocidad medida en usuarios reales.
 
-**En cierre:** [PR195](https://github.com/OsoCordobes/FolioApp/pull/195) reduce pruebas innecesarias para cambios sólo documentales; pasó 37 casos y revisión independiente. Esta primera publicación exige todos los controles; después se probará la omisión con una actualización útil del registro.
+**Trabajo repetido reducido:** [PR195 publicada](https://github.com/OsoCordobes/FolioApp/pull/195) permite omitir pruebas pesadas cuando sólo cambian documentos expresamente permitidos. Pasó 37 casos, revisión y todos los controles reales de su primera publicación. Falta comprobar el camino documental con la actualización útil de este registro.
 
-**Nuevo arreglo:** B agrega la opción de cancelar una suscripción pendiente desde Folio, usando el proceso existente y pruebas ficticias. La regla de adicionales de Clínica está pendiente de tu decisión: la web habla de profesionales, pero el cálculo incluye a todo el equipo. No se cambió el precio ni se realizaron cobros.
+**Nuevo arreglo en cierre:** [PR196](https://github.com/OsoCordobes/FolioApp/pull/196) agrega cancelar una suscripción pendiente, con confirmación y sin repetir la operación ante una respuesta incierta. Pasó 17 pruebas, revisión y vista móvil/escritorio; controles finales en curso. La regla de adicionales de Clínica sigue pendiente de tu decisión; no se cambió el precio ni se realizaron cobros.
 
 **Dependencias externas:** la nueva copia automática terminó correctamente según su recibo. Falta guardarla fuera del equipo y comprobar su apertura desde otro perfil. Consulta contractual a Vercel preparada y esperando autorización de envío; el titular confirmó que todavía no recibió respuesta. No se habilitaron pacientes reales ni proveedores.
 
