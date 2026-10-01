@@ -1,0 +1,19 @@
+.control { border-top: 1px solid var(--line); padding-top: 18px; margin: 18px 0; color: var(--ink); }
+.heading h3 { margin: 0 0 4px; color: var(--accent); font-size: 16px; }
+.heading p,.proposals>p { font-size: 13px; line-height: 1.5; margin: 0 0 12px; color: var(--ink-3); }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.actions button { min-height: 40px; }
+.confirm,.linkBox,.proposal { border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); padding: 12px; margin: 10px 0; }
+.confirm p,.linkBox p { font-size: 13px; line-height: 1.5; margin: 0; }
+.message,.warning { font-size: 13px; line-height: 1.5; padding: 10px 12px; border-radius: 8px; margin: 10px 0; }
+.message { background: var(--accent-soft); color: var(--ink); }
+.warning { background: var(--amber-soft); color: var(--amber); }
+.linkBox input { display: block; width: 100%; min-height: 38px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); padding: 7px; font-size: 12px; }
+.qr { display: block; margin: 14px auto 0; max-width: 100%; height: auto; }
+.proposals { margin-top: 18px; }
+.proposals h4 { margin: 0 0 5px; font-size: 15px; }
+.proposal small { color: var(--ink-3); }
+.proposal dl { margin: 8px 0 0; }
+.proposal dl div { display: grid; grid-template-columns: 42% 1fr; gap: 8px; padding: 5px 0; border-top: 1px solid var(--line-soft); font-size: 13px; }
+.proposal dt { color: var(--ink-3); }.proposal dd { margin: 0; overflow-wrap: anywhere; }
+@media (max-width: 520px) { .actions button { flex: 1 1 145px; }.proposal dl div { grid-template-columns: 1fr; gap: 2px; } }

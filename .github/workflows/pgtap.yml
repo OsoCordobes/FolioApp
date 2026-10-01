@@ -159,6 +159,13 @@ jobs:
           FOLIO_M144_SYNTHETIC: '1'
         run: node tests/concurrency/M144_patient_intake.mjs
 
+      - name: Run M147 real PostgreSQL link races
+        if: hashFiles('tests/concurrency/M147_patient_intake_link_recovery.mjs') != ''
+        timeout-minutes: 3
+        env:
+          FOLIO_M147_SYNTHETIC: '1'
+        run: node tests/concurrency/M147_patient_intake_link_recovery.mjs
+
       - name: Summary
         if: always()
         run: |

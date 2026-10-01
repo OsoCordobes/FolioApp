@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 
 /**
  * Folio · Cookie consent banner — Phase 6b of the pre-audit sprint.
@@ -56,6 +57,7 @@ export const CONSENT_EVENT = "folio:cookie-consent";
 type Consent = "granted" | "denied" | null;
 
 export function CookieBanner() {
+  const pathname = usePathname();
   // Hide by default until effect resolves the stored value (avoid hydration flash).
   const [consent, setConsent] = useState<Consent>("granted");
 
@@ -137,7 +139,7 @@ export function CookieBanner() {
     window.dispatchEvent(new CustomEvent(CONSENT_EVENT, { detail: "denied" }));
   };
 
-  if (consent === "granted" || consent === "denied") return null;
+  if (pathname === "/aporte" || consent === "granted" || consent === "denied") return null;
 
   return (
     <>

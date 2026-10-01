@@ -3,7 +3,8 @@
  * fixtures. Mail bodies/action URLs and passwords are never logged. */
 import {randomUUID} from 'node:crypto';
 import {createClient} from '@supabase/supabase-js';
-import {expect,test,type Browser,type Page} from '../fixtures/local-test';
+import {expect,test,type Browser,type Page,type Request} from '../fixtures/local-test';
+import {actionHttpKind,actionOutcomeKind,pageRouteKind,postKind,serviceAlertBySource,timerDelta,type ActionOutcome,type AlertSource,type PostKind,type TimerCounts} from './auth-proof-diagnostics';
 
 const APP='http://localhost:4430';
 const MAIL='http://127.0.0.1:55424';
@@ -185,10 +186,77 @@ async function diagnosticWithin<T>(work:(signal:AbortSignal)=>PromiseLike<T>,fal
  ]).finally(()=>{if(timer)clearTimeout(timer);});
 }
 
+type PostPhase='before_fill'|'after_fill';
+function watchOnboardingPosts(page:Page){
+  // Never retain or print action IDs, request bodies, response bodies, or URLs.
+  let phase:PostPhase='before_fill';
+  const outcomes=new Map<Request,{phase:PostPhase;kind:PostKind;result:ActionOutcome}>();
+  const onRequest=(request:Request)=>{
+   if(request.method()!=='POST')return;
+   const kind=postKind(request.url(),APP,Boolean(request.headers()['next-action']));
+   if(kind)outcomes.set(request,{phase,kind,result:'pending'});
+  };
+  const onResponse=(response:import('@playwright/test').Response)=>{
+   const item=outcomes.get(response.request());if(item)item.result=actionHttpKind(response.status());
+  };
+  const onFailed=(request:Request)=>{const item=outcomes.get(request);if(item)item.result='network_failed';};
+  page.on('request',onRequest);page.on('response',onResponse);page.on('requestfailed',onFailed);
+  const summary=(selected:PostPhase)=>{
+   const items=[...outcomes.values()].filter(item=>item.phase===selected);
+   const count=(kind:PostKind)=>Math.min(99,items.filter(item=>item.kind===kind).length);
+   const result=(kind:PostKind)=>actionOutcomeKind(items.filter(item=>item.kind===kind).map(item=>item.result));
+   return `onb_action:${count('onboarding_action')},onb_action_result:${result('onboarding_action')},onb_post:${count('onboarding_post')},onb_post_result:${result('onboarding_post')},app_action:${count('app_action')},app_action_result:${result('app_action')},app_post:${count('app_post')},app_post_result:${result('app_post')},external_action:${count('external_action')},external_action_result:${result('external_action')},external_post:${count('external_post')},external_post_result:${result('external_post')}`;
+  };
+  return {
+   afterFill:()=>{phase='after_fill';},
+   snapshot:()=>({before:summary('before_fill'),after:summary('after_fill')}),
+   stop:()=>{page.off('request',onRequest);page.off('response',onResponse);page.off('requestfailed',onFailed);},
+  };
+}
+
+async function installTimer800Observer(page:Page){
+ await page.addInitScript(()=>{
+  const originalSet=window.setTimeout.bind(window);
+  const originalClear=window.clearTimeout.bind(window);
+  const active=new Set<number>();
+  const counts={scheduled:0,fired:0,cancelled:0};
+  Object.defineProperty(window,'__folioProofTimers800',{value:()=>({...counts})});
+  window.setTimeout=((handler:TimerHandler,timeout?:number,...args:unknown[])=>{
+   if(timeout!==800||typeof handler!=='function')return originalSet(handler,timeout,...args);
+   counts.scheduled++;
+   let handle=0;
+   handle=originalSet((...callbackArgs:unknown[])=>{
+    active.delete(handle);counts.fired++;
+    handler.apply(window,callbackArgs);
+   },timeout,...args);
+   active.add(handle);
+   return handle;
+  }) as typeof window.setTimeout;
+  window.clearTimeout=((handle?:number)=>{
+   if(handle!==undefined&&active.delete(handle))counts.cancelled++;
+   originalClear(handle);
+  }) as typeof window.clearTimeout;
+ });
+}
+
+async function timer800Snapshot(page:Page):Promise<TimerCounts|null>{
+ return diagnosticWithin(()=>page.evaluate(()=>{
+  const observer=Reflect.get(window,'__folioProofTimers800') as (()=>TimerCounts)|undefined;
+  return observer?.()??null;
+ }),null);
+}
+
+async function serviceCommandPresence(page:Page,organizationId:string):Promise<boolean|null>{
+ return diagnosticWithin(()=>page.evaluate(key=>{
+  try{return sessionStorage.getItem(key)!==null;}catch{return null;}
+ },`folio:onboarding:services:${organizationId}`),null);
+}
+
 async function serviceStep(page:Page,tipo:'INDEPENDIENTE'|'CLINICA',organizationId:string){
  const isClinic=tipo==='CLINICA';
  const original=isClinic?'Servicio sintético clínica':'Servicio sintético Solo';
  const changed='Servicio sintético actualizado';
+ const posts=watchOnboardingPosts(page);
  await page.getByRole('button',{name:'Continuar',exact:true}).click();
  await expect(page.getByRole('heading',{name:'Tu página en Folio'})).toBeVisible();
  await page.getByRole('button',{name:'Continuar',exact:true}).click();
@@ -217,35 +285,50 @@ async function serviceStep(page:Page,tipo:'INDEPENDIENTE'|'CLINICA',organization
   if(!responses.length)console.log(`services_proof_response:phase=initial_save count=0 http=none result=unknown code=unknown outcome=unknown revision=unknown alert=${alert}`);
   for(const [index,response] of responses.entries())console.log(`services_proof_response:phase=initial_save count=${index+1} http=${response.http} result=${response.result} code=${response.code} outcome=${response.outcome} revision=${response.revision} alert=${alert}`);
  };
- if(isClinic)await page.getByRole('button',{name:'Agregar servicio'}).click();
- else if(await page.getByRole('textbox',{name:'Nombre del servicio 1'}).count()===0)
-  await page.getByRole('button',{name:'Agregar servicio'}).click();
- const nameField=page.getByRole('textbox',{name:'Nombre del servicio 1'});
- await nameField.fill(original);
- try {
-  await expect.poll(()=>storedService(organizationId,original),{timeout:30_000}).not.toBeUndefined();
- } catch {
-  const db=await diagnosticWithin(signal=>{
-   const service=createClient(API,process.env.SUPABASE_SERVICE_ROLE_KEY!,{auth:{persistSession:false,autoRefreshToken:false}});
-   return Promise.all([
-    service.from('servicio').select('id',{head:true,count:'exact'}).eq('organization_id',organizationId).is('deleted_at',null).abortSignal(signal),
-    service.from('organization').select('onboarding_services_revision').eq('id',organizationId).abortSignal(signal).maybeSingle(),
+  if(isClinic)await page.getByRole('button',{name:'Agregar servicio'}).click();
+  else if(await page.getByRole('textbox',{name:'Nombre del servicio 1'}).count()===0)
+   await page.getByRole('button',{name:'Agregar servicio'}).click();
+  const nameField=page.getByRole('textbox',{name:'Nombre del servicio 1'});
+  const [timersBefore,commandBefore]=await Promise.all([timer800Snapshot(page),serviceCommandPresence(page,organizationId)]);
+  posts.afterFill();
+  await nameField.fill(original);
+  try {
+   await expect.poll(()=>storedService(organizationId,original),{timeout:30_000}).not.toBeUndefined();
+  } catch {
+   const db=await diagnosticWithin(signal=>{
+    const service=createClient(API,process.env.SUPABASE_SERVICE_ROLE_KEY!,{auth:{persistSession:false,autoRefreshToken:false}});
+    return Promise.all([
+     service.from('servicio').select('id',{head:true,count:'exact'}).eq('organization_id',organizationId).is('deleted_at',null).abortSignal(signal),
+     service.from('organization').select('onboarding_services_revision,onboarding_step_max').eq('id',organizationId).abortSignal(signal).maybeSingle(),
+    ]);
+   },null);
+   const [catalog,organization]=db??[null,null];
+   const dbOk=!!catalog&&!catalog.error&&!!organization&&!organization.error&&!!organization.data;
+   const revision=dbOk?Number(organization.data!.onboarding_services_revision):NaN;
+   const stepMax=dbOk?Number(organization.data!.onboarding_step_max):NaN;
+   const [nameMatch,fieldEnabled,alerts,verify,commandAfter,timersAfter]=await Promise.all([
+    diagnosticWithin(()=>nameField.inputValue({timeout:2500}).then(value=>value===original),false),
+    diagnosticWithin(()=>nameField.isEnabled({timeout:2500}),false),
+    diagnosticWithin(()=>page.locator('.onb-app [role="alert"]').evaluateAll(elements=>elements.map(element=>({
+     source:(element.closest('.onb-app-head')?'save_status':element.classList.contains('onb-banner-err')?(element.closest('.onb-anim')?'services':'global'):'other') as AlertSource,
+     message:element.textContent??'',
+    }))),[] as {source:AlertSource;message:string}[]),
+    diagnosticWithin(()=>page.getByRole('button',{name:'Verificar guardado'}).isVisible({timeout:2500}),false),
+    serviceCommandPresence(page,organizationId),
+    timer800Snapshot(page),
    ]);
-  },null);
-  const [catalog,organization]=db??[null,null];
-  const dbOk=!!catalog&&!catalog.error&&!!organization&&!organization.error&&!!organization.data;
-  const revision=dbOk?Number(organization.data!.onboarding_services_revision):NaN;
-  const [nameMatch,fieldEnabled,alert,verify]=await Promise.all([
-   diagnosticWithin(()=>nameField.inputValue({timeout:2500}).then(value=>value===original),false),
-   diagnosticWithin(()=>nameField.isEnabled({timeout:2500}),false),
-   diagnosticWithin(()=>page.getByRole('alert').count().then(count=>count>0),false),
-   diagnosticWithin(()=>page.getByRole('button',{name:'Verificar guardado'}).isVisible({timeout:2500}),false),
-  ]);
+   const alertsBySource=serviceAlertBySource(alerts);
+   const postSnapshot=posts.snapshot();posts.stop();
+   const timerDiff=timerDelta(timersBefore,timersAfter);
+   const timerBeforeText=timersBefore?`${timersBefore.scheduled},${timersBefore.fired},${timersBefore.cancelled}`:'unknown';
+   const timerText=timerDiff?`${timerDiff.scheduled},${timerDiff.fired},${timerDiff.cancelled}`:'unknown';
+   const presence=(value:boolean|null)=>value===null?'unknown':value?1:0;
+   await finishObservation();
+   console.log(`services_proof_diagnostic:phase=initial_save db_ok=${dbOk?1:0} active_count=${dbOk?catalog!.count??'unknown':'unknown'} revision=${Number.isSafeInteger(revision)?revision:'unknown'} step_max=${Number.isSafeInteger(stepMax)?stepMax:'unknown'} name_match=${nameMatch?1:0} field_enabled=${fieldEnabled?1:0} alert=${alerts.length?1:0} alert_global=${alertsBySource.global} alert_services=${alertsBySource.services} alert_save_status=${alertsBySource.save_status} alert_other=${alertsBySource.other} verify=${verify?1:0} route=${pageRouteKind(page.url(),APP)} command_before=${presence(commandBefore)} command_after=${presence(commandAfter)} posts_before=${postSnapshot.before} posts_after=${postSnapshot.after} timers800_before_scheduled_fired_cancelled=${timerBeforeText} timers800_after_fill_delta_scheduled_fired_cancelled=${timerText}`);
+   throw Error('services_proof_initial_save_missing');
+  }
+  posts.stop();
   await finishObservation();
-  console.log(`services_proof_diagnostic:phase=initial_save db_ok=${dbOk?1:0} active_count=${dbOk?catalog!.count??'unknown':'unknown'} revision=${Number.isSafeInteger(revision)?revision:'unknown'} name_match=${nameMatch?1:0} field_enabled=${fieldEnabled?1:0} alert=${alert?1:0} verify=${verify?1:0}`);
-  throw Error('services_proof_initial_save_missing');
- }
- await finishObservation();
  const id=await storedService(organizationId,original);
  const initialRevision=await servicesRevision(organizationId);
  if(!isClinic){
@@ -381,6 +464,7 @@ async function oneMode(browser:Browser,tipo:'INDEPENDIENTE'|'CLINICA'){
  const resumed=await browser.newContext();
  const again=await resumed.newPage();
  await consentCookie(again);
+ await installTimer800Observer(again);
  await login(again,email,OLD_PASSWORD);
  await again.waitForURL(/\/onboarding(?:\?|$)/,{timeout:30_000});
  await expect(again.getByRole('heading',{name:tipo==='CLINICA'?'¿Dónde está tu clínica?':'¿Dónde está tu consultorio?'})).toBeVisible();

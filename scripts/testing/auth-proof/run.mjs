@@ -10,6 +10,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {openLoopbackBridge,validateBridgeTarget,waitForBridgeTarget} from '../../recovery/ci-loopback-bridge.mjs';
 import {dockerFailureKind} from './diagnostics.mjs';
+import {extractServiceProofDiagnostics} from './service-diagnostic.mjs';
 
 const repo=path.resolve(fileURLToPath(new URL('../../../',import.meta.url)));
 const compose=path.join(repo,'scripts/recovery/ci-compose.yml');
@@ -179,8 +180,8 @@ async function main(){
   for(const diagnostic of sessionDiagnostics.slice(-2))console.log(diagnostic[0]);
   const resetDiagnostics=[...result.output.matchAll(/auth_proof_reset_diagnostic:origin=(?:app|other_loopback|other) form=[01] checking=[01] invalid=[01] code=[01] error=[01] token_hash=[01] fragment_access=[01] cookie_kind=(?:missing|chunk_gap|empty|decode_failed|token_missing|config_missing|auth_rejected|auth_missing|auth_unavailable|valid) auth_valid=[01] same_user=[01]/g)];
   for(const diagnostic of resetDiagnostics.slice(-1))console.log(diagnostic[0]);
-  const serviceDiagnostics=[...result.output.matchAll(/services_proof_diagnostic:phase=initial_save db_ok=[01] active_count=(?:unknown|[0-9]+) revision=(?:unknown|[0-9]+) name_match=[01] field_enabled=[01] alert=[01] verify=[01]/g)];
-  for(const diagnostic of serviceDiagnostics.slice(-1))console.log(diagnostic[0]);
+  const serviceDiagnostics=extractServiceProofDiagnostics(result.output);
+  for(const diagnostic of serviceDiagnostics.slice(-1))console.log(diagnostic);
   const serviceResponses=[...result.output.matchAll(/services_proof_response:phase=initial_save count=[0-9] http=(?:none|[1-5][0-9]{2}) result=(?:unknown|ok|rejected) code=(?:none|unknown|auth_required|mfa_required|no_org|forbidden|not_found|validation|conflict|transition_invalid|locked|db_error|network) outcome=(?:none|unknown|rejected|uncertain|review_required) revision=(?:unknown|0|[1-9][0-9]{0,15}) alert=(?:none|unknown|validation|forbidden|auth_required|db_error|account_changed|snapshot_read|owner_missing|conflict|uncertain|prepare_storage)(?=\r?\n|$)/g)];
   for(const diagnostic of serviceResponses.slice(-9))console.log(diagnostic[0]);
   for(const count of counts.slice(-3))console.log(cleanOutput(count));

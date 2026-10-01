@@ -12,6 +12,7 @@ import {totp} from '../clinical-config.mjs';
 import {openLoopbackBridge,validateBridgeTarget,waitForBridgeTarget} from '../../recovery/ci-loopback-bridge.mjs';
 import {safeServiceState,SERVICES} from '../export-package-proof/service-diagnostics.mjs';
 import {proveHttp} from './prove-http.mjs';
+import {browserDiagnosticLine} from './browser-diagnostics.mjs';
 
 const repo=path.resolve(fileURLToPath(new URL('../../../',import.meta.url)));
 const compose=path.join(repo,'scripts/recovery/ci-compose.yml');
@@ -315,6 +316,8 @@ async function main(){
    .includes(reason.split('\n',1)[0])){
    console.error(JSON.stringify({diagnostic:'b06b3_begin_assertion',reason:reason.split('\n',1)[0]}));
   }
+  const browserDiagnostic=browserDiagnosticLine(error);
+  if(stage==='browser'&&browserDiagnostic)console.error(browserDiagnostic);
   console.error(`b06b3_${STAGES.has(stage)?stage:'unclassified'}_failed`); // No raw HTTP, SQL, Storage or Auth bodies.
   process.exitCode=1;
  }finally{

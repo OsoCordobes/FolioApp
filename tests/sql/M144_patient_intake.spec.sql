@@ -24,12 +24,30 @@ BEGIN
  RAISE EXCEPTION 'M144 expected %, statement succeeded',code;
 END $$;
 
+-- M147 retires the one-shot staff RPCs; retain M144 coverage through its
+-- fenced successor while preserving the old negative authorization checks.
+CREATE FUNCTION pg_temp.m144_issue(p_org uuid,p_turno uuid,p_key bytea) RETURNS jsonb
+LANGUAGE plpgsql AS $$
+DECLARE state jsonb; raw_token text; result jsonb;
+BEGIN
+ state:=public.patient_intake_link_state(p_org,p_turno);
+ raw_token:=replace(gen_random_uuid()::text,'-','')||replace(gen_random_uuid()::text,'-','');
+ result:=public.patient_intake_issue_v2(p_org,p_turno,gen_random_uuid(),
+   (state->>'generation')::bigint,state->>'contextHash',
+   encode(sha256(decode(raw_token,'hex')),'hex'),p_key);
+ IF result->>'status' IS DISTINCT FROM 'issued' THEN RAISE EXCEPTION 'M144 fenced issue did not commit'; END IF;
+ RETURN result||jsonb_build_object('token',raw_token);
+END $$;
+
 DO $$ BEGIN
  IF has_table_privilege('anon','folio_intake_private.invitation','SELECT')
   OR has_table_privilege('authenticated','folio_intake_private.submission','SELECT')
   OR has_table_privilege('service_role','folio_intake_private.submission','INSERT')
   OR has_table_privilege('service_role','folio_intake_private.event','SELECT')
   OR has_function_privilege('anon','public.patient_intake_issue(uuid,uuid,bytea)','EXECUTE')
+  OR has_function_privilege('authenticated','public.patient_intake_issue(uuid,uuid,bytea)','EXECUTE')
+  OR has_function_privilege('authenticated','public.patient_intake_revoke(uuid,uuid)','EXECUTE')
+  OR NOT has_function_privilege('authenticated','public.patient_intake_issue_v2(uuid,uuid,uuid,bigint,text,text,bytea)','EXECUTE')
   OR has_function_privilege('authenticated','public.patient_intake_submit(text,uuid,text,text,bytea)','EXECUTE')
   OR NOT has_function_privilege('service_role','public.patient_intake_submit(text,uuid,text,text,bytea)','EXECUTE') THEN
   RAISE EXCEPTION 'M144 private grant boundary changed';
@@ -72,11 +90,28 @@ INSERT INTO auth.sessions(id,user_id,aal,factor_id)
  SELECT pg_temp.m144_id(900+n),pg_temp.m144_id(n),'aal2',pg_temp.m144_id(800+n)
  FROM generate_series(1,6) n;
 
+-- Capture valid context before testing AAL/cross-org denial. The denied call
+-- must reach issue_v2 directly, not fail earlier in link_state.
+SELECT pg_temp.m144_login(1);
+SET LOCAL ROLE authenticated;
+SELECT set_config('test.m144_state_one',
+ public.patient_intake_link_state(pg_temp.m144_id(10),pg_temp.m144_id(61))::text,true);
+RESET ROLE;
+SELECT pg_temp.m144_login(4);
+SET LOCAL ROLE authenticated;
+SELECT set_config('test.m144_state_two',
+ public.patient_intake_link_state(pg_temp.m144_id(20),pg_temp.m144_id(62))::text,true);
+RESET ROLE;
 SELECT pg_temp.m144_login(1,'aal1');
 SET LOCAL ROLE authenticated;
-SELECT pg_temp.m144_expect($q$SELECT public.patient_intake_issue(pg_temp.m144_id(10),pg_temp.m144_id(61),decode(repeat('aa',60),'hex'))$q$,'42501');
+SELECT pg_temp.m144_expect(format($q$SELECT public.patient_intake_issue_v2(pg_temp.m144_id(10),pg_temp.m144_id(61),pg_temp.m144_id(91),0,%L,%L,decode(repeat('aa',60),'hex'))$q$,
+ (current_setting('test.m144_state_one',true)::jsonb)->>'contextHash',repeat('a',64)),'42501');
 SELECT pg_temp.m144_expect($q$SELECT * FROM folio_intake_private.invitation$q$,'42501');
-SELECT pg_temp.m144_expect($q$SELECT public.patient_intake_issue(pg_temp.m144_id(20),pg_temp.m144_id(62),decode(repeat('aa',60),'hex'))$q$,'42501');
+RESET ROLE;
+SELECT pg_temp.m144_login(1);
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.m144_expect(format($q$SELECT public.patient_intake_issue_v2(pg_temp.m144_id(20),pg_temp.m144_id(62),pg_temp.m144_id(92),0,%L,%L,decode(repeat('aa',60),'hex'))$q$,
+ (current_setting('test.m144_state_two',true)::jsonb)->>'contextHash',repeat('b',64)),'42501');
 RESET ROLE;
 
 -- Administrative review follows the current role/scope matrix.
@@ -127,7 +162,7 @@ SELECT pg_temp.m144_login(1);
 SET LOCAL ROLE authenticated;
 DO $$ DECLARE issued jsonb;
 BEGIN
- issued:=public.patient_intake_issue(pg_temp.m144_id(10),pg_temp.m144_id(61),decode(repeat('aa',60),'hex'));
+ issued:=pg_temp.m144_issue(pg_temp.m144_id(10),pg_temp.m144_id(61),decode(repeat('aa',60),'hex'));
  IF issued->>'token' !~ '^[0-9a-f]{64}$' THEN RAISE EXCEPTION 'M144 weak invitation'; END IF;
  PERFORM set_config('test.m144_invitation',issued::text,true);
 END $$;
@@ -184,7 +219,7 @@ SELECT pg_temp.m144_login(1);
 SET LOCAL ROLE authenticated;
 DO $$ DECLARE issued jsonb;
 BEGIN
- issued:=public.patient_intake_issue(pg_temp.m144_id(10),pg_temp.m144_id(61),decode(repeat('dd',60),'hex'));
+ issued:=pg_temp.m144_issue(pg_temp.m144_id(10),pg_temp.m144_id(61),decode(repeat('dd',60),'hex'));
  PERFORM set_config('test.m144_reissued',issued::text,true);
 END $$;
 RESET ROLE;
@@ -223,7 +258,7 @@ SELECT pg_temp.m144_login(1);
 SET LOCAL ROLE authenticated;
 DO $$ DECLARE issued jsonb;
 BEGIN
- issued:=public.patient_intake_issue(pg_temp.m144_id(10),pg_temp.m144_id(61),decode(repeat('ee',60),'hex'));
+ issued:=pg_temp.m144_issue(pg_temp.m144_id(10),pg_temp.m144_id(61),decode(repeat('ee',60),'hex'));
  PERFORM set_config('test.m144_link_token',issued::text,true);
 END $$;
 RESET ROLE;
@@ -248,7 +283,7 @@ SELECT pg_temp.m144_login(1);
 SET LOCAL ROLE authenticated;
 DO $$ DECLARE issued jsonb;
 BEGIN
- issued:=public.patient_intake_issue(pg_temp.m144_id(10),pg_temp.m144_id(61),decode(repeat('e1',60),'hex'));
+ issued:=pg_temp.m144_issue(pg_temp.m144_id(10),pg_temp.m144_id(61),decode(repeat('e1',60),'hex'));
  PERFORM set_config('test.m144_org_token',issued::text,true);
 END $$;
 RESET ROLE;
@@ -274,7 +309,7 @@ SELECT pg_temp.m144_login(1);
 SET LOCAL ROLE authenticated;
 DO $$ DECLARE issued jsonb;
 BEGIN
- issued:=public.patient_intake_issue(pg_temp.m144_id(10),pg_temp.m144_id(61),decode(repeat('e2',60),'hex'));
+ issued:=pg_temp.m144_issue(pg_temp.m144_id(10),pg_temp.m144_id(61),decode(repeat('e2',60),'hex'));
  PERFORM set_config('test.m144_patient_token',issued::text,true);
 END $$;
 RESET ROLE;
@@ -292,7 +327,7 @@ SELECT pg_temp.m144_login(1);
 SET LOCAL ROLE authenticated;
 DO $$ DECLARE issued jsonb;
 BEGIN
- issued:=public.patient_intake_issue(pg_temp.m144_id(10),pg_temp.m144_id(61),decode(repeat('e3',60),'hex'));
+ issued:=pg_temp.m144_issue(pg_temp.m144_id(10),pg_temp.m144_id(61),decode(repeat('e3',60),'hex'));
  PERFORM set_config('test.m144_identity_token',issued::text,true);
 END $$;
 RESET ROLE;
@@ -325,7 +360,7 @@ SELECT pg_temp.m144_login(1);
 SET LOCAL ROLE authenticated;
 DO $$ DECLARE issued jsonb;
 BEGIN
- issued:=public.patient_intake_issue(pg_temp.m144_id(10),pg_temp.m144_id(61),decode(repeat('ef',60),'hex'));
+ issued:=pg_temp.m144_issue(pg_temp.m144_id(10),pg_temp.m144_id(61),decode(repeat('ef',60),'hex'));
  PERFORM set_config('test.m144_final_invitation',issued::text,true);
 END $$;
 RESET ROLE;
@@ -387,7 +422,7 @@ SELECT pg_temp.m144_login(1);
 SET LOCAL ROLE authenticated;
 DO $$ DECLARE issued jsonb;
 BEGIN
- issued:=public.patient_intake_issue(pg_temp.m144_id(10),pg_temp.m144_id(63),decode(repeat('f1',60),'hex'));
+ issued:=pg_temp.m144_issue(pg_temp.m144_id(10),pg_temp.m144_id(63),decode(repeat('f1',60),'hex'));
  PERFORM set_config('test.m144_portal_invitation',issued::text,true);
 END $$;
 RESET ROLE;

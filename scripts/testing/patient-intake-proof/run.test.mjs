@@ -1,0 +1,60 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import {randomUUID} from 'node:crypto';
+import {assistantScopeList,authDiagnostic,browserResult,servicesStatus} from './run.mjs';
+
+test('browser diagnostics keep only closed intercept fields',()=>{
+ const output='intake_proof_stage:initial_fence\n'
+  +'intake_proof_issue_diagnostic:phase=fetch http=none rows=0 kind=terminal_timeout\n'
+  +'intake_proof_submit_diagnostic:phase=db_done http=200 rows=1 kind=none\n'
+  +'intake_proof_issue_diagnostic:phase=secret http=200 rows=1 kind=token=private\n';
+ const parsed=browserResult(output);
+ assert.deepEqual(parsed.markers,['initial_fence']);
+ assert.deepEqual(parsed.intercepts,{issue:'phase=fetch http=none rows=0 kind=terminal_timeout',submit:'phase=db_done http=200 rows=1 kind=none'});
+ assert.doesNotMatch(JSON.stringify(parsed),/secret|private/);
+});
+
+test('scoped assistant has a nonempty professional list excluding the visit owner',()=>{
+ const assigned=randomUUID(),visitOwner=randomUUID();
+ assert.deepEqual(assistantScopeList(assigned,visitOwner),[assigned]);
+ assert.throws(()=>assistantScopeList(visitOwner,visitOwner));
+ assert.throws(()=>assistantScopeList('not-a-member',visitOwner));
+});
+
+test('auth failures expose only fixed steps, bounded status and allowlisted SQLSTATE',()=>{
+ const dbError=Object.assign(Error('password=private patient=private'),{code:'23514'});
+ assert.equal(authDiagnostic('db_member_assistant',undefined,dbError),
+  'step=db_member_assistant kind=database http=none sqlstate=23514');
+ const authError=Object.assign(Error('token=private'),{code:'private',name:'AuthApiError'});
+ assert.equal(authDiagnostic('owner-a_verify',422,authError),
+  'step=owner-a_verify kind=auth_api http=422 sqlstate=other');
+ const unknown=authDiagnostic('secret-step',999,Error('token=private'));
+ assert.equal(unknown,'step=other kind=other http=none sqlstate=none');
+});
+
+test('reports only fixed services and bounded Compose fields',()=>{
+ const output=[
+  {Service:'db',State:'running',Health:'healthy',ExitCode:0,Name:'secret-container-name'},
+  {Service:'minio-createbucket',State:'exited',Health:'',ExitCode:42,Publishers:'password=secret'},
+  {Service:'injected-password',State:'running',Health:'healthy',ExitCode:0},
+ ].map(row=>JSON.stringify(row)).join('\n');
+ const status=servicesStatus(output);
+ assert.match(status,/\bdb=running_healthy_exit0\b/);
+ assert.match(status,/\bminio-createbucket=exited_none_exit42\b/);
+ assert.match(status,/\bauth=missing\b/);
+ assert.doesNotMatch(status,/secret|injected|container-name|password/);
+});
+
+test('rejects malformed rows and does not echo unknown status values',()=>{
+ assert.equal(servicesStatus('password=secret'), 'ps=unavailable');
+ const status=servicesStatus(JSON.stringify([{Service:'db',State:'secret',Health:'secret',ExitCode:'secret'},
+  {Service:'auth',State:'exited',Health:null,ExitCode:null}]));
+ assert.match(status,/\bdb=other_none_exitother\b/);
+ assert.match(status,/\bauth=exited_none_exitother\b/);
+ assert.doesNotMatch(status,/secret/);
+});
+
+test('accepts Compose JSON arrays as well as newline-delimited JSON',()=>{
+ const rows=[{Service:'db',State:'running',Health:'starting',ExitCode:0}];
+ assert.equal(servicesStatus(JSON.stringify(rows)),servicesStatus(rows.map(JSON.stringify).join('\n')));
+});
