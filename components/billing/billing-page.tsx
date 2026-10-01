@@ -38,6 +38,7 @@ interface ChargeRow {
 
 interface SubscriptionRow {
   id: string;
+  mpPreapprovalId?: string | null;
   estado: "PENDIENTE_ACTIVACION" | "ACTIVA" | "PAUSADA" | "CANCELADA" | "MOROSA";
   montoCents: number;
   payerEmail: string;
@@ -100,6 +101,9 @@ export function BillingPage({
 }: Props) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [cancelNeedsRefresh, setCancelNeedsRefresh] = useState(false);
+  const mutationInFlight = useRef(false);
+  const mutationDisabled = pending || cancelNeedsRefresh;
 
   // E3 · paywall que vende: el CTA del hero scrollea/enfoca el botón real de
   // activación dentro de SubscriptionCard (no duplica el flujo de MP).
@@ -119,34 +123,58 @@ export function BillingPage({
   };
 
   const onActivate = () => {
+    if (mutationInFlight.current) return;
+    mutationInFlight.current = true;
     setError(null);
     startTransition(async () => {
-      const res = await activateSubscriptionAction();
-      if (!res.ok) {
-        setError(res.error.message);
-        return;
+      try {
+        const res = await activateSubscriptionAction();
+        if (!res.ok) {
+          setError(res.error.message);
+          return;
+        }
+        // Redirigir al init_point de MP. window.location porque es URL externa.
+        window.location.href = res.data.initPoint;
+      } finally {
+        mutationInFlight.current = false;
       }
-      // Redirigir al init_point de MP. window.location porque es URL externa.
-      window.location.href = res.data.initPoint;
     });
   };
 
   const onCancel = () => {
+    if (mutationInFlight.current) return;
+    mutationInFlight.current = true;
     setError(null);
     startTransition(async () => {
-      const res = await cancelSubscriptionAction();
-      if (!res.ok) {
-        setError(res.error.message);
+      let needsRefresh = false;
+      try {
+        const res = await cancelSubscriptionAction();
+        if (!res.ok) {
+          setError(res.error.message);
+          needsRefresh = res.error.code === "network" || res.error.code === "db_error";
+        }
+      } catch {
+        needsRefresh = true;
+        setError("No pudimos confirmar la cancelación. Consultá el estado antes de volver a operar.");
+      } finally {
+        setCancelNeedsRefresh(needsRefresh);
+        mutationInFlight.current = needsRefresh;
       }
     });
   };
 
   const onSyncAmount = () => {
+    if (mutationInFlight.current) return;
+    mutationInFlight.current = true;
     setError(null);
     startTransition(async () => {
-      const res = await syncClinicAmountAction();
-      if (!res.ok) {
-        setError(res.error.message);
+      try {
+        const res = await syncClinicAmountAction();
+        if (!res.ok) {
+          setError(res.error.message);
+        }
+      } finally {
+        mutationInFlight.current = false;
       }
     });
   };
@@ -170,6 +198,11 @@ export function BillingPage({
           <h1>Suscripción Folio</h1>
           {error ? (
             <p role="alert" style={{ color: "var(--red)", marginTop: 4, fontSize: 13 }}>{error}</p>
+          ) : null}
+          {cancelNeedsRefresh ? (
+            <p style={{ marginTop: 8, fontSize: 13 }}>
+              <a href="/configuracion/billing">Consultar estado actualizado</a>
+            </p>
           ) : null}
         </div>
         <Link href="/configuracion" className="fi-btn fi-btn-ghost">
@@ -196,7 +229,7 @@ export function BillingPage({
         ) : null}
 
         {orgTipo === "CLINICA" && clinicPricing ? (
-          <ClinicPlanCard pricing={clinicPricing} pending={pending} onSyncAmount={onSyncAmount} />
+          <ClinicPlanCard pricing={clinicPricing} pending={pending} mutationDisabled={mutationDisabled} onSyncAmount={onSyncAmount} />
         ) : null}
 
         <div ref={subCardRef}>
@@ -206,6 +239,7 @@ export function BillingPage({
             planLabel={orgTipo === "CLINICA" ? "Plan Clínica" : "Plan Profesional"}
             payerEmail={payerEmail}
             pending={pending}
+            mutationDisabled={mutationDisabled}
             canReactivate={
               subscription != null &&
               canOfferReactivate({
@@ -235,10 +269,12 @@ export function BillingPage({
 function ClinicPlanCard({
   pricing,
   pending,
+  mutationDisabled,
   onSyncAmount,
 }: {
   pricing: ClinicPricingView;
   pending: boolean;
+  mutationDisabled: boolean;
   onSyncAmount: () => void;
 }) {
   return (
@@ -312,7 +348,7 @@ function ClinicPlanCard({
                 type="button"
                 className="fi-btn fi-btn-primary"
                 onClick={onSyncAmount}
-                disabled={pending}
+                disabled={mutationDisabled}
               >
                 {pending ? "Actualizando…" : "Actualizar monto"}
               </button>
@@ -360,6 +396,7 @@ function SubscriptionCard({
   planLabel,
   payerEmail,
   pending,
+  mutationDisabled,
   canReactivate,
   onActivate,
   onCancel,
@@ -369,6 +406,7 @@ function SubscriptionCard({
   planLabel: string;
   payerEmail: string;
   pending: boolean;
+  mutationDisabled: boolean;
   /** canOfferReactivate: PAUSADA siempre; MOROSA solo con gate bloqueado. */
   canReactivate: boolean;
   onActivate: () => void;
@@ -376,6 +414,25 @@ function SubscriptionCard({
 }) {
   const monto = formatArs(planPriceArs);
   const [confirming, setConfirming] = useState(false);
+  const cancellationControls = confirming ? (
+    <>
+      <span style={{ fontSize: 13, color: "var(--ink-2)" }}>
+        {subscription?.estado === "PENDIENTE_ACTIVACION"
+          ? "¿Cancelar esta suscripción pendiente en Mercado Pago?"
+          : "¿Cancelar? Seguís con acceso hasta el final del período pagado."}
+      </span>
+      <button type="button" className="fi-btn fi-btn-danger" onClick={onCancel} disabled={mutationDisabled}>
+        {pending ? "Cancelando…" : "Sí, cancelar"}
+      </button>
+      <button type="button" className="fi-btn fi-btn-ghost" onClick={() => setConfirming(false)} disabled={mutationDisabled}>
+        Volver
+      </button>
+    </>
+  ) : (
+    <button type="button" className="fi-btn fi-btn-danger" onClick={() => setConfirming(true)} disabled={mutationDisabled}>
+      Cancelar suscripción
+    </button>
+  );
 
   if (!subscription || subscription.estado === "CANCELADA") {
     return (
@@ -404,7 +461,7 @@ function SubscriptionCard({
                 type="button"
                 className="fi-btn fi-btn-primary"
                 onClick={onActivate}
-                disabled={pending}
+                disabled={mutationDisabled}
               >
                 {pending ? "Conectando con Mercado Pago…" : "Activar suscripción"}
               </button>
@@ -434,15 +491,18 @@ function SubscriptionCard({
                 pago.
               </p>
             </div>
-            <div className="cfg-plan-card-r">
-              <button
-                type="button"
-                className="fi-btn fi-btn-primary"
-                onClick={onActivate}
-                disabled={pending}
-              >
-                {pending ? "Reintentando…" : "Volver a activar"}
-              </button>
+            <div className="cfg-plan-card-r" style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+              {!confirming ? (
+                <button
+                  type="button"
+                  className="fi-btn fi-btn-primary"
+                  onClick={onActivate}
+                  disabled={mutationDisabled}
+                >
+                  {pending ? "Reintentando…" : "Volver a activar"}
+                </button>
+              ) : null}
+              {subscription.mpPreapprovalId ? cancellationControls : null}
             </div>
           </div>
         </div>
@@ -524,43 +584,12 @@ function SubscriptionCard({
               type="button"
               className="fi-btn fi-btn-primary"
               onClick={onActivate}
-              disabled={pending}
+              disabled={mutationDisabled}
             >
               {pending ? "Conectando con Mercado Pago…" : "Volver a activar"}
             </button>
           ) : null}
-          {confirming ? (
-            <>
-              <span style={{ fontSize: 13, color: "var(--ink-2)" }}>
-                ¿Cancelar? Seguís con acceso hasta el final del período pagado.
-              </span>
-              <button
-                type="button"
-                className="fi-btn fi-btn-danger"
-                onClick={onCancel}
-                disabled={pending}
-              >
-                {pending ? "Cancelando…" : "Sí, cancelar"}
-              </button>
-              <button
-                type="button"
-                className="fi-btn fi-btn-ghost"
-                onClick={() => setConfirming(false)}
-                disabled={pending}
-              >
-                Volver
-              </button>
-            </>
-          ) : (
-            <button
-              type="button"
-              className="fi-btn fi-btn-danger"
-              onClick={() => setConfirming(true)}
-              disabled={pending}
-            >
-              Cancelar suscripción
-            </button>
-          )}
+          {cancellationControls}
         </div>
       </div>
     </section>

@@ -67,4 +67,21 @@ do $$declare r public.suscripcion%rowtype; receipt jsonb; begin
  if has_function_privilege('authenticated','public.billing_record_charge(jsonb,integer,integer)','execute') then raise exception 'user can authorize payments'; end if;
  if has_table_privilege('authenticated','public.billing_followup_job','select') then raise exception 'user can read private jobs'; end if;
 end$$;
+-- Pending checkout cancellation uses the existing operation contract; no paid
+-- interval is manufactured, and a replay reads the same completed operation.
+do $$declare op jsonb; claimed jsonb; receipt jsonb; begin
+ update public.suscripcion set estado='PENDIENTE_ACTIVACION',proxima_cobro=null
+ where mp_preapproval_id='durable-test';
+ op:=public.billing_reserve_operation('99000000-0000-0000-0000-000000000001','cancel',3000000);
+ claimed:=public.billing_claim_operation((op->>'id')::uuid);
+ if not public.billing_mark_operation_write((op->>'id')::uuid,(claimed->>'lease_token')::uuid,'cancel') then raise exception 'pending cancellation phase not durable'; end if;
+ receipt:=public.billing_complete_operation((op->>'id')::uuid,(claimed->>'lease_token')::uuid,
+  '{"providerSubscriptionId":"durable-test","status":"CANCELADA","lastModified":"2026-09-08T20:00:00Z"}');
+ if receipt->>'estado' is distinct from 'CANCELADA' then raise exception 'pending checkout not cancelled'; end if;
+ if receipt->>'proxima_cobro' is not null then raise exception 'pending cancellation invented paid access'; end if;
+ if (select proxima_cobro from public.suscripcion where mp_preapproval_id='durable-test') is not null then raise exception 'pending cancellation changed paid interval'; end if;
+ claimed:=public.billing_claim_operation((op->>'id')::uuid);
+ if claimed->>'id' is distinct from op->>'id' or claimed->>'status' is distinct from 'done' then raise exception 'cancel replay lost completed operation'; end if;
+ if claimed->>'provider_id' is distinct from 'durable-test' then raise exception 'cancel replay lost provider identity'; end if;
+end$$;
 rollback;
