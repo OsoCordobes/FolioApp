@@ -1,8 +1,10 @@
 # Folio · avances comprobables
 
-Actualizado: 30/09/2026, horario de Copenhague. [El tablero técnico](LAUNCH-BOARD.md) conserva el detalle y los antecedentes. Cada fila cambia sólo ante un resultado o bloqueo real.
+Actualizado: 01/10/2026, horario de Copenhague. [El tablero técnico](LAUNCH-BOARD.md) conserva el detalle y los antecedentes. Cada fila cambia sólo ante un resultado o bloqueo real.
 
 **Ahora:** [PR191 publicada en Folio](https://foliosalud.com/): lectura, espacios, botones y marca coherentes en landing, ingreso, onboarding y miniweb. Revisión independiente aprobada en móvil/escritorio; versión publicada y ambos dominios comprobados. [Plan y evidencia](DESIGN-COHERENCE-PLAN.md).
+
+**Continuación01/10:** revisamos las4ramas reales de GitHub y el guardado del onboarding, medimos la carga de la landing y preparamos la guía de prueba y custodia externa. `market-ready` ya tiene su código integrado; PR188 sigue retenida por cobertura contractual pendiente. Ningún diagnóstico se cuenta como mejora publicada.
 
 **Cierre del30/09:** privacidad publicada; propuesta de landing descartada, sin contarla como mejora. La [propuesta del próximo ciclo](NEXT-LAUNCH-CYCLE.md) prioriza lo necesario para atender a los primeros clientes. Preparar herramientas o informes no cuenta como función entregada.
 

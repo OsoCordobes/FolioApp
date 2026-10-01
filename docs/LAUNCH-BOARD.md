@@ -1,16 +1,30 @@
 # Folio — tablero único de lanzamiento
 
-Actualizado: 30/09/2026, cierre de PR191. Autoridad operativa: esta copia en codex/launch-checkpoints. [AVANCES](AVANCES.md) contiene los19checkpoints y la vista breve del titular. Las fechas son comprobaciones, no estado en tiempo real.
+Actualizado: 01/10/2026, continuación autorizada tras PR191. Autoridad operativa: esta copia en codex/launch-checkpoints. [AVANCES](AVANCES.md) contiene los19checkpoints y la vista breve del titular. Las fechas son comprobaciones, no estado en tiempo real.
 
 ## Objetivo y método
 
 Lanzar Solo y Clínica, cinco especialidades, Google y portal para adultos; pacientes nuevos primero. Menores, WhatsApp automático, agentes operativos y traslado histórico desde Coofit quedan después. Priorizar riesgo, dependencias, utilidad y esfuerzo restante; cerrar con evidencia y tomar el siguiente paquete útil, sin semanas rígidas ni repetir controles vigentes. Piloto final: 14 días, tres profesionales, al menos cinco jornadas por persona y sin problemas graves pendientes.
 
-A dirige prioridades, aceptación y presupuesto. Máximo dos escritores aislados con contratos y revisión proporcional. D/Legal usaron Sol6.1High; C Medium para lectura y High para publicación; Landing Ultra por dirección humana. La pasada de coherencia usó Sol6.1High para escritor, críticas y revisión/operación independientes. Cuota al cierre30/09:67%usada/33%disponible, crédito62497.459246 y1reset disponible. No atribuir consumo exacto por agente. El titular retiró reserva15%, pero su instrucción posterior manda cerrar esta tanda y avisar antes de nuevos encargos. No agotar recursos artificialmente.
+A dirige prioridades, aceptación y presupuesto. Máximo dos escritores aislados con contratos y revisión proporcional. La pasada de coherencia usó Sol6.1High para escritor, críticas y revisión/operación independientes. Cuota consultada al iniciar01/10:75%usada/25%disponible, crédito62497.459246 y1reset disponible. No atribuir consumo exacto por agente. El titular retiró reserva15% y el01/10 autorizó continuar hasta consumir el uso útil disponible y aplicar después el reset. La pausa de cierre30/09 queda superada por esa instrucción. No agotar recursos artificialmente.
 
 Automatización `folio-manager-por-checkpoints`: PAUSED, sin modificar esa preferencia. Continuar directamente mientras haya trabajo útil; no esperar la hora ni prometer ejecución ininterrumpida.
 
-**Instrucción vigente del titular30/09, posterior al cierre:** abrir una pasada acotada de coherencia visual: criticar lo publicado, estudiar referencias profesionales y aplicar un sistema consistente a landing y superficies públicas. Mantener la estructura completa preferida, identidad violeta y comportamiento existente. Esta autorización reabre diseño, no los frentes clínicos ni los proveedores. [Plan y aceptación](DESIGN-COHERENCE-PLAN.md). El cierre anterior se conserva como antecedente.
+**Instrucción vigente01/10:** continuar el lanzamiento, coordinar también las otras sesiones e integrar el trabajo listo para evitar pendientes invisibles. El [siguiente tramo](NEXT-LAUNCH-CYCLE.md) pasa a ejecución por paquetes. PR191 y su [pasada visual](DESIGN-COHERENCE-PLAN.md) están cerradas: conservar estructura, identidad y evidencia; no iniciar otro rediseño. Siguen vigentes H3 y las autorizaciones específicas para proveedores, comunicaciones, cargos y decisiones clínicas. Una rama existente no equivale a trabajo pendiente ni justifica fusionar código retenido.
+
+### Paquetes activos01/10
+
+Base de producto común: master `6bfcaa13307fe6f52fac619368d082eeb685fe9a`. A mantiene los documentos de coordinación; no modifica producto. Encargos Sol6.1High, sin Docker local ni cambios de producción por estos diagnósticos.
+
+| Responsable | Resultado y archivos propios | Prueba y cierre |
+|---|---|---|
+| Agente ramas | Inventario de las4ramas remotas, evidencia en `branch-reconciliation-20261001/`. Sólo lectura de Git. | Clasificar por contenido/squash y preparar copia selectiva de documentos; no borrar ramas ni fusionar M147/M148/M150. |
+| Agente onboarding | Reproducir primero el guardado; checkout limpio `folio-onboarding-services/folio-app`, rama `codex/onboarding-services-reliability`. Sólo componentes/lógica de onboarding y sus pruebas si existe defecto actual demostrado. | Componente real y reloj controlado; registrar RED/causa antes del arreglo. Revisión independiente, tipos y pruebas afectadas. No atribuir los dos fallos históricos a una hipótesis. |
+| Agente rendimiento | Medir landing publicada móvil/escritorio; sólo evidencia `landing-performance-20261001/`. | Una línea base reproducible y máximo dos mejoras justificadas. No confundir laboratorio con usuarios reales ni modificar diseño/servidores. |
+| C · Continuidad | Preparar siguiente acción de custodia externa a partir de evidencia existente; `continuity-next-20261001/READY.md`. | Sólo lectura, sin capturar/restaurar/subir copias. Identificar acceso o decisión exacta pendiente; no contar la preparación como custodia completada. |
+| D · Experiencia | Guía sencilla para probar con datos ficticios; `pilot-guide-20261001/GUIA-PROFESIONAL.md` y `ACCEPTANCE.md`. | Contrastar rutas/funciones publicadas y límites; sin repetir smoke ni inventar decisiones clínicas. Revisión por A antes de entrega. |
+
+Las carpetas de evidencia están bajo `C:/Users/amiun/Documents/Codex/folio-manager-evidence/`. No se abren escritores de producto adicionales hasta liberar un puesto y aceptar un alcance concreto.
 
 ## Equipo y siguiente acción
 
@@ -22,7 +36,7 @@ Automatización `folio-manager-por-checkpoints`: PAUSED, sin modificar esa prefe
 | Legal/SEO | S1 y runner70ee23PASS, Node22 cubierto por CI app/callerPASS. PR190 publicada. Inactivo; P1/L4/H3 siguen retenidos. |
 | Diseño / Landing | PR191 publicada: candidato7f9c202f → master6bfcaa13, árbol592bd770 idéntico. Revisión SHIP y CI candidato aprobados; deployment READY/SHA exacto/gru1/ambos dominios/6GET aprobados. A contrastó 14/14 fuentes, nueve archivos protegidos y evidencia de publicación. Access36752567750 PASS Solo/Clínica; dos fallos previos preservados, causa sin explicar para seguimiento. Sin nueva implementación. |
 
-La pasada visual está publicada y cerrada. Críticas, escritor, revisor y operador terminaron; CI del candidato y master, despliegue y recibo final comprobados. Sin nuevo trabajo de producto. [Propuesta del próximo ciclo](NEXT-LAUNCH-CYCLE.md) sigue pendiente fuera de esta pasada. Automatización sigue PAUSED. La inestabilidad previa del ensayo de servicios requiere seguimiento acotado, sin repetir por rutina ni afirmar una reparación que no ocurrió.
+La tabla anterior conserva el cierre30/09; los encargos nuevos figuran arriba. La pasada visual está publicada y cerrada, con CI, despliegue y recibo final comprobados. Automatización sigue PAUSED. La inestabilidad previa del ensayo de servicios se investiga de forma acotada, sin repetir por rutina ni afirmar una reparación que no ocurrió.
 
 ## Producción y publicaciones
 

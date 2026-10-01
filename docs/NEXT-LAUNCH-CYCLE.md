@@ -1,6 +1,6 @@
 # Folio · siguiente tramo hacia los primeros clientes
 
-Propuesta del manager para revisar al cerrar la tanda del 30/09. No abre encargos nuevos. El [tablero](LAUNCH-BOARD.md) conserva la evidencia y [AVANCES](AVANCES.md) distingue lo publicado de lo pendiente.
+Plan del siguiente tramo, activado por el titular el01/10 después del cierre30/09. El [tablero](LAUNCH-BOARD.md) conserva los encargos y la evidencia; [AVANCES](AVANCES.md) distingue lo publicado de lo pendiente.
 
 ## Resultado buscado
 
@@ -32,4 +32,4 @@ La lista se toma por riesgo y dependencia, sin semanas obligatorias. Si un frent
 
 El titular dispone de un reset y aproximadamente 62.500 créditos. No hay una conversión fiable de ese saldo a horas ni a funcionalidades; no prometemos una fecha por el saldo. Se medirá la cuota compartida al inicio y cierre de bloques, sin atribuir consumo exacto a cada agente. El objetivo es llegar al servicio comprobado con el menor retrabajo, no agotar recursos.
 
-Al cerrar la tanda actual se informa el estado real y se pausa antes de nuevos encargos, como pidió el titular. Para el siguiente tramo, las intervenciones humanas se agruparán en una lista concreta: identidad/decisiones legales, accesos y ensayos externos autorizados, profesionales del piloto y aceptación visual. No hacen falta nuevas sesiones de planificación para cada paquete.
+El01/10 el titular autorizó seguir de un paquete útil al siguiente con la cuota restante y aplicar después su reset; esto sustituye la pausa solicitada para el cierre30/09. Las intervenciones humanas se agrupan en una lista concreta: identidad/decisiones legales, accesos y ensayos externos autorizados, profesionales del piloto y aceptación visual. No hacen falta nuevas sesiones de planificación para cada paquete ni se repiten verificaciones para consumir saldo.
