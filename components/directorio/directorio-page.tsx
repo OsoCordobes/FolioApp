@@ -8,6 +8,7 @@
  */
 
 import Link from "next/link";
+import "@/styles/public-experience.css";
 
 import { DirectorioCard } from "@/components/directorio/directorio-card";
 import { FolioMark } from "@/components/folio-mark";

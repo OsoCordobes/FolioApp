@@ -11,6 +11,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
+import "@/styles/public-experience.css";
 
 const TABS: Array<{ href: string; label: string }> = [
   { href: "/portal", label: "Inicio" },
