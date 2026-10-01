@@ -136,6 +136,47 @@ async function servicesRevision(organizationId:string){
  return Number(row.data!.onboarding_services_revision);
 }
 
+// Only categorical action results leave the browser proof, never Flight bodies or messages.
+const SERVICE_CODES=['auth_required','mfa_required','no_org','forbidden','not_found','validation','conflict','transition_invalid','locked','db_error','network'] as const;
+const SERVICE_OUTCOMES=['rejected','uncertain','review_required'] as const;
+function servicesActionCategory(body:string){
+ const unknown={result:'unknown',code:'unknown',outcome:'unknown',revision:'unknown'};
+ if(body.length>1_048_576)return unknown;
+ const chunks=new Map<string,unknown>();
+ for(const line of body.split('\n')){
+  const row=/^([0-9a-f]+):(.*)$/.exec(line);if(!row)continue;
+  try{const value:unknown=JSON.parse(row[2]);if(chunks.has(row[1]))return unknown;chunks.set(row[1],value);}catch{/* Non-JSON Flight chunks are not action results. */}
+ }
+ const root=chunks.get('0');if(!root||typeof root!=='object'||Array.isArray(root))return unknown;
+ let action=(root as Record<string,unknown>).a;
+ if(typeof action==='string')action=chunks.get(/^\$@([0-9a-f]+)$/.exec(action)?.[1]??'');
+ if(!action||typeof action!=='object'||Array.isArray(action))return unknown;
+ const result=action as Record<string,unknown>;
+ if(result.ok===true){
+  const revision=result.data&&typeof result.data==='object'&&!Array.isArray(result.data)?(result.data as Record<string,unknown>).revision:undefined;
+  return {result:'ok',code:'none',outcome:'none',revision:typeof revision==='number'&&Number.isSafeInteger(revision)&&revision>=0?String(revision):'unknown'};
+ }
+ if(result.ok!==false)return unknown;
+ const error=result.error&&typeof result.error==='object'&&!Array.isArray(result.error)?result.error as Record<string,unknown>:{};
+ const code=SERVICE_CODES.find(value=>value===error.code)??'unknown';
+ const outcome=error.mutationOutcome===undefined?'none':SERVICE_OUTCOMES.find(value=>value===error.mutationOutcome)??'unknown';
+ return {result:'rejected',code,outcome,revision:'unknown'};
+}
+function servicesAlertCategory(messages:string[]){
+ const known:Record<string,string>={
+  'Revisá los servicios antes de guardar.':'validation',
+  'No tenés permiso para esa acción.':'forbidden',
+  'Volvé a iniciar sesión.':'auth_required',
+  'Error en la base de datos.':'db_error',
+  'Cambió la cuenta o el consultorio activo. Volvé a cargar la página.':'account_changed',
+  'No pudimos leer los servicios guardados. Volvé a cargar para continuar.':'snapshot_read',
+  'No pudimos confirmar la cuenta activa. Volvé a cargar para continuar.':'owner_missing',
+  'Los servicios cambiaron. Cargá los guardados antes de continuar.':'conflict',
+  'No pudimos confirmar el guardado. Verificá el mismo cambio antes de editar.':'uncertain',
+  'No pudimos preparar el guardado. Habilitá almacenamiento del navegador y reintentá.':'prepare_storage',
+ };
+ return messages.length?messages.map(value=>Object.hasOwn(known,value.trim())?known[value.trim()]:undefined).find(Boolean)??'unknown':'none';
+}
 async function diagnosticWithin<T>(work:(signal:AbortSignal)=>PromiseLike<T>,fallback:T):Promise<T>{
  const controller=new AbortController();
  let timer:ReturnType<typeof setTimeout>|undefined;
@@ -225,6 +266,25 @@ async function serviceStep(page:Page,tipo:'INDEPENDIENTE'|'CLINICA',organization
  }
  await expect(page.getByRole('heading',{name:'¿Qué servicios ofrecés?'})).toBeVisible();
  await expect(page.getByRole('button',{name:'Agregar servicio'})).toBeEnabled();
+ const responses:Array<{http:string;result:string;code:string;outcome:string;revision:string}>=[];
+ const reads:Promise<void>[]=[];
+ const observe=(response:import('@playwright/test').Response)=>{
+  const request=response.request();
+  if(request.method()!=='POST'||new URL(request.url()).pathname!=='/onboarding'||reads.length>=9)return;
+  const http=String(response.status());
+  const index=reads.length;
+  reads.push(diagnosticWithin(()=>response.text(),'').then(body=>{
+   responses[index]={http:/^[1-5][0-9]{2}$/.test(http)?http:'none',...servicesActionCategory(body)};
+  }));
+ };
+ page.on('response',observe);
+ const finishObservation=async()=>{
+  page.off('response',observe);
+  await Promise.all(reads);
+  const alert=servicesAlertCategory(await diagnosticWithin(()=>page.locator('[role="alert"] > span[title], p[role="alert"]').allTextContents(),[]));
+  if(!responses.length)console.log(`services_proof_response:phase=initial_save count=0 http=none result=unknown code=unknown outcome=unknown revision=unknown alert=${alert}`);
+  for(const [index,response] of responses.entries())console.log(`services_proof_response:phase=initial_save count=${index+1} http=${response.http} result=${response.result} code=${response.code} outcome=${response.outcome} revision=${response.revision} alert=${alert}`);
+ };
   if(isClinic)await page.getByRole('button',{name:'Agregar servicio'}).click();
   else if(await page.getByRole('textbox',{name:'Nombre del servicio 1'}).count()===0)
    await page.getByRole('button',{name:'Agregar servicio'}).click();
@@ -263,10 +323,12 @@ async function serviceStep(page:Page,tipo:'INDEPENDIENTE'|'CLINICA',organization
    const timerBeforeText=timersBefore?`${timersBefore.scheduled},${timersBefore.fired},${timersBefore.cancelled}`:'unknown';
    const timerText=timerDiff?`${timerDiff.scheduled},${timerDiff.fired},${timerDiff.cancelled}`:'unknown';
    const presence=(value:boolean|null)=>value===null?'unknown':value?1:0;
+   await finishObservation();
    console.log(`services_proof_diagnostic:phase=initial_save db_ok=${dbOk?1:0} active_count=${dbOk?catalog!.count??'unknown':'unknown'} revision=${Number.isSafeInteger(revision)?revision:'unknown'} step_max=${Number.isSafeInteger(stepMax)?stepMax:'unknown'} name_match=${nameMatch?1:0} field_enabled=${fieldEnabled?1:0} alert=${alerts.length?1:0} alert_global=${alertsBySource.global} alert_services=${alertsBySource.services} alert_save_status=${alertsBySource.save_status} alert_other=${alertsBySource.other} verify=${verify?1:0} route=${pageRouteKind(page.url(),APP)} command_before=${presence(commandBefore)} command_after=${presence(commandAfter)} posts_before=${postSnapshot.before} posts_after=${postSnapshot.after} timers800_before_scheduled_fired_cancelled=${timerBeforeText} timers800_after_fill_delta_scheduled_fired_cancelled=${timerText}`);
    throw Error('services_proof_initial_save_missing');
   }
   posts.stop();
+  await finishObservation();
  const id=await storedService(organizationId,original);
  const initialRevision=await servicesRevision(organizationId);
  if(!isClinic){

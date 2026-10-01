@@ -33,7 +33,7 @@
 .fx-auth-state { font-size: 9px; padding: 4px 6px; border-radius: 4px; color: var(--accent); background: var(--accent-soft); white-space: nowrap; }
 .fx-auth-state.is-done { color: var(--green); background: var(--green-soft); }
 .fx-auth-state.is-waiting { color: var(--amber); background: var(--amber-soft); }
-.fx-auth-appointment.is-current { margin: 0 -9px; padding: 17px 9px; border-radius: 7px; border: 1px solid var(--line); background: var(--bg); }
+.fx-auth-appointment.is-current { margin: 0 -9px; padding: 17px 9px; border-radius: var(--control-radius); border: 1px solid var(--line); background: var(--bg); }
 .fx-auth-appointment.is-current + .fx-auth-appointment { border-top: 0; }
 .fx-auth-day figcaption { padding: 12px 0 15px; border-top: 1px solid var(--line-soft); font-size: 9px; color: var(--ink-3); text-align: center; line-height: 1.6; }
 .fx-auth-art-foot { margin: 0; color: var(--ink-3); font-size: 11px; line-height: 1.6; }
@@ -51,18 +51,18 @@
 .fx-auth-form .au-field > span:first-child, .fx-onb-shell .onb-field > span:first-child { font-family: var(--font-sans); font-size: 13px; font-weight: 550; letter-spacing: 0; text-transform: none; color: var(--ink); }
 .fx-auth-form .au-field-row { align-items: center; }
 .fx-auth-form .au-field input, .fx-onb-shell .onb-field input:not([type=checkbox]):not([type=radio]), .fx-onb-shell .onb-field select, .fx-onb-shell .onb-field textarea {
-  min-height: 48px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); font-family: var(--font-sans); font-size: 15px; line-height: 1.5; color: var(--ink); box-shadow: none;
+  min-height: var(--control-height); padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--control-radius); background: var(--surface); font-family: var(--font-sans); font-size: var(--text-body); line-height: 1.5; color: var(--ink); box-shadow: none;
 }
-.fx-auth-form .au-field input::placeholder, .fx-onb-shell input::placeholder, .fx-onb-shell textarea::placeholder { color: var(--ink-3); opacity: .78; }
+.fx-auth-form .au-field input::placeholder, .fx-onb-shell input::placeholder, .fx-onb-shell textarea::placeholder { color: var(--ink-3); opacity: 1; }
 .fx-auth-form .au-field input:focus, .fx-onb-shell .onb-field input:focus, .fx-onb-shell .onb-field select:focus, .fx-onb-shell .onb-field textarea:focus { outline: 3px solid color-mix(in srgb, var(--accent) 17%, transparent); outline-offset: 1px; border-color: var(--accent); }
 .fx-auth-form .au-field.is-err input, .fx-onb-shell .onb-field.is-err input { border-color: var(--red); background: var(--red-soft); }
 .fx-auth-form .au-pw input { padding-right: 48px; }
 .fx-auth-form .au-pw-toggle { width: 44px; height: 44px; right: 2px; border-radius: 5px; color: var(--ink-2); cursor: pointer; }
 .fx-auth-form .au-pw-toggle svg { width: 18px; height: 18px; }
-.fx-auth-form .au-btn-google, .fx-onb-shell .au-btn-google { min-height: 48px; padding: 12px 15px; border-radius: 7px; background: var(--surface); color: var(--ink); font-size: 13px; font-weight: 550; cursor: pointer; }
+.fx-auth-form .au-btn-google, .fx-onb-shell .au-btn-google { min-height: var(--control-height); padding: 12px 15px; border-radius: var(--control-radius); background: var(--surface); color: var(--ink); font-size: 13px; font-weight: 550; cursor: pointer; }
 .fx-auth-form .au-btn-google:hover, .fx-onb-shell .au-btn-google:hover { border-color: var(--accent); background: var(--bg); }
 .fx-auth-form .au-divider, .fx-onb-shell .au-divider { font-family: var(--font-sans); font-size: 11px; color: var(--ink-3); }
-.fx-auth-form .au-submit, .fx-onb-shell .onb-foot-next { min-height: 48px; padding: 12px 19px; border-radius: 7px; background: var(--accent); border: 1px solid var(--accent); font-family: var(--font-sans); font-size: 14px; font-weight: 600; box-shadow: 0 3px 8px color-mix(in srgb, var(--accent) 10%, transparent); cursor: pointer; }
+.fx-auth-form .au-submit, .fx-onb-shell .onb-foot-next { min-height: var(--control-height); padding: 12px 19px; border-radius: var(--control-radius); background: var(--accent); border: 1px solid var(--accent); font-family: var(--font-sans); font-size: 14px; font-weight: 600; box-shadow: 0 3px 8px color-mix(in srgb, var(--accent) 10%, transparent); cursor: pointer; }
 .fx-auth-form .au-submit::after { display: none; }
 .fx-auth-form .au-submit > svg { display: none; }
 .fx-auth-form .au-submit:not(:disabled):hover, .fx-onb-shell .onb-foot-next:not(:disabled):hover { background: var(--accent-2); border-color: var(--accent-2); transform: none; }
@@ -71,8 +71,8 @@
 .fx-auth-form button.au-link { min-height: 44px; }
 .fx-auth-form .au-link--ghost { padding: 8px 0; font-size: 12px; font-weight: 450; }
 .fx-auth-form .au-form-switch { padding-top: 23px; border-top-color: var(--line); font-size: 13px; line-height: 1.7; color: var(--ink-2); }
-.fx-auth-form .au-err, .fx-onb-shell .au-err { padding: 12px 14px; border-radius: 7px; font-family: var(--font-sans); font-size: 13px; line-height: 1.65; }
-.fx-auth-notice { margin: 0; padding: 12px 14px; background: var(--accent-soft); color: var(--ink); border: 1px solid var(--line); border-radius: 7px; font-size: 13px; line-height: 1.65; }
+.fx-auth-form .au-err, .fx-onb-shell .au-err { padding: 12px 14px; border-radius: var(--control-radius); font-family: var(--font-sans); font-size: 13px; line-height: 1.65; }
+.fx-auth-notice { margin: 0; padding: 12px 14px; background: var(--accent-soft); color: var(--ink); border: 1px solid var(--line); border-radius: var(--control-radius); font-size: 13px; line-height: 1.65; }
 .fx-auth-help { margin: 0; font-size: 13px; color: var(--ink-2); line-height: 1.75; }
 .fx-auth-email-icon { display: grid; place-items: center; width: 57px; height: 57px; border-radius: 15px; background: var(--accent-soft); color: var(--accent); }
 .fx-auth-form b { overflow-wrap: anywhere; }
@@ -126,7 +126,7 @@
 .fx-onb-shell .onb-preview-label { font-family: var(--font-sans); color: var(--ink); font-size: 13px; font-weight: 600; text-transform: none; letter-spacing: 0; }
 .fx-onb-shell .onb-preview-sticky { gap: 17px; padding-top: 11px; }
 .fx-onb-shell .onb-preview-fine { color: var(--ink-2); font-size: 12px; line-height: 1.75; margin: 0; max-width: 310px; }
-.fx-onb-shell .onb-preview-fab { position: static; margin-top: 18px; padding: 13px 16px; min-height: 46px; border-radius: 7px; background: var(--surface); color: var(--accent); border: 1px solid var(--line); box-shadow: none; font-size: 12px; cursor: pointer; }
+.fx-onb-shell .onb-preview-fab { position: static; margin-top: 18px; padding: 13px 16px; min-height: 46px; border-radius: var(--control-radius); background: var(--surface); color: var(--accent); border: 1px solid var(--line); box-shadow: none; font-size: 12px; cursor: pointer; }
 .fx-onb-shell dialog.onb-preview-drawer { max-width: none; max-height: none; width: 100%; height: 100%; margin: 0; padding: 0; border: 0; background: transparent; color: var(--ink); }
 .fx-onb-shell dialog.onb-preview-drawer:not([open]) { display: none; }
 .fx-onb-shell .onb-preview-drawer::backdrop { background: color-mix(in srgb, var(--ink) 35%, transparent); }
@@ -148,7 +148,7 @@
 .fx-onboarding .onb-moment-trial { max-width: 520px; padding: 14px 18px; border-radius: var(--r-md); background: var(--accent-soft); color: var(--ink-2); }
 .fx-onboarding .onb-moment-url { white-space: normal; overflow-wrap: anywhere; font-family: var(--font-sans); }
 .fx-onboarding .onb-moment-link-label { font-family: var(--font-sans); font-size: 12px; letter-spacing: 0; text-transform: none; }
-.fx-onboarding .onb-moment-cta { min-height: 48px; }
+.fx-onboarding .onb-moment-cta { min-height: var(--control-height); }
 .fx-onboarding .onb-moment-feedback { color: var(--ink-2); }
 .fx-onboarding .onb-moment :is(.onb-moment-mark, .onb-moment-head, .onb-moment-sub, .onb-moment-trial, .onb-moment-card, .onb-moment-link, .onb-moment-cta) { opacity: 1; animation: none; }
 @media (min-width: 1024px) {

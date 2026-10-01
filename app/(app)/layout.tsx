@@ -31,6 +31,8 @@ import {
 } from "@/lib/especialidades/meta";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
+export const metadata = { robots: { index: false, follow: false } };
+
 export default async function AppShellLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {

@@ -12,6 +12,8 @@ import { SideArt } from "@/components/auth/side-art";
 import { AuthForms } from "@/components/auth/login-form";
 import { MotionProvider } from "@/components/motion/motion-provider";
 
+export const metadata = { robots: { index: false, follow: false } };
+
 export default function LoginPage() {
   return (
     <MotionProvider>

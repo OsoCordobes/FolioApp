@@ -1,5 +1,5 @@
 .perfil-accent-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.perfil-accent-option { display: flex; align-items: center; gap: 9px; min-height: 46px; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); text-align: left; font: inherit; font-size: 12px; font-weight: 550; cursor: pointer; }
+.perfil-accent-option { display: flex; align-items: center; gap: 9px; min-height: 46px; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--control-radius); background: var(--surface); color: var(--ink); text-align: left; font: inherit; font-size: 12px; font-weight: 550; cursor: pointer; }
 .perfil-accent-option:hover { border-color: var(--ink-3); background: var(--surface-2); }
 .perfil-accent-option.is-selected { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
 .perfil-accent-option:disabled { cursor: not-allowed; opacity: .6; }
@@ -11,7 +11,7 @@
 .perfil-editor-label { color: var(--ink); font-size: 13px; font-weight: 600; }
 .perfil-editor-controls p { margin: 0; color: var(--ink-2); font-size: 12px; line-height: 1.55; }
 .perfil-editor-links { display: flex; flex-wrap: wrap; gap: 8px; }
-.perfil-editor-links :is(a, button) { display: inline-flex; align-items: center; min-height: 40px; padding: 8px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; font-size: 12px; font-weight: 600; text-decoration: none; cursor: pointer; }
+.perfil-editor-links :is(a, button) { display: inline-flex; align-items: center; min-height: 40px; padding: 8px 11px; border: 1px solid var(--line); border-radius: var(--control-radius); background: var(--surface); color: var(--ink); font: inherit; font-size: 12px; font-weight: 600; text-decoration: none; cursor: pointer; }
 .perfil-editor-links :is(a, button):hover { border-color: var(--ink-3); }
 .perfil-editor-links :is(a, button):focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .perfil-editor-logo { padding-top: 8px; border-top: 1px solid var(--line-soft); }
