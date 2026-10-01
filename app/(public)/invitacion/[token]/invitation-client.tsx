@@ -17,6 +17,7 @@
 import Script from "next/script";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
+import "@/styles/public-experience.css";
 
 import { signInWithPassword } from "@/app/(public)/login/actions";
 import { roleLabel, type Role } from "@/lib/auth/capabilities";

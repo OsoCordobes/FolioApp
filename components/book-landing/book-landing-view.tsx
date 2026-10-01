@@ -3,6 +3,7 @@
 
 import Image from "next/image";
 import type { ReactNode } from "react";
+import "@/styles/public-experience.css";
 
 import { AvatarIniciales } from "@/components/avatar-iniciales";
 import { Motif } from "@/components/book-landing/motifs";
