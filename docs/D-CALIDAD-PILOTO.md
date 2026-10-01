@@ -2,9 +2,11 @@
 
 **Estado al 27/09/2026:** lista de validación preparada; el piloto no está habilitado. Alcance: pacientes adultos nuevos, planes Solo y Clínica, tres profesionales durante 14 días y al menos cinco jornadas por persona. El producto registra cinco especialidades reales: quiropraxia, cardiología, psicología, kinesiología y nutrición (`lib/especialidades/meta.ts` y `registry.tsx`). Cada especialidad debe ser aprobada por una persona competente; si los tres participantes no cubren las cinco, se requieren revisores adicionales. Menores, importación histórica y afirmaciones no acreditadas quedan fuera.
 
-## Puertas y evidencia
+**Lectura vigente01/10:** la tabla siguiente conserva el corte histórico del27/09, incluidos intentos fallidos. Hay evidencia técnica posterior aprobada para acceso, exportación y M148–M150; consultar el [tablero activo](https://github.com/OsoCordobes/FolioApp/blob/codex/launch-checkpoints/docs/LAUNCH-BOARD.md) antes de decidir qué falta. Estas filas no declaran bloqueos actuales ni justifican repetir ensayos cerrados. H3 y las validaciones humanas del piloto siguen pendientes.
 
-| Recorrido a validar | Responsable humano | Evidencia mínima y criterio | Bloquea hoy |
+## Puertas y evidencia histórica al27/09
+
+| Recorrido a validar | Responsable humano | Evidencia mínima y criterio | Estado observado al27/09 |
 |---|---|---|---|
 | Alta y reingreso en **Solo** y **Clínica**: registro, MFA, elección de modalidad, invitación/alcance del equipo y reanudación sin reparación manual. | Titular del consultorio + QA | Video o capturas con versión exacta, roles usados, resultado y defectos; ninguna persona ve otra organización o un profesional fuera de su alcance. | **Sí:** Access de PR188 vuelve a fallar en `initial_save` (run `36274410842`); causa no demostrada. |
 | Paciente adulto nuevo: reserva o llegada sin turno, atestación de edad, enlace/QR de ingreso, envío, revocación y revisión profesional. | Responsable clínico + profesional tratante | Envío B09 completo y propuestas ocultas tras revocación. La incorporación única y sin sobreescritura depende del paquete posterior M148/app, todavía borrador. Referencias: `docs/B04-ADULT-CARE-CONTRACT.md`, `docs/B09-PATIENT-FORM-CONTRACT.md` y artifact B09 `run-36274410810/.../patient-intake-proof-summary.json`. | **Sí:** M147 aún no está productiva, M148/app no está aprobado y PR188 no está publicada. El PASS B09 no acredita incorporación ni cierra Access o decisiones humanas. |
@@ -21,4 +23,4 @@
 
 ## Regla de apertura
 
-Abrir sólo con PR188 publicada y controles fallidos resueltos; versión productiva y migraciones verificadas; responsables clínico, legal/privacidad, soporte y contingencia identificados; cinco especialidades aprobadas por revisores competentes; y ensayo previo sintético sin defectos críticos o altos abiertos dentro del alcance. Cerrar el piloto únicamente después de 14 días, tres profesionales, cinco jornadas por persona y revisión conjunta de incidentes. Un recorrido ya aprobado no se repite salvo cambio relevante, defecto o duda sobre la evidencia.
+Abrir sólo con PR188 publicada y bloqueos técnicos vigentes resueltos según el tablero activo; versión productiva y migraciones verificadas; responsables clínico, legal/privacidad, soporte y contingencia identificados; cinco especialidades aprobadas por revisores competentes; y ensayo previo sintético sin defectos críticos o altos abiertos dentro del alcance. Cerrar el piloto únicamente después de 14 días, tres profesionales, cinco jornadas por persona y revisión conjunta de incidentes. Un recorrido ya aprobado no se repite salvo cambio relevante, defecto o duda sobre la evidencia.
