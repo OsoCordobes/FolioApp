@@ -6,6 +6,10 @@ Actualizado: 01/10/2026, horario de Copenhague. [El tablero técnico](LAUNCH-BOA
 
 **Continuación01/10:** revisamos las4ramas reales de GitHub y el guardado del onboarding, medimos la carga de la landing y preparamos la guía de prueba y custodia externa. `market-ready` ya tiene su código integrado; PR188 sigue retenida por cobertura contractual pendiente. Ningún diagnóstico se cuenta como mejora publicada.
 
+**Entregas01/10:** [PR192](https://github.com/OsoCordobes/FolioApp/pull/192) reúne tablero, mapa de ramas y guía de prueba; aún en revisión. El onboarding pasó6casos aislados sin reproducir el fallo previo: no se afirma reparación. La landing midió0,37s escritorio/2,19s móvil simulado; optimización pequeña en curso. B resuelve tres conflictos de pruebas para actualizar la ficha preparada.
+
+**Continuidad01/10:** recibo de nueva copia automática completa contrastado; guardarla fuera del equipo y abrirla desde otro perfil sigue pendiente. Consulta contractual a Vercel preparada y esperando autorización para enviarla; no se habilitaron pacientes reales ni proveedores.
+
 **Cierre del30/09:** privacidad publicada; propuesta de landing descartada, sin contarla como mejora. La [propuesta del próximo ciclo](NEXT-LAUNCH-CYCLE.md) prioriza lo necesario para atender a los primeros clientes. Preparar herramientas o informes no cuenta como función entregada.
 
 **Regla de evidencia:** cada encargo tiene una razón, alcance y condición de cierre. Al terminar deja el cambio, una prueba verificable y sus límites; A contrasta el resultado antes de marcarlo terminado. Un fallo se conserva y sólo se repite la prueba cuando hay información o una corrección nueva.

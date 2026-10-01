@@ -26,6 +26,12 @@ Base de producto común: master `6bfcaa13307fe6f52fac619368d082eeb685fe9a`. A ma
 
 Las carpetas de evidencia están bajo `C:/Users/amiun/Documents/Codex/folio-manager-evidence/`. No se abren escritores de producto adicionales hasta liberar un puesto y aceptar un alcance concreto.
 
+**Avance01/10, 17:35UTC:** PR192 documental preparada en `5deaac3553534fe1fb10ec165b886d28700de871`, diez documentos y guía de prueba; CI automático y revisión independiente pendientes, sin merge. Auditoría de4heads cerrada: market-ready absorbida por PR165, manager documental, PR188 retenida. Escritorio actualizado ff-only a6bfcaa13, ajenos conservados. Diagnóstico onboarding cerrado:6casos del componente real pasan con acciones de memoria; sin defecto reproducido ni reparación, no prueba DB/producción. Rendimiento: baseline de laboratorio mediano LCP368ms escritorio/2192ms móvil y CLS0; optimización acotada de import CSS en preparación, no mejora publicada.
+
+**C/D/Legal01/10:** guía ficticia Solo/Clínica aceptada, incluida en PR192; exige espacio sin conexiones de proveedores y no habilita piloto real. C contrastó recibo automático01/10 17:01:35, `backup_20261001T165718355Z_b2b1058c-2aae-4a02-936b-0992ee750a56`, verificación0553ab46 y receiptc6a75e4c: completo/autenticado según recibo, sin nueva captura. Custodia fuera del equipo sigue pendiente de destino, responsables y apertura independiente; ZIP de configuración08/09 no prueba vigencia de todas las credenciales. Consulta contractual Vercel lista en `provider-question-20261001/CONSULTA-VERCEL.md`, no enviada: titular confirmó que aún no recibió acuerdo/respuesta y la autorización de envío está pendiente.
+
+**B01/10:** integración de PR188 con master encuentra tres conflictos en herramientas de prueba (bridge, auth runner, spec onboarding), sin conflictos textuales de producto/SQL. Se autoriza resolver esos tres archivos en un candidato local aislado manteniendo ambas garantías; revisión antes de push/CI, sin publicar ni aplicar M147. Paquete M148–M150 posterior queda intacto. Writers actuales: rendimiento y B; PR192 está congelada. Informes en `onboarding-reliability-20261001/REPORT.md`, `landing-performance-20261001/PERFORMANCE.md`, `continuity-next-20261001/READY.md` e `intake-integration-readiness-20261001/READY.md`.
+
 ## Equipo y siguiente acción
 
 | Área | Estado y siguiente paso |
