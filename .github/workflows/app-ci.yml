@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -29,50 +31,111 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      - name: Classify documentation-only PR from verified base
+        id: docs
+        shell: bash
+        env:
+          DOCS_ONLY_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          DOCS_ONLY_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          DOCS_ONLY_MERGE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          docs_only=false
+          classify_docs_only() {
+            [[ "$GITHUB_EVENT_NAME" == "pull_request" ]] || return 0
+            local base_sha="${DOCS_ONLY_BASE_SHA:-}" head_sha="${DOCS_ONLY_HEAD_SHA:-}" merge_sha="${DOCS_ONLY_MERGE_SHA:-}"
+            [[ "$base_sha" =~ ^[0-9a-f]{40}$ && "$head_sha" =~ ^[0-9a-f]{40}$ && "$merge_sha" =~ ^[0-9a-f]{40}$ ]] || return 0
+            local actual_sha parents helper_entry trusted result
+            actual_sha="$(git --no-replace-objects rev-parse --verify HEAD 2>/dev/null)" || return 0
+            [[ "$actual_sha" == "$merge_sha" ]] || return 0
+            parents="$(git --no-replace-objects show --no-patch --format=%P HEAD 2>/dev/null)" || return 0
+            [[ "$parents" == "$base_sha $head_sha" ]] || return 0
+            helper_entry="$(git --no-replace-objects ls-tree "$base_sha" -- scripts/ci/docs-only.mjs 2>/dev/null)" || return 0
+            [[ "$helper_entry" =~ ^100644\ blob\ [0-9a-f]{40}$'\t'scripts/ci/docs-only\.mjs$ ]] || return 0
+            trusted="$(mktemp "$RUNNER_TEMP/folio-docs-only-XXXXXX.mjs")" || return 0
+            if git --no-replace-objects show "$base_sha:scripts/ci/docs-only.mjs" > "$trusted"; then
+              if result="$(node "$trusted")" && [[ "$result" == "docs_only=true" ]]; then
+                docs_only=true
+              fi
+            fi
+            rm -- "$trusted"
+          }
+          classify_docs_only
+          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
+
+      - name: Verify conservative documentation classifier
+        run: node --test tests/unit/ci-docs-only.test.mjs
+
       - name: Install dependencies
+        if: steps.docs.outputs.docs_only != 'true'
         run: pnpm install --frozen-lockfile
 
       - name: Typecheck
+        if: steps.docs.outputs.docs_only != 'true'
         run: pnpm typecheck
 
       - name: Lint
+        if: steps.docs.outputs.docs_only != 'true'
         run: pnpm lint
 
       - name: Unit tests
+        if: steps.docs.outputs.docs_only != 'true'
         run: pnpm test:unit
 
       - name: Install Chromium for isolated walk-in smoke
+        if: steps.docs.outputs.docs_only != 'true'
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Verify onboarding paths and public booking with synthetic browser responses
+        if: steps.docs.outputs.docs_only != 'true'
         env:
           E2E_BASE_URL: http://127.0.0.1:4430
         run: pnpm test:e2e -- tests/e2e/onboarding-choice.spec.ts tests/e2e/onboarding-flow-synthetic.spec.ts tests/e2e/signup-consent-ratelimit.spec.ts tests/e2e/book-public.spec.ts
 
       - name: Verify signup challenge and password recovery with synthetic browser responses
+        if: steps.docs.outputs.docs_only != 'true'
         env:
           E2E_BASE_URL: http://127.0.0.1:4430
           FOLIO_TEST_TURNSTILE_SITEKEY: 2x00000000000000000000AB
         run: pnpm test:e2e -- tests/e2e/turnstile-recovery.spec.ts tests/e2e/forgot-recovery.spec.ts
 
       - name: Verify walk-in creation with synthetic server responses
+        if: steps.docs.outputs.docs_only != 'true'
         run: node tests/hoy/run-isolated.mjs browser-create
 
       - name: Verify rescheduling and uncertain response recovery
+        if: steps.docs.outputs.docs_only != 'true'
         run: node tests/hoy/run-isolated.mjs browser-reschedule
 
       - name: Verify atomic close and payment recovery with synthetic responses
+        if: steps.docs.outputs.docs_only != 'true'
         run: node tests/hoy/run-isolated.mjs browser-close
 
       - name: Verify clinical archive navigation and interrupted downloads
+        if: steps.docs.outputs.docs_only != 'true'
         run: node tests/hoy/run-isolated.mjs browser-archive
 
       - name: Render long clinical PDFs with synthetic data
+        if: steps.docs.outputs.docs_only != 'true'
         run: node tests/pdf/render-real.cjs
 
       - name: Recovery format tests (synthetic keys only)
+        if: steps.docs.outputs.docs_only != 'true'
         run: pnpm test:recovery
 
       # Isolated build: synthetic keys, local-only endpoints, no .env files or provider I/O.
       - name: Isolated build
+        if: steps.docs.outputs.docs_only != 'true'
         run: pnpm test:build
+
+      - name: Summary
+        if: always()
+        env:
+          DOCS_ONLY: ${{ steps.docs.outputs.docs_only }}
+        run: |
+          echo "## App CI" >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$DOCS_ONLY" == "true" ]]; then
+            echo "Allowlisted Markdown-only PR. Application typecheck, lint, unit, browser, recovery and build checks were NOT executed. Classifier regression checks ran separately." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Full application pipeline selected; inspect individual step results for completion." >> "$GITHUB_STEP_SUMMARY"
+          fi
