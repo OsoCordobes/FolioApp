@@ -88,11 +88,22 @@ export async function captureManualFailure(error,collect,receipt,persist){
 }
 
 export const CALENDAR_HOY_STEPS=['reload','card-wait','label-check','detail-link','hoy-navigation',
- 'row-wait','row-label','service-check','patient-navigation','receipt-write'];
+ 'row-visible-wait','row-count-check','row-label','service-check','patient-navigation','receipt-write'];
+/** Match only known local Playwright messages; return a literal, never the message. */
+export function calendarHoyExceptionClass(error){
+ try{
+  const message=error?.message;if(typeof message!=='string')return 'unavailable';
+  if(message.includes('strict mode violation:'))return 'strict-selector';
+  if(message.includes('Target page, context or browser has been closed'))return 'page-context-closed';
+  if(message.includes('Execution context was destroyed'))return 'execution-context';
+  return 'other';
+ }catch{return 'unavailable';}
+}
 /** Failure-only UI observation: no actions, DB calls, raw text, URLs or errors survive. */
 export async function collectCalendarHoyDiagnostic({staff,error,step,navigationStatus,plan,serviceName,pacienteId,appUrl}){
  const observe=async fn=>{try{return await fn();}catch{return null;}};
  const diagnostic={phase:'calendar-hoy',step:CALENDAR_HOY_STEPS.includes(step)?step:'unavailable',
+  exceptionClass:calendarHoyExceptionClass(error),
   errorKind:error?.code==='ERR_ASSERTION'?'assertion':error?.name==='TimeoutError'?'timeout':
    error?.name==='TypeError'?'type':error?.name==='Error'?'error':'other',
   navigation:Number.isInteger(navigationStatus)?(navigationStatus>=200&&navigationStatus<300?'success':
@@ -278,8 +289,10 @@ export async function provePublicBookingJoined({actor,service,scope,isolation,co
    calendarStep='hoy-navigation';calendarNavigationStatus=null;
    const hoyNavigation=await staff.goto('/hoy');calendarNavigationStatus=hoyNavigation?.status()??null;
    const today=staff.locator('.fi-turno').filter({hasText:NAME});
-   calendarStep='row-wait';
-   await today.waitFor();assert.equal(await today.count(),1);
+   calendarStep='row-visible-wait';
+   await today.waitFor();
+   calendarStep='row-count-check';
+   assert.equal(await today.count(),1);
    calendarStep='row-label';
    assert.ok((await today.getAttribute('aria-label')).includes(plan.hora));
    calendarStep='service-check';

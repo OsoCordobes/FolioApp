@@ -6,13 +6,17 @@ import {finishCalendarHoyDiagnostic,finishManualDiagnostic,joinedReceipt,finishJ
 
 test('calendar diagnostic sanitizer closes enums and drops raw data without granting PASS',()=>{
  const secret='private html URL stack token';
- const source={phase:'calendar-hoy',step:'detail-link',errorKind:'timeout',navigation:'success',route:'calendario',error:secret,url:secret,html:secret,
+ const source={phase:'calendar-hoy',step:'detail-link',exceptionClass:'strict-selector',errorKind:'timeout',navigation:'success',route:'calendario',error:secret,url:secret,html:secret,
   ui:{card:'one',dialog:'many',detailLink:'zero',row:'unavailable',cardName:true,cardTime:false,cardService:null,rowName:null,rowTime:null,rowService:null,
    calendarPatientLink:false,patientDestination:false,text:secret},readback:{body:secret}};
  const output=finishCalendarHoyDiagnostic(source);assert.equal(output.step,'detail-link');assert.equal(output.ui.detailLink,'zero');
  assert.equal(output.ui.cardTime,false);assert.ok(!JSON.stringify(output).includes(secret));assert.equal(output.readback,undefined);
  const receipt=complete();receipt.failure='calendar-hoy';receipt.diagnostic=source;
  const saved=finishJoinedReceipt(receipt);assert.deepEqual(saved.diagnostic,output);assert.equal(saved.passed,false);
+ for(const exceptionClass of ['strict-selector','page-context-closed','execution-context','other','unavailable']){
+  source.exceptionClass=exceptionClass;assert.equal(finishCalendarHoyDiagnostic(source).exceptionClass,exceptionClass);
+ }
+ source.exceptionClass=secret;assert.equal(finishCalendarHoyDiagnostic(source).exceptionClass,'unavailable');
  for(const key of ['step','errorKind','navigation','route'])source[key]=secret;
  for(const key of Object.keys(source.ui))source.ui[key]=secret;
  const invalid=finishCalendarHoyDiagnostic(source);

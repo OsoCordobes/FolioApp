@@ -36,6 +36,7 @@ export function finishCalendarHoyDiagnostic(value){
  if(!value||typeof value!=='object')return null;
  const ui=value.ui??{};
  return {phase:'calendar-hoy',step:permitted(value.step,CALENDAR_HOY_STEPS,'unavailable'),
+  exceptionClass:permitted(value.exceptionClass,['strict-selector','page-context-closed','execution-context','other','unavailable'],'unavailable'),
   errorKind:permitted(value.errorKind,['assertion','timeout','type','error','other'],'other'),
   navigation:permitted(value.navigation,['success','redirect','client-error','server-error','other','unavailable'],'unavailable'),
   route:permitted(value.route,['calendario','hoy','patient','login','other','unavailable'],'unavailable'),

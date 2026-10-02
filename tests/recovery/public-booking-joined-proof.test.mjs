@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {readFileSync} from 'node:fs';
 import {guardBrowserContext,LOCAL_BROWSER_ARGS} from '../../scripts/testing/browser-network.mjs';
-import {assertHoyPatientDestination,assertJoinedInputs,CALENDAR_HOY_STEPS,captureCalendarHoyFailure,captureManualFailure,collectCalendarHoyDiagnostic,collectManualDiagnostic,JOINED_PROJECT,pedidoDialog,todayPlan} from '../../scripts/testing/public-booking-joined-proof/prove.mjs';
+import {assertHoyPatientDestination,assertJoinedInputs,CALENDAR_HOY_STEPS,calendarHoyExceptionClass,captureCalendarHoyFailure,captureManualFailure,collectCalendarHoyDiagnostic,collectManualDiagnostic,JOINED_PROJECT,pedidoDialog,todayPlan} from '../../scripts/testing/public-booking-joined-proof/prove.mjs';
 
 const calendarInput=()=>({staff:null,error:new Error('private stack'),step:'reload',navigationStatus:null,
  plan:{hora:'14:30'},serviceName:'synthetic service',pacienteId:'11111111-1111-4111-8111-111111111111',appUrl:'http://127.0.0.1:4410'});
@@ -14,12 +14,33 @@ function calendarStaff({url='http://127.0.0.1:4410/hoy?secret=private',cardCount
  return {url:()=>{if(fail)throw Error('private URL');return url;},locator:selector=>selector==='.cal-turno'?card:row,getByRole:()=>dialog};
 }
 
+test('calendar diagnostic exception classes discard messages and leave unknown failures other',async()=>{
+ const secret='private@example.invalid http://127.0.0.1:4410/private?token=private';
+ for(const [message,expected] of [['locator.waitFor: strict mode violation: private resolved to 2 elements','strict-selector'],
+  ['locator.count: Target page, context or browser has been closed','page-context-closed'],
+  ['Execution context was destroyed, most likely because of a navigation.','execution-context'],
+  ['private unknown error','other'],['Timeout 30000ms exceeded.','other'],['','other']]){
+  const error=new Error(`${message} ${secret}`),original=error.message;
+  Object.defineProperty(error,'stack',{get(){throw Error('stack must not be read');}});
+  assert.equal(calendarHoyExceptionClass(error),expected);assert.equal(error.message,original);
+  for(const step of ['row-visible-wait','row-count-check']){
+   const result=await collectCalendarHoyDiagnostic({...calendarInput(),error,step});
+   assert.equal(result.step,step);assert.equal(result.exceptionClass,expected);assert.ok(!JSON.stringify(result).includes(secret));
+   assert.equal(result.message,undefined);assert.equal(result.stack,undefined);
+  }
+ }
+ for(const error of [null,{},'private', {message:42}, {get message(){throw Error('private');}}])assert.equal(calendarHoyExceptionClass(error),'unavailable');
+ const source=readFileSync(new URL('../../scripts/testing/public-booking-joined-proof/prove.mjs',import.meta.url),'utf8');
+ assert.match(source,/calendarStep='row-visible-wait';\s*await today\.waitFor\(\);\s*calendarStep='row-count-check';\s*assert\.equal\(await today\.count\(\),1\);/);
+});
+
 test('calendar diagnostic closes substeps, error kinds, navigation and route categories',async()=>{
- assert.deepEqual(CALENDAR_HOY_STEPS,['reload','card-wait','label-check','detail-link','hoy-navigation','row-wait','row-label','service-check','patient-navigation','receipt-write']);
+ assert.deepEqual(CALENDAR_HOY_STEPS,['reload','card-wait','label-check','detail-link','hoy-navigation','row-visible-wait','row-count-check','row-label','service-check','patient-navigation','receipt-write']);
  for(const step of [...CALENDAR_HOY_STEPS,'private']){
   const result=await collectCalendarHoyDiagnostic({...calendarInput(),step});
   assert.equal(result.step,step==='private'?'unavailable':step);
  }
+ assert.equal((await collectCalendarHoyDiagnostic({...calendarInput(),step:'row-wait'})).step,'unavailable');
  for(const [name,code,kind] of [['Error','ERR_ASSERTION','assertion'],['TimeoutError',null,'timeout'],['TypeError',null,'type'],['Error',null,'error'],['toString',null,'other']]){
   const result=await collectCalendarHoyDiagnostic({...calendarInput(),error:{name,code,message:'private'}});assert.equal(result.errorKind,kind);
  }
