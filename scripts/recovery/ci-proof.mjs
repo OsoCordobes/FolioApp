@@ -21,7 +21,7 @@ import {requireEmptyS3Bucket} from './ci-s3-preflight.mjs';
 const repo=path.resolve(fileURLToPath(new URL('../../',import.meta.url)));
 const compose=path.join(repo,'scripts/recovery/ci-compose.yml');
 const upstreamCommit='8c7a4d9dbbaf8b552893822e89d7bf06f33f9220';
-const images=['supabase/postgres:17.6.1.136','supabase/gotrue:v2.196.0','postgrest/postgrest:v14.17','supabase/storage-api:v1.74.0','envoyproxy/envoy:v1.39.1','cgr.dev/chainguard/minio@sha256:bd014394a80898e68c149f2311fdf8d5a2c2f3bb2c33b9327ae6d02b4b065ae1','cgr.dev/chainguard/minio-client@sha256:f0dd93b48af1f8a641edcd3c64661c8dbe05189bd2ef2f8cea216eb18af10bf8'];
+const images=['supabase/postgres:17.11.0.002@sha256:0450166354dc9c1d25f0322ac8b580774d4fb0184d2b087f6e4fe9499c66cf53','supabase/gotrue:v2.196.0','postgrest/postgrest:v14.17','supabase/storage-api:v1.74.0','envoyproxy/envoy:v1.39.1','cgr.dev/chainguard/minio@sha256:bd014394a80898e68c149f2311fdf8d5a2c2f3bb2c33b9327ae6d02b4b065ae1','cgr.dev/chainguard/minio-client@sha256:f0dd93b48af1f8a641edcd3c64661c8dbe05189bd2ef2f8cea216eb18af10bf8'];
 const source='folio_c01_source',destination='folio_c01_destination';
 const api='http://127.0.0.1:55421';
 const dbPort=55422;
@@ -78,6 +78,19 @@ const client=(key)=>createClient(api,key,authOptions);
 const must=(result,label)=>{if(result.error)throw Error(`${label}_failed`);return result.data;};
 const pg=(password,database='postgres')=>new Client({host:'127.0.0.1',port:dbPort,user:'postgres',password,database,connectionTimeoutMillis:10000,statement_timeout:30000});
 async function withPg(password,database,fn){const c=pg(password,database);await c.connect();try{return await fn(c);}finally{await c.end();}}
+async function recordDatabaseRuntime(password,database,phase,root){
+ const metadata=await withPg(password,database,async db=>({
+  serverVersionNum:(await db.query("SELECT current_setting('server_version_num')::int AS n")).rows[0].n,
+  installed:(await db.query('SELECT extname, extversion FROM pg_extension ORDER BY extname')).rows,
+  available:(await db.query('SELECT name, default_version, installed_version FROM pg_available_extensions ORDER BY name')).rows,
+ }));
+ const metadataSha256=sha(JSON.stringify(metadata));
+ await writeJson(path.join(root,`${phase}-database-runtime.json`),{phase,database,metadataSha256,...metadata});
+ // Only catalog versions are printed; fixtures, keys and Auth data stay private.
+ console.log(`c01_database_runtime:${JSON.stringify({phase,database,metadataSha256,...metadata})}`);
+ assert.equal(metadata.serverVersionNum,170011,'C01 requires the exact PostgreSQL 17.11 runtime');
+ return metadata;
+}
 async function waitApi(anon){let last='no_response';for(let i=0;i<36;i++){try{const r=await fetch(`${api}/auth/v1/settings`,{headers:{apikey:anon},signal:AbortSignal.timeout(2000)});if(r.ok)return;last=`http_${r.status}`;}catch{}await new Promise(r=>setTimeout(r,3000));}throw Error(`api_unhealthy_${last}`);}
 async function ensureFresh(sourceEnv,destinationEnv){
  for(const [project,projectEnv] of [[source,sourceEnv],[destination,destinationEnv]]){
@@ -353,10 +366,12 @@ async function main(){
   await dc(source,['up','-d','--wait'],env);
   await assertInternal(source,env);
   dbBridge=await startBridge(source,'db',dbPort,5432,env);
+  stage='source_runtime';await recordDatabaseRuntime(dbPassword,'postgres','source_initialized',root);
   apiBridge=await startBridge(source,'api-gw',55421,8000,env);
   assert.equal((await withPg(state.dbPassword,'postgres',async db=>(await db.query("SELECT current_setting('cron.database_name') AS database_name")).rows[0]?.database_name)),'postgres');
   await waitApi(state.anonKey);
   stage='migrations';const migrationCount=await applyMigrations(dbPassword,env);
+  stage='source_runtime';const sourceRuntime=await recordDatabaseRuntime(dbPassword,'postgres','source_migrated',root);
   stage='source_fixture';const fixture=await seed(state);
   stage='capture';const backup=await capture(state,fixture,root,env);
   stage='source_stop';
@@ -367,12 +382,15 @@ async function main(){
   await dc(destination,['up','-d','--wait','db','minio'],destinationEnv);
   await assertProjectInternalNetwork(destination,destinationEnv);
   dbBridge=await startBridge(destination,'db',dbPort,5432,destinationEnv);
+  stage='target_runtime';await recordDatabaseRuntime(dbPassword,'postgres','destination_initialized',root);
   stage='target_s3_preflight';await preflightEmptyDestinationBucket(destinationEnv);
   stage='target_prerequisites';await inspectCronPrerequisites(state,backup);
   await prepareTargetRoles(state,backup);
   stage='target_empty';
   const pid=await createTarget(state,destinationEnv);
   stage='database_restore';await restore(state,backup,root,destinationEnv,pid);
+  stage='target_runtime';const restoredRuntime=await recordDatabaseRuntime(dbPassword,targetDatabase,'destination_restored',root);
+  assert.deepEqual(restoredRuntime.installed,sourceRuntime.installed,'Restored extension versions must equal the pinned source catalog');
   stage='target_services';const targetEnv={...destinationEnv,C01_APP_DATABASE:targetDatabase};
   await dc(destination,['up','-d','--wait'],targetEnv);
   await assertInternal(destination,targetEnv);

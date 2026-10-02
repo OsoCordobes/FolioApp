@@ -4,7 +4,7 @@
 # use OCI index digests verified from cgr.dev (including linux/amd64).
 services:
   db:
-    image: supabase/postgres:17.6.1.136
+    image: supabase/postgres:17.11.0.002@sha256:0450166354dc9c1d25f0322ac8b580774d4fb0184d2b087f6e4fe9499c66cf53
     environment:
       POSTGRES_HOST: /var/run/postgresql
       PGPORT: "5432"

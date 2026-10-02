@@ -1,23 +1,23 @@
-name: Folio C01 synthetic recovery proof
+name: Operational Supabase 17.11 C01 recovery proof (not for product PR)
 
 on:
-  pull_request:
-    paths:
-      - .github/workflows/folio-recovery-proof.yml
-      - scripts/backup/**
-      - scripts/recovery/**
-      - tests/recovery/**
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Full commit SHA expected at checkout
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: folio-c01-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: folio-ops-supabase1711-20261002
+  cancel-in-progress: false
 
 jobs:
   recovery-proof:
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'OsoCordobes/FolioApp' && github.ref == 'refs/tags/codex/ops-supabase1711-20261002' && github.run_attempt == 1
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
@@ -27,7 +27,19 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.sha }}
+      - name: Verify operational checkout identity before installing or starting services
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          set -euo pipefail
+          test "${#EXPECTED_SHA}" -eq 40
+          [[ "$EXPECTED_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test "$GITHUB_SHA" = "$EXPECTED_SHA"
+          test "$GITHUB_REF" = 'refs/tags/codex/ops-supabase1711-20261002'
+          test "$GITHUB_RUN_ATTEMPT" = '1'
       - uses: pnpm/action-setup@v4
         with:
           version: 10
