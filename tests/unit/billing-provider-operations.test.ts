@@ -2,19 +2,19 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { runProviderOperation } from "../../lib/billing/provider-operations";
 const providerInfo={providerSubscriptionId:"created",status:"PENDIENTE",amountCents:3000000,currency:"ARS",payerEmail:null,externalReference:"folio_operation_op",checkoutUrl:"https://example.invalid/checkout",nextChargeDate:null,lastModified:"2026-09-08T10:00:00Z",liveMode:true};
-function fixture(config:{phase?:string;kind?:string;matches?:number;remoteAmount?:number;busy?:boolean;finishError?:boolean}={}) {
+function fixture(config:{phase?:string;kind?:string;matches?:number;remoteAmount?:number;busy?:boolean;finishError?:boolean;remoteStatus?:string;cancelResponseLost?:boolean}={}) {
  const calls:string[]=[]; const writes:Record<string,unknown>[]=[];
  const chain={select:()=>chain,eq:()=>chain,update:(value:Record<string,unknown>)=>{writes.push(value);return chain;},single:async()=>({data:{payer_email:"synthetic@example.invalid"},error:null})};
- const client={from:()=>chain,rpc:async(name:string)=>{
+ const client={from:()=>chain,rpc:async(name:string,args?:{p_phase?:string})=>{
   calls.push(name);
   if(name==="billing_claim_operation")return {data:config.busy?null:{id:"op",organization_id:"org",subscription_id:"sub",kind:config.kind??"create",phase:config.phase??"create",amount_cents:3000000,previous_preapproval_id:config.kind?"previous":null,status:"processing",idempotency_key:"stable",lease_token:"token",attempts:2},error:null};
-  if(name==="billing_mark_operation_write")return {data:true,error:null};
+  if(name==="billing_mark_operation_write"){config.phase=args?.p_phase;return {data:true,error:null};}
   return {data:config.finishError?null:{id:"sub",monto_cents:3000000},error:config.finishError?{}:null};
  }};
  const provider={name:"synthetic",findSubscriptionsForOperation:async()=>{calls.push("search");return Array.from({length:config.matches??1},()=>providerInfo);},
- fetchSubscription:async()=>{calls.push("fetch");return {...providerInfo,providerSubscriptionId:"previous",amountCents:config.remoteAmount??3000000};},
+ fetchSubscription:async()=>{calls.push("fetch");return {...providerInfo,providerSubscriptionId:"previous",amountCents:config.remoteAmount??3000000,status:config.remoteStatus??"PENDIENTE"};},
  createSubscription:async()=>{calls.push("CREATE");return {subscription:providerInfo,checkoutUrl:providerInfo.checkoutUrl};},
- updateSubscriptionAmount:async()=>{calls.push("UPDATE");return providerInfo;},cancelSubscription:async()=>{calls.push("CANCEL");return {...providerInfo,status:"CANCELADA"};}};
+ updateSubscriptionAmount:async()=>{calls.push("UPDATE");return providerInfo;},cancelSubscription:async()=>{calls.push("CANCEL");config.remoteStatus="CANCELADA";if(config.cancelResponseLost)throw Error("synthetic lost response after provider commit");return {...providerInfo,providerSubscriptionId:"previous",status:"CANCELADA"};}};
  return {deps:{client,provider},calls,writes};
 }
 test("uncertain creation with no observed provider match never repeats POST",async()=>{
@@ -46,4 +46,17 @@ test("busy operation lease makes no external request",async()=>{
 });
 test("provider success plus DB failure stays unresolved for observational repair",async()=>{
  const f=fixture({finishError:true});const r=await runProviderOperation("op",f.deps as never);assert.equal(r.ok,false);assert.equal(f.writes[0].status,"uncertain");
+});
+test("confirmed pending subscription cancellation reads then writes exactly once",async()=>{
+ const f=fixture({kind:"cancel",phase:"pending"});const r=await runProviderOperation("op",f.deps as never);
+ assert.equal(r.ok,true);assert.deepEqual(f.calls,["billing_claim_operation","fetch","billing_mark_operation_write","CANCEL","billing_complete_operation"]);
+ assert.ok(!f.calls.includes("CREATE"));
+});
+test("lost cancellation response recovers same operation via GET without another CANCEL",async()=>{
+ const f=fixture({kind:"cancel",phase:"pending",cancelResponseLost:true});
+ const first=await runProviderOperation("op",f.deps as never);assert.equal(first.ok,false);assert.equal(f.writes[0].status,"uncertain");
+ const recovered=await runProviderOperation("op",f.deps as never);assert.equal(recovered.ok,true);
+ assert.equal(f.calls.filter(call=>call==="CANCEL").length,1);assert.equal(f.calls.filter(call=>call==="fetch").length,2);
+ assert.equal(f.calls.filter(call=>call==="billing_mark_operation_write").length,1);
+ assert.equal(f.calls.filter(call=>call==="billing_complete_operation").length,1);assert.ok(!f.calls.includes("CREATE"));
 });
