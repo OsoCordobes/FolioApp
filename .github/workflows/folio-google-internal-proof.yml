@@ -1,4 +1,4 @@
-name: Folio C05 internal Google HTTP proof
+name: Folio internal Google and mail proof
 on:
   workflow_dispatch:
     inputs:
@@ -6,6 +6,14 @@ on:
         description: Exact reviewed candidate commit (40 lowercase hex characters)
         required: true
         type: string
+      proof_mode:
+        description: Exclusive internal proof mode
+        required: true
+        default: google-internal
+        type: choice
+        options:
+          - google-internal
+          - mail-internal
 permissions:
   contents: read
 concurrency:
@@ -25,10 +33,12 @@ jobs:
       - name: Verify exact candidate
         env:
           C05_CANDIDATE: ${{ inputs.candidate_sha }}
+          INTERNAL_PROOF_MODE: ${{ inputs.proof_mode }}
         run: |
           [[ "$C05_CANDIDATE" =~ ^[a-f0-9]{40}$ ]]
           test "$(git rev-parse HEAD)" = "$C05_CANDIDATE"
           git diff --exit-code
+          case "$INTERNAL_PROOF_MODE" in google-internal|mail-internal) ;; *) exit 1 ;; esac
       - uses: pnpm/action-setup@v4
         with:
           version: 10
@@ -59,12 +69,27 @@ jobs:
           test "$(git -C "$upstream" rev-parse HEAD)" = '8c7a4d9dbbaf8b552893822e89d7bf06f33f9220'
           echo "C01_OFFICIAL_DOCKER=$upstream/docker" >> "$GITHUB_ENV"
       - name: Prove internal integration against ephemeral real Supabase
-        run: node --conditions=react-server --import tsx scripts/testing/caller-proof/run.mjs --google-internal
+        env:
+          INTERNAL_PROOF_MODE: ${{ inputs.proof_mode }}
+        run: |
+          case "$INTERNAL_PROOF_MODE" in
+            google-internal) node --conditions=react-server --import tsx scripts/testing/caller-proof/run.mjs --google-internal ;;
+            mail-internal) node --conditions=react-server --import tsx scripts/testing/caller-proof/run.mjs --mail-internal ;;
+            *) exit 1 ;;
+          esac
       - name: Preserve finite sanitized proof receipt
-        if: always()
+        if: always() && inputs.proof_mode == 'google-internal'
         uses: actions/upload-artifact@v4
         with:
           name: google-internal-proof
           path: ${{ runner.temp }}/folio-google-internal-proof.json
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Preserve finite sanitized mail receipt
+        if: always() && inputs.proof_mode == 'mail-internal'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mail-internal-proof
+          path: ${{ runner.temp }}/folio-mail-internal-proof.json
           if-no-files-found: warn
           retention-days: 7

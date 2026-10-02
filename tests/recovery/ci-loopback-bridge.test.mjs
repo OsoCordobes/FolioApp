@@ -5,6 +5,7 @@ import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {safeEnvironment} from '../../scripts/testing/isolation-policy.mjs';
 import {GOOGLE_PROJECT} from '../../scripts/testing/google-c05-proof/contract.mjs';
+import {MAIL_PROJECT} from '../../scripts/testing/mail-recipient-proof/prove.mjs';
 import {validateBridgeTarget,preflightBridgeTarget,waitForBridgeTarget,bridgeFailureCategory} from '../../scripts/recovery/ci-loopback-bridge.mjs';
 
 const project='folio_c01_source',service='db',containerId='a'.repeat(64),networkId='b'.repeat(64);
@@ -66,6 +67,34 @@ test('Google bridge accepts exact metadata and rejects foreign project/network/p
    x=>{x.networks[`${GOOGLE_PROJECT}_default`].IPAddress='172.31.0.3';x.network.Containers[containerId].IPv4Address='172.31.0.3/16';},
    x=>{x.remotePort=443;},
   ]){const value=googleMetadata();mutate(value);assert.throws(()=>validateBridgeTarget(value));}
+ }
+});
+
+test('Mail bridge accepts its exact db/api-gw destinations and rejects foreign variants',()=>{
+ for(const rejected of [MAIL_PROJECT+'_extra','prefix_'+MAIL_PROJECT,'folio_mail_internal','folio_mail_proof',MAIL_PROJECT.toUpperCase(),
+  'http://127.0.0.1:55421','https://example.invalid'])assert.throws(()=>validateBridgeTarget(metadata(rejected)));
+ for(const selectedService of ['db','api-gw']){
+  const mailMetadata=()=>{
+   const value=metadata(MAIL_PROJECT);value.service=selectedService;
+   value.labels['com.docker.compose.service']=selectedService;
+   value.remotePort=selectedService==='db'?5432:8000;return value;
+  };
+  const target=validateBridgeTarget(mailMetadata());
+  assert.deepEqual(target,{address:'172.30.0.3',port:selectedService==='db'?5432:8000});
+  assert.equal(Object.isFrozen(target),true);
+  for(const mutate of [
+   x=>{x.labels['com.docker.compose.project']=GOOGLE_PROJECT;},
+   x=>{x.labels['com.docker.compose.service']='rest';},
+   x=>{x.service='auth';x.labels['com.docker.compose.service']='auth';},
+   x=>{x.network.Internal=false;},
+   x=>{x.network.Driver='overlay';},
+   x=>{x.network.Labels['com.docker.compose.project']='foreign';},
+   x=>{x.networks.other={};},
+   x=>{x.networks[`${MAIL_PROJECT}_default`].NetworkID='c'.repeat(64);},
+   x=>{x.networks[`${MAIL_PROJECT}_default`].IPAddress='172.31.0.3';x.network.Containers[containerId].IPv4Address='172.31.0.3/16';},
+   x=>{x.remotePort=selectedService==='db'?8000:5432;},
+   x=>{x.remotePort=443;},
+  ]){const value=mailMetadata();mutate(value);assert.throws(()=>validateBridgeTarget(value));}
  }
 });
 
