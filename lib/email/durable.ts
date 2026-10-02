@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { decryptColumn, encryptColumn } from "@/lib/crypto";
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
 import { emailDeliveryConfiguration, sendEmail, type SendEmailInput, type SendEmailResult } from "./client";
+import { validateBookingRecipient, type BookingRecipientAuthority } from "./recipient-authority";
 
 type Service = ReturnType<typeof createSupabaseServiceClient>;
 export interface EmailDeliveryRow {
@@ -17,6 +18,7 @@ export interface DurableEmailInput extends SendEmailInput {
   legacyKey?: string;
   turnoId?: string;
   billingFollowupId?: string;
+  recipientAuthority?: BookingRecipientAuthority;
 }
 export function emailDedupeKey(org: string, key: string): string {
   return createHash("sha256").update(`${org}\0${key}`).digest("hex");
@@ -31,7 +33,9 @@ export function deliveryOutcome(result: SendEmailResult): { status: "retryable" 
 export async function deliverDurableEmail(input: DurableEmailInput, serviceInput?: Service): Promise<SendEmailResult> {
   try {
     const service = serviceInput ?? createSupabaseServiceClient();
-    const payload = encryptColumn(JSON.stringify({ to: input.to, subject: input.subject, html: input.html, replyTo: input.replyTo }));
+    const payload = encryptColumn(JSON.stringify({ to: input.to, subject: input.subject, html: input.html, replyTo: input.replyTo,
+      ...(input.kind === "booking_request" ? { recipientAuthority: input.recipientAuthority } : {}),
+    }));
     const { data, error } = await service.rpc("email_enqueue", {
       p_org: input.organizationId, p_key: emailDedupeKey(input.organizationId, input.dedupeKey),
       p_kind: input.kind, p_payload: payload, p_expires_at: input.expiresAt ?? null, p_legacy_key: input.legacyKey ?? null, p_turno: input.turnoId ?? null, p_billing_job: input.billingFollowupId ?? null,
@@ -78,15 +82,27 @@ export async function processEmailDelivery(service: Service, row: EmailDeliveryR
       }
       const plaintext = decryptColumn(row.payload_cifrado);
       if (!plaintext) throw new Error("payload_unavailable");
-      const payload = JSON.parse(plaintext) as SendEmailInput;
-      result = await transport({ ...payload, idempotencyKey: `folio-email/${row.id}` });
+      const payload = JSON.parse(plaintext) as SendEmailInput & { recipientAuthority?: unknown };
+      if (row.kind === "booking_request") {
+        const authority = await validateBookingRecipient(service, row.organization_id, payload?.to, payload?.recipientAuthority);
+        result = authority.status === "authorized"
+          ? await transport({ to: payload.to, subject: payload.subject, html: payload.html,
+            replyTo: payload.replyTo, idempotencyKey: `folio-email/${row.id}` })
+          : authority;
+      } else result = await transport({ ...payload, idempotencyKey: `folio-email/${row.id}` });
     }
   } catch { result = { status: "failed", detail: "email_payload_unavailable", retryable: true }; }
   const outcome = deliveryOutcome(result);
-  const finished = await service.rpc("email_finish", {
-    p_id: row.id, p_token: row.lease_token, p_status: outcome.status,
-    p_provider_id: outcome.providerId, p_error: outcome.code,
-  });
+  let finished;
+  try {
+    finished = await service.rpc("email_finish", {
+      p_id: row.id, p_token: row.lease_token, p_status: outcome.status,
+      p_provider_id: outcome.providerId, p_error: outcome.code,
+    });
+  } catch (error) {
+    if (row.kind !== "booking_request") throw error;
+    return { status: "uncertain", detail: "email_receipt_persist_failed" };
+  }
   if (finished.error || finished.data !== true) return { status: "uncertain", detail: "email_receipt_persist_failed" };
   return result;
 }
