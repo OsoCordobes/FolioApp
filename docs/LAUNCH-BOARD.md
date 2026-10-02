@@ -10,6 +10,8 @@ A dirige prioridades, aceptación y presupuesto. Máximo dos escritores aislados
 
 Automatización `folio-manager-por-checkpoints`: PAUSED, sin modificar esa preferencia. Continuar directamente mientras haya trabajo útil; no esperar la hora ni prometer ejecución ininterrumpida.
 
+**Presupuesto vigente02/10, precisión posterior del titular:** trabajar con cuota del plan; NO créditos para desarrollo. Al0% entregar el relevo y detener, salvo mínimo crédito imprescindible para terminarlo. Reset disponible autorizado sólo mediante control real y tras confirmar que sigue sin aplicar; get_usage_limits es sólo lectura, no atribuirle esa capacidad. A congela paquetes nuevos desde97%usado para cerrar antes del agotamiento. Prompt y estado de relevo ya guardados en NEXT-MANAGER-PROMPT.md y MANAGER-HANDOFF.md; actualizar al cierre. Esta instrucción prevalece sobre cualquier autorización genérica anterior de gastar créditos.
+
 **Instrucción vigente01/10:** continuar el lanzamiento, coordinar también las otras sesiones e integrar el trabajo listo para evitar pendientes invisibles. El [siguiente tramo](NEXT-LAUNCH-CYCLE.md) pasa a ejecución por paquetes. PR191 y su [pasada visual](DESIGN-COHERENCE-PLAN.md) están cerradas: conservar estructura, identidad y evidencia; no iniciar otro rediseño. Siguen vigentes H3 y las autorizaciones específicas para proveedores, comunicaciones, cargos y decisiones clínicas. Una rama existente no equivale a trabajo pendiente ni justifica fusionar código retenido.
 
 ### Estado vigente y paquetes activos · 02/10

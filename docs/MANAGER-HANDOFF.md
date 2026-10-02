@@ -4,7 +4,7 @@
 
 ## Autoridad y recursos
 
-El titular autoriza continuar con el uso restante y luego aplicar su reset; pidió cerrar un checkpoint y entregar el prompt antes del0%. Retiró la reserva histórica15%. Todos los recursos disponibles se destinan al lanzamiento, sin gasto artificial. Última lectura82%usado/18%disponible,62497.459246créditos y1reset. No consumo exacto por agente. Prompt de rol y permisos: [NEXT-MANAGER-PROMPT.md](NEXT-MANAGER-PROMPT.md).
+El titular autoriza continuar con la cuota del plan y luego aplicar su reset; pidió cerrar un checkpoint y entregar el prompt al llegar al0%. **No usar créditos para desarrollo.** Sólo mínimo crédito imprescindible para terminar el relevo si el0% llega antes; luego detener. Reset autorizado si existe control real accesible, no comprar ni presumir ejecución; herramienta get_usage_limits sólo lee y no puede aplicarlo. Retiró la reserva histórica15%; A pide congelar nuevos paquetes al97% usado para proteger el cierre. Última lectura82%usado/18%disponible,62497.459246créditos intactos y1reset. No consumo exacto por agente. Prompt de rol y permisos: [NEXT-MANAGER-PROMPT.md](NEXT-MANAGER-PROMPT.md).
 
 ## Publicado y comprobado en este tramo
 
