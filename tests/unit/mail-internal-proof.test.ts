@@ -2,7 +2,66 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createClient } from "@supabase/supabase-js";
 import { proofConfiguration } from "../../scripts/testing/caller-proof/run.mjs";
-import { MAIL_API, MAIL_PROJECT, MAIL_CASES, assertMailFixtureIsolation, mailReceipt, finishMailReceipt, mailReadFailureFetch } from "../../scripts/testing/mail-recipient-proof/prove.mjs";
+import { MAIL_API, MAIL_PROJECT, MAIL_CASES, assertMailFixtureIsolation, mailReceipt, finishMailReceipt, mailReadFailureFetch, mailPedidoFixture, mailFixtureDiagnostics } from "../../scripts/testing/mail-recipient-proof/prove.mjs";
+
+test("WEB fixture sends explicit fictitious consent through the actual Supabase insert", async () => {
+  const scope = { org: "org-fixture", member: "member-fixture", patient: "patient-fixture", servicio: "service-fixture" };
+  let inserted: Record<string, unknown> | undefined;
+  const client = createClient(MAIL_API, "synthetic-test-key", { auth: { persistSession: false, autoRefreshToken: false }, global: { fetch: async (_input, options) => {
+    inserted = JSON.parse(String(options?.body));
+    return new Response(JSON.stringify({ id: "pedido-fixture" }), { status: 201, headers: { "Content-Type": "application/json" } });
+  } } });
+  const fixture = mailPedidoFixture(scope, "pedido-fixture", (text: string) => `encrypted:${text}`);
+  const result = await client.from("pedido").insert(fixture).select("id").single();
+  assert.equal(result.error, null); assert.equal(inserted?.canal, "WEB");
+  assert.equal(inserted?.consent_aceptado_en, "2026-01-01T00:00:00.000Z");
+  assert.ok(Number.isFinite(Date.parse(String(inserted?.consent_aceptado_en))));
+  assert.equal(inserted?.organization_id, scope.org); assert.equal(inserted?.profesional_id, scope.member);
+  assert.equal(inserted?.nombre_cifrado, "encrypted:Solicitante ficticio");
+  assert.ok(!Object.hasOwn(inserted!, "consent_ip")); assert.ok(!Object.hasOwn(inserted!, "consent_user_agent"));
+});
+
+test("fixture diagnosis retains only allowlisted SQLSTATE from PostgREST and direct PG failures", async () => {
+  const sensitive = "synthetic@example.invalid query patient token stack";
+  for (const viaRead of [true, false]) {
+    const receipt = mailReceipt("f643a230876c605ea94dd5af9bb3168a44b6bdce");
+    const diagnostic = mailFixtureDiagnostics(receipt);
+    diagnostic.case("active"); diagnostic.step("pedido_insert");
+    const error = { code: "23514", message: sensitive, details: sensitive, hint: sensitive, stack: sensitive, payload: sensitive, id: sensitive };
+    await assert.rejects(diagnostic.run(async () => {
+      if (viaRead) return diagnostic.read(Promise.resolve({ data: null, error }));
+      throw error;
+    }), (error: Error) => { assert.equal(error.message, "mail_proof_fixture_failed"); assert.ok(!error.stack?.includes(sensitive)); return true; });
+    // The runner writes the phase and later cleanup; the diagnosis must survive both checkpoints.
+    receipt.failure = "fixture";
+    const failed = finishMailReceipt(receipt); receipt.cleanup = true;
+    const cleaned = finishMailReceipt(receipt);
+    assert.deepEqual(failed.diagnostic, { case: "active", substep: "pedido_insert", sqlstate: "23514", classification: "check_violation" });
+    assert.deepEqual(cleaned.diagnostic, failed.diagnostic); assert.equal(cleaned.passed, false);
+    assert.ok(!JSON.stringify(cleaned).includes(sensitive));
+    assert.deepEqual(Object.keys(cleaned.diagnostic!).sort(), ["case", "classification", "sqlstate", "substep"]);
+  }
+});
+
+test("fixture diagnosis bounds unknown codes, assertions and nested restoration failures", async () => {
+  for (const [code, classification] of [["ERR_ASSERTION", "assertion"], ["PGRST116", "postgrest_error"], ["23514-private-data", "unclassified"], ["XX000", "unclassified"], [undefined, "unclassified"]]) {
+    const receipt = completeReceipt(); const diagnostic = mailFixtureDiagnostics(receipt);
+    diagnostic.case("private-case"); diagnostic.step("private-step");
+    await assert.rejects(diagnostic.run(async () => { throw { code, message: "private-data" }; }), /mail_proof_fixture_failed/);
+    assert.deepEqual(finishMailReceipt(receipt).diagnostic, { case: "unclassified", substep: "unclassified", sqlstate: null, classification });
+    assert.equal(finishMailReceipt(receipt).passed, false);
+  }
+  const receipt = completeReceipt(); const diagnostic = mailFixtureDiagnostics(receipt);
+  diagnostic.case("revoked");
+  await assert.rejects(diagnostic.run(async () => {
+    try { await diagnostic.run(async () => { diagnostic.step("invariants"); assert.equal(1, 0); }); }
+    finally { diagnostic.step("member_restore"); throw { code: "42501", message: "private-data" }; }
+  }), /mail_proof_fixture_failed/);
+  assert.deepEqual(finishMailReceipt(receipt).diagnostic, { case: "revoked", substep: "invariants", sqlstate: null, classification: "assertion" });
+  const forged = finishMailReceipt({ ...completeReceipt(), diagnostic: { case: "private-case", substep: "private-step", sqlstate: "constructor", classification: "check_violation", details: "private-data" } });
+  assert.deepEqual(forged.diagnostic, { case: "unclassified", substep: "unclassified", sqlstate: null, classification: "unclassified" });
+  assert.ok(!JSON.stringify(forged).includes("private-data"));
+});
 
 test("mail selector is exclusive and preserves caller, portal, S1 and Google modes", () => {
   const config = proofConfiguration(["--mail-internal"]);

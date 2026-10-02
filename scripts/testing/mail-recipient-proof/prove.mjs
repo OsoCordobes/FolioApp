@@ -7,15 +7,45 @@ export const MAIL_API='http://127.0.0.1:55421';
 export const MAIL_CASES=['active','revoked','email_changed','lookup_failure','retry_identity'];
 const expected={active:[1,'accepted'],revoked:[0,'terminal'],email_changed:[0,'terminal'],lookup_failure:[0,'retryable'],retry_identity:[2,'accepted']};
 const phases=new Set(['preflight','pull','services','migrations','schema','auth','fixture','cleanup','unclassified']);
+const substeps=new Set(['isolation','imports','organization_read','member_read','pedido_insert','queue_producer','queue_read','payload_check','claim','delivery','invariants','member_revoke','member_restore','email_change','email_restore','lease_expire','stale_finish','retry_available','receipt','unclassified']);
+const sqlstates={23502:'not_null_violation',23503:'foreign_key_violation',23505:'unique_violation',23514:'check_violation',42501:'insufficient_privilege','42P01':'undefined_table',42703:'undefined_column',42883:'undefined_function',40001:'serialization_failure','40P01':'deadlock_detected','08006':'connection_failure'};
+const classifications=new Set(['assertion','postgrest_error','unclassified']);
+function cleanDiagnostic(value){
+ const sqlstate=typeof value.sqlstate==='string'&&Object.hasOwn(sqlstates,value.sqlstate)?value.sqlstate:null;
+ return {case:MAIL_CASES.includes(value.case)?value.case:'unclassified',substep:substeps.has(value.substep)?value.substep:'unclassified',
+  sqlstate,classification:sqlstate?sqlstates[sqlstate]:classifications.has(value.classification)?value.classification:'unclassified'};
+}
+/** Capture only finite location and error codes, never error text or query data. */
+export function mailFixtureDiagnostics(receipt){
+ let substep='isolation',proofCase='unclassified';
+ return {
+  step(value){substep=substeps.has(value)?value:'unclassified';},
+  case(value){proofCase=MAIL_CASES.includes(value)?value:'unclassified';},
+  async read(query){const result=await query;if(result.error)throw result.error;assert.notEqual(result.data,null,'mail_database_data_missing');return result.data;},
+  async run(operation){
+   try{return await operation();}catch(error){
+    const code=error?.code;
+    receipt.diagnostic??=cleanDiagnostic({case:proofCase,substep,sqlstate:code,
+     classification:code==='ERR_ASSERTION'?'assertion':['PGRST116','PGRST202','PGRST204'].includes(code)?'postgrest_error':'unclassified'});
+    throw new Error('mail_proof_fixture_failed');
+   }
+  },
+ };
+}
+/** A fictitious WEB request; the fixed timestamp is test data, not patient consent evidence. */
+export function mailPedidoFixture({org,member,patient,servicio},pedido,encryptColumn){
+ return {id:pedido,organization_id:org,canal:'WEB',estado:'PENDIENTE',consent_aceptado_en:'2026-01-01T00:00:00.000Z',
+  nombre_cifrado:encryptColumn('Solicitante ficticio'),paciente_id:patient,profesional_id:member,servicio_id:servicio,duracion_min:30,precio_cents:1000};
+}
 export function assertMailFixtureIsolation(state){
  assert.equal(state.project,MAIL_PROJECT);assert.equal(state.githubActions,'true');
  assert.equal(state.runnerEnvironment,'github-hosted');assert.equal(state.platform,'linux');
  assert.equal(state.fresh,true);assert.equal(state.internalNetwork,true);assert.equal(state.apiUrl,MAIL_API);
 }
-/** @returns {{sha:string,cases:Record<string,{passed:boolean,sends:number,state:string,invariant:boolean}>,failure:string|null,cleanup:boolean,migrations:number}} */
+/** @returns {{sha:string,cases:Record<string,{passed:boolean,sends:number,state:string,invariant:boolean}>,failure:string|null,cleanup:boolean,migrations:number,diagnostic:object|null}} */
 export function mailReceipt(sha){
  assert.match(sha,/^[a-f0-9]{40}$/);
- return {sha,cases:{},failure:null,cleanup:false,migrations:0};
+ return {sha,cases:{},failure:null,cleanup:false,migrations:0,diagnostic:null};
 }
 /** Return an allowlisted receipt: never serialize input identities, messages or secrets. */
 export function finishMailReceipt(receipt){
@@ -31,9 +61,10 @@ export function finishMailReceipt(receipt){
  }
  const failure=receipt.failure===null?null:phases.has(receipt.failure)?receipt.failure:'unclassified';
  const migrations=Number.isInteger(receipt.migrations)&&receipt.migrations>0?receipt.migrations:0;
- const passed=receipt.cleanup===true&&failure===null&&migrations>0&&Object.keys(receipt.cases??{}).length===MAIL_CASES.length&&MAIL_CASES.every(name=>cases[name]?.passed===true);
+ const diagnostic=receipt.diagnostic?cleanDiagnostic(receipt.diagnostic):null;
+ const passed=receipt.cleanup===true&&failure===null&&diagnostic===null&&migrations>0&&Object.keys(receipt.cases??{}).length===MAIL_CASES.length&&MAIL_CASES.every(name=>cases[name]?.passed===true);
  return {version:1,sha:receipt.sha,environment:'github-ephemeral-supabase',provider:'function-stub',lookupFailure:'injected-http-read',
-  cases,failure,cleanup:receipt.cleanup===true,migrations,passed};
+  cases,failure,diagnostic,cleanup:receipt.cleanup===true,migrations,passed};
 }
 
 /** Inject one non-retried HTTP 403 on the matching member GET; other I/O stays real. */
@@ -54,10 +85,13 @@ export function mailReadFailureFetch(baseFetch,{org,member}){
 
 /** Hosted entry only: real producer/DB/RPC; explicit function stub, never sendEmail. */
 export async function proveMail({service,scope,isolation,receipt,withDatabase,persist}){
+ const diagnostic=mailFixtureDiagnostics(receipt);
+ return diagnostic.run(async()=>{
  assertMailFixtureIsolation(isolation);
  assert.equal(process.env.FOLIO_TEST_ISOLATED,'1');assert.equal(process.env.NEXT_PUBLIC_SUPABASE_URL,MAIL_API);
  assert.notEqual(process.env.FOLIO_EMAIL_DELIVERY_ENABLED,'true');
  assert.equal(process.env.RESEND_API_KEY,undefined);assert.equal(process.env.EMAIL_FROM,undefined);
+ diagnostic.step('imports');
  const notifyModule=await import('../../../lib/email/notify.ts'),durableModule=await import('../../../lib/email/durable.ts');
  const cryptoModule=await import('../../../lib/crypto.ts'),clientModule=await import('../../../lib/email/client.ts');
  const {notifyPedidoNuevo}=notifyModule.default??notifyModule;
@@ -67,24 +101,30 @@ export async function proveMail({service,scope,isolation,receipt,withDatabase,pe
  assert.equal(emailDeliveryConfiguration().enabled,false);assert.equal(emailDeliveryConfiguration().providerConfigured,false);
  const {org,member,profile,email,patient,servicio}=scope;
  assert.match(email,/^mail-internal-[a-f0-9-]+@example\.test$/);
- const read=async(query)=>{const result=await query;assert.equal(result.error,null,'mail_database_call_failed');assert.notEqual(result.data,null,'mail_database_data_missing');return result.data;};
+ const read=query=>diagnostic.read(query);
+ diagnostic.step('organization_read');
  assert.deepEqual(await read(service.from('organization').select('id,is_synthetic,is_internal_account,deleted_at')),
   [{id:org,is_synthetic:false,is_internal_account:true,deleted_at:null}]);
+ diagnostic.step('member_read');
  const membership=await read(service.from('member').select('id,organization_id,profile_id,role,deleted_at,accepted_at').eq('id',member).eq('organization_id',org).single());
  assert.equal(membership.profile_id,profile);assert.equal(membership.role,'PROFESIONAL');assert.equal(membership.deleted_at,null);assert.ok(membership.accepted_at);
  const row=async(id)=>read(service.from('email_delivery').select('*').eq('id',id).eq('organization_id',org).single());
  const claim=async(id)=>{
+  diagnostic.step('claim');
   const rows=await read(service.rpc('email_claim',{p_limit:1,p_id:id}));assert.equal(rows.length,1,'mail_claim_missing');
   assert.equal(rows[0].organization_id,org);assert.equal(rows[0].status,'leased');assert.ok(rows[0].lease_token);return rows[0];
  };
  const enqueue=async()=>{
   const pedido=randomUUID();
-  await read(service.from('pedido').insert({id:pedido,organization_id:org,canal:'WEB',estado:'PENDIENTE',
-   nombre_cifrado:encryptColumn('Solicitante ficticio'),paciente_id:patient,profesional_id:member,servicio_id:servicio,duracion_min:30,precio_cents:1000}).select('id').single());
+  diagnostic.step('pedido_insert');
+  await read(service.from('pedido').insert(mailPedidoFixture({org,member,patient,servicio},pedido,encryptColumn)).select('id').single());
   const input={client:service,organizationId:org,pedidoId:pedido,profesionalId:member,pacienteNombre:'Solicitante ficticio',canal:'WEB',fechaPropuestaIso:null};
+  diagnostic.step('queue_producer');
   assert.deepEqual(await notifyPedidoNuevo(input),{status:'queued',detail:'delivery_configuration_pending'});
+  diagnostic.step('queue_read');
   const queued=await read(service.from('email_delivery').select('*').eq('organization_id',org).eq('dedupe_key',emailDedupeKey(org,`pedido:${pedido}`)).single());
   assert.equal(queued.status,'pending');assert.equal(queued.kind,'booking_request');assert.ok(queued.payload_cifrado);
+  diagnostic.step('payload_check');
   const plaintext=JSON.parse(decryptColumn(queued.payload_cifrado));
   assert.equal(plaintext.to,email);assert.deepEqual(plaintext.recipientAuthority,{version:1,organizationId:org,pedidoId:pedido,
    memberId:member,profileId:profile,selection:'assigned_member',assignedMemberId:member,roleAtEnqueue:'PROFESIONAL'});
@@ -95,57 +135,76 @@ export async function proveMail({service,scope,isolation,receipt,withDatabase,pe
   calls.push({...input});
   return uncertainFirst&&calls.length===1?{status:'uncertain',detail:'provider_response_unknown'}:{status:'sent',providerId:'mail-proof-receipt'};
  };
- const mark=async(name,sends,state)=>{receipt.cases[name]={passed:true,sends,state,invariant:true};await persist();};
+ const mark=async(name,sends,state)=>{diagnostic.step('receipt');receipt.cases[name]={passed:true,sends,state,invariant:true};await persist();};
+ const deliver=async(client,job,provider)=>{diagnostic.step('delivery');return processEmailDelivery(client,job,provider);};
  const terminal=async(job,client)=>{
-  const calls=[];const result=await processEmailDelivery(client,await claim(job.id),stub(calls));
+  const calls=[];const result=await deliver(client,await claim(job.id),stub(calls));
+  diagnostic.step('invariants');
   assert.deepEqual(result,{status:'failed',detail:'email_recipient_authority_lost',retryable:false});assert.equal(calls.length,0);
   const closed=await row(job.id);assert.equal(closed.status,'terminal');assert.equal(closed.payload_cifrado,null);
   assert.equal(closed.created_at,job.created_at);assert.equal(closed.dedupe_key,job.dedupe_key);assert.equal(closed.provider_id,null);
   assert.equal(closed.sanitized_error,'email_recipient_authority_lost');assert.equal(closed.lease_token,null);
  };
 
+ diagnostic.case('active');
  const active=await enqueue(),activeCalls=[];
- assert.deepEqual(await processEmailDelivery(service,await claim(active.queued.id),stub(activeCalls)),{status:'sent',providerId:'mail-proof-receipt'});
+ assert.deepEqual(await deliver(service,await claim(active.queued.id),stub(activeCalls)),{status:'sent',providerId:'mail-proof-receipt'});
+ diagnostic.step('invariants');
  const accepted=await row(active.queued.id);assert.equal(activeCalls.length,1);assert.equal(accepted.status,'accepted');assert.equal(accepted.provider_id,'mail-proof-receipt');
  assert.equal(accepted.payload_cifrado,null);assert.equal(accepted.delivered_at,null);
  assert.deepEqual(await notifyPedidoNuevo(active.input),{status:'sent',providerId:'mail-proof-receipt'});
  assert.equal(activeCalls.length,1);await mark('active',1,'accepted');
 
+ diagnostic.case('revoked');
  const revoked=await enqueue();
+ diagnostic.step('member_revoke');
  await withDatabase(async db=>{const changed=await db.query("UPDATE public.member SET deleted_at=now() WHERE id=$1 AND organization_id=$2 AND profile_id=$3 AND role='PROFESIONAL' AND deleted_at IS NULL RETURNING id",[member,org,profile]);assert.equal(changed.rowCount,1);});
- try{await terminal(revoked.queued,service);}finally{
+ try{await diagnostic.run(()=>terminal(revoked.queued,service));}finally{
+  diagnostic.step('member_restore');
   await withDatabase(async db=>{const restored=await db.query("UPDATE public.member SET deleted_at=NULL WHERE id=$1 AND organization_id=$2 AND profile_id=$3 AND role='PROFESIONAL' AND deleted_at IS NOT NULL RETURNING id",[member,org,profile]);assert.equal(restored.rowCount,1);});
  }
  await mark('revoked',0,'terminal');
 
+ diagnostic.case('email_changed');
  const changedEmail=await enqueue(),replacement=`mail-changed-${randomUUID()}@example.test`;
+ diagnostic.step('email_change');
  await withDatabase(async db=>{const changed=await db.query('UPDATE public.profile SET email=$2 WHERE id=$1 AND email=$3 RETURNING id',[profile,replacement,email]);assert.equal(changed.rowCount,1);});
- try{await terminal(changedEmail.queued,service);}finally{
+ try{await diagnostic.run(()=>terminal(changedEmail.queued,service));}finally{
+  diagnostic.step('email_restore');
   await withDatabase(async db=>{const restored=await db.query('UPDATE public.profile SET email=$2 WHERE id=$1 AND email=$3 RETURNING id',[profile,email,replacement]);assert.equal(restored.rowCount,1);});
  }
  await mark('email_changed',0,'terminal');
 
+ diagnostic.case('lookup_failure');
  const lookup=await enqueue(),lookupCalls=[],fault=mailReadFailureFetch(globalThis.fetch,{org,member});
  const faulty=createClient(MAIL_API,process.env.SUPABASE_SERVICE_ROLE_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false},global:{fetch:fault.fetch}});
- assert.deepEqual(await processEmailDelivery(faulty,await claim(lookup.queued.id),stub(lookupCalls)),{status:'failed',detail:'email_recipient_lookup_failed',retryable:true});
+ assert.deepEqual(await deliver(faulty,await claim(lookup.queued.id),stub(lookupCalls)),{status:'failed',detail:'email_recipient_lookup_failed',retryable:true});
+ diagnostic.step('invariants');
  const waiting=await row(lookup.queued.id);assert.equal(fault.injections,1);assert.equal(lookupCalls.length,0);assert.equal(waiting.status,'retryable');
  assert.equal(waiting.payload_cifrado,lookup.queued.payload_cifrado);assert.equal(waiting.created_at,lookup.queued.created_at);assert.equal(waiting.dedupe_key,lookup.queued.dedupe_key);
  assert.equal(waiting.sanitized_error,'email_recipient_lookup_failed');await mark('lookup_failure',0,'retryable');
 
+ diagnostic.case('retry_identity');
  const retry=await enqueue(),stale=await claim(retry.queued.id);
+ diagnostic.step('lease_expire');
  await withDatabase(async db=>{const changed=await db.query("UPDATE public.email_delivery SET lease_until=now()-interval '1 second' WHERE id=$1 AND organization_id=$2 AND status='leased' AND lease_token=$3 RETURNING id",[stale.id,org,stale.lease_token]);assert.equal(changed.rowCount,1);});
  const current=await claim(retry.queued.id);assert.notEqual(current.lease_token,stale.lease_token);
+ diagnostic.step('stale_finish');
  assert.equal(await read(service.rpc('email_finish',{p_id:stale.id,p_token:stale.lease_token,p_status:'accepted',p_provider_id:'stale-proof-receipt'})),false);
  assert.equal((await row(stale.id)).status,'leased');
  const retryCalls=[],retryStub=stub(retryCalls,true);
- assert.deepEqual(await processEmailDelivery(service,current,retryStub),{status:'uncertain',detail:'provider_response_unknown'});
+ assert.deepEqual(await deliver(service,current,retryStub),{status:'uncertain',detail:'provider_response_unknown'});
+ diagnostic.step('invariants');
  const pending=await row(current.id);assert.equal(pending.status,'retryable');assert.equal(pending.payload_cifrado,retry.queued.payload_cifrado);
  assert.deepEqual(await notifyPedidoNuevo(retry.input),{status:'queued',detail:'delivery_configuration_pending'});
  const duplicate=await row(current.id);assert.equal(duplicate.payload_cifrado,retry.queued.payload_cifrado);assert.equal(duplicate.created_at,retry.queued.created_at);
+ diagnostic.step('retry_available');
  await withDatabase(async db=>{const changed=await db.query("UPDATE public.email_delivery SET available_at=now() WHERE id=$1 AND organization_id=$2 AND status='retryable' AND lease_token IS NULL RETURNING id",[current.id,org]);assert.equal(changed.rowCount,1);});
- assert.deepEqual(await processEmailDelivery(service,await claim(current.id),retryStub),{status:'sent',providerId:'mail-proof-receipt'});
+ assert.deepEqual(await deliver(service,await claim(current.id),retryStub),{status:'sent',providerId:'mail-proof-receipt'});
+ diagnostic.step('invariants');
  assert.deepEqual(retryCalls[0],retryCalls[1]);assert.equal(retryCalls[0].idempotencyKey,`folio-email/${current.id}`);
  const final=await row(current.id);assert.equal(final.status,'accepted');assert.equal(final.payload_cifrado,null);assert.equal(final.created_at,retry.queued.created_at);
  assert.equal((await read(service.from('email_delivery').select('id').eq('organization_id',org))).length,5);
  await mark('retry_identity',2,'accepted');
+ });
 }
