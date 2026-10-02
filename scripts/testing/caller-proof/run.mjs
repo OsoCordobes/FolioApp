@@ -17,6 +17,8 @@ import * as s1ContractModule from './s1-contract.ts';
 import {openLoopbackBridge,validateBridgeTarget,waitForBridgeTarget} from '../../recovery/ci-loopback-bridge.mjs';
 import {GOOGLE_PROJECT,assertGoogleFixtureIsolation,googleReceipt,finishGoogleReceipt} from '../google-c05-proof/contract.mjs';
 import {MAIL_PROJECT,assertMailFixtureIsolation,mailReceipt,finishMailReceipt,proveMail} from '../mail-recipient-proof/prove.mjs';
+import {JOINED_PROJECT,provePublicBookingJoined} from '../public-booking-joined-proof/prove.mjs';
+import {joinedReceipt,finishJoinedReceipt,joinedBrowserCookies,withJoinedNext} from '../public-booking-joined-proof/adapter.mjs';
 
 const repo=path.resolve(fileURLToPath(new URL('../../../',import.meta.url)));
 const compose=path.join(repo,'scripts/recovery/ci-compose.yml');
@@ -28,6 +30,8 @@ const {proofMode,proofSpecs,PORTAL_EXPORT_FIXTURE_NAME,PORTAL_EXPORT_RECEIPT_NAM
 const {S1_FIXTURE_NAME,S1_SPECS,s1Result}=s1Contract;
 // The accepted portal contract stays closed to --s1; only this shared entry dispatches it.
 export function proofConfiguration(args){
+ if(args.length===1&&args[0]==='--public-booking-joined')return {mode:'public-booking-joined',project:JOINED_PROJECT,prefix:'public_booking_joined_proof',
+  fixtureName:'folio-public-booking-joined-fixture.json',specs:[],clinical:'1',bucket:'public-booking-joined-synthetic'};
  if(args.length===1&&args[0]==='--mail-internal')return {mode:'mail-internal',project:MAIL_PROJECT,prefix:'mail_internal_proof',
   fixtureName:'folio-mail-internal-fixture.json',specs:[],clinical:'0',bucket:'mail-internal-synthetic'};
  if(args.length===1&&args[0]==='--google-internal')return {mode:'google-internal',project:GOOGLE_PROJECT,prefix:'google_internal_proof',
@@ -44,9 +48,12 @@ const configuration=proofConfiguration(isEntry?process.argv.slice(2):[]);
 const {mode,prefix,project}=configuration;
 const portal=mode==='portal-export',s1=mode==='s1';
 const googleInternal=mode==='google-internal';
-const mailInternal=mode==='mail-internal',internalProof=googleInternal||mailInternal;
+const joined=mode==='public-booking-joined';
+const mailInternal=mode==='mail-internal',internalProof=googleInternal||mailInternal||joined;
 const googleReceiptFile=path.join(process.env.RUNNER_TEMP??tmpdir(),'folio-google-internal-proof.json');
 const mailReceiptFile=path.join(process.env.RUNNER_TEMP??tmpdir(),'folio-mail-internal-proof.json');
+const joinedReceiptFile=path.join(process.env.RUNNER_TEMP??tmpdir(),'folio-public-booking-joined-proof.json');
+const joinedApp='http://127.0.0.1:4440';
 const upstreamCommit='8c7a4d9dbbaf8b552893822e89d7bf06f33f9220';
 const api='http://127.0.0.1:55421';
 const fixtureFile=path.join(tmpdir(),configuration.fixtureName);
@@ -134,6 +141,7 @@ async function prepareSchema(password,env,serviceKey){
  const folder=path.join(repo,'supabase/migrations');
  const files=(await readdir(folder)).filter(name=>/^\d{14}_.+\.sql$/.test(name)).sort();
  if(googleInternal)for(const suffix of ['_M107_google_calendar_durability.sql','_M119_reschedule_turno_atomic.sql'])assert.ok(files.some(name=>name.endsWith(suffix)),'google_proof_migration_missing');
+ if(joined)for(const suffix of ['_M107_google_calendar_durability.sql','_M110_booking_atomic.sql','_M101_staff_mfa_gate.sql'])assert.ok(files.some(name=>name.endsWith(suffix)),'joined_proof_migration_missing');
  if(mailInternal)for(const suffix of ['_M100_email_delivery.sql','_M101_staff_mfa_gate.sql','_M128_pedido_scoped_access.sql'])assert.ok(files.some(name=>name.endsWith(suffix)),'mail_proof_migration_missing');
  if(!s1&&!internalProof)for(const suffix of portal?['_M70_paciente_cuenta.sql','_M71_rls_autolectura_paciente.sql','_M101_staff_mfa_gate.sql']:
   ['_M139_reception_caller.sql','_M141_caller_screen_list.sql'])assert.ok(files.some(name=>name.endsWith(suffix)),'proof_migration_missing');
@@ -198,7 +206,7 @@ async function fixture(state){
    await db.query('INSERT INTO public.paciente_identidad(id,organization_id,nombre_cifrado,apellido_cifrado,telefono_cifrado,fecha_nacimiento) VALUES($1,$2,$3,$3,$3,$4)',[identity,org,cipher,internalProof?'1980-01-01':null]);
    await db.query('INSERT INTO public.paciente(id,organization_id,identidad_id,profesional_principal_id) VALUES($1,$2,$3,$4)',[patient,org,identity,member]);
    await db.query("INSERT INTO public.servicio(id,organization_id,nombre,tipo_canonico,duracion_min,precio_cents) VALUES($1,$2,'Consulta sintética',enum_first(null::public.tipo_servicio_canonico),30,1000)",[servicio,org]);
-   if(googleInternal){
+   if(googleInternal||joined){
     const encryptedToken=crypto.encryptColumn('c05-http-refresh'),encryptedAccess=crypto.encryptColumn('c05-http-access');
     await db.query("INSERT INTO public.integration(id,organization_id,profesional_id,proveedor,access_token_cifrado,refresh_token_cifrado,meta_json) VALUES($1,$2,$3,'GOOGLE_CALENDAR',$4,$5,'{\"calendar_id\":\"c05-internal\"}')",[integration,org,member,Buffer.from(encryptedAccess.slice(2),'hex'),Buffer.from(encryptedToken.slice(2),'hex')]);
    }else if(!mailInternal)await db.query("INSERT INTO public.turno(id,organization_id,paciente_id,servicio_id,profesional_id,inicio,duracion_min,precio_cents,estado) VALUES($1,$2,$3,$4,$5,((timezone('America/Argentina/Cordoba',clock_timestamp())::date)::timestamp+interval '12 hours') AT TIME ZONE 'America/Argentina/Cordoba',30,1000,'EN_SALA')",[turno,org,patient,servicio,member]);
@@ -229,6 +237,8 @@ async function fixture(state){
  assert.ok(cookies.length>0,'session_cookie_missing');
  if(googleInternal){state.googleActor=seeded;state.googleService=service;state.googleScope={org,member,patient,servicio,integration};return;}
  if(mailInternal){state.mailService=service;state.mailScope={org,member,profile:user,email,patient,servicio};return;}
+ if(joined){state.joinedActor=seeded;state.joinedService=service;state.joinedScope={org,member,patient,servicio,integration};
+  state.joinedCookies=joinedBrowserCookies(cookies,joinedApp);return;}
  if(portal){
   const members=await seeded.from('member').select('id');assert.equal(members.error,null);assert.deepEqual(members.data,[]);
   const account=await seeded.rpc('paciente_cuenta_actual');assert.equal(account.error,null);assert.equal(account.data,cuentaId);
@@ -260,6 +270,7 @@ async function main(){
   portalReceipt:{version:1,passed:false,exitCode:1,markers:[],primary:null,secondary:[]}};
  const persistGoogle=async()=>writeFile(googleReceiptFile,JSON.stringify(finishGoogleReceipt(state.googleReceipt)),{mode:0o600});
  const persistMail=async()=>writeFile(mailReceiptFile,JSON.stringify(finishMailReceipt(state.mailReceipt)),{mode:0o600});
+ const persistJoined=async()=>writeFile(joinedReceiptFile,JSON.stringify(finishJoinedReceipt(state.joinedReceipt)),{mode:0o600});
  if(googleInternal){
   try{await access(googleReceiptFile);throw Error('receipt_not_fresh');}catch(error){if(error.code!=='ENOENT')throw error;}
   state.googleReceipt=googleReceipt((await must('git',['rev-parse','HEAD'])).trim());await persistGoogle();
@@ -267,6 +278,10 @@ async function main(){
  if(mailInternal){
   try{await access(mailReceiptFile);throw Error('receipt_not_fresh');}catch(error){if(error.code!=='ENOENT')throw error;}
   state.mailReceipt=mailReceipt((await must('git',['rev-parse','HEAD'])).trim());await persistMail();
+ }
+ if(joined){
+  try{await access(joinedReceiptFile);throw Error('receipt_not_fresh');}catch(error){if(error.code!=='ENOENT')throw error;}
+  state.joinedReceipt=joinedReceipt((await must('git',['rev-parse','HEAD'])).trim(),(await must('git',['rev-parse','HEAD^{tree}'])).trim());await persistJoined();
  }
  const env={...process.env,C01_OFFICIAL_DOCKER:official,C01_DB_PASSWORD:dbPassword,C01_JWT_SECRET:secret,C01_ANON_KEY:state.anonKey,C01_SERVICE_KEY:state.serviceKey,
   C01_DASHBOARD_PASSWORD:random(18),C01_APP_DATABASE:'postgres',C01_CRON_DATABASE:'postgres',C01_S3_BUCKET:configuration.bucket,C01_MINIO_USER:random(18),C01_MINIO_PASSWORD:random(36)};
@@ -286,12 +301,21 @@ async function main(){
    const isolation={project,githubActions:process.env.GITHUB_ACTIONS,runnerEnvironment:process.env.RUNNER_ENVIRONMENT,
     platform:process.platform,fresh:true,internalNetwork:true,apiUrl:api};
    if(googleInternal){state.googleIsolation=isolation;assertGoogleFixtureIsolation(isolation);}
-   else {state.mailIsolation=isolation;assertMailFixtureIsolation(isolation);}
+   else if(mailInternal){state.mailIsolation=isolation;assertMailFixtureIsolation(isolation);}
+   else {state.joinedIsolation=isolation;assert.equal(isolation.project,JOINED_PROJECT);}
    const {safeEnvironment}=await import('../isolation-policy.mjs');const {installIsolation}=await import('../install-isolation.mjs');
    installIsolation();const clean=safeEnvironment(process.env,{mode:'unit',supabaseUrl:api,anonKey:state.anonKey,serviceKey:state.serviceKey});
    for(const key of Object.keys(process.env))delete process.env[key];Object.assign(process.env,clean);
   }
   stage='auth';await fixture(state);
+  if(joined){
+   stage='fixture';const config={mode:'app',appUrl:joinedApp,supabaseUrl:api,anonKey:state.anonKey,serviceKey:state.serviceKey,
+    databaseUrl:`postgresql://postgres:${dbPassword}@127.0.0.1:55422/postgres`,realSupabase:true,clinical:true};
+   await provePublicBookingJoined({actor:state.joinedActor,service:state.joinedService,scope:state.joinedScope,
+    isolation:state.joinedIsolation,config,browserCookies:state.joinedCookies,withDatabase:fn=>withPg(dbPassword,fn),
+    withNext:(nextConfig,callback)=>withJoinedNext(nextConfig,state.joinedReceipt,persistJoined,callback),receipt:state.joinedReceipt,persist:persistJoined});
+   state.joinedReceipt.migrations=count;stage='complete';return;
+  }
   if(googleInternal){
    stage='fixture';const {proveGoogle}=await import('../google-c05-proof/prove.mjs');
    await proveGoogle({actor:state.googleActor,service:state.googleService,scope:state.googleScope,receipt:state.googleReceipt,
@@ -340,6 +364,7 @@ async function main(){
    assert.ok(markers.some(item=>item.stage===required),'caller_stage_missing');
   stage='complete';console.log(`caller_proof_pass:migrations=${count} polls_11s=${markers.find(item=>item.stage==='polling_bounded')?.visible11s} hidden_6s=0`);
  }catch(error){
+  if(joined){state.joinedReceipt.failure??=stages.has(stage)?stage:'preflight';await persistJoined();}
   if(googleInternal){state.googleReceipt.failure=stages.has(stage)?stage:'preflight';await persistGoogle();}
   if(mailInternal){state.mailReceipt.failure=stages.has(stage)?stage:'preflight';await persistMail();}
   if(portal){retainFailure(state,error,stages.has(stage)?stage:'preflight');await preservePortalReceipt(state);}
@@ -397,11 +422,17 @@ async function main(){
     if(internalCleanupFailed&&state.googleReceipt.failure===null)state.googleReceipt.failure='cleanup';
     await persistGoogle();assert.equal(state.googleReceipt.passed,true,'google_internal_missing_pass');
     console.log('google_internal_proof_pass:cases=4 provider=http-loopback supabase=real cleanup=1');
-   }else{
+   }else if(mailInternal){
     state.mailReceipt.cleanup=!internalCleanupFailed;
     if(internalCleanupFailed&&state.mailReceipt.failure===null)state.mailReceipt.failure='cleanup';
     const result=finishMailReceipt(state.mailReceipt);await persistMail();assert.equal(result.passed,true,'mail_internal_missing_pass');
     console.log('mail_internal_proof_pass:cases=5 provider=function-stub supabase=real cleanup=1');
+   }else{
+    state.joinedCookies=undefined;
+    state.joinedReceipt.cleanup=!internalCleanupFailed;
+    if(internalCleanupFailed&&state.joinedReceipt.failure===null)state.joinedReceipt.failure='cleanup';
+    await persistJoined();assert.equal(finishJoinedReceipt(state.joinedReceipt).passed,true,'public_booking_joined_missing_pass');
+    console.log('public_booking_joined_proof_pass:requests=1 confirmation=manual calendar=1 hoy_patient=1 google_intents=1 google_events=1 cleanup=1');
    }
   }
   if(s1&&stage==='complete'&&process.exitCode!==1)console.log(`s1_proof_pass:tests=3 skipped=0 migrations=${state.s1Migrations} restored=1 cleanup=1`);

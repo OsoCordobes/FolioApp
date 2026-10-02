@@ -14,6 +14,7 @@ on:
         options:
           - google-internal
           - mail-internal
+          - public-booking-joined
 permissions:
   contents: read
 concurrency:
@@ -38,7 +39,7 @@ jobs:
           [[ "$C05_CANDIDATE" =~ ^[a-f0-9]{40}$ ]]
           test "$(git rev-parse HEAD)" = "$C05_CANDIDATE"
           git diff --exit-code
-          case "$INTERNAL_PROOF_MODE" in google-internal|mail-internal) ;; *) exit 1 ;; esac
+          case "$INTERNAL_PROOF_MODE" in google-internal|mail-internal|public-booking-joined) ;; *) exit 1 ;; esac
       - uses: pnpm/action-setup@v4
         with:
           version: 10
@@ -68,6 +69,9 @@ jobs:
           git -C "$upstream" sparse-checkout set docker
           test "$(git -C "$upstream" rev-parse HEAD)" = '8c7a4d9dbbaf8b552893822e89d7bf06f33f9220'
           echo "C01_OFFICIAL_DOCKER=$upstream/docker" >> "$GITHUB_ENV"
+      - name: Install Chromium for joined proof
+        if: inputs.proof_mode == 'public-booking-joined'
+        run: pnpm exec playwright install --with-deps chromium
       - name: Prove internal integration against ephemeral real Supabase
         env:
           INTERNAL_PROOF_MODE: ${{ inputs.proof_mode }}
@@ -75,6 +79,7 @@ jobs:
           case "$INTERNAL_PROOF_MODE" in
             google-internal) node --conditions=react-server --import tsx scripts/testing/caller-proof/run.mjs --google-internal ;;
             mail-internal) node --conditions=react-server --import tsx scripts/testing/caller-proof/run.mjs --mail-internal ;;
+            public-booking-joined) node --conditions=react-server --import tsx scripts/testing/caller-proof/run.mjs --public-booking-joined ;;
             *) exit 1 ;;
           esac
       - name: Preserve finite sanitized proof receipt
@@ -83,6 +88,14 @@ jobs:
         with:
           name: google-internal-proof
           path: ${{ runner.temp }}/folio-google-internal-proof.json
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Preserve finite sanitized joined receipt
+        if: always() && inputs.proof_mode == 'public-booking-joined'
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-booking-joined-proof
+          path: ${{ runner.temp }}/folio-public-booking-joined-proof.json
           if-no-files-found: warn
           retention-days: 7
       - name: Preserve finite sanitized mail receipt
