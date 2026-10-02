@@ -4,7 +4,7 @@ import net from 'node:net';
 import {fileURLToPath} from 'node:url';
 import {safeEnvironment} from '../isolation-policy.mjs';
 import {testAppConfig} from '../app-config.mjs';
-import {JOINED_TIMEZONE} from './prove.mjs';
+import {CALENDAR_HOY_STEPS,JOINED_TIMEZONE} from './prove.mjs';
 
 const uuid=value=>typeof value==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(value)?value:null;
 const day=value=>typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value)?value:null;
@@ -32,6 +32,17 @@ export function finishManualDiagnostic(value){
    turnMatchesConversion:available?diagnosticBoolean(r.turnMatchesConversion):null,
    turnMatchesFixture:available?diagnosticBoolean(r.turnMatchesFixture):null,jobMatchesTurn:available?diagnosticBoolean(r.jobMatchesTurn):null}};
 }
+export function finishCalendarHoyDiagnostic(value){
+ if(!value||typeof value!=='object')return null;
+ const ui=value.ui??{};
+ return {phase:'calendar-hoy',step:permitted(value.step,CALENDAR_HOY_STEPS,'unavailable'),
+  errorKind:permitted(value.errorKind,['assertion','timeout','type','error','other'],'other'),
+  navigation:permitted(value.navigation,['success','redirect','client-error','server-error','other','unavailable'],'unavailable'),
+  route:permitted(value.route,['calendario','hoy','patient','login','other','unavailable'],'unavailable'),
+  ui:{...Object.fromEntries(['card','dialog','detailLink','row'].map(key=>[key,diagnosticCount(ui[key])])),
+   ...Object.fromEntries(['cardName','cardTime','cardService','rowName','rowTime','rowService','calendarPatientLink','patientDestination']
+    .map(key=>[key,diagnosticBoolean(ui[key])]))}};
+}
 export function joinedReceipt(sha,tree){
  assert.match(sha,/^[a-f0-9]{40}$/);assert.match(tree,/^[a-f0-9]{40}$/);
  return {sha,tree,stages:{},failure:null,modulePassed:false,moduleCleanup:false,nextCleanup:false,
@@ -53,7 +64,8 @@ export function finishJoinedReceipt(source){
    intents:count(v.intents),events:count(v.events),http:Object.fromEntries(['insert','get','patch','list','token'].map(key=>[key,count(v.http?.[key])]))};
  }
  const failure=source.failure===null?null:phases.has(source.failure)?source.failure:'unclassified';
- const receipt={version:1,sha:source.sha,tree:source.tree,environment:'github-ephemeral-supabase',provider:'http-loopback',stages,failure,diagnostic:finishManualDiagnostic(source.diagnostic),
+ const diagnostic=source.diagnostic?.phase==='calendar-hoy'?finishCalendarHoyDiagnostic(source.diagnostic):finishManualDiagnostic(source.diagnostic);
+ const receipt={version:1,sha:source.sha,tree:source.tree,environment:'github-ephemeral-supabase',provider:'http-loopback',stages,failure,diagnostic,
   modulePassed:source.modulePassed===true,moduleCleanup:source.moduleCleanup===true,nextCleanup:source.nextCleanup===true,
   nextIsolation:source.nextIsolation===true,cleanup:source.cleanup===true,migrations:Number.isInteger(source.migrations)&&source.migrations>0?source.migrations:0,
   limits:{nextMode:'development',captcha:'absent-secret-development-policy',professionalUi:'single-owner-implicit',mailWorkersExecuted:0}};

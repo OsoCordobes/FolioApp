@@ -2,7 +2,63 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {readFileSync} from 'node:fs';
 import {guardBrowserContext,LOCAL_BROWSER_ARGS} from '../../scripts/testing/browser-network.mjs';
-import {assertHoyPatientDestination,assertJoinedInputs,captureManualFailure,collectManualDiagnostic,JOINED_PROJECT,pedidoDialog,todayPlan} from '../../scripts/testing/public-booking-joined-proof/prove.mjs';
+import {assertHoyPatientDestination,assertJoinedInputs,CALENDAR_HOY_STEPS,captureCalendarHoyFailure,captureManualFailure,collectCalendarHoyDiagnostic,collectManualDiagnostic,JOINED_PROJECT,pedidoDialog,todayPlan} from '../../scripts/testing/public-booking-joined-proof/prove.mjs';
+
+const calendarInput=()=>({staff:null,error:new Error('private stack'),step:'reload',navigationStatus:null,
+ plan:{hora:'14:30'},serviceName:'synthetic service',pacienteId:'11111111-1111-4111-8111-111111111111',appUrl:'http://127.0.0.1:4410'});
+function calendarStaff({url='http://127.0.0.1:4410/hoy?secret=private',cardCount=1,rowCount=1,linkCount=1,fail=false}={}){
+ const value=(result)=>async()=>{if(fail)throw Error('private observation');return result;};
+ const card={filter:()=>card,count:value(cardCount),getAttribute:value('Ensayo joined.invalid 14:30 synthetic service private')};
+ const row={filter:()=>row,count:value(rowCount),getAttribute:value('14:30 private'),innerText:value('Ensayo joined.invalid synthetic service private')};
+ const dialog={count:value(2),locator:()=>({count:value(linkCount)})};
+ return {url:()=>{if(fail)throw Error('private URL');return url;},locator:selector=>selector==='.cal-turno'?card:row,getByRole:()=>dialog};
+}
+
+test('calendar diagnostic closes substeps, error kinds, navigation and route categories',async()=>{
+ assert.deepEqual(CALENDAR_HOY_STEPS,['reload','card-wait','label-check','detail-link','hoy-navigation','row-wait','row-label','service-check','patient-navigation','receipt-write']);
+ for(const step of [...CALENDAR_HOY_STEPS,'private']){
+  const result=await collectCalendarHoyDiagnostic({...calendarInput(),step});
+  assert.equal(result.step,step==='private'?'unavailable':step);
+ }
+ for(const [name,code,kind] of [['Error','ERR_ASSERTION','assertion'],['TimeoutError',null,'timeout'],['TypeError',null,'type'],['Error',null,'error'],['toString',null,'other']]){
+  const result=await collectCalendarHoyDiagnostic({...calendarInput(),error:{name,code,message:'private'}});assert.equal(result.errorKind,kind);
+ }
+ for(const [navigationStatus,navigation] of [[200,'success'],[302,'redirect'],[403,'client-error'],[503,'server-error'],[0,'other'],[null,'unavailable']]){
+  assert.equal((await collectCalendarHoyDiagnostic({...calendarInput(),navigationStatus})).navigation,navigation);
+ }
+ const input=calendarInput();
+ for(const [path,route] of [['/calendario','calendario'],['/hoy','hoy'],['/login','login'],[`/pacientes/${input.pacienteId}`,'patient'],['/other','other']]){
+  const result=await collectCalendarHoyDiagnostic({...input,staff:calendarStaff({url:`${input.appUrl}${path}?secret=private`})});
+  assert.equal(result.route,route);assert.equal(result.ui.patientDestination,false);assert.ok(!JSON.stringify(result).includes('private'));
+ }
+ assert.equal((await collectCalendarHoyDiagnostic({...input,staff:calendarStaff({url:`${input.appUrl}/pacientes/${input.pacienteId}`})})).ui.patientDestination,true);
+ assert.equal((await collectCalendarHoyDiagnostic({...input,staff:calendarStaff({url:`http://127.0.0.1:4411/pacientes/${input.pacienteId}`})})).route,'other');
+});
+
+test('calendar diagnostic keeps counts and matches finite and failed observations unavailable',async()=>{
+ const input=calendarInput(),result=await collectCalendarHoyDiagnostic({...input,staff:calendarStaff()});
+ assert.equal(result.ui.card,'one');assert.equal(result.ui.dialog,'many');assert.equal(result.ui.detailLink,'one');assert.equal(result.ui.row,'one');
+ for(const key of ['cardName','cardTime','cardService','rowName','rowTime','rowService','calendarPatientLink'])assert.equal(result.ui[key],true);
+ assert.ok(!JSON.stringify(result).includes('private'));assert.ok(!JSON.stringify(result).includes(input.serviceName));
+ const absent=await collectCalendarHoyDiagnostic({...input,staff:calendarStaff({cardCount:0,rowCount:2,linkCount:0})});
+ assert.equal(absent.ui.card,'zero');assert.equal(absent.ui.row,'many');assert.equal(absent.ui.calendarPatientLink,false);
+ assert.equal(absent.ui.cardName,null);assert.equal(absent.ui.rowName,null);
+ const failed=await collectCalendarHoyDiagnostic({...input,staff:calendarStaff({fail:true})});
+ assert.equal(failed.route,'unavailable');
+ for(const key of ['card','dialog','detailLink','row'])assert.equal(failed.ui[key],'unavailable');
+ for(const key of ['cardName','cardTime','cardService','rowName','rowTime','rowService','calendarPatientLink','patientDestination'])assert.equal(failed.ui[key],null);
+});
+
+test('calendar diagnostic capture preserves first exception even when observation or persistence fails',async()=>{
+ const original=new Error('first');
+ for(const [collect,persist] of [[async()=>({phase:'calendar-hoy',step:'reload'}),async()=>{}],
+  [async()=>{throw Error('capture failure');},async()=>{}],
+  [async()=>({phase:'calendar-hoy',step:'reload'}),async()=>{throw Error('write failure');}]]){
+  const receipt={modulePassed:false,stages:{}};
+  await assert.rejects(()=>captureCalendarHoyFailure(original,collect,receipt,persist),error=>error===original);
+  assert.equal(receipt.modulePassed,false);assert.deepEqual(receipt.stages,{});
+ }
+});
 
 test('pedido modal selector: global RED and exact target GREEN with cookie dialog visible',async()=>{
  const source=readFileSync(new URL('../../components/calendario/pedido-modal.tsx',import.meta.url),'utf8');

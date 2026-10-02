@@ -2,7 +2,25 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
-import {finishManualDiagnostic,joinedReceipt,finishJoinedReceipt,joinedNextEnvironment,joinedBrowserCookies} from '../../scripts/testing/public-booking-joined-proof/adapter.mjs';
+import {finishCalendarHoyDiagnostic,finishManualDiagnostic,joinedReceipt,finishJoinedReceipt,joinedNextEnvironment,joinedBrowserCookies} from '../../scripts/testing/public-booking-joined-proof/adapter.mjs';
+
+test('calendar diagnostic sanitizer closes enums and drops raw data without granting PASS',()=>{
+ const secret='private html URL stack token';
+ const source={phase:'calendar-hoy',step:'detail-link',errorKind:'timeout',navigation:'success',route:'calendario',error:secret,url:secret,html:secret,
+  ui:{card:'one',dialog:'many',detailLink:'zero',row:'unavailable',cardName:true,cardTime:false,cardService:null,rowName:null,rowTime:null,rowService:null,
+   calendarPatientLink:false,patientDestination:false,text:secret},readback:{body:secret}};
+ const output=finishCalendarHoyDiagnostic(source);assert.equal(output.step,'detail-link');assert.equal(output.ui.detailLink,'zero');
+ assert.equal(output.ui.cardTime,false);assert.ok(!JSON.stringify(output).includes(secret));assert.equal(output.readback,undefined);
+ const receipt=complete();receipt.failure='calendar-hoy';receipt.diagnostic=source;
+ const saved=finishJoinedReceipt(receipt);assert.deepEqual(saved.diagnostic,output);assert.equal(saved.passed,false);
+ for(const key of ['step','errorKind','navigation','route'])source[key]=secret;
+ for(const key of Object.keys(source.ui))source.ui[key]=secret;
+ const invalid=finishCalendarHoyDiagnostic(source);
+ assert.equal(invalid.step,'unavailable');assert.equal(invalid.errorKind,'other');assert.equal(invalid.navigation,'unavailable');assert.equal(invalid.route,'unavailable');
+ for(const key of ['card','dialog','detailLink','row'])assert.equal(invalid.ui[key],'unavailable');
+ for(const key of ['cardName','cardTime','cardService','rowName','rowTime','rowService','calendarPatientLink','patientDestination'])assert.equal(invalid.ui[key],null);
+ receipt.diagnostic=invalid;assert.equal(finishJoinedReceipt(receipt).passed,false);
+});
 
 test('manual diagnostic sanitizer drops raw UI/errors/URLs/cookies and invalid categories',()=>{
  const sensitive='private alert html stack cookie query@example.invalid';

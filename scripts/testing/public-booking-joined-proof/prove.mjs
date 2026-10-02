@@ -87,6 +87,50 @@ export async function captureManualFailure(error,collect,receipt,persist){
  throw error;
 }
 
+export const CALENDAR_HOY_STEPS=['reload','card-wait','label-check','detail-link','hoy-navigation',
+ 'row-wait','row-label','service-check','patient-navigation','receipt-write'];
+/** Failure-only UI observation: no actions, DB calls, raw text, URLs or errors survive. */
+export async function collectCalendarHoyDiagnostic({staff,error,step,navigationStatus,plan,serviceName,pacienteId,appUrl}){
+ const observe=async fn=>{try{return await fn();}catch{return null;}};
+ const diagnostic={phase:'calendar-hoy',step:CALENDAR_HOY_STEPS.includes(step)?step:'unavailable',
+  errorKind:error?.code==='ERR_ASSERTION'?'assertion':error?.name==='TimeoutError'?'timeout':
+   error?.name==='TypeError'?'type':error?.name==='Error'?'error':'other',
+  navigation:Number.isInteger(navigationStatus)?(navigationStatus>=200&&navigationStatus<300?'success':
+   navigationStatus>=300&&navigationStatus<400?'redirect':navigationStatus>=400&&navigationStatus<500?'client-error':
+    navigationStatus>=500&&navigationStatus<600?'server-error':'other'):'unavailable',
+  route:'unavailable',ui:{card:'unavailable',dialog:'unavailable',detailLink:'unavailable',row:'unavailable',
+   cardName:null,cardTime:null,cardService:null,rowName:null,rowTime:null,rowService:null,calendarPatientLink:null,patientDestination:null}};
+ if(!staff)return diagnostic;
+ const destination=await observe(()=>new URL(staff.url())),expected=await observe(()=>new URL(`/pacientes/${pacienteId}`,appUrl));
+ if(destination){
+  diagnostic.route=destination.pathname==='/calendario'?'calendario':destination.pathname==='/hoy'?'hoy':
+   destination.pathname==='/login'?'login':expected&&destination.origin===expected.origin&&destination.pathname===expected.pathname?'patient':'other';
+  diagnostic.ui.patientDestination=expected?destination.href===expected.href:null;
+ }
+ const card=staff.locator('.cal-turno').filter({hasText:NAME.split(' ')[0]}),dialog=staff.getByRole('dialog');
+ const link=dialog.locator(`a[href="/pacientes/${pacienteId}"]`),row=staff.locator('.fi-turno').filter({hasText:NAME});
+ const counts={};
+ for(const [key,locator] of Object.entries({card,dialog,detailLink:link,row})){
+  counts[key]=await observe(()=>locator.count());diagnostic.ui[key]=cardinality(counts[key]);
+ }
+ diagnostic.ui.calendarPatientLink=Number.isInteger(counts.detailLink)&&counts.detailLink>=0?counts.detailLink>0:null;
+ const matches=(text,value)=>typeof text==='string'&&typeof value==='string'?text.includes(value):null;
+ if(counts.card===1){
+  const label=await observe(()=>card.getAttribute('aria-label',{timeout:1000}));
+  diagnostic.ui.cardName=matches(label,NAME);diagnostic.ui.cardTime=matches(label,plan.hora);diagnostic.ui.cardService=matches(label,serviceName);
+ }
+ if(counts.row===1){
+  const label=await observe(()=>row.getAttribute('aria-label',{timeout:1000})),text=await observe(()=>row.innerText({timeout:1000}));
+  diagnostic.ui.rowName=matches(text,NAME);diagnostic.ui.rowTime=matches(label,plan.hora);diagnostic.ui.rowService=matches(text,serviceName);
+ }
+ return diagnostic;
+}
+
+export async function captureCalendarHoyFailure(error,collect,receipt,persist){
+ try{receipt.diagnostic=await collect();await persist();}catch{/* Keep the original Calendar/Hoy failure. */}
+ throw error;
+}
+
 /** Fail before fixture writes. The adapter retains the pre-sanitization hosted facts. */
 export function assertJoinedInputs({isolation,config,scope,browserCookies}){
  assert.equal(isolation.project,JOINED_PROJECT);assert.equal(isolation.githubActions,'true');
@@ -160,7 +204,7 @@ export async function provePublicBookingJoined({actor,service,scope,isolation,co
    google:'existing-http-loopback',professionalUi:'single-owner-implicit',mailWorkersExecuted:0};
   await record('fixture',{day:plan.day,start:plan.start,timezone:JOINED_TIMEZONE});
   await withNext(config,async runtime=>{
-   let staff=null,pedidoModal=null,manualStep='context',navigationStatus=null;
+   let staff=null,pedidoModal=null,manualStep='context',navigationStatus=null,calendarStep='reload',calendarNavigationStatus=null;
    try{
    assert.equal(runtime.kind,'next-dev');assert.equal(runtime.appUrl,config.appUrl);
    assert.equal(runtime.externalIoDenied,true);assert.equal(runtime.turnstileSecretPresent,false);
@@ -221,18 +265,29 @@ export async function provePublicBookingJoined({actor,service,scope,isolation,co
    assert.ok(patients.some(row=>row.id===turn.paciente_id));
    manualStep='receipt-write';
    await record('manualConfirmation',{turnoId:turn.id,pacienteId:turn.paciente_id,serviceId:servicio,professionalId:member});
-   stage='calendar-hoy';await staff.reload();
+   stage='calendar-hoy';calendarStep='reload';
+   const calendarNavigation=await staff.reload();calendarNavigationStatus=calendarNavigation?.status()??null;
    const turnCard=staff.locator('.cal-turno').filter({hasText:NAME.split(' ')[0]});
+   calendarStep='card-wait';
    await turnCard.waitFor();assert.equal(await turnCard.count(),1);
+   calendarStep='label-check';
    const label=await turnCard.getAttribute('aria-label');assert.ok(label.includes(NAME));
    assert.ok(label.includes(plan.hora));assert.ok(label.includes(services[0].nombre));
+   calendarStep='detail-link';
    await turnCard.click();await staff.getByRole('dialog').locator(`a[href="/pacientes/${turn.paciente_id}"]`).waitFor();
-   await staff.goto('/hoy');const today=staff.locator('.fi-turno').filter({hasText:NAME});
+   calendarStep='hoy-navigation';calendarNavigationStatus=null;
+   const hoyNavigation=await staff.goto('/hoy');calendarNavigationStatus=hoyNavigation?.status()??null;
+   const today=staff.locator('.fi-turno').filter({hasText:NAME});
+   calendarStep='row-wait';
    await today.waitFor();assert.equal(await today.count(),1);
+   calendarStep='row-label';
    assert.ok((await today.getAttribute('aria-label')).includes(plan.hora));
+   calendarStep='service-check';
    assert.ok((await today.innerText()).includes(services[0].nombre));
+   calendarStep='patient-navigation';calendarNavigationStatus=null;
    await today.click();await staff.waitForURL(`${config.appUrl}/pacientes/${conversion.paciente_id}`);
    const hoyPatientLink=assertHoyPatientDestination(staff.url(),config.appUrl,conversion.paciente_id);
+   calendarStep='receipt-write';
    await record('calendarHoy',{calendarVisible:true,calendarPatientLink:true,hoyVisible:true,hoyPatientLink,day:plan.day});
    stage='google-intent';const jobs=await read(rows('google_outbound_job'));assert.equal(jobs.length,1);
    const job=jobs[0];assert.equal(job.turno_id,turn.id);assert.equal(job.integration_id,integration);
@@ -253,6 +308,9 @@ export async function provePublicBookingJoined({actor,service,scope,isolation,co
    }catch(error){
     if(stage==='manual-confirmation')await captureManualFailure(error,()=>collectManualDiagnostic({staff,pedidoModal,error,step:manualStep,navigationStatus,
      scope,pedidoId:receipt.stages.publicRequest.pedidoId,withDatabase}),receipt,persist);
+    if(stage==='calendar-hoy')await captureCalendarHoyFailure(error,()=>collectCalendarHoyDiagnostic({staff,error,step:calendarStep,
+     navigationStatus:calendarNavigationStatus,plan,serviceName:services[0].nombre,pacienteId:receipt.stages.manualConfirmation.pacienteId,
+     appUrl:config.appUrl}),receipt,persist);
     throw error;
    }
   });
