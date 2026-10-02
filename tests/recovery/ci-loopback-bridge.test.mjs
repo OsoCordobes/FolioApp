@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import net from 'node:net';
+import {execFileSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
+import {safeEnvironment} from '../../scripts/testing/isolation-policy.mjs';
+import {GOOGLE_PROJECT} from '../../scripts/testing/google-c05-proof/contract.mjs';
 import {validateBridgeTarget,preflightBridgeTarget,waitForBridgeTarget,bridgeFailureCategory} from '../../scripts/recovery/ci-loopback-bridge.mjs';
 
 const project='folio_c01_source',service='db',containerId='a'.repeat(64),networkId='b'.repeat(64);
@@ -41,6 +45,34 @@ test('S1 bridge accepts only its exact internal db and api-gw targets',()=>{
   value.remotePort=selectedService==='db'?5432:8000;
   assert.deepEqual(validateBridgeTarget(value),{address:'172.30.0.3',port:value.remotePort});
  }
+});
+
+test('Google bridge accepts exact metadata and rejects foreign project/network/port',()=>{
+ for(const selectedService of ['db','api-gw']){
+  const googleMetadata=()=>{
+   const value=metadata(GOOGLE_PROJECT);value.service=selectedService;
+   value.labels['com.docker.compose.service']=selectedService;
+   value.remotePort=selectedService==='db'?5432:8000;return value;
+  };
+  assert.deepEqual(validateBridgeTarget(googleMetadata()),{address:'172.30.0.3',port:selectedService==='db'?5432:8000});
+  for(const mutate of [
+   x=>{x.project=GOOGLE_PROJECT+'_extra';},
+   x=>{x.labels['com.docker.compose.project']='folio_caller_proof';},
+   x=>{x.labels['com.docker.compose.service']='other';},
+   x=>{x.network.Internal=false;},
+   x=>{x.network.Labels['com.docker.compose.project']='foreign';},
+   x=>{x.networks.other={};},
+   x=>{x.networks[`${GOOGLE_PROJECT}_default`].NetworkID='c'.repeat(64);},
+   x=>{x.networks[`${GOOGLE_PROJECT}_default`].IPAddress='172.31.0.3';x.network.Containers[containerId].IPv4Address='172.31.0.3/16';},
+   x=>{x.remotePort=443;},
+  ]){const value=googleMetadata();mutate(value);assert.throws(()=>validateBridgeTarget(value));}
+ }
+});
+
+test('validated parent capability crosses the guard only to its exact target and cleans up throws',()=>{
+ const output=execFileSync(process.execPath,[fileURLToPath(new URL('./fixtures/bridge-isolation-probe.mjs',import.meta.url))],
+  {env:safeEnvironment(process.env),encoding:'utf8',timeout:10000});
+ assert.equal(output.trim(),'bridge_guard_exact_target_cleanup_pass');
 });
 
 test('S1 bridge rejects lookalike names, URLs, hosted addresses and foreign metadata before I/O',()=>{
