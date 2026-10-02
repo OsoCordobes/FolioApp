@@ -16,6 +16,24 @@ function metadata(selectedProject=project){return {
  network:{Name:`${selectedProject}_default`,Id:networkId,Internal:true,Driver:'bridge',Options:{},Labels:{'com.docker.compose.project':selectedProject},IPAM:{Config:[{Subnet:'172.30.0.0/16'}]},Containers:{[containerId]:{IPv4Address:'172.30.0.3/16'}}},
 };}
 
+test('Joined bridge accepts only its exact internal db/api-gw metadata',()=>{
+ const joinedProject='folio_public_booking_joined_proof';
+ for(const rejected of [joinedProject+'_extra','prefix_'+joinedProject,joinedProject.toUpperCase(),'folio_public_booking',
+  'http://127.0.0.1:55421','https://example.invalid'])assert.throws(()=>validateBridgeTarget(metadata(rejected)));
+ for(const selectedService of ['db','api-gw']){
+  const own=()=>{const value=metadata(joinedProject);value.service=selectedService;
+   value.labels['com.docker.compose.service']=selectedService;value.remotePort=selectedService==='db'?5432:8000;return value;};
+  assert.deepEqual(validateBridgeTarget(own()),{address:'172.30.0.3',port:selectedService==='db'?5432:8000});
+  for(const mutate of [x=>{x.network.Internal=false;},x=>{x.labels['com.docker.compose.project']=MAIL_PROJECT;},
+   x=>{x.network.Labels['com.docker.compose.project']='foreign';},x=>{x.networks.other={};},
+   x=>{x.networks[`${joinedProject}_default`].NetworkID='c'.repeat(64);},
+   x=>{x.remotePort=selectedService==='db'?8000:5432;},x=>{x.service='rest';},
+   x=>{x.networks[`${joinedProject}_default`].IPAddress='198.51.100.4';}]){
+   const value=own();mutate(value);assert.throws(()=>validateBridgeTarget(value));
+  }
+ }
+});
+
 test('bridge accepts only the exact internal Compose target',()=>{
  assert.deepEqual(validateBridgeTarget(metadata()),{address:'172.30.0.3',port:5432});
  assert.deepEqual(validateBridgeTarget(metadata('folio_export_bytes_proof')),{address:'172.30.0.3',port:5432});
