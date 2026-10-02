@@ -1,6 +1,6 @@
 # Folio — tablero único de lanzamiento
 
-Actualizado: 02/10/2026, continuación autorizada tras PR196. Autoridad operativa: esta copia en codex/launch-checkpoints. [AVANCES](AVANCES.md) contiene los19checkpoints y la vista breve del titular. Las fechas son comprobaciones, no estado en tiempo real.
+Actualizado: 02/10/2026, continuación autorizada tras PR196. La autoridad operativa permanece en el [tablero activo de codex/launch-checkpoints](https://github.com/OsoCordobes/FolioApp/blob/codex/launch-checkpoints/docs/LAUNCH-BOARD.md), mantenido por el manager; las copias en master y otras ramas son fotografías documentales de su fecha. [AVANCES](AVANCES.md) contiene los19checkpoints y la vista breve del titular. Las fechas son comprobaciones, no estado en tiempo real.
 
 ## Objetivo y método
 
@@ -172,4 +172,4 @@ Seguir AGENTS y RTK.md, originales para decisiones consecuentes. No iniciar/rese
 
 [Auditoría de instrucciones](AGENT-SETUP-20260926.md) cerrada90/100; Flow sin almacén/no-op. No repetir. [Preparación de piloto](D-CALIDAD-PILOTO.md) no es aprobación profesional.
 
-Historial íntegro de este corte: [archivo30/09 01:19](LAUNCH-BOARD-HISTORY-20260930-0119.md), SHA256`ad2627ddeb1fc751bb6828630acdf5723ac39e13bc4693d3260157760d4d583e` (64208bytes, copia exacta antes de compactar). Historial previo: [archivo29/09 20:50](LAUNCH-BOARD-HISTORY-20260929-2050.md), SHA256`f725a510211fce532871057d83063ad800f7ea419c1ebd537f2070fa93c767a0`. Consultarlos sólo para evidencia necesaria; autorizaciones pendientes de sus fechas ya pueden estar consumidas. Esta página y recibos actuales prevalecen como estado, sin borrar fracasos ni antecedentes.
+Historial íntegro de este corte: [archivo30/09 01:19](https://github.com/OsoCordobes/FolioApp/blob/addd45d4875b0586bbd282a15f90a1040c09dce3/docs/LAUNCH-BOARD-HISTORY-20260930-0119.md), SHA256`ad2627ddeb1fc751bb6828630acdf5723ac39e13bc4693d3260157760d4d583e` (64208bytes, copia exacta antes de compactar). Historial previo: [archivo29/09 20:50](https://github.com/OsoCordobes/FolioApp/blob/addd45d4875b0586bbd282a15f90a1040c09dce3/docs/LAUNCH-BOARD-HISTORY-20260929-2050.md), SHA256`f725a510211fce532871057d83063ad800f7ea419c1ebd537f2070fa93c767a0`. Consultarlos sólo para evidencia necesaria; autorizaciones pendientes de sus fechas ya pueden estar consumidas. El tablero activo y los recibos actuales prevalecen como estado, sin borrar fracasos ni antecedentes.
