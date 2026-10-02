@@ -127,6 +127,7 @@ export function BookingWizard({
   const professionalForAction = fixedProfessionalId ?? profesionalIdParaActions(multiProf, profesionalSelId);
   const profesionalSelNombre = nombreProfesionalSeleccionado(profesionales, profesionalSelId);
   const [slots, setSlots] = useState<Slot[]>([]);
+  const [slotsReload, setSlotsReload] = useState(0);
   const [slotPicked, setSlotPicked] = useState<Slot | null>(null);
   const [nombre, setNombre] = useState("");
   const [telefono, setTelefono] = useState("");
@@ -239,23 +240,29 @@ export function BookingWizard({
     let cancelled = false;
     startTransition(async () => {
       setErr(null);
-      const result = await fetchSlotsAction({
-        orgSlug: org.slug,
-        servicioId,
-        profesionalId: professionalForAction,
-        personalPageMemberId: fixedProfessionalId,
-        diasAdelante: 14,
-      });
-      if (cancelled) return;
-      if (!result.ok) {
-        setErr(result.error.message);
+      try {
+        const result = await fetchSlotsAction({
+          orgSlug: org.slug,
+          servicioId,
+          profesionalId: professionalForAction,
+          personalPageMemberId: fixedProfessionalId,
+          diasAdelante: 14,
+        });
+        if (cancelled) return;
+        if (!result.ok) {
+          setErr(result.error.message);
+          setSlots([]);
+          return;
+        }
+        setSlots(result.data);
+      } catch {
+        if (cancelled) return;
+        setErr("No pudimos cargar los horarios. Volvé a intentarlo.");
         setSlots([]);
-        return;
       }
-      setSlots(result.data);
     });
     return () => { cancelled = true; };
-  }, [vista, servicioId, org.slug, multiProf, profesionalSelId, professionalForAction, fixedProfessionalId, fetchSlotsAction]);
+  }, [vista, servicioId, org.slug, multiProf, profesionalSelId, professionalForAction, fixedProfessionalId, fetchSlotsAction, slotsReload]);
 
   // ─── Render ──────────────────────────────────────────────────────────
   // El chrome de página (hero, header sticky, "atienden acá", powered-by) lo
@@ -391,7 +398,13 @@ export function BookingWizard({
                 ))}
               </div>
             ) : null}
-            {err ? <p className="au-err" role="alert">{err}</p> : null}
+            {err ? <>
+              <p className="au-err" role="alert">{err}</p>
+              <button type="button" className="fi-btn fi-btn-ghost" disabled={pending}
+                onClick={() => setSlotsReload((attempt) => attempt + 1)}>
+                Reintentar horarios
+              </button>
+            </> : null}
             {slots.length === 0 && !pending && !err ? (
               <div className="bk-empty">
                 <p className="bk-empty-title">
