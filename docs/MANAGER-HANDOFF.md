@@ -4,15 +4,17 @@
 
 ## Mandato y presupuesto vigentes
 
-El titular autoriza dirigir, delegar, implementar y publicar mejoras comprobadas dentro del alcance. Pidió consumir trabajo útil de la cuota y entregar el relevo al0%. **No créditos para desarrollo**; sólo mínimo imprescindible para terminar el relevo si la cuota se agotó antes. Última lectura:85%usado/15%libre,62497.459246créditos intactos y1reset disponible. Se retiró la reserva histórica15%; A congela nuevos paquetes al97% para cerrar. No gastar artificialmente. get_usage_limits sólo lee; no hay control de reset accesible comprobado. Si sigue así, detener y el titular lo aplica. [Prompt copiable y revisado](NEXT-MANAGER-PROMPT.md).
+El titular autoriza dirigir, delegar, implementar y publicar mejoras comprobadas dentro del alcance. Pidió consumir trabajo útil de la cuota y entregar el relevo al0%. **No créditos para desarrollo**; sólo mínimo imprescindible para terminar el relevo si la cuota se agotó antes. Última lectura:86%usado/14%libre,62497.459246créditos intactos y1reset disponible. Se retiró la reserva histórica15%; A congela nuevos paquetes al97% para cerrar. No gastar artificialmente. get_usage_limits sólo lee; no hay control de reset accesible comprobado. Si sigue así, detener y el titular lo aplica. [Prompt copiable y revisado](NEXT-MANAGER-PROMPT.md).
 
 ## Publicación actual
 
-- Master/Desktop: `695b6f6c2e57380c7faa2c9529b4301c67d4ba7e`, tree `96abf9550932539630a33954bf5ba29eb9bc34d9`. PR198 publicada; App36976848491/SQL36976848426SUCCESS, deployment `dpl_3ubJmTMohiV9rtd9G8AW4SZTAoKy` READY/exacto/ambos dominios. Releer remoto antes de actuar.
+- Master/Desktop: `bd6128a9b411261482112f35350cb871e5d5362c`, tree `df31bec0300520ac4c37bde118ec12d0e28a7b5b`. PR199 publicada; App36989767378/SQL36989767350SUCCESS, deployment `dpl_4TrKWFvFPi77trzbCeadG3hwL9U7` READY/exacto/ambos dominios. FINAL78f582a0 y40hashes contrastados por A. Releer remoto antes de actuar.
 - PR196 permite cancelar suscripción pendiente con confirmación y preserva estado incierto. PR197 cerró la prueba real de CI sólo documental. PR198 recupera errores de consulta de horarios sin perder selección, con ocho casos. PR192–195 y anteriores siguen acreditadas; no repetir.
 - No migración productiva nueva en este tramo. Desktop conserva archivos ajenos sin seguimiento. Landing PR191 aceptada: mantener estructura completa e identidad violeta; no otro rediseño.
 
 ## Paquetes actuales y primera acción
+
+**Actualización posterior:** PR199 cerrada y publicada, sin tareas pendientes; su fila conserva identidad. C integra Google en PR200, candidato e6b0aeb5, diez blobs intactos, CI en curso. D implementa ensayo integrado de correo con DB real aislada/transporte stub, sin alterar los cinco blobs aprobados. B prepara módulo independiente del recorrido público completo en nueva copia; READINESS67cb8a62 está en public-booking-joined-proof-20261002. No puede tocar caller-proof/run.mjs mientras D lo posea. Reserva pública integrada aún pendiente, no defecto confirmado.
 
 | Paquete | Estado y continuación exacta |
 |---|---|
