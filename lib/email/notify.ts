@@ -23,6 +23,7 @@ import { SUPPORT_EMAIL } from "@/lib/support";
 
 import type { SendEmailResult } from "./client";
 import { deliverDurableEmail } from "./durable";
+import { resolveBookingRecipient } from "./recipient-authority";
 import { esc } from "./templates/billing-common";
 import { buildBookingConfirmadaEmail } from "./templates/booking-confirmada";
 import { tryDecrypt } from "@/lib/crypto";
@@ -545,7 +546,8 @@ export async function notifySuscripcionActivada(input: {
  * confirmación ya cubre el aviso).
  *
  * Destinatario: el profesional destino del pedido (pedido.profesional_id →
- * member → profile.email) o, sin profesional asignado, el OWNER de la org.
+ * member → profile.email) o, sin miembro/perfil asignado resoluble, el OWNER
+ * más antiguo de la org. Un error de consulta nunca permite ese fallback.
  * La lectura de `member` usa el client del caller (ambos call sites pasan el
  * SERVICE client — no hay sesión en webhook/booking); la de `profile` va por
  * service client ANGOSTO (profile_select_self impide leer profiles ajenos
@@ -554,7 +556,7 @@ export async function notifySuscripcionActivada(input: {
  * PHI mínima deliberada: nombre del solicitante y canal — sin motivo/notas
  * clínicas ni contacto del paciente. Fail-safe como el resto del módulo:
  * try/catch + captureException, jamás re-lanza ni rompe la creación del
- * pedido. Sin destinatario resoluble → return silencioso.
+ * pedido. Sin autoridad vigente → fallo terminal; lookup fallido → reintentable.
  */
 export async function notifyPedidoNuevo(input: {
   client: ServerClient;
@@ -571,48 +573,18 @@ export async function notifyPedidoNuevo(input: {
   const { client, organizationId, pedidoId, pacienteNombre, canal, fechaPropuestaIso } = input;
 
   try {
-    // 1. Resolver el profile destinatario: profesional del pedido, o OWNER.
-    let profileId: string | null = null;
-    if (input.profesionalId) {
-      const { data: prof } = await client
-        .from("member")
-        .select("profile_id")
-        .eq("id", input.profesionalId)
-        .eq("organization_id", organizationId)
-        .is("deleted_at", null)
-        .maybeSingle();
-      profileId = (prof?.profile_id as string | undefined) ?? null;
-    }
-    if (!profileId) {
-      const { data: owner } = await client
-        .from("member")
-        .select("profile_id")
-        .eq("organization_id", organizationId)
-        .eq("role", "OWNER")
-        .is("deleted_at", null)
-        .order("created_at", { ascending: true })
-        .limit(1)
-        .maybeSingle();
-      profileId = (owner?.profile_id as string | undefined) ?? null;
-    }
-    if (!profileId) return { status: "blocked", detail: "notification_context_unavailable" };
-
-    // 2. Email del profile — lectura angosta vía service client (ver doc).
+    // Capturar identidad/autoridad desde DB; ningún error habilita fallback.
     const service = createSupabaseServiceClient();
-    const { data: profile } = await service
-      .from("profile")
-      .select("email")
-      .eq("id", profileId)
-      .maybeSingle();
-    const to = (profile?.email as string | undefined) ?? null;
-    if (!to) return { status: "blocked", detail: "notification_context_unavailable" };
+    const recipient = await resolveBookingRecipient(client, service, input);
+    if (recipient.status !== "resolved") return recipient;
 
     // 3. Datos de display + template puro.
-    const { data: org } = await client
+    const { data: org, error: orgError } = await client
       .from("organization")
       .select("nombre, timezone")
       .eq("id", organizationId)
       .maybeSingle();
+    if (orgError) return { status: "failed", detail: "email_recipient_lookup_failed", retryable: true };
 
     const { subject, html } = buildPedidoNuevoEmail({
       organizationNombre: org?.nombre ?? "Folio",
@@ -626,7 +598,8 @@ export async function notifyPedidoNuevo(input: {
 
     // Reply-To soporte: el destinatario es un profesional (mismo criterio que
     // notifyMemberInvitation — los emails a pacientes no llevan replyTo).
-    return deliverDurableEmail({ organizationId, kind: "booking_request", dedupeKey: `pedido:${pedidoId}`, to, subject, html, replyTo: SUPPORT_EMAIL });
+    return deliverDurableEmail({ organizationId, kind: "booking_request", dedupeKey: `pedido:${pedidoId}`,
+      to: recipient.to, recipientAuthority: recipient.context, subject, html, replyTo: SUPPORT_EMAIL });
   } catch {
     return { status: "failed", detail: "email_notification_preparation_failed", retryable: true };
   }
