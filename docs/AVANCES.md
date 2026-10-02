@@ -1,6 +1,6 @@
 # Folio · avances comprobables
 
-Actualizado: 01/10/2026, horario de Copenhague. [El tablero técnico](LAUNCH-BOARD.md) conserva el detalle y los antecedentes. Cada fila cambia sólo ante un resultado o bloqueo real.
+Actualizado: 02/10/2026, horario de Copenhague. [El tablero técnico](LAUNCH-BOARD.md) conserva el detalle y los antecedentes. Cada fila cambia sólo ante un resultado o bloqueo real.
 
 **Ahora:** [PR191 publicada en Folio](https://foliosalud.com/): lectura, espacios, botones y marca coherentes en landing, ingreso, onboarding y miniweb. Revisión independiente aprobada en móvil/escritorio; versión publicada y ambos dominios comprobados. [Plan y evidencia](DESIGN-COHERENCE-PLAN.md).
 
@@ -12,7 +12,9 @@ Actualizado: 01/10/2026, horario de Copenhague. [El tablero técnico](LAUNCH-BOA
 
 **Trabajo repetido reducido:** [PR195 publicada](https://github.com/OsoCordobes/FolioApp/pull/195) permite omitir pruebas pesadas cuando sólo cambian documentos expresamente permitidos. Pasó 37 casos, revisión y todos los controles reales de su primera publicación. Falta comprobar el camino documental con la actualización útil de este registro.
 
-**Nuevo arreglo en cierre:** [PR196](https://github.com/OsoCordobes/FolioApp/pull/196) agrega cancelar una suscripción pendiente, con confirmación y sin repetir la operación ante una respuesta incierta. Pasó 17 pruebas, revisión y vista móvil/escritorio; controles finales en curso. La regla de adicionales de Clínica sigue pendiente de tu decisión; no se cambió el precio ni se realizaron cobros.
+**Nuevo arreglo publicado:** [PR196](https://github.com/OsoCordobes/FolioApp/pull/196) permite cancelar una suscripción pendiente, con confirmación y sin repetir la operación ante una respuesta incierta. Pasó 17 pruebas, revisión, vista móvil/escritorio y controles automáticos; publicación comprobada. No se cambiaron precios ni se realizaron cobros o cancelaciones reales.
+
+**En preparación:** D reprodujo un fallo en la reserva pública: si se corta la consulta de horarios, desaparece el formulario. Está corrigiéndolo para conservar la selección y permitir recuperarse. Se probará y revisará antes de publicar; el resto del diseño se conserva.
 
 **Dependencias externas:** la nueva copia automática terminó correctamente según su recibo. Falta guardarla fuera del equipo y comprobar su apertura desde otro perfil. Consulta contractual a Vercel preparada y esperando autorización de envío; el titular confirmó que todavía no recibió respuesta. No se habilitaron pacientes reales ni proveedores.
 
@@ -38,7 +40,7 @@ Actualizado: 01/10/2026, horario de Copenhague. [El tablero técnico](LAUNCH-BOA
 | **Llamador de recepción** · publicado | D · revisión A; [PR181 publicada](https://github.com/OsoCordobes/FolioApp/pull/181). Pantalla con código y destino, sin nombres; llamar conserva el turno en sala. [Prueba completa](https://github.com/OsoCordobes/FolioApp/actions/runs/36124468806): vinculación, respuesta perdida sin duplicar, reconexión y revocación; móvil y escritorio revisados. |
 | **Google Calendar** · prueba externa pendiente | [Ensayo definido](C05-GOOGLE-PROOF-CONTRACT.md): reserva, cambios, ocupación externa y reintentos. [PR184 publicada](https://github.com/OsoCordobes/FolioApp/pull/184) mejora el aviso en celular; eso no acredita la integración. |
 | **Correo y comunicaciones** · prueba externa pendiente | La entrega global sigue desactivada; falta comprobar recepción y reintentos en buzones controlados. |
-| **Pagos y suscripciones** · prueba externa pendiente | Los cobros ficticios previos no prueban Mercado Pago real; faltan los recorridos comerciales ofrecidos. |
+| **Pagos y suscripciones** · cancelación pendiente publicada; prueba externa pendiente | [PR196](https://github.com/OsoCordobes/FolioApp/pull/196) agrega confirmación y recuperación ante una respuesta incierta. Pruebas ficticias, revisión y publicación comprobadas; Mercado Pago real y regla de adicionales de Clínica siguen pendientes. |
 | **Portal y exportación** · refuerzo publicado | [PR190 publicada](https://github.com/OsoCordobes/FolioApp/pull/190): la descarga del portal vuelve a comprobar el permiso antes de entregar el archivo. Revisión independiente, cinco controles y publicación verificados. La [descarga profesional](https://github.com/OsoCordobes/FolioApp/pull/182) ya estaba publicada. |
 | **Continuidad y soporte** · copia automática comprobada | Nuevo recibo del 01/10 completo y autenticado, contrastado por C. [Herramienta de apertura portátil publicada](https://github.com/OsoCordobes/FolioApp/pull/193), con pruebas ficticias y revisión. Guardar y abrir una copia real fuera del equipo sigue pendiente. |
 | **Legal, privacidad y cookies** · condiciones pendientes | [Ficha de proveedores](PROVIDER-FACTS-20260929.md): falta aclarar cobertura de Vercel para datos de salud antes del piloto real; consulta preparada, no enviada. La vista local anterior no se ofrece como página publicada. También sigue pendiente el preaviso legal. |
@@ -46,7 +48,7 @@ Actualizado: 01/10/2026, horario de Copenhague. [El tablero técnico](LAUNCH-BOA
 | **Validación profesional y piloto** · preparación lista, validación pendiente | D preparó la [hoja del piloto](https://github.com/OsoCordobes/FolioApp/blob/codex/launch-checkpoints/docs/D-CALIDAD-PILOTO.md), revisada por A. Define recorridos, responsables y decisiones pendientes; todavía no habilita el piloto ni acredita las cinco especialidades. |
 | **Lanzamiento** · pendiente | Se cerrará cuando la versión publicada y la oferta comercial coincidan con lo demostrado. |
 
-**Dónde probar:** [Folio publicado](https://foliosalud.com/), portada y [directorio](https://foliosalud.com/profesionales) en móvil/escritorio; conservan su aspecto con la distribución corregida de estilos. Para recorrer la aplicación con datos ficticios, usar la [guía breve](GUIA-PRUEBA-FOLIO.md). Última publicación verificada: PR194. Cuota compartida consultada el 01/10: 21% disponible, un reset y 62.497,46 créditos; no es consumo por agente.
+**Dónde probar:** [Folio publicado](https://foliosalud.com/), portada y [directorio](https://foliosalud.com/profesionales) en móvil/escritorio. En una cuenta de ensayo preparada con suscripción pendiente, Configuración → Facturación debe ofrecer la confirmación para cancelar; «Volver» conserva el estado. No confirmar una cancelación real sólo para probar. Para los demás recorridos ficticios, usar la [guía breve](GUIA-PRUEBA-FOLIO.md). Última publicación verificada: PR196. Cuota compartida consultada el 02/10: 20% disponible, un reset y 62.497,46 créditos; no es consumo por agente.
 
 **Seguimiento abierto:** dos ensayos de guardado de servicios fallaron antes del ensayo completo aprobado en Solo/Clínica. Se mejoró el diagnóstico de la prueba; la causa de aquellos fallos sigue sin confirmarse. La publicación visual no se presenta como una reparación funcional de ese problema. Registros y continuación en el [plan de diseño](DESIGN-COHERENCE-PLAN.md).
 

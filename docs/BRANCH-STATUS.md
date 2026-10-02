@@ -1,6 +1,12 @@
-# Folio · estado de ramas al 01/10/2026
+# Folio · estado de ramas al 02/10/2026
 
-## Actualización vigente · 01/10/2026, 20:50 Copenhague (18:50 UTC)
+## Actualización vigente · 02/10/2026, 08:17 Copenhague (06:17 UTC)
+
+Consulta paginada de las ramas remotas: cuatro heads reales. `master` está en **f30388f100d4e32fc85910130b96dce2f0c2c87f**, con [PR196 integrada](https://github.com/OsoCordobes/FolioApp/pull/196). `codex/launch-checkpoints` estaba en87e25945 al corte; `codex/market-ready` conserva ae1d9bd7 y `codex/patient-intake-proof` conserva eb5ebd93. PR188 sigue retenida por H3; no se vuelve a integrar una rama histórica para vaciar la lista.
+
+La documentación se entregará selectivamente desde master. D prepara un arreglo local de recuperación de horarios desde f30388f1; todavía no existe una PR publicada de ese paquete. Esta fotografía no incluye futuras ramas que se creen para esas entregas. Se preservan todas las copias y evidencias; recibo `C:/Users/amiun/Documents/Codex/folio-manager-evidence/checkpoint-close-20261002/heads.json`.
+
+## Corte histórico · 01/10/2026, 20:50 Copenhague (18:50 UTC)
 
 Consulta única de heads remotos y PRs en GitHub. Master **182919288301f474fa88f1d02eb0bb2d985ea702**. Los cuatro heads reales son:
 
