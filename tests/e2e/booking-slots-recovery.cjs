@@ -76,9 +76,11 @@ const stubs = {
           await expect(page.getByRole('heading',{name:/Elegí un horario/})).toContainText('Synthetic Alpha');
           assert.equal(await page.evaluate(()=>qa.calls.length),1,'error cannot trigger an automatic retry');
           const retry = page.getByRole('button',{name:'Reintentar horarios'});
-          await retry.focus();
+          await expect(retry).toBeEnabled();
+          await expect(page.getByRole('heading',{name:/Elegí un horario/})).toBeFocused();
+          await page.keyboard.press('Tab');
           await expect(retry).toBeFocused();
-          await retry.press('Enter');
+          await page.keyboard.press('Enter');
           await expect(page.locator('.bk-slot')).toHaveCount(1);
           await expect(page.getByRole('alert')).toHaveCount(0);
           await page.locator('.bk-slot').click();
