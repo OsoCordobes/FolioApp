@@ -30,7 +30,7 @@ function inSubnet(address,subnet){
 
 /** Accept only an exact Compose service on its one internal project bridge. */
 export function validateBridgeTarget({project,service,containerId,labels,networks,network,remotePort}){
- assert.ok(['folio_c01_source','folio_c01_destination','folio_export_bytes_proof','folio_caller_proof','folio_s1_indexing_proof',GOOGLE_PROJECT,'folio_mail_internal_proof'].includes(project));
+ assert.ok(['folio_c01_source','folio_c01_destination','folio_export_bytes_proof','folio_caller_proof','folio_s1_indexing_proof',GOOGLE_PROJECT,'folio_mail_internal_proof','folio_public_booking_joined_proof'].includes(project));
  assert.ok(['db','api-gw'].includes(service));
  assert.match(containerId,/^[a-f0-9]{64}$/);
  assert.equal(labels?.['com.docker.compose.project'],project);
