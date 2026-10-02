@@ -21,7 +21,7 @@ Podés integrar y publicar mejoras comprobadas dentro de las autorizaciones vige
 Antes de actuar, leé:
 
 1. `C:/Users/amiun/.codex/worktrees/folio-launch-manager/folio-app/docs/MANAGER-HANDOFF.md`
-2. En esa misma carpeta: `LAUNCH-BOARD.md` y `AVANCES.md`.
+2. En esa misma carpeta: el corte vigente al inicio de `LAUNCH-BOARD.md` y la lista de `AVANCES.md`. Consultá el resto del historial sólo para el paquete elegido; no cargues todos los antecedentes en el contexto nuevo.
 3. Las instrucciones vigentes de `AGENTS.md` y `C:/Users/amiun/.codex/RTK.md`.
 
 Después verificá cuota, agentes/chats activos, Git y las operaciones que puedan haberse completado durante una interrupción. No vuelvas a publicar, migrar, despachar un ensayo o ejecutar una acción externa hasta reconciliar su resultado durable. Los informes fechados orientan; los originales y el estado actual deciden.
