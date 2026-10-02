@@ -15,16 +15,17 @@ El titular autoriza continuar con la cuota del plan y luego aplicar su reset; pi
 ## Trabajo abierto: reconciliar antes de continuar
 
 - **Google interno:** candidato `a0dfffaafac7d0c1a7f13a4583e1d5844fda0021`, árbol `ef5baeb8d904602213275ac8a3b12f02187c88df`, copia `google-internal-proof/folio-app`, rama `codex/google-internal-proof`. Siete archivos de prueba,359+/9−,18locales/tipos/lintPASS. NO push/PR/dispatch/DB/Google real. Revisión encontró dos P2 de bridge/aislamiento; esperar dictamen y corregir antes del ensayo GitHub. El PASS interno no cerrará Google externo.
-- **Parche de imágenes:** D implementa sharp0.34.5→0.35.4 y validación de optimización real con imágenes sintéticas; candidato aún no recibido en este corte. Auditoría original única476dependencias:21HIGH/0CRITICAL/18moderate/6low. Dos avisos sharp afectan el procesamiento público; otros hallazgos se preservan y no prueban explotación. No actualización masiva autorizada.
-- **Aviso Postgres25/09:** C revisa únicamente código, versión y catálogos para determinar aplicabilidad. Sin lectura de datos clínicos, upgrades, reindex, DDL o cambios productivos. Resultado pendiente.
+- **Parche de imágenes:** congelado69312c6ea19aca44a42cda9bfed283f78e0d1b0e/treeb49ec1b2782c18d9cc0421489ede1f7736773c1f, tres archivos package/lock/test.12pruebasWindows/tipos/lint/revisión independientePASS; A27hashescontrastados. B recibió ownershipsharp-security-patch e integración mediante merge conmaster actual, PR/fullCI y squash sólo siLinux/build/exactoPASS. Postauditúnico21→19HIGH, sin avisos nuevos; no actualización masiva ni nuevoaudit. Reconciliar operación antes de repetir.
+- **Aviso Postgres25/09:** lectura terminada, producción17.6. Cero objetos catalogados afectados porltree/GiSTfloat/estimadores y sinPGP en fuente/objetos propios; historia sin certificar, no se leyó dato clínico. C prepara plan17.11; ninguna actualización autorizada/ejecutada.
+- **Correo:** D revisa evidencia existente y paso externo pendiente, sólolectura/sintético; no envíos, flags, cron ni proveedorreal. No presentar preparación como entrega real.
 
 Evidencia privada bajo `C:/Users/amiun/Documents/Codex/folio-manager-evidence/`: `public-booking-readiness-20261002/`, `checkpoint-close-20261002/`, `google-c05-readiness-20261002/`, `dependency-readiness-20261002/`, `postgres-readiness-20261002/`.
 
 ## Chats y propiedad
 
-- B — Acceso y producto de Folio: `01a0bb34-d7b9-7841-b45c-1889b0b987dd`. Cerró operación PR198; copia privacy-release preserva candidatos. No nuevo escritor asignado.
-- C — Continuidad y proveedores de Folio: `01a0bb34-d802-7852-82c5-126c0af7e654`. Cerró PR197; lectura Postgres en curso.
-- D — Experiencia y verificación de Folio: `01a0bb34-d7b9-7841-b45c-189d01589d14`. Escritor del parche sharp; confirmar copia/SHA al retomar.
+- B — Acceso y producto de Folio: `01a0bb34-d7b9-7841-b45c-1889b0b987dd`. Opera sharp-security-patch. Copia privacy-release preservaPR198.
+- C — Continuidad y proveedores de Folio: `01a0bb34-d802-7852-82c5-126c0af7e654`. CerróPR197 y lecturaPostgres; plan operativo17.11 en preparación, sin mutaciones.
+- D — Experiencia y verificación de Folio: `01a0bb34-d7b9-7841-b45c-189d01589d14`. Cerrósharp, cediócheckout aB; lectura correo en curso.
 - Subagentes de la sesión actual: google_c05_readiness (escritor Google, congelado), booking_recovery_review (revisor Google), checkpoint_docs_review (diagnóstico dependencias cerrado). Sus resultados se guardan en archivos; un manager en otro chat puede necesitar agentes nuevos, sin repetir sus pruebas.
 
 ## Decisiones externas aún pendientes

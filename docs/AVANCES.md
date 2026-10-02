@@ -16,7 +16,7 @@ Actualizado: 02/10/2026, horario de Copenhague. [El tablero técnico](LAUNCH-BOA
 
 **Reserva corregida y publicada:** [PR198](https://github.com/OsoCordobes/FolioApp/pull/198) conserva la selección y permite «Reintentar horarios» si se interrumpe la consulta. Ocho casos del componente real, revisión independiente, controles automáticos y despliegue comprobados; esa regresión ya protege los cambios futuros.
 
-**Seguridad en curso:** se comprobaron dos avisos que afectan al procesador de imágenes instalado. D prepara el parche compatible y pruebas de fotos/logos; todavía no se declara corregido. Los otros avisos del análisis se conservan con su alcance, sin presentarlos como ataques observados.
+**Seguridad en curso:** el parche del procesador de imágenes pasó12 pruebas locales y revisión independiente; B comprueba Linux y publicación. El análisis posterior elimina los dos avisos de ese componente; todavía no está publicado. C confirmó también que la base sigue enPostgreSQL17.6 y prepara su actualización, sin modificarla.
 
 **Dependencias externas:** la nueva copia automática terminó correctamente según su recibo. Falta guardarla fuera del equipo y comprobar su apertura desde otro perfil. Consulta contractual a Vercel preparada y esperando autorización de envío; el titular confirmó que todavía no recibió respuesta. No se habilitaron pacientes reales ni proveedores.
 
