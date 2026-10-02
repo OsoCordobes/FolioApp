@@ -1,6 +1,6 @@
 # Folio · avances comprobables
 
-Actualizado: 02/10/2026, horario de Copenhague. **Última publicación verificada: [PR200](https://github.com/OsoCordobes/FolioApp/pull/200)**, pruebas internas de Google disponibles para reutilizar, sin activar el proveedor. El [parche de imágenes PR199](https://github.com/OsoCordobes/FolioApp/pull/199) también está publicado. El ensayo de correo falló al preparar datos ficticios y se corrige esa preparación; el recorrido unido de reserva y agenda está en revisión antes de ejecutarlo.
+Actualizado: 02/10/2026, horario de Copenhague. **Última publicación verificada: [PR200](https://github.com/OsoCordobes/FolioApp/pull/200)**, pruebas internas de Google disponibles para reutilizar, sin activar el proveedor. El [parche de imágenes PR199](https://github.com/OsoCordobes/FolioApp/pull/199) también está publicado. Correo aprobó su ensayo con base temporal real; el recorrido unido de reserva y agenda está en ejecución. Ambos siguen pendientes de publicación.
 
 **Publicado** = disponible en Folio. **Probado** = pasó los controles indicados, sin publicar. Cada fila conserva su alcance; las pruebas parciales no cierran el lanzamiento.
 
@@ -30,6 +30,6 @@ Actualizado: 02/10/2026, horario de Copenhague. **Última publicación verificad
 
 **Decisiones pendientes:** cobertura contractual de Vercel y autorización de envío de la consulta; adicionales de Clínica; custodia externa; preaviso legal, criterio profesional y piloto. Google, correo y pagos reales conservan sus autorizaciones específicas; no se habilitaron pacientes reales ni proveedores.
 
-**Cuota al02/10:** 11% disponible, un reset y 62.497,46 créditos intactos; es cuota compartida, sin atribuir consumo por agente. Desarrollo sólo con cuota del plan; cierre y relevo antes de pasar a créditos.
+**Cuota al02/10:** 9% disponible, un reset y 62.497,46 créditos intactos; es cuota compartida, sin atribuir consumo por agente. Desarrollo sólo con cuota del plan; cierre y relevo antes de pasar a créditos.
 
 **Historia y fallos:** [copia íntegra anterior](AVANCES-20261002-before-compact.md) y [tablero operativo](LAUNCH-BOARD.md). Los dos fallos previos de guardado de servicios siguen sin causa confirmada; el diagnóstico y la publicación visual no se presentan como reparación. [Plan y evidencia de diseño](DESIGN-COHERENCE-PLAN.md). El registro y su [copia en Git](https://github.com/OsoCordobes/FolioApp/blob/codex/launch-checkpoints/docs/AVANCES.md) sustituyen la vista del panel4420 detenido.
