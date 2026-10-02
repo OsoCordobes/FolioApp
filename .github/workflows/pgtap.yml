@@ -1,4 +1,4 @@
-name: SQL tests (migrations + specs)
+name: Operational SQL proof PostgreSQL 17.11 (not for product PR)
 
 on:
   workflow_dispatch:
@@ -7,25 +7,23 @@ on:
         description: Full commit SHA expected at checkout
         required: true
         type: string
-  push:
-    branches: [master]
-  pull_request:
 
 permissions:
   contents: read
 
-# Cancel in-flight runs of the same ref when a new push lands.
+# One isolated operational object; never cancel an in-flight proof.
 concurrency:
-  group: pgtap-${{ github.ref }}
-  cancel-in-progress: true
+  group: folio-ops-pg1711-20261002
+  cancel-in-progress: false
 
 jobs:
   sql-specs:
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'OsoCordobes/FolioApp' && github.ref == 'refs/tags/codex/ops-pg1711-20261002' && github.run_attempt == 1
     runs-on: ubuntu-latest
 
     services:
       postgres:
-        image: postgres:16
+        image: postgres:17.11-bookworm@sha256:639ab7ceb90e13123085b741fb31ef493fba25463002f6da665352e7b534b652
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -91,22 +89,47 @@ jobs:
           EXPECTED_SHA: ${{ inputs.expected_sha }}
         run: |
           set -euo pipefail
+          [[ "$GITHUB_EVENT_NAME" == 'workflow_dispatch' ]]
+          [[ "$GITHUB_REPOSITORY" == 'OsoCordobes/FolioApp' ]]
+          [[ "$GITHUB_REF" == 'refs/tags/codex/ops-pg1711-20261002' ]]
+          [[ "$GITHUB_RUN_ATTEMPT" == '1' ]]
           if [[ ! "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]; then
             echo "::error::expected_sha must be a full lowercase hexadecimal SHA-1"
             exit 1
           fi
 
           actual_sha="$(git rev-parse HEAD)"
-          if [[ "$actual_sha" != "$EXPECTED_SHA" ]]; then
-            echo "::error::Checked out $actual_sha, expected $EXPECTED_SHA"
+          if [[ "$actual_sha" != "$EXPECTED_SHA" || "$GITHUB_SHA" != "$EXPECTED_SHA" ]]; then
+            echo "::error::Checkout/event SHA differs from expected_sha"
             exit 1
           fi
 
       - name: Install psql client + pgTAP
         if: steps.docs.outputs.docs_only != 'true'
         run: |
+          set -euo pipefail
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl --fail --silent --show-error https://www.postgresql.org/media/keys/ACCC4CF8.asc -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+          . /etc/os-release
+          printf 'Types: deb\nURIs: https://apt.postgresql.org/pub/repos/apt\nSuites: %s-pgdg\nComponents: main\nSigned-By: /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc\n' "$VERSION_CODENAME" | sudo tee /etc/apt/sources.list.d/pgdg.sources >/dev/null
           sudo apt-get update
-          sudo apt-get install -y postgresql-client postgresql-16-pgtap
+          sudo apt-get install -y postgresql-client-17 postgresql-17-pgtap
+          echo '/usr/lib/postgresql/17/bin' >> "$GITHUB_PATH"
+
+      - name: Verify isolated PostgreSQL 17.11 runtime
+        if: steps.docs.outputs.docs_only != 'true'
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$PGHOST" == 'localhost' && "$PGPORT" == '5432' && "$PGDATABASE" == 'folio_test' && "$PGUSER" == 'postgres' ]]
+          client_version="$(/usr/lib/postgresql/17/bin/psql --version)"
+          [[ "$client_version" == 'psql (PostgreSQL) 17.'* ]]
+          server_version_num="$(psql -X -At -v ON_ERROR_STOP=1 -c 'show server_version_num')"
+          [[ "$server_version_num" == '170011' ]]
+          printf 'repository=%s\nref=%s\nexpected_sha=%s\nGITHUB_SHA=%s\nclient=%s\nserver_version_num=%s\n' "$GITHUB_REPOSITORY" "$GITHUB_REF" "$EXPECTED_SHA" "$GITHUB_SHA" "$client_version" "$server_version_num"
+          psql -X -v ON_ERROR_STOP=1 -c 'select version(), current_database(), inet_server_addr(), inet_server_port();'
 
       - name: Bootstrap Supabase-compatible roles + auth schema stubs
         if: steps.docs.outputs.docs_only != 'true'
@@ -210,7 +233,7 @@ jobs:
           echo "- Migrations applied: $(ls supabase/migrations/*.sql | wc -l)" >> "$GITHUB_STEP_SUMMARY"
           echo "- Specs ejecutados: $(ls tests/sql/*.spec.sql | wc -l)" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "NOTA: este CI usa postgres:16 vanilla + stubs minimos de" >> "$GITHUB_STEP_SUMMARY"
+          echo "NOTA: ensayo operativo postgres:17.11 por digest + stubs minimos de" >> "$GITHUB_STEP_SUMMARY"
           echo "auth/storage. NO reemplaza un test E2E con \`supabase start\`," >> "$GITHUB_STEP_SUMMARY"
           echo "que sigue siendo la fuente de verdad para RLS-with-JWT y" >> "$GITHUB_STEP_SUMMARY"
           echo "storage policies." >> "$GITHUB_STEP_SUMMARY"
