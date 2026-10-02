@@ -86,6 +86,10 @@ jobs:
         if: steps.docs.outputs.docs_only != 'true'
         run: pnpm exec playwright install --with-deps chromium
 
+      - name: Verify public slot query recovery with synthetic responses
+        if: steps.docs.outputs.docs_only != 'true'
+        run: node --import ./scripts/testing/unit-bootstrap.mjs tests/e2e/booking-slots-recovery.cjs "$RUNNER_TEMP/booking-slots-recovery"
+
       - name: Verify onboarding paths and public booking with synthetic browser responses
         if: steps.docs.outputs.docs_only != 'true'
         env:
