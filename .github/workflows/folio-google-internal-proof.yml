@@ -1,0 +1,70 @@
+name: Folio C05 internal Google HTTP proof
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Exact reviewed candidate commit (40 lowercase hex characters)
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: folio-google-internal-proof
+  cancel-in-progress: false
+jobs:
+  google-internal-proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.candidate_sha }}
+      - name: Verify exact candidate
+        env:
+          C05_CANDIDATE: ${{ inputs.candidate_sha }}
+        run: |
+          [[ "$C05_CANDIDATE" =~ ^[a-f0-9]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$C05_CANDIDATE"
+          git diff --exit-code
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install locked tools
+        run: pnpm install --frozen-lockfile
+      - name: Install PostgreSQL 17 client
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq curl ca-certificates
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl --fail --silent --show-error -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          . /etc/os-release
+          printf 'Types: deb\nURIs: https://apt.postgresql.org/pub/repos/apt\nSuites: %s-pgdg\nComponents: main\nSigned-By: /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc\n' "$VERSION_CODENAME" | sudo tee /etc/apt/sources.list.d/pgdg.sources >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+          echo '/usr/lib/postgresql/17/bin' >> "$GITHUB_PATH"
+      - name: Fetch pinned official Supabase Docker release
+        run: |
+          set -euo pipefail
+          upstream="$RUNNER_TEMP/supabase-upstream"
+          git clone --quiet --depth 1 --filter=blob:none --sparse --branch self-hosted/v0.8.1 https://github.com/supabase/supabase "$upstream"
+          git -C "$upstream" sparse-checkout set docker
+          test "$(git -C "$upstream" rev-parse HEAD)" = '8c7a4d9dbbaf8b552893822e89d7bf06f33f9220'
+          echo "C01_OFFICIAL_DOCKER=$upstream/docker" >> "$GITHUB_ENV"
+      - name: Prove internal integration against ephemeral real Supabase
+        run: node --conditions=react-server --import tsx scripts/testing/caller-proof/run.mjs --google-internal
+      - name: Preserve finite sanitized proof receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: google-internal-proof
+          path: ${{ runner.temp }}/folio-google-internal-proof.json
+          if-no-files-found: warn
+          retention-days: 7

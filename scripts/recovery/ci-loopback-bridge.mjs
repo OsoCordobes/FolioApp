@@ -1,6 +1,17 @@
 import assert from 'node:assert/strict';
 import net from 'node:net';
 import {performance} from 'node:perf_hooks';
+import {GOOGLE_PROJECT} from '../testing/google-c05-proof/contract.mjs';
+
+// The trusted parent loads this helper before test isolation. Only an immutable
+// metadata-validated target issued before that guard receives this capability.
+// Workers retain the global guard; neither the connector nor its arguments escape.
+const socketConnect=net.Socket.prototype.connect;
+const validatedTargets=new WeakSet(),parentConnectors=new WeakMap();
+function connectTarget(target){
+ const connect=parentConnectors.get(target);
+ return connect?connect():net.connect({host:target.address,port:target.port});
+}
 
 function ipv4Number(value){
  if(net.isIP(value)!==4)throw Error('c01_bridge_ipv4_required');
@@ -19,7 +30,7 @@ function inSubnet(address,subnet){
 
 /** Accept only an exact Compose service on its one internal project bridge. */
 export function validateBridgeTarget({project,service,containerId,labels,networks,network,remotePort}){
- assert.ok(['folio_c01_source','folio_c01_destination','folio_export_bytes_proof','folio_caller_proof','folio_s1_indexing_proof'].includes(project));
+ assert.ok(['folio_c01_source','folio_c01_destination','folio_export_bytes_proof','folio_caller_proof','folio_s1_indexing_proof',GOOGLE_PROJECT].includes(project));
  assert.ok(['db','api-gw'].includes(service));
  assert.match(containerId,/^[a-f0-9]{64}$/);
  assert.equal(labels?.['com.docker.compose.project'],project);
@@ -38,14 +49,21 @@ export function validateBridgeTarget({project,service,containerId,labels,network
  assert.ok(Array.isArray(network?.IPAM?.Config));
  assert.ok(network.IPAM.Config.some(config=>inSubnet(attachment.IPAddress,config.Subnet)));
  assert.equal(remotePort,service==='db'?5432:8000);
- return {address:attachment.IPAddress,port:remotePort};
+ const target=Object.freeze({address:attachment.IPAddress,port:remotePort});
+ validatedTargets.add(target);
+ if(!globalThis[Symbol.for('folio.test.isolation')])parentConnectors.set(target,()=>{
+  const socket=new net.Socket();
+  try{return socketConnect.call(socket,{host:target.address,port:target.port});}
+  catch(error){socket.destroy();throw error;}
+ });
+ return target;
 }
 
 /** A failed direct route aborts before its loopback bridge opens. */
 export async function preflightBridgeTarget(target,timeoutMs=3000){
  await new Promise((resolve,reject)=>{
   let socket;
-  try{socket=net.connect({host:target.address,port:target.port});}
+  try{socket=connectTarget(target);}
   catch{reject(bridgeFailure('other'));return;}
   const timer=setTimeout(()=>{socket.destroy();reject(bridgeFailure('timeout'));},timeoutMs);
   socket.once('connect',()=>{clearTimeout(timer);socket.destroy();resolve();});
@@ -89,12 +107,15 @@ export async function waitForBridgeTarget(target,totalTimeoutMs=15000){
 
 /** Fixed upstream; no generic CONNECT handler, public listener, or DNS lookup. */
 export async function openLoopbackBridge(target,localPort){
+ assert.ok(validatedTargets.has(target),'c01_bridge_validated_target_required');
  assert.ok([55421,55422].includes(localPort));
  assert.equal(target.port,localPort===55422?5432:8000);
  assert.equal(net.isIP(target.address),4);
  const sockets=new Set();
  const server=net.createServer(inbound=>{
-  const outbound=net.connect({host:target.address,port:target.port});
+  let outbound;
+  try{outbound=connectTarget(target);}
+  catch{inbound.destroy();return;} // Guard/connector failure must not bypass cleanup.
   sockets.add(inbound);sockets.add(outbound);
   const end=()=>{inbound.destroy();outbound.destroy();sockets.delete(inbound);sockets.delete(outbound);};
   inbound.once('error',end);outbound.once('error',end);
