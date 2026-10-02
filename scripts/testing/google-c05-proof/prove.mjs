@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {installGoogleTransport,startGoogleHttp} from './transport.mjs';
+import {assertGoogleSyncObserved} from './contract.mjs';
 
 /** Called only after the hosted runner has denied external I/O and seeded MFA. */
 export async function proveGoogle({actor,service,scope,receipt,withDatabase,persist}){
@@ -17,6 +18,10 @@ export async function proveGoogle({actor,service,scope,receipt,withDatabase,pers
   const turns=()=>read(rows('turno').order('id'));
   const patients=()=>read(rows('paciente').order('id'));
   const integrationRow=()=>read(service.from('integration').select('*').eq('id',integration).single());
+  const syncObserved=async()=>{
+   const before=http.calls.list,result=await sync(service,await integrationRow());
+   assertGoogleSyncObserved(result,before,http.calls.list);return result;
+  };
   const organizations=await read(service.from('organization').select('id,is_synthetic,is_internal_account'));
   assert.deepEqual(organizations,[{id:org,is_synthetic:false,is_internal_account:true}]);assert.equal((await patients()).length,1);
   const day=new Date(),base=Date.UTC(day.getUTCFullYear(),day.getUTCMonth(),day.getUTCDate()+2,12),start=offset=>new Date(base+offset*3600000).toISOString();
@@ -55,17 +60,17 @@ export async function proveGoogle({actor,service,scope,receipt,withDatabase,pers
   await mark('uncertain_insert',{turnId:uncertain.id,eventId:uncertain.event,acceptedInserts:1,jobState:'complete'});
   const external='c05external';const externalAt=offset=>({id:external,status:'confirmed',summary:'Ensayo externo',
    start:{dateTime:start(offset)},end:{dateTime:new Date(Date.parse(start(offset))+30*60000).toISOString()},etag:'external'});
-  assert.equal(await occupied(4),false);http.events.set(external,externalAt(4));await sync(service,await integrationRow());
-  assert.equal(await occupied(4),true);await sync(service,await integrationRow());
+  assert.equal(await occupied(4),false);http.events.set(external,externalAt(4));await syncObserved();
+  assert.equal(await occupied(4),true);await syncObserved();
   assert.equal((await read(rows('bloqueo'))).length,1);
-  http.events.set(external,externalAt(5));await sync(service,await integrationRow());assert.equal(await occupied(4),false);assert.equal(await occupied(5),true);
-  http.events.delete(external);await sync(service,await integrationRow());assert.equal(await occupied(5),false);assert.equal((await read(rows('bloqueo'))).length,0);
+  http.events.set(external,externalAt(5));await syncObserved();assert.equal(await occupied(4),false);assert.equal(await occupied(5),true);
+  http.events.delete(external);await syncObserved();assert.equal(await occupied(5),false);assert.equal((await read(rows('bloqueo'))).length,0);
   await mark('external_availability',{eventId:external,slots:[false,true,false,true,false],duplicateBlocks:0});
   const beforeTurns=await turns(),beforePatients=await patients();
   const own=http.events.get(uncertain.event);http.events.set(uncertain.event,{...own,summary:'Título ficticio modificado',start:{dateTime:start(6)},end:{dateTime:new Date(Date.parse(start(6))+30*60000).toISOString()},etag:'edited'});
-  await sync(service,await integrationRow());assert.deepEqual(await turns(),beforeTurns);assert.deepEqual(await patients(),beforePatients);
+  const beforeOwnList=http.calls.list;await syncObserved();assert.deepEqual(await turns(),beforeTurns);assert.deepEqual(await patients(),beforePatients);
   assert.equal((await read(rows('bloqueo'))).length,0);assert.equal(await occupied(6),false);
-  assert.ok(http.calls.token>0);await mark('owned_event_isolation',{eventId:uncertain.event,unchangedTurns:4,unchangedPatients:1,duplicateBlocks:0});
+  assert.ok(http.calls.token>0);await mark('owned_event_isolation',{eventId:uncertain.event,unchangedTurns:4,unchangedPatients:1,duplicateBlocks:0,httpListRequests:http.calls.list-beforeOwnList,snapshotApplied:true});
   receipt.http={...http.calls};
  }finally{restore?.();await http.close();}
 }

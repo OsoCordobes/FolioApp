@@ -6,6 +6,12 @@ export function assertGoogleFixtureIsolation(state){
  assert.equal(state.runnerEnvironment,'github-hosted');assert.equal(state.platform,'linux');
  assert.equal(state.fresh,true);assert.equal(state.internalNetwork,true);
 }
+export function assertGoogleSyncObserved(result,beforeList,afterList){
+ assert.equal(result.ok,true);assert.equal(result.skipped,undefined);
+ assert.ok(Number.isInteger(beforeList)&&beforeList>=0);
+ assert.ok(Number.isInteger(afterList)&&afterList>beforeList);
+ for(const count of [result.upserted,result.deleted])assert.ok(Number.isInteger(count)&&count>=0);
+}
 /** @returns {{version:number,sha:string,environment:string,provider:string,cases:Record<string,{passed:boolean}>,failure:string|null,cleanup:boolean,passed:boolean}} */
 export function googleReceipt(sha){
  assert.match(sha,/^[a-f0-9]{40}$/);

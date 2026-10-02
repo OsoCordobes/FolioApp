@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { google } from "googleapis";
 import { proofConfiguration } from "../../scripts/testing/caller-proof/run.mjs";
-import { GOOGLE_CASES, GOOGLE_PROJECT, assertGoogleFixtureIsolation, googleReceipt, finishGoogleReceipt } from "../../scripts/testing/google-c05-proof/contract.mjs";
+import { GOOGLE_CASES, GOOGLE_PROJECT, assertGoogleFixtureIsolation, assertGoogleSyncObserved, googleReceipt, finishGoogleReceipt } from "../../scripts/testing/google-c05-proof/contract.mjs";
 import { googleAdapter, installGoogleTransport, startGoogleHttp } from "../../scripts/testing/google-c05-proof/transport.mjs";
 import { createEvent, getEvent, updateEvent, listEvents } from "../../lib/google/calendar";
 
@@ -27,6 +27,13 @@ test("HTTP receipt cannot pass before every internal case and cleanup", () => {
   receipt.cleanup = true; assert.equal(finishGoogleReceipt(receipt).passed, true);
   receipt.failure = "fixture"; assert.equal(finishGoogleReceipt(receipt).passed, false);
   assert.equal(receipt.provider, "http-loopback");
+});
+
+test("inbound proof requires an applied snapshot and an actual HTTP list", () => {
+  const applied = { ok: true, upserted: 0, deleted: 0 };
+  assertGoogleSyncObserved(applied, 3, 5);
+  for (const delta of [{ ok: false }, { skipped: "busy" }, { skipped: "no_token" }, { upserted: -1 }, { deleted: NaN }]) assert.throws(() => assertGoogleSyncObserved({ ...applied, ...delta }, 3, 5));
+  for (const counts of [[3, 3], [3, 2], [-1, 5], [3, NaN]]) assert.throws(() => assertGoogleSyncObserved(applied, counts[0], counts[1]));
 });
 test("transport rejects scope escapes before any HTTP adapter and preserves request options", async () => {
   const adapter = googleAdapter("http://127.0.0.1:55427"); let calls = 0;
