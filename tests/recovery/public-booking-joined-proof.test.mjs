@@ -1,6 +1,39 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {assertHoyPatientDestination,assertJoinedInputs,captureManualFailure,collectManualDiagnostic,JOINED_PROJECT,todayPlan} from '../../scripts/testing/public-booking-joined-proof/prove.mjs';
+import {readFileSync} from 'node:fs';
+import {guardBrowserContext,LOCAL_BROWSER_ARGS} from '../../scripts/testing/browser-network.mjs';
+import {assertHoyPatientDestination,assertJoinedInputs,captureManualFailure,collectManualDiagnostic,JOINED_PROJECT,pedidoDialog,todayPlan} from '../../scripts/testing/public-booking-joined-proof/prove.mjs';
+
+test('pedido modal selector: global RED and exact target GREEN with cookie dialog visible',async()=>{
+ const source=readFileSync(new URL('../../components/calendario/pedido-modal.tsx',import.meta.url),'utf8');
+ const cookieSource=readFileSync(new URL('../../components/cookie-banner.tsx',import.meta.url),'utf8');
+ assert.match(source,/aria-labelledby="cal-pedido-modal-title"/);
+ assert.match(source,/<h2 id="cal-pedido-modal-title"[^>]*>\s*\{pedido\.nombre\}/);
+ assert.match(cookieSource,/aria-labelledby="cookie-banner-title"/);
+ assert.match(cookieSource,/<strong id="cookie-banner-title"[^>]*>Cookies y privacidad<\/strong>/);
+ const {chromium}=await import('@playwright/test');
+ const browser=await chromium.launch({headless:true,args:LOCAL_BROWSER_ARGS});
+ try{
+  const context=await browser.newContext();await guardBrowserContext(context);const page=await context.newPage();
+  await page.setContent(`<div id="pedido-dialog" role="dialog" aria-modal="true" aria-labelledby="cal-pedido-modal-title">
+   <h2 id="cal-pedido-modal-title">Ensayo joined.invalid</h2>
+   <button onclick="document.getElementById('pedido-dialog').remove()">Aceptar y crear turno</button></div>
+   <div role="dialog" aria-labelledby="cookie-banner-title"><strong id="cookie-banner-title">Cookies y privacidad</strong>
+   <button>Solo esenciales</button></div>`);
+  assert.equal(await page.getByRole('dialog').count(),2);
+  await assert.rejects(()=>page.getByRole('dialog').waitFor({state:'hidden',timeout:1000}),error=>error.message.includes('strict mode violation'));
+  const target=pedidoDialog(page),cookie=page.getByRole('dialog',{name:'Cookies y privacidad',exact:true});
+  assert.equal(await target.count(),1);assert.equal(await cookie.isVisible(),true);
+  const snapshot=await collectManualDiagnostic({staff:page,pedidoModal:target,error:new Error('synthetic'),step:'accept-click',navigationStatus:null,
+   scope:fixture().scope,pedidoId:fixture().scope.org,withDatabase:async()=>{throw Error('no database in this probe');}});
+  assert.equal(snapshot.ui.dialog,'one');assert.equal(snapshot.ui.acceptEnabled,true);
+  assert.equal(snapshot.readback.available,false);
+  const accept=target.getByRole('button',{name:'Aceptar y crear turno',exact:true});assert.equal(await accept.count(),1);
+  await accept.click();await target.waitFor({state:'hidden',timeout:1000});
+  assert.equal(await cookie.isVisible(),true);assert.equal(await page.getByRole('dialog').count(),1);
+  console.log('pedido_selector_probe:old=RED_strict target=GREEN_hidden cookie=visible target_diagnostic=one accepts=1 network=blocked app=none db=none');
+ }finally{await browser.close();}
+});
 
 test('manual diagnostic reads only the existing pedido and keeps failures unavailable',async()=>{
  const scope=fixture().scope,pedidoId='22222222-2222-4222-8222-222222222222';

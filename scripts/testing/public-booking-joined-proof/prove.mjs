@@ -35,8 +35,9 @@ export function assertHoyPatientDestination(url,appUrl,pacienteId){
 
 const cardinality=value=>Number.isInteger(value)&&value>=0?(value===0?'zero':value===1?'one':'many'):'unavailable';
 const observedBoolean=value=>typeof value==='boolean'?value:null;
+export const pedidoDialog=staff=>staff.getByRole('dialog',{name:NAME,exact:true});
 /** Only literals, booleans and correlated counts; never retain browser text/URLs/errors. */
-export async function collectManualDiagnostic({staff,error,step,navigationStatus,scope,pedidoId,withDatabase}){
+export async function collectManualDiagnostic({staff,pedidoModal,error,step,navigationStatus,scope,pedidoId,withDatabase}){
  const observe=async fn=>{try{return await fn();}catch{return null;}};
  const diagnostic={step,errorKind:error?.code==='ERR_ASSERTION'?'assertion':
   ({TimeoutError:'timeout',TypeError:'type',Error:'error'})[error?.name]??'other',
@@ -49,7 +50,7 @@ export async function collectManualDiagnostic({staff,error,step,navigationStatus
  if(staff){
   const path=await observe(()=>new URL(staff.url()).pathname);
   diagnostic.route=path===null?'unavailable':path==='/calendario'?'calendario':path==='/login'?'login':'other';
-  const card=staff.locator(`.cal-pedido[title*="${NAME}"]`),dialog=staff.getByRole('dialog');
+  const card=staff.locator(`.cal-pedido[title*="${NAME}"]`),dialog=pedidoModal??pedidoDialog(staff);
   diagnostic.ui.card=cardinality(await observe(()=>card.count()));
   diagnostic.ui.dialog=cardinality(await observe(()=>dialog.count()));
   const accept=dialog.getByRole('button',{name:'Aceptar y crear turno',exact:true});
@@ -159,7 +160,7 @@ export async function provePublicBookingJoined({actor,service,scope,isolation,co
    google:'existing-http-loopback',professionalUi:'single-owner-implicit',mailWorkersExecuted:0};
   await record('fixture',{day:plan.day,start:plan.start,timezone:JOINED_TIMEZONE});
   await withNext(config,async runtime=>{
-   let staff=null,manualStep='context',navigationStatus=null;
+   let staff=null,pedidoModal=null,manualStep='context',navigationStatus=null;
    try{
    assert.equal(runtime.kind,'next-dev');assert.equal(runtime.appUrl,config.appUrl);
    assert.equal(runtime.externalIoDenied,true);assert.equal(runtime.turnstileSecretPresent,false);
@@ -196,14 +197,15 @@ export async function provePublicBookingJoined({actor,service,scope,isolation,co
    manualStep='cookies';
    await guardBrowserContext(staffContext);await staffContext.addCookies(browserCookies);
    manualStep='navigation';
-   staff=await staffContext.newPage();const navigation=await staff.goto('/calendario');navigationStatus=navigation?.status()??null;
+   staff=await staffContext.newPage();pedidoModal=pedidoDialog(staff);
+   const navigation=await staff.goto('/calendario');navigationStatus=navigation?.status()??null;
    manualStep='card-wait';
    const card=staff.locator(`.cal-pedido[title*="${NAME}"]`);
    await card.waitFor();assert.equal(await card.count(),1);manualStep='card-open';await card.click();
    manualStep='accept-click';
-   await staff.getByRole('dialog').getByRole('button',{name:'Aceptar y crear turno',exact:true}).click();
+   await pedidoModal.getByRole('button',{name:'Aceptar y crear turno',exact:true}).click();
    manualStep='dialog-hidden';
-   await staff.getByRole('dialog').waitFor({state:'hidden'});
+   await pedidoModal.waitFor({state:'hidden'});
    manualStep='conversion-readback';
    const conversions=await privateRows('conversion');assert.equal(conversions.length,1);const conversion=conversions[0];
    assert.equal(conversion.pedido_id,pedido.id);assert.notEqual(conversion.paciente_id,patient);
@@ -249,7 +251,7 @@ export async function provePublicBookingJoined({actor,service,scope,isolation,co
    assert.equal(event.attendees,undefined);assert.equal(event.location,undefined);
    await record('googleIntent',{integrationId:integration,eventId:job.event_id,intents:1,events:1,http:{...http.calls}});
    }catch(error){
-    if(stage==='manual-confirmation')await captureManualFailure(error,()=>collectManualDiagnostic({staff,error,step:manualStep,navigationStatus,
+    if(stage==='manual-confirmation')await captureManualFailure(error,()=>collectManualDiagnostic({staff,pedidoModal,error,step:manualStep,navigationStatus,
      scope,pedidoId:receipt.stages.publicRequest.pedidoId,withDatabase}),receipt,persist);
     throw error;
    }
