@@ -33,6 +33,59 @@ export function assertHoyPatientDestination(url,appUrl,pacienteId){
  return true;
 }
 
+const cardinality=value=>Number.isInteger(value)&&value>=0?(value===0?'zero':value===1?'one':'many'):'unavailable';
+const observedBoolean=value=>typeof value==='boolean'?value:null;
+/** Only literals, booleans and correlated counts; never retain browser text/URLs/errors. */
+export async function collectManualDiagnostic({staff,error,step,navigationStatus,scope,pedidoId,withDatabase}){
+ const observe=async fn=>{try{return await fn();}catch{return null;}};
+ const diagnostic={step,errorKind:error?.code==='ERR_ASSERTION'?'assertion':
+  ({TimeoutError:'timeout',TypeError:'type',Error:'error'})[error?.name]??'other',
+  navigation:Number.isInteger(navigationStatus)?(navigationStatus>=200&&navigationStatus<300?'success':
+   navigationStatus>=300&&navigationStatus<400?'redirect':navigationStatus>=400&&navigationStatus<500?'client-error':
+    navigationStatus>=500&&navigationStatus<600?'server-error':'other'):'unavailable',
+  route:'unavailable',ui:{card:'unavailable',dialog:'unavailable',acceptEnabled:null,inlineAlert:null},
+  readback:{available:false,pedido:'unavailable',pedidoState:'unavailable',conversion:'unavailable',turno:'unavailable',googleJob:'unavailable',
+   conversionMatchesPedido:null,turnMatchesConversion:null,turnMatchesFixture:null,jobMatchesTurn:null}};
+ if(staff){
+  const path=await observe(()=>new URL(staff.url()).pathname);
+  diagnostic.route=path===null?'unavailable':path==='/calendario'?'calendario':path==='/login'?'login':'other';
+  const card=staff.locator(`.cal-pedido[title*="${NAME}"]`),dialog=staff.getByRole('dialog');
+  diagnostic.ui.card=cardinality(await observe(()=>card.count()));
+  diagnostic.ui.dialog=cardinality(await observe(()=>dialog.count()));
+  const accept=dialog.getByRole('button',{name:'Aceptar y crear turno',exact:true});
+  if(await observe(()=>accept.count())===1)diagnostic.ui.acceptEnabled=observedBoolean(await observe(()=>accept.isEnabled({timeout:1000})));
+  const alerts=await observe(()=>dialog.getByRole('alert').count());
+  diagnostic.ui.inlineAlert=Number.isInteger(alerts)&&alerts>=0?alerts>0:null;
+ }
+ // One bounded SELECT uses a single MVCC snapshot and the already submitted pedido.
+ const result=await observe(()=>withDatabase(db=>db.query({query_timeout:3000,values:[scope.org,pedidoId,scope.member,scope.servicio,scope.integration],text:`
+  WITH wanted AS (SELECT id,organization_id,estado FROM public.pedido WHERE organization_id=$1 AND id=$2),
+   converted AS (SELECT * FROM folio_booking_private.conversion WHERE organization_id=$1 AND pedido_id=$2),
+   turns AS (SELECT t.* FROM public.turno t JOIN converted c ON c.turno_id=t.id WHERE t.organization_id=$1),
+   jobs AS (SELECT j.* FROM public.google_outbound_job j JOIN converted c ON c.turno_id=j.turno_id WHERE j.organization_id=$1)
+  SELECT (SELECT count(*)::int FROM wanted) AS pedido_count,
+   coalesce((SELECT CASE WHEN estado IN ('PENDIENTE','CONFIRMADO') THEN estado::text ELSE 'other' END FROM wanted),'unavailable') AS pedido_state,
+   (SELECT count(*)::int FROM converted) AS conversion_count,(SELECT count(*)::int FROM turns) AS turn_count,(SELECT count(*)::int FROM jobs) AS job_count,
+   CASE WHEN (SELECT count(*) FROM wanted)=1 AND (SELECT count(*) FROM converted)=1 THEN
+    EXISTS(SELECT 1 FROM converted c JOIN wanted p ON p.id=c.pedido_id AND p.organization_id=c.organization_id) END AS conversion_match,
+   CASE WHEN (SELECT count(*) FROM converted)=1 AND (SELECT count(*) FROM turns)=1 THEN
+    EXISTS(SELECT 1 FROM turns t JOIN converted c ON c.turno_id=t.id AND c.paciente_id=t.paciente_id AND c.organization_id=t.organization_id) END AS turn_match,
+   CASE WHEN (SELECT count(*) FROM turns)=1 THEN EXISTS(SELECT 1 FROM turns WHERE profesional_id=$3 AND servicio_id=$4) END AS fixture_match,
+   CASE WHEN (SELECT count(*) FROM turns)=1 AND (SELECT count(*) FROM jobs)=1 THEN
+    EXISTS(SELECT 1 FROM jobs j JOIN turns t ON t.id=j.turno_id AND t.organization_id=j.organization_id WHERE j.integration_id=$5) END AS job_match`})));
+ if(result?.rows?.length===1){const row=result.rows[0];diagnostic.readback={available:true,pedido:cardinality(row.pedido_count),
+  pedidoState:['PENDIENTE','CONFIRMADO','other','unavailable'].includes(row.pedido_state)?row.pedido_state:'unavailable',
+  conversion:cardinality(row.conversion_count),turno:cardinality(row.turn_count),googleJob:cardinality(row.job_count),
+  conversionMatchesPedido:observedBoolean(row.conversion_match),turnMatchesConversion:observedBoolean(row.turn_match),
+  turnMatchesFixture:observedBoolean(row.fixture_match),jobMatchesTurn:observedBoolean(row.job_match)};}
+ return diagnostic;
+}
+
+export async function captureManualFailure(error,collect,receipt,persist){
+ try{receipt.diagnostic=await collect();await persist();}catch{/* Diagnostic failure must not replace the first error. */}
+ throw error;
+}
+
 /** Fail before fixture writes. The adapter retains the pre-sanitization hosted facts. */
 export function assertJoinedInputs({isolation,config,scope,browserCookies}){
  assert.equal(isolation.project,JOINED_PROJECT);assert.equal(isolation.githubActions,'true');
@@ -106,6 +159,8 @@ export async function provePublicBookingJoined({actor,service,scope,isolation,co
    google:'existing-http-loopback',professionalUi:'single-owner-implicit',mailWorkersExecuted:0};
   await record('fixture',{day:plan.day,start:plan.start,timezone:JOINED_TIMEZONE});
   await withNext(config,async runtime=>{
+   let staff=null,manualStep='context',navigationStatus=null;
+   try{
    assert.equal(runtime.kind,'next-dev');assert.equal(runtime.appUrl,config.appUrl);
    assert.equal(runtime.externalIoDenied,true);assert.equal(runtime.turnstileSecretPresent,false);
    const {chromium}=await import('@playwright/test');
@@ -136,16 +191,25 @@ export async function provePublicBookingJoined({actor,service,scope,isolation,co
    assert.equal((await read(rows('turno'))).length,0);assert.equal((await read(rows('google_outbound_job'))).length,0);
    await record('publicRequest',{pedidoId:pedido.id,operationId:submissions[0].operation_id,requestCount:1,autoConfirmed:false});
    stage='manual-confirmation';
+   manualStep='context';
    const staffContext=await browser.newContext({baseURL:config.appUrl,timezoneId:JOINED_TIMEZONE});
+   manualStep='cookies';
    await guardBrowserContext(staffContext);await staffContext.addCookies(browserCookies);
-   const staff=await staffContext.newPage();await staff.goto('/calendario');
+   manualStep='navigation';
+   staff=await staffContext.newPage();const navigation=await staff.goto('/calendario');navigationStatus=navigation?.status()??null;
+   manualStep='card-wait';
    const card=staff.locator(`.cal-pedido[title*="${NAME}"]`);
-   await card.waitFor();assert.equal(await card.count(),1);await card.click();
+   await card.waitFor();assert.equal(await card.count(),1);manualStep='card-open';await card.click();
+   manualStep='accept-click';
    await staff.getByRole('dialog').getByRole('button',{name:'Aceptar y crear turno',exact:true}).click();
+   manualStep='dialog-hidden';
    await staff.getByRole('dialog').waitFor({state:'hidden'});
+   manualStep='conversion-readback';
    const conversions=await privateRows('conversion');assert.equal(conversions.length,1);const conversion=conversions[0];
    assert.equal(conversion.pedido_id,pedido.id);assert.notEqual(conversion.paciente_id,patient);
+   manualStep='turn-readback';
    const turns=await read(rows('turno'));assert.equal(turns.length,1);const turn=turns[0];
+   manualStep='identity-assertions';
    assert.equal(turn.id,conversion.turno_id);assert.equal(turn.paciente_id,conversion.paciente_id);
    assert.equal(turn.profesional_id,member);assert.equal(turn.servicio_id,servicio);assert.equal(turn.estado,'CONFIRMADO');
    assert.equal(new Date(turn.inicio).toISOString(),plan.start);assert.equal(turn.duracion_min,30);
@@ -153,6 +217,7 @@ export async function provePublicBookingJoined({actor,service,scope,isolation,co
    assert.equal(confirmed[0].estado,'CONFIRMADO');assert.equal(confirmed[0].paciente_id,turn.paciente_id);
    const patients=await read(rows('paciente'));assert.equal(patients.length,2);
    assert.ok(patients.some(row=>row.id===turn.paciente_id));
+   manualStep='receipt-write';
    await record('manualConfirmation',{turnoId:turn.id,pacienteId:turn.paciente_id,serviceId:servicio,professionalId:member});
    stage='calendar-hoy';await staff.reload();
    const turnCard=staff.locator('.cal-turno').filter({hasText:NAME.split(' ')[0]});
@@ -183,6 +248,11 @@ export async function provePublicBookingJoined({actor,service,scope,isolation,co
    assert.equal(event.summary,'Turno reservado');assert.equal(event.description,'Reserva gestionada por Folio.');
    assert.equal(event.attendees,undefined);assert.equal(event.location,undefined);
    await record('googleIntent',{integrationId:integration,eventId:job.event_id,intents:1,events:1,http:{...http.calls}});
+   }catch(error){
+    if(stage==='manual-confirmation')await captureManualFailure(error,()=>collectManualDiagnostic({staff,error,step:manualStep,navigationStatus,
+     scope,pedidoId:receipt.stages.publicRequest.pedidoId,withDatabase}),receipt,persist);
+    throw error;
+   }
   });
   receipt.modulePassed=true;
  }catch(error){failed=true;receipt.failure=stage;throw error;}
@@ -194,7 +264,7 @@ export async function provePublicBookingJoined({actor,service,scope,isolation,co
    receipt.modulePassed=false;receipt.moduleCleanup=false;
    if(!failed)receipt.failure='module-cleanup';
   }else receipt.moduleCleanup=true;
-  await persist();
+  try{await persist();}catch(error){if(!failed)throw error;}
   if(!failed&&!receipt.moduleCleanup)throw Error('joined_module_cleanup_failed');
  }
 }

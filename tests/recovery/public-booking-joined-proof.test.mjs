@@ -1,6 +1,55 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {assertHoyPatientDestination,assertJoinedInputs,JOINED_PROJECT,todayPlan} from '../../scripts/testing/public-booking-joined-proof/prove.mjs';
+import {assertHoyPatientDestination,assertJoinedInputs,captureManualFailure,collectManualDiagnostic,JOINED_PROJECT,todayPlan} from '../../scripts/testing/public-booking-joined-proof/prove.mjs';
+
+test('manual diagnostic reads only the existing pedido and keeps failures unavailable',async()=>{
+ const scope=fixture().scope,pedidoId='22222222-2222-4222-8222-222222222222';
+ const error=Object.assign(new Error('private message'),{name:'TimeoutError'});
+ const input={staff:null,error,step:'dialog-hidden',navigationStatus:200,scope,pedidoId};
+ const failed=await collectManualDiagnostic({...input,withDatabase:async()=>{throw Error('private DB error');}});
+ assert.equal(failed.errorKind,'timeout');assert.equal(failed.readback.available,false);
+ for(const key of ['pedido','conversion','turno','googleJob'])assert.equal(failed.readback[key],'unavailable');
+ assert.equal(failed.readback.turnMatchesConversion,null);assert.equal(failed.ui.acceptEnabled,null);
+ let reads=0;
+ const observed=await collectManualDiagnostic({...input,withDatabase:async fn=>fn({query:async query=>{
+  reads++;assert.deepEqual(query.values,[scope.org,pedidoId,scope.member,scope.servicio,scope.integration]);
+  assert.equal(query.query_timeout,3000);assert.match(query.text,/WHERE organization_id=\$1 AND pedido_id=\$2/);
+  return {rows:[{pedido_count:1,pedido_state:'CONFIRMADO',conversion_count:1,turn_count:1,job_count:1,
+   conversion_match:true,turn_match:true,fixture_match:true,job_match:true}]};
+ }})});
+ assert.equal(reads,1);assert.equal(observed.readback.available,true);assert.equal(observed.readback.pedidoState,'CONFIRMADO');
+ assert.equal(observed.readback.turno,'one');assert.equal(observed.readback.googleJob,'one');assert.equal(observed.readback.jobMatchesTurn,true);
+ const absent=await collectManualDiagnostic({...input,withDatabase:async fn=>fn({query:async()=>({rows:[{
+  pedido_count:1,pedido_state:'PENDIENTE',conversion_count:0,turn_count:0,job_count:0,
+  conversion_match:null,turn_match:null,fixture_match:null,job_match:null}]})})});
+ assert.equal(absent.readback.available,true);assert.equal(absent.readback.turno,'zero');
+ assert.equal(absent.readback.googleJob,'zero');assert.equal(absent.readback.turnMatchesConversion,null);
+});
+
+test('manual UI diagnostics retain categories and booleans without text or full URL',async()=>{
+ const button={count:async()=>1,isEnabled:async()=>false};
+ const dialog={count:async()=>1,getByRole:role=>role==='button'?button:{count:async()=>1}};
+ const staff={url:()=> 'http://127.0.0.1:4440/login?secret=private',locator:()=>({count:async()=>2}),getByRole:()=>dialog};
+ const result=await collectManualDiagnostic({staff,error:new Error('private'),step:'accept-click',navigationStatus:403,
+  scope:fixture().scope,pedidoId:fixture().scope.org,withDatabase:async()=>{throw Error('private');}});
+ assert.equal(result.route,'login');assert.equal(result.navigation,'client-error');assert.equal(result.ui.card,'many');
+ assert.equal(result.ui.dialog,'one');assert.equal(result.ui.acceptEnabled,false);assert.equal(result.ui.inlineAlert,true);
+ assert.ok(!JSON.stringify(result).includes('private'));
+ dialog.count=async()=>{throw Error('private');};button.isEnabled=async()=>{throw Error('private');};
+ dialog.getByRole=role=>role==='button'?button:{count:async()=>{throw Error('private');}};
+ const unavailable=await collectManualDiagnostic({staff,error:new Error('private'),step:'card-open',navigationStatus:null,
+  scope:fixture().scope,pedidoId:fixture().scope.org,withDatabase:async()=>{throw Error('private');}});
+ assert.equal(unavailable.ui.dialog,'unavailable');assert.equal(unavailable.ui.acceptEnabled,null);assert.equal(unavailable.ui.inlineAlert,null);
+});
+
+test('manual capture and persistence failures rethrow the original error by identity',async()=>{
+ const original=new Error('first');
+ for(const [collect,persist] of [[async()=>({step:'card-wait'}),async()=>{}],
+  [async()=>{throw Error('capture failure');},async()=>{}],
+  [async()=>({step:'card-wait'}),async()=>{throw Error('write failure');}]]){
+  await assert.rejects(()=>captureManualFailure(original,collect,{},persist),error=>error===original);
+ }
+});
 
 test('Hoy evidence requires navigation to the durable conversion patient on the same app',()=>{
  const app='http://127.0.0.1:4410',patient='11111111-1111-4111-8111-111111111111';

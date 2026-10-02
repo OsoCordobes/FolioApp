@@ -2,7 +2,24 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
-import {joinedReceipt,finishJoinedReceipt,joinedNextEnvironment,joinedBrowserCookies} from '../../scripts/testing/public-booking-joined-proof/adapter.mjs';
+import {finishManualDiagnostic,joinedReceipt,finishJoinedReceipt,joinedNextEnvironment,joinedBrowserCookies} from '../../scripts/testing/public-booking-joined-proof/adapter.mjs';
+
+test('manual diagnostic sanitizer drops raw UI/errors/URLs/cookies and invalid categories',()=>{
+ const sensitive='private alert html stack cookie query@example.invalid';
+ const source={step:'dialog-hidden',errorKind:'timeout',navigation:'success',route:'calendario',error:sensitive,
+  url:sensitive,html:sensitive,cookies:sensitive,screenshot:sensitive,ui:{card:'one',dialog:'one',acceptEnabled:true,inlineAlert:true,alert:sensitive},
+  readback:{available:true,pedido:'one',pedidoState:'CONFIRMADO',conversion:'one',turno:'one',googleJob:'one',
+   conversionMatchesPedido:true,turnMatchesConversion:true,turnMatchesFixture:true,jobMatchesTurn:true,body:sensitive}};
+ const output=finishManualDiagnostic(source);assert.equal(output.readback.pedidoState,'CONFIRMADO');
+ assert.equal(output.ui.inlineAlert,true);assert.ok(!JSON.stringify(output).includes(sensitive));
+ const receipt=complete();receipt.diagnostic=source;const saved=finishJoinedReceipt(receipt);
+ assert.deepEqual(saved.diagnostic,output);assert.ok(!JSON.stringify(saved).includes(sensitive));
+ source.step=sensitive;source.route=sensitive;source.errorKind=sensitive;source.navigation=sensitive;
+ source.ui.card=0;source.ui.acceptEnabled=sensitive;source.readback.available=false;
+ const invalid=finishManualDiagnostic(source);assert.equal(invalid.step,'unavailable');assert.equal(invalid.route,'unavailable');
+ assert.equal(invalid.errorKind,'other');assert.equal(invalid.navigation,'unavailable');assert.equal(invalid.ui.card,'unavailable');
+ assert.equal(invalid.ui.acceptEnabled,null);assert.equal(invalid.readback.turno,'unavailable');assert.equal(invalid.readback.jobMatchesTurn,null);
+});
 
 const id='11111111-1111-4111-8111-111111111111',sha='a'.repeat(40),tree='b'.repeat(40);
 function complete(){return {...joinedReceipt(sha,tree),modulePassed:true,moduleCleanup:true,nextCleanup:true,nextIsolation:true,cleanup:true,migrations:150,

@@ -13,6 +13,25 @@ const count=value=>Number.isInteger(value)&&value>=0&&value<=10?value:null;
 const names=['fixture','publicRequest','manualConfirmation','calendarHoy','googleIntent'];
 const phases=new Set(['preflight','pull','services','migrations','schema','auth','fixture','browser','complete',
  'public-request','manual-confirmation','calendar-hoy','google-intent','module-cleanup','next','cleanup','unclassified']);
+const permitted=(value,values,fallback)=>values.includes(value)?value:fallback;
+const diagnosticCount=value=>permitted(value,['zero','one','many','unavailable'],'unavailable');
+const diagnosticBoolean=value=>typeof value==='boolean'?value:null;
+export function finishManualDiagnostic(value){
+ if(!value||typeof value!=='object')return null;
+ const ui=value.ui??{},r=value.readback??{},available=r.available===true;
+ return {step:permitted(value.step,['context','cookies','navigation','card-wait','card-open','accept-click','dialog-hidden',
+  'conversion-readback','turn-readback','identity-assertions','receipt-write'],'unavailable'),
+  errorKind:permitted(value.errorKind,['assertion','timeout','type','error','other'],'other'),
+  navigation:permitted(value.navigation,['success','redirect','client-error','server-error','other','unavailable'],'unavailable'),
+  route:permitted(value.route,['calendario','login','other','unavailable'],'unavailable'),
+  ui:{card:diagnosticCount(ui.card),dialog:diagnosticCount(ui.dialog),acceptEnabled:diagnosticBoolean(ui.acceptEnabled),inlineAlert:diagnosticBoolean(ui.inlineAlert)},
+  readback:{available,pedido:available?diagnosticCount(r.pedido):'unavailable',
+   pedidoState:available?permitted(r.pedidoState,['PENDIENTE','CONFIRMADO','other','unavailable'],'unavailable'):'unavailable',
+   conversion:available?diagnosticCount(r.conversion):'unavailable',turno:available?diagnosticCount(r.turno):'unavailable',googleJob:available?diagnosticCount(r.googleJob):'unavailable',
+   conversionMatchesPedido:available?diagnosticBoolean(r.conversionMatchesPedido):null,
+   turnMatchesConversion:available?diagnosticBoolean(r.turnMatchesConversion):null,
+   turnMatchesFixture:available?diagnosticBoolean(r.turnMatchesFixture):null,jobMatchesTurn:available?diagnosticBoolean(r.jobMatchesTurn):null}};
+}
 export function joinedReceipt(sha,tree){
  assert.match(sha,/^[a-f0-9]{40}$/);assert.match(tree,/^[a-f0-9]{40}$/);
  return {sha,tree,stages:{},failure:null,modulePassed:false,moduleCleanup:false,nextCleanup:false,
@@ -34,7 +53,7 @@ export function finishJoinedReceipt(source){
    intents:count(v.intents),events:count(v.events),http:Object.fromEntries(['insert','get','patch','list','token'].map(key=>[key,count(v.http?.[key])]))};
  }
  const failure=source.failure===null?null:phases.has(source.failure)?source.failure:'unclassified';
- const receipt={version:1,sha:source.sha,tree:source.tree,environment:'github-ephemeral-supabase',provider:'http-loopback',stages,failure,
+ const receipt={version:1,sha:source.sha,tree:source.tree,environment:'github-ephemeral-supabase',provider:'http-loopback',stages,failure,diagnostic:finishManualDiagnostic(source.diagnostic),
   modulePassed:source.modulePassed===true,moduleCleanup:source.moduleCleanup===true,nextCleanup:source.nextCleanup===true,
   nextIsolation:source.nextIsolation===true,cleanup:source.cleanup===true,migrations:Number.isInteger(source.migrations)&&source.migrations>0?source.migrations:0,
   limits:{nextMode:'development',captcha:'absent-secret-development-policy',professionalUi:'single-owner-implicit',mailWorkersExecuted:0}};
@@ -78,7 +97,7 @@ export async function withJoinedNext(config,receipt,persist,callback){
   reservation.listen(Number(new URL(config.appUrl).port),new URL(config.appUrl).hostname,()=>reservation.close(error=>error?reject(Error('joined_next_port_not_fresh')):resolve()));
  });
  const child=spawn(process.execPath,['scripts/testing/app-server.mjs'],{cwd:repo,env,stdio:'ignore',detached:true});
- let closed=false,spawnFailed=false;
+ let closed=false,spawnFailed=false,primaryFailed=false;
  const finished=new Promise(resolve=>{child.once('error',()=>{spawnFailed=true;closed=true;resolve();});child.once('close',()=>{closed=true;resolve();});});
  const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  try{
@@ -90,18 +109,20 @@ export async function withJoinedNext(config,receipt,persist,callback){
   }
   assert.equal(ready,true,'joined_next_not_ready');receipt.nextIsolation=true;await persist();
   return await callback({kind:'next-dev',appUrl:config.appUrl,externalIoDenied:true,turnstileSecretPresent:false});
+ }catch(error){primaryFailed=true;throw error;
  }finally{
-  let cleanup=false;
+  let cleanup=false,cleanupError;
   try{
    if(spawnFailed||!child.pid)throw Error('joined_next_spawn_failed');
    const signal=value=>{try{process.kill(-child.pid,value);return true;}catch(error){if(error.code==='ESRCH')return false;throw error;}};
    signal('SIGTERM');await Promise.race([finished,pause(3000)]);
    signal('SIGKILL');await Promise.race([finished,pause(5000)]);
    for(let attempt=0;attempt<30;attempt++){if(!signal(0)){cleanup=closed;break;}await pause(100);}
-  }finally{
+  }catch(error){cleanupError=error;}finally{
    receipt.nextCleanup=cleanup;if(!cleanup){receipt.modulePassed=false;receipt.failure??='next';}
-   await persist();
+   try{await persist();}catch(error){if(!primaryFailed)throw error;}
   }
-  if(!cleanup)throw Error('joined_next_cleanup_failed');
+  if(!primaryFailed&&cleanupError)throw cleanupError;
+  if(!cleanup&&!primaryFailed)throw Error('joined_next_cleanup_failed');
  }
 }
