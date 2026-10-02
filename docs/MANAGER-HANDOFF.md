@@ -14,7 +14,7 @@ El titular autoriza dirigir, delegar, implementar y publicar mejoras comprobadas
 
 ## Paquetes actuales y primera acción
 
-**Corte vigente:** PR199 y PR200 cerradas y publicadas. C integra correo para un único ensayo aislado antes de publicarlo. B prepara el recorrido completo desde miniweb; su primer módulo tiene un P2 de correlación en Hoy ya corregido localmente, hijo/revisión aún pendientes. D terminó implementación y mantiene su copia congelada. Los detalles siguientes son de este corte, no permisos para repetir operaciones.
+**Corte vigente:** PR199 y PR200 cerradas y publicadas. C opera el único ensayo autorizado de correo sobre M f643a230, integrado/revisado y congelado. B cerró el P2 de correlación en Hoy en fe22f977/review761c37fd y recibió ownership del adapter en su copia, desde ese M. D terminó implementación y mantiene su copia congelada. Reconciliar run/POST antes de actuar; los detalles anteriores de preparación en la tabla siguiente se conservan hasta sustituirlos por el resultado del ensayo.
 
 | Paquete | Estado y continuación exacta |
 |---|---|
