@@ -27,6 +27,12 @@ export function todayPlan(clock){
   hora:time(minute),horaFin:time(minute+30),weekday:new Date(`${day}T12:00:00Z`).getUTCDay()};
 }
 
+export function assertHoyPatientDestination(url,appUrl,pacienteId){
+ assert.match(pacienteId,UUID);
+ assert.equal(new URL(url).href,new URL(`/pacientes/${pacienteId}`,appUrl).href,'joined_hoy_patient_destination_mismatch');
+ return true;
+}
+
 /** Fail before fixture writes. The adapter retains the pre-sanitization hosted facts. */
 export function assertJoinedInputs({isolation,config,scope,browserCookies}){
  assert.equal(isolation.project,JOINED_PROJECT);assert.equal(isolation.githubActions,'true');
@@ -158,7 +164,9 @@ export async function provePublicBookingJoined({actor,service,scope,isolation,co
    await today.waitFor();assert.equal(await today.count(),1);
    assert.ok((await today.getAttribute('aria-label')).includes(plan.hora));
    assert.ok((await today.innerText()).includes(services[0].nombre));
-   await record('calendarHoy',{calendarVisible:true,calendarPatientLink:true,hoyVisible:true,day:plan.day});
+   await today.click();await staff.waitForURL(`${config.appUrl}/pacientes/${conversion.paciente_id}`);
+   const hoyPatientLink=assertHoyPatientDestination(staff.url(),config.appUrl,conversion.paciente_id);
+   await record('calendarHoy',{calendarVisible:true,calendarPatientLink:true,hoyVisible:true,hoyPatientLink,day:plan.day});
    stage='google-intent';const jobs=await read(rows('google_outbound_job'));assert.equal(jobs.length,1);
    const job=jobs[0];assert.equal(job.turno_id,turn.id);assert.equal(job.integration_id,integration);
    assert.equal(job.calendar_id,'c05-internal');assert.equal(job.status,'pending');

@@ -27,7 +27,9 @@ The reviewed shared runner must provide:
 - `receipt`: `{modulePassed:false,stages:{},failure:null}` plus parent SHA/tree;
   `persist()` saves a restricted receipt. Overall `passed` requires all five
   stages, `modulePassed`, `moduleCleanup` and the parent's successful backend/Next
-  cleanup. Preserve failure evidence. Do not reuse the four-case Google receipt.
+  cleanup. `calendarHoy.hoyPatientLink` must be true: activating the Hoy row must
+  navigate to `/pacientes/<conversion.paciente_id>` on the same app origin.
+  Preserve failure evidence. Do not reuse the four-case Google receipt.
 
 ## Observations and limits
 

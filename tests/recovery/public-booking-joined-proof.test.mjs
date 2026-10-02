@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {assertJoinedInputs,JOINED_PROJECT,todayPlan} from '../../scripts/testing/public-booking-joined-proof/prove.mjs';
+import {assertHoyPatientDestination,assertJoinedInputs,JOINED_PROJECT,todayPlan} from '../../scripts/testing/public-booking-joined-proof/prove.mjs';
+
+test('Hoy evidence requires navigation to the durable conversion patient on the same app',()=>{
+ const app='http://127.0.0.1:4410',patient='11111111-1111-4111-8111-111111111111';
+ assert.equal(assertHoyPatientDestination(`${app}/pacientes/${patient}`,app,patient),true);
+ for(const destination of [`${app}/hoy`,`${app}/pacientes/22222222-2222-4222-8222-222222222222`,
+  `http://127.0.0.1:4411/pacientes/${patient}`,`${app}/pacientes/${patient}?other=1`]){
+  assert.throws(()=>assertHoyPatientDestination(destination,app,patient),/joined_hoy_patient_destination_mismatch/);
+ }
+});
 
 test('plans today in the organization timezone when UTC is already tomorrow',()=>{
  const plan=todayPlan('2026-10-03T00:00:00Z');
