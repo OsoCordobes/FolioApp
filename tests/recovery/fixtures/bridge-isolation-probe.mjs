@@ -11,7 +11,16 @@ const upstream=net.createServer(socket=>socket.pipe(socket));
 const upstreamSockets=new Set();upstream.on('connection',socket=>{upstreamSockets.add(socket);socket.once('close',()=>upstreamSockets.delete(socket));});
 await new Promise(resolve=>upstream.listen({host:'127.0.0.1',port:0},resolve));
 const nativeConnect=net.Socket.prototype.connect;
-let exactCalls=0,throwNext=false,bridge;
+const nativeListen=net.Server.prototype.listen;
+let exactCalls=0,listenCalls=0,throwNext=false,bridge,bridgeListener;
+// Assert the real helper's fixed bind contract, but give this offline fixture its
+// own OS-assigned listener instead of competing for the hosted proof's DB port.
+net.Server.prototype.listen=function(options,...rest){
+ listenCalls++;
+ assert.deepEqual(options,{host:'127.0.0.1',port:55422,exclusive:true});
+ assert.equal(bridgeListener,undefined);
+ bridgeListener=nativeListen.call(this,{...options,port:0},...rest);return bridgeListener;
+};
 net.Socket.prototype.connect=function(options,...rest){
  if(options?.host==='172.30.0.3'&&options.port===5432){
   exactCalls++;if(throwNext)throw Error('synthetic_connector_throw');
@@ -35,25 +44,32 @@ try{
  }
  assert.equal(exactCalls,0);
  await assert.rejects(openLoopbackBridge({...target},55422),/validated_target_required/);
+ await assert.rejects(openLoopbackBridge(target,0));
+ await assert.rejects(openLoopbackBridge(target,55421));
+ assert.equal(listenCalls,0);
  await assert.rejects(preflightBridgeTarget({address:'172.30.0.4',port:5432},100),/direct_route_unavailable/);
  // Metadata validated after the guard cannot mint a parent capability.
  await assert.rejects(preflightBridgeTarget(validateBridgeTarget(metadata()),100),/direct_route_unavailable/);
  assert.equal(exactCalls,0);await preflightBridgeTarget(target,1000);assert.equal(exactCalls,1);
  bridge=await openLoopbackBridge(target,55422);
+ assert.equal(listenCalls,1);
+ const bridgePort=bridgeListener.address().port;assert.ok(bridgePort>0);
  await new Promise((resolve,reject)=>{
-  const client=net.connect({host:'127.0.0.1',port:55422});
+  const client=net.connect({host:'127.0.0.1',port:bridgePort});
   client.once('error',reject);client.once('connect',()=>client.write('bridge-loopback-proof'));
   client.once('data',data=>{assert.equal(data.toString(),'bridge-loopback-proof');client.destroy();resolve();});
  });
  assert.equal(exactCalls,2);throwNext=true;
  await new Promise((resolve,reject)=>{
-  const client=net.connect({host:'127.0.0.1',port:55422});client.once('error',reject);client.once('close',resolve);
+  const client=net.connect({host:'127.0.0.1',port:bridgePort});client.once('error',reject);client.once('close',resolve);
  });
  assert.equal(exactCalls,3);await bridge.close();await bridge.close();bridge=undefined;
+ assert.equal(bridgeListener.listening,false);
  assert.throws(()=>net.connect({host:'172.30.0.3',port:5432}),error=>error.code==='FOLIO_TEST_ISOLATION');
  assert.equal(exactCalls,3);
  console.log('bridge_guard_exact_target_cleanup_pass');
 }finally{
+ net.Server.prototype.listen=nativeListen;
  await bridge?.close();for(const socket of upstreamSockets)socket.destroy();
  await new Promise(resolve=>upstream.close(resolve));
 }
