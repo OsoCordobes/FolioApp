@@ -2,11 +2,13 @@
 
 Actualizado: 03/10/2026. **Última publicación verificada: [PR202](https://github.com/OsoCordobes/FolioApp/pull/202)**. El lanzamiento sigue abierto; estos avances no habilitan todavía el piloto con pacientes reales.
 
-**Clínica:** implementada la regla decidida: fijo + cada profesional que atiende, sin plaza incluida; administración y secretaría incluidas. La [PR203](https://github.com/OsoCordobes/FolioApp/pull/203) pasó revisión, 44 unidades y cuatro recorridos locales. Un control remoto de acceso falló y detuvo la publicación. Ya se revisó un diagnóstico que permite distinguir qué se guardó; se incorporará a la misma PR para su siguiente CI automático. Todavía no hay causa ni reparación demostrada.
+**Clínica:** implementada la regla decidida: fijo + cada profesional que atiende, sin plaza incluida; administración y secretaría incluidas. La [PR203](https://github.com/OsoCordobes/FolioApp/pull/203) pasó revisión, 44 unidades y cuatro recorridos locales. Un control remoto de acceso falló y detuvo la publicación. El diagnóstico añadido y su nuevo CI pasaron; el éxito no explica la causa anterior. El merge espera resolver un comentario de precio con evidencia de cero suscripciones y volver a comprobar el impacto antes de publicar.
 
-**Google:** terminado el código para una prueba externa acotada, con diez pruebas sin proveedor; revisión independiente en curso. Sigue pendiente cuenta dedicada, consentimiento y custodia de credenciales. **Material de inicio:** [ficha, demo de cinco minutos y guía de soporte](C:/Users/amiun/Documents/Codex/folio-manager-evidence/first-clients-kit-20261003/READY.md) revisadas para lectura interna del titular.
+**Google:** terminado el código para una prueba externa acotada, con diez pruebas sin proveedor; revisión independiente aprobada tras una corrección de identidad del evento. Sigue pendiente publicar la infraestructura y obtener cuenta dedicada, consentimiento y custodia de credenciales. Se prepara también una prueba de transporte de correo, sin enviar mensajes. **Material de inicio:** [ficha, demo de cinco minutos y guía de soporte](C:/Users/amiun/Documents/Codex/folio-manager-evidence/first-clients-kit-20261003/READY.md) revisadas para lectura interna del titular.
 
 **Vercel:** consulta enviada desde tu correo a `privacy@vercel.com` el 03/10 a las 07:29:30 UTC; [envío confirmado](C:/Users/amiun/Documents/Codex/folio-manager-evidence/provider-question-20261003/SUBMISSION.md), respuesta contractual pendiente. También siguen abiertos custodia externa, pruebas reales de proveedores, soporte operativo, identidad/legal, validación profesional y piloto. Las tres preguntas ya planteadas (custodia, cuenta Google e identidad legal) quedan pendientes, sin repetirlas.
+
+**Almacenamiento:** se recuperó capacidad de escritura limpiando sólo caché de paquetes no referenciados; fuentes, respaldos y evidencias conservados. El trabajo continúa.
 
 **Equipo:** tres subagentes internos: operador de publicación, revisor independiente y autor Google; el manager coordina y acepta. Cuota observada: 7% usada / 93% disponible, créditos intactos. [Estado técnico y continuación](MANAGER-HANDOFF.md).
 
