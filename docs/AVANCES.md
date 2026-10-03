@@ -8,6 +8,10 @@ Actualizado: 03/10/2026, horario de Copenhague. **Última publicación verificad
 
 **03/10 · Entrega comercial:** [PR203](https://github.com/OsoCordobes/FolioApp/pull/203), candidato e6da364, ya tiene revisión independiente aprobada, 44 unidades, 4 E2E y pantallas comprobadas con datos ficticios. CI remota en curso; todavía sin publicar. En paralelo se preparan material breve para profesionales/soporte y el alcance aislado de la prueba real de Google.
 
+**CI detuvo la publicación:** el control remoto de acceso falló. El operador investiga el original; no se repitió la prueba ni se publicó. SQL, llamador y Preview aprobaron; el resto conserva su estado propio.
+
+**Siguiente trabajo activo:** el escritor prepara diagnóstico preciso del guardado fallido; aún no hay causa ni reparación demostrada. Un segundo escritor prepara el ensayo Google real, sin ejecutar proveedores. La [ficha, demo y guía de soporte](C:/Users/amiun/Documents/Codex/folio-manager-evidence/first-clients-kit-20261003/READY.md) ya pasaron revisión para lectura interna; siguen sin difundirse.
+
 **Publicado** = disponible en Folio. **Probado** = pasó los controles indicados, sin publicar. Cada fila conserva su alcance; las pruebas parciales no cierran el lanzamiento.
 
 | Checkpoint | Resultado y prueba |
