@@ -1,0 +1,119 @@
+name: Folio bounded external Google worker proof
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Exact independently reviewed commit
+        required: true
+        type: string
+      environment:
+        description: Existing Environment with required reviewers and retained trial grant
+        required: true
+        type: string
+      authorization_id:
+        description: Explicit human authorization reference for this one trial
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: folio-google-external-proof
+  cancel-in-progress: false
+jobs:
+  custody-gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Reject missing or unprotected Environment before selecting it
+        env:
+          GH_TOKEN: ${{ github.token }}
+          C05_ENVIRONMENT: ${{ inputs.environment }}
+          C05_CANDIDATE: ${{ inputs.candidate_sha }}
+          C05_AUTHORIZATION_ID: ${{ inputs.authorization_id }}
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          assert.match(process.env.C05_CANDIDATE,/^[a-f0-9]{40}$/);
+          assert.match(process.env.C05_ENVIRONMENT,/^[a-zA-Z0-9_-]{1,80}$/);
+          assert.match(process.env.C05_AUTHORIZATION_ID,/^[a-zA-Z0-9_-]{8,128}$/);
+          const url=`https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}/environments/${encodeURIComponent(process.env.C05_ENVIRONMENT)}`;
+          const response=await fetch(url,{redirect:'error',headers:{Authorization:`Bearer ${process.env.GH_TOKEN}`,Accept:'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'}});
+          assert.equal(response.status,200,'existing_environment_required');
+          const data=await response.json(),rule=data.protection_rules?.find(r=>r.type==='required_reviewers');
+          assert.ok(rule?.reviewers?.length>0,'manual_environment_approval_required');
+          NODE
+  external-proof:
+    needs: custody-gate
+    environment: ${{ inputs.environment }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.candidate_sha }}
+      - name: Enforce reviewed commit and single authorization before installing tools
+        env:
+          C05_CANDIDATE: ${{ inputs.candidate_sha }}
+          C05_REVIEWED_SHA: ${{ vars.C05_REVIEWED_SHA }}
+          C05_AUTHORIZATION_ID: ${{ inputs.authorization_id }}
+          C05_REVIEWED_AUTHORIZATION: ${{ vars.C05_AUTHORIZATION_ID }}
+          C05_REVIEWED_RUN_ID: ${{ vars.C05_REVIEWED_RUN_ID }}
+        run: |
+          test "$C05_CANDIDATE" = "$C05_REVIEWED_SHA"
+          test "$C05_AUTHORIZATION_ID" = "$C05_REVIEWED_AUTHORIZATION"
+          test "$GITHUB_RUN_ID" = "$C05_REVIEWED_RUN_ID"
+          test "$GITHUB_RUN_ATTEMPT" = '1'
+          test "$(git rev-parse HEAD)" = "$C05_CANDIDATE"
+          git diff --exit-code
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Run offline boundaries
+        run: node --test scripts/testing/google-c05-external-proof/offline.test.mjs
+      - name: Install PostgreSQL 17 client
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq curl ca-certificates
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl --fail --silent --show-error -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          . /etc/os-release
+          printf 'Types: deb\nURIs: https://apt.postgresql.org/pub/repos/apt\nSuites: %s-pgdg\nComponents: main\nSigned-By: /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc\n' "$VERSION_CODENAME" | sudo tee /etc/apt/sources.list.d/pgdg.sources >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+          echo '/usr/lib/postgresql/17/bin' >> "$GITHUB_PATH"
+      - name: Fetch pinned Supabase Docker source
+        run: |
+          set -euo pipefail
+          upstream="$RUNNER_TEMP/c05-external-supabase-upstream"
+          git clone --quiet --depth 1 --filter=blob:none --sparse --branch self-hosted/v0.8.1 https://github.com/supabase/supabase "$upstream"
+          git -C "$upstream" sparse-checkout set docker
+          test "$(git -C "$upstream" rev-parse HEAD)" = '8c7a4d9dbbaf8b552893822e89d7bf06f33f9220'
+          echo "C01_OFFICIAL_DOCKER=$upstream/docker" >> "$GITHUB_ENV"
+      - name: One explicitly authorized trial
+        env:
+          C05_EXECUTE: authorized
+          C05_CANDIDATE: ${{ inputs.candidate_sha }}
+          C05_ENVIRONMENT: ${{ inputs.environment }}
+          C05_AUTHORIZATION_ID: ${{ inputs.authorization_id }}
+          C05_REVIEWED_RUN_ID: ${{ vars.C05_REVIEWED_RUN_ID }}
+          C05_MANIFEST_JSON: ${{ vars.C05_MANIFEST_JSON }}
+          C05_GRANT_JSON: ${{ secrets.C05_GRANT_JSON }}
+          C05_CLIENT_SECRET: ${{ secrets.C05_CLIENT_SECRET }}
+        run: node --conditions=react-server --import tsx scripts/testing/google-c05-external-proof/run.mjs --execute
+      - name: Preserve only enumerated sanitized receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: google-external-proof-receipt
+          path: ${{ runner.temp }}/folio-google-external-proof.json
+          if-no-files-found: warn
+          retention-days: 7
