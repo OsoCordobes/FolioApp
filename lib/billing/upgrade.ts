@@ -22,9 +22,9 @@
  * Montos (centavos ARS, según lib/billing/pricing.ts al momento del cambio):
  *   - montoAntes  = precio del tier ACTUAL (INDEPENDIENTE → plan Solo vigente).
  *   - montoDespues = precio de CLINICA con los seats activos actuales. La base
- *     de Clínica INCLUYE al titular (1 seat = base; cada member activo
- *     adicional suma un seat). `membersActivos` es el head-count de members
- *     activos (deleted_at IS NULL) de la org, incluyendo al OWNER.
+ *     de Clínica es fija; cada profesional que atiende suma su importe, sin
+ *     plaza incluida. `membersActivos` cuenta sólo profesionales activos con
+ *     es_colegiado=true; recepción y administración están incluidas.
  *
  * Función pura y testeable (`tests/unit/upgrade-tipo.test.ts`).
  */
@@ -41,8 +41,8 @@ export interface DecideUpgradeInput {
   /** Rol del member de la sesión que intenta el cambio. */
   rol: MemberRol;
   /**
-   * Head-count de members activos de la org (deleted_at IS NULL), INCLUYENDO al
-   * OWNER. Define cuántos seats cobra Clínica (la base cubre al titular).
+   * Profesionales activos que atienden (es_colegiado=true y deleted_at IS NULL).
+   * Un titular que atiende cuenta como profesional.
    */
   membersActivos: number;
   /** Estado de la suscripción, o null si nunca se creó. No afecta elegibilidad. */
@@ -58,7 +58,7 @@ export interface DecideUpgradeResult {
   montoAntes: number;
   /**
    * Monto mensual (centavos) que aplicaría como CLINICA con los seats actuales
-   * (base incluye titular). Se computa siempre — también cuando no es elegible,
+   * (fijo + N profesionales, sin plaza incluida). Se computa siempre — también cuando no es elegible,
    * para poder mostrar el "a cuánto pasarías" en la UI si hiciera falta.
    */
   montoDespues: number;

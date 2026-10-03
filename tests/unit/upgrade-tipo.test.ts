@@ -2,7 +2,7 @@
  * Folio · unit de decideUpgradeTipo (PR 1.4 · upgrade self-serve a Clínica).
  *
  * Cubre: roles (solo OWNER), tipos (solo INDEPENDIENTE→CLINICA), montos por
- * seats con la base de Clínica que INCLUYE al titular, y el downgrade con
+ * seats con la base de Clínica que no incluye una plaza, y el downgrade con
  * motivo "vía soporte".
  */
 
@@ -17,7 +17,7 @@ import { computeMonthlyPriceCents } from "../../lib/billing/pricing";
 import { MP_PLAN_PRICE_CENTS } from "../../lib/mercadopago/client";
 import type { EstadoSuscripcion } from "../../lib/db/suscripcion";
 
-const BASE_DEFAULT = 10_000_000; // ARS 100.000 (base Clínica, cubre al titular)
+const BASE_DEFAULT = 10_000_000; // ARS 100.000 (base Clínica, fijo mensual)
 const SEAT_DEFAULT = 2_500_000; //  ARS 25.000 por seat adicional
 
 function clearEnv() {
@@ -106,9 +106,9 @@ test("downgrade gana sobre el chequeo de rol: CLINICA + no-OWNER también da 'v�
   assert.match(r.motivo ?? "", /soporte/i);
 });
 
-// ─── Montos: consistentes con pricing.ts (base incluye titular) ─────────────
+// ─── Montos: consistentes con pricing.ts (fijo + profesionales) ─────────────
 
-test("montoAntes = plan Solo vigente; montoDespues = base Clínica (1 seat = solo titular)", () => {
+test("montoAntes = plan Solo vigente; montoDespues = base Clínica (1 profesional)", () => {
   clearEnv();
   const r = decideUpgradeTipo({
     tipoActual: "INDEPENDIENTE",
@@ -117,11 +117,11 @@ test("montoAntes = plan Solo vigente; montoDespues = base Clínica (1 seat = sol
     estadoSuscripcion: "ACTIVA",
   });
   assert.equal(r.montoAntes, MP_PLAN_PRICE_CENTS);
-  // 1 seat = solo el titular → base, sin adicionales.
-  assert.equal(r.montoDespues, BASE_DEFAULT);
+  // 1 profesional → fijo + un importe por profesional.
+  assert.equal(r.montoDespues, BASE_DEFAULT + SEAT_DEFAULT);
 });
 
-test("montoDespues suma un seat de 25.000 por cada member activo ADEMÁS del titular", () => {
+test("montoDespues suma un seat de 25.000 por cada profesional que atiende", () => {
   clearEnv();
   const r2 = decideUpgradeTipo({
     tipoActual: "INDEPENDIENTE",
@@ -129,7 +129,7 @@ test("montoDespues suma un seat de 25.000 por cada member activo ADEMÁS del tit
     membersActivos: 2,
     estadoSuscripcion: "ACTIVA",
   });
-  assert.equal(r2.montoDespues, BASE_DEFAULT + SEAT_DEFAULT);
+  assert.equal(r2.montoDespues, BASE_DEFAULT + 2 * SEAT_DEFAULT);
 
   const r4 = decideUpgradeTipo({
     tipoActual: "INDEPENDIENTE",
@@ -137,7 +137,7 @@ test("montoDespues suma un seat de 25.000 por cada member activo ADEMÁS del tit
     membersActivos: 4,
     estadoSuscripcion: "ACTIVA",
   });
-  assert.equal(r4.montoDespues, BASE_DEFAULT + 3 * SEAT_DEFAULT);
+  assert.equal(r4.montoDespues, BASE_DEFAULT + 4 * SEAT_DEFAULT);
 });
 
 test("montos coinciden exactamente con computeMonthlyPriceCents (fuente de verdad)", () => {
@@ -165,7 +165,7 @@ test("montos se calculan incluso cuando NO es elegible (para display)", () => {
   });
   assert.equal(r.elegible, false);
   assert.equal(r.montoAntes, MP_PLAN_PRICE_CENTS);
-  assert.equal(r.montoDespues, BASE_DEFAULT + 2 * SEAT_DEFAULT);
+  assert.equal(r.montoDespues, BASE_DEFAULT + 3 * SEAT_DEFAULT);
 });
 
 test("respeta overrides de pricing por env (base/seat) en los montos", () => {
@@ -178,7 +178,7 @@ test("respeta overrides de pricing por env (base/seat) en los montos", () => {
       membersActivos: 3,
       estadoSuscripcion: "ACTIVA",
     });
-    assert.equal(r.montoDespues, 20_000_000 + 2 * 1_000_000);
+    assert.equal(r.montoDespues, 20_000_000 + 3 * 1_000_000);
   } finally {
     clearEnv();
   }

@@ -112,7 +112,7 @@ export default async function OnboardingPage() {
           authedEmail={authedEmail}
           authedUserId={user?.id}
           soloPriceCents={computeMonthlyPriceCents("INDEPENDIENTE", 1)}
-          clinicPriceCents={computeMonthlyPriceCents("CLINICA", 1)}
+          clinicPriceCents={computeMonthlyPriceCents("CLINICA", 0)}
           clinicSeatPriceCents={resolveClinicSeatPriceCents()}
           googleConnected={googleConnected}
         />

@@ -20,7 +20,7 @@ test("la primera pantalla exige modalidad y rol clínico antes del registro", as
   await expect(proceed).toBeEnabled();
   await proceed.click();
   await expect(page.getByRole("heading", { name: "Empezá creando tu cuenta." })).toBeVisible();
-  await expect(page.getByText(/miembro adicional/i).first()).toBeVisible();
+  await expect(page.getByText(/por cada profesional que atiende/i).first()).toBeVisible();
   await page.getByRole("button", { name: /Atrás/ }).click();
   await expect(page.getByRole("radio", { name: "No, administro la clínica" })).toBeChecked();
 });

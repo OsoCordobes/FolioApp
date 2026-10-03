@@ -24,15 +24,15 @@ test("INDEPENDIENTE: siempre el plan único vigente, sin importar seats", () => 
   assert.equal(computeMonthlyPriceCents("INDEPENDIENTE", 0), MP_PLAN_PRICE_CENTS);
 });
 
-test("CLINICA: 1 seat (solo OWNER) = base, sin adicionales", () => {
+test("CLINICA: 0 profesionales = fijo, sin cargos por recepción/admin", () => {
   clearEnv();
-  assert.equal(computeMonthlyPriceCents("CLINICA", 1), BASE_DEFAULT);
+  assert.equal(computeMonthlyPriceCents("CLINICA", 0), BASE_DEFAULT);
 });
 
-test("CLINICA: cada member activo adicional suma un seat de 25.000", () => {
+test("CLINICA: cada profesional que atiende suma 25.000, sin plaza incluida", () => {
   clearEnv();
-  assert.equal(computeMonthlyPriceCents("CLINICA", 2), BASE_DEFAULT + SEAT_DEFAULT);
-  assert.equal(computeMonthlyPriceCents("CLINICA", 4), BASE_DEFAULT + 3 * SEAT_DEFAULT);
+  assert.equal(computeMonthlyPriceCents("CLINICA", 2), BASE_DEFAULT + 2 * SEAT_DEFAULT);
+  assert.equal(computeMonthlyPriceCents("CLINICA", 4), BASE_DEFAULT + 4 * SEAT_DEFAULT);
 });
 
 test("CLINICA: seats 0 o negativos no descuentan de la base", () => {
@@ -43,7 +43,7 @@ test("CLINICA: seats 0 o negativos no descuentan de la base", () => {
 
 test("CLINICA: seats fraccionales se truncan hacia abajo", () => {
   clearEnv();
-  assert.equal(computeMonthlyPriceCents("CLINICA", 2.9), BASE_DEFAULT + SEAT_DEFAULT);
+  assert.equal(computeMonthlyPriceCents("CLINICA", 2.9), BASE_DEFAULT + 2 * SEAT_DEFAULT);
 });
 
 test("overrides por env CLINIC_BASE_PRICE_CENTS / CLINIC_SEAT_PRICE_CENTS", () => {
@@ -52,7 +52,7 @@ test("overrides por env CLINIC_BASE_PRICE_CENTS / CLINIC_SEAT_PRICE_CENTS", () =
   try {
     assert.equal(resolveClinicBasePriceCents(), 20_000_000);
     assert.equal(resolveClinicSeatPriceCents(), 1_000_000);
-    assert.equal(computeMonthlyPriceCents("CLINICA", 3), 20_000_000 + 2 * 1_000_000);
+    assert.equal(computeMonthlyPriceCents("CLINICA", 3), 20_000_000 + 3 * 1_000_000);
   } finally {
     clearEnv();
   }
@@ -64,7 +64,7 @@ test("env inválida (no entera / <= 0) cae al default con warn", () => {
   try {
     assert.equal(resolveClinicBasePriceCents(), BASE_DEFAULT);
     assert.equal(resolveClinicSeatPriceCents(), SEAT_DEFAULT);
-    assert.equal(computeMonthlyPriceCents("CLINICA", 2), BASE_DEFAULT + SEAT_DEFAULT);
+    assert.equal(computeMonthlyPriceCents("CLINICA", 2), BASE_DEFAULT + 2 * SEAT_DEFAULT);
   } finally {
     clearEnv();
   }
@@ -74,7 +74,7 @@ test("computeClinicBreakdownCents: desglose consistente con computeMonthlyPriceC
   clearEnv();
   const b = computeClinicBreakdownCents(3);
   assert.equal(b.seats, 3);
-  assert.equal(b.extraSeats, 2);
+  assert.equal(b.extraSeats, 3);
   assert.equal(b.basePriceCents, BASE_DEFAULT);
   assert.equal(b.seatPriceCents, SEAT_DEFAULT);
   assert.equal(b.totalCents, computeMonthlyPriceCents("CLINICA", 3));

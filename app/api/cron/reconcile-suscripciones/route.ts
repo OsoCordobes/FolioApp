@@ -1,4 +1,5 @@
 
+import { isBillableClinicProfessional } from "@/lib/db/billing-professionals";
 import { safeLog } from "@/lib/observability/safe-log";
 /**
  * Folio · /api/cron/reconcile-suscripciones
@@ -327,21 +328,28 @@ async function runTrialAvisos(
 
   // Una sola query de members: seats por org (pricing CLINICA) + OWNER
   // (destinatario cuando no hay suscripción con payer_email).
-  const { data: memberRows, error: memErr } = await service
+  const { data: memberRows, count: memberCount, error: memErr } = await service
     .from("member")
-    .select("organization_id, profile_id, role")
+    .select("organization_id, profile_id, role, es_colegiado, deleted_at", { count: "exact" })
     .in("organization_id", orgIds)
     .is("deleted_at", null)
     .limit(1000);
   if (memErr) throw new Error(`members de orgs trial: ${memErr.message}`);
+  if (memberCount === null || memberCount !== (memberRows ?? []).length) {
+    throw new Error("No se pudo confirmar el equipo completo de las organizaciones en prueba.");
+  }
   const seatsByOrg = new Map<string, number>();
   const ownerProfileByOrg = new Map<string, string>();
   for (const m of (memberRows ?? []) as Array<{
     organization_id: string;
     profile_id: string;
     role: string;
+    es_colegiado: boolean;
+    deleted_at: string | null;
   }>) {
-    seatsByOrg.set(m.organization_id, (seatsByOrg.get(m.organization_id) ?? 0) + 1);
+    if (isBillableClinicProfessional(m)) {
+      seatsByOrg.set(m.organization_id, (seatsByOrg.get(m.organization_id) ?? 0) + 1);
+    }
     if (m.role === "OWNER" && !ownerProfileByOrg.has(m.organization_id)) {
       ownerProfileByOrg.set(m.organization_id, m.profile_id);
     }
@@ -389,7 +397,7 @@ async function runTrialAvisos(
         organizationId: org.id,
         destinatario,
         diasRestantes: decision.diasRestantes,
-        montoMensualCents: computeMonthlyPriceCents(org.tipo, seatsByOrg.get(org.id) ?? 1),
+        montoMensualCents: computeMonthlyPriceCents(org.tipo, seatsByOrg.get(org.id) ?? 0),
       });
       recordLifecycleDelivery(counters, "trial", delivery);
     }

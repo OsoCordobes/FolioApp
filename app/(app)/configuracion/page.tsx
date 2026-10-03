@@ -11,6 +11,7 @@
  * botón Guardar y mostrar tooltip explicativo.
  */
 
+import { countClinicProfessionals } from "@/lib/db/billing-professionals";
 import { Configuracion } from "@/components/configuracion/configuracion";
 import { capabilitiesFor } from "@/lib/auth/capabilities";
 import { computeMonthlyPriceCents } from "@/lib/billing/pricing";
@@ -101,10 +102,9 @@ export default async function ConfiguracionPage({
   );
 
   // PR 1.4 · datos para el upgrade self-serve a Clínica (card "Tipo de
-  // organización"). membersActivos = head-count de members activos (incluye al
-  // titular) → define los seats que cobraría Clínica. RLS-aware (server client);
-  // best-effort: si el count falla, asumimos 1 (solo el titular) para no romper
-  // la página — el monto real lo re-computa el action al confirmar.
+  // organización"). membersActivos = profesionales activos que atienden.
+  // Conservamos la autoridad del server client; si falla el conteo no mostramos
+  // un precio inventado. El action lo vuelve a computar al confirmar.
   const supabase = await createSupabaseServerClient();
   let ownMiniwebConsent = false;
   if (data.data.tipo === "CLINICA" && ctx.data.session.esColegiado) {
@@ -112,12 +112,9 @@ export default async function ConfiguracionPage({
       .select("enabled").eq("id", ctx.data.session.memberId).maybeSingle();
     ownMiniwebConsent = consent?.enabled === true;
   }
-  const { count: membersCount } = await supabase
-    .from("member")
-    .select("id", { count: "exact", head: true })
-    .eq("organization_id", ctx.data.organization.id)
-    .is("deleted_at", null);
-  const membersActivos = membersCount ?? 1;
+  const professionals = await countClinicProfessionals(supabase, ctx.data.organization.id);
+  if (!professionals.ok) throw new Error(professionals.error.message);
+  const membersActivos = professionals.data;
   const montoActualCents = computeMonthlyPriceCents(data.data.tipo, membersActivos);
   const montoClinicaCents = computeMonthlyPriceCents("CLINICA", membersActivos);
 

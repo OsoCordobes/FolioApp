@@ -1,7 +1,7 @@
 /**
  * Folio · Términos y Condiciones.
  *
- * Versión 2026-07-24. Incluye cláusulas de suscripción, cancelación,
+ * Versión 2026-10-03. Incluye cláusulas de suscripción, cancelación,
  * falta de pago y reembolsos alineadas al comportamiento real del
  * producto (trial de 30 días sin tarjeta, cancelación self-service desde
  * /configuracion/billing, gate de acceso con retención de datos).
@@ -26,7 +26,7 @@ export default function TerminosPage() {
 
       <h1 style={{ marginBottom: 8 }}>Términos y Condiciones</h1>
       <p style={{ color: "var(--ink-3)", marginBottom: 32 }}>
-        Última actualización: 24 de julio de 2026
+        Última actualización: 3 de octubre de 2026
       </p>
 
       <section style={{ marginBottom: 32 }}>
@@ -110,10 +110,12 @@ export default function TerminosPage() {
           </li>
           <li>
             <b>Plan Clínica:</b> el precio mensual varía según la cantidad de
-            miembros activos (seats) de la organización: un precio base que
-            cubre al titular más un adicional por cada miembro activo
-            adicional, según los valores publicados. Al sumar o dar de baja
-            miembros, el monto del período siguiente se ajusta en consecuencia.
+            profesionales que atienden en la organización: un fijo mensual más
+            un importe por cada profesional que atiende, sin plaza incluida,
+            según los valores publicados. Los paneles del titular, recepción y
+            administración están incluidos. Cuando cambia la cantidad de
+            profesionales que atienden, el monto del período siguiente se ajusta
+            en consecuencia.
           </li>
           <li>
             <b>Cambios de precio:</b> los comunicamos con al menos 30 días de

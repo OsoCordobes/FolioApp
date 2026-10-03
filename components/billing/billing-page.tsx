@@ -56,7 +56,7 @@ interface AccessGate {
 
 /** Fase C/E · desglose del plan Clínica + monto que MP debita hoy. */
 export interface ClinicPricingView {
-  /** Members activos (incluye OWNER). */
+  /** Profesionales activos que atienden. */
   seats: number;
   extraSeats: number;
   basePriceArs: number;
@@ -261,7 +261,7 @@ export function BillingPage({
 // ─── Subcomponentes ────────────────────────────────────────────────────────
 
 /**
- * Fase C/E · plan Clínica: desglose base + integrantes adicionales = total,
+ * Fase C/E · plan Clínica: desglose fijo + profesionales que atienden = total,
  * más el monto que MP debita HOY (suscripcion.monto_cents). Si el débito
  * quedó desfasado del equipo actual (syncPending), botón "Actualizar monto"
  * → syncClinicAmountAction (gate OWNER + CLINICA en el server).
@@ -284,14 +284,14 @@ function ClinicPlanCard({
           <h2>Plan Clínica</h2>
           <p>
             {formatArs(pricing.basePriceArs)}/mes base + {formatArs(pricing.seatPriceArs)} por
-            integrante adicional.
+            profesional que atiende. Recepción y administración incluidas.
           </p>
         </div>
       </header>
       <div className="cfg-section-body">
         <div className="cfg-row">
           <div className="cfg-row-label">
-            <span>Base (incluye 1 integrante)</span>
+            <span>Fijo mensual</span>
           </div>
           <div className="cfg-row-control">
             <span className="fm-mono">{formatArs(pricing.basePriceArs)}</span>
@@ -299,9 +299,9 @@ function ClinicPlanCard({
         </div>
         <div className="cfg-row">
           <div className="cfg-row-label">
-            <span>Integrantes adicionales</span>
+            <span>Profesionales que atienden</span>
             <span className="cfg-row-sub">
-              {pricing.seats} {pricing.seats === 1 ? "miembro activo" : "miembros activos"} en total
+              {pricing.seats} {pricing.seats === 1 ? "profesional activo" : "profesionales activos"} en total
             </span>
           </div>
           <div className="cfg-row-control">
@@ -366,7 +366,7 @@ function ClinicPlanCard({
               }}
             >
               Mercado Pago te debita {formatArs(pricing.montoActualArs)}/mes, en línea con tu
-              equipo actual. Cuando sumás o das de baja integrantes, el monto se ajusta solo.
+              equipo actual. Cuando cambia la cantidad de profesionales que atienden, el monto se ajusta solo.
             </p>
           )
         ) : (
