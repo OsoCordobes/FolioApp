@@ -14,6 +14,6 @@
  */
 
 export const PRIVACY_VERSION = "2026-07-04";
-// 2026-07-24: período de prueba 7 → 30 días (§5, cambio material).
-export const TERMS_VERSION = "2026-07-24";
+// 2026-10-03: Clínica = fijo + cada profesional que atiende (§5).
+export const TERMS_VERSION = "2026-10-03";
 export const COOKIES_VERSION = "2026-07-04";

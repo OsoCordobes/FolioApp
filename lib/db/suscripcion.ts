@@ -1,4 +1,5 @@
 
+import { countClinicProfessionals } from "@/lib/db/billing-professionals";
 import { safeLog } from "@/lib/observability/safe-log";
 /**
  * Folio · helpers de datos para la suscripción mensual MP (M19).
@@ -209,7 +210,7 @@ export async function loadRecentCharges(
 
 interface OrgExpectedAmount {
   tipo: OrganizacionTipo;
-  /** Members activos (deleted_at IS NULL), incluyendo OWNER. 1 para INDEPENDIENTE (no aplica). */
+  /** Profesionales que atienden. 1 para INDEPENDIENTE (no aplica). */
   seats: number;
   /** Monto mensual esperado en centavos según tier + seats (computeMonthlyPriceCents). */
   expectedCents: number;
@@ -242,13 +243,9 @@ async function resolveExpectedAmountForOrg(
 
   let seats = 1;
   if (tipo === "CLINICA") {
-    const { count, error: cntErr } = await supabase
-      .from("member")
-      .select("id", { count: "exact", head: true })
-      .eq("organization_id", organizationId)
-      .is("deleted_at", null);
-    if (cntErr) return err("db_error", "Error contando miembros activos.", cntErr.message);
-    seats = count ?? 1;
+    const professionals = await countClinicProfessionals(supabase, organizationId);
+    if (!professionals.ok) return professionals;
+    seats = professionals.data;
   }
 
   return ok({ tipo, seats, expectedCents: computeMonthlyPriceCents(tipo, seats) });
@@ -390,9 +387,9 @@ const TOLERANCIA_REDONDEO_CENTS = 1;
 /**
  * true si la diferencia entre lo debitado y lo esperado se explica por un
  * cambio de equipo en una org CLINICA. El precio Clínica es
- * `base + (seats - 1) × seat` (computeMonthlyPriceCents), así que cualquier
- * alta/baja de integrantes mueve el monto en múltiplos EXACTOS del precio por
- * seat. Cuando se suma gente, `syncSubscriptionAmount` actualiza monto_cents y
+ * `base + seats × seat` (computeMonthlyPriceCents), así que cualquier
+ * alta/baja de profesionales que atienden mueve el monto en múltiplos EXACTOS
+ * del precio por profesional. `syncSubscriptionAmount` actualiza monto_cents y
  * el preapproval, pero el débito que MP ya tenía en curso sale con el monto
  * viejo: un pago perfectamente legítimo que llegaba "corto".
  *
@@ -458,7 +455,7 @@ export function validateChargeAmount(input: {
     const seatsDeDiferencia = -desvio / resolveClinicSeatPriceCents();
     return {
       aceptado: true,
-      warning: `${inesperado} Coincide con ${seatsDeDiferencia} integrante(s) de diferencia: el débito de Mercado Pago todavía no tomó el último cambio de equipo.`,
+      warning: `${inesperado} Coincide con ${seatsDeDiferencia} profesional(es) de diferencia: el débito de Mercado Pago todavía no tomó el último cambio de equipo.`,
     };
   }
 

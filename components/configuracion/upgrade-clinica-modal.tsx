@@ -24,7 +24,7 @@ interface UpgradeClinicaModalProps {
   montoAntesCents: number;
   /** Precio mensual como Clínica (centavos ARS) con los seats actuales. */
   montoDespuesCents: number;
-  /** Members activos actuales (incluye al titular) — para el desglose de seats. */
+  /** Profesionales activos que atienden — para el desglose. */
   membersActivos: number;
   onClose: () => void;
   /** Upgrade OK — el caller cierra y refresca (router.refresh). */
@@ -44,7 +44,7 @@ export function UpgradeClinicaModal({
   const dialogRef = useRef<HTMLDivElement | null>(null);
   useModalA11y(dialogRef, { onClose, closeDisabled: submitting });
 
-  const seatsAdicionales = Math.max(0, membersActivos - 1);
+  const seatsAdicionales = Math.max(0, membersActivos);
 
   const handleConfirm = () => {
     setSubmitErr(null);
@@ -130,11 +130,8 @@ export function UpgradeClinicaModal({
         </div>
 
         <p style={{ fontSize: 13, color: "var(--ink-3)", margin: "0 0 4px", lineHeight: 1.55 }}>
-          {seatsAdicionales === 0
-            ? "Incluye la base que cubre al titular. Cada integrante adicional (médico/a o secretaría) suma ARS 25.000/mes."
-            : `Base que cubre al titular + ${seatsAdicionales} ${
-                seatsAdicionales === 1 ? "integrante activo" : "integrantes activos"
-              } (ARS 25.000/mes cada uno).`}
+          Fijo mensual + {seatsAdicionales} {seatsAdicionales === 1 ? "profesional que atiende" : "profesionales que atienden"}.
+          Recepción, administración y el panel del titular están incluidos.
         </p>
         <p style={{ fontSize: 13, color: "var(--ink-3)", margin: "0 0 12px", lineHeight: 1.55 }}>
           <b>Aplica al próximo cobro, sin cargos retroactivos.</b> Tu débito de este mes no cambia.
@@ -161,7 +158,7 @@ export function UpgradeClinicaModal({
               Roles y permisos por integrante (quién ve qué, quién gestiona).
             </li>
             <li style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.5 }}>
-              Facturación por seat: pagás por integrante activo, se ajusta al sumar o dar de baja.
+              Fijo mensual más cada profesional que atiende; el monto se ajusta cuando cambia esa cantidad.
             </li>
           </ul>
         </div>

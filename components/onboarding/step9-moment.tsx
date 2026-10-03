@@ -122,7 +122,7 @@ export function Step9Moment({
           mismo valor que el cobro real — nunca un hardcode que driftee). */}
       <p className="onb-moment-trial onb-anim-head">
         Tenés 30 días de prueba gratis, sin tarjeta. Después,{" "}
-        {formatArsFromCents(planPriceCents)} / mes {data.tipo === "CLINICA" && clinicSeatPriceCents ? `de base + ${formatArsFromCents(clinicSeatPriceCents)} por miembro adicional` : ""} — lo activás desde Configuración.
+        {formatArsFromCents(planPriceCents)} / mes {data.tipo === "CLINICA" && clinicSeatPriceCents ? `de base + ${formatArsFromCents(clinicSeatPriceCents)} por cada profesional que atiende. Recepción y administración incluidas` : ""} — lo activás desde Configuración.
       </p>
 
       {error ? (

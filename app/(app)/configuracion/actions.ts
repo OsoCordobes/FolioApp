@@ -1,4 +1,5 @@
 "use server";
+import { countClinicProfessionals } from "@/lib/db/billing-professionals";
 import { safeLog } from "@/lib/observability/safe-log";
 
 
@@ -290,15 +291,10 @@ export async function upgradeOrgTipoAction(): Promise<Result<UpgradeOrgTipoResul
   if (!orgRow) return err("not_found", "Organización no encontrada.");
   const tipoActual = (orgRow as { tipo: "INDEPENDIENTE" | "CLINICA" }).tipo;
 
-  // Head-count de members activos (incluye al OWNER) — define los seats que
-  // cobra Clínica. `head: true` no trae filas, solo el count.
-  const { count: membersCount, error: cntErr } = await supabase
-    .from("member")
-    .select("id", { count: "exact", head: true })
-    .eq("organization_id", session.data.organizationId)
-    .is("deleted_at", null);
-  if (cntErr) return err("db_error", "Error contando miembros activos.", cntErr.message);
-  const membersActivos = membersCount ?? 1;
+  // Sólo profesionales que atienden; recepción y administración incluidas.
+  const professionals = await countClinicProfessionals(supabase, session.data.organizationId);
+  if (!professionals.ok) return professionals;
+  const membersActivos = professionals.data;
 
   const { data: subRow, error: subErr } = await supabase
     .from("suscripcion")

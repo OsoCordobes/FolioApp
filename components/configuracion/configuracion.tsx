@@ -548,7 +548,7 @@ function SecConsultorio({
   initialListarEnDirectorio: boolean;
   /** PR 1.4 · solo el OWNER puede pasar de plan (self-serve a Clínica). */
   isOwner: boolean;
-  /** Members activos actuales (incluye al titular) — desglose de seats de Clínica. */
+  /** Profesionales activos que atienden — desglose de Clínica. */
   membersActivos: number;
   /** Precio mensual actual (centavos ARS), según pricing.ts. */
   montoActualCents: number;
@@ -1622,8 +1622,8 @@ function SecEquipo({
             <h3>El equipo es del plan Clínica</h3>
             <p>
               Tu organización está en el plan individual (un solo profesional). El plan Clínica
-              cuesta ARS 100.000/mes base e incluye a quien dirige la cuenta; cada integrante
-              adicional (médico/a o secretaría) suma ARS 25.000/mes.
+              tiene un fijo mensual más un importe por cada profesional que atiende.
+              Los paneles del titular, recepción y administración están incluidos.
             </p>
             <p style={{ fontSize: 13, color: "var(--ink-3)", marginTop: 8 }}>
               El cambio de plan se hace al crear una organización tipo clínica. Si querés migrar
@@ -1830,7 +1830,7 @@ function SecEquipo({
 
       <Section
         title="Invitar al equipo"
-        sub="La persona recibe un link por email, crea su cuenta y entra directo a tu organización. Cada integrante adicional suma ARS 25.000/mes al plan Clínica."
+        sub="La persona recibe un link por email, crea su cuenta y entra directo a tu organización. Clínica cobra por cada profesional que atiende; recepción y administración están incluidas."
       >
         <form onSubmit={submitInvite}>
           <Row label="Email" sub="A dónde mandamos la invitación (vence en 7 días)">
@@ -1964,8 +1964,8 @@ function SecPlan({
             <p>
               {esClinica
                 ? `Según tu equipo actual (${membersActivos} ${
-                    membersActivos === 1 ? "integrante activo" : "integrantes activos"
-                  }): el monto se ajusta solo cuando cambia el equipo. `
+                    membersActivos === 1 ? "profesional que atiende" : "profesionales que atienden"
+                  }): el monto se ajusta solo cuando cambia la cantidad de profesionales que atienden. Recepción y administración incluidas. `
                 : ""}
               Cobro automático mensual vía Mercado Pago. Podés cancelar cuando quieras.
               Durante los primeros 30 días tenés acceso completo sin tarjeta.
@@ -2075,7 +2075,7 @@ interface ConfiguracionProps {
   /** M49 · tipo de organización. PR 1.4 · el OWNER de una INDEPENDIENTE puede upgradear a Clínica desde acá. */
   orgTipo: "INDEPENDIENTE" | "CLINICA";
   canEdit: boolean;
-  /** PR 1.4 · members activos de la org (incluye titular) — desglose de seats del upgrade. */
+  /** PR 1.4 · profesionales activos que atienden — desglose del upgrade. */
   membersActivos: number;
   /** PR 1.4 · precio mensual actual (centavos ARS) — display del upgrade. */
   montoActualCents: number;

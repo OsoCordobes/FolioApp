@@ -40,10 +40,9 @@ export function Pricing() {
   const soloPrice = formatArsFromCents(MP_PLAN_PRICE_CENTS);
   const clinicBase = formatArsFromCents(resolveClinicBasePriceCents());
   const clinicSeat = formatArsFromCents(resolveClinicSeatPriceCents());
-  // Ejemplo trabajado: la base incluye al titular (lib/billing/pricing.ts), así
-  // que 4 profesionales = base + 3 asientos adicionales.
+  // Ejemplo trabajado: fijo + 4 profesionales que atienden, sin plaza incluida.
   const clinicFourTotal = formatArsFromCents(
-    resolveClinicBasePriceCents() + 3 * resolveClinicSeatPriceCents(),
+    resolveClinicBasePriceCents() + 4 * resolveClinicSeatPriceCents(),
   );
 
   return (
@@ -89,8 +88,8 @@ export function Pricing() {
             <span className="fl-price-per">/mes</span>
           </p>
           <p className="fl-price-note">
-            La base incluye al titular; + {clinicSeat}/mes por profesional. Una clínica
-            de 4: {clinicFourTotal}/mes.
+            Fijo + {clinicSeat}/mes por cada profesional que atiende. Con 4 profesionales:
+            {" "}{clinicFourTotal}/mes. Recepción y administración incluidas.
           </p>
           <ul className="fl-price-list">
             {CLINIC_BULLETS.map((b) => (

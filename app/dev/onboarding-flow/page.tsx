@@ -12,7 +12,7 @@ export default function OnboardingFlowFixturePage() {
   if (process.env.NODE_ENV === "production" || process.env.FOLIO_TEST_ISOLATED !== "1") notFound();
   return <Suspense fallback={null}><OnboardingFlowFixture
     soloPriceCents={computeMonthlyPriceCents("INDEPENDIENTE", 1)}
-    clinicPriceCents={computeMonthlyPriceCents("CLINICA", 1)}
+    clinicPriceCents={computeMonthlyPriceCents("CLINICA", 0)}
     clinicSeatPriceCents={resolveClinicSeatPriceCents()}
   /></Suspense>;
 }

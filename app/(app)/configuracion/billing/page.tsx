@@ -10,6 +10,7 @@
  * Esta página acepta query param `?gate=<reason>` para banner contextual.
  */
 
+import { countClinicProfessionals } from "@/lib/db/billing-professionals";
 import { notFound } from "next/navigation";
 
 import { BillingLockedMember } from "@/components/billing/billing-locked-member";
@@ -73,17 +74,14 @@ export default async function BillingRoutePage({
   // desglose base + seats Y el monto que MP efectivamente debita
   // (suscripcion.monto_cents). Si difieren con una suscripción elegible
   // (ACTIVA/MOROSA con preapproval — misma decisión pura que el sync real),
-  // la UI ofrece "Actualizar monto". Seats = members activos de la org
-  // (deleted_at IS NULL), incluyendo al OWNER.
+  // la UI ofrece "Actualizar monto". Seats = profesionales activos que atienden.
+  // Recepción y administración están incluidas en el fijo.
   let clinicPricing: ClinicPricingView | null = null;
   if (ctx.data.organization.tipo === "CLINICA") {
     const supabase = await createSupabaseServerClient();
-    const { count } = await supabase
-      .from("member")
-      .select("id", { count: "exact", head: true })
-      .eq("organization_id", ctx.data.organization.id)
-      .is("deleted_at", null);
-    const breakdown = computeClinicBreakdownCents(count ?? 1);
+    const professionals = await countClinicProfessionals(supabase, ctx.data.organization.id);
+    if (!professionals.ok) throw new Error(professionals.error.message);
+    const breakdown = computeClinicBreakdownCents(professionals.data);
     const sub = subRes.data;
     const decision = decideSubscriptionAmountSync({
       tipo: "CLINICA",

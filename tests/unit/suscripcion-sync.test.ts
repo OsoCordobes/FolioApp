@@ -25,7 +25,7 @@ import {
 import { MP_PLAN_PRICE_CENTS } from "../../lib/mercadopago/client";
 
 const SOLO_CENTS = 3_000_000; //  ARS 30.000 (default del plan Solo)
-const CLINIC_3_SEATS_CENTS = 15_000_000; // ARS 150.000 = base 100K + 2 seats × 25K
+const CLINIC_3_SEATS_CENTS = 17_500_000; // ARS 175.000 = fijo 100K + 3 profesionales × 25K
 
 function clearPricingEnv() {
   delete process.env.CLINIC_BASE_PRICE_CENTS;
@@ -112,7 +112,7 @@ test("sync: MOROSA también es elegible (el preapproval sigue debitando/reintent
   assert.deepEqual(d, { action: "sync", fromCents: CLINIC_3_SEATS_CENTS, toCents: 12_500_000 });
 });
 
-test("sync: expectedCents coherente con computeMonthlyPriceCents (CLINICA, 3 seats = 150K)", () => {
+test("sync: expectedCents coherente con computeMonthlyPriceCents (CLINICA, 3 profesionales = 175K)", () => {
   clearPricingEnv();
   assert.equal(computeMonthlyPriceCents("CLINICA", 3), CLINIC_3_SEATS_CENTS);
   const d = decideSubscriptionAmountSync({
@@ -120,7 +120,7 @@ test("sync: expectedCents coherente con computeMonthlyPriceCents (CLINICA, 3 sea
     expectedCents: computeMonthlyPriceCents("CLINICA", 3),
     subscription: sub({ montoCents: computeMonthlyPriceCents("CLINICA", 2) }),
   });
-  assert.deepEqual(d, { action: "sync", fromCents: 12_500_000, toCents: 15_000_000 });
+  assert.deepEqual(d, { action: "sync", fromCents: 15_000_000, toCents: 17_500_000 });
 });
 
 // ─── validateChargeAmount (M-BILL-2 per-org · C2) ────────────────────────────
@@ -149,7 +149,7 @@ test("cargo Solo: 30.000 ARS contra monto_cents del plan Solo → aceptado sin w
   assert.equal(r2.warning, null);
 });
 
-test("cargo Clinic: 150.000 ARS (base + 2 seats extra) contra monto_cents de ESA org → aceptado", () => {
+test("cargo Clinic: 175.000 ARS (fijo + 3 profesionales) contra monto_cents de ESA org → aceptado", () => {
   clearPricingEnv();
   const expected = computeMonthlyPriceCents("CLINICA", 3);
   assert.equal(expected, CLINIC_3_SEATS_CENTS);
@@ -181,7 +181,7 @@ test("cargo: tolerancia de ±1 centavo (redondeos MP) → aceptado y silencioso"
 
 test("C2 · debitaron de MENOS por múltiplos exactos del seat → ACEPTADO con warning", () => {
   // El caso que este PR arregla. En una org Clínica, dar de baja a un
-  // integrante actualiza monto_cents y el preapproval, pero el débito que MP ya
+  // profesional actualiza monto_cents y el preapproval, pero el débito que MP ya
   // tenía en curso sale con el monto VIEJO. Antes eso se rechazaba: el cliente
   // pagaba y la suscripción no se activaba.
   clearPricingEnv();
@@ -190,7 +190,7 @@ test("C2 · debitaron de MENOS por múltiplos exactos del seat → ACEPTADO con 
   const r = validateChargeAmount({ amountCents: unSeatMenos, currency: "ARS", expectedCents: esperado });
   assert.equal(r.aceptado, true, "un desfasaje de seats no puede bloquear al que pagó");
   assert.ok(r.warning, "pero tiene que quedar registrado");
-  assert.match(r.warning, /integrante/);
+  assert.match(r.warning, /profesional/);
 });
 
 test("C2 · debitaron de MÁS → aceptado con warning (la plata entró)", () => {

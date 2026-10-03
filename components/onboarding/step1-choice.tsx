@@ -22,7 +22,7 @@ export function Step1Choice({ data, set, onContinue, soloPriceCents, clinicPrice
       </label>
       <label className={`onb-choice ${data.tipo === "CLINICA" ? "is-selected" : ""}`}>
         <input type="radio" name="onboarding-tipo" checked={data.tipo === "CLINICA"} onChange={() => set({ tipo: "CLINICA", ownerTratante: null })} />
-        <span><strong>Clínica</strong><small>Una organización para invitar profesionales y equipo.</small><em>Base {formatArsFromCents(clinicPriceCents)} / mes + {formatArsFromCents(clinicSeatPriceCents)} por miembro adicional</em></span>
+        <span><strong>Clínica</strong><small>Una organización para invitar profesionales y equipo.</small><em>Base {formatArsFromCents(clinicPriceCents)} / mes + {formatArsFromCents(clinicSeatPriceCents)} por cada profesional que atiende. Recepción y administración incluidas</em></span>
       </label>
     </fieldset>
     {data.tipo === "CLINICA" ? <fieldset className="onb-choice-group onb-choice-followup">
