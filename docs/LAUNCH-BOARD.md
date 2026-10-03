@@ -1,5 +1,19 @@
 # Folio — tablero único de lanzamiento
 
+## Corte vigente · 03/10/2026
+
+Dirección retomada por el chat `01a1007e-feab-7e80-898f-98b3812f46c2` (Astra Ultra comprobado); manager anterior archivado, un único coordinador activo. Copia operativa recuperada desde `ea676d11` en `C:/Users/amiun/.codex/worktrees/folio-launch-direction/folio-app`, misma rama `codex/launch-checkpoints`. Los cortes del 02/10 que siguen son antecedentes. PR202/master `8317f187` y deployment exacto vuelven a estar conciliados por lectura, sin repetir ensayos: [evidencia actual](C:/Users/amiun/Documents/Codex/folio-manager-evidence/manager-resumption-20261003/release-reconciliation/RECONCILIATION.md).
+
+**Decisiones nuevas del titular:** autoriza enviar la consulta preparada a Vercel Support; enviada una vez al portal, conversación `5fb46cbc-5e11-4bab-9785-d88e99245bba`. El asistente remitió a `privacy@vercel.com` sin abrir caso; borrador del mismo texto preparado, autorización específica de ese canal pendiente. H3 sigue abierto. Define Clínica como **fijo + precio por cada profesional que atiende, sin plaza incluida**, paneles de titular administrativo/secretaría incluidos. [Mandato, citas y continuación](C:/Users/amiun/Documents/Codex/folio-manager-evidence/manager-resumption-20261003/AUTHORIZATION-AND-CONTINUATION.md).
+
+**Equipo:** `clinic_billing` (Sol6.1 High) es el único escritor, aislado desde master8317; `next_checkpoint` (Astra Ultra) revisa independientemente; `reconcile_release` (Sol6.1 High) comprueba sólo agregados de impacto productivo. Cinco consumidores de precio deben concordar. El cron puede actualizar montos recurrentes MP tras publicar: implementación local autorizada, liberación requiere cerrar ese efecto con evidencia actual. Sin migraciones, datos clínicos, envíos de Folio, cargos ni activaciones. Manager actualiza sólo coordinación y gestiona la consulta autorizada.
+
+Cuota observada03/10: **99% disponible**, créditos62497.459246 y1reset sin usar. Sin reserva antigua15%; mantener margen de cierre, no usar créditos para desarrollo. Custodia externa, validación profesional/piloto y accesos/autorizaciones de proveedores continúan pendientes; no repetir paquetes cerrados por tener nueva cuota.
+
+**Impacto comercial contrastado03/10,07:02UTC:** lectura agregada productiva con visibilidad completa: cero suscripciones, cero preapprovals y cero operaciones de proveedor; no hay Clínica vigente. [SQL, originales y límites](C:/Users/amiun/Documents/Codex/folio-manager-evidence/clinic-professional-billing-20261003/live-impact/IMPACT.md). No se consultó MP ni se autorizan cargos futuros; refrescar el agregado antes de liberar el candidato. Revisión documental independiente PASS; cuota posterior98%disponible, créditos/reset intactos observados.
+
+## Antecedentes preservados · hasta 02/10
+
 Actualizado: 02/10/2026, continuación autorizada tras PR196. La autoridad operativa permanece en el [tablero activo de codex/launch-checkpoints](https://github.com/OsoCordobes/FolioApp/blob/codex/launch-checkpoints/docs/LAUNCH-BOARD.md), mantenido por el manager; las copias en master y otras ramas son fotografías documentales de su fecha. [AVANCES](AVANCES.md) contiene los19checkpoints y la vista breve del titular. Las fechas son comprobaciones, no estado en tiempo real.
 
 ## Objetivo y método

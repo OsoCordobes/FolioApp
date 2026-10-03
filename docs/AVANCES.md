@@ -1,6 +1,10 @@
 # Folio · avances comprobables
 
-Actualizado: 02/10/2026, horario de Copenhague. **Última publicación verificada: [PR202](https://github.com/OsoCordobes/FolioApp/pull/202)**: ensayo unido de reserva, Calendario/Hoy y Google simulado disponible y aprobado; producto y proveedores intactos. PR201 de correo ya cerrada. Relevo listo; la parada responde a decisiones humanas pendientes, con6% de cuota libre, no a agotamiento.
+Actualizado: 03/10/2026, horario de Copenhague. **Última publicación verificada: [PR202](https://github.com/OsoCordobes/FolioApp/pull/202)**, conciliada nuevamente por lectura sin repetir pruebas. Nuevo manager activo, copia operativa recuperada en `folio-launch-direction`, cuota99%disponible al iniciar. La tabla conserva el último cierre de cada área; los avances nuevos se indican debajo.
+
+**03/10 · Comercial en implementación:** el titular definió Clínica = fijo + importe por cada profesional que atiende, sin plaza incluida; paneles administrativos y secretaría incluidos. Escritor y revisor independientes trabajan en cálculo y presentación; todavía sin publicar ni cambiar cobros. **Contractual:** consulta autorizada enviada al portal Vercel; asistente remite a correo Privacy/Legal, sin respuesta contractual ni caso abierto. [Prueba y decisiones](C:/Users/amiun/Documents/Codex/folio-manager-evidence/manager-resumption-20261003/AUTHORIZATION-AND-CONTINUATION.md).
+
+**03/10 · Impacto de publicación:** la lectura productiva confirma cero suscripciones y operaciones MP registradas; [evidencia agregada](C:/Users/amiun/Documents/Codex/folio-manager-evidence/clinic-professional-billing-20261003/live-impact/IMPACT.md), sin modificar datos. Se revalidará antes de publicar.
 
 **Publicado** = disponible en Folio. **Probado** = pasó los controles indicados, sin publicar. Cada fila conserva su alcance; las pruebas parciales no cierran el lanzamiento.
 

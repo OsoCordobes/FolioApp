@@ -1,4 +1,10 @@
-# Folio · relevo final del manager
+# Folio · continuación del manager
+
+**ACTIVO · 03/10/2026.** El chat `01a1007e-feab-7e80-898f-98b3812f46c2` retomó la dirección; el manager anterior está archivado. Copia actual: `C:/Users/amiun/.codex/worktrees/folio-launch-direction/folio-app`, rama `codex/launch-checkpoints`, recuperada desde `ea676d11`. [Tablero vigente](LAUNCH-BOARD.md) y [avance breve](AVANCES.md) prevalecen sobre el corte final anterior conservado abajo.
+
+PR202/master8317/árbol/despliegue conciliados actualmente sin repetir operaciones. Cuota99%disponible al iniciar; créditos62497.459246 intactos observados, reset1. Decisiones directas nuevas: consulta preparada autorizada y enviada al portal de Vercel; el asistente remite a `privacy@vercel.com`, borrador preparado pendiente de autorización de correo. H3 sigue abierto. Clínica será fijo + precio por **cada** profesional que atiende, sin plaza incluida; secretaría/titular administrativo incluidos. Un escritor Sol6.1High implementa desde master8317, AstraUltra revisa y otro Sol verifica sólo agregados productivos de billing. Publicar puede disparar el sync recurrente MP; falta cerrar ese efecto antes de liberar. [Autoridad y encargos](C:/Users/amiun/Documents/Codex/folio-manager-evidence/manager-resumption-20261003/AUTHORIZATION-AND-CONTINUATION.md).
+
+## Corte final anterior preservado · 02/10
 
 **LISTO FINAL · 02/10/2026. A finaliza la dirección al cerrar su turno; ningún manager nuevo fue creado.** B/C/D están inactivos, sin operaciones pendientes. La parada responde a decisiones humanas pendientes, no al agotamiento: queda 6% de cuota y no hay otro paquete necesario listo bajo las autorizaciones actuales.
 
