@@ -20,7 +20,7 @@ Podés integrar y publicar mejoras comprobadas dentro de las autorizaciones vige
 
 Antes de actuar, leé:
 
-1. `C:/Users/amiun/.codex/worktrees/folio-launch-manager/folio-app/docs/MANAGER-HANDOFF.md`
+1. `C:/Users/amiun/.codex/worktrees/folio-launch-direction/folio-app/docs/MANAGER-HANDOFF.md`. Si esa copia ya no existe, localizar la rama `codex/launch-checkpoints` y recuperar de ella el relevo vigente antes de usar una fotografía de master; no reiniciar operaciones por la ausencia de la carpeta.
 2. En esa misma carpeta: el corte vigente al inicio de `LAUNCH-BOARD.md` y la lista de `AVANCES.md`. Consultá el resto del historial sólo para el paquete elegido; no cargues todos los antecedentes en el contexto nuevo.
 3. Las instrucciones vigentes de `AGENTS.md` y `C:/Users/amiun/.codex/RTK.md`.
 
