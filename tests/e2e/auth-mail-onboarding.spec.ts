@@ -4,6 +4,7 @@
 import {randomUUID} from 'node:crypto';
 import {createClient} from '@supabase/supabase-js';
 import {expect,test,type Browser,type Page} from '../fixtures/local-test';
+import {createServicesObserver,servicesAlertCategory,servicesPageErrorKind} from '../../scripts/testing/auth-proof/diagnostics.mjs';
 
 const APP='http://localhost:4430';
 const MAIL='http://127.0.0.1:55424';
@@ -135,47 +136,6 @@ async function servicesRevision(organizationId:string){
  return Number(row.data!.onboarding_services_revision);
 }
 
-// Only categorical action results leave the browser proof, never Flight bodies or messages.
-const SERVICE_CODES=['auth_required','mfa_required','no_org','forbidden','not_found','validation','conflict','transition_invalid','locked','db_error','network'] as const;
-const SERVICE_OUTCOMES=['rejected','uncertain','review_required'] as const;
-function servicesActionCategory(body:string){
- const unknown={result:'unknown',code:'unknown',outcome:'unknown',revision:'unknown'};
- if(body.length>1_048_576)return unknown;
- const chunks=new Map<string,unknown>();
- for(const line of body.split('\n')){
-  const row=/^([0-9a-f]+):(.*)$/.exec(line);if(!row)continue;
-  try{const value:unknown=JSON.parse(row[2]);if(chunks.has(row[1]))return unknown;chunks.set(row[1],value);}catch{/* Non-JSON Flight chunks are not action results. */}
- }
- const root=chunks.get('0');if(!root||typeof root!=='object'||Array.isArray(root))return unknown;
- let action=(root as Record<string,unknown>).a;
- if(typeof action==='string')action=chunks.get(/^\$@([0-9a-f]+)$/.exec(action)?.[1]??'');
- if(!action||typeof action!=='object'||Array.isArray(action))return unknown;
- const result=action as Record<string,unknown>;
- if(result.ok===true){
-  const revision=result.data&&typeof result.data==='object'&&!Array.isArray(result.data)?(result.data as Record<string,unknown>).revision:undefined;
-  return {result:'ok',code:'none',outcome:'none',revision:typeof revision==='number'&&Number.isSafeInteger(revision)&&revision>=0?String(revision):'unknown'};
- }
- if(result.ok!==false)return unknown;
- const error=result.error&&typeof result.error==='object'&&!Array.isArray(result.error)?result.error as Record<string,unknown>:{};
- const code=SERVICE_CODES.find(value=>value===error.code)??'unknown';
- const outcome=error.mutationOutcome===undefined?'none':SERVICE_OUTCOMES.find(value=>value===error.mutationOutcome)??'unknown';
- return {result:'rejected',code,outcome,revision:'unknown'};
-}
-function servicesAlertCategory(messages:string[]){
- const known:Record<string,string>={
-  'Revisá los servicios antes de guardar.':'validation',
-  'No tenés permiso para esa acción.':'forbidden',
-  'Volvé a iniciar sesión.':'auth_required',
-  'Error en la base de datos.':'db_error',
-  'Cambió la cuenta o el consultorio activo. Volvé a cargar la página.':'account_changed',
-  'No pudimos leer los servicios guardados. Volvé a cargar para continuar.':'snapshot_read',
-  'No pudimos confirmar la cuenta activa. Volvé a cargar para continuar.':'owner_missing',
-  'Los servicios cambiaron. Cargá los guardados antes de continuar.':'conflict',
-  'No pudimos confirmar el guardado. Verificá el mismo cambio antes de editar.':'uncertain',
-  'No pudimos preparar el guardado. Habilitá almacenamiento del navegador y reintentá.':'prepare_storage',
- };
- return messages.length?messages.map(value=>Object.hasOwn(known,value.trim())?known[value.trim()]:undefined).find(Boolean)??'unknown':'none';
-}
 async function diagnosticWithin<T>(work:(signal:AbortSignal)=>PromiseLike<T>,fallback:T):Promise<T>{
  const controller=new AbortController();
  let timer:ReturnType<typeof setTimeout>|undefined;
@@ -189,6 +149,33 @@ async function serviceStep(page:Page,tipo:'INDEPENDIENTE'|'CLINICA',organization
  const isClinic=tipo==='CLINICA';
  const original=isClinic?'Servicio sintético clínica':'Servicio sintético Solo';
  const changed='Servicio sintético actualizado';
+ const observation=createServicesObserver(diagnosticWithin);
+ const pageErrors:string[]=[];
+ const observeError=(error:Error)=>{if(pageErrors.length<9)pageErrors.push(servicesPageErrorKind(error.name));};
+ // Start before entering Step 6 so the snapshot response can be correlated too.
+ page.on('request',observation.request);
+ page.on('response',observation.response);
+ page.on('requestfailed',observation.requestfailed);
+ page.on('pageerror',observeError);
+ const finishObservation=async()=>{
+  page.off('request',observation.request);
+  page.off('response',observation.response);
+  page.off('requestfailed',observation.requestfailed);
+  page.off('pageerror',observeError);
+  const responses=await observation.finish();
+  const alerts=await diagnosticWithin(()=>page.getByRole('alert').evaluateAll(elements=>elements.slice(0,9).map(element=>({
+   scope:element.closest('.onb-app-head')?'save_indicator':element.matches('p.onb-banner-err')?'wizard_banner':element.classList.contains('onb-err')?'wizard_field':'other',
+   text:element.textContent??'',title:element.querySelector('span[title]')?.getAttribute('title')??'',
+  }))),null);
+  if(alerts===null)console.log('services_proof_alert:phase=initial_save index=0 scope=unknown category=unknown');
+  else if(!alerts.length)console.log('services_proof_alert:phase=initial_save index=0 scope=none category=none');
+  for(const [index,alert] of (alerts??[]).entries())console.log(`services_proof_alert:phase=initial_save index=${index+1} scope=${alert.scope} category=${servicesAlertCategory(alert.text,alert.title)}`);
+  if(!pageErrors.length)console.log('services_proof_pageerror:phase=initial_save kind=none count=0');
+  for(const kind of new Set(pageErrors))console.log(`services_proof_pageerror:phase=initial_save kind=${kind} count=${pageErrors.filter(value=>value===kind).length}`);
+  if(!responses.length)console.log('services_proof_response:phase=initial_save index=0 seen=none state=none request=unknown action=unknown http=none result=unknown code=unknown outcome=unknown revision=unknown rows=unknown');
+  for(const [index,response] of responses.entries())console.log(`services_proof_response:phase=initial_save index=${index+1} seen=${response.seen} state=${response.state} request=${response.request} action=${response.action} http=${response.http} result=${response.result} code=${response.code} outcome=${response.outcome} revision=${response.revision} rows=${response.rows}`);
+  console.log(`services_proof_observation:phase=initial_save captured=${responses.length} dropped_events=${observation.droppedEvents()}`);
+ };
  await page.getByRole('button',{name:'Continuar',exact:true}).click();
  await expect(page.getByRole('heading',{name:'Tu página en Folio'})).toBeVisible();
  await page.getByRole('button',{name:'Continuar',exact:true}).click();
@@ -198,25 +185,6 @@ async function serviceStep(page:Page,tipo:'INDEPENDIENTE'|'CLINICA',organization
  }
  await expect(page.getByRole('heading',{name:'¿Qué servicios ofrecés?'})).toBeVisible();
  await expect(page.getByRole('button',{name:'Agregar servicio'})).toBeEnabled();
- const responses:Array<{http:string;result:string;code:string;outcome:string;revision:string}>=[];
- const reads:Promise<void>[]=[];
- const observe=(response:import('@playwright/test').Response)=>{
-  const request=response.request();
-  if(request.method()!=='POST'||new URL(request.url()).pathname!=='/onboarding'||reads.length>=9)return;
-  const http=String(response.status());
-  const index=reads.length;
-  reads.push(diagnosticWithin(()=>response.text(),'').then(body=>{
-   responses[index]={http:/^[1-5][0-9]{2}$/.test(http)?http:'none',...servicesActionCategory(body)};
-  }));
- };
- page.on('response',observe);
- const finishObservation=async()=>{
-  page.off('response',observe);
-  await Promise.all(reads);
-  const alert=servicesAlertCategory(await diagnosticWithin(()=>page.locator('[role="alert"] > span[title], p[role="alert"]').allTextContents(),[]));
-  if(!responses.length)console.log(`services_proof_response:phase=initial_save count=0 http=none result=unknown code=unknown outcome=unknown revision=unknown alert=${alert}`);
-  for(const [index,response] of responses.entries())console.log(`services_proof_response:phase=initial_save count=${index+1} http=${response.http} result=${response.result} code=${response.code} outcome=${response.outcome} revision=${response.revision} alert=${alert}`);
- };
  if(isClinic)await page.getByRole('button',{name:'Agregar servicio'}).click();
  else if(await page.getByRole('textbox',{name:'Nombre del servicio 1'}).count()===0)
   await page.getByRole('button',{name:'Agregar servicio'}).click();
