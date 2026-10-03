@@ -1,0 +1,113 @@
+name: Folio bounded external mail transport proof
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Exact independently reviewed commit
+        required: true
+        type: string
+      environment:
+        description: Existing Environment with manual approval and dedicated mail grant
+        required: true
+        type: string
+      authorization_id:
+        description: Explicit human authorization for this one trial
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: folio-mail-external-proof
+  cancel-in-progress: false
+jobs:
+  custody-gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Verify existing Environment protection
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MAIL_PROOF_ENVIRONMENT: ${{ inputs.environment }}
+          MAIL_PROOF_CANDIDATE: ${{ inputs.candidate_sha }}
+          MAIL_PROOF_AUTHORIZATION_ID: ${{ inputs.authorization_id }}
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          try {
+            assert.match(process.env.MAIL_PROOF_CANDIDATE,/^[a-f0-9]{40}$/);
+            assert.match(process.env.MAIL_PROOF_ENVIRONMENT,/^[a-zA-Z0-9_-]{1,80}$/);
+            assert.match(process.env.MAIL_PROOF_AUTHORIZATION_ID,/^[a-zA-Z0-9_-]{8,128}$/);
+            const url=`https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}/environments/${encodeURIComponent(process.env.MAIL_PROOF_ENVIRONMENT)}`;
+            const response=await fetch(url,{redirect:'error',headers:{Authorization:`Bearer ${process.env.GH_TOKEN}`,Accept:'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'}});
+            assert.equal(response.status,200);
+            const data=await response.json(),rule=data.protection_rules?.find(r=>r.type==='required_reviewers');
+            assert.ok(rule?.reviewers?.length>0);
+          } catch { console.error('mail_custody_gate_rejected');process.exitCode=1; }
+          NODE
+  external-proof:
+    needs: custody-gate
+    environment: ${{ inputs.environment }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.candidate_sha }}
+      - name: Validate reviewed candidate, manifest and single run before installing tools
+        env:
+          MAIL_PROOF_CANDIDATE: ${{ inputs.candidate_sha }}
+          MAIL_PROOF_ENVIRONMENT: ${{ inputs.environment }}
+          MAIL_PROOF_AUTHORIZATION_ID: ${{ inputs.authorization_id }}
+          MAIL_PROOF_REVIEWED_SHA: ${{ vars.MAIL_PROOF_REVIEWED_SHA }}
+          MAIL_PROOF_REVIEWED_AUTHORIZATION: ${{ vars.MAIL_PROOF_AUTHORIZATION_ID }}
+          MAIL_PROOF_REVIEWED_RUN_ID: ${{ vars.MAIL_PROOF_REVIEWED_RUN_ID }}
+          MAIL_PROOF_REVIEWED_NONCE: ${{ vars.MAIL_PROOF_REVIEWED_NONCE }}
+          MAIL_PROOF_MANIFEST_JSON: ${{ vars.MAIL_PROOF_MANIFEST_JSON }}
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import {execFileSync} from 'node:child_process';
+          import {validateManifest} from './scripts/testing/mail-external-proof/contract.mjs';
+          try {
+            const e=process.env;
+            assert.equal(e.MAIL_PROOF_CANDIDATE,e.MAIL_PROOF_REVIEWED_SHA);
+            assert.equal(e.MAIL_PROOF_AUTHORIZATION_ID,e.MAIL_PROOF_REVIEWED_AUTHORIZATION);
+            assert.equal(e.GITHUB_RUN_ID,e.MAIL_PROOF_REVIEWED_RUN_ID);
+            assert.equal(e.GITHUB_RUN_ATTEMPT,'1');
+            assert.equal(execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),e.MAIL_PROOF_CANDIDATE);
+            const m=validateManifest(JSON.parse(e.MAIL_PROOF_MANIFEST_JSON),{sha:e.MAIL_PROOF_CANDIDATE,environment:e.MAIL_PROOF_ENVIRONMENT,authorizationId:e.MAIL_PROOF_AUTHORIZATION_ID});
+            assert.equal(m.runId,e.MAIL_PROOF_REVIEWED_NONCE);
+          } catch { console.error('mail_preflight_rejected');process.exitCode=1; }
+          NODE
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install locked dependencies without mail credentials
+        run: pnpm install --frozen-lockfile
+      - name: Offline boundaries with real client
+        run: node --conditions=react-server --import tsx --test scripts/testing/mail-external-proof/offline.test.mjs
+      - name: One explicitly authorized transport trial
+        env:
+          MAIL_PROOF_EXECUTE: authorized
+          MAIL_PROOF_CANDIDATE: ${{ inputs.candidate_sha }}
+          MAIL_PROOF_ENVIRONMENT: ${{ inputs.environment }}
+          MAIL_PROOF_AUTHORIZATION_ID: ${{ inputs.authorization_id }}
+          MAIL_PROOF_REVIEWED_RUN_ID: ${{ vars.MAIL_PROOF_REVIEWED_RUN_ID }}
+          MAIL_PROOF_MANIFEST_JSON: ${{ vars.MAIL_PROOF_MANIFEST_JSON }}
+          MAIL_PROOF_REVIEWED_NONCE: ${{ vars.MAIL_PROOF_REVIEWED_NONCE }}
+          RESEND_API_KEY: ${{ secrets.MAIL_PROOF_RESEND_API_KEY }}
+        run: node --conditions=react-server --import tsx scripts/testing/mail-external-proof/run.mjs --execute
+      - name: Preserve only enumerated sanitized receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mail-external-proof-receipt
+          path: ${{ runner.temp }}/folio-mail-external-proof.json
+          if-no-files-found: warn
+          retention-days: 7
