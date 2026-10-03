@@ -6,6 +6,8 @@ Actualizado: 03/10/2026, horario de Copenhague. **Última publicación verificad
 
 **03/10 · Impacto de publicación:** la lectura productiva confirma cero suscripciones y operaciones MP registradas; [evidencia agregada](C:/Users/amiun/Documents/Codex/folio-manager-evidence/clinic-professional-billing-20261003/live-impact/IMPACT.md), sin modificar datos. Se revalidará antes de publicar.
 
+**03/10 · Entrega comercial:** [PR203](https://github.com/OsoCordobes/FolioApp/pull/203), candidato e6da364, ya tiene revisión independiente aprobada, 44 unidades, 4 E2E y pantallas comprobadas con datos ficticios. CI remota en curso; todavía sin publicar. En paralelo se preparan material breve para profesionales/soporte y el alcance aislado de la prueba real de Google.
+
 **Publicado** = disponible en Folio. **Probado** = pasó los controles indicados, sin publicar. Cada fila conserva su alcance; las pruebas parciales no cierran el lanzamiento.
 
 | Checkpoint | Resultado y prueba |
